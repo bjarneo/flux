@@ -197,6 +197,45 @@ other settings change the image while it streams.
 `resolution`, and `camera`. The phone limits each value to what its camera
 supports, and saves the settings for the next stream.
 
+## Do Not Disturb sync
+
+When you turn on Do Not Disturb on the computer, the phone turns it on too.
+When you turn it off on the phone, the computer turns it off. Each side
+sends its state only after a change, so the start of `fluxd` changes
+nothing.
+
+On the phone, turn on **Sync Do Not Disturb** on the device page. Android
+asks for Do Not Disturb access the first time. On the computer, the sync
+is on by default. To turn it off, set this key in `config.toml`:
+
+```toml
+sync_dnd = false
+```
+
+`fluxd` uses the notification service of the Omarchy shell. It reads
+`~/.local/state/omarchy/notifications.json` every 2 seconds and sets the
+state with `omarchy-shell notifications setDnd on`. With no Omarchy shell,
+`fluxd` uses the `do-not-disturb` mode of mako. The log of `fluxd` names the
+service at start.
+
+## New screenshots and photos
+
+Flux for Android can send each new screenshot and each new camera photo to
+the computer by itself. On the phone, turn on **Send new screenshots** or
+**Send new photos** on the device page. Both are off by default. Android
+asks for access to photos the first time. Allow access to all photos,
+because access to selected photos does not show new images.
+
+| Phone folder | Kind | Folder on the computer |
+| --- | --- | --- |
+| `Pictures/Screenshots`, `DCIM/Screenshots` | Screenshot | `<photo_dir>/screenshots` |
+| `DCIM/Camera` | Photo | `<photo_dir>` |
+
+An image goes out once, to every connected computer, when the phone has
+written it completely. Images from before the switch turned on stay on the
+phone. An image that no computer took goes out when a computer connects.
+The computer shows a notification with Open for each image.
+
 ## Open the window
 
 `flux open [page]` opens the plugin when `omarchy-shell` runs and the plugin
