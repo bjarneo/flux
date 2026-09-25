@@ -379,22 +379,21 @@ fun RingOverlay(from: String, onStop: () -> Unit) {
 }
 
 /**
- * The Flux mark, variant 4a: an accent square with an outline square over it.
- * The geometry uses an 8-unit box: the fill sits at 2.6 units and is 4.9
- * units wide. The outline sits at 0.5 units, is 4.9 units wide, and has a
- * 0.75-unit stroke inside its edge.
+ * The Flux mark, Φ phi: a square ring with an accent bar through it. The
+ * geometry uses a 16-unit box. The ring is 10 units wide at 3 units, with a
+ * 2-unit stroke. The bar is 2 by 14 units at 7 and 1 units, over the ring.
  */
 @Composable
 fun FluxMark(size: Dp, fg: Color = Palette.text, accent: Color = Palette.accent) {
     androidx.compose.foundation.Canvas(Modifier.size(size)) {
-        val u = this.size.minDimension / 8f
-        drawRect(accent, topLeft = Offset(2.6f * u, 2.6f * u), size = androidx.compose.ui.geometry.Size(4.9f * u, 4.9f * u))
-        val stroke = 0.75f * u
+        val u = this.size.minDimension / 16f
+        // A stroke is centered on its path, so the path is 1 unit inside the outer edge.
         drawRect(
             fg,
-            topLeft = Offset(0.5f * u + stroke / 2, 0.5f * u + stroke / 2),
-            size = androidx.compose.ui.geometry.Size(4.9f * u - stroke, 4.9f * u - stroke),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke),
+            topLeft = Offset(4f * u, 4f * u),
+            size = androidx.compose.ui.geometry.Size(8f * u, 8f * u),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f * u),
         )
+        drawRect(accent, topLeft = Offset(7f * u, 1f * u), size = androidx.compose.ui.geometry.Size(2f * u, 14f * u))
     }
 }

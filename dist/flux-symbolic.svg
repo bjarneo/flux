@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
-  <!-- Flux mark 4a in one color for panels and trays. 2 px per unit. -->
-  <rect x="5.2" y="5.2" width="9.8" height="9.8" fill="#bebebe"/>
-  <rect x="1.75" y="1.75" width="8.3" height="8.3" fill="none" stroke="#bebebe" stroke-width="1.5"/>
+  <!-- Flux mark Φ phi in 1 color for panels and trays. 1 px per unit. -->
+  <path fill="#bebebe" fill-rule="evenodd" d="M3 3h10v10H3z M5 5v6h6V5z"/>
+  <rect x="7" y="1" width="2" height="14" fill="#bebebe"/>
 </svg>

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- The Flux mark: variant 4a, outline over fill. -->
-    <color name="flux_mark_bg">#FF1A1B26</color>
+    <!-- The Flux mark, Φ phi: the ring in fg and the bar in accent, on bg2. -->
+    <color name="flux_mark_bg">#FF16161E</color>
     <color name="flux_mark_fg">#FFC0CAF5</color>
     <color name="flux_mark_accent">#FF7AA2F7</color>
 </resources>

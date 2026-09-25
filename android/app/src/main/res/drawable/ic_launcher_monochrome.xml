@@ -3,12 +3,21 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- The 2 shapes of the mark in 1 color, for Android themed icons. -->
-    <path
-        android:fillColor="#FF000000"
-        android:pathData="M47.7,47.7 L69.75,47.7 L69.75,69.75 L47.7,69.75 Z" />
-    <path
-        android:fillColor="#FF000000"
-        android:fillType="evenOdd"
-        android:pathData="M38.25,38.25 L60.3,38.25 L60.3,60.3 L38.25,60.3 Z M41.625,41.625 L41.625,56.925 L56.925,56.925 L56.925,41.625 Z" />
+    <!-- The Flux mark, Φ phi, in 1 color for themed icons. -->
+    <!-- The 16-unit box is 40.5 dp, centered, so that the mark has the size of the design. -->
+    <group
+        android:scaleX="2.53125"
+        android:scaleY="2.53125"
+        android:translateX="33.75"
+        android:translateY="33.75">
+        <!-- The ring: 10 units at 3 units, with a 2-unit stroke. -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M3,3 L13,3 L13,13 L3,13 Z M5,5 L5,11 L11,11 L11,5 Z" />
+        <!-- The bar: 2 by 14 units at 7 and 1 units, over the ring. -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M7,1 L9,1 L9,15 L7,15 Z" />
+    </group>
 </vector>
