@@ -15,21 +15,126 @@ import (
 	"flux/internal/approve"
 )
 
-// pamLine is the line that turns approvals on in a PAM file.
-const pamLine = "auth sufficient pam_exec.so quiet stdout /usr/lib/flux/flux-approve"
-
-// approveCmd runs flux approve status, enroll, and remove.
+// approveCmd runs flux approve status, setup, enroll, enable, disable,
+// and remove.
 func approveCmd(args []string, device string) error {
+	var rest []string
+	if len(args) > 1 {
+		rest = args[1:]
+	}
 	switch first(args) {
 	case "", "status":
 		return approveStatus()
+	case "setup":
+		return approveSetup(device, rest)
 	case "enroll":
 		return approveEnroll(device)
+	case "enable":
+		return approveEnable(rest)
+	case "disable":
+		return approveDisable(rest)
 	case "remove":
 		return approveRemove()
 	default:
-		return fmt.Errorf("unknown command: approve %s. Use status, enroll, or remove", args[0])
+		return fmt.Errorf("unknown command: approve %s. Use status, setup, enroll, enable, disable, or remove", args[0])
 	}
+}
+
+// approveSetup turns approvals on in 1 step: it enrolls the phone when no
+// key exists, and it adds the helper to the PAM files of services.
+func approveSetup(device string, services []string) error {
+	u, _, err := sudoUser("setup")
+	if err != nil {
+		return err
+	}
+	if err := checkHelper(); err != nil {
+		return err
+	}
+	if _, err := approve.ReadKey(approve.KeyPath(u.Username), 0); errors.Is(err, approve.ErrNoKey) {
+		if _, err := enrollKey(device); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return fmt.Errorf("the key file is not safe: %v. Remove it with: sudo flux approve remove", err)
+	}
+	return enablePAM(services)
+}
+
+// approveEnable adds the helper to the PAM files of services. It needs an
+// enrolled key.
+func approveEnable(services []string) error {
+	u, _, err := sudoUser("enable")
+	if err != nil {
+		return err
+	}
+	if err := checkHelper(); err != nil {
+		return err
+	}
+	if _, err := approve.ReadKey(approve.KeyPath(u.Username), 0); err != nil {
+		return fmt.Errorf("no safe key for %s: %v. Run: sudo flux approve setup", u.Username, err)
+	}
+	return enablePAM(services)
+}
+
+// approveDisable removes the helper from the PAM files of services, or
+// from all of them.
+func approveDisable(services []string) error {
+	if os.Geteuid() != 0 {
+		return errors.New("run it with sudo: sudo flux approve disable")
+	}
+	if len(services) == 0 {
+		services = approve.PAMServices
+	}
+	pam := approve.SystemPAM()
+	for _, s := range services {
+		changed, err := pam.Disable(s)
+		switch {
+		case err != nil:
+			return err
+		case changed:
+			fmt.Printf("Removed the phone approval from %s/%s.\n", pam.Dir, s)
+		}
+	}
+	fmt.Println("The password works as before.")
+	return nil
+}
+
+func enablePAM(services []string) error {
+	if len(services) == 0 {
+		services = []string{"sudo"}
+	}
+	pam := approve.SystemPAM()
+	for _, s := range services {
+		changed, err := pam.Enable(s)
+		if err != nil {
+			return err
+		}
+		if changed {
+			fmt.Printf("%s now asks the phone first. The file before the change is in %s/%s.\n", s, pam.Backup, s)
+		} else {
+			fmt.Printf("%s already asks the phone.\n", s)
+		}
+	}
+	fmt.Println("Test it in a new terminal: sudo -k && sudo true")
+	fmt.Println("If the phone does not answer, the password works as before. To undo it, run: sudo flux approve disable")
+	return nil
+}
+
+// checkHelper refuses to add the helper to PAM when it is missing, or when
+// a user other than root can change it.
+func checkHelper() error {
+	st, err := os.Stat(approve.HelperPath)
+	if err != nil {
+		return fmt.Errorf("%s is not installed. Install Flux with: sudo make install", approve.HelperPath)
+	}
+	sys, ok := st.Sys().(*syscall.Stat_t)
+	if !ok || sys.Uid != 0 || st.Mode().Perm()&0o022 != 0 || !st.Mode().IsRegular() {
+		return fmt.Errorf("%s must be a file that only root can change", approve.HelperPath)
+	}
+	if _, err := os.Stat("/usr/lib/security/pam_exec.so"); err != nil {
+		return errors.New("pam_exec.so is not installed, so PAM cannot run the helper")
+	}
+	return nil
 }
 
 // approveUser returns the user that approvals are for: SUDO_USER under
@@ -76,7 +181,7 @@ func approveStatus() error {
 	k, err := approve.ReadKey(approve.KeyPath(name), 0)
 	switch {
 	case errors.Is(err, approve.ErrNoKey):
-		fmt.Printf("No phone can approve for %s. To enroll a phone, run: sudo flux approve enroll\n", name)
+		fmt.Printf("No phone can approve for %s. To set it up, run: sudo flux approve setup\n", name)
 		return nil
 	case err != nil:
 		return fmt.Errorf("the key file is not safe, so flux-approve does not use it: %v", err)
@@ -86,28 +191,35 @@ func approveStatus() error {
 	if k.Enrolled != "" {
 		fmt.Printf("Enrolled: %s\n", k.Enrolled)
 	}
-	for _, f := range []string{"/etc/pam.d/sudo", "/etc/pam.d/polkit-1"} {
-		b, err := os.ReadFile(f)
-		switch {
-		case err != nil:
-			continue
-		case strings.Contains(string(b), "/usr/lib/flux/flux-approve"):
-			fmt.Printf("%s uses it.\n", f)
-		default:
-			fmt.Printf("%s does not use it. To turn it on, add this line at the top: %s\n", f, pamLine)
+	pam := approve.SystemPAM()
+	for _, s := range approve.PAMServices {
+		if pam.Uses(s) {
+			fmt.Printf("%s asks the phone first.\n", s)
+		} else {
+			fmt.Printf("%s does not ask the phone. To turn it on, run: sudo flux approve enable %s\n", s, s)
 		}
 	}
 	return nil
 }
 
 func approveEnroll(device string) error {
+	if _, err := enrollKey(device); err != nil {
+		return err
+	}
+	fmt.Println("To turn it on for sudo, run: sudo flux approve enable")
+	return nil
+}
+
+// enrollKey makes a key on the phone, and writes its public key after the
+// user compares the key codes.
+func enrollKey(device string) (*approve.Key, error) {
 	u, uid, err := sudoUser("enroll")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	host, err := os.Hostname()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -126,15 +238,12 @@ func approveEnroll(device string) error {
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			return errors.New("stopped. Flux wrote no key")
+			return nil, errors.New("stopped. Flux wrote no key")
 		}
-		return err
+		return nil, err
 	}
 	fmt.Printf("Enrolled. %s can now approve for %s.\n", k.DeviceName, u.Username)
-	fmt.Println("To turn it on for sudo, add this line at the top of /etc/pam.d/sudo:")
-	fmt.Println("  " + pamLine)
-	fmt.Println("Keep a root shell open while you test it. The password still works.")
-	return nil
+	return k, nil
 }
 
 // confirmCode shows the key code and asks the user to compare it with the
@@ -164,6 +273,5 @@ func approveRemove() error {
 		return err
 	}
 	fmt.Printf("Removed the key for %s. No phone can approve for this user now.\n", u.Username)
-	fmt.Println("You can also remove the flux-approve line from your PAM files.")
-	return nil
+	return approveDisable(nil)
 }

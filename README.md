@@ -333,53 +333,48 @@ checks the signature with a key file that only root can change. If the
 phone does not answer, PAM asks for the password as usual. The security
 design is in `docs/approve.md`.
 
-The feature is off until you add it to a PAM file. The phone needs a
-fingerprint in its settings. To turn it on for `sudo`:
+The feature is off until you turn it on. The phone needs a fingerprint in
+its settings. To turn it on for `sudo`:
 
 1. Open Flux on the phone, and check that the computer is connected.
-2. From your own user, enroll the phone:
+2. Run the setup from your own user:
 
    ```sh
-   sudo flux approve enroll
+   sudo flux approve setup
    ```
 
 3. On the phone, press Enroll and touch the fingerprint sensor.
 4. Compare the key code on the phone with the key code in the terminal.
    Type `y` only when the codes are the same.
-5. Open a root shell in a second terminal. Keep it open until the test
-   works.
-6. Add this line at the top of `/etc/pam.d/sudo`, above
-   `auth include system-auth`:
-
-   ```text
-   auth sufficient pam_exec.so quiet stdout /usr/lib/flux/flux-approve
-   ```
-
-7. In a new terminal, run `sudo -k` and then `sudo true`. The terminal
+5. In a new terminal, run `sudo -k` and then `sudo true`. The terminal
    shows `Approve on <phone>, or wait for the password prompt.`, and the
    phone shows the request.
 
-If you change a PAM file, keep the root shell open until `sudo` works. A
-wrong line can stop `sudo` for all users.
+The setup checks that root owns the helper. It adds this line before the
+first `auth` rule of `/etc/pam.d/sudo`, and keeps a copy of the file in
+`/etc/flux/approve/pam-backup/`:
+
+```text
+auth sufficient pam_exec.so quiet stdout /usr/lib/flux/flux-approve
+```
+
+To turn it on for polkit or hyprlock too, name the services. The setup
+copies the vendor file of polkit to `/etc/pam.d/polkit-1` first:
+
+```sh
+sudo flux approve enable polkit-1 hyprlock
+sudo flux approve disable            # remove the line from all PAM files
+```
 
 Approve a request only right after you typed the command. The phone shows
 the service, the user, the host, the terminal, and the time.
 
-To use it for polkit, copy the vendor file and add the same line at the
-top of the copy:
-
-```sh
-sudo cp /usr/lib/pam.d/polkit-1 /etc/pam.d/polkit-1
-sudoedit /etc/pam.d/polkit-1
-```
-
-hyprlock reads `/etc/pam.d/hyprlock`, and it takes the same line. The
-Omarchy lock screen uses its own PAM services, and Flux does not change
-them. Do not add the line to `sshd` or `login`. The helper refuses `sshd`.
+The Omarchy lock screen uses its own PAM services, and Flux does not change
+them. Flux never changes `sshd` or `login`, and the helper refuses `sshd`.
 
 ```sh
 flux approve              # the enrolled phone and the PAM files that use it
-sudo flux approve remove  # delete the key file, so that no phone can approve
+sudo flux approve remove  # delete the key file and remove the PAM lines
 ```
 
 `approve_timeout` in `config.toml` sets how long `sudo` waits for the

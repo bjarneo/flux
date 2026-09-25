@@ -52,8 +52,12 @@ Commands:
   mic [stop]             Show the phone microphone state, or stop the phone microphone
   screen [stop]          Show the phone screen mirror state, or stop the mirror
   approve [status]       Show whether a phone can approve sudo with a fingerprint
-  approve enroll         Let the phone approve sudo. Run it with sudo.
-  approve remove         Stop the phone from approving sudo. Run it with sudo.
+  approve setup [SVC…]   Enroll the phone and turn approval on for sudo, or for
+                         polkit-1 and hyprlock. Run it with sudo.
+  approve enroll         Enroll the phone only. Run it with sudo.
+  approve enable [SVC…]  Turn approval on in PAM for an enrolled phone. Run it with sudo.
+  approve disable [SVC…] Turn approval off in PAM. Run it with sudo.
+  approve remove         Delete the phone key and turn approval off. Run it with sudo.
   watch                  Print each state change as one JSON line
   setup [--dry-run]      Start fluxd for this user and add the omarchy-shell plugin
   off                    Stop fluxd, and do not start it at login
