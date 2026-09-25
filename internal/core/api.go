@@ -98,10 +98,6 @@ func (d *Daemon) Snapshot() json.RawMessage {
 		}
 		views = append(views, dev.view())
 	}
-	inputErr := ""
-	if d.inputErr != nil {
-		inputErr = d.inputErr.Error()
-	}
 	clip := d.clipboard
 	if clip == nil {
 		clip = []ClipEntry{}
@@ -126,14 +122,12 @@ func (d *Daemon) Snapshot() json.RawMessage {
 		"settings": map[string]any{
 			"autoClipboard": d.cfg.AutoClipboard,
 			"notifications": d.cfg.Notifications,
-			"receiveInput":  d.cfg.ReceiveInput,
 			"shareHome":     d.cfg.ShareHome,
 			"downloadDir":   d.cfg.DownloadPath(),
 		},
-		"webcam":     d.webcamViewLocked(),
-		"ringing":    d.ringing,
-		"ringFrom":   d.ringFrom,
-		"inputError": inputErr,
+		"webcam":   d.webcamViewLocked(),
+		"ringing":  d.ringing,
+		"ringFrom": d.ringFrom,
 	})
 }
 
@@ -170,17 +164,9 @@ type params struct {
 	Thread    int64           `json:"thread"`
 	Addresses []string        `json:"addresses"`
 	Body      string          `json:"body"`
-	DX        float64         `json:"dx"`
-	DY        float64         `json:"dy"`
-	Button    string          `json:"button"`
 	Key       string          `json:"key"`
 	Name      string          `json:"name"`
 	Command   string          `json:"command"`
-	Special   int             `json:"special"`
-	Shift     bool            `json:"shift"`
-	Ctrl      bool            `json:"ctrl"`
-	Alt       bool            `json:"alt"`
-	Super     bool            `json:"super"`
 	Value     any             `json:"value"`
 	Config    json.RawMessage `json:"config"`
 	Reset     bool            `json:"reset"`
@@ -293,28 +279,6 @@ func (d *Daemon) Call(_ context.Context, method string, raw json.RawMessage) (an
 		return map[string]any{"messages": msgs}, nil
 	case "sms.send":
 		return ok, d.SendSms(dev, p.Addresses, p.Body)
-	case "input.pointer":
-		return ok, d.send(dev, proto.New(proto.TypeMousepad, map[string]any{"dx": p.DX, "dy": p.DY}))
-	case "input.click":
-		key := map[string]string{"left": "singleclick", "right": "rightclick", "middle": "middleclick"}[p.Button]
-		if key == "" {
-			key = "singleclick"
-		}
-		return ok, d.send(dev, proto.New(proto.TypeMousepad, map[string]any{key: true}))
-	case "input.scroll":
-		// The window sends wheel notches. KDE Connect sends pixels, with 15
-		// pixels for each notch.
-		return ok, d.send(dev, proto.New(proto.TypeMousepad, map[string]any{"scroll": true, "dx": 0, "dy": p.DY * 15}))
-	case "input.key":
-		body := map[string]any{"shift": p.Shift, "ctrl": p.Ctrl, "alt": p.Alt, "super": p.Super}
-		if p.Special > 0 {
-			body["specialKey"] = p.Special
-		} else if p.Key != "" {
-			body["key"] = p.Key
-		} else {
-			return nil, apiErr("bad_params", "Give key or special")
-		}
-		return ok, d.send(dev, proto.New(proto.TypeMousepad, body))
 	case "browse.open":
 		roots, err := d.BrowseOpen(dev)
 		if err != nil {
@@ -398,8 +362,6 @@ func (d *Daemon) setSetting(key string, value any) error {
 		d.cfg.AutoClipboard = b
 	case key == "notifications" && isBool:
 		d.cfg.Notifications = b
-	case key == "receiveInput" && isBool:
-		d.cfg.ReceiveInput = b
 	case key == "shareHome" && isBool:
 		d.cfg.ShareHome = b
 	case key == "name" && isString:

@@ -42,7 +42,7 @@ To take a screenshot of one page on a locked test phone, use the debug-only laun
 tools/shot.sh media /tmp/media.png
 ```
 
-The pages are `devices`, `home`, `touchpad`, `media`, `present`, `commands`, `browse`, `camera`, `ring`, and `icon`. Release builds ignore these extras.
+The pages are `devices`, `home`, `media`, `commands`, `browse`, `camera`, `ring`, and `icon`. Release builds ignore these extras.
 
 ## Layout
 

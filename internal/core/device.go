@@ -38,7 +38,6 @@ type Device struct {
 
 	battery       *Battery
 	signal        *Signal
-	keyboard      bool
 	notifications []*PhoneNotification
 	notifDesktop  map[string]uint32
 	media         *PhoneMedia
@@ -111,8 +110,6 @@ func (dev *Device) plugins() []string {
 		{"mpris", dev.supports(proto.TypeMpris)},
 		{"sms", dev.supports(proto.TypeSmsMessages)},
 		{"runcommand", dev.supports(proto.TypeRunCommandRequest)},
-		{"mousepad", dev.supports(proto.TypeMousepad)},
-		{"remoteinput", dev.accepts(proto.TypeMousepad)},
 		{"sftp", dev.sharesStorage()},
 		{"connectivity", dev.supports(proto.TypeConnectivity)},
 	}
@@ -159,7 +156,6 @@ type DeviceView struct {
 	LastSeen      int64                `json:"lastSeen"`
 	Battery       *Battery             `json:"battery"`
 	Signal        *Signal              `json:"signal"`
-	Keyboard      bool                 `json:"keyboard"`
 	Plugins       []string             `json:"plugins"`
 	Notifications []*PhoneNotification `json:"notifications"`
 	Media         *PhoneMedia          `json:"media"`
@@ -177,7 +173,7 @@ func (dev *Device) view() DeviceView {
 		ID: dev.ID, Name: dev.Name, Type: dev.Type, IP: dev.IP,
 		Paired: dev.Paired, Online: dev.link != nil,
 		PairState: state, PairKey: dev.pairKey, PairedAt: dev.PairedAt,
-		Battery: dev.battery, Signal: dev.signal, Keyboard: dev.keyboard,
+		Battery: dev.battery, Signal: dev.signal,
 		Plugins: dev.plugins(), Notifications: dev.notifications, Media: dev.media,
 	}
 	if v.Type == "" {

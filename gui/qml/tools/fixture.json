@@ -34,10 +34,8 @@
      "mpris",
      "sms",
      "sftp",
-     "mousepad",
      "runcommand",
-     "connectivity",
-     "remoteinput"
+     "connectivity"
     ],
     "notifications": [
      {

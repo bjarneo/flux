@@ -26,9 +26,6 @@ const (
 	TypeRunCommandRequest   = "kdeconnect.runcommand.request"
 	TypeMpris               = "kdeconnect.mpris"
 	TypeMprisRequest        = "kdeconnect.mpris.request"
-	TypeMousepad            = "kdeconnect.mousepad.request"
-	TypeMousepadEcho        = "kdeconnect.mousepad.echo"
-	TypeMousepadKeyboard    = "kdeconnect.mousepad.keyboardstate"
 	TypeSftp                = "kdeconnect.sftp"
 	TypeSftpRequest         = "kdeconnect.sftp.request"
 	TypeSmsMessages         = "kdeconnect.sms.messages"
@@ -37,8 +34,6 @@ const (
 	TypeSmsConversation     = "kdeconnect.sms.request_conversation"
 	TypeConnectivity        = "kdeconnect.connectivity_report"
 
-	// TypePresenter moves the pointer for a presentation remote.
-	TypePresenter = "kdeconnect.presenter"
 	// TypeFluxTunnel carries the port of a listener that a Flux phone opens,
 	// so that fluxd can connect out for payloads and Browse PC. The phone
 	// sends it, and fluxd receives it.
@@ -53,18 +48,18 @@ const (
 var Incoming = []string{
 	TypePing, TypeBattery, TypeClipboard, TypeClipboardConnect,
 	TypeShare, TypeShareUpdate, TypeNotification, TypeFindMyPhone,
-	TypeRunCommandRequest, TypeMpris, TypeMprisRequest, TypeMousepad,
-	TypeMousepadKeyboard, TypeMousepadEcho, TypeSftp, TypeSftpRequest, TypeSmsMessages,
-	TypeConnectivity, TypePresenter, TypeFluxTunnel, TypeFluxWebcam,
+	TypeRunCommandRequest, TypeMpris, TypeMprisRequest, TypeSftp,
+	TypeSftpRequest, TypeSmsMessages, TypeConnectivity, TypeFluxTunnel,
+	TypeFluxWebcam,
 }
 
 // Outgoing lists the packet types that Flux sends.
 var Outgoing = []string{
 	TypePing, TypeBattery, TypeClipboard, TypeClipboardConnect, TypeShare,
 	TypeNotificationRequest, TypeNotificationReply, TypeNotificationAction,
-	TypeFindMyPhone, TypeRunCommand, TypeMpris, TypeMprisRequest, TypeMousepad,
-	TypeMousepadKeyboard, TypeMousepadEcho, TypeSftpRequest, TypeSmsRequest,
-	TypeSmsConversations, TypeSmsConversation, TypeSftp, TypeFluxWebcam,
+	TypeFindMyPhone, TypeRunCommand, TypeMpris, TypeMprisRequest,
+	TypeSftpRequest, TypeSmsRequest, TypeSmsConversations,
+	TypeSmsConversation, TypeSftp, TypeFluxWebcam,
 }
 
 // Identity is the body of a kdeconnect.identity packet.

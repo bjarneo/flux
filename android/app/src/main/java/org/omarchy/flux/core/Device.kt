@@ -42,7 +42,6 @@ class Device(private val core: FluxCore, var identity: Identity) {
     var currentPlayer: String? = null
     var commands: List<RemoteCommand> = emptyList()
     var commandsLoaded = false
-    var keyboardAvailable = false
 
     val online: Boolean get() = link?.isOpen == true
     val paired: Boolean get() = pairState == PairState.Paired
@@ -77,7 +76,6 @@ class Device(private val core: FluxCore, var identity: Identity) {
         player = currentPlayer?.let { playerStates[it] },
         commands = commands,
         commandsLoaded = commandsLoaded,
-        keyboardAvailable = keyboardAvailable,
     )
 
     // ---------------------------------------------------------------- pairing

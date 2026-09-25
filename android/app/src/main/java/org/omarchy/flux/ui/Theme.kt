@@ -52,9 +52,7 @@ object Palette {
 
     val border: Color @Composable get() = c.outlineVariant
     val borderStrong: Color @Composable get() = c.outline
-    val padBorder: Color @Composable get() = c.outlineVariant
     val thumbOff: Color @Composable get() = c.outline
-    val laserOff: Color @Composable get() = c.onSurfaceVariant
 
     val accent: Color @Composable get() = c.primary
     val onAccent: Color @Composable get() = c.onPrimary

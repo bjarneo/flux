@@ -7,7 +7,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -42,8 +41,6 @@ type Daemon struct {
 	clip     clipboard
 	notifier *desktop.Notifier
 	media    *desktop.Media
-	input    *desktop.Input
-	inputErr error
 	ringer   ringer
 
 	webcam       *webcamSession
@@ -62,7 +59,7 @@ type Daemon struct {
 // Options change how the daemon runs. The zero value is the normal mode.
 type Options struct {
 	// Headless turns off the desktop: clipboard, notifications, media,
-	// sound, uinput, and mDNS. Discovery uses loopback only. Tests use it.
+	// sound, and mDNS. Discovery uses loopback only. Tests use it.
 	Headless bool
 	// UDPPort and FirstTCPPort change the protocol ports. Zero means 1716.
 	UDPPort      int
@@ -132,7 +129,6 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 	}
 	if opts.Headless {
 		d.clip, d.ringer = &memClipboard{}, silentRinger{}
-		d.inputErr = errors.New("remote input is off in headless mode")
 	}
 	for _, t := range trust.All() {
 		dev := d.deviceLocked(t.ID)
@@ -234,9 +230,6 @@ func (d *Daemon) Run() error {
 		if err := loop.Close(); err != nil {
 			d.logf("remove %s: %v", loop.Path, err)
 		}
-	}
-	if d.input != nil {
-		_ = d.input.Close()
 	}
 	if d.notifier != nil {
 		d.notifier.Shutdown()
@@ -467,7 +460,6 @@ func (d *Daemon) onPairedLink(dev *Device, l *lan.Link) {
 	d.sendCommandList(l)
 	d.mu.Lock()
 	auto := d.cfg.AutoClipboard
-	receiveInput := d.cfg.ReceiveInput
 	d.mu.Unlock()
 	if auto {
 		if text, err := d.clip.Get(); err == nil && text != "" {
@@ -478,9 +470,6 @@ func (d *Daemon) onPairedLink(dev *Device, l *lan.Link) {
 				_ = l.Send(proto.New(proto.TypeClipboardConnect, map[string]any{"content": text, "timestamp": ts}))
 			}
 		}
-	}
-	if receiveInput {
-		_ = l.Send(proto.New(proto.TypeMousepadKeyboard, map[string]any{"state": true}))
 	}
 	if dev.supports(proto.TypeNotification) {
 		_ = l.Send(proto.New(proto.TypeNotificationRequest, map[string]any{"request": true}))

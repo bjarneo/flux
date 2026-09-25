@@ -3,11 +3,9 @@
 # is safe to run again. `make install` and the pacman package run it.
 set -u
 
-# The phone touchpad: load uinput and apply the udev rule that gives the
-# user at the seat access.
-modprobe uinput 2>/dev/null || true
+# Load the udev rule that gives the user at the seat access to the
+# v4l2loopback control device.
 udevadm control --reload 2>/dev/null || true
-[ -e /dev/uinput ] && udevadm trigger --action=change /dev/uinput 2>/dev/null
 
 # The phone as webcam: v4l2loopback is optional. Omarchy can already use
 # the module for a laptop camera, so Flux never changes existing module

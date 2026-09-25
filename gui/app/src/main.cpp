@@ -119,7 +119,7 @@ int main(int argc, char *argv[])
                       QStringLiteral("dir")});
     parser.addPositionalArgument(QStringLiteral("page"),
                                  QStringLiteral("The page to open: overview, clipboard, files, notifications, media, "
-                                                "messages, commands, input, or browse. With --snapshot: the screens to render."),
+                                                "messages, commands, or browse. With --snapshot: the screens to render."),
                                  QStringLiteral("[page]"));
     parser.process(app);
     const QString page = parser.positionalArguments().value(0);

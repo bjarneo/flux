@@ -52,9 +52,6 @@ func doctor() {
 	check(active("avahi-daemon"), "avahi-daemon runs, so fluxd can find phones with mDNS",
 		"avahi-daemon is not running, so fluxd cannot find phones. Run: sudo systemctl enable --now avahi-daemon")
 
-	check(unix.Access("/dev/uinput", unix.W_OK) == nil, "/dev/uinput is writable, so the phone touchpad works",
-		"The phone touchpad needs /dev/uinput. Install /usr/lib/udev/rules.d/60-flux-uinput.rules, then log out and in")
-
 	// The phone as webcam needs ffmpeg and access to the v4l2loopback
 	// control device. Both are optional.
 	_, ffErr := exec.LookPath("ffmpeg")

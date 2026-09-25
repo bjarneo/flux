@@ -19,7 +19,7 @@ omarchy-shell shell summon flux '{"page":"files"}'
 ```
 
 The payload is optional. `page` is one of `overview`, `clipboard`, `files`,
-`notifications`, `media`, `messages`, `input`, `browse`, or `commands`.
+`notifications`, `media`, `messages`, `browse`, or `commands`.
 To open or close the window, use `omarchy-shell shell toggle flux '{}'`.
 
 ## Install layout

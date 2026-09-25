@@ -23,9 +23,6 @@ object Types {
     const val RUN_COMMAND_REQUEST = "kdeconnect.runcommand.request"
     const val MPRIS = "kdeconnect.mpris"
     const val MPRIS_REQUEST = "kdeconnect.mpris.request"
-    const val MOUSEPAD = "kdeconnect.mousepad.request"
-    const val MOUSEPAD_KEYBOARD = "kdeconnect.mousepad.keyboardstate"
-    const val PRESENTER = "kdeconnect.presenter"
     const val SFTP = "kdeconnect.sftp"
     const val SFTP_REQUEST = "kdeconnect.sftp.request"
 
@@ -41,15 +38,14 @@ val INCOMING = listOf(
     Types.PING, Types.BATTERY, Types.BATTERY_REQUEST, Types.CLIPBOARD, Types.CLIPBOARD_CONNECT,
     Types.SHARE, Types.SHARE_UPDATE, Types.NOTIFICATION_REQUEST, Types.NOTIFICATION_REPLY,
     Types.NOTIFICATION_ACTION, Types.FIND_MY_PHONE, Types.RUN_COMMAND, Types.MPRIS,
-    Types.MOUSEPAD_KEYBOARD, Types.SFTP, Types.FLUX_TUNNEL, Types.FLUX_WEBCAM,
+    Types.SFTP, Types.FLUX_TUNNEL, Types.FLUX_WEBCAM,
 )
 
 /** Packet types that the phone sends. */
 val OUTGOING = listOf(
     Types.PING, Types.BATTERY, Types.CLIPBOARD, Types.CLIPBOARD_CONNECT, Types.SHARE,
     Types.SHARE_UPDATE, Types.NOTIFICATION, Types.FIND_MY_PHONE, Types.RUN_COMMAND_REQUEST,
-    Types.MPRIS_REQUEST, Types.MOUSEPAD, Types.PRESENTER, Types.SFTP_REQUEST, Types.FLUX_TUNNEL,
-    Types.FLUX_WEBCAM,
+    Types.MPRIS_REQUEST, Types.SFTP_REQUEST, Types.FLUX_TUNNEL, Types.FLUX_WEBCAM,
 )
 
 /** The body of a kdeconnect.identity packet. */

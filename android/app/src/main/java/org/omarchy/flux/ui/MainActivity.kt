@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
@@ -34,9 +33,6 @@ import org.omarchy.flux.core.UiState
 import org.omarchy.flux.service.FluxService
 
 class MainActivity : ComponentActivity() {
-    /** Set by the Presentation screen. It receives the volume keys. */
-    var volumeHandler: ((up: Boolean) -> Unit)? = null
-
     /** Debug builds only: the page that the `flux.debug.page` extra asks for. */
     val debugPage = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 
@@ -80,15 +76,6 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         FluxService.start(this, FluxService.ACTION_REFRESH)
-    }
-
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        val handler = volumeHandler
-        if (handler != null && (event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN || event.keyCode == KeyEvent.KEYCODE_VOLUME_UP)) {
-            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) handler(event.keyCode == KeyEvent.KEYCODE_VOLUME_UP)
-            return true
-        }
-        return super.dispatchKeyEvent(event)
     }
 }
 
@@ -164,9 +151,7 @@ fun FluxRoot(activity: MainActivity) {
                     },
                     onUnpair = { unpairing = it.id },
                 )
-                route.page == "touchpad" -> TouchpadScreen(device, ::pop)
                 route.page == "media" -> MediaScreen(device, ::pop)
-                route.page == "present" -> PresentationScreen(device, activity, ::pop)
                 route.page == "commands" -> CommandsScreen(device, ::pop)
                 route.page == "browse" -> BrowseScreen(device, state.browse, ::pop)
                 route.page == "camera" -> org.omarchy.flux.camera.CameraScreen(device, ::pop)

@@ -19,7 +19,6 @@ Item {
     { key: "notifications", label: "Notifications", page: "Notifications" },
     { key: "media", label: "Media", page: "Media" },
     { key: "messages", label: "Messages", page: "Messages" },
-    { key: "input", label: "Remote input", page: "RemoteInput" },
     { key: "browse", label: "Browse files", page: "Browse" },
     { key: "commands", label: "Phone commands", page: "PhoneCommands" }
   ]
@@ -60,7 +59,6 @@ Item {
   function tabAllowed(key) {
     if (key === "messages") return has("sms")
     if (key === "browse") return has("sftp")
-    if (key === "input") return has("remoteinput")
     return true
   }
 

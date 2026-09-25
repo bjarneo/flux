@@ -16,8 +16,8 @@ import (
 )
 
 // setup does the per-user part of the install: the fluxd service and the
-// omarchy-shell plugin. The system part (udev rules, kernel modules) is done
-// by post-install.sh, which the package runs as root. setup reports any
+// omarchy-shell plugin. The system part (the udev rule and the kernel
+// module for the webcam) is done by post-install.sh, which the package runs as root. setup reports any
 // system part that is missing and prints the command that adds it.
 func setup(args []string) error {
 	dry, noPlugin := false, false
@@ -236,23 +236,13 @@ func setupSystemReport() {
 	if _, err := os.Stat(script); err != nil {
 		script = "dist/post-install.sh (from the checkout, after sudo make install)"
 	}
-	missing := false
-	if unix.Access("/dev/uinput", unix.W_OK) != nil {
-		missing = true
-		fmt.Println("  ✗ The phone touchpad has no access to /dev/uinput")
-	} else {
-		fmt.Println("  ✓ The phone touchpad can use /dev/uinput")
-	}
 	switch {
 	case unix.Access("/dev/v4l2loopback", unix.W_OK) == nil:
 		fmt.Println("  ✓ The phone can be a webcam")
 	case unix.Access("/dev/v4l2loopback", unix.F_OK) == nil:
-		missing = true
 		fmt.Println("  ✗ The phone as webcam has no access to /dev/v4l2loopback")
+		fmt.Println("  To fix it, run: sudo sh", script)
 	default:
 		fmt.Println("  - The phone as webcam is off. To add it: sudo pacman -S ffmpeg v4l2loopback-dkms")
-	}
-	if missing {
-		fmt.Println("  To fix the parts above, run: sudo sh", script)
 	}
 }

@@ -66,7 +66,6 @@ object Plugins {
                 d.commandsLoaded = true
             }
             Types.MPRIS -> receiveMpris(d, p)
-            Types.MOUSEPAD_KEYBOARD -> d.keyboardAvailable = p.bool("state") ?: false
             Types.SFTP -> Browse.onCredentials(core, d, p)
             Types.FLUX_WEBCAM -> org.omarchy.flux.webcam.WebcamSession.onPacket(core, d, p)
         }
@@ -201,42 +200,6 @@ object Plugins {
         }
     }
 
-    // --------------------------------------------------------------- mousepad
-
-    fun move(core: FluxCore, id: String, dx: Float, dy: Float) {
-        core.device(id)?.send(Packet(Types.MOUSEPAD, bodyOf("dx" to dx.toDouble(), "dy" to dy.toDouble())))
-    }
-
-    /** Sends a click. [kind] is singleclick, doubleclick, rightclick, middleclick, singlehold, or singlerelease. */
-    fun click(core: FluxCore, id: String, kind: String) {
-        core.device(id)?.send(Packet(Types.MOUSEPAD, bodyOf(kind to true)))
-    }
-
-    fun scroll(core: FluxCore, id: String, dy: Float) {
-        core.device(id)?.send(Packet(Types.MOUSEPAD, bodyOf("scroll" to true, "dx" to 0.0, "dy" to dy.toDouble())))
-    }
-
-    fun key(core: FluxCore, id: String, text: String) {
-        core.device(id)?.send(Packet(Types.MOUSEPAD, bodyOf("key" to text)))
-    }
-
-    fun special(core: FluxCore, id: String, code: Int, shift: Boolean = false, ctrl: Boolean = false, alt: Boolean = false, superKey: Boolean = false) {
-        core.device(id)?.send(
-            Packet(Types.MOUSEPAD, bodyOf("specialKey" to code, "shift" to shift, "ctrl" to ctrl, "alt" to alt, "super" to superKey)),
-        )
-    }
-
-    // -------------------------------------------------------------- presenter
-
-    /** Moves the presentation pointer. The values are in screen pixels. */
-    fun pointer(core: FluxCore, id: String, dx: Float, dy: Float) {
-        core.device(id)?.send(Packet(Types.PRESENTER, bodyOf("dx" to dx.toDouble(), "dy" to dy.toDouble())))
-    }
-
-    fun stopPointer(core: FluxCore, id: String) {
-        core.device(id)?.send(Packet(Types.PRESENTER, bodyOf("stop" to true)))
-    }
-
     // ------------------------------------------------------------------- ring
 
     fun ring(core: FluxCore, id: String) {
@@ -244,17 +207,4 @@ object Plugins {
         d.send(Packet(Types.FIND_MY_PHONE))
         core.toast("Ringing ${d.identity.deviceName}")
     }
-}
-
-/** The KDE Connect special key codes. */
-object SpecialKey {
-    const val BACKSPACE = 1
-    const val TAB = 2
-    const val LEFT = 4
-    const val UP = 5
-    const val RIGHT = 6
-    const val DOWN = 7
-    const val PAGE_UP = 8
-    const val PAGE_DOWN = 9
-    const val ENTER = 12
 }

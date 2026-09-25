@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Takes a screenshot of one Flux page on a connected test phone. Debug builds only.
 # Usage: tools/shot.sh <page> <out.png>
-# Pages: devices, home, touchpad, media, present, commands, browse, camera, ring, icon
+# Pages: devices, home, media, commands, browse, camera, ring, icon
 set -euo pipefail
 page=$1
 out=$2

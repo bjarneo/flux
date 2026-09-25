@@ -52,7 +52,6 @@ data class DeviceUi(
     val player: PlayerState?,
     val commands: List<RemoteCommand>,
     val commandsLoaded: Boolean,
-    val keyboardAvailable: Boolean,
 )
 
 /** A snapshot of the whole app for the UI. */

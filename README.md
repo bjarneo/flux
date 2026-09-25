@@ -2,8 +2,8 @@
 
 Flux connects an Omarchy computer to your phone on the same network. Share
 files and the clipboard, read phone notifications, control media, send text
-messages, run desktop commands from the phone, and use the phone as a
-touchpad.
+messages, run desktop commands from the phone, and use the phone camera as
+a scanner or a webcam.
 
 Flux for Android, in `android/`, is the phone app.
 
@@ -51,7 +51,7 @@ flux setup
 
 | Part | Runs as | What it does |
 | --- | --- | --- |
-| `post-install.sh` | root, from pacman or `sudo make install` | Loads `uinput`. Reloads udev and applies the rules for `/dev/uinput` and `/dev/v4l2loopback`. Loads `v4l2loopback` with no devices when nothing else configures it, and keeps existing camera settings. Enables `fluxd.service` for all users. |
+| `post-install.sh` | root, from pacman or `sudo make install` | Reloads udev and applies the rule for `/dev/v4l2loopback`. Loads `v4l2loopback` with no devices when nothing else configures it, and keeps existing camera settings. Enables `fluxd.service` for all users. |
 | `flux setup` | your user | Enables and starts `fluxd.service`. Copies the `omarchy-shell` plugin to `~/.config/omarchy/plugins/flux`, rescans, and adds the bar item. Reports each missing system part with the command that adds it. |
 
 The install opens no firewall port, because Flux needs none. Run
@@ -131,7 +131,6 @@ scan_dir = "~/Documents/flux/scanned"   # scanned text and PDFs from the phone
 photo_dir = "~/Pictures/flux"             # photos from the phone camera
 auto_clipboard = true        # sync the clipboard in both directions
 notifications = true         # show phone notifications on this computer
-receive_input = true         # let the phone move the pointer and type
 share_home = true            # let Flux for Android browse the home folder, read-only
 
 # Commands that the phone can run. A new config has none. Add them in the

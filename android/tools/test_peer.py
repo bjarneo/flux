@@ -60,8 +60,8 @@ def make_identity(dev_id, target=None, name="flux-test-peer"):
         "incomingCapabilities": [
             "kdeconnect.ping", "kdeconnect.battery", "kdeconnect.clipboard", "kdeconnect.clipboard.connect",
             "kdeconnect.share.request", "kdeconnect.notification", "kdeconnect.findmyphone.request",
-            "kdeconnect.runcommand.request", "kdeconnect.mpris.request", "kdeconnect.mousepad.request",
-            "kdeconnect.presenter", "kdeconnect.sftp.request", "flux.tunnel",
+            "kdeconnect.runcommand.request", "kdeconnect.mpris.request", "kdeconnect.sftp.request",
+            "flux.tunnel",
         ],
         "outgoingCapabilities": [
             "kdeconnect.ping", "kdeconnect.battery", "kdeconnect.clipboard", "kdeconnect.share.request",

@@ -105,7 +105,7 @@ func start(t *testing.T, bin, name string, udpPort, tcpPort int) *node {
 	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	cfg := fmt.Sprintf("name = %q\ndownload_dir = %q\nauto_clipboard = true\nnotifications = false\nreceive_input = false\n",
+	cfg := fmt.Sprintf("name = %q\ndownload_dir = %q\nauto_clipboard = true\nnotifications = false\n",
 		name, filepath.Join(dir, "downloads"))
 	if err := os.WriteFile(filepath.Join(cfgDir, "config.toml"), []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)

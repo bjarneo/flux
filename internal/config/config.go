@@ -35,7 +35,6 @@ type Config struct {
 	PhotoDir      string `toml:"photo_dir,omitempty"`
 	AutoClipboard bool   `toml:"auto_clipboard"`
 	Notifications bool   `toml:"notifications"`
-	ReceiveInput  bool   `toml:"receive_input"`
 	ShareHome     bool   `toml:"share_home"`
 	// GUI selects the window: "plugin" for the omarchy-shell plugin, "app"
 	// for flux-gui, or empty for the plugin when it is enabled.
@@ -82,7 +81,7 @@ var mu sync.Mutex
 func Load() (*Config, error) {
 	mu.Lock()
 	defer mu.Unlock()
-	c := &Config{AutoClipboard: true, Notifications: true, ReceiveInput: true, ShareHome: true}
+	c := &Config{AutoClipboard: true, Notifications: true, ShareHome: true}
 	data, err := os.ReadFile(Path())
 	if errors.Is(err, os.ErrNotExist) {
 		c.Commands = []Command{}
