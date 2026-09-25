@@ -234,6 +234,7 @@ Item {
       AccentButton {
         id: sendButton
         anchors.verticalCenter: draft.verticalCenter
+        icon: "send"
         text: "Send"
         padX: 16
         padY: 10

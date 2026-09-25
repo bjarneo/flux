@@ -103,11 +103,17 @@ Item {
             y: 17
             width: parent.width - 34
             spacing: 8
-            Txt {
+            Row {
               width: parent.width
-              text: modelData.name
-              font.weight: Font.Bold
-              elide: Text.ElideRight
+              spacing: 8
+              Icon { id: cmdIcon; anchors.verticalCenter: parent.verticalCenter; name: "console"; size: 16; color: Theme.accent }
+              Txt {
+                anchors.verticalCenter: parent.verticalCenter
+                width: parent.width - cmdIcon.width - 8
+                text: modelData.name
+                font.weight: Font.Bold
+                elide: Text.ElideRight
+              }
             }
             Txt {
               width: parent.width
@@ -122,6 +128,7 @@ Item {
               OutlineButton {
                 id: removeButton
                 y: 6
+                icon: "trash"
                 text: "Remove"
                 padX: 14
                 padY: 6
@@ -143,7 +150,12 @@ Item {
           visible: !root.adding
           lineWidth: 1.5
           color: addArea.containsMouse ? Theme.dim : Theme.bg3
-          Txt { anchors.centerIn: parent; text: "+ Add command"; color: Theme.dim }
+          Row {
+            anchors.centerIn: parent
+            spacing: 6
+            Icon { anchors.verticalCenter: parent.verticalCenter; name: "plus"; size: 15; color: Theme.dim }
+            Txt { anchors.verticalCenter: parent.verticalCenter; text: "Add command"; color: Theme.dim }
+          }
           MouseArea {
             id: addArea
             anchors.fill: parent
@@ -183,6 +195,7 @@ Item {
               spacing: 8
               topPadding: 4
               AccentButton {
+                icon: "check"
                 text: root.saving ? "Saving…" : "Save"
                 padX: 12
                 padY: 6

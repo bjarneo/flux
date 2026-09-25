@@ -42,12 +42,12 @@ Item {
           y: 15
           width: 36
           height: 36
-          color: Theme[Fmt.appToken(modelData.app)]
-          Txt {
+          color: Theme.alpha(Theme[Fmt.appToken(modelData.app)], 0.18)
+          Icon {
             anchors.centerIn: parent
-            text: (modelData.app || "?").charAt(0).toUpperCase()
-            color: Theme.bg
-            font.weight: Font.ExtraBold
+            name: Fmt.appIcon(modelData.app)
+            size: 20
+            color: Theme[Fmt.appToken(modelData.app)]
           }
         }
 
@@ -116,6 +116,7 @@ Item {
             visible: card.replyable || (modelData.actions && modelData.actions.length > 0)
             OutlineButton {
               visible: card.replyable && !card.replying
+              icon: "reply"
               text: "Reply"
               padX: 10
               padY: 4
@@ -152,6 +153,7 @@ Item {
             }
             AccentButton {
               id: send
+              icon: "send"
               text: "Send"
               padY: 8
               onClicked: {

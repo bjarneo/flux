@@ -1,7 +1,7 @@
 import QtQuick
 import ".."
 
-// One device in the sidebar: type code, name, status, and battery.
+// One device in the sidebar: type icon, name, status, and battery.
 Rectangle {
   id: root
   property var device: ({})
@@ -22,12 +22,12 @@ Rectangle {
     anchors.verticalCenter: parent.verticalCenter
     width: 32
     height: 32
-    color: Theme.bg3
-    Txt {
+    color: root.online && root.device.paired ? Theme.alpha(Theme.accent, 0.16) : Theme.bg3
+    Icon {
       anchors.centerIn: parent
-      text: Fmt.kindShort(root.device.type)
-      color: Theme.dim
-      font.pixelSize: 11
+      name: Fmt.kindIcon(root.device.type)
+      size: 18
+      color: root.online && root.device.paired ? Theme.accent : Theme.dim
     }
   }
 
@@ -53,14 +53,25 @@ Rectangle {
     }
   }
 
-  Txt {
+  Row {
     id: battery
     anchors.right: parent.right
     anchors.rightMargin: 11
     anchors.verticalCenter: parent.verticalCenter
-    text: Fmt.battery(root.device.battery)
-    color: Theme.dim
-    font.pixelSize: 11
+    spacing: 2
+    visible: !!root.device.battery && root.device.battery.charge >= 0
+    Icon {
+      anchors.verticalCenter: parent.verticalCenter
+      name: Fmt.batteryIcon(root.device.battery)
+      size: 14
+      color: root.device.battery && root.device.battery.charge <= 15 && !root.device.battery.charging ? Theme.err : Theme.dim
+    }
+    Txt {
+      anchors.verticalCenter: parent.verticalCenter
+      text: Fmt.battery(root.device.battery)
+      color: Theme.dim
+      font.pixelSize: 11
+    }
   }
 
   MouseArea {

@@ -37,7 +37,7 @@ flux setup
 ```
 
 `makepkg` needs Go 1.27, CMake, and Ninja. Omarchy installs the other
-dependencies.
+dependencies, including the Nerd Font that the window uses for its icons.
 
 ### From source
 

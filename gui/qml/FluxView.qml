@@ -13,14 +13,14 @@ Item {
   Component.onCompleted: Theme.load(themeText)
 
   readonly property var tabs: [
-    { key: "overview", label: "Overview", page: "Overview" },
-    { key: "clipboard", label: "Clipboard", page: "Clipboard" },
-    { key: "files", label: "Files", page: "Files" },
-    { key: "notifications", label: "Notifications", page: "Notifications" },
-    { key: "media", label: "Media", page: "Media" },
-    { key: "messages", label: "Messages", page: "Messages" },
-    { key: "browse", label: "Browse files", page: "Browse" },
-    { key: "commands", label: "Phone commands", page: "PhoneCommands" }
+    { key: "overview", label: "Overview", page: "Overview", icon: "dashboard" },
+    { key: "clipboard", label: "Clipboard", page: "Clipboard", icon: "clipboard" },
+    { key: "files", label: "Files", page: "Files", icon: "transfers" },
+    { key: "notifications", label: "Notifications", page: "Notifications", icon: "bell" },
+    { key: "media", label: "Media", page: "Media", icon: "music" },
+    { key: "messages", label: "Messages", page: "Messages", icon: "message" },
+    { key: "browse", label: "Browse files", page: "Browse", icon: "browse" },
+    { key: "commands", label: "Phone commands", page: "PhoneCommands", icon: "console" }
   ]
 
   property string tab: "overview"
@@ -282,21 +282,33 @@ Item {
             width: parent.width
             height: pairLabel.implicitHeight + 18
             color: pairArea.containsMouse ? Theme.dim : Theme.bg3
-            Txt {
+            Row {
               id: pairLabel
               anchors.centerIn: parent
-              width: parent.width - 18
-              horizontalAlignment: Text.AlignHCenter
-              wrapMode: Text.Wrap
-              color: root.justPaired !== "" ? Theme.ok : Theme.dim
-              font.pixelSize: 12
-              text: {
-                if (root.requested) {
-                  var key = root.requested.pairKey || ""
-                  return key !== "" ? "Confirm " + key + " on " + root.requested.name + "…" : "Waiting for " + root.requested.name + "…"
+              width: Math.min(implicitWidth, parent.width - 18)
+              spacing: 6
+              readonly property color tint: root.justPaired !== "" ? Theme.ok : Theme.dim
+              Icon {
+                id: pairIcon
+                anchors.verticalCenter: parent.verticalCenter
+                name: root.requested ? "key" : (root.justPaired !== "" ? "check" : "plus")
+                size: 14
+                color: pairLabel.tint
+              }
+              Txt {
+                anchors.verticalCenter: parent.verticalCenter
+                width: Math.min(implicitWidth, pairButton.width - 18 - pairIcon.width - 6)
+                elide: Text.ElideRight
+                color: pairLabel.tint
+                font.pixelSize: 12
+                text: {
+                  if (root.requested) {
+                    var key = root.requested.pairKey || ""
+                    return key !== "" ? "Confirm " + key + " on " + root.requested.name + "…" : "Waiting for " + root.requested.name + "…"
+                  }
+                  if (root.justPaired !== "") return root.justPaired + " paired"
+                  return "Pair new device"
                 }
-                if (root.justPaired !== "") return "✓ " + root.justPaired + " paired"
-                return "+ Pair new device"
               }
             }
             MouseArea {
@@ -325,7 +337,7 @@ Item {
                 width: 24
                 height: 24
                 color: Theme.bg3
-                Txt { anchors.centerIn: parent; text: Fmt.kindShort(modelData.type); color: Theme.dim; font.pixelSize: 10 }
+                Icon { anchors.centerIn: parent; name: Fmt.kindIcon(modelData.type); color: Theme.dim; size: 15 }
               }
               Txt {
                 x: 43
@@ -339,7 +351,7 @@ Item {
                 anchors.right: parent.right
                 anchors.rightMargin: 10
                 anchors.verticalCenter: parent.verticalCenter
-                text: modelData.pairState === "requested" ? "waiting" : "pair ▸"
+                text: modelData.pairState === "requested" ? "waiting" : "pair"
                 color: Theme.accent
                 font.pixelSize: 11
               }
@@ -375,16 +387,36 @@ Item {
             model: root.visibleTabs
             delegate: Rectangle {
               required property var modelData
+              required property int index
               readonly property bool sel: root.currentTab && root.currentTab.key === modelData.key
               width: side.width
               height: tabLabel.implicitHeight + 16
               color: sel ? Theme.alpha(Theme.accent, 0.18) : (tabArea.containsMouse ? Theme.alpha(Theme.fg, 0.05) : "transparent")
+              Icon {
+                id: tabIcon
+                x: 10
+                anchors.verticalCenter: parent.verticalCenter
+                name: modelData.icon
+                size: 16
+                color: parent.sel ? Theme.accent : Theme.dim
+              }
               Txt {
                 id: tabLabel
-                x: 12
+                anchors.left: tabIcon.right
+                anchors.leftMargin: 8
                 anchors.verticalCenter: parent.verticalCenter
                 text: modelData.label
                 color: parent.sel ? Theme.accent : Theme.fg
+              }
+              // The number key that opens the tab.
+              Txt {
+                anchors.right: parent.right
+                anchors.rightMargin: 10
+                anchors.verticalCenter: parent.verticalCenter
+                visible: index < 9 && (parent.sel || tabArea.containsMouse)
+                text: index + 1
+                color: Theme.dim
+                font.pixelSize: 11
               }
               MouseArea {
                 id: tabArea
@@ -456,17 +488,20 @@ Item {
         visible: !!root.dev
         AccentButton {
           visible: !!root.backend && root.backend.ringing
+          icon: "bell-off"
           text: "Stop ringing"
           anchors.verticalCenter: parent.verticalCenter
           onClicked: root.call("ring.stop", {})
         }
         OutlineButton {
+          icon: "bell-ring"
           text: "Ring " + Fmt.noun(root.dev ? root.dev.type : "")
           active: root.devOnline
           anchors.verticalCenter: parent.verticalCenter
           onClicked: root.ring()
         }
         AccentButton {
+          icon: "paste"
           text: "Send clipboard"
           active: root.devOnline
           anchors.verticalCenter: parent.verticalCenter
@@ -556,6 +591,7 @@ Item {
       Item { width: 1; height: 6 }
       AccentButton {
         anchors.horizontalCenter: parent.horizontalCenter
+        icon: "power"
         text: "Start fluxd"
         onClicked: {
           root.toast("Starting fluxd…")

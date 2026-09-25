@@ -38,8 +38,8 @@ Rectangle {
     Row {
       spacing: 8
       topPadding: 2
-      AccentButton { text: "Accept"; padX: 12; padY: 6; fontSize: 12; onClicked: root.accept() }
-      OutlineButton { text: "Reject"; padX: 12; padY: 6; fontSize: 12; onClicked: root.reject() }
+      AccentButton { icon: "link"; text: "Accept"; padX: 12; padY: 6; fontSize: 12; onClicked: root.accept() }
+      OutlineButton { icon: "close"; text: "Reject"; padX: 12; padY: 6; fontSize: 12; onClicked: root.reject() }
     }
   }
 }

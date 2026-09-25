@@ -77,7 +77,16 @@ Item {
           fill: Theme.ok
           value: root.dev && root.dev.battery ? (root.dev.battery.charge || 0) / 100 : 0
         }
-        Txt { text: "battery"; color: Theme.dim; font.pixelSize: 11 }
+        Row {
+          spacing: 4
+          Icon {
+            anchors.verticalCenter: parent.verticalCenter
+            name: Fmt.batteryIcon(root.dev ? root.dev.battery : null)
+            size: 13
+            color: Theme.dim
+          }
+          Txt { anchors.verticalCenter: parent.verticalCenter; text: "battery"; color: Theme.dim; font.pixelSize: 11 }
+        }
       }
 
       Column {
@@ -130,27 +139,27 @@ Item {
 
       Tile {
         Layout.fillWidth: true
-        glyph: "◉"
+        icon: "bell-ring"
         label: "Ring " + Fmt.noun(root.dev ? root.dev.type : "")
         active: root.online
         onClicked: root.view.ring()
       }
       Tile {
         Layout.fillWidth: true
-        glyph: "↑"
+        icon: "upload"
         label: "Send file"
         onClicked: root.view.go("files")
       }
       Tile {
         Layout.fillWidth: true
-        glyph: "▤"
+        icon: "browse"
         label: "Browse storage"
         active: root.view ? root.view.has("sftp") : true
         onClicked: root.view.go("browse")
       }
       Tile {
         Layout.fillWidth: true
-        glyph: "♪"
+        icon: "music"
         label: "Media"
         onClicked: root.view.go("media")
       }
@@ -182,16 +191,16 @@ Item {
             required property var modelData
             width: notifCol.width
             height: nCol.implicitHeight
-            Rectangle {
-              y: 6
-              width: 8
-              height: 8
+            Icon {
+              y: 1
+              name: Fmt.appIcon(modelData.app)
+              size: 15
               color: Theme[Fmt.appToken(modelData.app)]
             }
             Column {
               id: nCol
-              x: 20
-              width: parent.width - 20
+              x: 26
+              width: parent.width - 26
               Txt {
                 width: parent.width
                 text: (modelData.app || "") + " · " + (modelData.title || "")
@@ -233,7 +242,7 @@ Item {
             id: art
             width: 64
             height: 64
-            Stripes { anchors.fill: parent; c1: Theme.bg3; c2: Theme.bg; visible: artImage.status !== Image.Ready }
+            IconBox { anchors.fill: parent; icon: "music"; visible: artImage.status !== Image.Ready }
             Image {
               id: artImage
               anchors.fill: parent
@@ -278,11 +287,11 @@ Item {
             height: 40
             color: Theme.accent
             opacity: root.media && root.online ? 1 : 0.4
-            Txt {
+            Icon {
               anchors.centerIn: parent
-              text: root.media && root.media.playing ? "❚❚" : "▶"
+              name: root.media && root.media.playing ? "pause" : "play"
+              size: 22
               color: Theme.bg
-              font.weight: Font.ExtraBold
             }
             MouseArea {
               anchors.fill: parent

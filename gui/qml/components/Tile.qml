@@ -1,11 +1,12 @@
 import QtQuick
 import ".."
 
-// A quick action tile: a glyph in accent and a label. The border turns
+// A quick action tile: an icon in accent and a label. The border turns
 // accent on hover.
 Rectangle {
   id: root
-  property string glyph: ""
+  // An Icon name.
+  property string icon: ""
   property string label: ""
   property bool active: true
   signal clicked()
@@ -22,8 +23,8 @@ Rectangle {
     anchors.right: parent.right
     anchors.top: parent.top
     anchors.margins: 14
-    spacing: 6
-    Txt { text: root.glyph; color: Theme.accent; font.pixelSize: 18 }
+    spacing: 8
+    Icon { name: root.icon; color: Theme.accent; size: 20 }
     Txt { width: parent.width; text: root.label; font.weight: Font.DemiBold; elide: Text.ElideRight }
   }
 

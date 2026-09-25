@@ -141,10 +141,14 @@ Item {
       visible: !!root.root_ && root.path !== root.root_.path
       bottomPadding: 14
       Txt { text: root.relative(); color: Theme.dim }
-      Txt {
-        text: "↑ up"
-        color: Theme.accent
-        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.up() }
+      OutlineButton {
+        anchors.verticalCenter: parent.verticalCenter
+        icon: "arrow-up"
+        text: "Up"
+        padX: 10
+        padY: 3
+        fontSize: 12
+        onClicked: root.up()
       }
     }
 
@@ -160,7 +164,7 @@ Item {
       spacing: 12
       width: parent.width
       Txt { width: parent.width; text: root.error; color: Theme.dim; wrapMode: Text.Wrap }
-      OutlineButton { text: "Try again"; onClicked: root.open() }
+      OutlineButton { icon: "refresh"; text: "Try again"; onClicked: root.open() }
     }
 
     Txt {
@@ -188,18 +192,19 @@ Item {
           height: width + 6 + tName.implicitHeight + 6 + tMeta.implicitHeight
           readonly property string kind: Fmt.kindOf(modelData.name, modelData.dir)
 
-          Stripes {
+          IconBox {
             id: thumb
             width: parent.width
             height: parent.width
-            c1: Theme.bg3
-            c2: Theme.bg2
-            label: tile.kind
+            color: tArea.containsMouse ? Theme.alpha(Theme.fg, 0.05) : Theme.bg2
+            icon: Fmt.fileIcon(modelData.name, modelData.dir)
+            iconSize: Math.round(width * 0.36)
+            fg: modelData.dir ? Theme.accent : Theme.dim
             Rectangle {
               anchors.fill: parent
               color: "transparent"
               border.width: 1
-              border.color: tArea.containsMouse ? Theme.accent : "transparent"
+              border.color: tArea.containsMouse ? Theme.accent : Theme.bg3
             }
           }
           Txt {

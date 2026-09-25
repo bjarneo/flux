@@ -110,7 +110,16 @@ Card {
     anchors.top: parent.top
     anchors.margins: 19
     spacing: 12
-    SectionLabel { text: "PHONE CAMERA" }
+    Row {
+      spacing: 8
+      Icon {
+        anchors.verticalCenter: parent.verticalCenter
+        name: "webcam"
+        size: 14
+        color: root.live ? Theme.err : Theme.dim
+      }
+      SectionLabel { anchors.verticalCenter: parent.verticalCenter; text: root.live ? "PHONE CAMERA · LIVE" : "PHONE CAMERA" }
+    }
 
     Item {
       width: parent.width
@@ -164,11 +173,13 @@ Card {
         spacing: 8
         OutlineButton {
           visible: !root.failed
+          icon: root.settingsOpen ? "close" : "tune"
           text: root.settingsOpen ? "Close" : "Settings"
           onClicked: root.settingsOpen = !root.settingsOpen
         }
         OutlineButton {
           visible: root.live
+          icon: "stop"
           text: "Stop"
           onClicked: root.view.call("webcam.stop", {})
         }
@@ -343,6 +354,7 @@ Card {
       OutlineButton {
         id: resetButton
         anchors.verticalCenter: parent.verticalCenter
+        icon: "refresh"
         text: "Reset"
         onClicked: root.send({ reset: true })
       }

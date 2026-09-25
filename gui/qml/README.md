@@ -25,7 +25,21 @@ FluxView {
 | --- | --- | --- |
 | `backend` | `var`, required | The backend object. The contract is below. |
 | `themeText` | `string` | The content of `~/.local/state/omarchy/current/theme/colors.toml`. Set it again when the file changes. An empty string gives the Tokyo Night defaults. |
-| `showPage(key)` | function, returns `bool` | Selects a screen: `overview`, `clipboard`, `files`, `notifications`, `media`, `messages`, `input`, `browse`, or `commands`. Returns `false` for an unknown key. |
+| `showPage(key)` | function, returns `bool` | Selects a screen: `overview`, `clipboard`, `files`, `notifications`, `media`, `messages`, `browse`, or `commands`. Returns `false` for an unknown key. |
+
+## Icons
+
+`components/Icon.qml` draws Material Design glyphs from the Nerd Font in
+the `monospace` font, the same icons as the Omarchy shell. An icon takes
+its color like text:
+
+```qml
+Icon { name: "phone"; size: 18; color: Theme.accent }
+```
+
+To add an icon, add its name and codepoint to `codes` in `Icon.qml`. The
+codepoints are in the Nerd Fonts `glyphnames.json`, under the `md-` names.
+The package depends on `ttf-font-nerd`, which every Nerd Font provides.
 
 ## Backend contract
 

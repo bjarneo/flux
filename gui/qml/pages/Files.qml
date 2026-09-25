@@ -83,6 +83,12 @@ Item {
       Column {
         anchors.centerIn: parent
         spacing: 6
+        Icon {
+          anchors.horizontalCenter: parent.horizontalCenter
+          name: "tray-up"
+          size: 34
+          color: drop.containsDrag ? Theme.accent : Theme.dim
+        }
         Txt {
           anchors.horizontalCenter: parent.horizontalCenter
           text: "Drop files to send to " + (root.view ? root.view.devName : "")
@@ -143,11 +149,12 @@ Item {
           width: col.width
           implicitHeight: nameCol.implicitHeight + 26
 
-          Txt {
+          // The direction: received from the device, or sent to it.
+          Icon {
             x: 19
             anchors.verticalCenter: parent.verticalCenter
-            width: 28
-            text: row.incoming ? "↓" : "↑"
+            name: row.incoming ? "tray-down" : "tray-up"
+            size: 20
             color: row.incoming ? Theme.ok : Theme.accent
           }
           Column {

@@ -213,12 +213,24 @@ Window {
     index++
     while (index < steps.length && only !== "" && steps[index][0].indexOf(only) < 0) index++
     if (index >= steps.length) {
-      console.log("snapshot: done")
-      Qt.quit()
+      console.log("snapshot: done, " + failures + " failed steps")
+      Qt.exit(failures > 0 ? 1 : 0)
       return
     }
-    steps[index][1]()
+    run(steps[index][1])
     after.restart()
+  }
+
+  // Runs a step function. A step that fails logs the error, and the run
+  // goes on, so that 1 broken screen does not stop the others.
+  property int failures: 0
+  function run(f) {
+    try {
+      f()
+    } catch (e) {
+      failures++
+      console.warn("snapshot: " + steps[index][0] + " failed: " + e)
+    }
   }
 
   Timer {
@@ -226,7 +238,7 @@ Window {
     interval: 150
     onTriggered: {
       var s = win.steps[win.index]
-      if (s.length > 2 && s[2]) s[2]()
+      if (s.length > 2 && s[2]) win.run(s[2])
       shoot.interval = s.length > 3 ? s[3] : 500
       shoot.restart()
     }

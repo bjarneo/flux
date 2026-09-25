@@ -41,13 +41,14 @@ Item {
         width: list.width
         implicitHeight: Math.max(textCol.implicitHeight, copy.implicitHeight) + 30
 
-        Txt {
+        // The direction: from the device, or from this computer.
+        Icon {
           id: arrow
-          x: 19
+          x: 17
           anchors.verticalCenter: parent.verticalCenter
-          text: parent.incoming ? "↓" : "↑"
+          name: parent.incoming ? "arrow-in" : "arrow-out"
+          size: 18
           color: parent.incoming ? Theme.ok : Theme.accent
-          font.pixelSize: 16
         }
         Column {
           id: textCol
@@ -74,6 +75,7 @@ Item {
           anchors.right: parent.right
           anchors.rightMargin: 19
           anchors.verticalCenter: parent.verticalCenter
+          icon: "copy"
           text: "Copy"
           padX: 12
           padY: 5

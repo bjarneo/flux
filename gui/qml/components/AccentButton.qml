@@ -5,6 +5,8 @@ import ".."
 Rectangle {
   id: root
   property string text: ""
+  // An Icon name, shown before the text.
+  property string icon: ""
   property int padX: 14
   property int padY: 7
   property int fontSize: Theme.size
@@ -12,18 +14,29 @@ Rectangle {
   property bool active: true
   signal clicked()
 
-  implicitWidth: label.implicitWidth + padX * 2
-  implicitHeight: label.implicitHeight + padY * 2
+  implicitWidth: content.implicitWidth + padX * 2
+  implicitHeight: content.implicitHeight + padY * 2
   color: area.containsMouse && root.active ? Theme.mix(Theme.accent, Theme.fg, 0.15) : Theme.accent
   opacity: active ? 1 : 0.4
 
-  Txt {
-    id: label
+  Row {
+    id: content
     anchors.centerIn: parent
-    text: root.text
-    color: Theme.bg
-    font.pixelSize: root.fontSize
-    font.weight: root.fontWeight
+    spacing: 7
+    Icon {
+      visible: root.icon !== ""
+      anchors.verticalCenter: parent.verticalCenter
+      name: root.icon
+      size: root.fontSize + 2
+      color: Theme.bg
+    }
+    Txt {
+      anchors.verticalCenter: parent.verticalCenter
+      text: root.text
+      color: Theme.bg
+      font.pixelSize: root.fontSize
+      font.weight: root.fontWeight
+    }
   }
 
   MouseArea {

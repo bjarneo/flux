@@ -73,6 +73,44 @@ QtObject {
     return "PH"
   }
 
+  // The icon name for a device type, for Icon.
+  function kindIcon(type) {
+    if (type === "tablet") return "tablet"
+    if (type === "tv") return "tv"
+    if (type === "laptop") return "laptop"
+    if (type === "desktop") return "monitor"
+    return "phone"
+  }
+
+  // The battery icon for a battery object, in steps of 10%.
+  function batteryIcon(b) {
+    if (!b || b.charge === undefined || b.charge === null || b.charge < 0) return "battery-unknown"
+    if (b.charging) return "battery-charging"
+    if (b.charge >= 95) return "battery"
+    if (b.charge < 5) return "battery-empty"
+    return "battery-" + Math.max(10, Math.floor(b.charge / 10) * 10)
+  }
+
+  // The icon name for a file, from Fmt.kindOf.
+  function fileIcon(name, dir) {
+    var k = kindOf(name, dir)
+    var map = { "folder": "folder", "image": "file-image", "video": "file-video", "audio": "file-audio", "pdf": "file-pdf",
+                "text": "file-text", "archive": "file-archive" }
+    return map[k] || "file"
+  }
+
+  // The icon name for a phone app, or a bell for an app with no icon.
+  readonly property var appIcons: ({
+    "messages": "message", "sms": "message", "phone": "phone", "calendar": "calendar", "clock": "clock",
+    "github": "github", "slack": "slack", "bank": "bank", "mail": "mail", "gmail": "mail", "email": "mail",
+    "signal": "chat", "telegram": "chat", "discord": "chat", "whatsapp": "whatsapp", "spotify": "spotify",
+    "firefox": "firefox", "chrome": "chrome"
+  })
+
+  function appIcon(app) {
+    return appIcons[(app || "").toLowerCase()] || "bell"
+  }
+
   function typeName(type) {
     if (!type) return "Device"
     return type.charAt(0).toUpperCase() + type.slice(1)

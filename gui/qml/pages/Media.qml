@@ -53,12 +53,14 @@ Item {
       anchors.horizontalCenter: parent.horizontalCenter
       width: 300
       height: 300
-      Stripes {
+      IconBox {
         anchors.fill: parent
-        c1: Theme.bg3
-        c2: Theme.bg2
-        band: 10
-        label: "album art"
+        color: Theme.bg2
+        border.width: 1
+        border.color: Theme.bg3
+        icon: "music"
+        iconSize: 96
+        fg: Theme.alpha(Theme.accent, 0.7)
         visible: art.status !== Image.Ready
       }
       Image {
@@ -134,7 +136,7 @@ Item {
         color: prevArea.containsMouse && root.usable ? Theme.alpha(Theme.fg, 0.06) : "transparent"
         border.width: 1
         border.color: Theme.bg3
-        Txt { anchors.centerIn: parent; text: "◀◀" }
+        Icon { anchors.centerIn: parent; name: "previous"; size: 22 }
         MouseArea { id: prevArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.act("Previous") }
       }
       Rectangle {
@@ -142,12 +144,11 @@ Item {
         width: 60
         height: 60
         color: Theme.accent
-        Txt {
+        Icon {
           anchors.centerIn: parent
-          text: root.media && root.media.playing ? "❚❚" : "▶"
+          name: root.media && root.media.playing ? "pause" : "play"
+          size: 30
           color: Theme.bg
-          font.pixelSize: 18
-          font.weight: Font.ExtraBold
         }
         MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.act("PlayPause") }
       }
@@ -158,7 +159,7 @@ Item {
         color: nextArea.containsMouse && root.usable ? Theme.alpha(Theme.fg, 0.06) : "transparent"
         border.width: 1
         border.color: Theme.bg3
-        Txt { anchors.centerIn: parent; text: "▶▶" }
+        Icon { anchors.centerIn: parent; name: "next"; size: 22 }
         MouseArea { id: nextArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.act("Next") }
       }
     }
