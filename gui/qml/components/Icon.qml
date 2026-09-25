@@ -36,6 +36,7 @@ Text {
     "play": 0xF040A, "pause": 0xF03E4, "previous": 0xF04AE, "next": 0xF04AD, "stop": 0xF04DB,
     "camera": 0xF0D5D, "webcam": 0xF05A0, "video": 0xF0BDC, "record": 0xF044B,
     "switch-camera": 0xF084A, "rotate": 0xF0467,
+    "mic": 0xF036C, "mic-off": 0xF036D, "screen-share": 0xF1483,
 
     "folder": 0xF024B, "folder-outline": 0xF0256, "file": 0xF0224, "file-text": 0xF09EE,
     "file-image": 0xF0EB0, "file-video": 0xF0E2C, "file-audio": 0xF0E2A, "file-pdf": 0xF0226,

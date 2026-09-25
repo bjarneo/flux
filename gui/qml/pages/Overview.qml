@@ -15,6 +15,9 @@ Item {
   readonly property var notifs: dev && dev.notifications ? dev.notifications.slice(0, 3) : []
   // The phone camera as a webcam on this computer. Null when it is not used.
   readonly property var webcam: view && view.backend && view.backend.state ? (view.backend.state.webcam || null) : null
+  // The phone microphone and the phone screen mirror. Null when not used.
+  readonly property var mic: view && view.backend && view.backend.state ? (view.backend.state.mic || null) : null
+  readonly property var screen: view && view.backend && view.backend.state ? (view.backend.state.screen || null) : null
 
   implicitHeight: grid.implicitHeight
 
@@ -317,6 +320,36 @@ Item {
       Layout.fillHeight: true
       Layout.preferredWidth: 320
       Layout.columnSpan: settingsOpen ? grid.columns : 1
+    }
+
+    // Phone microphone
+    StreamCard {
+      objectName: "micCard"
+      visible: !!root.mic
+      Layout.fillWidth: true
+      Layout.fillHeight: true
+      Layout.preferredWidth: 320
+      icon: "mic"
+      heading: "PHONE MICROPHONE"
+      stream: root.mic || ({})
+      title: root.mic ? (root.mic.fromName || "The phone") + " is live as " + (root.mic.source || "Flux Microphone") : ""
+      detail: root.mic ? Math.round((root.mic.rate || 48000) / 1000) + " kHz · " + (root.mic.channels === 2 ? "stereo" : "mono") : ""
+      onStop: root.view.call("mic.stop", {})
+    }
+
+    // Phone screen mirror
+    StreamCard {
+      objectName: "screenCard"
+      visible: !!root.screen
+      Layout.fillWidth: true
+      Layout.fillHeight: true
+      Layout.preferredWidth: 320
+      icon: "screen-share"
+      heading: "PHONE SCREEN"
+      stream: root.screen || ({})
+      title: root.screen ? (root.screen.fromName || "The phone") + " shows its screen in " + (root.screen.player || "a window") : ""
+      detail: root.screen && root.screen.width ? root.screen.width + "×" + root.screen.height + " · close the window to stop" : ""
+      onStop: root.view.call("screen.stop", {})
     }
   }
 }
