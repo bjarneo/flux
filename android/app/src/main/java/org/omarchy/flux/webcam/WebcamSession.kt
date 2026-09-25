@@ -40,7 +40,7 @@ object WebcamSession {
 
     /** The camera side, which starts and stops the encoder. */
     interface Listener {
-        fun onConnected(out: OutputStream)
+        fun onConnected(out: OutputStream, width: Int, height: Int)
         fun onEnded()
     }
 
@@ -55,9 +55,11 @@ object WebcamSession {
     private var listener: Listener? = null
     private var watch: ScheduledFuture<*>? = null
     private var attempt = 0
+    /** True after the computer got "start", so it can take "config". */
+    private var announced = false
 
-    /** Starts a stream to [deviceId]. A running stream stops first. */
-    fun start(core: FluxCore, deviceId: String, resolution: Resolution, listener: Listener) {
+    /** Starts a stream of [width] x [height] to [deviceId]. A running stream stops first. */
+    fun start(core: FluxCore, deviceId: String, width: Int, height: Int, listener: Listener) {
         stop(core, notify = true)
         val id = synchronized(lock) {
             this.deviceId = deviceId
@@ -76,10 +78,12 @@ object WebcamSession {
                 srv.soTimeout = CONNECT_TIMEOUT_MS
                 if (!current(id)) return@execute srv.close()
                 synchronized(lock) { server = srv }
-                if (!d.send(WebcamPackets.start(srv.localPort, resolution))) {
+                if (!d.send(WebcamPackets.start(srv.localPort, width, height))) {
                     srv.close()
                     error("Not connected to $name")
                 }
+                synchronized(lock) { if (attempt == id) announced = true }
+                d.send(WebcamPackets.config(WebcamSettings.config.value, WebcamSettings.caps.value))
                 val raw = srv.accept()
                 raw.tcpNoDelay = true
                 val ssl = tls.wrap(raw, server = true)
@@ -97,7 +101,7 @@ object WebcamSession {
                     }
                 } ?: return@execute runCatching { ssl.close() }.let { }
                 _status.value = Status(Phase.Starting, "Starting Flux Camera on $name…")
-                l.onConnected(ssl.outputStream)
+                l.onConnected(ssl.outputStream, width, height)
                 watch(core, d, id)
             } catch (e: Exception) {
                 if (!current(id)) return@execute
@@ -106,6 +110,22 @@ object WebcamSession {
                 end(core, notify = true, Status(Phase.Error, message), id)
             }
         }
+    }
+
+    /**
+     * Starts the stream again with a new frame size: "stop", then a new
+     * "start" with a new port. It does nothing when no stream runs.
+     */
+    fun restart(core: FluxCore, width: Int, height: Int) {
+        val (target, l) = synchronized(lock) { deviceId to listener }
+        if (target == null || l == null) return
+        start(core, target, width, height, l)
+    }
+
+    /** Sends the full settings to the computer, when a stream runs. */
+    fun sendConfig(core: FluxCore) {
+        val target = synchronized(lock) { deviceId.takeIf { announced } } ?: return
+        core.device(target)?.send(WebcamPackets.config(WebcamSettings.config.value, WebcamSettings.caps.value))
     }
 
     /** Stops the stream. With [notify], the computer gets flux.webcam "stop". */
@@ -129,6 +149,7 @@ object WebcamSession {
             }
             is WebcamReply.Failed -> core.io.execute { stop(core, notify = false, Status(Phase.Error, reply.message)) }
             WebcamReply.Stop -> core.io.execute { stop(core, notify = false, Status(Phase.Idle, "Stopped on $name")) }
+            is WebcamReply.Config -> WebcamSettings.applyRemote(reply.reset, reply.partial)
         }
     }
 
@@ -152,6 +173,7 @@ object WebcamSession {
             socket = null
             listener = null
             watch = null
+            announced = false
             r
         }
         w?.cancel(false)

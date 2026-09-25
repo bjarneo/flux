@@ -25,7 +25,7 @@ class WebcamTest {
 
     @Test
     fun startBodyHasEveryField() {
-        val p = WebcamPackets.start(1742, Resolution.FULL_HD)
+        val p = WebcamPackets.start(1742, 1920, 1080)
         assertEquals(Types.FLUX_WEBCAM, p.type)
         assertEquals("start", p.string("state"))
         assertEquals(1742, p.int("port"))

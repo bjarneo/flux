@@ -22,12 +22,11 @@ import java.util.concurrent.TimeUnit
 
 private const val TAG = "FluxWebcamGl"
 private const val EGL_RECORDABLE_ANDROID = 0x3142
-private const val OUTPUT_ASPECT = 16f / 9f
 
 /**
  * Draws camera frames into the encoder and into the phone preview. Both
- * targets get the same upright 16:9 frame, so the preview shows what the
- * computer gets. All GL work runs on 1 thread.
+ * targets get the same upright frame with the same color adjustments, so
+ * the preview shows what the computer gets. All GL work runs on 1 thread.
  */
 class GlRenderer {
     private val thread = HandlerThread("flux-webcam-gl").apply { start() }
@@ -42,7 +41,7 @@ class GlRenderer {
     private var cameraTexture: SurfaceTexture? = null
     private var cameraSize = Size(1920, 1080)
 
-    private class Target(val surface: EGLSurface, val width: Int, val height: Int, val mirror: Boolean)
+    private class Target(val surface: EGLSurface, val width: Int, val height: Int)
     private var preview: Target? = null
     private var encoder: Target? = null
 
@@ -61,6 +60,14 @@ class GlRenderer {
     @Volatile var front = false
     /** An extra clockwise rotation that the user picks, in steps of 90 degrees. */
     @Volatile var extraRotation = 0
+    /** The width divided by the height of the output frame. */
+    @Volatile var outputAspect = 16f / 9f
+    /** Mirrors the output horizontally, for the computer and the preview. */
+    @Volatile var mirror = false
+
+    /** The color adjustments: brightness -1..1, contrast 0..2, saturation 0..2, warmth -1..1. */
+    data class Color(val brightness: Float = 0f, val contrast: Float = 1f, val saturation: Float = 1f, val warmth: Float = 0f)
+    @Volatile var color = Color()
 
     /**
      * Prepares GL and a camera texture of [size]. [onReady] gets the texture
@@ -82,11 +89,11 @@ class GlRenderer {
     }
 
     /** Shows frames on [texture], or stops the preview when it is null. It waits until done. */
-    fun setPreview(texture: SurfaceTexture?, width: Int, height: Int, mirror: Boolean) = runSync {
+    fun setPreview(texture: SurfaceTexture?, width: Int, height: Int) = runSync {
         preview?.let { destroySurface(it.surface) }
         preview = null
         if (texture != null && context != EGL14.EGL_NO_CONTEXT) {
-            preview = Target(createWindow(texture), width, height, mirror)
+            preview = Target(createWindow(texture), width, height)
         }
     }
 
@@ -95,7 +102,7 @@ class GlRenderer {
         encoder?.let { destroySurface(it.surface) }
         encoder = null
         if (surface != null && context != EGL14.EGL_NO_CONTEXT) {
-            encoder = Target(createWindow(surface), width, height, mirror = false)
+            encoder = Target(createWindow(surface), width, height)
         }
     }
 
@@ -107,18 +114,20 @@ class GlRenderer {
         val natural = FrameGeometry.swapsAxes(texMatrix)
         val contentAspect = if (natural) cameraSize.height.toFloat() / cameraSize.width else cameraSize.width.toFloat() / cameraSize.height
         val rotation = FrameGeometry.uprightRotation(deviceOrientation, sensorOrientation, front, natural) + extraRotation
+        val crop = FrameGeometry.matrix(rotation, contentAspect, outputAspect, mirror)
+        val c = color
         encoder?.let { t ->
-            draw(t, FrameGeometry.matrix(rotation, contentAspect, OUTPUT_ASPECT, t.mirror))
+            draw(t, crop, c)
             EGLExt.eglPresentationTimeANDROID(display, t.surface, st.timestamp)
             EGL14.eglSwapBuffers(display, t.surface)
         }
         preview?.let { t ->
-            draw(t, FrameGeometry.matrix(rotation, contentAspect, OUTPUT_ASPECT, t.mirror))
+            draw(t, crop, c)
             EGL14.eglSwapBuffers(display, t.surface)
         }
     }
 
-    private fun draw(t: Target, crop: FloatArray) {
+    private fun draw(t: Target, crop: FloatArray, c: Color) {
         makeCurrent(t.surface)
         GLES20.glViewport(0, 0, t.width, t.height)
         GLES20.glUseProgram(program)
@@ -126,6 +135,7 @@ class GlRenderer {
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, texture)
         GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(program, "uTex"), 1, false, texMatrix, 0)
         GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(program, "uCrop"), 1, false, crop, 0)
+        GLES20.glUniform4f(GLES20.glGetUniformLocation(program, "uColor"), c.brightness, c.contrast, c.saturation, c.warmth)
         val pos = GLES20.glGetAttribLocation(program, "aPos")
         val uv = GLES20.glGetAttribLocation(program, "aUv")
         quad.position(0)
@@ -231,13 +241,22 @@ class GlRenderer {
                 vUv = (uTex * uCrop * vec4(aUv, 0.0, 1.0)).xy;
             }
         """
+        // uColor holds brightness, contrast, saturation, and warmth. The
+        // neutral values (0, 1, 1, 0) leave the image as it is.
         const val FRAGMENT = """
             #extension GL_OES_EGL_image_external : require
             precision mediump float;
             uniform samplerExternalOES sTex;
+            uniform vec4 uColor;
             varying vec2 vUv;
             void main() {
-                gl_FragColor = texture2D(sTex, vUv);
+                vec3 c = texture2D(sTex, vUv).rgb;
+                c += uColor.x * 0.5;
+                c = (c - 0.5) * uColor.y + 0.5;
+                float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+                c = mix(vec3(l), c, uColor.z);
+                c += vec3(0.08, 0.0, -0.08) * uColor.w;
+                gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
             }
         """
 

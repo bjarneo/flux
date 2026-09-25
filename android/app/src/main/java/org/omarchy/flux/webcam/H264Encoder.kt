@@ -17,7 +17,9 @@ private const val TAG = "FluxWebcam"
  * because the computer closed the connection, [onError] runs once.
  */
 class H264Encoder(
-    private val resolution: Resolution,
+    private val width: Int,
+    private val height: Int,
+    private val bitrate: Int,
     private val out: OutputStream,
     private val onError: (String) -> Unit,
 ) {
@@ -28,9 +30,16 @@ class H264Encoder(
     private val drain: Thread
 
     init {
-        val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, resolution.width, resolution.height).apply {
+        try {
+            val video = codec.codecInfo.getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_AVC).videoCapabilities
+            if (video != null && !video.isSizeSupported(width, height)) error("This phone cannot encode $width × $height video")
+        } catch (e: Exception) {
+            codec.release()
+            throw e
+        }
+        val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-            setInteger(MediaFormat.KEY_BIT_RATE, resolution.bitrate)
+            setInteger(MediaFormat.KEY_BIT_RATE, bitrate)
             setInteger(MediaFormat.KEY_FRAME_RATE, WebcamPackets.FPS)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
             setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
@@ -43,17 +52,22 @@ class H264Encoder(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
         }
         try {
-            codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            try {
+                codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            } catch (e: Exception) {
+                // Some encoders reject the profile or the level. Try the defaults.
+                Log.i(TAG, "encoder rejected main profile, using defaults: ${e.message}")
+                format.removeKey(MediaFormat.KEY_PROFILE)
+                format.removeKey(MediaFormat.KEY_LEVEL)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) format.removeKey(MediaFormat.KEY_LOW_LATENCY)
+                codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            }
+            inputSurface = codec.createInputSurface()
+            codec.start()
         } catch (e: Exception) {
-            // Some encoders reject the profile or the level. Try the defaults.
-            Log.i(TAG, "encoder rejected main profile, using defaults: ${e.message}")
-            format.removeKey(MediaFormat.KEY_PROFILE)
-            format.removeKey(MediaFormat.KEY_LEVEL)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) format.removeKey(MediaFormat.KEY_LOW_LATENCY)
-            codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            codec.release()
+            throw e
         }
-        inputSurface = codec.createInputSurface()
-        codec.start()
         drain = Thread(::drainLoop, "flux-webcam-encoder").apply { isDaemon = true }
         drain.start()
     }

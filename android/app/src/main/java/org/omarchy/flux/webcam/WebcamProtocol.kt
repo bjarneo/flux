@@ -1,5 +1,6 @@
 package org.omarchy.flux.webcam
 
+import kotlinx.serialization.json.JsonObject
 import org.omarchy.flux.protocol.Packet
 import org.omarchy.flux.protocol.Types
 import org.omarchy.flux.protocol.bodyOf
@@ -7,27 +8,28 @@ import org.omarchy.flux.protocol.bodyOf
 /**
  * The flux.webcam extension. The phone opens a TLS listener, sends "start"
  * with its port, and writes a raw H.264 Annex-B stream to the computer that
- * connects. The computer answers "live", "error", or "stop".
+ * connects. The computer answers "live", "error", or "stop". Both sides send
+ * "config" to change the settings.
  */
 object WebcamPackets {
     const val FPS = 30
 
-    fun start(port: Int, resolution: Resolution): Packet = Packet(
+    fun start(port: Int, width: Int, height: Int): Packet = Packet(
         Types.FLUX_WEBCAM,
         bodyOf(
             "state" to "start", "port" to port,
-            "width" to resolution.width, "height" to resolution.height,
+            "width" to width, "height" to height,
             "fps" to FPS, "codec" to "h264",
         ),
     )
 
     fun stop(): Packet = Packet(Types.FLUX_WEBCAM, bodyOf("state" to "stop"))
-}
 
-/** The frame sizes that the phone offers. Both are 16:9. */
-enum class Resolution(val width: Int, val height: Int, val bitrate: Int, val label: String) {
-    HD(1280, 720, 4_000_000, "720p"),
-    FULL_HD(1920, 1080, 8_000_000, "1080p"),
+    /** The full settings and what the camera supports. The phone sends it after "start" and after each change. */
+    fun config(config: WebcamConfig, caps: WebcamCaps): Packet = Packet(
+        Types.FLUX_WEBCAM,
+        bodyOf("state" to "config", "config" to config.toJson(), "caps" to caps.toJson()),
+    )
 }
 
 /** An answer from the computer. */
@@ -40,6 +42,12 @@ sealed interface WebcamReply {
     /** The user stopped the camera on the computer. */
     data object Stop : WebcamReply
 
+    /**
+     * The computer changes settings. [reset] sets the neutral image values
+     * first, and [partial] then sets the fields that it names.
+     */
+    data class Config(val partial: JsonObject?, val reset: Boolean) : WebcamReply
+
     companion object {
         /** Parses a flux.webcam packet. It returns null for other packets and unknown states. */
         fun parse(p: Packet): WebcamReply? {
@@ -48,6 +56,7 @@ sealed interface WebcamReply {
                 "live" -> Live(p.string("device") ?: "", p.string("label")?.takeIf { it.isNotEmpty() } ?: "Flux Camera")
                 "error" -> Failed(p.string("message")?.takeIf { it.isNotEmpty() } ?: "The computer could not start the camera")
                 "stop" -> Stop
+                "config" -> Config(p.obj("config"), p.bool("reset") == true).takeIf { it.partial != null || it.reset }
                 else -> null
             }
         }
