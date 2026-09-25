@@ -62,6 +62,12 @@ func (b *approvalBook) add(a *approval) error {
 	if b.byID == nil {
 		b.byID = map[string]*approval{}
 	}
+	// A request whose helper stopped before approve.wait stays until here.
+	for id, other := range b.byID {
+		if time.Since(other.deadline) > time.Minute {
+			delete(b.byID, id)
+		}
+	}
 	for _, other := range b.byID {
 		if other.device == a.device && other.result == nil && time.Now().Before(other.deadline) {
 			return apiErr("busy", "Another request waits for this phone")
