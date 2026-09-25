@@ -70,9 +70,13 @@ func (d *Daemon) handleClipboard(dev *Device, p *proto.Packet) {
 	}
 	d.mu.Unlock()
 	if auto && !stale {
-		if err := d.clip.Set(body.Content); err != nil {
-			d.logf("set clipboard: %v", err)
-		}
+		// Run the desktop call outside the read loop of the link, so a slow
+		// clipboard tool cannot block the next packets from the phone.
+		go func() {
+			if err := d.clip.Set(body.Content); err != nil {
+				d.logf("set clipboard: %v", err)
+			}
+		}()
 	}
 	d.markDirty()
 }

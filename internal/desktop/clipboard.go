@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"os/exec"
 	"strings"
 	"sync"
@@ -131,15 +132,14 @@ func (c *Clipboard) Set(text string) error {
 	c.mu.Lock()
 	c.lastSeen = text
 	c.mu.Unlock()
+	// wl-copy forks a background process that serves the clipboard until
+	// the clipboard changes. That process inherits stdout and stderr, so a
+	// pipe on either one makes Run wait until the clipboard changes. The
+	// output goes to /dev/null, so Run returns when the first process exits.
 	cmd := exec.Command("wl-copy")
 	cmd.Stdin = strings.NewReader(text)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		if msg := strings.TrimSpace(stderr.String()); msg != "" {
-			return errors.New("wl-copy: " + msg)
-		}
-		return err
+		return fmt.Errorf("wl-copy: %w", err)
 	}
 	return nil
 }

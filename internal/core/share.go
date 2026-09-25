@@ -144,7 +144,7 @@ func (d *Daemon) handleShare(dev *Device, l *lan.Link, p *proto.Packet) {
 	case body.Text != "" && body.Scan:
 		d.saveScan(dev, body.Text)
 	case body.Text != "":
-		_ = d.clip.Set(body.Text)
+		go func() { _ = d.clip.Set(body.Text) }()
 		d.mu.Lock()
 		d.addClipLocked(ClipEntry{Text: body.Text, Dir: "in", Device: dev.ID, DeviceName: dev.Name, Source: "share", Time: time.Now().Unix()})
 		d.mu.Unlock()

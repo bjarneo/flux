@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 	"unsafe"
 )
 
@@ -207,5 +208,27 @@ func TestFindLoopback(t *testing.T) {
 	}
 	if _, ok := findLoopback("Nothing"); ok {
 		t.Fatal("found a device that does not exist")
+	}
+}
+
+// TestClipboardSetReturnsWhileWlCopyServes uses a fake wl-copy that, like
+// the real one, leaves a background process that keeps its stdout and
+// stderr open. Set must return at once and not wait for that process.
+func TestClipboardSetReturnsWhileWlCopyServes(t *testing.T) {
+	dir := t.TempDir()
+	fake := "#!/bin/sh\ncat >/dev/null\n(sleep 30) &\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(dir, "wl-copy"), []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	done := make(chan error, 1)
+	go func() { done <- NewClipboard().Set("hello") }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Set waits for the background wl-copy process")
 	}
 }
