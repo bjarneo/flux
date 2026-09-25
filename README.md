@@ -117,7 +117,8 @@ to reload it, or run `systemctl --user reload fluxd`.
 ```toml
 name = "omarchy-framework"   # the name that the phone shows
 download_dir = "~/Downloads"
-scan_dir = "~/Documents/flux/scanned"   # text that the phone camera scans
+scan_dir = "~/Documents/flux/scanned"   # scanned text and PDFs from the phone
+photo_dir = "~/Pictures/flux"             # photos from the phone camera
 auto_clipboard = true        # sync the clipboard in both directions
 notifications = true         # show phone notifications on this computer
 receive_input = true         # let the phone move the pointer and type
@@ -138,7 +139,8 @@ command = "omarchy-system-lock"
 | `~/.config/flux/config.toml` | Settings and commands |
 | `~/.local/share/flux/certificate.pem`, `privateKey.pem` | The identity of this computer |
 | `~/.local/share/flux/devices.json` | Paired devices and their pinned certificates |
-| `~/Documents/flux/scanned/` | Text that the phone camera scanned, 1 file per scan |
+| `~/Documents/flux/scanned/` | Scanned text and PDFs from the phone, 1 file per scan |
+| `~/Pictures/flux/` | Photos from the phone camera |
 | `~/.cache/flux/` | Notification icons and album art |
 | `$XDG_RUNTIME_DIR/flux/fluxd.sock` | The IPC socket |
 

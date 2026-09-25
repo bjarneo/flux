@@ -127,8 +127,10 @@ func (d *Daemon) handleShare(dev *Device, l *lan.Link, p *proto.Packet) {
 		Text     string `json:"text"`
 		URL      string `json:"url"`
 		Open     bool   `json:"open"`
-		// Scan is set by Flux for Android for text that the camera read.
-		Scan bool `json:"scan"`
+		// Scan marks text or a PDF that the phone camera scanned. Photo marks
+		// a photo from the phone camera. Both come from Flux for Android.
+		Scan  bool `json:"scan"`
+		Photo bool `json:"photo"`
 	}
 	if p.Decode(&body) != nil {
 		return
@@ -149,11 +151,27 @@ func (d *Daemon) handleShare(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.notify(desktop.Notification{AppName: "Flux", Title: "Text from " + dev.Name, Body: body.Text})
 		d.markDirty()
 	case p.HasPayload():
-		go d.receiveFile(dev, l, p, body.Filename, body.Open)
+		kind := destDownload
+		switch {
+		case body.Scan:
+			kind = destScan
+		case body.Photo:
+			kind = destPhoto
+		}
+		go d.receiveFile(dev, l, p, body.Filename, body.Open, kind)
 	}
 }
 
-func (d *Daemon) receiveFile(dev *Device, l *lan.Link, p *proto.Packet, name string, open bool) {
+// fileDest selects the folder for a received file.
+type fileDest int
+
+const (
+	destDownload fileDest = iota // the download folder
+	destScan                     // the scan folder, for scanned PDFs
+	destPhoto                    // the photo folder
+)
+
+func (d *Daemon) receiveFile(dev *Device, l *lan.Link, p *proto.Packet, name string, open bool, kind fileDest) {
 	name = safeName(name)
 	t := d.newTransfer(dev, name, "in", p.PayloadSize)
 	ctx, cancel := context.WithCancel(d.ctx)
@@ -161,6 +179,12 @@ func (d *Daemon) receiveFile(dev *Device, l *lan.Link, p *proto.Packet, name str
 	d.mu.Lock()
 	t.cancel = cancel
 	dir := d.cfg.DownloadPath()
+	switch kind {
+	case destScan:
+		dir = d.cfg.ScanPath()
+	case destPhoto:
+		dir = d.cfg.PhotoPath()
+	}
 	d.mu.Unlock()
 
 	err := func() error {
@@ -201,8 +225,15 @@ func (d *Daemon) receiveFile(dev *Device, l *lan.Link, p *proto.Packet, name str
 		d.toast("Could not receive %s: %v", name, err)
 		return
 	}
+	title := "Received " + t.Name
+	switch kind {
+	case destScan:
+		title = "Scanned document from " + dev.Name
+	case destPhoto:
+		title = "Photo from " + dev.Name
+	}
 	d.notify(desktop.Notification{
-		AppName: "Flux", Title: "Received " + t.Name, Body: "From " + dev.Name,
+		AppName: "Flux", Title: title, Body: "Saved as " + t.Path,
 		Actions: []desktop.Action{{Key: "open:" + t.Path, Label: "Open"}, {Key: "reveal:" + t.Path, Label: "Show in folder"}},
 	})
 	if open {

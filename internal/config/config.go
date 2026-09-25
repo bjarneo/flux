@@ -29,7 +29,10 @@ type Config struct {
 	DownloadDir string `toml:"download_dir"`
 	// ScanDir is the folder for text that Flux for Android scans with the
 	// camera. Empty means <Documents>/flux/scanned.
-	ScanDir       string `toml:"scan_dir,omitempty"`
+	ScanDir string `toml:"scan_dir,omitempty"`
+	// PhotoDir is the folder for photos that Flux for Android takes with
+	// the camera. Empty means <Pictures>/flux.
+	PhotoDir      string `toml:"photo_dir,omitempty"`
 	AutoClipboard bool   `toml:"auto_clipboard"`
 	Notifications bool   `toml:"notifications"`
 	ReceiveInput  bool   `toml:"receive_input"`
@@ -144,6 +147,21 @@ func (c *Config) ScanPath() string {
 		docs = filepath.Join(home, "Documents")
 	}
 	return filepath.Join(docs, "flux", "scanned")
+}
+
+// PhotoPath returns the folder for photos from the phone camera. It uses
+// the photo_dir setting, then XDG_PICTURES_DIR, then ~/Pictures, with flux
+// inside.
+func (c *Config) PhotoPath() string {
+	home, _ := os.UserHomeDir()
+	if c.PhotoDir != "" {
+		return expand(c.PhotoDir, home)
+	}
+	pics := userDir("XDG_PICTURES_DIR", home)
+	if pics == "" {
+		pics = filepath.Join(home, "Pictures")
+	}
+	return filepath.Join(pics, "flux")
 }
 
 func expand(p, home string) string {

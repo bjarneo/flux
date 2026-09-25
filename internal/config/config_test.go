@@ -66,3 +66,17 @@ func TestScanPath(t *testing.T) {
 		t.Errorf("scan_dir: %s, want %s", got, want)
 	}
 }
+
+func TestPhotoPath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	c := &Config{}
+	if got, want := c.PhotoPath(), filepath.Join(home, "Pictures", "flux"); got != want {
+		t.Errorf("default: %s, want %s", got, want)
+	}
+	c.PhotoDir = "~/phone"
+	if got, want := c.PhotoPath(), filepath.Join(home, "phone"); got != want {
+		t.Errorf("photo_dir: %s, want %s", got, want)
+	}
+}
