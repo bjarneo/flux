@@ -116,6 +116,11 @@ func (d *Daemon) handleTelephony(dev *Device, p *proto.Packet) {
 		if pauseMedia && m != nil {
 			c.pause.pause(m)
 		}
+		if b.Event == "talking" && c.notice != 0 && d.notifier != nil {
+			// The user answered, so the ringing notification closes.
+			_ = d.notifier.Close(c.notice)
+			c.notice = 0
+		}
 		if b.Event == "ringing" {
 			// A second ringing packet, with the number or the name, replaces
 			// the first notification.

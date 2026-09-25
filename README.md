@@ -91,6 +91,7 @@ flux url https://omarchy.org
 flux sms +4712345678 "On my way"
 flux media play-pause
 flux notifications
+flux notify "Backup done"   # a notification on the phone
 flux commands add "Lock screen" omarchy-system-lock   # a command for the phone
 flux commands               # list the commands, with their IDs
 flux commands remove ID
@@ -132,6 +133,7 @@ photo_dir = "~/Pictures/flux"             # photos from the phone camera
 auto_clipboard = true        # sync the clipboard in both directions
 notifications = true         # show phone notifications on this computer
 share_home = true            # let Flux for Android browse the home folder, read-only
+pause_media_on_call = true   # pause the players on this computer during a phone call
 
 # Commands that the phone can run. A new config has none. Add them in the
 # Phone commands tab of the window, or with `flux commands add`.
@@ -196,6 +198,41 @@ other settings change the image while it streams.
 `flux webcam reset` sets the defaults again and keeps `aspect`,
 `resolution`, and `camera`. The phone limits each value to what its camera
 supports, and saves the settings for the next stream.
+
+## Notifications to the phone
+
+To show a notification on the phone, run `flux notify`. The phone shows it
+in the "From computers" channel, with the name of this computer:
+
+```sh
+flux notify "Backup done" "412 files, 2.1 GB"
+```
+
+To get a notification when a long command ends, run the command through
+`flux notify --run`. Flux runs it in the terminal, then sends "finished" or
+"failed" with the exit code and the time that it took. `flux` exits with
+the exit code of the command, so the command still works in scripts:
+
+```sh
+flux notify --run -- make -j8
+flux notify --run -- rsync -a ~/Photos nas:/backup
+```
+
+Ctrl+C stops the command, and the phone still gets the result. Use
+`--device NAME` before `--` when more than 1 phone is connected.
+
+## Calls
+
+To see phone calls on this computer, turn on **Call alerts** on the device
+screen of Flux for Android. The phone asks for phone access. The call log
+gives the number, and the contacts give the name. You can refuse both.
+Then the notification shows "Unknown caller".
+
+While the phone rings or has a call, fluxd pauses the players on this
+computer that play. When the call ends, fluxd plays only those players
+again. A player that you start again during the call stays as it is. A
+missed call gives a notification. To keep the players on, set
+`pause_media_on_call = false` in `config.toml`.
 
 ## Open the window
 
