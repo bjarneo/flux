@@ -43,6 +43,11 @@ type Daemon struct {
 	media    *desktop.Media
 	ringer   ringer
 
+	// dnd is the Do Not Disturb of the desktop, or nil when the desktop has
+	// no supported notification service.
+	dnd      dndBackend
+	dndGuard dndGuard
+
 	webcam       *webcamSession
 	webcamErr    string
 	webcamConfig json.RawMessage
@@ -213,6 +218,16 @@ func (d *Daemon) Run() error {
 		m.OnChange(d.onDesktopMediaChange)
 	} else {
 		d.logf("media control off: %v", err)
+	}
+
+	if dnd := desktop.NewDND(); dnd.Kind() != "" {
+		d.mu.Lock()
+		d.dnd = dnd
+		d.mu.Unlock()
+		d.logf("Do Not Disturb sync uses %s", dnd.Kind())
+		go d.dndLoop(ctx)
+	} else {
+		d.logf("Do Not Disturb sync off: no supported notification service")
 	}
 
 	go d.clip.Watch(ctx, d.onLocalClipboard)

@@ -36,6 +36,8 @@ type Config struct {
 	AutoClipboard bool   `toml:"auto_clipboard"`
 	Notifications bool   `toml:"notifications"`
 	ShareHome     bool   `toml:"share_home"`
+	// SyncDnd syncs Do Not Disturb between this computer and the phone.
+	SyncDnd bool `toml:"sync_dnd"`
 	// GUI selects the window: "plugin" for the omarchy-shell plugin, "app"
 	// for flux-gui, or empty for the plugin when it is enabled.
 	GUI      string    `toml:"gui,omitempty"`
@@ -81,7 +83,7 @@ var mu sync.Mutex
 func Load() (*Config, error) {
 	mu.Lock()
 	defer mu.Unlock()
-	c := &Config{AutoClipboard: true, Notifications: true, ShareHome: true}
+	c := &Config{AutoClipboard: true, Notifications: true, ShareHome: true, SyncDnd: true}
 	data, err := os.ReadFile(Path())
 	if errors.Is(err, os.ErrNotExist) {
 		c.Commands = []Command{}
