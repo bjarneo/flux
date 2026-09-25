@@ -85,10 +85,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      # The default packages of the action include "tools", which the
+      # current cmdline-tools no longer have.
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools platforms;android-36 build-tools;36.0.0
       - uses: gradle/actions/setup-gradle@v4
-      - name: Install SDK packages
-        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
       - name: Test and build APKs
         run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease --no-daemon --stacktrace
       - uses: actions/upload-artifact@v4

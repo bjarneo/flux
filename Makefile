@@ -37,7 +37,7 @@ test:
 
 vet:
 	$(GO) vet ./cmd/... ./internal/...
-	gofmt -l .
+	@out=$$(gofmt -l cmd internal); if [ -n "$$out" ]; then echo "Run gofmt -w on:"; echo "$$out"; exit 1; fi
 
 # install copies what `make build` made. It does not build, so that
 # `sudo make install` works without Go on the PATH of root. On a real
