@@ -14,6 +14,11 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("syncClipboard", true)
         set(v) = prefs.edit().putBoolean("syncClipboard", v).apply()
 
+    /** Sends the calls of this phone to the computers. It needs the phone permission. */
+    var callAlerts: Boolean
+        get() = prefs.getBoolean("callAlerts", false)
+        set(v) = prefs.edit().putBoolean("callAlerts", v).apply()
+
     /** The time of the last local clipboard change, in milliseconds. */
     var clipboardTimestamp: Long
         get() = prefs.getLong("clipboardTimestamp", 0)

@@ -62,6 +62,9 @@ data class UiState(
     val shareNotifications: Boolean = true,
     val syncClipboard: Boolean = true,
     val notificationAccess: Boolean = false,
+    /** Call alerts are on. [callAccess] is true when the phone allows them. */
+    val callAlerts: Boolean = false,
+    val callAccess: Boolean = false,
     val ringingFrom: String? = null,
     val browse: BrowseState? = null,
     val listeningUdp: Boolean = true,

@@ -41,6 +41,7 @@ class FluxService : Service() {
     private var lastBattery = -1
     private var lastCharging = false
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var calls: CallMonitor? = null
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
@@ -156,6 +157,17 @@ class FluxService : Service() {
         scope.launch {
             FluxCore.state.map { s -> s.devices.count { it.paired && it.online } }.distinctUntilChanged().collect { startInForeground(it) }
         }
+        // Call alerts follow the switch on the device screen and the phone permission.
+        scope.launch {
+            FluxCore.state.map { it.callAlerts && it.callAccess }.distinctUntilChanged().collect { on ->
+                if (on) {
+                    calls = calls ?: CallMonitor(this@FluxService)
+                    calls?.start()
+                } else {
+                    calls?.stop()
+                }
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -172,6 +184,7 @@ class FluxService : Service() {
 
     override fun onDestroy() {
         scope.cancel()
+        calls?.stop()
         runCatching { nsd?.stopServiceDiscovery(nsdListener) }
         unannounce()
         runCatching { getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(networkCallback) }

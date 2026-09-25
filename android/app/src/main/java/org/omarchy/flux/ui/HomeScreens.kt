@@ -1,5 +1,6 @@
 package org.omarchy.flux.ui
 
+import android.Manifest
 import android.content.ComponentName
 import android.content.Intent
 import android.os.Build
@@ -211,6 +212,15 @@ fun HomeScreen(
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) Share.sendFiles(FluxCore, d.id, uris)
     }
+    // Call alerts need the phone state. The call log and the contacts add
+    // the number and the name, and the user can refuse them.
+    val askPhone = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
+        if (granted[Manifest.permission.READ_PHONE_STATE] == true) {
+            FluxCore.setCallAlerts(true)
+        } else {
+            FluxCore.toast("Call alerts need phone access. Allow it in the app settings.")
+        }
+    }
     fun guarded(action: () -> Unit): () -> Unit = { if (d.online) action() else FluxCore.toast("${d.name} is not reachable") }
     val actions = listOf(
         Action(Ic.pasteGo, "Send clipboard", "Paste it on the computer", guarded { Plugins.sendClipboard(FluxCore, d.id) }),
@@ -256,6 +266,18 @@ fun HomeScreen(
         }
         SwitchRow(Ic.paste, "Sync clipboard", "Copy on one device, paste on the other", checked = state.syncClipboard) {
             FluxCore.setSyncClipboard(!state.syncClipboard)
+        }
+        SwitchRow(
+            Ic.call,
+            "Call alerts",
+            if (state.callAccess) "Show calls on the computer and pause its media" else "Tap to allow phone access",
+            checked = state.callAlerts && state.callAccess,
+        ) {
+            if (!state.callAccess) {
+                askPhone.launch(arrayOf(Manifest.permission.READ_PHONE_STATE, Manifest.permission.READ_CALL_LOG, Manifest.permission.READ_CONTACTS))
+            } else {
+                FluxCore.setCallAlerts(!state.callAlerts)
+            }
         }
         Spacer(Modifier.height(96.dp))
     }

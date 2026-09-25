@@ -28,6 +28,8 @@ object Android {
     const val CHANNEL_SERVICE = "flux.service"
     const val CHANNEL_EVENTS = "flux.events"
     const val CHANNEL_RING = "flux.ring"
+    const val CHANNEL_COMPUTER = "flux.computer"
+    private const val TAG_COMPUTER = "computer"
     const val ID_SERVICE = 1
     const val ID_PAIR = 2
     const val ID_RING = 3
@@ -81,6 +83,9 @@ object Android {
         nm.createNotificationChannel(NotificationChannel(CHANNEL_EVENTS, "Events", NotificationManager.IMPORTANCE_DEFAULT).apply {
             description = "Received files, links, and pairing requests"
         })
+        nm.createNotificationChannel(NotificationChannel(CHANNEL_COMPUTER, "From computers", NotificationManager.IMPORTANCE_HIGH).apply {
+            description = "Notifications that a computer sends, for example with flux notify"
+        })
         nm.createNotificationChannel(NotificationChannel(CHANNEL_RING, "Find my phone", NotificationManager.IMPORTANCE_HIGH).apply {
             description = "Rings the phone when a computer asks"
             setSound(null, null)
@@ -123,6 +128,37 @@ object Android {
             .build()
         NotificationManagerCompat.from(context).notify(nextId++, n)
     }
+
+    /**
+     * Shows a notification from a computer. The notification listener
+     * skips the notifications of Flux, so it does not go back to the computer.
+     */
+    @Suppress("MissingPermission")
+    fun showFromComputer(context: Context, n: ComputerNotification) {
+        if (!canNotify(context)) return
+        val b = NotificationCompat.Builder(context, CHANNEL_COMPUTER)
+            .setSmallIcon(R.drawable.ic_stat_flux)
+            .setContentTitle(n.title)
+            .setSubText(n.subText)
+            .setWhen(n.time)
+            .setShowWhen(true)
+            .setContentIntent(openApp(context))
+            .setAutoCancel(n.clearable)
+            .setOngoing(!n.clearable)
+        if (n.text.isNotEmpty()) {
+            b.setContentText(n.text).setStyle(NotificationCompat.BigTextStyle().bigText(n.text))
+        }
+        NotificationManagerCompat.from(context).notify(TAG_COMPUTER, n.notificationId, b.build())
+    }
+
+    fun cancelFromComputer(context: Context, n: ComputerNotification) {
+        NotificationManagerCompat.from(context).cancel(TAG_COMPUTER, n.notificationId)
+    }
+
+    /** True when the phone lets Flux read the call state. */
+    fun hasPhoneState(context: Context): Boolean =
+        androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_PHONE_STATE) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
 
     /** A file in the public Downloads folder that is still being written. */
     class Download(val uri: Uri, val stream: OutputStream)

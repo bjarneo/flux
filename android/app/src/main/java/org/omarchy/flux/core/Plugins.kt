@@ -48,6 +48,10 @@ object Plugins {
             Types.CLIPBOARD_CONNECT -> receiveClipboard(core, p.string("content"), p.long("timestamp") ?: 0L)
             Types.SHARE -> Share.receive(core, d, p)
             Types.SHARE_UPDATE -> Unit
+            Types.NOTIFICATION -> {
+                val n = ComputerNotification.from(p, d.id, d.identity.deviceName, System.currentTimeMillis()) ?: return
+                if (n.cancel) Android.cancelFromComputer(core.app, n) else Android.showFromComputer(core.app, n)
+            }
             Types.NOTIFICATION_REQUEST -> {
                 if (p.bool("request") == true) NotificationSync.sendAll(d)
                 p.string("cancel")?.let { NotificationSync.dismiss(it) }

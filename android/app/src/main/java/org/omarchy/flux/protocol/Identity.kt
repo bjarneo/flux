@@ -25,6 +25,7 @@ object Types {
     const val MPRIS_REQUEST = "kdeconnect.mpris.request"
     const val SFTP = "kdeconnect.sftp"
     const val SFTP_REQUEST = "kdeconnect.sftp.request"
+    const val TELEPHONY = "kdeconnect.telephony"
 
     /** Flux extension: this phone opens a listener that the computer connects to. */
     const val FLUX_TUNNEL = "flux.tunnel"
@@ -36,7 +37,7 @@ object Types {
 /** Packet types that the phone accepts. */
 val INCOMING = listOf(
     Types.PING, Types.BATTERY, Types.BATTERY_REQUEST, Types.CLIPBOARD, Types.CLIPBOARD_CONNECT,
-    Types.SHARE, Types.SHARE_UPDATE, Types.NOTIFICATION_REQUEST, Types.NOTIFICATION_REPLY,
+    Types.SHARE, Types.SHARE_UPDATE, Types.NOTIFICATION, Types.NOTIFICATION_REQUEST, Types.NOTIFICATION_REPLY,
     Types.NOTIFICATION_ACTION, Types.FIND_MY_PHONE, Types.RUN_COMMAND, Types.MPRIS,
     Types.SFTP, Types.FLUX_TUNNEL, Types.FLUX_WEBCAM,
 )
@@ -45,7 +46,7 @@ val INCOMING = listOf(
 val OUTGOING = listOf(
     Types.PING, Types.BATTERY, Types.CLIPBOARD, Types.CLIPBOARD_CONNECT, Types.SHARE,
     Types.SHARE_UPDATE, Types.NOTIFICATION, Types.FIND_MY_PHONE, Types.RUN_COMMAND_REQUEST,
-    Types.MPRIS_REQUEST, Types.SFTP_REQUEST, Types.FLUX_TUNNEL, Types.FLUX_WEBCAM,
+    Types.MPRIS_REQUEST, Types.SFTP_REQUEST, Types.TELEPHONY, Types.FLUX_TUNNEL, Types.FLUX_WEBCAM,
 )
 
 /** The body of a kdeconnect.identity packet. */

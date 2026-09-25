@@ -27,7 +27,7 @@ battery_full battery_6_bar battery_5_bar battery_4_bar battery_3_bar
 battery_2_bar battery_1_bar battery_0_bar battery_charging_full
 
 upload_file photo_camera music_note terminal folder_open ring_volume
-notifications notifications_active
+notifications notifications_active call
 
 skip_previous+fill skip_next+fill play_arrow+fill pause+fill
 

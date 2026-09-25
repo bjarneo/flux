@@ -177,6 +177,8 @@ object FluxCore {
                 shareNotifications = settings.shareNotifications,
                 syncClipboard = settings.syncClipboard,
                 notificationAccess = Android.hasNotificationAccess(app),
+                callAlerts = settings.callAlerts,
+                callAccess = Android.hasPhoneState(app),
                 ringingFrom = ringingFrom,
                 browse = browse,
                 listeningUdp = backend?.listeningUdp ?: true,
@@ -252,6 +254,11 @@ object FluxCore {
 
     fun setSyncClipboard(on: Boolean) {
         settings.syncClipboard = on
+        publish()
+    }
+
+    fun setCallAlerts(on: Boolean) {
+        settings.callAlerts = on
         publish()
     }
 }

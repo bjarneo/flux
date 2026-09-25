@@ -67,6 +67,7 @@ object Ic {
     val ring = R.drawable.ic_ring_volume
     val notifications = R.drawable.ic_notifications
     val notificationsActive = R.drawable.ic_notifications_active
+    val call = R.drawable.ic_call
 
     val previous = R.drawable.ic_skip_previous_fill
     val next = R.drawable.ic_skip_next_fill
