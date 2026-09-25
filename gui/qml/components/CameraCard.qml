@@ -352,7 +352,7 @@ Card {
         anchors.leftMargin: 14
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
-        text: "A Format, Resolution, or Camera change restarts the stream on the phone."
+        text: "A Format or Resolution change restarts the stream on the phone."
         color: Theme.dim
         font.pixelSize: 11
         wrapMode: Text.Wrap

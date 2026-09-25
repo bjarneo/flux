@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -426,6 +427,10 @@ func webcam(args []string) error {
 	return nil
 }
 
+// webcamKeys are the settings that Flux for Android reads. The phone
+// ignores other keys, so the CLI refuses them.
+var webcamKeys = []string{"aspect", "resolution", "camera", "mirror", "zoom", "exposure", "whiteBalance", "brightness", "contrast", "saturation", "warmth"}
+
 // webcamSettings turns KEY=VALUE arguments into a config object. true and
 // false become booleans, numbers become numbers, and the rest stays text.
 func webcamSettings(args []string) (map[string]any, error) {
@@ -437,6 +442,9 @@ func webcamSettings(args []string) (map[string]any, error) {
 		k, v, ok := strings.Cut(a, "=")
 		if !ok || k == "" {
 			return nil, fmt.Errorf("%q is not KEY=VALUE", a)
+		}
+		if !slices.Contains(webcamKeys, k) {
+			return nil, fmt.Errorf("%q is not a setting. Use one of: %s", k, strings.Join(webcamKeys, ", "))
 		}
 		switch {
 		case v == "true" || v == "false":

@@ -13,4 +13,7 @@ func TestWebcamSettings(t *testing.T) {
 	if _, err := webcamSettings([]string{"aspect"}); err == nil {
 		t.Fatal("a setting without = must fail")
 	}
+	if _, err := webcamSettings([]string{"white_balance=daylight"}); err == nil {
+		t.Fatal("an unknown setting must fail")
+	}
 }

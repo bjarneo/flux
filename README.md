@@ -174,6 +174,29 @@ flux webcam reset                          # the neutral settings
 flux webcam stop
 ```
 
+To change the settings in the window, open the PHONE CAMERA card on the
+Overview page and press Settings. The Settings sheet in the Webcam mode on
+the phone changes the same settings. A change to `aspect` or `resolution`
+restarts the stream. The other settings change the image while it streams.
+
+| Key | Values | Default |
+| --- | --- | --- |
+| `aspect` | `16:9`, `4:3`, `1:1`, `9:16` | `16:9` |
+| `resolution` | `720`, `1080`. The short side of the frame, in pixels | `720` |
+| `camera` | `back`, `front` | `back` |
+| `mirror` | `true`, `false` | `false` |
+| `zoom` | `1` to the maximum zoom of the camera | `1` |
+| `exposure` | The EV range of the camera | `0` |
+| `whiteBalance` | `auto`, `daylight`, `cloudy`, `shade`, `incandescent`, `fluorescent`, `twilight` | `auto` |
+| `brightness` | `-1` to `1` | `0` |
+| `contrast` | `0` to `2` | `1` |
+| `saturation` | `0` to `2` | `1` |
+| `warmth` | `-1` to `1`. A higher value makes the image warmer | `0` |
+
+`flux webcam reset` sets the defaults again and keeps `aspect`,
+`resolution`, and `camera`. The phone limits each value to what its camera
+supports, and saves the settings for the next stream.
+
 ## Open the window
 
 `flux open [page]` opens the plugin when `omarchy-shell` runs and the plugin
