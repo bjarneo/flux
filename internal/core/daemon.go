@@ -46,6 +46,10 @@ type Daemon struct {
 	inputErr error
 	ringer   ringer
 
+	webcam    *webcamSession
+	webcamErr string
+	loopback  *desktop.Loopback
+
 	subs   map[int]func(event string, data any)
 	nextID int
 	dirty  chan struct{}
@@ -221,6 +225,14 @@ func (d *Daemon) Run() error {
 	<-ctx.Done()
 	d.closeLinks()
 	d.ringer.Stop()
+	d.mu.Lock()
+	loop := d.loopback
+	d.mu.Unlock()
+	if loop != nil {
+		if err := loop.Close(); err != nil {
+			d.logf("remove %s: %v", loop.Path, err)
+		}
+	}
 	if d.input != nil {
 		_ = d.input.Close()
 	}

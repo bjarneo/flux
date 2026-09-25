@@ -144,6 +144,21 @@ command = "omarchy-system-lock"
 | `~/.cache/flux/` | Notification icons and album art |
 | `$XDG_RUNTIME_DIR/flux/fluxd.sock` | The IPC socket |
 
+## Phone as webcam
+
+Flux for Android can stream its camera to this computer. Video apps then
+see a camera named "Flux Camera". It needs `ffmpeg` and `v4l2loopback`:
+
+```sh
+sudo pacman -S ffmpeg v4l2loopback-dkms
+sudo modprobe v4l2loopback devices=0   # skip this when the module is already loaded
+sudo make install                      # installs the udev rule for the control device
+sudo udevadm trigger /dev/v4l2loopback
+```
+
+On the phone, open Camera, select Webcam, and press Start. `flux webcam`
+shows the state, and `flux webcam stop` stops the stream.
+
 ## Open the window
 
 `flux open [page]` opens the plugin when `omarchy-shell` runs and the plugin

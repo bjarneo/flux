@@ -179,3 +179,33 @@ func TestClipboardObserve(t *testing.T) {
 		t.Fatal("the echo of Set must not be reported")
 	}
 }
+
+func TestLoopbackABI(t *testing.T) {
+	if got := unsafe.Sizeof(loopbackConfig{}); got != 72 {
+		t.Fatalf("struct v4l2_loopback_config has %d bytes, want 72", got)
+	}
+	if loopbackAdd != 0x40487e01 || loopbackRemove != 0x40047e02 {
+		t.Fatalf("ioctl numbers %#x %#x", loopbackAdd, loopbackRemove)
+	}
+}
+
+func TestFindLoopback(t *testing.T) {
+	dir := t.TempDir()
+	old := sysfsVideo
+	sysfsVideo = dir
+	defer func() { sysfsVideo = old }()
+	for nr, name := range map[string]string{"video50": "Hardware ISP Camera", "video51": "Flux Camera"} {
+		if err := os.MkdirAll(filepath.Join(dir, nr), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, nr, "name"), []byte(name+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if nr, ok := findLoopback("Flux Camera"); !ok || nr != 51 {
+		t.Fatalf("findLoopback = %d, %v", nr, ok)
+	}
+	if _, ok := findLoopback("Nothing"); ok {
+		t.Fatal("found a device that does not exist")
+	}
+}

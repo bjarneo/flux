@@ -1,0 +1,4 @@
+# Give the user at the seat access to the v4l2loopback control device.
+# fluxd adds the virtual camera "Flux Camera" there when the phone streams
+# as a webcam, without a change to the module options.
+KERNEL=="v4l2loopback", SUBSYSTEM=="misc", TAG+="uaccess"

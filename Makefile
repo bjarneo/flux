@@ -44,6 +44,7 @@ install: build
 	$(call copy-plugin,$(DESTDIR)$(PREFIX)/share/flux/omarchy-plugin)
 	install -Dm644 dist/fluxd.service $(DESTDIR)$(PREFIX)/lib/systemd/user/fluxd.service
 	install -Dm644 dist/60-flux-uinput.rules $(DESTDIR)$(PREFIX)/lib/udev/rules.d/60-flux-uinput.rules
+	install -Dm644 dist/61-flux-v4l2loopback.rules $(DESTDIR)$(PREFIX)/lib/udev/rules.d/61-flux-v4l2loopback.rules
 	install -Dm644 dist/flux-uinput.conf $(DESTDIR)$(PREFIX)/lib/modules-load.d/flux-uinput.conf
 	install -Dm644 dist/flux.desktop $(DESTDIR)$(PREFIX)/share/applications/flux.desktop
 	install -Dm644 dist/flux.svg $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/flux.svg
@@ -54,6 +55,7 @@ uninstall:
 	rm -rf $(DESTDIR)$(PREFIX)/share/flux
 	rm -f $(DESTDIR)$(PREFIX)/lib/systemd/user/fluxd.service
 	rm -f $(DESTDIR)$(PREFIX)/lib/udev/rules.d/60-flux-uinput.rules
+	rm -f $(DESTDIR)$(PREFIX)/lib/udev/rules.d/61-flux-v4l2loopback.rules
 	rm -f $(DESTDIR)$(PREFIX)/lib/modules-load.d/flux-uinput.conf
 	rm -f $(DESTDIR)$(PREFIX)/share/applications/flux.desktop
 	rm -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/flux.svg

@@ -55,6 +55,19 @@ func doctor() {
 	check(unix.Access("/dev/uinput", unix.W_OK) == nil, "/dev/uinput is writable, so the phone touchpad works",
 		"The phone touchpad needs /dev/uinput. Install /usr/lib/udev/rules.d/60-flux-uinput.rules, then log out and in")
 
+	// The phone as webcam needs ffmpeg and access to the v4l2loopback
+	// control device. Both are optional.
+	_, ffErr := exec.LookPath("ffmpeg")
+	check(ffErr == nil, "ffmpeg is installed, so the phone can be a webcam",
+		"The phone as webcam needs ffmpeg. Install it with: sudo pacman -S ffmpeg")
+	switch {
+	case unix.Access("/dev/v4l2loopback", unix.F_OK) != nil:
+		check(false, "", "The phone as webcam needs v4l2loopback. Install v4l2loopback-dkms, then run: sudo modprobe v4l2loopback devices=0")
+	default:
+		check(unix.Access("/dev/v4l2loopback", unix.W_OK) == nil, "fluxd can add the Flux Camera device",
+			"fluxd cannot add the Flux Camera device. Install /usr/lib/udev/rules.d/61-flux-v4l2loopback.rules, then run: sudo udevadm trigger /dev/v4l2loopback")
+	}
+
 	for _, bin := range []string{"wl-copy", "wl-paste", "pw-play", "xdg-open"} {
 		_, lerr := exec.LookPath(bin)
 		check(lerr == nil, bin+" is installed", bin+" is missing. Flux needs it for the clipboard, the ring sound, and opening files")

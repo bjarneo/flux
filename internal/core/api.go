@@ -130,6 +130,7 @@ func (d *Daemon) Snapshot() json.RawMessage {
 			"shareHome":     d.cfg.ShareHome,
 			"downloadDir":   d.cfg.DownloadPath(),
 		},
+		"webcam":     d.webcamViewLocked(),
 		"ringing":    d.ringing,
 		"ringFrom":   d.ringFrom,
 		"inputError": inputErr,
@@ -203,6 +204,8 @@ func (d *Daemon) Call(_ context.Context, method string, raw json.RawMessage) (an
 	case "ring.stop":
 		d.StopRing()
 		return ok, nil
+	case "webcam.stop":
+		return ok, d.StopWebcam()
 	case "clipboard.copy":
 		if p.Text == "" {
 			return nil, apiErr("bad_params", "text is empty")

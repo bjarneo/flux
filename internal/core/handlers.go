@@ -92,6 +92,8 @@ func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.handleSftp(dev, p)
 	case proto.TypeSftpRequest:
 		d.handleBrowseRequest(dev, l, p)
+	case proto.TypeFluxWebcam:
+		d.handleWebcam(dev, l, p)
 	case proto.TypeSmsMessages:
 		d.handleSms(dev, p)
 	default:

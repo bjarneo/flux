@@ -40,6 +40,7 @@ Commands:
   commands add NAME CMD  Add a command, for example: commands add "Lock" omarchy-system-lock
   commands remove ID     Remove a command
   run ID                 Run a command on this computer
+  webcam [stop]          Show the phone camera state, or stop the phone camera
   watch                  Print each state change as one JSON line
   doctor                 Check the setup and print the fixes
   version                Print the version
@@ -92,6 +93,8 @@ func main() {
 		err = commands(args)
 	case "run":
 		err = call("commands.run", map[string]any{"id": need(args, "ID")})
+	case "webcam":
+		err = webcam(first(args))
 	case "watch":
 		err = watch()
 	case "doctor":
@@ -357,6 +360,39 @@ func commands(args []string) error {
 	}
 	for _, c := range s.Commands {
 		fmt.Printf("%-10s %-18s $ %s\n", c.ID, c.Name, c.Command)
+	}
+	return nil
+}
+
+func webcam(action string) error {
+	if action == "stop" {
+		return call("webcam.stop", nil)
+	}
+	var s struct {
+		Webcam *struct {
+			Active   bool   `json:"active"`
+			Device   string `json:"device"`
+			Label    string `json:"label"`
+			FromName string `json:"fromName"`
+			Width    int    `json:"width"`
+			Height   int    `json:"height"`
+			FPS      int    `json:"fps"`
+			Error    string `json:"error"`
+		} `json:"webcam"`
+	}
+	if err := callInto("state", nil, &s); err != nil {
+		return err
+	}
+	w := s.Webcam
+	switch {
+	case w == nil:
+		fmt.Println("No phone camera. Start it in Flux for Android: Camera, then Webcam.")
+	case w.Error != "":
+		fmt.Println("The phone camera failed:", w.Error)
+	case w.Active:
+		fmt.Printf("%s is live as %s on %s, %dx%d at %d fps\n", w.FromName, w.Label, w.Device, w.Width, w.Height, w.FPS)
+	default:
+		fmt.Printf("%s is starting as %s on %s\n", w.FromName, w.Label, w.Device)
 	}
 	return nil
 }

@@ -95,11 +95,17 @@ func (l *Link) OpenTunnel(ctx context.Context, id string) (*tls.Conn, error) {
 	if reply.err != "" {
 		return nil, fmt.Errorf("the device could not open a tunnel: %s", reply.err)
 	}
-	if reply.port < MinPayloadPort || reply.port > MaxPayloadPort {
-		return nil, fmt.Errorf("the device sent tunnel port %d, outside %d to %d", reply.port, MinPayloadPort, MaxPayloadPort)
+	return l.DialPeer(ctx, reply.port)
+}
+
+// DialPeer connects to a TLS listener that the peer opened on a port from
+// 1739 to 1764, as the TLS client. It checks the pinned certificate.
+func (l *Link) DialPeer(ctx context.Context, port int) (*tls.Conn, error) {
+	if port < MinPayloadPort || port > MaxPayloadPort {
+		return nil, fmt.Errorf("the device sent port %d, outside %d to %d", port, MinPayloadPort, MaxPayloadPort)
 	}
 	d := net.Dialer{Timeout: 10 * time.Second}
-	conn, err := d.DialContext(ctx, "tcp", net.JoinHostPort(l.IP(), fmt.Sprint(reply.port)))
+	conn, err := d.DialContext(ctx, "tcp", net.JoinHostPort(l.IP(), fmt.Sprint(port)))
 	if err != nil {
 		return nil, err
 	}
