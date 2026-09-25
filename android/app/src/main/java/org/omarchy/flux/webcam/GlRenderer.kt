@@ -45,6 +45,12 @@ class GlRenderer {
     private var preview: Target? = null
     private var encoder: Target? = null
 
+    // The preview that the screen gave. The screen can give it before GL is
+    // ready, so start() attaches it when GL is ready.
+    private var previewTexture: SurfaceTexture? = null
+    private var previewWidth = 0
+    private var previewHeight = 0
+
     private val texMatrix = FloatArray(16)
     private val quad: FloatBuffer = floatBuffer(
         // x, y, u, v for a triangle strip over the whole target.
@@ -76,6 +82,7 @@ class GlRenderer {
     fun start(size: Size, onReady: (SurfaceTexture) -> Unit) = handler.post {
         try {
             if (context == EGL14.EGL_NO_CONTEXT) setUpEgl()
+            attachPreview()
             cameraSize = size
             val st = cameraTexture ?: SurfaceTexture(texture).also { st ->
                 st.setOnFrameAvailableListener({ drawFrame() }, handler)
@@ -92,9 +99,19 @@ class GlRenderer {
     fun setPreview(texture: SurfaceTexture?, width: Int, height: Int) = runSync {
         preview?.let { destroySurface(it.surface) }
         preview = null
-        if (texture != null && context != EGL14.EGL_NO_CONTEXT) {
-            preview = Target(createWindow(texture), width, height)
-        }
+        previewTexture = texture
+        previewWidth = width
+        previewHeight = height
+        attachPreview()
+    }
+
+    /** Draws into the preview that the screen gave, when GL is ready. */
+    private fun attachPreview() {
+        val texture = previewTexture ?: return
+        if (preview != null || context == EGL14.EGL_NO_CONTEXT) return
+        preview = runCatching { Target(createWindow(texture), previewWidth, previewHeight) }
+            .onFailure { Log.w(TAG, "preview surface failed", it) }
+            .getOrNull()
     }
 
     /** Sends frames to [surface], or stops when it is null. It waits until done. */
@@ -214,6 +231,7 @@ class GlRenderer {
             preview?.let { destroySurface(it.surface) }
             encoder?.let { destroySurface(it.surface) }
             preview = null
+            previewTexture = null
             encoder = null
             cameraTexture?.release()
             cameraTexture = null
