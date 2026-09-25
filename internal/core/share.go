@@ -128,9 +128,12 @@ func (d *Daemon) handleShare(dev *Device, l *lan.Link, p *proto.Packet) {
 		URL      string `json:"url"`
 		Open     bool   `json:"open"`
 		// Scan marks text or a PDF that the phone camera scanned. Photo marks
-		// a photo from the phone camera. Both come from Flux for Android.
-		Scan  bool `json:"scan"`
-		Photo bool `json:"photo"`
+		// a photo from the phone camera. Screenshot marks a new screenshot
+		// that the phone sends by itself, together with Photo, so that an
+		// older fluxd saves it as a photo. All come from Flux for Android.
+		Scan       bool `json:"scan"`
+		Photo      bool `json:"photo"`
+		Screenshot bool `json:"screenshot"`
 	}
 	if p.Decode(&body) != nil {
 		return
@@ -155,6 +158,8 @@ func (d *Daemon) handleShare(dev *Device, l *lan.Link, p *proto.Packet) {
 		switch {
 		case body.Scan:
 			kind = destScan
+		case body.Screenshot:
+			kind = destScreenshot
 		case body.Photo:
 			kind = destPhoto
 		}
@@ -166,10 +171,24 @@ func (d *Daemon) handleShare(dev *Device, l *lan.Link, p *proto.Packet) {
 type fileDest int
 
 const (
-	destDownload fileDest = iota // the download folder
-	destScan                     // the scan folder, for scanned PDFs
-	destPhoto                    // the photo folder
+	destDownload   fileDest = iota // the download folder
+	destScan                       // the scan folder, for scanned PDFs
+	destPhoto                      // the photo folder
+	destScreenshot                 // the screenshots folder in the photo folder
 )
+
+// destDir returns the folder for a received file of the kind.
+func destDir(cfg *config.Config, kind fileDest) string {
+	switch kind {
+	case destScan:
+		return cfg.ScanPath()
+	case destPhoto:
+		return cfg.PhotoPath()
+	case destScreenshot:
+		return filepath.Join(cfg.PhotoPath(), "screenshots")
+	}
+	return cfg.DownloadPath()
+}
 
 func (d *Daemon) receiveFile(dev *Device, l *lan.Link, p *proto.Packet, name string, open bool, kind fileDest) {
 	name = safeName(name)
@@ -178,13 +197,7 @@ func (d *Daemon) receiveFile(dev *Device, l *lan.Link, p *proto.Packet, name str
 	defer cancel()
 	d.mu.Lock()
 	t.cancel = cancel
-	dir := d.cfg.DownloadPath()
-	switch kind {
-	case destScan:
-		dir = d.cfg.ScanPath()
-	case destPhoto:
-		dir = d.cfg.PhotoPath()
-	}
+	dir := destDir(d.cfg, kind)
 	d.mu.Unlock()
 
 	err := func() error {
@@ -231,6 +244,8 @@ func (d *Daemon) receiveFile(dev *Device, l *lan.Link, p *proto.Packet, name str
 		title = "Scanned document from " + dev.Name
 	case destPhoto:
 		title = "Photo from " + dev.Name
+	case destScreenshot:
+		title = "Screenshot from " + dev.Name
 	}
 	d.notify(desktop.Notification{
 		AppName: "Flux", Title: title, Body: "Saved as " + t.Path,
