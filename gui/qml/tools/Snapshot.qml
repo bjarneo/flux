@@ -5,13 +5,15 @@ import ".."
 // quits. It needs only QtQuick:
 //   QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software QML_XHR_ALLOW_FILE_READ=1 \
 //   FLUX_SNAPSHOT=<dir> qml6 gui/qml/tools/Snapshot.qml
-// Arguments after "--" also work: -- <dir> [only] [theme=<colors.toml>].
+// Arguments after "--" also work: -- <dir> [only] [theme=<colors.toml>] [size=<w>x<h>].
 // Environment: FLUX_SNAPSHOT, FLUX_SNAPSHOT_ONLY (a part of a screen name),
 // FLUX_THEME_FILE (a colors.toml; empty gives the Tokyo Night defaults).
 Window {
   id: win
-  width: 1180
-  height: 760
+  // size=<width>x<height>, or FLUX_SNAPSHOT_SIZE, renders at another size.
+  readonly property var size: (arg("size") || env.FLUX_SNAPSHOT_SIZE || "1180x760").split("x")
+  width: parseInt(size[0]) || 1180
+  height: parseInt(size[1]) || 760
   visible: true
   color: Theme.bg
 
@@ -157,7 +159,17 @@ Window {
     }],
     ["37-sidebar-640-bottom", function () { view.sidebarFlick.contentY = view.sidebarFlick.contentHeight - view.sidebarFlick.height }],
     ["38-sidebar-640-select-last", function () { view.sidebarFlick.contentY = 0; view.selectedId = "a0000000000000000000000000000002"; view.tab = "files" }],
-    ["39-sidebar-640-moving", function () { view.sidebarFlick.contentY = 0 }, function () { view.sidebarFlick.flick(0, -1200) }, 60]
+    ["39-sidebar-640-moving", function () { view.sidebarFlick.contentY = 0 }, function () { view.sidebarFlick.flick(0, -1200) }, 60],
+    // The drawer of the rail and the narrow layouts, and 1 open thread of a narrow Messages page.
+    ["40-drawer", function () {
+      view.anchors.fill = win.contentItem
+      mock.state = mock.fixTimes(mock.fixture.state)
+      view.pairMode = false
+      view.selectedId = pixel
+      view.tab = "overview"
+      view.drawerOpen = true
+    }],
+    ["41-messages-thread", function () { view.drawerOpen = false; view.tab = "messages" }, function () { pageItem().threadOpen = true }]
   ]
 
   function pageItem() {

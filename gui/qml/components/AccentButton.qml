@@ -31,6 +31,7 @@ Rectangle {
       color: Theme.bg
     }
     Txt {
+      visible: root.text !== ""
       anchors.verticalCenter: parent.verticalCenter
       text: root.text
       color: Theme.bg

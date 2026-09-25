@@ -27,6 +27,27 @@ FluxView {
 | `themeText` | `string` | The content of `~/.local/state/omarchy/current/theme/colors.toml`. Set it again when the file changes. An empty string gives the Tokyo Night defaults. |
 | `showPage(key)` | function, returns `bool` | Selects a screen: `overview`, `clipboard`, `files`, `notifications`, `media`, `messages`, `browse`, or `commands`. Returns `false` for an unknown key. |
 
+## Layouts
+
+The window follows its width:
+
+| Width | Layout |
+| --- | --- |
+| 1000 px and more | The full sidebar of 260 px |
+| 680 to 999 px | A rail of 64 px, with 1 icon for each device and each tab |
+| Less than 680 px | No sidebar. The header has a menu button. |
+
+The rail and the narrow layout open the full sidebar as a drawer over the
+content. A pair request opens the drawer by itself. Below 760 px of content,
+the header buttons show only their icons. Messages shows 1 pane below
+620 px. The smallest window is 360 × 480 px.
+
+To render every screen at another size, add `size=<width>x<height>`:
+
+```sh
+QT_QPA_PLATFORM=offscreen gui/app/build/flux-gui --snapshot /tmp/shots "" size=480x820
+```
+
 ## Icons
 
 `components/Icon.qml` draws Material Design glyphs from the Nerd Font in

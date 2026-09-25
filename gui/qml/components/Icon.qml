@@ -31,7 +31,7 @@ Text {
     "open": 0xF03CC, "refresh": 0xF0450, "plus": 0xF0415, "close": 0xF0156, "check": 0xF012C,
     "check-circle": 0xF05E1, "error": 0xF015A, "alert": 0xF05D6, "info": 0xF02FD,
     "trash": 0xF0A7A, "tune": 0xF1542, "cog": 0xF08BB, "search": 0xF0349, "chevron": 0xF0142,
-    "more": 0xF01D9, "clock": 0xF0150, "power": 0xF0425, "play-circle": 0xF040D,
+    "more": 0xF01D9, "menu": 0xF035C, "arrow-left": 0xF004D, "clock": 0xF0150, "power": 0xF0425, "play-circle": 0xF040D,
 
     "play": 0xF040A, "pause": 0xF03E4, "previous": 0xF04AE, "next": 0xF04AD, "stop": 0xF04DB,
     "camera": 0xF0D5D, "webcam": 0xF05A0, "video": 0xF0BDC, "record": 0xF044B,

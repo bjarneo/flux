@@ -23,7 +23,24 @@ Item {
     { key: "commands", label: "Phone commands", page: "PhoneCommands", icon: "console" }
   ]
 
+  // The layout follows the width of the window. Wide shows the full
+  // sidebar. Below 1000 px, a rail of icons takes its place. Below 680 px,
+  // there is no sidebar. The rail and the narrow layout open the full
+  // sidebar as a drawer over the content.
+  readonly property bool wideLayout: width >= 1000
+  readonly property bool narrowLayout: width < 680
+  property bool drawerOpen: false
+  readonly property bool sidebarFull: wideLayout || drawerOpen
+  readonly property int sidebarSpace: wideLayout ? 260 : (narrowLayout ? 0 : 64)
+  // The side margin of the content.
+  readonly property int gutter: narrowLayout ? 16 : 28
+  onWideLayoutChanged: if (wideLayout) drawerOpen = false
+
+  // The header shows icon buttons with no text when the window is narrow.
+  readonly property bool compactHeader: width - sidebarSpace < 760
+
   property string tab: "overview"
+  onTabChanged: drawerOpen = false
   property string selectedId: ""
   property bool pairMode: false
   property string justPaired: ""
@@ -131,9 +148,16 @@ Item {
   }
 
   // A new pair request scrolls the sidebar to the top, where the card is.
-  onIncomingChanged: if (incoming.length > 0) sideFlick.contentY = 0
+  // The card shows only in the full sidebar, so a narrow window opens the
+  // drawer.
+  onIncomingChanged: {
+    if (incoming.length === 0) return
+    sideFlick.contentY = 0
+    if (!wideLayout) drawerOpen = true
+  }
 
   function startPair() {
+    if (!wideLayout) drawerOpen = true
     pairMode = !pairMode
     if (pairMode) call("discover", {})
   }
@@ -192,7 +216,8 @@ Item {
     } else if (event.text === "p") {
       startPair(); event.accepted = true
     } else if (event.key === Qt.Key_Escape) {
-      if (pairMode) pairMode = false
+      if (drawerOpen) drawerOpen = false
+      else if (pairMode) pairMode = false
       event.accepted = true
     }
   }
@@ -203,13 +228,93 @@ Item {
   }
 
   // Sidebar
+  // The scrim behind the drawer. A click on it closes the drawer.
+  Rectangle {
+    anchors.fill: parent
+    z: 15
+    visible: root.drawerOpen && !root.wideLayout && root.daemonUp
+    color: Theme.alpha(Theme.bg2, 0.6)
+    MouseArea { anchors.fill: parent; onClicked: root.drawerOpen = false }
+  }
+
+  // Sidebar
   Rectangle {
     id: sidebar
-    width: 260
+    width: root.sidebarFull ? 260 : root.sidebarSpace
     anchors.top: parent.top
     anchors.bottom: parent.bottom
     color: Theme.bg2
-    visible: root.daemonUp
+    visible: root.daemonUp && width > 0
+    z: root.drawerOpen ? 20 : 0
+
+    // The edge of the drawer over the content.
+    Rectangle {
+      visible: root.drawerOpen && !root.wideLayout
+      anchors.right: parent.right
+      width: 1
+      height: parent.height
+      color: Theme.bg3
+    }
+
+    // The rail: 1 icon for each device and each tab.
+    Flickable {
+      id: railFlick
+      anchors.fill: parent
+      visible: !root.sidebarFull
+      contentHeight: rail.implicitHeight + 28
+      boundsBehavior: Flickable.StopAtBounds
+      interactive: contentHeight > height
+      clip: true
+      Column {
+        id: rail
+        y: 14
+        width: parent.width
+        spacing: 6
+        RailButton {
+          icon: "menu"
+          tip: "Show the devices and pages"
+          onClicked: root.drawerOpen = true
+        }
+        Item { width: 1; height: 4 }
+        Repeater {
+          model: root.paired
+          delegate: RailButton {
+            required property var modelData
+            icon: Fmt.kindIcon(modelData.type)
+            tip: modelData.name + (modelData.online ? " · connected" : " · offline")
+            selected: !!root.dev && root.dev.id === modelData.id
+            dot: modelData.online ? Theme.ok : "transparent"
+            onClicked: root.selectedId = modelData.id
+          }
+        }
+        RailButton {
+          icon: root.incoming.length > 0 ? "key" : "plus"
+          tip: root.incoming.length > 0 ? "A device asks to pair" : "Pair new device"
+          dot: root.incoming.length > 0 ? Theme.warn : "transparent"
+          onClicked: {
+            root.drawerOpen = true
+            if (root.incoming.length === 0 && !root.pairMode) root.startPair()
+          }
+        }
+        Rectangle {
+          anchors.horizontalCenter: parent.horizontalCenter
+          width: 32
+          height: 1
+          color: Theme.bg3
+          visible: !!root.dev
+        }
+        Repeater {
+          model: root.dev ? root.visibleTabs : []
+          delegate: RailButton {
+            required property var modelData
+            icon: modelData.icon
+            tip: modelData.label
+            selected: root.currentTab && root.currentTab.key === modelData.key
+            onClicked: root.tab = modelData.key
+          }
+        }
+      }
+    }
 
     // The sidebar scrolls when the devices and tabs are taller than the
     // window. The scroll bar shows only on hover or while it moves.
@@ -218,6 +323,7 @@ Item {
     Flickable {
       id: sideFlick
       anchors.fill: parent
+      visible: root.sidebarFull
       contentHeight: side.implicitHeight + 36
       boundsBehavior: Flickable.StopAtBounds
       interactive: contentHeight > height
@@ -272,7 +378,10 @@ Item {
               width: side.width
               device: modelData
               selected: !!root.dev && root.dev.id === modelData.id
-              onClicked: root.selectedId = modelData.id
+              onClicked: {
+                root.selectedId = modelData.id
+                root.drawerOpen = false
+              }
               onSelectedChanged: if (selected) Qt.callLater(root.revealInSidebar, this)
             }
           }
@@ -423,7 +532,10 @@ Item {
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: root.tab = modelData.key
+                onClicked: {
+                  root.tab = modelData.key
+                  root.drawerOpen = false
+                }
               }
             }
           }
@@ -432,10 +544,51 @@ Item {
     }
   }
 
+  // An icon button of the rail, with a tooltip. dot marks a state, such as
+  // a connected device.
+  component RailButton: Rectangle {
+    id: rb
+    property string icon: ""
+    property string tip: ""
+    property bool selected: false
+    property color dot: "transparent"
+    signal clicked()
+    anchors.horizontalCenter: parent ? parent.horizontalCenter : undefined
+    width: 44
+    height: 40
+    color: selected ? Theme.alpha(Theme.accent, 0.18) : (rbArea.containsMouse ? Theme.alpha(Theme.fg, 0.06) : "transparent")
+    Icon {
+      anchors.centerIn: parent
+      name: rb.icon
+      size: 18
+      color: rb.selected ? Theme.accent : Theme.fg
+    }
+    Rectangle {
+      anchors.right: parent.right
+      anchors.bottom: parent.bottom
+      anchors.margins: 7
+      width: 7
+      height: 7
+      radius: 3.5
+      color: rb.dot
+    }
+    MouseArea {
+      id: rbArea
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: rb.clicked()
+    }
+    ToolTip.visible: rbArea.containsMouse && tip !== ""
+    ToolTip.delay: 400
+    ToolTip.text: tip
+  }
+
   // Main area
   Item {
     id: main
-    anchors.left: sidebar.right
+    anchors.left: parent.left
+    anchors.leftMargin: root.sidebarSpace
     anchors.right: parent.right
     anchors.top: parent.top
     anchors.bottom: parent.bottom
@@ -457,14 +610,27 @@ Item {
       anchors.right: parent.right
       height: Math.max(title.implicitHeight, actions.implicitHeight) + 36 + 1
 
+      // The narrow layout has no rail, so the header opens the drawer.
+      OutlineButton {
+        id: menuButton
+        visible: root.narrowLayout
+        x: root.gutter
+        anchors.verticalCenter: title.verticalCenter
+        icon: "menu"
+        padX: 8
+        padY: 6
+        onClicked: root.drawerOpen = true
+      }
       Txt {
         id: title
-        x: 28
+        x: root.narrowLayout ? menuButton.x + menuButton.width + 12 : root.gutter
+        width: Math.min(implicitWidth, (actions.visible ? actions.x - 14 : parent.width - root.gutter) - x)
         anchors.verticalCenter: parent.verticalCenter
         anchors.verticalCenterOffset: -0.5
         text: root.dev ? root.currentTab.label : "Get started"
-        font.pixelSize: 20
+        font.pixelSize: root.narrowLayout ? 17 : 20
         font.weight: Font.Bold
+        elide: Text.ElideRight
       }
       Txt {
         id: subtitle
@@ -473,7 +639,7 @@ Item {
         anchors.right: actions.left
         anchors.rightMargin: 14
         anchors.verticalCenter: title.verticalCenter
-        visible: !!root.dev
+        visible: !!root.dev && !root.compactHeader
         text: root.dev ? root.devName + " · " + (root.dev.ip || "—") : ""
         color: Theme.dim
         font.pixelSize: 12
@@ -482,27 +648,27 @@ Item {
       Row {
         id: actions
         anchors.right: parent.right
-        anchors.rightMargin: 28
+        anchors.rightMargin: root.gutter
         anchors.verticalCenter: title.verticalCenter
         spacing: 8
         visible: !!root.dev
         AccentButton {
           visible: !!root.backend && root.backend.ringing
           icon: "bell-off"
-          text: "Stop ringing"
+          text: root.compactHeader ? "" : "Stop ringing"
           anchors.verticalCenter: parent.verticalCenter
           onClicked: root.call("ring.stop", {})
         }
         OutlineButton {
           icon: "bell-ring"
-          text: "Ring " + Fmt.noun(root.dev ? root.dev.type : "")
+          text: root.compactHeader ? "" : "Ring " + Fmt.noun(root.dev ? root.dev.type : "")
           active: root.devOnline
           anchors.verticalCenter: parent.verticalCenter
           onClicked: root.ring()
         }
         AccentButton {
           icon: "paste"
-          text: "Send clipboard"
+          text: root.compactHeader ? "" : "Send clipboard"
           active: root.devOnline
           anchors.verticalCenter: parent.verticalCenter
           onClicked: root.sendClipboard()
@@ -535,9 +701,9 @@ Item {
 
       Column {
         id: body
-        x: 28
-        y: 24
-        width: flick.width - 56
+        x: root.gutter
+        y: root.narrowLayout ? 16 : 24
+        width: flick.width - 2 * root.gutter
         spacing: 18
         readonly property real fillHeight: flick.height - 48 - (offlineLine.visible ? offlineLine.height + spacing : 0)
 
@@ -569,7 +735,7 @@ Item {
     Column {
       anchors.centerIn: parent
       spacing: 10
-      width: 420
+      width: Math.min(420, parent.width - 32)
       FluxMark {
         anchors.horizontalCenter: parent.horizontalCenter
         size: 64

@@ -12,6 +12,10 @@ Item {
   readonly property var convos: dev && dev.conversations ? dev.conversations : []
 
   property var selected: null
+  // A narrow page shows 1 pane: the conversations, or 1 thread with a back
+  // button.
+  readonly property bool single: width < 620
+  property bool threadOpen: false
   property var messages: []
   property bool loading: false
   property string loadedFor: ""
@@ -92,8 +96,9 @@ Item {
   // Conversations
   ListView {
     id: convoList
-    width: 280
+    width: root.single ? parent.width : 280
     height: parent.height
+    visible: !root.single || !root.threadOpen
     spacing: 6
     clip: true
     model: root.convos
@@ -143,7 +148,10 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onClicked: root.load(modelData)
+        onClicked: {
+          root.load(modelData)
+          root.threadOpen = true
+        }
       }
     }
 
@@ -159,16 +167,27 @@ Item {
   // Thread
   Card {
     id: pane
-    anchors.left: convoList.right
-    anchors.leftMargin: 18
+    anchors.left: root.single ? parent.left : convoList.right
+    anchors.leftMargin: root.single ? 0 : 18
     anchors.right: parent.right
     height: parent.height
+    visible: !root.single || root.threadOpen
 
+    OutlineButton {
+      id: backButton
+      visible: root.single
+      x: 19
+      anchors.verticalCenter: threadName.verticalCenter
+      icon: "arrow-left"
+      padX: 8
+      padY: 4
+      onClicked: root.threadOpen = false
+    }
     Txt {
       id: threadName
-      x: 19
+      x: root.single ? backButton.x + backButton.width + 10 : 19
       y: 19
-      width: parent.width - 38
+      width: parent.width - x - 19
       text: root.selected ? (root.selected.name || root.selected.address || "") : "Messages"
       font.weight: Font.Bold
       elide: Text.ElideRight

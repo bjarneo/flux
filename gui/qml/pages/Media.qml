@@ -51,15 +51,15 @@ Item {
 
     Item {
       anchors.horizontalCenter: parent.horizontalCenter
-      width: 300
-      height: 300
+      width: Math.min(300, parent.width)
+      height: width
       IconBox {
         anchors.fill: parent
         color: Theme.bg2
         border.width: 1
         border.color: Theme.bg3
         icon: "music"
-        iconSize: 96
+        iconSize: Math.round(parent.width * 0.32)
         fg: Theme.alpha(Theme.accent, 0.7)
         visible: art.status !== Image.Ready
       }
@@ -93,12 +93,13 @@ Item {
     }
 
     Row {
+      id: progress
       anchors.horizontalCenter: parent.horizontalCenter
-      width: 420
+      width: Math.min(420, parent.width)
       spacing: 12
       Txt { id: pos; text: Fmt.duration(root.position); color: Theme.dim; font.pixelSize: 12 }
       Item {
-        width: 420 - pos.width - len.width - 24
+        width: progress.width - pos.width - len.width - 24
         height: pos.height
         Bar {
           anchors.verticalCenter: parent.verticalCenter

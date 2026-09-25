@@ -5,7 +5,7 @@ import ".."
 Rectangle {
   id: root
   property string message: ""
-  width: 340
+  width: Math.min(340, (parent ? parent.width : 372) - 32)
   implicitHeight: col.implicitHeight + 24
   color: Theme.bg2
   border.width: 2
