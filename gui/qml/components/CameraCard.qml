@@ -19,12 +19,13 @@ Card {
 
   implicitHeight: col.implicitHeight + 38
 
-  // A Format, Resolution, or Camera change restarts the stream on the phone.
-  // "Restarting…" shows until the stream is live again.
+  // A Format or Resolution change restarts the stream on the phone, because
+  // the frame size changes. "Restarting…" shows until the stream is live
+  // again. A Camera change is live.
   property bool restarting: false
   property bool sawInactive: false
   property double restartedAt: 0
-  readonly property var restartKeys: ["aspect", "resolution", "camera"]
+  readonly property var restartKeys: ["aspect", "resolution"]
 
   onLiveChanged: {
     if (!restarting) return
