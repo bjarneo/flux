@@ -41,6 +41,9 @@ const (
 	// TypeFluxWebcam starts and stops the phone as a webcam. Both sides
 	// send it.
 	TypeFluxWebcam = "flux.webcam"
+	// TypeFluxApprove carries approval and enrollment requests to the phone,
+	// and the signed answers back. docs/approve.md describes it.
+	TypeFluxApprove = "flux.approve"
 )
 
 // Incoming lists the packet types that Flux accepts. The phone enables a
@@ -50,7 +53,7 @@ var Incoming = []string{
 	TypeShare, TypeShareUpdate, TypeNotification, TypeFindMyPhone,
 	TypeRunCommandRequest, TypeMpris, TypeMprisRequest, TypeSftp,
 	TypeSftpRequest, TypeSmsMessages, TypeConnectivity, TypeFluxTunnel,
-	TypeFluxWebcam,
+	TypeFluxWebcam, TypeFluxApprove,
 }
 
 // Outgoing lists the packet types that Flux sends.
@@ -59,7 +62,7 @@ var Outgoing = []string{
 	TypeNotificationRequest, TypeNotificationReply, TypeNotificationAction,
 	TypeFindMyPhone, TypeRunCommand, TypeMpris, TypeMprisRequest,
 	TypeSftpRequest, TypeSmsRequest, TypeSmsConversations,
-	TypeSmsConversation, TypeSftp, TypeFluxWebcam,
+	TypeSmsConversation, TypeSftp, TypeFluxWebcam, TypeFluxApprove,
 }
 
 // Identity is the body of a kdeconnect.identity packet.

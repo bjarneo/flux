@@ -119,6 +119,8 @@ func Enroll(ctx context.Context, o EnrollOptions) (*Key, error) {
 	case "enrolled":
 	case "denied":
 		return nil, ErrDenied
+	case "failed":
+		return nil, fmt.Errorf("the phone could not make the key: %s", res.Message)
 	default:
 		return nil, fmt.Errorf("fluxd sent the state %q", res.State)
 	}

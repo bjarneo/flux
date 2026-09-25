@@ -94,11 +94,11 @@ func TestReadKeyRefusesSymlinks(t *testing.T) {
 func TestReadKeyRefusesOtherContent(t *testing.T) {
 	dir := t.TempDir()
 	for name, content := range map[string]string{
-		"empty.pub":  "",
-		"text.pub":   "not a key\n",
-		"nodev.pub":  "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE\n-----END PUBLIC KEY-----\n",
-		"rsa.pub":    "-----BEGIN RSA PUBLIC KEY-----\nAA==\n-----END RSA PUBLIC KEY-----\n",
-		"large.pub":  string(make([]byte, maxKeyFile+10)),
+		"empty.pub": "",
+		"text.pub":  "not a key\n",
+		"nodev.pub": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE\n-----END PUBLIC KEY-----\n",
+		"rsa.pub":   "-----BEGIN RSA PUBLIC KEY-----\nAA==\n-----END RSA PUBLIC KEY-----\n",
+		"large.pub": string(make([]byte, maxKeyFile+10)),
 	} {
 		p := filepath.Join(dir, name)
 		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {

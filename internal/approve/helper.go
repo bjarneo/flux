@@ -173,6 +173,8 @@ func Run(ctx context.Context, o Options) error {
 			return Verify(req, sig, key.Public, o.Now(), wait+grace+time.Second)
 		case "denied":
 			return ErrDenied
+		case "failed":
+			return fmt.Errorf("the phone could not approve: %s", res.Message)
 		case "pending":
 			if !o.Now().Before(deadline) {
 				return ErrTimeout
