@@ -4,9 +4,9 @@ import qs.Commons
 import qs.Ui
 import "Flux/components" as FluxUi
 
-// The Flux bar widget: the Flux mark and the first connected device with its
-// battery, as in the design. The tooltip lists every paired device. A left
-// click opens or closes the Flux window.
+// The Flux bar widget: the Flux mark alone. The mark takes the accent color
+// while a paired device is connected. The tooltip lists every paired device.
+// A left click opens or closes the Flux window.
 BarWidget {
   id: root
   moduleName: "flux"
@@ -19,20 +19,14 @@ BarWidget {
   readonly property bool up: !!backend && backend.connected
   readonly property var paired: backend ? (backend.devices || []).filter(d => d.paired) : []
   readonly property var primary: paired.find(d => d.online) || null
-
-  readonly property string label: {
-    if (!primary) return ""
-    var b = primary.battery
-    var charge = b && b.charge !== undefined && b.charge !== null && b.charge >= 0 ? " " + b.charge + "%" : ""
-    return primary.name + charge
-  }
+  readonly property bool linked: up && !!primary
 
   readonly property string tooltip: {
     if (!backend) return "Flux"
     if (!up) return "Flux · fluxd is not running"
     if (paired.length === 0) return "Flux · no paired devices"
     var lines = []
-    // The connected device in the label comes first.
+    // The connected device comes first.
     var sorted = paired.slice().sort(function (a, b) {
       if (a === root.primary) return -1
       if (b === root.primary) return 1
@@ -57,36 +51,19 @@ BarWidget {
     bar: root.bar
     labelVisible: false
     hasVisualContent: true
-    fixedWidth: root.vertical ? -1 : content.implicitWidth + scaledHorizontalMargin * 2
+    fixedWidth: root.vertical ? -1 : mark.width + scaledHorizontalMargin * 2
     fixedHeight: root.vertical ? mark.height + scaledVerticalPadding * 2 : -1
     tooltipText: root.tooltip
     onPressed: function (mouseButton) {
       if (mouseButton === Qt.LeftButton) root.togglePanel()
     }
 
-    Row {
-      id: content
+    FluxUi.FluxMark {
+      id: mark
       anchors.centerIn: parent
-      spacing: 6
-
-      FluxUi.FluxMark {
-        id: mark
-        anchors.verticalCenter: parent.verticalCenter
-        size: 14
-        fg: button.foreground
-        accent: Color.accent
-      }
-
-      Text {
-        anchors.verticalCenter: parent.verticalCenter
-        visible: !root.vertical && text !== ""
-        textFormat: Text.PlainText
-        text: root.label
-        color: Color.accent
-        font.family: button.fontFamily
-        font.pixelSize: button.fontSize
-        renderType: Text.NativeRendering
-      }
+      size: 14
+      fg: button.foreground
+      accent: root.linked ? Color.accent : button.foreground
     }
   }
 }
