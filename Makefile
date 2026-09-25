@@ -24,6 +24,8 @@ build: build-go build-gui
 build-go:
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/fluxd ./cmd/fluxd
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/flux ./cmd/flux
+	@# The PAM helper is static, so that it depends on no shared library.
+	CGO_ENABLED=0 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/flux-approve ./cmd/flux-approve
 
 # The Qt6 C++ app. The shared views in gui/qml are compiled into it.
 build-gui:
@@ -41,10 +43,13 @@ vet:
 # `sudo make install` works without Go on the PATH of root. On a real
 # install (no DESTDIR), it also runs the system setup in post-install.sh.
 install:
-	@test -x bin/fluxd -a -x bin/flux -a -x $(GUI_BUILD)/flux-gui || { echo "Run make first, then sudo make install"; exit 1; }
+	@test -x bin/fluxd -a -x bin/flux -a -x bin/flux-approve -a -x $(GUI_BUILD)/flux-gui || { echo "Run make first, then sudo make install"; exit 1; }
 	install -Dm755 bin/fluxd $(DESTDIR)$(PREFIX)/bin/fluxd
 	install -Dm755 bin/flux $(DESTDIR)$(PREFIX)/bin/flux
 	install -Dm755 $(GUI_BUILD)/flux-gui $(DESTDIR)$(PREFIX)/bin/flux-gui
+	@# The PAM helper for approval with a fingerprint. PAM uses it only
+	@# after the user adds it to a PAM file.
+	install -Dm755 bin/flux-approve $(DESTDIR)$(PREFIX)/lib/flux/flux-approve
 	$(call copy-plugin,$(DESTDIR)$(PREFIX)/share/flux/omarchy-plugin)
 	install -Dm644 dist/fluxd.service $(DESTDIR)$(PREFIX)/lib/systemd/user/fluxd.service
 	install -Dm644 dist/61-flux-v4l2loopback.rules $(DESTDIR)$(PREFIX)/lib/udev/rules.d/61-flux-v4l2loopback.rules
@@ -61,6 +66,7 @@ uninstall:
 	@if [ -z "$(DESTDIR)" ]; then sh dist/pre-remove.sh; fi
 	rm -f $(DESTDIR)$(PREFIX)/bin/fluxd $(DESTDIR)$(PREFIX)/bin/flux $(DESTDIR)$(PREFIX)/bin/flux-gui
 	rm -rf $(DESTDIR)$(PREFIX)/share/flux
+	rm -rf $(DESTDIR)$(PREFIX)/lib/flux
 	rm -f $(DESTDIR)$(PREFIX)/lib/systemd/user/fluxd.service
 	rm -f $(DESTDIR)$(PREFIX)/lib/udev/rules.d/61-flux-v4l2loopback.rules
 	rm -f $(DESTDIR)$(PREFIX)/share/applications/flux.desktop

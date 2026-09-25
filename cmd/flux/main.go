@@ -51,6 +51,9 @@ Commands:
   webcam reset           Set the phone camera back to the neutral values
   mic [stop]             Show the phone microphone state, or stop the phone microphone
   screen [stop]          Show the phone screen mirror state, or stop the mirror
+  approve [status]       Show whether a phone can approve sudo with a fingerprint
+  approve enroll         Let the phone approve sudo. Run it with sudo.
+  approve remove         Stop the phone from approving sudo. Run it with sudo.
   watch                  Print each state change as one JSON line
   setup [--dry-run]      Start fluxd for this user and add the omarchy-shell plugin
   doctor                 Check the setup and print the fixes
@@ -112,6 +115,8 @@ func main() {
 		err = mic(args)
 	case "screen":
 		err = screen(args)
+	case "approve":
+		err = approveCmd(args, device)
 	case "watch":
 		err = watch()
 	case "setup":

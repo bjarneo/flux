@@ -178,7 +178,7 @@ type params struct {
 }
 
 // Call runs one API method.
-func (d *Daemon) Call(_ context.Context, method string, raw json.RawMessage) (any, error) {
+func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (any, error) {
 	var p params
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &p); err != nil {
@@ -205,6 +205,14 @@ func (d *Daemon) Call(_ context.Context, method string, raw json.RawMessage) (an
 		return ok, d.StopMic()
 	case "screen.stop":
 		return ok, d.StopScreen()
+	case "approve.request":
+		return d.ApproveRequest(raw)
+	case "approve.enroll":
+		return d.ApproveEnroll(raw)
+	case "approve.wait":
+		return d.ApproveWait(ctx, p.ID)
+	case "approve.cancel":
+		return ok, d.ApproveCancel(p.ID)
 	case "clipboard.copy":
 		if p.Text == "" {
 			return nil, apiErr("bad_params", "text is empty")

@@ -2,6 +2,8 @@
 #   cd dist/arch && makepkg -si
 # pacman then runs the system setup (udev, kernel modules, the user
 # service). After the install, run `flux setup` as your user.
+# The package installs the PAM helper /usr/lib/flux/flux-approve, but it
+# changes no PAM file. The README tells how to turn approvals on.
 
 pkgname=omarchy-flux
 pkgver=0.1.0.r7.g52a5df5

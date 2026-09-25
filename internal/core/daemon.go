@@ -62,6 +62,7 @@ type Daemon struct {
 	micErr    string
 	screen    *screenSession
 	screenErr string
+	approvals approvalBook
 
 	subs   map[int]func(event string, data any)
 	nextID int

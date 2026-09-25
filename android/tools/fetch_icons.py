@@ -38,6 +38,8 @@ text_fields qr_code_scanner document_scanner videocam+fill videocam_off
 cameraswitch flash_on flash_off flash_auto rotate_right stop+fill
 fiber_manual_record+fill photo_library do_not_disturb_on screenshot
 mic+fill mic_off screen_share stop_screen_share
+
+fingerprint
 """.split()
 
 BASE = "https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android"

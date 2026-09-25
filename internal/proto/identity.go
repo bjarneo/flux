@@ -51,6 +51,9 @@ const (
 	// TypeFluxScreen starts and stops the mirror of the phone screen. Both
 	// sides send it.
 	TypeFluxScreen = "flux.screen"
+	// TypeFluxApprove carries approval and enrollment requests to the phone,
+	// and the signed answers back. docs/approve.md describes it.
+	TypeFluxApprove = "flux.approve"
 )
 
 // Incoming lists the packet types that Flux accepts. The phone enables a
@@ -61,6 +64,7 @@ var Incoming = []string{
 	TypeRunCommandRequest, TypeMpris, TypeMprisRequest, TypeSftp,
 	TypeSftpRequest, TypeSmsMessages, TypeConnectivity, TypeTelephony,
 	TypeFluxTunnel, TypeFluxWebcam, TypeFluxDnd, TypeFluxMic, TypeFluxScreen,
+	TypeFluxApprove,
 }
 
 // Outgoing lists the packet types that Flux sends.
@@ -70,7 +74,7 @@ var Outgoing = []string{
 	TypeFindMyPhone, TypeRunCommand, TypeMpris, TypeMprisRequest,
 	TypeSftpRequest, TypeSmsRequest, TypeSmsConversations,
 	TypeSmsConversation, TypeSftp, TypeFluxWebcam, TypeFluxDnd,
-	TypeFluxMic, TypeFluxScreen,
+	TypeFluxMic, TypeFluxScreen, TypeFluxApprove,
 }
 
 // Identity is the body of a kdeconnect.identity packet.

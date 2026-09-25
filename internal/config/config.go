@@ -43,8 +43,11 @@ type Config struct {
 	SyncDnd bool `toml:"sync_dnd"`
 	// GUI selects the window: "plugin" for the omarchy-shell plugin, "app"
 	// for flux-gui, or empty for the plugin when it is enabled.
-	GUI      string    `toml:"gui,omitempty"`
-	Commands []Command `toml:"commands"`
+	GUI string `toml:"gui,omitempty"`
+	// ApproveTimeout is how long an approval waits for the phone, in
+	// seconds, from 5 to 120. Zero means 20.
+	ApproveTimeout int       `toml:"approve_timeout,omitempty"`
+	Commands       []Command `toml:"commands"`
 }
 
 // ConfigDir returns ~/.config/flux, or $XDG_CONFIG_HOME/flux.

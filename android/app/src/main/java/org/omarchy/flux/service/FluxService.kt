@@ -186,6 +186,7 @@ class FluxService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP_RING -> Ringer.stop(this)
+            ACTION_APPROVE_DENY -> org.omarchy.flux.core.Approvals.deny(FluxCore)
             ACTION_REFRESH -> {
                 FluxCore.rediscover()
                 // The device name can change in the system settings.
@@ -234,6 +235,7 @@ class FluxService : Service() {
 
     companion object {
         const val ACTION_STOP_RING = "org.omarchy.flux.STOP_RING"
+        const val ACTION_APPROVE_DENY = "org.omarchy.flux.APPROVE_DENY"
         const val ACTION_REFRESH = "org.omarchy.flux.REFRESH"
         const val MDNS_TYPE = "_kdeconnect._udp"
 

@@ -28,6 +28,8 @@
     <!-- The phone as microphone, and the screen mirror. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <!-- Approve sudo and polkit with a fingerprint. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
@@ -81,6 +83,15 @@
             android:showWhenLocked="true"
             android:turnScreenOn="true"
             android:taskAffinity="org.omarchy.flux.ring" />
+
+        <activity
+            android:name=".ui.ApproveActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:taskAffinity="org.omarchy.flux.approve" />
 
         <service
             android:name=".service.FluxService"
