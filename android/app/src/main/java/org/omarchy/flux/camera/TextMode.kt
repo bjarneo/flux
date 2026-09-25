@@ -1,5 +1,12 @@
 package org.omarchy.flux.camera
 
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.CircularProgressIndicator
+import org.omarchy.flux.ui.Ic
+import org.omarchy.flux.ui.Sym
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -200,8 +207,11 @@ fun TextMode(d: DeviceUi) {
                 }
                 is ScanPhase.Reading -> {
                     Still(p.image)
-                    Box(Modifier.clip(RoundedCornerShape(20.dp)).background(Palette.snackbar).padding(horizontal = 16.dp, vertical = 10.dp)) {
-                        T("Reading text…", color = Palette.snackbarText)
+                    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.inverseSurface) {
+                        Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.inverseOnSurface)
+                            Text("Reading text", color = MaterialTheme.colorScheme.inverseOnSurface)
+                        }
                     }
                 }
                 is ScanPhase.Result -> Still(p.image)
@@ -255,12 +265,10 @@ private fun LiveControls(onPhoto: () -> Unit, onCapture: () -> Unit) {
         Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { OutlinedPill("From photo", onPhoto) }
-        // The capture button: a filled circle inside a ring.
-        Box(
-            Modifier.size(80.dp).clip(CircleShape).border(4.dp, Palette.accent, CircleShape).clickable(onClick = onCapture).padding(8.dp),
-            contentAlignment = Alignment.Center,
-        ) { Box(Modifier.fillMaxSize().clip(CircleShape).background(Palette.accent)) }
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            FilledTonalIconButton(onClick = onPhoto, modifier = Modifier.size(52.dp)) { Sym(Ic.gallery, "From photo") }
+        }
+        Shutter(onCapture, description = "Scan text")
         Box(Modifier.weight(1f))
     }
 }
@@ -282,8 +290,8 @@ private fun ResultControls(d: DeviceUi, text: String, onText: (String) -> Unit, 
             )
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
-            OutlinedPill("Retake", onRetake)
-            if (text.isNotBlank()) FilledPill("Send to ${d.name}", onSend)
+            OutlinedPill("Retake", onRetake, Ic.refresh)
+            if (text.isNotBlank()) FilledPill("Send to ${d.name}", onSend, Ic.send)
         }
     }
 }

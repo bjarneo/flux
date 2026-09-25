@@ -1,5 +1,21 @@
 package org.omarchy.flux.webcam
 
+import androidx.annotation.DrawableRes
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.ui.semantics.Role
+import org.omarchy.flux.ui.Ic
+import org.omarchy.flux.ui.Sym
 import android.graphics.SurfaceTexture
 import android.view.TextureView
 import androidx.compose.foundation.background
@@ -139,10 +155,17 @@ fun WebcamPanel(deviceId: String) {
                     },
                 )
                 if (status.phase == WebcamSession.Phase.Live) {
-                    Box(
-                        Modifier.align(Alignment.TopStart).padding(12.dp).clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.error).padding(horizontal = 10.dp, vertical = 4.dp),
-                    ) { T("● LIVE", size = 12, color = MaterialTheme.colorScheme.onError, weight = FontWeight.Medium) }
+                    Surface(
+                        Modifier.align(Alignment.TopStart).padding(12.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError,
+                    ) {
+                        Row(Modifier.padding(horizontal = 10.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Sym(Ic.live, size = 10.dp)
+                            Text("LIVE", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
                 }
             }
         }
@@ -157,8 +180,12 @@ fun WebcamPanel(deviceId: String) {
                 StatusLine(status, cameraError, pcName, config)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                LiveButton(active, canStart, Modifier.weight(1f).height(48.dp), size = 16, onClick = toggleLive)
-                Pill("Done") { settingsOpen = false }
+                LiveButton(active, canStart, Modifier.weight(1f).height(48.dp), onClick = toggleLive)
+                FilledTonalButton(onClick = { settingsOpen = false }, modifier = Modifier.height(48.dp)) {
+                    Sym(Ic.check, size = ButtonDefaults.IconSize)
+                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                    Text("Done")
+                }
             }
             WebcamSettingsPanel(
                 config, caps, streaming = active,
@@ -169,17 +196,20 @@ fun WebcamPanel(deviceId: String) {
             StatusLine(status, cameraError, pcName, config)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (caps.cameras.size > 1) {
-                    Pill(if (config.camera == "front") "Back camera" else "Front camera") {
+                    ActionChip(Ic.switchCamera, if (config.camera == "front") "Back camera" else "Front camera") {
                         WebcamSettings.update { it.copy(camera = if (it.camera == "front") "back" else "front") }
                     }
                 }
-                Pill("Rotate") { rotation = (rotation + 90) % 360 }
-                Pill("Settings") { settingsOpen = true }
+                ActionChip(Ic.rotate, "Rotate") { rotation = (rotation + 90) % 360 }
+                ActionChip(Ic.tune, "Settings") { settingsOpen = true }
             }
-            LiveButton(active, canStart, Modifier.fillMaxWidth().height(64.dp), size = 18, onClick = toggleLive)
-            T(
+            LiveButton(active, canStart, Modifier.fillMaxWidth().height(64.dp), onClick = toggleLive)
+            Text(
                 "Apps on $pcName see this phone as Flux Camera. Keep this screen open while you stream.",
-                color = Palette.hint, size = 12, align = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }
@@ -187,36 +217,37 @@ fun WebcamPanel(deviceId: String) {
 
 /** Start webcam, or Stop webcam while the phone streams. */
 @Composable
-private fun LiveButton(active: Boolean, enabled: Boolean, modifier: Modifier, size: Int, onClick: () -> Unit) {
-    Box(
-        modifier.clip(RoundedCornerShape(32.dp))
-            .background(if (active) MaterialTheme.colorScheme.errorContainer else Palette.accent)
-            .clickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
+private fun LiveButton(active: Boolean, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        colors = if (active) ButtonDefaults.buttonColors(containerColor = scheme.errorContainer, contentColor = scheme.onErrorContainer) else ButtonDefaults.buttonColors(),
     ) {
-        T(
-            if (active) "Stop webcam" else "Start webcam",
-            size = size, weight = FontWeight.Medium,
-            color = if (active) MaterialTheme.colorScheme.onErrorContainer else Palette.onAccent,
-        )
+        Sym(if (active) Ic.stop else Ic.videocam)
+        Spacer(Modifier.size(12.dp))
+        Text(if (active) "Stop webcam" else "Start webcam", style = MaterialTheme.typography.titleMedium)
     }
 }
 
 @Composable
 private fun StatusLine(status: WebcamSession.Status, cameraError: String?, pcName: String, config: WebcamConfig) {
-    val error = MaterialTheme.colorScheme.error
+    val scheme = MaterialTheme.colorScheme
+    val body = MaterialTheme.typography.bodyMedium
     when {
-        cameraError != null -> T(cameraError, color = error)
-        status.phase == WebcamSession.Phase.Error -> T(status.message, color = error)
+        cameraError != null -> Text(cameraError, style = body, color = scheme.error)
+        status.phase == WebcamSession.Phase.Error -> Text(status.message, style = body, color = scheme.error)
         status.phase == WebcamSession.Phase.Live -> Column {
-            T(status.message, weight = FontWeight.Medium)
-            T(
+            Text(status.message, style = MaterialTheme.typography.titleSmall)
+            Text(
                 listOf(status.device, "${config.width} × ${config.height}").filter { it.isNotEmpty() }.joinToString(" · "),
-                color = Palette.secondary, size = 12, family = Mono,
+                style = MaterialTheme.typography.bodySmall.copy(fontFamily = Mono),
+                color = scheme.onSurfaceVariant,
             )
         }
-        status.message.isNotEmpty() -> T(status.message, color = Palette.body)
-        else -> T("Ready. Start to use this phone as a webcam on $pcName.", color = Palette.body)
+        status.message.isNotEmpty() -> Text(status.message, style = body, color = scheme.onSurfaceVariant)
+        else -> Text("Ready. Press Start webcam to use this phone as a webcam on $pcName.", style = body, color = scheme.onSurfaceVariant)
     }
 }
 
@@ -235,41 +266,44 @@ private fun WebcamSettingsPanel(
         modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        T("The computer can change these settings too.", color = Palette.secondary, size = 13)
+        Text("The computer can change these settings too.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
         Section("Shape") {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (a in caps.aspects) Pill(a, selected = a == config.aspect) { set { it.copy(aspect = a) } }
+                for (a in caps.aspects) Choice(a, selected = a == config.aspect) { set { it.copy(aspect = a) } }
             }
         }
         Section("Quality") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                for (r in caps.resolutions) Pill("${r}p", selected = r == config.resolution) { set { it.copy(resolution = r) } }
-                T("${config.width} × ${config.height}", color = Palette.secondary, size = 13, family = Mono)
+                for (r in caps.resolutions) Choice("${r}p", selected = r == config.resolution) { set { it.copy(resolution = r) } }
+                Text("${config.width} × ${config.height}", style = MaterialTheme.typography.bodySmall.copy(fontFamily = Mono), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            if (streaming) T("A new shape or quality starts the stream again.", color = Palette.hint, size = 12)
+            if (streaming) Text("A new shape or quality starts the stream again.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Section("Camera") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (caps.cameras.size > 1) {
-                    for (c in caps.cameras) Pill(c.replaceFirstChar { it.uppercase() }, selected = c == config.camera) { set { it.copy(camera = c) } }
+                    for (c in caps.cameras) Choice(c.replaceFirstChar { it.uppercase() }, selected = c == config.camera) { set { it.copy(camera = c) } }
                 }
-                Pill("Rotate", onClick = onRotate)
+                ActionChip(Ic.rotate, "Rotate", onRotate)
             }
         }
-        Row(Modifier.fillMaxWidth().clickable { set { it.copy(mirror = !it.mirror) } }, verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.fillMaxWidth().toggleable(value = config.mirror, role = Role.Switch) { on -> set { it.copy(mirror = on) } },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Column(Modifier.weight(1f)) {
-                T("Mirror", size = 16)
-                T("Flip the image from left to right", color = Palette.secondary, size = 13)
+                Text("Mirror", style = MaterialTheme.typography.bodyLarge)
+                Text("Flip the image from left to right", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Switch(checked = config.mirror, onCheckedChange = { on -> set { it.copy(mirror = on) } })
+            Switch(checked = config.mirror, onCheckedChange = null)
         }
         if (caps.zoomMax > 1f) {
             SliderRow("Zoom", config.zoom, 1f..caps.zoomMax, "%.1f×".format(config.zoom)) { v -> set { it.copy(zoom = v) } }
         }
         if (caps.exposureMax > caps.exposureMin) {
-            val steps = if (caps.exposureStep > 0f) ((caps.exposureMax - caps.exposureMin) / caps.exposureStep).roundToInt() - 1 else 0
-            SliderRow("Exposure", config.exposure, caps.exposureMin..caps.exposureMax, "%+.1f EV".format(config.exposure), steps.coerceAtLeast(0)) { v ->
+            // The phone rounds the value to the exposure step of the camera.
+            SliderRow("Exposure", config.exposure, caps.exposureMin..caps.exposureMax, "%+.1f EV".format(config.exposure)) { v ->
                 set { it.copy(exposure = v) }
             }
         }
@@ -277,7 +311,7 @@ private fun WebcamSettingsPanel(
             Section("White balance") {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     for (w in caps.whiteBalance) {
-                        Pill(w.replaceFirstChar { it.uppercase() }, selected = w == config.whiteBalance) { set { it.copy(whiteBalance = w) } }
+                        Choice(w.replaceFirstChar { it.uppercase() }, selected = w == config.whiteBalance) { set { it.copy(whiteBalance = w) } }
                     }
                 }
             }
@@ -286,7 +320,11 @@ private fun WebcamSettingsPanel(
         SliderRow("Contrast", config.contrast, 0f..2f, "%.2f".format(config.contrast)) { v -> set { it.copy(contrast = v) } }
         SliderRow("Saturation", config.saturation, 0f..2f, "%.2f".format(config.saturation)) { v -> set { it.copy(saturation = v) } }
         SliderRow("Warmth", config.warmth, -1f..1f, warmthLabel(config.warmth)) { v -> set { it.copy(warmth = v) } }
-        Pill("Reset image") { set { it.reset() } }
+        OutlinedButton(onClick = { set { it.reset() } }, contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
+            Sym(Ic.refresh, size = ButtonDefaults.IconSize)
+            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+            Text("Reset image")
+        }
     }
 }
 
@@ -299,7 +337,7 @@ private fun warmthLabel(v: Float): String = when {
 @Composable
 private fun Section(title: String, content: @Composable () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        T(title, color = Palette.secondary, size = 13, weight = FontWeight.Medium)
+        Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
         content()
     }
 }
@@ -315,19 +353,21 @@ private fun SliderRow(
 ) {
     Column {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            T(title, size = 16, modifier = Modifier.weight(1f))
-            T(label, color = Palette.secondary, size = 13, family = Mono)
+            Text(title, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+            Text(label, style = MaterialTheme.typography.bodySmall.copy(fontFamily = Mono), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Slider(value = value.coerceIn(range.start, range.endInclusive), onValueChange = onChange, valueRange = range, steps = steps)
     }
 }
 
+/** 1 choice of a setting, such as a shape or a white balance mode. */
 @Composable
-private fun Pill(label: String, selected: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(20.dp)
-    val base = Modifier.clip(shape).alpha(if (enabled) 1f else 0.45f)
-    val styled = if (selected) base.background(Palette.accentContainer) else base.border(1.dp, Palette.borderStrong, shape)
-    Box(styled.clickable(enabled = enabled, onClick = onClick).padding(horizontal = 16.dp, vertical = 9.dp)) {
-        T(label, color = if (selected) Palette.onAccentContainer else Palette.text, size = 14, maxLines = 1)
-    }
+private fun Choice(label: String, selected: Boolean, onClick: () -> Unit) {
+    FilterChip(selected = selected, onClick = onClick, label = { Text(label) })
+}
+
+/** An action with an icon, such as Rotate. */
+@Composable
+private fun ActionChip(@DrawableRes icon: Int, label: String, onClick: () -> Unit) {
+    AssistChip(onClick = onClick, label = { Text(label) }, leadingIcon = { Sym(icon, size = AssistChipDefaults.IconSize) })
 }

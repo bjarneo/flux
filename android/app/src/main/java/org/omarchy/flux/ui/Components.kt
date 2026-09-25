@@ -1,47 +1,70 @@
 package org.omarchy.flux.ui
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.annotation.DrawableRes
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.text.BasicText
-import androidx.compose.ui.graphics.drawscope.clipRect
 
 val Mono = FontFamily.Monospace
+
+/** The side margin of every screen. List rows use the same margin. */
+val Gutter = 16.dp
 
 @Composable
 fun T(
@@ -73,226 +96,285 @@ fun T(
     )
 }
 
-/** The top bar of an inner screen: a back arrow, the title, and optional content at the end. */
+/**
+ * The top bar of an inner screen: a back button, the title with an
+ * optional subtitle, and optional actions at the end.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TopBar(title: String, onBack: () -> Unit, trailing: @Composable () -> Unit = {}) {
+fun TopBar(title: String, onBack: () -> Unit, subtitle: String? = null, trailing: @Composable RowScope.() -> Unit = {}) {
+    TopAppBar(
+        title = {
+            Column {
+                Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (!subtitle.isNullOrEmpty()) {
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        },
+        navigationIcon = { IconButton(onClick = onBack) { Sym(Ic.back, "Back") } },
+        actions = trailing,
+        // The root of the activity already pads for the system bars.
+        windowInsets = WindowInsets(0),
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+    )
+}
+
+@Composable
+fun SectionHeader(text: String, modifier: Modifier = Modifier, top: Dp = 16.dp, trailing: @Composable () -> Unit = {}) {
     Row(
-        Modifier.fillMaxWidth().padding(12.dp),
+        modifier.fillMaxWidth().padding(start = Gutter, end = Gutter, top = top, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Box(
-            Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onBack),
-            contentAlignment = Alignment.Center,
-        ) { T("←", size = 20) }
-        T(title, Modifier.weight(1f), size = 20, maxLines = 1)
+        Text(
+            text,
+            Modifier.weight(1f),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
         trailing()
     }
 }
 
+/**
+ * An action on the device screen: an icon, a label, and a short line that
+ * says what the action does. [wide] lays it out in a row, for a tile that
+ * takes the full width.
+ */
 @Composable
-fun SectionHeader(text: String, top: Int = 6) {
-    T(text, Modifier.padding(start = 20.dp, end = 20.dp, top = top.dp, bottom = 6.dp), size = 13, color = Palette.accent, weight = FontWeight.Medium)
-}
-
-@Composable
-fun Avatar(label: String, on: Boolean) {
-    Box(
-        Modifier.size(44.dp).clip(CircleShape).background(if (on) Palette.accent else Palette.avatarOff),
-        contentAlignment = Alignment.Center,
-    ) { T(label, color = if (on) Palette.onAccent else Palette.secondary, weight = FontWeight.Bold) }
-}
-
-/** A glyph in a rounded primary container square, used by tiles and list rows. */
-@Composable
-fun GlyphBox(glyph: String, mono: Boolean = false) {
-    val accent = Palette.accent
-    Box(
-        Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(Palette.accentContainer),
-        contentAlignment = Alignment.Center,
-    ) { T(glyph, size = 18, color = Palette.onAccentContainer, family = if (mono) Mono else FontFamily.Default) }
-}
-
-/** A row that changes its background while pressed. */
-@Composable
-fun PressRow(
+fun ActionTile(
+    @DrawableRes icon: Int,
+    label: String,
+    supporting: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    onClick: (() -> Unit)?,
-    onLongClick: (() -> Unit)? = null,
-    content: @Composable () -> Unit,
+    wide: Boolean = false,
 ) {
-    val source = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
-    var m = modifier.fillMaxWidth()
-    if (onClick != null || onLongClick != null) {
-        m = m.background(if (pressed) Palette.rowPressed else Color.Transparent)
-            .combinedClickable(interactionSource = source, indication = null, onClick = { onClick?.invoke() }, onLongClick = onLongClick)
+    val scheme = MaterialTheme.colorScheme
+    Card(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = scheme.surfaceContainerHigh),
+    ) {
+        val badge = @Composable {
+            IconBadge(
+                icon,
+                container = if (enabled) scheme.primaryContainer else scheme.surfaceContainerHighest,
+                content = if (enabled) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+                size = 44.dp,
+            )
+        }
+        val labels = @Composable {
+            Column {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (enabled) scheme.onSurface else scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    supporting,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (wide) {
+            Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                badge()
+                labels()
+            }
+        } else {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                badge()
+                labels()
+            }
+        }
     }
-    Box(m) { content() }
 }
 
+/** A setting with an icon, a title, a line of help, and a switch. The whole row toggles. */
 @Composable
-fun Tile(glyph: String, label: String, enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val source = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
+fun SwitchRow(@DrawableRes icon: Int, title: String, subtitle: String, checked: Boolean, onClick: () -> Unit) {
+    ListItem(
+        headlineContent = { Text(title) },
+        supportingContent = { Text(subtitle) },
+        leadingContent = { Sym(icon) },
+        trailingContent = { Switch(checked = checked, onCheckedChange = null) },
+        modifier = Modifier.toggleable(value = checked, role = Role.Switch, onValueChange = { onClick() }),
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+    )
+}
+
+/**
+ * A screen or a section with nothing to show: an icon, a title, a line
+ * that says what to do, and an optional action.
+ */
+@Composable
+fun EmptyState(
+    @DrawableRes icon: Int,
+    title: String,
+    body: String,
+    modifier: Modifier = Modifier,
+    action: (@Composable () -> Unit)? = null,
+) {
     Column(
-        modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(if (pressed) Palette.tilePressed else Palette.tile)
-            .clickable(interactionSource = source, indication = null, onClick = onClick)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        GlyphBox(glyph)
-        T(label, size = 15, color = if (enabled) Palette.text else Palette.secondary)
-    }
-}
-
-/** The Material 3 style switch of the design: a 52 by 32 track with a 24 dp thumb. */
-@Composable
-fun FluxSwitch(checked: Boolean) {
-    val accent = Palette.accent
-    Box(
-        Modifier.size(52.dp, 32.dp).clip(RoundedCornerShape(16.dp)).background(if (checked) accent else Palette.track).padding(horizontal = 4.dp),
-        contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart,
-    ) {
-        Box(Modifier.size(24.dp).clip(CircleShape).background(if (checked) Palette.onAccent else Palette.thumbOff))
-    }
-}
-
-@Composable
-fun SwitchRow(title: String, subtitle: String, checked: Boolean, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            T(title, size = 16)
-            T(subtitle, size = 13, color = Palette.secondary)
-        }
-        Spacer(Modifier.width(12.dp))
-        FluxSwitch(checked)
-    }
-}
-
-@Composable
-fun Chip(text: String, filled: Boolean) {
-    val accent = Palette.accent
-    val m = if (filled) {
-        Modifier.clip(RoundedCornerShape(8.dp)).background(Palette.accentContainer)
-    } else {
-        Modifier.border(1.dp, Palette.border, RoundedCornerShape(8.dp))
-    }
-    Box(m.padding(horizontal = 12.dp, vertical = 6.dp)) {
-        T(text, size = 13, color = if (filled) Palette.onAccentContainer else Palette.text)
-    }
-}
-
-/** The diagonal stripes that stand in for album art. */
-fun Modifier.stripes(a: Color, b: Color, stripe: Float = 10f): Modifier = drawBehind {
-    drawRect(b)
-    val step = stripe * 2 * density
-    val w = stripe * density * 1.4142f
-    clipRect {
-        var x = -size.height
-        while (x < size.width + size.height) {
-            drawLine(a, Offset(x, size.height), Offset(x + size.height, 0f), strokeWidth = w)
-            x += step * 1.4142f
+        IconBadge(icon, size = 72.dp)
+        Spacer(Modifier.height(4.dp))
+        Text(title, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+        Text(
+            body,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        if (action != null) {
+            Spacer(Modifier.height(4.dp))
+            action()
         }
     }
 }
 
-/** The snackbar of the design, at the bottom with a 16 dp margin. */
+/** A button with a leading icon, in the Material 3 filled style. */
 @Composable
-fun BoxScope.Snack(message: String?) {
-    AnimatedVisibility(
-        visible = message != null,
-        enter = fadeIn(),
-        exit = fadeOut(),
-        modifier = Modifier.align(Alignment.BottomCenter).padding(start = 16.dp, end = 16.dp, bottom = 40.dp),
-    ) {
-        Box(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(Palette.snackbar).padding(horizontal = 16.dp, vertical = 14.dp),
-        ) { T(message ?: "", color = Palette.snackbarText) }
+fun IconTextButton(@DrawableRes icon: Int, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    Button(onClick = onClick, modifier = modifier, enabled = enabled, contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
+        Sym(icon, size = ButtonDefaults.IconSize)
+        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+        Text(label)
     }
 }
+
+/** Splits a verification key into groups of 4 characters, so that it is easy to compare. */
+fun formatKey(key: String): String = key.chunked(4).joinToString(" ")
 
 /** The pairing dialog with the verification key. */
 @Composable
 fun PairDialog(name: String, key: String, waiting: Boolean, onCancel: () -> Unit, onPair: () -> Unit) {
-    val accent = Palette.accent
-    Box(
-        Modifier.fillMaxSize().background(Palette.scrim).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            Modifier.width(312.dp).clip(RoundedCornerShape(28.dp)).background(Palette.dialog).padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            T("Pair with $name?", size = 22)
-            T(
-                if (waiting) "Confirm the same code on $name." else "Check that this code matches the one shown on the computer.",
-                color = Palette.body, lineHeight = 1.45f,
-            )
-            T(
-                key.ifEmpty { "…" },
-                Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                size = 30, color = accent, align = TextAlign.Center, letterSpacing = 6f, maxLines = 1,
-            )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                Box(Modifier.clip(RoundedCornerShape(20.dp)).clickable(onClick = onCancel).padding(horizontal = 14.dp, vertical = 10.dp)) {
-                    T("Cancel", color = accent, weight = FontWeight.Medium)
+    AlertDialog(
+        onDismissRequest = onCancel,
+        icon = { Sym(Ic.link) },
+        title = { Text("Pair with $name?", textAlign = TextAlign.Center) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(
+                    if (waiting) "Confirm the same code on $name." else "Check that $name shows the same code.",
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerHighest, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        formatKey(key).ifEmpty { "…" },
+                        Modifier.padding(vertical = 16.dp),
+                        style = MaterialTheme.typography.headlineMedium.copy(fontFamily = Mono, letterSpacing = 2.sp),
+                        color = MaterialTheme.colorScheme.primary,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                    )
                 }
-                Box(
-                    Modifier.clip(RoundedCornerShape(20.dp)).background(if (waiting) Palette.accentContainer else accent)
-                        .clickable(enabled = !waiting, onClick = onPair).padding(horizontal = 18.dp, vertical = 10.dp),
-                ) { T(if (waiting) "Waiting…" else "Pair", color = if (waiting) Palette.onAccentContainer else Palette.onAccent, weight = FontWeight.Medium) }
             }
-        }
-    }
+        },
+        confirmButton = {
+            Button(onClick = onPair, enabled = !waiting) {
+                if (waiting) {
+                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.size(8.dp))
+                    Text("Waiting")
+                } else {
+                    Text("Pair")
+                }
+            }
+        },
+        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } },
+    )
 }
 
-/** A simple confirmation dialog in the style of the pairing dialog. */
+/** A confirmation dialog. [destructive] shows the confirm button in the error color. */
 @Composable
-fun ConfirmDialog(title: String, body: String, confirm: String, onCancel: () -> Unit, onConfirm: () -> Unit) {
-    val accent = Palette.accent
-    Box(
-        Modifier.fillMaxSize().background(Palette.scrim).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onCancel),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            Modifier.width(312.dp).clip(RoundedCornerShape(28.dp)).background(Palette.dialog).padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            T(title, size = 22)
-            T(body, color = Palette.body, lineHeight = 1.45f)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                Box(Modifier.clip(RoundedCornerShape(20.dp)).clickable(onClick = onCancel).padding(horizontal = 14.dp, vertical = 10.dp)) {
-                    T("Cancel", color = accent, weight = FontWeight.Medium)
-                }
-                Box(Modifier.clip(RoundedCornerShape(20.dp)).background(accent).clickable(onClick = onConfirm).padding(horizontal = 18.dp, vertical = 10.dp)) {
-                    T(confirm, color = Palette.onAccent, weight = FontWeight.Medium)
-                }
-            }
-        }
-    }
+fun ConfirmDialog(
+    title: String,
+    body: String,
+    confirm: String,
+    onCancel: () -> Unit,
+    onConfirm: () -> Unit,
+    @DrawableRes icon: Int? = null,
+    destructive: Boolean = false,
+) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        icon = icon?.let { { Sym(it) } },
+        title = { Text(title) },
+        text = { Text(body) },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = if (destructive) {
+                    ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError)
+                } else {
+                    ButtonDefaults.buttonColors()
+                },
+            ) { Text(confirm) }
+        },
+        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } },
+    )
 }
 
-/** The full-screen Find my phone overlay. */
+/** The full-screen Find my phone overlay. The ring icon pulses while the phone rings. */
 @Composable
 fun RingOverlay(from: String, onStop: () -> Unit) {
-    val accent = Palette.accent
-    Column(
-        Modifier.fillMaxSize().background(accent).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+    val scheme = MaterialTheme.colorScheme
+    val pulse by rememberInfiniteTransition(label = "ring").animateFloat(
+        initialValue = 1f,
+        targetValue = 1.12f,
+        animationSpec = infiniteRepeatable(tween(600), RepeatMode.Reverse),
+        label = "pulse",
+    )
+    Box(
+        Modifier.fillMaxSize().background(scheme.primary)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
     ) {
-        T("FLUX · FIND MY PHONE", size = 14, color = Palette.onAccent, weight = FontWeight.Medium, letterSpacing = 2f)
-        T("Ringing from\n$from", size = 40, color = Palette.onAccent, align = TextAlign.Center, lineHeight = 1.1f)
-        Spacer(Modifier.size(24.dp))
-        Box(
-            Modifier.clip(RoundedCornerShape(40.dp)).background(Palette.onAccent).clickable(onClick = onStop).padding(horizontal = 44.dp, vertical = 18.dp),
-        ) { T("I found it", size = 18, color = accent) }
+        Column(
+            Modifier.fillMaxSize().systemBarsPadding().padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
+        ) {
+            IconBadge(Ic.ring, Modifier.scale(pulse), container = scheme.onPrimary.copy(alpha = 0.16f), content = scheme.onPrimary, size = 120.dp)
+            Spacer(Modifier.height(8.dp))
+            Text("Find my phone", style = MaterialTheme.typography.titleMedium, color = scheme.onPrimary.copy(alpha = 0.8f))
+            Text(
+                "$from is ringing this phone",
+                style = MaterialTheme.typography.headlineMedium,
+                color = scheme.onPrimary,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(16.dp))
+            Button(
+                onClick = onStop,
+                modifier = Modifier.height(64.dp),
+                shape = CircleShape,
+                colors = ButtonDefaults.buttonColors(containerColor = scheme.onPrimary, contentColor = scheme.primary),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 40.dp),
+            ) {
+                Sym(Ic.check)
+                Spacer(Modifier.size(12.dp))
+                Text("I found it", style = MaterialTheme.typography.titleMedium)
+            }
+        }
     }
 }
 
@@ -303,7 +385,7 @@ fun RingOverlay(from: String, onStop: () -> Unit) {
  * 0.75-unit stroke inside its edge.
  */
 @Composable
-fun FluxMark(size: androidx.compose.ui.unit.Dp, fg: Color = Palette.text, accent: Color = Palette.accent) {
+fun FluxMark(size: Dp, fg: Color = Palette.text, accent: Color = Palette.accent) {
     androidx.compose.foundation.Canvas(Modifier.size(size)) {
         val u = this.size.minDimension / 8f
         drawRect(accent, topLeft = Offset(2.6f * u, 2.6f * u), size = androidx.compose.ui.geometry.Size(4.9f * u, 4.9f * u))

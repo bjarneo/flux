@@ -2,42 +2,53 @@ package org.omarchy.flux.ui
 
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import org.omarchy.flux.core.Browse
 import org.omarchy.flux.core.BrowseState
+import org.omarchy.flux.core.DebugDemo
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.Plugins
@@ -57,9 +68,11 @@ fun bytes(n: Long): String = when {
 
 @Composable
 fun MediaScreen(d: DeviceUi, onBack: () -> Unit) {
-    val accent = Palette.accent
+    val scheme = MaterialTheme.colorScheme
     val p = d.player
     var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
+    // The position that the user drags to, until the drag ends.
+    var dragging by remember { mutableStateOf<Float?>(null) }
     LaunchedEffect(d.id) {
         while (true) {
             Plugins.requestPlayers(FluxCore, d.id)
@@ -77,130 +90,243 @@ fun MediaScreen(d: DeviceUi, onBack: () -> Unit) {
         p.playing -> (p.position + (now - p.updatedAt)).coerceIn(0, maxOf(p.length, 0))
         else -> p.position
     }
-    val fraction = if (p != null && p.length > 0) (position.toFloat() / p.length).coerceIn(0f, 1f) else 0f
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        TopBar("Media", onBack)
-        Column(Modifier.padding(horizontal = 28.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Box(
-                Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(28.dp)).stripes(Palette.stripeA, Palette.stripeB),
-                contentAlignment = Alignment.Center,
-            ) { T("album art", size = 11, color = Palette.hint, family = Mono) }
-            T(if (p != null) "${p.name} on ${d.name}" else "No player on ${d.name}", size = 13, color = accent)
-            Column {
-                T(p?.title?.ifEmpty { null } ?: if (p == null) "Nothing is playing" else "Unknown title", size = 24, maxLines = 2)
-                T(p?.artist?.ifEmpty { null } ?: if (p == null) "Start a player on ${d.name}" else "", size = 16, color = Palette.secondary, maxLines = 1)
-            }
-            Box(
-                Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(Palette.track)
-                    .pointerInput(p?.length, p?.canSeek) {
-                        detectTapGestures { o ->
-                            if (p != null && p.canSeek && p.length > 0) {
-                                Plugins.seek(FluxCore, d.id, (o.x / size.width * p.length).toLong())
-                            }
-                        }
-                    },
+        TopBar("Media", onBack, subtitle = "On ${d.name}")
+        if (!d.online) {
+            NotReachable(d, "The player controls")
+            return@Column
+        }
+        if (p == null) {
+            EmptyState(
+                Ic.music,
+                "Nothing is playing",
+                "Play music or a video on ${d.name}. The controls show here.",
+                Modifier.padding(top = 48.dp),
+            )
+            return@Column
+        }
+        if (d.players.size > 1) {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = Gutter),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Box(Modifier.fillMaxHeight().fillMaxWidth(fraction).clip(RoundedCornerShape(3.dp)).background(accent))
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                T(clock(position), size = 12, color = Palette.secondary)
-                T(if (p != null && p.length > 0) clock(p.length) else "0:00", size = 12, color = Palette.secondary)
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(28.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(56.dp).clip(CircleShape).background(Palette.tile).clickable { Plugins.mediaAction(FluxCore, d.id, "Previous") }, contentAlignment = Alignment.Center) {
-                    T("◀◀")
-                }
-                Box(Modifier.size(84.dp).clip(RoundedCornerShape(28.dp)).background(accent).clickable { Plugins.mediaAction(FluxCore, d.id, "PlayPause") }, contentAlignment = Alignment.Center) {
-                    T(if (p?.playing == true) "❚❚" else "▶", size = 26, color = Palette.onAccent)
-                }
-                Box(Modifier.size(56.dp).clip(CircleShape).background(Palette.tile).clickable { Plugins.mediaAction(FluxCore, d.id, "Next") }, contentAlignment = Alignment.Center) {
-                    T("▶▶")
+                for (name in d.players) {
+                    FilterChip(
+                        selected = name == p.name,
+                        onClick = { Plugins.selectPlayer(FluxCore, d.id, name) },
+                        label = { Text(name) },
+                    )
                 }
             }
         }
-        Spacer(Modifier.height(96.dp))
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Surface(
+                Modifier.widthIn(max = 360.dp).fillMaxWidth().aspectRatio(1f),
+                shape = RoundedCornerShape(32.dp),
+                color = scheme.primaryContainer,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Sym(Ic.music, tint = scheme.onPrimaryContainer, size = 112.dp)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Column(Modifier.fillMaxWidth()) {
+                Text(
+                    p.title.ifEmpty { "Unknown title" },
+                    style = MaterialTheme.typography.headlineSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    listOf(p.artist, p.name).filter { it.isNotEmpty() }.joinToString(" · "),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (p.length > 0) {
+                Column(Modifier.fillMaxWidth()) {
+                    Slider(
+                        value = dragging ?: position.toFloat(),
+                        onValueChange = { dragging = it },
+                        onValueChangeFinished = {
+                            dragging?.let { Plugins.seek(FluxCore, d.id, it.toLong()) }
+                            dragging = null
+                        },
+                        valueRange = 0f..p.length.toFloat(),
+                        enabled = p.canSeek,
+                    )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(clock(dragging?.toLong() ?: position), style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+                        Text(clock(p.length), style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+                    }
+                }
+            }
+            Row(
+                Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FilledTonalIconButton(onClick = { Plugins.mediaAction(FluxCore, d.id, "Previous") }, modifier = Modifier.size(64.dp)) {
+                    Sym(Ic.previous, "Previous", size = 32.dp)
+                }
+                FilledIconButton(
+                    onClick = { Plugins.mediaAction(FluxCore, d.id, "PlayPause") },
+                    modifier = Modifier.size(88.dp),
+                    shape = RoundedCornerShape(28.dp),
+                    colors = IconButtonDefaults.filledIconButtonColors(),
+                ) {
+                    Sym(if (p.playing) Ic.pause else Ic.play, if (p.playing) "Pause" else "Play", size = 44.dp)
+                }
+                FilledTonalIconButton(onClick = { Plugins.mediaAction(FluxCore, d.id, "Next") }, modifier = Modifier.size(64.dp)) {
+                    Sym(Ic.next, "Next", size = 32.dp)
+                }
+            }
+        }
+        Spacer(Modifier.height(48.dp))
     }
 }
 
 @Composable
 fun CommandsScreen(d: DeviceUi, onBack: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
     LaunchedEffect(d.id) { Plugins.requestCommands(FluxCore, d.id) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        TopBar("Run commands", onBack)
+        TopBar("Run commands", onBack, subtitle = "On ${d.name}")
         when {
-            !d.commandsLoaded -> T("Loading the commands of ${d.name}", Modifier.padding(horizontal = 20.dp, vertical = 14.dp), color = Palette.secondary)
-            d.commands.isEmpty() -> T("${d.name} has no commands yet", Modifier.padding(horizontal = 20.dp, vertical = 14.dp), color = Palette.secondary)
+            !d.online -> NotReachable(d, "The commands")
+            !d.commandsLoaded -> Row(
+                Modifier.padding(horizontal = Gutter, vertical = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                Text("Loading the commands of ${d.name}", color = scheme.onSurfaceVariant)
+            }
+            d.commands.isEmpty() -> EmptyState(
+                Ic.terminal,
+                "No commands yet",
+                "On ${d.name}, open Flux and add commands in Phone commands. They show here.",
+                Modifier.padding(top = 48.dp),
+            )
+            else -> Text(
+                "Tap a command to run it on ${d.name}.",
+                Modifier.padding(horizontal = Gutter, vertical = 8.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurfaceVariant,
+            )
         }
         for (c in d.commands) {
-            PressRow(onClick = { Plugins.runCommand(FluxCore, d.id, c) }) {
-                ListRow("$", c.name, c.command, monoGlyph = true)
-            }
+            ListItem(
+                headlineContent = { Text(c.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                supportingContent = {
+                    Text(c.command, style = MaterialTheme.typography.bodySmall.copy(fontFamily = Mono), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                },
+                leadingContent = { IconBadge(Ic.terminal, shape = RoundedCornerShape(12.dp)) },
+                trailingContent = { Sym(Ic.play, "Run", tint = scheme.primary) },
+                modifier = Modifier.clickable { Plugins.runCommand(FluxCore, d.id, c) },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            )
         }
         Spacer(Modifier.height(96.dp))
     }
 }
 
+/** The empty state of a screen whose computer is not reachable. [what] names what shows when it connects. */
 @Composable
-private fun ListRow(glyph: String, title: String, subtitle: String, monoGlyph: Boolean = false) {
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        GlyphBox(glyph, mono = monoGlyph)
-        Column(Modifier.weight(1f)) {
-            T(title, size = 16, maxLines = 1)
-            if (subtitle.isNotEmpty()) T(subtitle, size = 12, color = Palette.secondary, family = Mono, maxLines = 1)
-        }
-    }
+private fun NotReachable(d: DeviceUi, what: String) {
+    EmptyState(
+        Ic.wifiOff,
+        "${d.name} is not reachable",
+        "$what show here when ${d.name} connects again.",
+        Modifier.padding(top = 48.dp),
+        action = { TextButton(onClick = { FluxCore.rediscover() }) { Text("Retry") } },
+    )
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun BrowseScreen(d: DeviceUi, browse: BrowseState?, onBack: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    fun open() {
+        if (DebugDemo.isDemo(d.id)) FluxCore.setBrowse(DebugDemo.browse()) else Browse.start(FluxCore, d.id)
+    }
     DisposableEffect(d.id) {
-        Browse.start(FluxCore, d.id)
+        open()
         onDispose {
             Browse.close()
             FluxCore.setBrowse(null)
         }
     }
-    val root = browse?.roots?.firstOrNull { browse.path.startsWith(it.second) }?.second
+    val rootEntry = browse?.roots?.firstOrNull { browse.path.startsWith(it.second) }
+    val root = rootEntry?.second
     val atRoot = browse == null || browse.path.isEmpty() || browse.path == root
     val up = {
         if (atRoot) onBack() else Browse.list(FluxCore, browse!!.path.trimEnd('/').substringBeforeLast('/').ifEmpty { "/" })
     }
     BackHandler(enabled = !atRoot) { up() }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        TopBar("Browse PC", onBack = { up() })
-        if (browse != null && browse.roots.size > 1) {
-            FlowRow(
-                Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                for ((name, path) in browse.roots) {
-                    Box(Modifier.clickable { Browse.list(FluxCore, path) }) { Chip(name, filled = path == root) }
+    // Show the path from the root folder name, not the full path on the computer.
+    val shown = browse?.path?.takeIf { it.isNotEmpty() }?.let { path ->
+        rootEntry?.let { it.first + "/" + path.removePrefix(it.second).trimEnd('/') }?.trimEnd('/') ?: path
+    }
+    Column(Modifier.fillMaxSize()) {
+        TopBar("Browse PC", onBack = { up() }, subtitle = shown ?: "On ${d.name}")
+        if (browse != null && browse.loading) LinearProgressIndicator(Modifier.fillMaxWidth()) else Spacer(Modifier.height(4.dp))
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            if (browse != null && browse.roots.size > 1) {
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = Gutter, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    for ((name, path) in browse.roots) {
+                        FilterChip(
+                            selected = path == root,
+                            onClick = { Browse.list(FluxCore, path) },
+                            label = { Text(name) },
+                            leadingIcon = { Sym(if (name.equals("Home", ignoreCase = true)) Ic.home else Ic.drive, size = 18.dp) },
+                        )
+                    }
                 }
             }
-        }
-        if (browse != null && browse.path.isNotEmpty()) {
-            // Show the path from the root folder name, not the full path on the computer.
-            val rootEntry = browse.roots.firstOrNull { browse.path.startsWith(it.second) }
-            val shown = rootEntry?.let { it.first + browse.path.removePrefix(it.second) } ?: browse.path
-            T(shown, Modifier.padding(horizontal = 20.dp, vertical = 4.dp), size = 12, color = Palette.secondary, family = Mono, maxLines = 1)
-        }
-        when {
-            browse?.error != null -> T(browse.error, Modifier.padding(horizontal = 20.dp, vertical = 14.dp), color = Palette.secondary)
-            browse == null || (browse.loading && browse.entries.isEmpty()) ->
-                T("Opening the files of ${d.name}", Modifier.padding(horizontal = 20.dp, vertical = 14.dp), color = Palette.secondary)
-            browse.entries.isEmpty() -> T("This folder is empty", Modifier.padding(horizontal = 20.dp, vertical = 14.dp), color = Palette.secondary)
-        }
-        for (e in browse?.entries.orEmpty()) {
-            PressRow(onClick = { if (e.dir) Browse.list(FluxCore, e.path) else Browse.download(FluxCore, e) }) {
-                ListRow(if (e.dir) "▤" else "↓", if (e.dir) e.name + "/" else e.name, if (e.dir) "folder" else bytes(e.size))
+            when {
+                browse?.error != null -> EmptyState(
+                    Ic.error,
+                    "Cannot open the files",
+                    browse.error,
+                    Modifier.padding(top = 32.dp),
+                    action = { TextButton(onClick = ::open) { Text("Try again") } },
+                )
+                browse == null || (browse.loading && browse.entries.isEmpty()) -> Text(
+                    "Opening the files of ${d.name}",
+                    Modifier.padding(horizontal = Gutter, vertical = 16.dp),
+                    color = scheme.onSurfaceVariant,
+                )
+                browse.entries.isEmpty() -> EmptyState(Ic.folderOpen, "This folder is empty", "Go back to open another folder.", Modifier.padding(top = 32.dp))
             }
+            for (e in browse?.entries.orEmpty()) {
+                ListItem(
+                    headlineContent = { Text(e.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    supportingContent = { Text(if (e.dir) "Folder" else bytes(e.size)) },
+                    leadingContent = {
+                        IconBadge(
+                            fileIcon(e.name, e.dir),
+                            container = if (e.dir) scheme.primaryContainer else scheme.surfaceContainerHighest,
+                            content = if (e.dir) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+                            shape = RoundedCornerShape(12.dp),
+                        )
+                    },
+                    trailingContent = {
+                        if (e.dir) Sym(Ic.chevron, tint = scheme.onSurfaceVariant) else Sym(Ic.download, "Download", tint = scheme.primary)
+                    },
+                    modifier = Modifier.clickable { if (e.dir) Browse.list(FluxCore, e.path) else Browse.download(FluxCore, e) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                )
+            }
+            Spacer(Modifier.height(96.dp))
         }
-        Spacer(Modifier.height(96.dp))
     }
 }

@@ -176,6 +176,13 @@ object Plugins {
         d.currentPlayer?.let { requestNowPlaying(d, it) }
     }
 
+    /** Makes [name] the player that the Media screen controls. */
+    fun selectPlayer(core: FluxCore, id: String, name: String) {
+        val d = core.device(id) ?: return
+        core.locked { d.currentPlayer = name }
+        requestNowPlaying(d, name)
+    }
+
     fun mediaAction(core: FluxCore, id: String, action: String) {
         val d = core.device(id) ?: return
         val player = d.currentPlayer ?: return

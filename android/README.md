@@ -42,7 +42,30 @@ To take a screenshot of one page on a locked test phone, use the debug-only laun
 tools/shot.sh media /tmp/media.png
 ```
 
-The pages are `devices`, `home`, `media`, `commands`, `browse`, `camera`, `ring`, and `icon`. Release builds ignore these extras.
+To render the pages on an emulator with no computer, turn on the sample computers with `FLUX_DEMO=1`. Set `ANDROID_SERIAL` when a phone is also connected:
+
+```bash
+ANDROID_SERIAL=emulator-5554 FLUX_DEMO=1 tools/shot.sh home /tmp/home.png
+```
+
+The pages are:
+
+- `devices`, `home`, `media`, `commands`, `browse`, and `camera`.
+- `camera:<mode>` for a camera mode: `text`, `qr`, `photo`, `document`, or `webcam`.
+- `ring`, `pair`, and `unpair` for the overlay and the dialogs.
+- `<page>@offline` for the page of a paired computer that is not reachable.
+- `empty` for the app with no computers.
+- `icon` for the launcher and notification icons.
+
+Release builds ignore these extras.
+
+## Icons
+
+The app uses Material Symbols Rounded at the 24 dp optical size, under the Apache License 2.0. To add an icon, add its name to `ICONS` in `tools/fetch_icons.py`, run the script, and add the drawable to `Ic` in `ui/Icons.kt`:
+
+```bash
+python3 tools/fetch_icons.py
+```
 
 ## Layout
 
@@ -53,4 +76,4 @@ The pages are `devices`, `home`, `media`, `commands`, `browse`, `camera`, `ring`
 | `app/src/main/java/org/omarchy/flux/core` | Devices, pairing, trust store, and the plugins |
 | `app/src/main/java/org/omarchy/flux/service` | The foreground service and the notification listener |
 | `app/src/main/java/org/omarchy/flux/ui` | The Compose screens |
-| `tools` | The test peer and the screenshot helper |
+| `tools` | The test peer, the screenshot helper, and the icon script |

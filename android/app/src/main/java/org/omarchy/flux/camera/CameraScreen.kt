@@ -1,42 +1,47 @@
 package org.omarchy.flux.camera
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import org.omarchy.flux.core.DeviceUi
-import org.omarchy.flux.ui.Palette
-import org.omarchy.flux.ui.T
+import org.omarchy.flux.ui.Ic
+import org.omarchy.flux.ui.Sym
 import org.omarchy.flux.ui.TopBar
 import org.omarchy.flux.webcam.WebcamPanel
 
-/** The modes of the Camera screen, in the order of the mode row. */
-enum class CameraMode(val label: String) { Text("Text"), Qr("QR"), Photo("Photo"), Document("Document"), Webcam("Webcam") }
+/** The modes of the Camera screen, in the order of the mode bar. */
+enum class CameraMode(val label: String, @DrawableRes val icon: Int, val hint: String) {
+    Text("Text", Ic.text, "Scan text and send it"),
+    Qr("QR", Ic.qr, "Read a QR code or barcode"),
+    Photo("Photo", Ic.camera, "Take a photo for the computer"),
+    Document("Document", Ic.document, "Scan pages to a PDF"),
+    Webcam("Webcam", Ic.videocamOutline, "Use this phone as a webcam");
 
-/** The Camera screen: 1 camera with a mode row at the bottom, like a camera app. */
+    companion object {
+        /** The mode named [key], such as "qr", or Text for an unknown key. */
+        fun fromKey(key: String): CameraMode = entries.firstOrNull { it.name.equals(key, ignoreCase = true) } ?: Text
+    }
+}
+
+/** The Camera screen: 1 camera with a mode bar at the bottom. */
 @Composable
-fun CameraScreen(d: DeviceUi, onBack: () -> Unit) {
-    var mode by rememberSaveable { mutableStateOf(CameraMode.Text) }
+fun CameraScreen(d: DeviceUi, onBack: () -> Unit, initial: CameraMode = CameraMode.Text) {
+    var mode by rememberSaveable { mutableStateOf(initial) }
     Column(Modifier.fillMaxSize()) {
-        TopBar("Camera", onBack)
+        TopBar("Camera", onBack, subtitle = mode.hint)
         Box(Modifier.weight(1f).fillMaxWidth()) {
             // Each mode binds the camera itself and releases it when it leaves.
             when (mode) {
@@ -47,25 +52,15 @@ fun CameraScreen(d: DeviceUi, onBack: () -> Unit) {
                 CameraMode.Webcam -> WebcamPanel(d.id)
             }
         }
-        ModeRow(mode) { mode = it }
-    }
-}
-
-@Composable
-private fun ModeRow(selected: CameraMode, onSelect: (CameraMode) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
-    ) {
-        for (m in CameraMode.entries) {
-            val on = m == selected
-            Box(
-                Modifier.clip(RoundedCornerShape(16.dp))
-                    .background(if (on) Palette.accentContainer else androidx.compose.ui.graphics.Color.Transparent)
-                    .clickable { onSelect(m) }
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-            ) {
-                T(m.label, size = 14, color = if (on) Palette.onAccentContainer else Palette.secondary, weight = FontWeight.Medium, maxLines = 1)
+        // The root of the activity already pads for the system bars.
+        NavigationBar(windowInsets = WindowInsets(0), containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+            for (m in CameraMode.entries) {
+                NavigationBarItem(
+                    selected = m == mode,
+                    onClick = { mode = m },
+                    icon = { Sym(m.icon) },
+                    label = { Text(m.label, maxLines = 1) },
+                )
             }
         }
     }

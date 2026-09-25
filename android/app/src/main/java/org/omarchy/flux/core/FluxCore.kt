@@ -173,7 +173,7 @@ object FluxCore {
             UiState(
                 phoneName = deviceName,
                 onWifi = Android.onWifi(app),
-                devices = devices.values.map { it.snapshot() },
+                devices = devices.values.map { it.snapshot() } + DebugDemo.devices(),
                 shareNotifications = settings.shareNotifications,
                 syncClipboard = settings.syncClipboard,
                 notificationAccess = Android.hasNotificationAccess(app),

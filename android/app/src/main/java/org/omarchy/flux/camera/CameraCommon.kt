@@ -10,6 +10,7 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,9 +18,16 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -33,16 +41,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import org.omarchy.flux.ui.GlyphBox
-import org.omarchy.flux.ui.Palette
-import org.omarchy.flux.ui.T
+import org.omarchy.flux.ui.Ic
+import org.omarchy.flux.ui.IconBadge
+import org.omarchy.flux.ui.Sym
 
 /** The largest side of a still image that Flux reads. It keeps memory use low. */
 internal const val MAX_STILL_SIDE = 2048
@@ -80,35 +90,61 @@ internal fun openAppSettings(context: Context) {
 @Composable
 internal fun CameraRationale(onAllow: () -> Unit, onSettings: () -> Unit, onPhoto: (() -> Unit)?, what: String = "scan text") {
     Column(
-        Modifier.fillMaxSize().padding(horizontal = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
+        Modifier.fillMaxSize().padding(horizontal = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        GlyphBox("⌗")
-        T("Allow the camera to $what", size = 20, align = TextAlign.Center)
-        T(
+        IconBadge(Ic.camera, size = 72.dp)
+        Text("Allow the camera to $what", style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+        Text(
             "Flux uses the camera only while this screen is open. Only what you send goes to the computer.",
-            color = Palette.body, align = TextAlign.Center, lineHeight = 1.45f,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
         )
-        FilledPill("Allow camera", onAllow)
-        OutlinedPill("Open app settings", onSettings)
-        if (onPhoto != null) OutlinedPill("From photo", onPhoto)
+        FilledPill("Allow camera", onAllow, Ic.camera)
+        OutlinedPill("Open app settings", onSettings, Ic.settings)
+        if (onPhoto != null) OutlinedPill("From photo", onPhoto, Ic.gallery)
+    }
+}
+
+/** The main action of a camera mode: a filled button with an optional icon. */
+@Composable
+internal fun FilledPill(label: String, onClick: () -> Unit, @DrawableRes icon: Int? = null) {
+    Button(onClick = onClick, contentPadding = if (icon != null) ButtonDefaults.ButtonWithIconContentPadding else ButtonDefaults.ContentPadding) {
+        PillContent(label, icon)
+    }
+}
+
+/** A second action of a camera mode: an outlined button with an optional icon. */
+@Composable
+internal fun OutlinedPill(label: String, onClick: () -> Unit, @DrawableRes icon: Int? = null) {
+    OutlinedButton(onClick = onClick, contentPadding = if (icon != null) ButtonDefaults.ButtonWithIconContentPadding else ButtonDefaults.ContentPadding) {
+        PillContent(label, icon)
     }
 }
 
 @Composable
-internal fun FilledPill(label: String, onClick: () -> Unit) {
-    Box(
-        Modifier.clip(RoundedCornerShape(20.dp)).background(Palette.accent).clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 11.dp),
-    ) { T(label, color = Palette.onAccent, weight = FontWeight.Medium, maxLines = 1) }
+private fun PillContent(label: String, @DrawableRes icon: Int?) {
+    if (icon != null) {
+        Sym(icon, size = ButtonDefaults.IconSize)
+        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+    }
+    Text(label, maxLines = 1)
 }
 
+/** The shutter button: a filled circle inside a ring. */
 @Composable
-internal fun OutlinedPill(label: String, onClick: () -> Unit) {
+internal fun Shutter(onClick: () -> Unit, busy: Boolean = false, description: String = "Take picture") {
+    val scheme = MaterialTheme.colorScheme
     Box(
-        Modifier.clip(RoundedCornerShape(20.dp)).border(1.dp, Palette.borderStrong, RoundedCornerShape(20.dp))
-            .clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 10.dp),
-    ) { T(label, color = Palette.accent, weight = FontWeight.Medium, maxLines = 1) }
+        Modifier.size(80.dp).clip(CircleShape).border(4.dp, scheme.primary, CircleShape)
+            .clickable(onClickLabel = description, role = Role.Button, onClick = onClick).padding(8.dp)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.fillMaxSize().clip(CircleShape).background(if (busy) scheme.primaryContainer else scheme.primary))
+    }
 }
 
 @Composable

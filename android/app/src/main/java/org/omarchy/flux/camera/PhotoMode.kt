@@ -1,5 +1,8 @@
 package org.omarchy.flux.camera
 
+import androidx.compose.material3.FilledTonalIconButton
+import org.omarchy.flux.ui.Ic
+import org.omarchy.flux.ui.Sym
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import android.net.Uri
@@ -155,7 +158,7 @@ fun PhotoMode(d: DeviceUi) {
             AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
             Row(Modifier.align(Alignment.TopEnd).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (camera?.cameraInfo?.hasFlashUnit() == true) {
-                    Chip(flashLabel(flash)) { flash = nextFlash(flash) }
+                    FilledTonalIconButton(onClick = { flash = nextFlash(flash) }) { Sym(flashIcon(flash), flashLabel(flash)) }
                 }
             }
         }
@@ -164,21 +167,13 @@ fun PhotoMode(d: DeviceUi) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { LastPhoto(status) { s -> send(s.file, s.name, s.thumb) } }
-            // The shutter button: a filled circle inside a ring.
-            Box(
-                Modifier.size(80.dp).clip(CircleShape).border(4.dp, Palette.accent, CircleShape).clickable(onClick = ::shoot).padding(8.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(Modifier.fillMaxSize().clip(CircleShape).background(if (status == PhotoStatus.Saving) Palette.accentContainer else Palette.accent))
-            }
+            Shutter(::shoot, busy = status == PhotoStatus.Saving)
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
                 if (hasFront) {
-                    Box(
-                        Modifier.size(52.dp).clip(CircleShape).background(Palette.tile).clickable {
-                            lens = if (lens == CameraSelector.LENS_FACING_BACK) CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK
-                        },
-                        contentAlignment = Alignment.Center,
-                    ) { T("⇄", size = 20) }
+                    FilledTonalIconButton(
+                        onClick = { lens = if (lens == CameraSelector.LENS_FACING_BACK) CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK },
+                        modifier = Modifier.size(52.dp),
+                    ) { Sym(Ic.switchCamera, "Switch camera") }
                 }
             }
         }
@@ -206,17 +201,16 @@ private fun LastPhoto(status: PhotoStatus, onRetry: (PhotoStatus.Failed) -> Unit
     }
 }
 
-@Composable
-private fun Chip(label: String, onClick: () -> Unit) {
-    Box(
-        Modifier.clip(RoundedCornerShape(16.dp)).background(Palette.snackbar).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 7.dp),
-    ) { T(label, size = 13, color = Palette.snackbarText) }
-}
-
 private fun nextFlash(mode: Int): Int = when (mode) {
     ImageCapture.FLASH_MODE_OFF -> ImageCapture.FLASH_MODE_AUTO
     ImageCapture.FLASH_MODE_AUTO -> ImageCapture.FLASH_MODE_ON
     else -> ImageCapture.FLASH_MODE_OFF
+}
+
+private fun flashIcon(mode: Int): Int = when (mode) {
+    ImageCapture.FLASH_MODE_AUTO -> Ic.flashAuto
+    ImageCapture.FLASH_MODE_ON -> Ic.flashOn
+    else -> Ic.flashOff
 }
 
 private fun flashLabel(mode: Int): String = when (mode) {

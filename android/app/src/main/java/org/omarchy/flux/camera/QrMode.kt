@@ -1,5 +1,12 @@
 package org.omarchy.flux.camera
 
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import org.omarchy.flux.ui.Ic
+import org.omarchy.flux.ui.Sym
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
 import android.graphics.Bitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -152,16 +159,16 @@ fun QrMode(d: DeviceUi) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                T("Point the camera at a code", color = Palette.secondary)
-                OutlinedPill("From photo", choosePhoto)
+                Text("Point the camera at a code", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedPill("From photo", choosePhoto, Ic.gallery)
             }
             is QrPhase.Found -> CodeSheetView(d, p.sheet) { phase = QrPhase.Live }
             is QrPhase.Missing -> Column(
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                T("No code found in this image.", color = Palette.secondary)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { FilledPill("Scan again") { phase = QrPhase.Live } }
+                Text("No code found in this image.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { FilledPill("Scan again", { phase = QrPhase.Live }, Ic.qr) }
             }
         }
     }
@@ -185,13 +192,23 @@ private fun CodeSheetView(d: DeviceUi, sheet: CodeSheet, onAgain: () -> Unit) {
                     val ok = Share.sendFields(FluxCore, d.id, action.body.fields())
                     FluxCore.toast(if (ok) "Sent to ${d.name}" else "Not connected")
                 }
-                if (i == 0) FilledPill(action.verb, send) else OutlinedPill(action.verb, send)
+                if (i == 0) FilledPill(action.verb, send, verbIcon(action.verb)) else OutlinedPill(action.verb, send, verbIcon(action.verb))
             }
         }
-        Box(
-            Modifier.clip(RoundedCornerShape(20.dp)).clickable(onClick = onAgain).padding(horizontal = 4.dp, vertical = 6.dp),
-        ) { T("Scan again", color = Palette.accent, weight = FontWeight.Medium) }
+        TextButton(onClick = onAgain) {
+            Sym(Ic.qr, size = 18.dp)
+            Spacer(Modifier.size(8.dp))
+            Text("Scan again")
+        }
     }
+}
+
+/** The icon for the verb of a code action, such as Open, Copy, or Save. */
+private fun verbIcon(verb: String): Int = when (verb.substringBefore(' ').lowercase()) {
+    "open" -> Ic.openInNew
+    "copy" -> Ic.copy
+    "save" -> Ic.download
+    else -> Ic.send
 }
 
 /** The outlines of the codes that the camera sees, in preview view pixels. */

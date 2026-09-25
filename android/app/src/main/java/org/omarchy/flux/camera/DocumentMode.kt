@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,9 +32,8 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.Share
-import org.omarchy.flux.ui.GlyphBox
-import org.omarchy.flux.ui.Palette
-import org.omarchy.flux.ui.T
+import org.omarchy.flux.ui.Ic
+import org.omarchy.flux.ui.IconBadge
 
 private const val NO_PLAY_SERVICES = "Document scan needs Google Play services, and this phone does not have them."
 
@@ -92,14 +94,16 @@ fun DocumentMode(d: DeviceUi) {
         verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        GlyphBox("▤")
-        T("Scan a document", size = 20, align = TextAlign.Center)
-        T(
+        IconBadge(Ic.document, size = 72.dp)
+        Text("Scan a document", style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+        Text(
             "The scanner finds the page edges. You can add pages or import from the gallery. Flux sends 1 PDF to ${d.name}.",
-            color = Palette.body, align = TextAlign.Center, lineHeight = 1.45f,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
         )
-        if (!busy) FilledPill("Scan document", ::start)
-        status?.let { T(it, color = Palette.secondary, align = TextAlign.Center) }
+        if (busy) CircularProgressIndicator() else FilledPill("Scan document", ::start, Ic.document)
+        status?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center) }
     }
 }
 

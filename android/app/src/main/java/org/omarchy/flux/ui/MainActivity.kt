@@ -13,18 +13,22 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.PairState
@@ -67,6 +71,10 @@ class MainActivity : ComponentActivity() {
      */
     private fun debugShowWhenLocked(intent: android.content.Intent?) {
         if (!org.omarchy.flux.BuildConfig.DEBUG) return
+        if (intent?.getBooleanExtra("flux.debug.demo", false) == true) {
+            org.omarchy.flux.core.DebugDemo.on = true
+            FluxCore.publish()
+        }
         intent?.getStringExtra("flux.debug.page")?.let { debugPage.value = it }
         if (intent?.getBooleanExtra("flux.debug.showWhenLocked", false) != true) return
         setShowWhenLocked(true)
@@ -89,18 +97,15 @@ private data class Outgoing(val deviceId: String, val timestamp: Long, val key: 
 fun FluxRoot(activity: MainActivity) {
     val state by FluxCore.state.collectAsStateWithLifecycle()
     var stack by remember { mutableStateOf(listOf(Route())) }
-    var snack by remember { mutableStateOf<String?>(null) }
+    val snacks = remember { SnackbarHostState() }
     var outgoing by remember { mutableStateOf<Outgoing?>(null) }
     var unpairing by remember { mutableStateOf<String?>(null) }
     val route = stack.last()
     val device = state.devices.firstOrNull { it.id == route.deviceId }
 
+    // A new message replaces the one on screen.
     LaunchedEffect(Unit) {
-        FluxCore.toasts.collectLatest {
-            snack = it
-            delay(2200)
-            snack = null
-        }
+        FluxCore.toasts.collectLatest { snacks.showSnackbar(it) }
     }
     // Leave the device screens when the device is gone or no longer paired.
     LaunchedEffect(route, device?.paired) {
@@ -118,17 +123,40 @@ fun FluxRoot(activity: MainActivity) {
     val debugPage by activity.debugPage.collectAsStateWithLifecycle()
     var showIcons by remember { mutableStateOf(false) }
     LaunchedEffect(debugPage, state.devices.size) {
-        val page = debugPage ?: return@LaunchedEffect
-        showIcons = page == "icon"
+        val request = debugPage ?: return@LaunchedEffect
+        showIcons = request == "icon"
+        // Each page starts from a clean screen.
+        FluxCore.setRinging(null)
+        outgoing = null
+        unpairing = null
         if (showIcons) {
             activity.debugPage.value = null
             return@LaunchedEffect
         }
-        val d = state.devices.firstOrNull { it.paired && it.online } ?: state.devices.firstOrNull { it.paired } ?: return@LaunchedEffect
+        if (request == "empty") {
+            org.omarchy.flux.core.DebugDemo.on = false
+            FluxCore.publish()
+            stack = listOf(Route())
+            activity.debugPage.value = null
+            return@LaunchedEffect
+        }
+        // "<page>@offline" opens the page of a paired computer that is not reachable.
+        val page = request.substringBefore('@')
+        val offline = request.endsWith("@offline")
+        val d = if (offline) {
+            state.devices.firstOrNull { it.paired && !it.online }
+        } else {
+            state.devices.firstOrNull { it.paired && it.online } ?: state.devices.firstOrNull { it.paired }
+        } ?: return@LaunchedEffect
         // The ring page shows the overlay without the alarm sound.
         if (page == "ring") FluxCore.setRinging(d.name)
+        // The pair and unpair pages show their dialogs over the device list.
+        if (page == "pair") {
+            state.devices.firstOrNull { !it.paired && it.online }?.let { outgoing = Outgoing(it.id, 0, "4F21A9C3") }
+        }
+        if (page == "unpair") unpairing = d.id
         stack = when (page) {
-            "devices", "ring" -> listOf(Route())
+            "devices", "ring", "pair", "unpair" -> listOf(Route())
             "home" -> listOf(Route(), Route(d.id))
             else -> listOf(Route(), Route(d.id), Route(d.id, page))
         }
@@ -154,8 +182,11 @@ fun FluxRoot(activity: MainActivity) {
                 route.page == "media" -> MediaScreen(device, ::pop)
                 route.page == "commands" -> CommandsScreen(device, ::pop)
                 route.page == "browse" -> BrowseScreen(device, state.browse, ::pop)
-                route.page == "camera" -> org.omarchy.flux.camera.CameraScreen(device, ::pop)
-                else -> HomeScreen(device, state, ::pop) { page -> push(Route(device.id, page)) }
+                // Debug builds open a mode with "camera:<mode>".
+                route.page.startsWith("camera") -> key(route.page) {
+                    org.omarchy.flux.camera.CameraScreen(device, ::pop, org.omarchy.flux.camera.CameraMode.fromKey(route.page.substringAfter(':', "")))
+                }
+                else -> HomeScreen(device, state, ::pop, onUnpair = { unpairing = device.id }) { page -> push(Route(device.id, page)) }
             }
         }
         if (out != null && outDevice != null) {
@@ -179,16 +210,20 @@ fun FluxRoot(activity: MainActivity) {
             val d = state.devices.firstOrNull { it.id == id }
             if (d == null) unpairing = null
             else ConfirmDialog(
-                "Unpair ${d.name}?", "The computer can pair again later.", "Unpair",
+                "Unpair ${d.name}?",
+                "This phone and ${d.name} stop connecting. You can pair them again later.",
+                "Unpair",
                 onCancel = { unpairing = null },
                 onConfirm = {
                     FluxCore.unpair(id)
                     unpairing = null
                 },
+                icon = Ic.unlink,
+                destructive = true,
             )
         }
         if (showIcons) Box(Modifier.fillMaxSize().background(Palette.background).systemBarsPadding()) { DebugIconsScreen() }
-        Snack(snack)
+        SnackbarHost(snacks, Modifier.align(Alignment.BottomCenter).systemBarsPadding().padding(bottom = 16.dp))
         state.ringingFrom?.let { from -> RingOverlay(from) { Ringer.stop(activity) } }
     }
 }

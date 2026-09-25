@@ -6,31 +6,48 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.Plugins
@@ -38,19 +55,19 @@ import org.omarchy.flux.core.Share
 import org.omarchy.flux.core.UiState
 import org.omarchy.flux.service.FluxNotificationListener
 
-/** The short code in the round avatar of a device row. */
-fun kindCode(type: String): String = when (type) {
-    "phone" -> "PH"
-    "tablet" -> "TAB"
-    "tv" -> "TV"
-    else -> "PC"
-}
-
 private fun typeLabel(d: DeviceUi): String = when {
     d.isFlux -> "Omarchy"
     else -> d.type.replaceFirstChar { it.uppercase() }
 }
 
+/** The status line of a paired device: the connection and the battery. */
+private fun statusLine(d: DeviceUi): String = when {
+    !d.online -> "Not reachable"
+    d.battery != null -> "Connected · battery ${d.battery}%" + if (d.charging) ", charging" else ""
+    else -> "Connected"
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DevicesScreen(
     state: UiState,
@@ -58,139 +75,169 @@ fun DevicesScreen(
     onPair: (DeviceUi) -> Unit,
     onUnpair: (DeviceUi) -> Unit,
 ) {
-    val accent = Palette.accent
     val paired = state.devices.filter { it.paired }
     val available = state.devices.filter { !it.paired && it.online }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        Row(
-            Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            FluxMark(28.dp)
-            T("Flux", size = 32)
+    var refreshing by remember { mutableStateOf(false) }
+    LaunchedEffect(refreshing) {
+        if (refreshing) {
+            FluxCore.rediscover()
+            delay(1500)
+            refreshing = false
         }
-        Column(
-            Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 18.dp).fillMaxWidth()
-                .clip(RoundedCornerShape(24.dp)).background(Palette.accentContainer)
-                .padding(horizontal = 18.dp, vertical = 16.dp),
-        ) {
-            T("THIS PHONE", size = 12, color = Palette.onAccentContainer, weight = FontWeight.Medium)
-            T(
-                "${state.phoneName} · " + if (state.onWifi) "visible on Wi-Fi" else "not on Wi-Fi",
-                Modifier.padding(top = 4.dp), size = 16, color = Palette.onAccentContainer,
-            )
-        }
+    }
+    PullToRefreshBox(isRefreshing = refreshing, onRefresh = { refreshing = true }, modifier = Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            Row(
+                Modifier.fillMaxWidth().padding(start = Gutter + 4.dp, end = 8.dp, top = 16.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                FluxMark(28.dp)
+                Text("Flux", Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium)
+                IconButton(onClick = { refreshing = true }) { Sym(Ic.refresh, "Search again") }
+            }
+            ThisPhoneCard(state)
 
-        SectionHeader("Paired")
-        if (paired.isEmpty()) {
-            T("No paired computers yet", Modifier.padding(horizontal = 20.dp, vertical = 14.dp), color = Palette.secondary)
-        }
-        for (d in paired) {
-            PressRow(onClick = if (d.online) ({ onOpen(d) }) else null, onLongClick = { onUnpair(d) }) {
-                DeviceRowContent(
-                    d,
-                    subtitle = if (d.online) "Connected" + (d.battery?.let { " · battery $it%" } ?: "") else "Not reachable",
-                    trailing = { if (d.online) T("›", color = Palette.secondary) },
+            SectionHeader("Paired computers", top = 20.dp)
+            if (paired.isEmpty()) {
+                Text(
+                    "Pair a computer below. Paired computers connect by themselves.",
+                    Modifier.padding(horizontal = Gutter, vertical = 8.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-        }
+            for (d in paired) PairedRow(d, onOpen = { onOpen(d) }, onUnpair = { onUnpair(d) })
 
-        SectionHeader("Available", top = 18)
-        if (available.isEmpty()) {
-            PressRow(onClick = { FluxCore.rediscover() }) {
-                Column(Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
-                    T("Looking for computers on this network", color = Palette.secondary)
-                    T(
-                        "Install Flux on the computer. Tap to search again.",
-                        Modifier.padding(top = 4.dp), size = 13, color = Palette.hint,
-                    )
-                }
+            SectionHeader("Available", top = 20.dp) {
+                if (available.isEmpty()) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
             }
+            if (available.isEmpty()) {
+                EmptyState(
+                    Ic.wifiFind,
+                    "Looking for computers",
+                    "Open Flux on the computer, and use the same Wi-Fi network as this phone.",
+                    action = { TextButton(onClick = { refreshing = true }) { Text("Search again") } },
+                )
+            }
+            for (d in available) {
+                ListItem(
+                    headlineContent = { Text(d.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    supportingContent = { Text("${typeLabel(d)} · ${d.ip}") },
+                    leadingContent = { IconBadge(deviceIcon(d.type)) },
+                    trailingContent = { FilledTonalButton(onClick = { onPair(d) }) { Text("Pair") } },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                )
+            }
+            Spacer(Modifier.height(96.dp))
         }
-        for (d in available) {
-            DeviceRowContent(
-                d,
-                subtitle = "${typeLabel(d)} · ${d.ip}",
-                trailing = {
-                    Box(
-                        Modifier.clip(RoundedCornerShape(20.dp)).border(1.dp, Palette.borderStrong, RoundedCornerShape(20.dp))
-                            .clickable { onPair(d) }.padding(horizontal = 18.dp, vertical = 9.dp),
-                    ) { T("Pair", color = accent, weight = FontWeight.Medium) }
-                },
-            )
-        }
-        Spacer(Modifier.height(96.dp))
     }
 }
 
 @Composable
-private fun DeviceRowContent(d: DeviceUi, subtitle: String, trailing: @Composable () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+private fun ThisPhoneCard(state: UiState) {
+    val scheme = MaterialTheme.colorScheme
+    Card(
+        Modifier.padding(horizontal = Gutter).fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = scheme.primaryContainer, contentColor = scheme.onPrimaryContainer),
     ) {
-        Avatar(kindCode(d.type), on = d.paired && d.online)
-        Column(Modifier.weight(1f)) {
-            T(d.name, size = 16, maxLines = 1)
-            T(subtitle, size = 13, color = Palette.secondary, maxLines = 1)
+        Row(Modifier.padding(20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconBadge(Ic.phone, container = scheme.primary, content = scheme.onPrimary, size = 48.dp)
+            Column(Modifier.weight(1f)) {
+                Text("This phone", style = MaterialTheme.typography.labelMedium)
+                Text(state.phoneName, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Sym(if (state.onWifi) Ic.wifi else Ic.wifiOff, size = 16.dp)
+                    Text(
+                        if (state.onWifi) "Visible to computers on this Wi-Fi" else "Not on Wi-Fi. Connect to the network of the computer.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
         }
-        trailing()
     }
 }
 
-private data class TileDef(val glyph: String, val label: String, val action: () -> Unit)
+@Composable
+private fun PairedRow(d: DeviceUi, onOpen: () -> Unit, onUnpair: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    ListItem(
+        headlineContent = { Text(d.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        supportingContent = { Text(statusLine(d), color = if (d.online) scheme.onSurfaceVariant else scheme.outline) },
+        leadingContent = {
+            IconBadge(
+                deviceIcon(d.type),
+                container = if (d.online) scheme.primaryContainer else scheme.surfaceContainerHighest,
+                content = if (d.online) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+            )
+        },
+        trailingContent = { DeviceMenu(d.name, onUnpair) },
+        modifier = Modifier.clickable(onClick = onOpen),
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+    )
+}
 
-@OptIn(ExperimentalLayoutApi::class)
+/** The overflow menu of a paired device. */
+@Composable
+fun DeviceMenu(name: String, onUnpair: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) { Sym(Ic.more, "More options for $name") }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text("Unpair") },
+                leadingIcon = { Sym(Ic.unlink) },
+                onClick = {
+                    open = false
+                    onUnpair()
+                },
+            )
+        }
+    }
+}
+
+private data class Action(@DrawableRes val icon: Int, val label: String, val supporting: String, val run: () -> Unit)
+
 @Composable
 fun HomeScreen(
     d: DeviceUi,
     state: UiState,
     onBack: () -> Unit,
+    onUnpair: () -> Unit,
     onNavigate: (String) -> Unit,
 ) {
     val context = LocalContext.current
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) Share.sendFiles(FluxCore, d.id, uris)
     }
-    val offline = { FluxCore.toast("${d.name} is not reachable") }
-    fun guarded(action: () -> Unit): () -> Unit = { if (d.online) action() else offline() }
-    val tiles = listOf(
-        TileDef("⧉", "Send clipboard", guarded { Plugins.sendClipboard(FluxCore, d.id) }),
-        TileDef("↑", "Send files", guarded { pickFiles.launch(arrayOf("*/*")) }),
-        TileDef("\u2317", "Camera", guarded { onNavigate("camera") }),
-        TileDef("♪", "Media", guarded { onNavigate("media") }),
-        TileDef("$", "Run commands", guarded { onNavigate("commands") }),
-        TileDef("▤", "Browse PC", guarded { onNavigate("browse") }),
-        TileDef("◉", "Ring PC", guarded { Plugins.ring(FluxCore, d.id) }),
+    fun guarded(action: () -> Unit): () -> Unit = { if (d.online) action() else FluxCore.toast("${d.name} is not reachable") }
+    val actions = listOf(
+        Action(Ic.pasteGo, "Send clipboard", "Paste it on the computer", guarded { Plugins.sendClipboard(FluxCore, d.id) }),
+        Action(Ic.sendFiles, "Send files", "To the Downloads folder", guarded { pickFiles.launch(arrayOf("*/*")) }),
+        Action(Ic.camera, "Camera", "Scan, photo, or webcam", guarded { onNavigate("camera") }),
+        Action(Ic.music, "Media", "Control what plays", guarded { onNavigate("media") }),
+        Action(Ic.terminal, "Run commands", "Commands you added", guarded { onNavigate("commands") }),
+        Action(Ic.folderOpen, "Browse PC", "Open and get files", guarded { onNavigate("browse") }),
+        Action(Ic.ring, "Ring PC", "Play a sound to find it", guarded { Plugins.ring(FluxCore, d.id) }),
     )
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        TopBar(d.name, onBack)
-        FlowRow(
-            Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 18.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            if (d.online) Chip("● Connected", filled = true) else Chip("● Not reachable", filled = false)
-            d.battery?.let { Chip("Battery $it%" + if (d.charging) " · charging" else "", filled = false) }
-            if (state.onWifi) Chip("Wi-Fi", filled = false)
-        }
-        Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            for (row in tiles.chunked(2)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    for (t in row) {
-                        Tile(t.glyph, t.label, enabled = d.online, onClick = t.action, modifier = Modifier.weight(1f).alpha(if (d.online) 1f else 0.5f))
+        TopBar(d.name, onBack, subtitle = "${typeLabel(d)} · ${d.ip}") { DeviceMenu(d.name, onUnpair) }
+        StatusCard(d)
+        Column(Modifier.padding(horizontal = Gutter, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            for (row in actions.chunked(2)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    for (a in row) {
+                        ActionTile(a.icon, a.label, a.supporting, enabled = d.online, onClick = a.run, modifier = Modifier.weight(1f), wide = row.size == 1)
                     }
-                    // An odd tile count leaves a gap, so that the last tile keeps the column width.
-                    if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
         }
-        SectionHeader("Sync", top = 20)
+        SectionHeader("Sync", top = 8.dp)
         SwitchRow(
+            Ic.notifications,
             "Share notifications",
-            if (state.notificationAccess) "Show on the PC as notifications" else "Tap to allow notification access",
+            if (state.notificationAccess) "Show phone notifications on the computer" else "Tap to allow notification access",
             checked = state.shareNotifications && state.notificationAccess,
         ) {
             if (!state.notificationAccess) {
@@ -207,9 +254,51 @@ fun HomeScreen(
                 FluxCore.setShareNotifications(!state.shareNotifications)
             }
         }
-        SwitchRow("Sync clipboard", "Both directions, automatically", checked = state.syncClipboard) {
+        SwitchRow(Ic.paste, "Sync clipboard", "Copy on one device, paste on the other", checked = state.syncClipboard) {
             FluxCore.setSyncClipboard(!state.syncClipboard)
         }
         Spacer(Modifier.height(96.dp))
+    }
+}
+
+/** The connection and the battery of the computer. A computer that is not reachable gets help and a retry. */
+@Composable
+private fun StatusCard(d: DeviceUi) {
+    val scheme = MaterialTheme.colorScheme
+    Card(
+        Modifier.padding(horizontal = Gutter).fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = scheme.surfaceContainer),
+    ) {
+        Row(Modifier.padding(20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconBadge(
+                deviceIcon(d.type),
+                container = if (d.online) scheme.primary else scheme.surfaceContainerHighest,
+                content = if (d.online) scheme.onPrimary else scheme.onSurfaceVariant,
+                size = 48.dp,
+            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(if (d.online) "Connected" else "Not reachable", style = MaterialTheme.typography.titleMedium)
+                if (d.online) {
+                    d.battery?.let { level ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Sym(batteryIcon(level, d.charging), size = 18.dp, tint = scheme.onSurfaceVariant)
+                            Text(
+                                "$level%" + if (d.charging) ", charging" else "",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = scheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                } else {
+                    Text(
+                        "Check that Flux runs on ${d.name}, and that both are on the same Wi-Fi.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = scheme.onSurfaceVariant,
+                    )
+                }
+            }
+            if (!d.online) TextButton(onClick = { FluxCore.rediscover() }) { Text("Retry") }
+        }
     }
 }
