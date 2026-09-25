@@ -1,0 +1,87 @@
+name: Publish to AUR
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+    secrets:
+      AUR_SSH_PRIVATE_KEY:
+        required: true
+      AUR_USERNAME:
+        required: true
+      AUR_EMAIL:
+        required: true
+      AUR_KNOWN_HOSTS:
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aur-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: aur-package
+          path: package
+      - name: Publish the tested recipe
+        env:
+          TAG: ${{ inputs.tag }}
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUR_KNOWN_HOSTS: ${{ secrets.AUR_KNOWN_HOSTS }}
+          GIT_AUTHOR_NAME: ${{ secrets.AUR_USERNAME }}
+          GIT_AUTHOR_EMAIL: ${{ secrets.AUR_EMAIL }}
+          GIT_COMMITTER_NAME: ${{ secrets.AUR_USERNAME }}
+          GIT_COMMITTER_EMAIL: ${{ secrets.AUR_EMAIL }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo '::error::AUR accepts stable tags only.'
+            exit 1
+          fi
+          for key in AUR_SSH_PRIVATE_KEY AUR_KNOWN_HOSTS GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL; do
+            if [[ -z "${!key}" ]]; then
+              echo "::error::$key is required for AUR publication."
+              exit 1
+            fi
+          done
+          umask 077
+          keyfile="$RUNNER_TEMP/aur-key"
+          hostsfile="$RUNNER_TEMP/aur-known-hosts"
+          trap 'rm -f "$keyfile" "$hostsfile"' EXIT
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > "$keyfile"
+          printf '%s\n' "$AUR_KNOWN_HOSTS" > "$hostsfile"
+          export GIT_SSH_COMMAND="ssh -i $keyfile -o IdentitiesOnly=yes -o UserKnownHostsFile=$hostsfile -o StrictHostKeyChecking=yes"
+          git clone ssh://aur@aur.archlinux.org/omarchy-flux.git aur-repo
+          python3 - "$TAG" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          def version(path):
+              match = re.search(r'^\s*pkgver = (\d+)\.(\d+)\.(\d+)\s*$', path.read_text(), re.MULTILINE)
+              if not match:
+                  raise SystemExit(f"Invalid stable version in {path}")
+              return tuple(map(int, match.groups()))
+
+          incoming = version(Path("package/.SRCINFO"))
+          if incoming != tuple(map(int, sys.argv[1][1:].split("."))):
+              raise SystemExit("The AUR artifact does not match the release tag.")
+          current = Path("aur-repo/.SRCINFO")
+          if current.exists() and version(current) > incoming:
+              raise SystemExit("A newer AUR version exists. Refuse the downgrade.")
+          PY
+          cp package/PKGBUILD package/.SRCINFO package/omarchy-flux.install aur-repo/
+          cd aur-repo
+          git add PKGBUILD .SRCINFO omarchy-flux.install
+          if ! git diff --cached --quiet; then
+            git commit -m "Update to $TAG"
+            git push
+          fi

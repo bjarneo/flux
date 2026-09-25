@@ -1,42 +1,54 @@
-# Arch package for Flux, built from this checkout:
-#   cd dist/arch && makepkg -si
-# pacman then runs the system setup (udev, kernel modules, the user
-# service). After the install, run `flux setup` as your user.
-# The package installs the PAM helper /usr/lib/flux/flux-approve, but it
-# changes no PAM file. The README tells how to turn approvals on.
+# Build from this checkout with: makepkg -si
+# scripts/prepare-aur.py sets the release source fields for AUR builds.
 
 pkgname=omarchy-flux
-pkgver=0.1.0.r7.g52a5df5
+pkgver=0.1.0
 pkgrel=1
 pkgdesc='Connect an Omarchy computer to your phone with Flux for Android'
 arch=('x86_64' 'aarch64')
 url='https://omarchy.org'
 # The repository has no license yet.
 license=('LicenseRef-unknown')
-depends=('qt6-base' 'qt6-declarative' 'qt6-svg' 'ttf-font-nerd' 'wl-clipboard' 'pipewire' 'sound-theme-freedesktop' 'avahi' 'xdg-utils')
+depends=('qt6-base' 'qt6-declarative' 'qt6-svg' 'qt6-wayland' 'ttf-font-nerd' 'wl-clipboard' 'pipewire' 'sound-theme-freedesktop' 'avahi' 'xdg-utils')
 optdepends=(
 	'quickshell: the flux plugin for omarchy-shell'
 	'ffmpeg: the phone as webcam'
 	'v4l2loopback-dkms: the phone as webcam'
+	'mpv: the phone screen mirror'
 )
-makedepends=('go' 'cmake' 'ninja' 'git')
+makedepends=('go>=1.27.1' 'cmake' 'ninja' 'git')
 install=omarchy-flux.install
 
-_src() { cd "$startdir/../.."; }
+_source_url=''
+_source_sha256=''
+_source_dir=''
 
-pkgver() {
-	_src
-	printf '0.1.0.r%s.g%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+if [[ -n $_source_url ]]; then
+	source=("${pkgname}-${pkgver}.tar.gz::${_source_url}")
+	sha256sums=("$_source_sha256")
+else
+	pkgver() {
+		_src
+		printf '0.1.0.r%s.g%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+	}
+fi
+
+_src() {
+	if [[ -n $_source_url ]]; then
+		cd "$srcdir/$_source_dir" || return 1
+	else
+		cd "$startdir/../.." || return 1
+	fi
 }
 
 build() {
 	_src
-	make build
+	make build VERSION="$pkgver"
 }
 
 check() {
 	_src
-	go test ./cmd/... ./internal/...
+	make test vet
 }
 
 package() {

@@ -2,7 +2,7 @@ PREFIX  ?= /usr
 DESTDIR ?=
 GO      ?= go
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
-LDFLAGS := -s -w -X main.version=$(VERSION)
+GO_LDFLAGS := -s -w -X main.version=$(VERSION)
 
 GUI_BUILD  := gui/app/build
 PLUGIN_DIR ?= $(HOME)/.config/omarchy/plugins/flux
@@ -22,14 +22,14 @@ endef
 build: build-go build-gui
 
 build-go:
-	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/fluxd ./cmd/fluxd
-	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/flux ./cmd/flux
+	$(GO) build -trimpath -ldflags "$(GO_LDFLAGS)" -o bin/fluxd ./cmd/fluxd
+	$(GO) build -trimpath -ldflags "$(GO_LDFLAGS)" -o bin/flux ./cmd/flux
 	@# The PAM helper is static, so that it depends on no shared library.
-	CGO_ENABLED=0 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/flux-approve ./cmd/flux-approve
+	CGO_ENABLED=0 $(GO) build -trimpath -ldflags "$(GO_LDFLAGS)" -o bin/flux-approve ./cmd/flux-approve
 
 # The Qt6 C++ app. The shared views in gui/qml are compiled into it.
 build-gui:
-	cmake -S gui/app -B $(GUI_BUILD) -G Ninja -DCMAKE_BUILD_TYPE=Release
+	cmake -S gui/app -B $(GUI_BUILD) -G Ninja -DCMAKE_BUILD_TYPE=Release -DFLUX_VERSION="$(VERSION)"
 	cmake --build $(GUI_BUILD)
 
 test:

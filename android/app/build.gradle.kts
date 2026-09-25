@@ -4,6 +4,17 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+val releaseKeystore = providers.environmentVariable("KEYSTORE_FILE").orNull
+val releaseStorePassword = providers.environmentVariable("KEYSTORE_PASSWORD").orNull
+val releaseKeyAlias = providers.environmentVariable("KEY_ALIAS").orNull
+val releaseKeyPassword = providers.environmentVariable("KEY_PASSWORD").orNull
+val releaseCredentials = listOf(releaseKeystore, releaseStorePassword, releaseKeyAlias, releaseKeyPassword)
+require(releaseCredentials.all { it.isNullOrBlank() } || releaseCredentials.all { !it.isNullOrBlank() }) {
+    "Set KEYSTORE_FILE, KEYSTORE_PASSWORD, KEY_ALIAS, and KEY_PASSWORD together."
+}
+val fluxVersionCode = providers.environmentVariable("FLUX_VERSION_CODE").orElse("1").get().toInt()
+require(fluxVersionCode in 1..2100000000) { "FLUX_VERSION_CODE must be between 1 and 2100000000." }
+
 android {
     namespace = "org.omarchy.flux"
     compileSdk = 36
@@ -12,12 +23,24 @@ android {
         applicationId = "org.omarchy.flux"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = fluxVersionCode
+        versionName = providers.environmentVariable("FLUX_VERSION").orElse("0.1.0").get()
+    }
+
+    signingConfigs {
+        if (!releaseKeystore.isNullOrBlank()) {
+            create("release") {
+                storeFile = rootProject.file(releaseKeystore)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
     }
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

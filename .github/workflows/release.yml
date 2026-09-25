@@ -1,0 +1,164 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing stable tag to rebuild, such as v0.1.0
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      name: ${{ steps.version.outputs.name }}
+    steps:
+      - name: Validate stable tag
+        id: version
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          if [[ ! "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo '::error::Use a stable tag such as v0.1.0.'
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "name=${TAG#v}" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ steps.version.outputs.tag }}
+          persist-credentials: false
+
+  build:
+    needs: version
+    uses: ./.github/workflows/build.yml
+    with:
+      tag: ${{ needs.version.outputs.tag }}
+
+  apk:
+    needs: version
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.version.outputs.tag }}
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install SDK packages
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Restore release key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          for key in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [[ -z "${!key}" ]]; then
+              echo "::error::$key is required for signed releases."
+              exit 1
+            fi
+          done
+          umask 077
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/flux-release.jks"
+      - name: Build signed release
+        env:
+          KEYSTORE_FILE: ${{ runner.temp }}/flux-release.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          FLUX_VERSION: ${{ needs.version.outputs.name }}
+          FLUX_VERSION_CODE: ${{ github.run_number }}
+        run: ./gradlew :app:assembleRelease --no-daemon --no-configuration-cache --stacktrace
+      - name: Verify and stage APK
+        env:
+          VERSION: ${{ needs.version.outputs.name }}
+        run: |
+          apk=app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$apk" > "$RUNNER_TEMP/apk-certificate.txt"
+          if grep -qi 'CN=Android Debug' "$RUNNER_TEMP/apk-certificate.txt"; then
+            echo '::error::The release APK uses a debug key.'
+            exit 1
+          fi
+          mkdir -p release
+          cp "$apk" "release/flux-android-$VERSION.apk"
+          cp "$RUNNER_TEMP/apk-certificate.txt" release/android-certificate.txt
+      - name: Remove release key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/flux-release.jks"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-release
+          path: android/release/
+          if-no-files-found: error
+
+  publish:
+    needs: [version, build, apk]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: arch-package
+          path: artifacts/arch
+      - uses: actions/download-artifact@v4
+        with:
+          name: aur-package
+          path: artifacts/aur
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-release
+          path: artifacts/android
+      - name: Prepare release files
+        env:
+          VERSION: ${{ needs.version.outputs.name }}
+        run: |
+          mkdir release
+          find artifacts/arch -name '*.pkg.tar.zst' -exec cp {} release/ \;
+          cp artifacts/android/* release/
+          tar -czf "release/omarchy-flux-$VERSION-aur.tar.gz" -C artifacts/aur PKGBUILD .SRCINFO omarchy-flux.install
+          cd release
+          sha256sum -- *.pkg.tar.zst *.apk *-aur.tar.gz android-certificate.txt > SHA256SUMS
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          if ! gh release view "$TAG" > /dev/null 2>&1; then
+            gh release create "$TAG" --verify-tag --draft --title "Flux $TAG" --generate-notes
+          fi
+          gh release upload "$TAG" release/* --clobber
+          gh release edit "$TAG" --draft=false
+
+  aur:
+    needs: [version, publish]
+    if: vars.AUR_PUBLISH == 'true'
+    uses: ./.github/workflows/aur.yml
+    with:
+      tag: ${{ needs.version.outputs.tag }}
+    secrets:
+      AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+      AUR_USERNAME: ${{ secrets.AUR_USERNAME }}
+      AUR_EMAIL: ${{ secrets.AUR_EMAIL }}
+      AUR_KNOWN_HOSTS: ${{ secrets.AUR_KNOWN_HOSTS }}

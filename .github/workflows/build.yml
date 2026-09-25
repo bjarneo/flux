@@ -1,0 +1,105 @@
+name: Build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag:
+        description: Stable release tag to package from its source archive
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  arch:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install build dependencies
+        run: |
+          pacman -Syu --noconfirm --needed go cmake ninja git python \
+            qt6-base qt6-declarative qt6-svg qt6-wayland ttf-jetbrains-mono-nerd \
+            wl-clipboard pipewire sound-theme-freedesktop avahi xdg-utils
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Prepare release source
+        if: inputs.tag != ''
+        env:
+          TAG: ${{ inputs.tag }}
+          REPO: ${{ github.repository }}
+        run: python scripts/prepare-aur.py --tag "$TAG" --repo "$REPO"
+      - name: Test release package generator
+        run: python -m unittest discover -s scripts -p 'test_*.py'
+      - name: Build and test the complete package
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          useradd --create-home builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          package_dir="$GITHUB_WORKSPACE/dist/arch"
+          if [[ -n "$TAG" ]]; then package_dir="$GITHUB_WORKSPACE/dist/aur"; fi
+          runuser -u builder -- bash -c 'cd "$1" && makepkg --noconfirm && makepkg --printsrcinfo > .SRCINFO' bash "$package_dir"
+      - name: Upload Arch package
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-package
+          path: |
+            dist/arch/*.pkg.tar.zst
+            dist/aur/*.pkg.tar.zst
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload AUR recipe
+        if: inputs.tag != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: aur-package
+          path: |
+            dist/aur/PKGBUILD
+            dist/aur/.SRCINFO
+            dist/aur/omarchy-flux.install
+          include-hidden-files: true
+          if-no-files-found: error
+
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install SDK packages
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Test and build APKs
+        run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease --no-daemon --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-reports
+          path: android/app/build/reports/

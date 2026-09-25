@@ -48,7 +48,7 @@ class ApproveMessageTest {
     fun fieldRules() {
         assertTrue(ApproveMessage.validField("/dev/pts/3"))
         assertTrue(ApproveMessage.validField(""))
-        assertTrue(ApproveMessage.validField("Pixel 8 · Bjarnes"))
+        assertTrue(ApproveMessage.validField("Pixel 8 · Office"))
         assertFalse(ApproveMessage.validField("alice\nservice=sshd"))
         assertFalse(ApproveMessage.validField("tab\there"))
         assertFalse(ApproveMessage.validField("c1\u0085"))

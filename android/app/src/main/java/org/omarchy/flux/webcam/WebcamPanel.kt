@@ -92,7 +92,7 @@ fun WebcamPanel(deviceId: String) {
     }
 
     val context = LocalContext.current
-    remember { WebcamSettings.load(context.applicationContext) }
+    LaunchedEffect(context) { WebcamSettings.load(context.applicationContext) }
     val controller = remember { WebcamController(context.applicationContext) }
     val config by WebcamSettings.config.collectAsState()
     val caps by WebcamSettings.caps.collectAsState()
@@ -104,7 +104,7 @@ fun WebcamPanel(deviceId: String) {
 
     // "Also send the microphone": the microphone streams while the webcam
     // is live. The webcam stops it when the webcam stops.
-    remember { MicSettings.load(context.applicationContext) }
+    LaunchedEffect(context) { MicSettings.load(context.applicationContext) }
     val withMic by MicSettings.withWebcam.collectAsState()
     var micByWebcam by remember { mutableStateOf(false) }
     fun hasMicPermission() = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED

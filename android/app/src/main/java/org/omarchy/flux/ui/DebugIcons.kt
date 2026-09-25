@@ -1,6 +1,7 @@
 package org.omarchy.flux.ui
 
 import android.graphics.drawable.AdaptiveIconDrawable
+import android.os.Build
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -30,7 +31,7 @@ import org.omarchy.flux.R
 fun DebugIconsScreen() {
     val context = LocalContext.current
     val icon = context.packageManager.getApplicationIcon(context.packageName)
-    val mono = (icon as? AdaptiveIconDrawable)?.monochrome
+    val mono = if (Build.VERSION.SDK_INT >= 33) (icon as? AdaptiveIconDrawable)?.monochrome else null
     Column(
         Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp),

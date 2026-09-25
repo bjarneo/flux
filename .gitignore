@@ -13,3 +13,6 @@ __pycache__/
 /dist/arch/src/
 /dist/arch/pkg/
 /dist/arch/*.pkg.tar.*
+/dist/aur/
+*.jks
+*.keystore

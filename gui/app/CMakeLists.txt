@@ -14,7 +14,8 @@ qt_add_executable(flux-gui
     src/singleinstance.cpp
 )
 
-target_compile_definitions(flux-gui PRIVATE FLUX_VERSION="${PROJECT_VERSION}")
+set(FLUX_VERSION "${PROJECT_VERSION}" CACHE STRING "Flux release version")
+target_compile_definitions(flux-gui PRIVATE FLUX_VERSION="${FLUX_VERSION}")
 target_link_libraries(flux-gui PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Network)
 
 # The shared views use plain directory imports with qmldir files, so they
