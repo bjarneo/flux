@@ -52,6 +52,10 @@ type Daemon struct {
 	dnd      dndBackend
 	dndGuard dndGuard
 
+	// mdns resolves the address of a paired device again. It is nil when
+	// Avahi is not available.
+	mdns *lan.MDNS
+
 	webcam       *webcamSession
 	webcamErr    string
 	webcamConfig json.RawMessage
@@ -213,8 +217,23 @@ func (d *Daemon) Run() error {
 		return nil
 	}
 	mdns := lan.MDNSInfo{DeviceID: d.selfID, Name: d.Name(), Type: proto.DeviceType(), Protocol: proto.ProtocolVersion, Port: d.lan.TCPPort()}
-	if err := lan.StartMDNS(ctx, mdns, d.onMDNS); err != nil {
+	if m, err := lan.StartMDNS(ctx, mdns, d.onMDNS); err != nil {
 		d.logf("mDNS off, UDP discovery only: %v", err)
+	} else {
+		d.mu.Lock()
+		d.mdns = m
+		var paired []string
+		for _, dev := range d.devices {
+			if dev.Paired && dev.link == nil {
+				paired = append(paired, dev.ID)
+			}
+		}
+		d.mu.Unlock()
+		// The first dial round can come before mDNS runs, so resolve the
+		// paired devices now. A phone with a new address connects at once.
+		for _, id := range paired {
+			m.Refresh(id)
+		}
 	}
 
 	if n, err := desktop.NewNotifier(); err == nil {
@@ -390,8 +409,15 @@ func (d *Daemon) dialKnown() {
 		id   proto.Identity
 	}
 	var targets []target
+	var refresh []string
 	d.mu.Lock()
+	m := d.mdns
 	for _, dev := range d.devices {
+		// A paired device that is offline can have a new address. mDNS
+		// gives it, and onMDNS then dials it.
+		if dev.link == nil && dev.Paired {
+			refresh = append(refresh, dev.ID)
+		}
 		if dev.link != nil || dev.IP == "" {
 			continue
 		}
@@ -401,6 +427,9 @@ func (d *Daemon) dialKnown() {
 		targets = append(targets, target{dev.IP, dev.Port, proto.Identity{DeviceID: dev.ID, DeviceName: dev.Name, ProtocolVersion: dev.Version}})
 	}
 	d.mu.Unlock()
+	for _, id := range refresh {
+		m.Refresh(id)
+	}
 	for _, t := range targets {
 		d.lan.Announce(t.ip)
 		if t.port > 0 {

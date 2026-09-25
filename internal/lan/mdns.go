@@ -43,21 +43,39 @@ type MDNSPeer struct {
 	Port     int
 }
 
+// MDNS is a running mDNS publisher and browser.
+type MDNS struct {
+	server dbus.BusObject
+	self   string
+	found  func(MDNSPeer)
+}
+
+// Refresh resolves the service of deviceID again, and calls found with its
+// address now. The browser reports a service only when its name is new. A
+// phone keeps its name when it gets a new address, so fluxd must resolve
+// it again to find the phone. A nil MDNS does nothing.
+func (m *MDNS) Refresh(deviceID string) {
+	if m == nil || deviceID == "" || deviceID == m.self {
+		return
+	}
+	go resolve(m.server, ifaceUnspec, protoInet, deviceID, serviceType, "local", m.found)
+}
+
 // StartMDNS publishes this device and browses for other devices, and calls
 // found for each device that it resolves. The default ufw rules of Omarchy
 // let mDNS in, so this path works with a firewall that blocks all other
 // incoming traffic. It returns an error when Avahi is not available.
-func StartMDNS(ctx context.Context, info MDNSInfo, found func(MDNSPeer)) error {
+func StartMDNS(ctx context.Context, info MDNSInfo, found func(MDNSPeer)) (*MDNS, error) {
 	conn, err := dbus.ConnectSystemBus()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	server := conn.Object(avahiBus, "/")
 
 	var groupPath dbus.ObjectPath
 	if err := server.Call(avahiServer+".EntryGroupNew", 0).Store(&groupPath); err != nil {
 		conn.Close()
-		return fmt.Errorf("avahi: %w", err)
+		return nil, fmt.Errorf("avahi: %w", err)
 	}
 	group := conn.Object(avahiBus, groupPath)
 	txt := [][]byte{
@@ -69,25 +87,25 @@ func StartMDNS(ctx context.Context, info MDNSInfo, found func(MDNSPeer)) error {
 	if err := group.Call(avahiGroup+".AddService", 0, ifaceUnspec, protoInet, uint32(0),
 		info.DeviceID, serviceType, "", "", uint16(info.Port), txt).Err; err != nil {
 		conn.Close()
-		return fmt.Errorf("avahi add service: %w", err)
+		return nil, fmt.Errorf("avahi add service: %w", err)
 	}
 	if err := group.Call(avahiGroup+".Commit", 0).Err; err != nil {
 		conn.Close()
-		return fmt.Errorf("avahi commit: %w", err)
+		return nil, fmt.Errorf("avahi commit: %w", err)
 	}
 
 	// Add the match rule before the browser exists, so no ItemNew signal is
 	// lost.
 	if err := conn.AddMatchSignal(dbus.WithMatchInterface(avahiBrowser), dbus.WithMatchMember("ItemNew")); err != nil {
 		conn.Close()
-		return err
+		return nil, err
 	}
 	signals := make(chan *dbus.Signal, 32)
 	conn.Signal(signals)
 	var browserPath dbus.ObjectPath
 	if err := server.Call(avahiServer+".ServiceBrowserNew", 0, ifaceUnspec, protoInet, serviceType, "", lookupNoFlags).Store(&browserPath); err != nil {
 		conn.Close()
-		return fmt.Errorf("avahi browse: %w", err)
+		return nil, fmt.Errorf("avahi browse: %w", err)
 	}
 
 	go func() {
@@ -113,7 +131,7 @@ func StartMDNS(ctx context.Context, info MDNSInfo, found func(MDNSPeer)) error {
 			}
 		}
 	}()
-	return nil
+	return &MDNS{server: server, self: info.DeviceID, found: found}, nil
 }
 
 func resolve(server dbus.BusObject, iface, proto int32, name, typ, domain string, found func(MDNSPeer)) {
