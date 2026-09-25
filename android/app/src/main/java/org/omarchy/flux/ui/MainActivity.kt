@@ -180,6 +180,7 @@ fun FluxRoot(activity: MainActivity) {
                     onUnpair = { unpairing = it.id },
                 )
                 route.page == "media" -> MediaScreen(device, ::pop)
+                route.page == "mic" -> org.omarchy.flux.mic.MicScreen(device, ::pop)
                 route.page == "commands" -> CommandsScreen(device, ::pop)
                 route.page == "browse" -> BrowseScreen(device, state.browse, ::pop)
                 // Debug builds open a mode with "camera:<mode>".

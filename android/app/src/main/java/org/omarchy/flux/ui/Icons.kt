@@ -99,6 +99,11 @@ object Ic {
     val stop = R.drawable.ic_stop_fill
     val live = R.drawable.ic_fiber_manual_record_fill
     val gallery = R.drawable.ic_photo_library
+    val mic = R.drawable.ic_mic
+    val micFill = R.drawable.ic_mic_fill
+    val micOff = R.drawable.ic_mic_off
+    val screenShare = R.drawable.ic_screen_share
+    val stopScreenShare = R.drawable.ic_stop_screen_share
 }
 
 /** An icon from [Ic]. It takes the content color unless [tint] is set. */

@@ -31,6 +31,12 @@ object Types {
 
     /** Flux extension: this phone streams its camera to the computer as a virtual webcam. */
     const val FLUX_WEBCAM = "flux.webcam"
+
+    /** Flux extension: this phone streams its microphone to the computer as a virtual source. */
+    const val FLUX_MIC = "flux.mic"
+
+    /** Flux extension: this phone streams its screen to a window on the computer. */
+    const val FLUX_SCREEN = "flux.screen"
 }
 
 /** Packet types that the phone accepts. */
@@ -39,6 +45,7 @@ val INCOMING = listOf(
     Types.SHARE, Types.SHARE_UPDATE, Types.NOTIFICATION_REQUEST, Types.NOTIFICATION_REPLY,
     Types.NOTIFICATION_ACTION, Types.FIND_MY_PHONE, Types.RUN_COMMAND, Types.MPRIS,
     Types.SFTP, Types.FLUX_TUNNEL, Types.FLUX_WEBCAM,
+    Types.FLUX_MIC, Types.FLUX_SCREEN,
 )
 
 /** Packet types that the phone sends. */
@@ -46,6 +53,7 @@ val OUTGOING = listOf(
     Types.PING, Types.BATTERY, Types.CLIPBOARD, Types.CLIPBOARD_CONNECT, Types.SHARE,
     Types.SHARE_UPDATE, Types.NOTIFICATION, Types.FIND_MY_PHONE, Types.RUN_COMMAND_REQUEST,
     Types.MPRIS_REQUEST, Types.SFTP_REQUEST, Types.FLUX_TUNNEL, Types.FLUX_WEBCAM,
+    Types.FLUX_MIC, Types.FLUX_SCREEN,
 )
 
 /** The body of a kdeconnect.identity packet. */

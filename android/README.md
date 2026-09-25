@@ -50,7 +50,7 @@ ANDROID_SERIAL=emulator-5554 FLUX_DEMO=1 tools/shot.sh home /tmp/home.png
 
 The pages are:
 
-- `devices`, `home`, `media`, `commands`, `browse`, and `camera`.
+- `devices`, `home`, `media`, `commands`, `browse`, `mic`, and `camera`.
 - `camera:<mode>` for a camera mode: `text`, `qr`, `photo`, `document`, or `webcam`.
 - `ring`, `pair`, and `unpair` for the overlay and the dialogs.
 - `<page>@offline` for the page of a paired computer that is not reachable.

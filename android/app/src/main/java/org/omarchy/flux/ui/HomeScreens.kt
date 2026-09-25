@@ -1,5 +1,10 @@
 package org.omarchy.flux.ui
 
+import android.app.Activity
+import android.media.projection.MediaProjectionManager
+import androidx.compose.runtime.collectAsState
+import org.omarchy.flux.screen.ScreenMirrorService
+import org.omarchy.flux.screen.ScreenSession
 import android.content.ComponentName
 import android.content.Intent
 import android.os.Build
@@ -212,10 +217,28 @@ fun HomeScreen(
         if (uris.isNotEmpty()) Share.sendFiles(FluxCore, d.id, uris)
     }
     fun guarded(action: () -> Unit): () -> Unit = { if (d.online) action() else FluxCore.toast("${d.name} is not reachable") }
+    // The screen mirror asks Android for the capture, then the service runs it.
+    val screen by ScreenSession.status.collectAsState()
+    val mirroring = screen.active && screen.deviceId == d.id
+    val askCapture = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        val data = r.data
+        if (r.resultCode == Activity.RESULT_OK && data != null) ScreenMirrorService.start(context, d.id, r.resultCode, data)
+    }
+    LaunchedEffect(screen) {
+        if (screen.phase == ScreenSession.Phase.Error && screen.deviceId == d.id) FluxCore.toast(screen.message)
+    }
     val actions = listOf(
         Action(Ic.pasteGo, "Send clipboard", "Paste it on the computer", guarded { Plugins.sendClipboard(FluxCore, d.id) }),
         Action(Ic.sendFiles, "Send files", "To the Downloads folder", guarded { pickFiles.launch(arrayOf("*/*")) }),
         Action(Ic.camera, "Camera", "Scan, photo, or webcam", guarded { onNavigate("camera") }),
+        Action(Ic.mic, "Microphone", "Use as a mic on the PC", guarded { onNavigate("mic") }),
+        if (mirroring) {
+            Action(Ic.stopScreenShare, "Stop mirror", "This screen shows on the PC", { ScreenSession.stop() })
+        } else {
+            Action(Ic.screenShare, "Mirror screen", "Show this screen on the PC", guarded {
+                askCapture.launch(context.getSystemService(MediaProjectionManager::class.java).createScreenCaptureIntent())
+            })
+        },
         Action(Ic.music, "Media", "Control what plays", guarded { onNavigate("media") }),
         Action(Ic.terminal, "Run commands", "Commands you added", guarded { onNavigate("commands") }),
         Action(Ic.folderOpen, "Browse PC", "Open and get files", guarded { onNavigate("browse") }),

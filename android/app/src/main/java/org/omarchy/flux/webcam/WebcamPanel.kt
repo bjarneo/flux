@@ -1,5 +1,12 @@
 package org.omarchy.flux.webcam
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import org.omarchy.flux.mic.MicSession
+import org.omarchy.flux.mic.MicSettings
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
@@ -95,7 +102,37 @@ fun WebcamPanel(deviceId: String) {
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     val pcName = remember(deviceId) { FluxCore.device(deviceId)?.identity?.deviceName ?: "the computer" }
 
-    DisposableEffect(controller) { onDispose { controller.release() } }
+    // "Also send the microphone": the microphone streams while the webcam
+    // is live. The webcam stops it when the webcam stops.
+    remember { MicSettings.load(context.applicationContext) }
+    val withMic by MicSettings.withWebcam.collectAsState()
+    var micByWebcam by remember { mutableStateOf(false) }
+    fun hasMicPermission() = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        MicSettings.setWithWebcam(context.applicationContext, ok)
+        if (!ok) FluxCore.toast("Allow the microphone for Flux to send it with the webcam")
+    }
+    val setWithMic = { on: Boolean ->
+        if (on && !hasMicPermission()) askMic.launch(Manifest.permission.RECORD_AUDIO)
+        else MicSettings.setWithWebcam(context.applicationContext, on)
+    }
+    LaunchedEffect(status.phase, withMic) {
+        val live = status.phase == WebcamSession.Phase.Live
+        if (live && withMic && hasMicPermission() && !MicSession.status.value.active) {
+            MicSession.start(FluxCore, deviceId)
+            micByWebcam = true
+        } else if ((!status.active || !withMic) && micByWebcam) {
+            MicSession.stop(FluxCore, notify = true)
+            micByWebcam = false
+        }
+    }
+
+    DisposableEffect(controller) {
+        onDispose {
+            controller.release()
+            if (micByWebcam) MicSession.stop(FluxCore, notify = true)
+        }
+    }
     LaunchedEffect(config) { controller.apply(config) }
     LaunchedEffect(rotation) { controller.extraRotation = rotation }
 
@@ -190,6 +227,8 @@ fun WebcamPanel(deviceId: String) {
             WebcamSettingsPanel(
                 config, caps, streaming = active,
                 onRotate = { rotation = (rotation + 90) % 360 },
+                withMic = withMic,
+                onWithMic = setWithMic,
                 modifier = Modifier.weight(1f),
             )
         } else {
@@ -259,6 +298,8 @@ private fun WebcamSettingsPanel(
     caps: WebcamCaps,
     streaming: Boolean,
     onRotate: () -> Unit,
+    withMic: Boolean,
+    onWithMic: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     fun set(change: (WebcamConfig) -> WebcamConfig) = WebcamSettings.update(change)
@@ -297,6 +338,16 @@ private fun WebcamSettingsPanel(
                 Text("Flip the image from left to right", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(checked = config.mirror, onCheckedChange = null)
+        }
+        Row(
+            Modifier.fillMaxWidth().toggleable(value = withMic, role = Role.Switch) { on -> onWithMic(on) },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Also send the microphone", style = MaterialTheme.typography.bodyLarge)
+                Text("Apps on the computer also get Flux Microphone", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = withMic, onCheckedChange = null)
         }
         if (caps.zoomMax > 1f) {
             SliderRow("Zoom", config.zoom, 1f..caps.zoomMax, "%.1f×".format(config.zoom)) { v -> set { it.copy(zoom = v) } }
