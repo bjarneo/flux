@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 
 	"flux/internal/config"
@@ -41,6 +43,8 @@ Commands:
   commands remove ID     Remove a command
   run ID                 Run a command on this computer
   webcam [stop]          Show the phone camera state, or stop the phone camera
+  webcam set KEY=VALUE…  Change the phone camera, for example: webcam set aspect=1:1 brightness=0.2
+  webcam reset           Set the phone camera back to the neutral values
   watch                  Print each state change as one JSON line
   doctor                 Check the setup and print the fixes
   version                Print the version
@@ -94,7 +98,7 @@ func main() {
 	case "run":
 		err = call("commands.run", map[string]any{"id": need(args, "ID")})
 	case "webcam":
-		err = webcam(first(args))
+		err = webcam(args)
 	case "watch":
 		err = watch()
 	case "doctor":
@@ -364,20 +368,30 @@ func commands(args []string) error {
 	return nil
 }
 
-func webcam(action string) error {
-	if action == "stop" {
+func webcam(args []string) error {
+	switch first(args) {
+	case "stop":
 		return call("webcam.stop", nil)
+	case "reset":
+		return call("webcam.config", map[string]any{"reset": true})
+	case "set":
+		cfg, err := webcamSettings(args[1:])
+		if err != nil {
+			return err
+		}
+		return call("webcam.config", map[string]any{"config": cfg})
 	}
 	var s struct {
 		Webcam *struct {
-			Active   bool   `json:"active"`
-			Device   string `json:"device"`
-			Label    string `json:"label"`
-			FromName string `json:"fromName"`
-			Width    int    `json:"width"`
-			Height   int    `json:"height"`
-			FPS      int    `json:"fps"`
-			Error    string `json:"error"`
+			Active   bool           `json:"active"`
+			Device   string         `json:"device"`
+			Label    string         `json:"label"`
+			FromName string         `json:"fromName"`
+			Width    int            `json:"width"`
+			Height   int            `json:"height"`
+			FPS      int            `json:"fps"`
+			Error    string         `json:"error"`
+			Config   map[string]any `json:"config"`
 		} `json:"webcam"`
 	}
 	if err := callInto("state", nil, &s); err != nil {
@@ -394,7 +408,45 @@ func webcam(action string) error {
 	default:
 		fmt.Printf("%s is starting as %s on %s\n", w.FromName, w.Label, w.Device)
 	}
+	if w != nil && len(w.Config) > 0 {
+		keys := make([]string, 0, len(w.Config))
+		for k := range w.Config {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		parts := make([]string, 0, len(keys))
+		for _, k := range keys {
+			parts = append(parts, fmt.Sprintf("%s=%v", k, w.Config[k]))
+		}
+		fmt.Println("Settings:", strings.Join(parts, " "))
+	}
 	return nil
+}
+
+// webcamSettings turns KEY=VALUE arguments into a config object. true and
+// false become booleans, numbers become numbers, and the rest stays text.
+func webcamSettings(args []string) (map[string]any, error) {
+	if len(args) == 0 {
+		return nil, errors.New("give at least 1 KEY=VALUE, for example: flux webcam set aspect=16:9")
+	}
+	cfg := map[string]any{}
+	for _, a := range args {
+		k, v, ok := strings.Cut(a, "=")
+		if !ok || k == "" {
+			return nil, fmt.Errorf("%q is not KEY=VALUE", a)
+		}
+		switch {
+		case v == "true" || v == "false":
+			cfg[k] = v == "true"
+		default:
+			if n, err := strconv.ParseFloat(v, 64); err == nil {
+				cfg[k] = n
+			} else {
+				cfg[k] = v
+			}
+		}
+	}
+	return cfg, nil
 }
 
 func watch() error {

@@ -157,31 +157,33 @@ func (d *Daemon) command(id string) (config.Command, bool) {
 
 // params is the union of all request parameters.
 type params struct {
-	Device    string   `json:"device"`
-	ID        string   `json:"id"`
-	Text      string   `json:"text"`
-	URL       string   `json:"url"`
-	Message   string   `json:"message"`
-	Paths     []string `json:"paths"`
-	Path      string   `json:"path"`
-	Player    string   `json:"player"`
-	Action    string   `json:"action"`
-	Position  int64    `json:"position"`
-	Thread    int64    `json:"thread"`
-	Addresses []string `json:"addresses"`
-	Body      string   `json:"body"`
-	DX        float64  `json:"dx"`
-	DY        float64  `json:"dy"`
-	Button    string   `json:"button"`
-	Key       string   `json:"key"`
-	Name      string   `json:"name"`
-	Command   string   `json:"command"`
-	Special   int      `json:"special"`
-	Shift     bool     `json:"shift"`
-	Ctrl      bool     `json:"ctrl"`
-	Alt       bool     `json:"alt"`
-	Super     bool     `json:"super"`
-	Value     any      `json:"value"`
+	Device    string          `json:"device"`
+	ID        string          `json:"id"`
+	Text      string          `json:"text"`
+	URL       string          `json:"url"`
+	Message   string          `json:"message"`
+	Paths     []string        `json:"paths"`
+	Path      string          `json:"path"`
+	Player    string          `json:"player"`
+	Action    string          `json:"action"`
+	Position  int64           `json:"position"`
+	Thread    int64           `json:"thread"`
+	Addresses []string        `json:"addresses"`
+	Body      string          `json:"body"`
+	DX        float64         `json:"dx"`
+	DY        float64         `json:"dy"`
+	Button    string          `json:"button"`
+	Key       string          `json:"key"`
+	Name      string          `json:"name"`
+	Command   string          `json:"command"`
+	Special   int             `json:"special"`
+	Shift     bool            `json:"shift"`
+	Ctrl      bool            `json:"ctrl"`
+	Alt       bool            `json:"alt"`
+	Super     bool            `json:"super"`
+	Value     any             `json:"value"`
+	Config    json.RawMessage `json:"config"`
+	Reset     bool            `json:"reset"`
 }
 
 // Call runs one API method.
@@ -206,6 +208,8 @@ func (d *Daemon) Call(_ context.Context, method string, raw json.RawMessage) (an
 		return ok, nil
 	case "webcam.stop":
 		return ok, d.StopWebcam()
+	case "webcam.config":
+		return ok, d.ConfigureWebcam(p.Config, p.Reset)
 	case "clipboard.copy":
 		if p.Text == "" {
 			return nil, apiErr("bad_params", "text is empty")

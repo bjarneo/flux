@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -34,6 +35,10 @@ type WebcamView struct {
 	Height   int    `json:"height"`
 	FPS      int    `json:"fps"`
 	Error    string `json:"error,omitempty"`
+	// Config and Caps are the camera settings and their ranges, as the
+	// phone last reported them.
+	Config json.RawMessage `json:"config,omitempty"`
+	Caps   json.RawMessage `json:"caps,omitempty"`
 }
 
 type webcamSession struct {
@@ -44,13 +49,15 @@ type webcamSession struct {
 }
 
 type webcamStart struct {
-	State   string `json:"state"`
-	Port    int    `json:"port"`
-	Width   int    `json:"width"`
-	Height  int    `json:"height"`
-	FPS     int    `json:"fps"`
-	Codec   string `json:"codec"`
-	Message string `json:"message"`
+	State   string          `json:"state"`
+	Port    int             `json:"port"`
+	Width   int             `json:"width"`
+	Height  int             `json:"height"`
+	FPS     int             `json:"fps"`
+	Codec   string          `json:"codec"`
+	Message string          `json:"message"`
+	Config  json.RawMessage `json:"config"`
+	Caps    json.RawMessage `json:"caps"`
 }
 
 func (d *Daemon) handleWebcam(dev *Device, l *lan.Link, p *proto.Packet) {
@@ -63,6 +70,17 @@ func (d *Daemon) handleWebcam(dev *Device, l *lan.Link, p *proto.Packet) {
 		go d.runWebcam(dev, l, b)
 	case "stop":
 		d.endWebcam(dev.ID)
+	case "config":
+		// The phone reports its settings after a start and after each change.
+		d.mu.Lock()
+		if len(b.Config) > 0 {
+			d.webcamConfig = b.Config
+		}
+		if len(b.Caps) > 0 {
+			d.webcamCaps = b.Caps
+		}
+		d.mu.Unlock()
+		d.markDirty()
 	case "error":
 		d.logf("%s: webcam: %s", dev.Name, b.Message)
 	}
@@ -192,6 +210,32 @@ func (d *Daemon) StopWebcam() error {
 	return nil
 }
 
+// ConfigureWebcam sends changed settings to the phone that streams. With
+// reset, the phone goes back to the neutral values. A change of the format
+// or the camera makes the phone restart the stream.
+func (d *Daemon) ConfigureWebcam(config json.RawMessage, reset bool) error {
+	d.mu.Lock()
+	s := d.webcam
+	d.mu.Unlock()
+	if s == nil {
+		return apiErr("not_active", "No phone camera is live")
+	}
+	body := map[string]any{"state": "config"}
+	switch {
+	case reset:
+		body["reset"] = true
+	case len(config) > 0:
+		var m map[string]any
+		if err := json.Unmarshal(config, &m); err != nil || len(m) == 0 {
+			return apiErr("bad_params", "config must be an object with at least 1 setting")
+		}
+		body["config"] = m
+	default:
+		return apiErr("bad_params", "Give config or reset")
+	}
+	return s.link.Send(proto.New(proto.TypeFluxWebcam, body))
+}
+
 // loopbackDevice returns the Flux Camera device and creates it on first
 // use. The device stays until fluxd stops, so video apps keep it in their
 // camera list between sessions.
@@ -212,6 +256,7 @@ func (d *Daemon) loopbackDevice() (*desktop.Loopback, error) {
 func (d *Daemon) webcamViewLocked() *WebcamView {
 	if d.webcam != nil {
 		v := d.webcam.view
+		v.Config, v.Caps = d.webcamConfig, d.webcamCaps
 		return &v
 	}
 	if d.webcamErr != "" {

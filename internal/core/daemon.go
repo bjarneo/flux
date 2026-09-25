@@ -46,9 +46,11 @@ type Daemon struct {
 	inputErr error
 	ringer   ringer
 
-	webcam    *webcamSession
-	webcamErr string
-	loopback  *desktop.Loopback
+	webcam       *webcamSession
+	webcamErr    string
+	webcamConfig json.RawMessage
+	webcamCaps   json.RawMessage
+	loopback     *desktop.Loopback
 
 	subs   map[int]func(event string, data any)
 	nextID int
