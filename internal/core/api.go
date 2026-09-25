@@ -126,6 +126,8 @@ func (d *Daemon) Snapshot() json.RawMessage {
 			"downloadDir":   d.cfg.DownloadPath(),
 		},
 		"webcam":   d.webcamViewLocked(),
+		"mic":      d.micViewLocked(),
+		"screen":   d.screenViewLocked(),
 		"ringing":  d.ringing,
 		"ringFrom": d.ringFrom,
 	})
@@ -196,6 +198,10 @@ func (d *Daemon) Call(_ context.Context, method string, raw json.RawMessage) (an
 		return ok, d.StopWebcam()
 	case "webcam.config":
 		return ok, d.ConfigureWebcam(p.Config, p.Reset)
+	case "mic.stop":
+		return ok, d.StopMic()
+	case "screen.stop":
+		return ok, d.StopScreen()
 	case "clipboard.copy":
 		if p.Text == "" {
 			return nil, apiErr("bad_params", "text is empty")

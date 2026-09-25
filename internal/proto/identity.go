@@ -41,6 +41,12 @@ const (
 	// TypeFluxWebcam starts and stops the phone as a webcam. Both sides
 	// send it.
 	TypeFluxWebcam = "flux.webcam"
+	// TypeFluxMic starts and stops the phone as a microphone. Both sides
+	// send it.
+	TypeFluxMic = "flux.mic"
+	// TypeFluxScreen starts and stops the mirror of the phone screen. Both
+	// sides send it.
+	TypeFluxScreen = "flux.screen"
 )
 
 // Incoming lists the packet types that Flux accepts. The phone enables a
@@ -51,6 +57,7 @@ var Incoming = []string{
 	TypeRunCommandRequest, TypeMpris, TypeMprisRequest, TypeSftp,
 	TypeSftpRequest, TypeSmsMessages, TypeConnectivity, TypeFluxTunnel,
 	TypeFluxWebcam,
+	TypeFluxMic, TypeFluxScreen,
 }
 
 // Outgoing lists the packet types that Flux sends.
@@ -60,6 +67,7 @@ var Outgoing = []string{
 	TypeFindMyPhone, TypeRunCommand, TypeMpris, TypeMprisRequest,
 	TypeSftpRequest, TypeSmsRequest, TypeSmsConversations,
 	TypeSmsConversation, TypeSftp, TypeFluxWebcam,
+	TypeFluxMic, TypeFluxScreen,
 }
 
 // Identity is the body of a kdeconnect.identity packet.

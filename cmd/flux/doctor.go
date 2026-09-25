@@ -65,6 +65,16 @@ func doctor() {
 			"fluxd cannot add the Flux Camera device. Install /usr/lib/udev/rules.d/61-flux-v4l2loopback.rules, then run: sudo udevadm trigger /dev/v4l2loopback")
 	}
 
+	// The phone as microphone needs pw-cat, and the screen mirror needs
+	// mpv or ffplay. Both are optional.
+	_, pwErr := exec.LookPath("pw-cat")
+	check(pwErr == nil, "pw-cat is installed, so the phone can be a microphone",
+		"The phone as microphone needs pw-cat. Install it with: sudo pacman -S pipewire")
+	_, mpvErr := exec.LookPath("mpv")
+	_, ffplayErr := exec.LookPath("ffplay")
+	check(mpvErr == nil || ffplayErr == nil, "mpv or ffplay is installed, so the phone screen can show here",
+		"The screen mirror needs mpv or ffplay. Install mpv with: sudo pacman -S mpv")
+
 	for _, bin := range []string{"wl-copy", "wl-paste", "pw-play", "xdg-open"} {
 		_, lerr := exec.LookPath(bin)
 		check(lerr == nil, bin+" is installed", bin+" is missing. Flux needs it for the clipboard, the ring sound, and opening files")
