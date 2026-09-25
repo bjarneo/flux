@@ -20,12 +20,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -60,9 +57,9 @@ import kotlin.math.roundToInt
 /**
  * The Webcam mode of the Camera screen. The phone camera becomes a webcam
  * named Flux Camera on the computer. The preview shows what the computer
- * gets, with the same shape, mirror, and colors.
+ * gets, with the same shape, mirror, and colors. The settings open below
+ * the preview, so the preview shows each change.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WebcamPanel(deviceId: String) {
     val permission = rememberCameraPermission()
@@ -117,7 +114,7 @@ fun WebcamPanel(deviceId: String) {
     ) {
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             Box(
-                Modifier.heightIn(max = 360.dp).aspectRatio(config.width.toFloat() / config.height)
+                Modifier.heightIn(max = if (settingsOpen) 220.dp else 360.dp).aspectRatio(config.width.toFloat() / config.height)
                     .clip(RoundedCornerShape(24.dp)).background(Palette.pad),
             ) {
                 AndroidView(
@@ -150,44 +147,58 @@ fun WebcamPanel(deviceId: String) {
             }
         }
 
-        StatusLine(status, cameraError, pcName, config)
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (caps.cameras.size > 1) {
-                Pill(if (config.camera == "front") "Back camera" else "Front camera") {
-                    WebcamSettings.update { it.copy(camera = if (it.camera == "front") "back" else "front") }
-                }
-            }
-            Pill("Rotate") { rotation = (rotation + 90) % 360 }
-            Pill("Settings") { settingsOpen = true }
-        }
-
         val active = status.active
-        Box(
-            Modifier.fillMaxWidth().height(64.dp).clip(RoundedCornerShape(32.dp))
-                .background(if (active) MaterialTheme.colorScheme.errorContainer else Palette.accent)
-                .clickable(enabled = cameraError == null || active) {
-                    if (active) controller.stopLive() else controller.goLive(deviceId)
-                },
-            contentAlignment = Alignment.Center,
-        ) {
+        val canStart = cameraError == null || active
+        val toggleLive = { if (active) controller.stopLive() else controller.goLive(deviceId) }
+        if (settingsOpen) {
+            // The settings get the most room. Rotate and the camera switch
+            // move into the panel, and the status shows only when it matters.
+            if (active || status.phase == WebcamSession.Phase.Error || cameraError != null) {
+                StatusLine(status, cameraError, pcName, config)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                LiveButton(active, canStart, Modifier.weight(1f).height(48.dp), size = 16, onClick = toggleLive)
+                Pill("Done") { settingsOpen = false }
+            }
+            WebcamSettingsPanel(
+                config, caps, streaming = active,
+                onRotate = { rotation = (rotation + 90) % 360 },
+                modifier = Modifier.weight(1f),
+            )
+        } else {
+            StatusLine(status, cameraError, pcName, config)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (caps.cameras.size > 1) {
+                    Pill(if (config.camera == "front") "Back camera" else "Front camera") {
+                        WebcamSettings.update { it.copy(camera = if (it.camera == "front") "back" else "front") }
+                    }
+                }
+                Pill("Rotate") { rotation = (rotation + 90) % 360 }
+                Pill("Settings") { settingsOpen = true }
+            }
+            LiveButton(active, canStart, Modifier.fillMaxWidth().height(64.dp), size = 18, onClick = toggleLive)
             T(
-                if (active) "Stop webcam" else "Start webcam",
-                size = 18, weight = FontWeight.Medium,
-                color = if (active) MaterialTheme.colorScheme.onErrorContainer else Palette.onAccent,
+                "Apps on $pcName see this phone as Flux Camera. Keep this screen open while you stream.",
+                color = Palette.hint, size = 12, align = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
             )
         }
-        T(
-            "Apps on $pcName see this phone as Flux Camera. Keep this screen open while you stream.",
-            color = Palette.hint, size = 12, align = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
-        )
     }
+}
 
-    if (settingsOpen) {
-        ModalBottomSheet(
-            onDismissRequest = { settingsOpen = false },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        ) { WebcamSettingsSheet(config, caps, streaming = status.active) }
+/** Start webcam, or Stop webcam while the phone streams. */
+@Composable
+private fun LiveButton(active: Boolean, enabled: Boolean, modifier: Modifier, size: Int, onClick: () -> Unit) {
+    Box(
+        modifier.clip(RoundedCornerShape(32.dp))
+            .background(if (active) MaterialTheme.colorScheme.errorContainer else Palette.accent)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        T(
+            if (active) "Stop webcam" else "Start webcam",
+            size = size, weight = FontWeight.Medium,
+            color = if (active) MaterialTheme.colorScheme.onErrorContainer else Palette.onAccent,
+        )
     }
 }
 
@@ -209,19 +220,22 @@ private fun StatusLine(status: WebcamSession.Status, cameraError: String?, pcNam
     }
 }
 
-/** All webcam settings. The computer can change the same settings. */
+/** All webcam settings, in a panel that scrolls. The computer can change the same settings. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun WebcamSettingsSheet(config: WebcamConfig, caps: WebcamCaps, streaming: Boolean) {
+private fun WebcamSettingsPanel(
+    config: WebcamConfig,
+    caps: WebcamCaps,
+    streaming: Boolean,
+    onRotate: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     fun set(change: (WebcamConfig) -> WebcamConfig) = WebcamSettings.update(change)
     Column(
-        Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 28.dp),
+        modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            T("Webcam settings", size = 20)
-            T("The computer can change these settings too.", color = Palette.secondary, size = 13)
-        }
+        T("The computer can change these settings too.", color = Palette.secondary, size = 13)
 
         Section("Shape") {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -235,11 +249,12 @@ private fun WebcamSettingsSheet(config: WebcamConfig, caps: WebcamCaps, streamin
             }
             if (streaming) T("A new shape or quality starts the stream again.", color = Palette.hint, size = 12)
         }
-        if (caps.cameras.size > 1) {
-            Section("Camera") {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Section("Camera") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (caps.cameras.size > 1) {
                     for (c in caps.cameras) Pill(c.replaceFirstChar { it.uppercase() }, selected = c == config.camera) { set { it.copy(camera = c) } }
                 }
+                Pill("Rotate", onClick = onRotate)
             }
         }
         Row(Modifier.fillMaxWidth().clickable { set { it.copy(mirror = !it.mirror) } }, verticalAlignment = Alignment.CenterVertically) {
