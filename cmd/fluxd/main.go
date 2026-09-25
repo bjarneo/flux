@@ -14,6 +14,7 @@ import (
 
 	"flux/internal/config"
 	"flux/internal/core"
+	"flux/internal/desktop"
 	"flux/internal/ipc"
 )
 
@@ -42,6 +43,17 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	// A nested Hyprland can write its display into the systemd environment.
+	// fluxd then opens its windows where nobody sees them, and wl-copy talks
+	// to the wrong desktop. So fluxd uses the display of the Hyprland that
+	// the user sees.
+	if !*headless {
+		if s, ok := desktop.HyprlandSession(os.Getenv("XDG_RUNTIME_DIR"), desktop.SystemProcs{}); ok {
+			if old, changed := desktop.UseSession(s); changed {
+				log.Printf("display: %s of the Hyprland session, not %s from the environment", s.Wayland, old)
+			}
+		}
+	}
 	d, err := core.New(ctx, logger, core.Options{Headless: *headless, UDPPort: *udpPort, FirstTCPPort: *tcpPort})
 	if err != nil {
 		logger.Fatalf("fluxd: %v", err)
