@@ -1,0 +1,12 @@
+/bin/
+/android/.gradle/
+/android/build/
+/android/app/build/
+/android/local.properties
+/android/keystore.properties
+*.part
+/snapshots/
+/gui/app/build/
+/.claude/
+__pycache__/
+/android/.kotlin/

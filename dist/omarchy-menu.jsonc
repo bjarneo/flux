@@ -1,0 +1,9 @@
+{
+  // Add Flux to the Omarchy menu under Trigger. Merge these entries into
+  // ~/.config/omarchy/extensions/omarchy-menu.jsonc.
+  "trigger.flux": {"icon":"󰄜","label":"Flux"},
+  "trigger.flux.open": {"icon":"󰄜","label":"Open Flux","action":"flux open"},
+  "trigger.flux.ring": {"icon":"󰂞","label":"Ring phone","action":"flux ring"},
+  "trigger.flux.clip": {"icon":"󰅍","label":"Send clipboard","action":"flux clip"},
+  "trigger.flux.pair": {"icon":"󰌘","label":"Pair a device","action":"flux open overview"},
+}

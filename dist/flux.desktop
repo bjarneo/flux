@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Flux
+GenericName=Phone link
+Comment=Share files, clipboard, notifications, and media with your phone
+Exec=flux open
+Icon=flux
+Terminal=false
+Categories=Network;Utility;
+Keywords=phone;android;clipboard;share;sms;

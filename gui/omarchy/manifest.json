@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "flux",
+  "name": "Flux",
+  "version": "0.1.0",
+  "description": "Connects this computer to Flux for Android and to KDE Connect. Shares the clipboard, files, notifications, and media. Summon the window with: omarchy-shell shell summon flux '{\"page\":\"files\"}'",
+  "kinds": ["service", "bar-widget", "panel"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml",
+    "panel": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Flux",
+    "description": "The first connected device and its battery. Click to open Flux.",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

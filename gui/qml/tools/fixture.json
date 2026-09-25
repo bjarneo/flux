@@ -1,0 +1,472 @@
+{
+ "state": {
+  "self": {
+   "id": "9c1f2e3d4b5a69788796a5b4c3d2e1f0",
+   "name": "omarchy-framework",
+   "type": "laptop"
+  },
+  "devices": [
+   {
+    "id": "3f8e2a1c9b7d4e6fa0c5b8d2e1f47a93",
+    "name": "Pixel 8",
+    "type": "phone",
+    "ip": "192.168.1.42",
+    "paired": true,
+    "online": true,
+    "pairState": "paired",
+    "pairKey": "",
+    "pairedAt": "2026-03-14",
+    "lastSeen": -2,
+    "battery": {
+     "charge": 78,
+     "charging": false
+    },
+    "signal": {
+     "type": "LTE",
+     "strength": 4
+    },
+    "plugins": [
+     "battery",
+     "clipboard",
+     "share",
+     "notification",
+     "findmyphone",
+     "mpris",
+     "sms",
+     "sftp",
+     "mousepad",
+     "runcommand",
+     "connectivity",
+     "remoteinput"
+    ],
+    "notifications": [
+     {
+      "id": "n1",
+      "app": "Messages",
+      "title": "Mom",
+      "text": "Dinner sunday? bring the kids",
+      "time": -120,
+      "replyId": "r1",
+      "actions": []
+     },
+     {
+      "id": "n2",
+      "app": "Calendar",
+      "title": "Standup in 10 min",
+      "text": "Basecamp HQ · Room 3",
+      "time": -480,
+      "replyId": "",
+      "actions": [
+       "Snooze"
+      ]
+     },
+     {
+      "id": "n3",
+      "app": "GitHub",
+      "title": "basecamp/omarchy",
+      "text": "PR #1482 merged: flux: presentation remote",
+      "time": -1260,
+      "replyId": "",
+      "actions": []
+     },
+     {
+      "id": "n4",
+      "app": "Bank",
+      "title": "Card payment",
+      "text": "$12.40 at Blue Bottle Coffee",
+      "time": -3600,
+      "replyId": "",
+      "actions": []
+     },
+     {
+      "id": "n5",
+      "app": "Signal",
+      "title": "Dan Kim",
+      "text": "pushed the hypr config, check it",
+      "time": -7200,
+      "replyId": "r5",
+      "actions": []
+     }
+    ],
+    "media": {
+     "player": "spotify",
+     "players": [
+      "spotify"
+     ],
+     "title": "Weightless",
+     "artist": "Marconi Union",
+     "album": "Weightless",
+     "playing": true,
+     "position": 192000,
+     "length": 489000,
+     "canSeek": true
+    },
+    "conversations": [
+     {
+      "thread": 1,
+      "name": "Mom",
+      "address": "+4791234567",
+      "last": "Dinner sunday? bring the kids",
+      "time": -180
+     },
+     {
+      "thread": 2,
+      "name": "Dan Kim",
+      "address": "+4798765432",
+      "last": "on it. the new gaps look great",
+      "time": -8100
+     },
+     {
+      "thread": 3,
+      "name": "72345",
+      "address": "72345",
+      "last": "Your code is 482913. Do not share it.",
+      "time": -8640
+     }
+    ]
+   },
+   {
+    "id": "b71c04e9d2a84f3e9c6a5d1b0e8f2c47",
+    "name": "iPhone 15",
+    "type": "phone",
+    "ip": "192.168.1.57",
+    "paired": true,
+    "online": true,
+    "pairState": "paired",
+    "pairKey": "",
+    "pairedAt": "2026-08-02",
+    "lastSeen": -5,
+    "battery": {
+     "charge": 42,
+     "charging": true
+    },
+    "signal": {
+     "type": "5G",
+     "strength": 3
+    },
+    "plugins": [
+     "battery",
+     "clipboard",
+     "share",
+     "notification",
+     "findmyphone",
+     "mpris",
+     "runcommand",
+     "connectivity"
+    ],
+    "notifications": [],
+    "media": null,
+    "conversations": []
+   },
+   {
+    "id": "5d2e9f1a7c3b4e8d9a0f6c2b1e7d4a38",
+    "name": "Galaxy Tab S9",
+    "type": "tablet",
+    "ip": "",
+    "paired": true,
+    "online": false,
+    "pairState": "paired",
+    "pairKey": "",
+    "pairedAt": "2025-12-20",
+    "lastSeen": 1789920000,
+    "battery": null,
+    "signal": null,
+    "plugins": [],
+    "notifications": [],
+    "media": null,
+    "conversations": []
+   },
+   {
+    "id": "e4a1c8f2b9d3470a8c5e6f1d2b9a7c30",
+    "name": "OnePlus 12",
+    "type": "phone",
+    "ip": "192.168.1.61",
+    "paired": false,
+    "online": true,
+    "pairState": "none",
+    "pairKey": "",
+    "pairedAt": "",
+    "lastSeen": -1,
+    "battery": null,
+    "signal": null,
+    "plugins": [],
+    "notifications": [],
+    "media": null,
+    "conversations": []
+   }
+  ],
+  "clipboard": [
+   {
+    "text": "https://omarchy.org/manual/flux",
+    "dir": "in",
+    "device": "3f8e2a1c9b7d4e6fa0c5b8d2e1f47a93",
+    "time": -60
+   },
+   {
+    "text": "yay -S flux-git",
+    "dir": "out",
+    "device": "",
+    "time": -1200
+   },
+   {
+    "text": "Gate B14 · Boarding 15:40",
+    "dir": "in",
+    "device": "b71c04e9d2a84f3e9c6a5d1b0e8f2c47",
+    "time": -2040
+   },
+   {
+    "text": "ssh deploy@10.0.4.12",
+    "dir": "out",
+    "device": "",
+    "time": -3120
+   },
+   {
+    "text": "482913",
+    "dir": "in",
+    "device": "3f8e2a1c9b7d4e6fa0c5b8d2e1f47a93",
+    "time": -8640
+   }
+  ],
+  "transfers": [
+   {
+    "id": "t1",
+    "device": "3f8e2a1c9b7d4e6fa0c5b8d2e1f47a93",
+    "name": "VID_20260925.mp4",
+    "size": 182000000,
+    "done": 114660000,
+    "dir": "in",
+    "state": "active",
+    "rate": 12000000
+   },
+   {
+    "id": "t2",
+    "device": "3f8e2a1c9b7d4e6fa0c5b8d2e1f47a93",
+    "name": "boarding-pass.pdf",
+    "size": 220000,
+    "done": 0,
+    "dir": "in",
+    "state": "queued",
+    "rate": 0
+   },
+   {
+    "id": "t3",
+    "device": "3f8e2a1c9b7d4e6fa0c5b8d2e1f47a93",
+    "name": "IMG_2041.jpg",
+    "size": 4200000,
+    "done": 4200000,
+    "dir": "in",
+    "state": "done",
+    "rate": 0
+   },
+   {
+    "id": "t4",
+    "device": "3f8e2a1c9b7d4e6fa0c5b8d2e1f47a93",
+    "name": "screenshot-2026-09-25.png",
+    "size": 1100000,
+    "done": 1100000,
+    "dir": "out",
+    "state": "done",
+    "rate": 0
+   }
+  ],
+  "settings": {
+   "autoClipboard": true,
+   "notifications": true
+  },
+  "ringing": false,
+  "commands": [
+   {
+    "id": "lock",
+    "name": "Lock screen",
+    "command": "omarchy-system-lock"
+   },
+   {
+    "id": "background",
+    "name": "Next background",
+    "command": "omarchy-theme-bg-next"
+   },
+   {
+    "id": "mute",
+    "name": "Mute audio",
+    "command": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+   }
+  ]
+ },
+ "threads": {
+  "1": [
+   {
+    "body": "Hi honey!",
+    "time": -300,
+    "outgoing": false
+   },
+   {
+    "body": "Dinner sunday? bring the kids",
+    "time": -180,
+    "outgoing": false
+   }
+  ],
+  "2": [
+   {
+    "body": "pushed the hypr config, check it",
+    "time": -8280,
+    "outgoing": false
+   },
+   {
+    "body": "on it. the new gaps look great",
+    "time": -8100,
+    "outgoing": true
+   }
+  ],
+  "3": [
+   {
+    "body": "Your code is 482913. Do not share it.",
+    "time": -8640,
+    "outgoing": false
+   }
+  ]
+ },
+ "roots": [
+  {
+   "name": "DCIM",
+   "path": "/storage/emulated/0/DCIM"
+  },
+  {
+   "name": "Download",
+   "path": "/storage/emulated/0/Download"
+  },
+  {
+   "name": "Documents",
+   "path": "/storage/emulated/0/Documents"
+  },
+  {
+   "name": "Music",
+   "path": "/storage/emulated/0/Music"
+  },
+  {
+   "name": "Pictures",
+   "path": "/storage/emulated/0/Pictures"
+  }
+ ],
+ "dirs": {
+  "/storage/emulated/0/DCIM": [
+   {
+    "name": "Camera",
+    "dir": true,
+    "size": 0,
+    "mtime": -3600
+   },
+   {
+    "name": "Screenshots",
+    "dir": true,
+    "size": 0,
+    "mtime": -3600
+   },
+   {
+    "name": "IMG_2041.jpg",
+    "dir": false,
+    "size": 4200000,
+    "mtime": -3600
+   },
+   {
+    "name": "IMG_2040.jpg",
+    "dir": false,
+    "size": 3900000,
+    "mtime": -3600
+   },
+   {
+    "name": "VID_20260925.mp4",
+    "dir": false,
+    "size": 182000000,
+    "mtime": -3600
+   }
+  ],
+  "/storage/emulated/0/DCIM/Camera": [
+   {
+    "name": "IMG_1998.jpg",
+    "dir": false,
+    "size": 3800000,
+    "mtime": -3600
+   },
+   {
+    "name": "IMG_1999.jpg",
+    "dir": false,
+    "size": 4100000,
+    "mtime": -3600
+   }
+  ],
+  "/storage/emulated/0/Download": [
+   {
+    "name": "boarding-pass.pdf",
+    "dir": false,
+    "size": 220000,
+    "mtime": -3600
+   },
+   {
+    "name": "omarchy-3.1.iso",
+    "dir": false,
+    "size": 6100000000,
+    "mtime": -3600
+   },
+   {
+    "name": "invoice-0925.pdf",
+    "dir": false,
+    "size": 88000,
+    "mtime": -3600
+   }
+  ],
+  "/storage/emulated/0/Documents": [
+   {
+    "name": "notes.md",
+    "dir": false,
+    "size": 12000,
+    "mtime": -3600
+   },
+   {
+    "name": "passport-scan.jpg",
+    "dir": false,
+    "size": 2100000,
+    "mtime": -3600
+   },
+   {
+    "name": "lease-2026.pdf",
+    "dir": false,
+    "size": 1400000,
+    "mtime": -3600
+   }
+  ],
+  "/storage/emulated/0/Music": [
+   {
+    "name": "Weightless.flac",
+    "dir": false,
+    "size": 82000000,
+    "mtime": -3600
+   },
+   {
+    "name": "podcasts",
+    "dir": true,
+    "size": 0,
+    "mtime": -3600
+   }
+  ],
+  "/storage/emulated/0/Pictures": [
+   {
+    "name": "wallpapers",
+    "dir": true,
+    "size": 0,
+    "mtime": -3600
+   },
+   {
+    "name": "kanagawa.png",
+    "dir": false,
+    "size": 5800000,
+    "mtime": -3600
+   },
+   {
+    "name": "avatar.png",
+    "dir": false,
+    "size": 240000,
+    "mtime": -3600
+   }
+  ]
+ }
+}

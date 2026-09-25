@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="8"
+    android:viewportHeight="8">
+    <!-- The Flux mark in white on the 8-unit box, for notification icons. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M2.6,2.6 L7.5,2.6 L7.5,7.5 L2.6,7.5 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M0.5,0.5 L5.4,0.5 L5.4,5.4 L0.5,5.4 Z M1.25,1.25 L1.25,4.65 L4.65,4.65 L4.65,1.25 Z" />
+</vector>

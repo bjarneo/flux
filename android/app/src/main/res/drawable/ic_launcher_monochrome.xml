@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- The 2 shapes of the mark in 1 color, for Android themed icons. -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M47.7,47.7 L69.75,47.7 L69.75,69.75 L47.7,69.75 Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:fillType="evenOdd"
+        android:pathData="M38.25,38.25 L60.3,38.25 L60.3,60.3 L38.25,60.3 Z M41.625,41.625 L41.625,56.925 L56.925,56.925 L56.925,41.625 Z" />
+</vector>

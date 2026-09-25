@@ -1,0 +1,16 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- The Flux mark, variant 4a. The 8-unit box is 36 dp and sits from 36 to 72 dp. -->
+    <!-- Layer 1: the accent square at 2.6 units, 4.9 units wide. -->
+    <path
+        android:fillColor="@color/flux_mark_accent"
+        android:pathData="M47.7,47.7 L69.75,47.7 L69.75,69.75 L47.7,69.75 Z" />
+    <!-- Layer 2: the outline at 0.5 units, 4.9 units wide, 0.75 units stroke inside. -->
+    <path
+        android:fillColor="@color/flux_mark_fg"
+        android:fillType="evenOdd"
+        android:pathData="M38.25,38.25 L60.3,38.25 L60.3,60.3 L38.25,60.3 Z M41.625,41.625 L41.625,56.925 L56.925,56.925 L56.925,41.625 Z" />
+</vector>

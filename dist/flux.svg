@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Flux mark 4a on a Tokyo Night tile. The mark is 96 px on an 8 by 8 grid, 12 px per unit. -->
+  <rect width="128" height="128" fill="#1a1b26"/>
+  <rect x="0.5" y="0.5" width="127" height="127" fill="none" stroke="#292e42"/>
+  <rect x="47.2" y="47.2" width="58.8" height="58.8" fill="#7aa2f7"/>
+  <rect x="26.5" y="26.5" width="49.8" height="49.8" fill="none" stroke="#c0caf5" stroke-width="9"/>
+</svg>

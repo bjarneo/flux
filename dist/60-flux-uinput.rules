@@ -1,0 +1,3 @@
+# Give the user at the seat access to /dev/uinput. fluxd creates a virtual
+# pointer and keyboard there for the phone touchpad and keyboard.
+KERNEL=="uinput", SUBSYSTEM=="misc", TAG+="uaccess", OPTIONS+="static_node=uinput"
