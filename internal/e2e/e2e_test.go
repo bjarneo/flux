@@ -54,6 +54,12 @@ type state struct {
 		Paired    bool   `json:"paired"`
 		PairState string `json:"pairState"`
 		PairKey   string `json:"pairKey"`
+		// Notifications are the notifications that the device sent.
+		Notifications []struct {
+			App   string `json:"app"`
+			Title string `json:"title"`
+			Text  string `json:"text"`
+		} `json:"notifications"`
 	} `json:"devices"`
 	Clipboard []struct {
 		Text string `json:"text"`
@@ -255,6 +261,18 @@ func TestTwoDaemons(t *testing.T) {
 		t.Fatalf("received file differs: %v, %d bytes", err, len(got))
 	}
 	alpha.wait(t, "sent file", func(s state) bool { return len(s.Transfers) > 0 && s.Transfers[0].State == "done" })
+
+	// A notification from alpha shows on beta, with the name of alpha as the app.
+	alpha.call(t, "notify.send", map[string]any{"device": "beta", "title": "Build done", "body": "make finished in 42 s"}, nil)
+	beta.wait(t, "notification from alpha", func(s state) bool {
+		for _, d := range s.Devices {
+			if d.Name == "alpha" && len(d.Notifications) > 0 {
+				n := d.Notifications[0]
+				return n.App == "alpha" && n.Title == "Build done" && n.Text == "make finished in 42 s"
+			}
+		}
+		return false
+	})
 
 	// Find my device.
 	alpha.call(t, "ring", map[string]any{"device": "beta"}, nil)

@@ -42,6 +42,10 @@ type Daemon struct {
 	notifier *desktop.Notifier
 	media    *desktop.Media
 	ringer   ringer
+	// callPlayers are the players that a call pauses. It is the desktop
+	// media when media control works, else nil.
+	callPlayers callMedia
+	calls       map[string]*callState
 
 	webcam       *webcamSession
 	webcamErr    string
@@ -210,6 +214,7 @@ func (d *Daemon) Run() error {
 	}
 	if m, err := desktop.NewMedia(); err == nil {
 		d.media = m
+		d.callPlayers = m
 		m.OnChange(d.onDesktopMediaChange)
 	} else {
 		d.logf("media control off: %v", err)

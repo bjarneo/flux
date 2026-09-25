@@ -33,6 +33,7 @@ const (
 	TypeSmsConversations    = "kdeconnect.sms.request_conversations"
 	TypeSmsConversation     = "kdeconnect.sms.request_conversation"
 	TypeConnectivity        = "kdeconnect.connectivity_report"
+	TypeTelephony           = "kdeconnect.telephony"
 
 	// TypeFluxTunnel carries the port of a listener that a Flux phone opens,
 	// so that fluxd can connect out for payloads and Browse PC. The phone
@@ -49,14 +50,14 @@ var Incoming = []string{
 	TypePing, TypeBattery, TypeClipboard, TypeClipboardConnect,
 	TypeShare, TypeShareUpdate, TypeNotification, TypeFindMyPhone,
 	TypeRunCommandRequest, TypeMpris, TypeMprisRequest, TypeSftp,
-	TypeSftpRequest, TypeSmsMessages, TypeConnectivity, TypeFluxTunnel,
-	TypeFluxWebcam,
+	TypeSftpRequest, TypeSmsMessages, TypeConnectivity, TypeTelephony,
+	TypeFluxTunnel, TypeFluxWebcam,
 }
 
 // Outgoing lists the packet types that Flux sends.
 var Outgoing = []string{
 	TypePing, TypeBattery, TypeClipboard, TypeClipboardConnect, TypeShare,
-	TypeNotificationRequest, TypeNotificationReply, TypeNotificationAction,
+	TypeNotification, TypeNotificationRequest, TypeNotificationReply, TypeNotificationAction,
 	TypeFindMyPhone, TypeRunCommand, TypeMpris, TypeMprisRequest,
 	TypeSftpRequest, TypeSmsRequest, TypeSmsConversations,
 	TypeSmsConversation, TypeSftp, TypeFluxWebcam,

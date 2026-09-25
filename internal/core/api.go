@@ -120,10 +120,11 @@ func (d *Daemon) Snapshot() json.RawMessage {
 		"transfers": transfers,
 		"commands":  commands,
 		"settings": map[string]any{
-			"autoClipboard": d.cfg.AutoClipboard,
-			"notifications": d.cfg.Notifications,
-			"shareHome":     d.cfg.ShareHome,
-			"downloadDir":   d.cfg.DownloadPath(),
+			"autoClipboard":    d.cfg.AutoClipboard,
+			"notifications":    d.cfg.Notifications,
+			"shareHome":        d.cfg.ShareHome,
+			"pauseMediaOnCall": d.cfg.PauseMediaOnCall,
+			"downloadDir":      d.cfg.DownloadPath(),
 		},
 		"webcam":   d.webcamViewLocked(),
 		"ringing":  d.ringing,
@@ -164,6 +165,7 @@ type params struct {
 	Thread    int64           `json:"thread"`
 	Addresses []string        `json:"addresses"`
 	Body      string          `json:"body"`
+	Title     string          `json:"title"`
 	Key       string          `json:"key"`
 	Name      string          `json:"name"`
 	Command   string          `json:"command"`
@@ -277,6 +279,8 @@ func (d *Daemon) Call(_ context.Context, method string, raw json.RawMessage) (an
 			return nil, err
 		}
 		return map[string]any{"messages": msgs}, nil
+	case "notify.send":
+		return ok, d.SendNotification(dev, p.Title, p.Body)
 	case "sms.send":
 		return ok, d.SendSms(dev, p.Addresses, p.Body)
 	case "browse.open":
@@ -364,6 +368,8 @@ func (d *Daemon) setSetting(key string, value any) error {
 		d.cfg.Notifications = b
 	case key == "shareHome" && isBool:
 		d.cfg.ShareHome = b
+	case key == "pauseMediaOnCall" && isBool:
+		d.cfg.PauseMediaOnCall = b
 	case key == "name" && isString:
 		d.cfg.Name = strings.TrimSpace(s)
 	case key == "downloadDir" && isString:

@@ -81,6 +81,8 @@ func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.handleWebcam(dev, l, p)
 	case proto.TypeSmsMessages:
 		d.handleSms(dev, p)
+	case proto.TypeTelephony:
+		d.handleTelephony(dev, p)
 	default:
 		d.logf("%s: no handler for %s", dev.Name, p.Type)
 	}

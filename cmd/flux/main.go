@@ -39,6 +39,9 @@ Commands:
   sms NUMBER TEXT...     Send a text message through the phone
   media ACTION           play-pause, play, pause, next, previous, or stop
   notifications          List the phone notifications
+  notify TITLE [BODY]    Show a notification on the phone
+  notify --run -- CMD…   Run CMD, then show on the phone how it ended. Exits with
+                         the exit code of CMD
   commands               List the commands that the phone can run
   commands add NAME CMD  Add a command, for example: commands add "Lock" omarchy-system-lock
   commands remove ID     Remove a command
@@ -95,6 +98,8 @@ func main() {
 		err = media(device, need(args, "ACTION"))
 	case "notifications":
 		err = notifications(device)
+	case "notify":
+		err = notify(device, args)
 	case "commands":
 		err = commands(args)
 	case "run":
@@ -121,10 +126,14 @@ func main() {
 }
 
 // splitDevice removes --device NAME, -d NAME, and --device=NAME from args.
+// It stops at --, so that the arguments of a command after -- stay as
+// they are.
 func splitDevice(in []string) (out []string, device string) {
 	for i := 0; i < len(in); i++ {
 		a := in[i]
 		switch {
+		case a == "--":
+			return append(out, in[i:]...), device
 		case (a == "--device" || a == "-d") && i+1 < len(in):
 			device = in[i+1]
 			i++
