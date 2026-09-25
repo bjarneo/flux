@@ -1,0 +1,23 @@
+{
+  "skill_name": "omarchy-flux",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Two phones are paired with Flux. Send ~/Downloads/report.txt to my Pixel 8 and confirm it arrived. Give the command sequence without executing it.",
+      "expected_output": "Inspect JSON state, select the Pixel 8 explicitly, send the file, and check transfer completion. Do not equate a queued transfer with delivery.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "I cloned Flux on Omarchy. I want the Qt app, CLI, daemon, and shell plugin. Explain the full local install and Android build steps. Do not run them.",
+      "expected_output": "Give dependencies and a complete desktop install, run user setup without sudo, verify with doctor, and build Android with JDK 21 and SDK 36.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Prepare a checklist for Flux v0.2.0 with a signed APK and AUR package. Explain manual rebuilds, secrets, artifacts, and upgrade constraints. Do not publish anything.",
+      "expected_output": "Use an existing stable tag, identify all signing and AUR secrets plus AUR_PUBLISH, preserve the signing key and version-code sequence, and describe verified release artifacts.",
+      "files": []
+    }
+  ]
+}
