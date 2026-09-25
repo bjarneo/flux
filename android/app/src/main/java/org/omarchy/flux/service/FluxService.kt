@@ -1,5 +1,6 @@
 package org.omarchy.flux.service
 
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.BroadcastReceiver
@@ -25,6 +26,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.omarchy.flux.R
 import org.omarchy.flux.core.Android
+import org.omarchy.flux.core.CaptureWatch
+import org.omarchy.flux.core.DndSync
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.Plugins
 import org.omarchy.flux.core.Ringer
@@ -60,6 +63,10 @@ class FluxService : Service() {
             lastCharging = charging
             FluxCore.connectedPaired().forEach { Plugins.sendBattery(FluxCore, it) }
         }
+    }
+
+    private val dndReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) = DndSync.onLocalChange(FluxCore)
     }
 
     private var nsd: NsdManager? = null
@@ -149,6 +156,12 @@ class FluxService : Service() {
         }
         getSystemService(ConnectivityManager::class.java)?.registerDefaultNetworkCallback(networkCallback)
         ContextCompat.registerReceiver(this, batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
+        // The system sends this broadcast only to receivers that register at run time.
+        DndSync.start(this)
+        ContextCompat.registerReceiver(
+            this, dndReceiver, IntentFilter(NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        CaptureWatch.refresh(this)
         FluxCore.startNetwork()
         nsd = getSystemService(NsdManager::class.java)
         runCatching { nsd?.discoverServices(MDNS_TYPE, NsdManager.PROTOCOL_DNS_SD, nsdListener) }
@@ -176,6 +189,8 @@ class FluxService : Service() {
         unannounce()
         runCatching { getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(networkCallback) }
         runCatching { unregisterReceiver(batteryReceiver) }
+        runCatching { unregisterReceiver(dndReceiver) }
+        CaptureWatch.stop(this)
         multicast?.release()
         FluxCore.stopNetwork()
         super.onDestroy()

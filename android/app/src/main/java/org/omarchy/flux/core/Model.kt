@@ -61,6 +61,13 @@ data class UiState(
     val devices: List<DeviceUi> = emptyList(),
     val shareNotifications: Boolean = true,
     val syncClipboard: Boolean = true,
+    val syncDnd: Boolean = true,
+    /** Flux may read and set Do Not Disturb. */
+    val dndAccess: Boolean = false,
+    val sendScreenshots: Boolean = false,
+    val sendPhotos: Boolean = false,
+    /** Flux can see every new image. */
+    val mediaAccess: Boolean = false,
     val notificationAccess: Boolean = false,
     val ringingFrom: String? = null,
     val browse: BrowseState? = null,
