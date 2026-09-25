@@ -300,7 +300,47 @@
    "width": 1920,
    "height": 1080,
    "fps": 30,
-   "error": ""
+   "error": "",
+   "config": {
+    "aspect": "16:9",
+    "resolution": 1080,
+    "camera": "back",
+    "mirror": false,
+    "zoom": 1.0,
+    "exposure": 0.0,
+    "whiteBalance": "auto",
+    "brightness": 0.0,
+    "contrast": 1.0,
+    "saturation": 1.0,
+    "warmth": 0.0
+   },
+   "caps": {
+    "zoomMax": 8,
+    "exposureMin": -2,
+    "exposureMax": 2,
+    "exposureStep": 0.333,
+    "whiteBalance": [
+     "auto",
+     "daylight",
+     "cloudy",
+     "incandescent",
+     "fluorescent"
+    ],
+    "cameras": [
+     "back",
+     "front"
+    ],
+    "aspects": [
+     "16:9",
+     "4:3",
+     "1:1",
+     "9:16"
+    ],
+    "resolutions": [
+     720,
+     1080
+    ]
+   }
   }
  },
  "threads": {

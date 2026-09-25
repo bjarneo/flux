@@ -73,56 +73,69 @@ Window {
     ["01-overview", function () { view.selectedId = pixel; view.tab = "overview" }],
     ["02-camera-starting", function () { mock.setState(function (s) { s.webcam.active = false }) }],
     ["03-camera-error", function () { mock.setState(function (s) { s.webcam.error = "The v4l2loopback module is not loaded. Run: sudo modprobe v4l2loopback" }) }],
-    ["04-camera-stopped", function () { mock.call("webcam.stop", {}, null) }],
-    ["05-clipboard", function () { mock.setState(function (s) { s.webcam = mock.fixture.state.webcam }); view.tab = "clipboard" }],
-    ["06-files", function () { view.tab = "files" }],
-    ["07-notifications", function () { view.tab = "notifications" }],
-    ["08-media", function () { view.tab = "media" }],
-    ["09-messages", function () { view.tab = "messages" }],
-    ["10-input", function () { view.tab = "input" }],
-    ["11-browse", function () { view.tab = "browse" }],
-    ["12-commands", function () { view.tab = "commands" }],
-    ["13-commands-form", function () { view.tab = "commands" }, function () {
+    ["04-camera-settings", function () { mock.setState(function (s) { s.webcam = mock.fixture.state.webcam }) }, function () { camera().settingsOpen = true ; scrollToEnd() }],
+    ["05-camera-settings-changed", function () {
+      var c = camera()
+      c.setKey("zoom", 2.5)
+      c.setKey("exposure", 0.666)
+      c.setKey("warmth", 0.3)
+      c.setKey("whiteBalance", "daylight")
+      c.setKey("mirror", true)
+    }, function () { scrollToEnd() }],
+    ["06-camera-restarting", function () { camera().setKey("aspect", "4:3") }, function () { scrollToEnd() }, 300],
+    ["07-camera-restarted", function () {}, function () { scrollToEnd() }, 1500],
+    ["08-camera-narrow", function () { view.anchors.fill = undefined; view.width = 900; view.height = 760 }, function () { scrollToEnd() }],
+    ["09-camera-closed", function () { view.anchors.fill = win.contentItem; camera().settingsOpen = false }],
+    ["10-camera-stopped", function () { mock.call("webcam.stop", {}, null) }],
+    ["11-clipboard", function () { mock.setState(function (s) { s.webcam = mock.fixture.state.webcam }); view.tab = "clipboard" }],
+    ["12-files", function () { view.tab = "files" }],
+    ["13-notifications", function () { view.tab = "notifications" }],
+    ["14-media", function () { view.tab = "media" }],
+    ["15-messages", function () { view.tab = "messages" }],
+    ["16-input", function () { view.tab = "input" }],
+    ["17-browse", function () { view.tab = "browse" }],
+    ["18-commands", function () { view.tab = "commands" }],
+    ["19-commands-form", function () { view.tab = "commands" }, function () {
       pageItem().openForm()
       setField("Name", "Screenshot")
       setField("omarchy-system-lock", "omarchy-capture-screenshot fullscreen save")
     }],
-    ["14-commands-empty", function () { pageItem().cancel(); mock.setState(function (s) { s.commands = [] }); view.tab = "commands" }],
-    ["15-commands-offline", function () {
+    ["20-commands-empty", function () { pageItem().cancel(); mock.setState(function (s) { s.commands = [] }); view.tab = "commands" }],
+    ["21-commands-offline", function () {
       if (pageItem().cancel) pageItem().cancel()
       mock.state = mock.fixTimes(mock.fixture.state)
       view.selectedId = tablet
       view.tab = "commands"
     }],
-    ["16-input-capture", function () { view.selectedId = pixel; view.tab = "input" }, function () { view.children && pageItem().start() }],
-    ["17-pair-list", function () { pageItem().stop && pageItem().stop(); view.tab = "overview"; view.pairMode = true }],
-    ["18-pair-requested", function () {
+    ["22-input-capture", function () { view.selectedId = pixel; view.tab = "input" }, function () { view.children && pageItem().start() }],
+    ["23-pair-list", function () { pageItem().stop && pageItem().stop(); view.tab = "overview"; view.pairMode = true }],
+    ["24-pair-requested", function () {
       mock.updateDevice(oneplus, function (d) { d.pairState = "requested"; d.pairKey = "4F21A9C3"; return d })
     }],
-    ["19-paired", function () {
+    ["25-paired", function () {
       mock.updateDevice(oneplus, function (d) { d.pairState = "paired"; d.paired = true; d.pairedAt = "2026-09-25"; d.battery = { charge: 91, charging: false }; d.signal = { type: "5G", strength: 4 }; return d })
     }],
-    ["20-pair-incoming", function () {
+    ["26-pair-incoming", function () {
       mock.setState(function (s) {
         s.devices.push({ id: "c0ffee0000000000000000000000beef", name: "work-thinkpad", type: "laptop", ip: "192.168.1.70", paired: false, online: true, pairState: "incoming", pairKey: "9B03E7D1", plugins: [], notifications: [], conversations: [] })
       })
       view.selectedId = pixel
     }],
-    ["21-iphone", function () {
+    ["27-iphone", function () {
       mock.setState(function (s) { s.devices = s.devices.filter(function (d) { return d.pairState !== "incoming" }) })
       view.selectedId = iphone; view.tab = "overview"
     }],
-    ["22-offline", function () { view.selectedId = tablet; view.tab = "overview" }],
-    ["23-offline-files", function () { view.tab = "files" }],
-    ["24-toast", function () { view.selectedId = pixel; view.tab = "overview"; view.toast("Clipboard sent to Pixel 8") }],
-    ["25-ringing", function () { view.toast(""); mock.setState(function (s) { s.ringing = true }) }],
-    ["26-notif-reply", function () { mock.setState(function (s) { s.ringing = false }); view.tab = "notifications" }, function () { replyFirst() }],
-    ["27-browse-deeper", function () { view.tab = "browse" }, function () { var p = pageItem(); p.list(p.root_, p.root_.path + "/Camera") }],
-    ["28-empty", function () { mock.setState(function (s) { s.devices = [] }) }],
-    ["29-not-running", function () { mock.connected = false }],
+    ["28-offline", function () { view.selectedId = tablet; view.tab = "overview" }],
+    ["29-offline-files", function () { view.tab = "files" }],
+    ["30-toast", function () { view.selectedId = pixel; view.tab = "overview"; view.toast("Clipboard sent to Pixel 8") }],
+    ["31-ringing", function () { view.toast(""); mock.setState(function (s) { s.ringing = true }) }],
+    ["32-notif-reply", function () { mock.setState(function (s) { s.ringing = false }); view.tab = "notifications" }, function () { replyFirst() }],
+    ["33-browse-deeper", function () { view.tab = "browse" }, function () { var p = pageItem(); p.list(p.root_, p.root_.path + "/Camera") }],
+    ["34-empty", function () { mock.setState(function (s) { s.devices = [] }) }],
+    ["35-not-running", function () { mock.connected = false }],
     // Sidebar overflow at the 640 px minimum height: 6 paired devices, a pair
     // request, and the list of discovered devices.
-    ["30-sidebar-640-top", function () {
+    ["36-sidebar-640-top", function () {
       mock.connected = true
       mock.state = mock.fixTimes(mock.fixture.state)
       mock.setState(function (s) {
@@ -140,9 +153,9 @@ Window {
       view.tab = "overview"
       view.pairMode = true
     }],
-    ["31-sidebar-640-bottom", function () { view.sidebarFlick.contentY = view.sidebarFlick.contentHeight - view.sidebarFlick.height }],
-    ["32-sidebar-640-select-last", function () { view.sidebarFlick.contentY = 0; view.selectedId = "a0000000000000000000000000000002"; view.tab = "files" }],
-    ["33-sidebar-640-moving", function () { view.sidebarFlick.contentY = 0 }, function () { view.sidebarFlick.flick(0, -1200) }, 60]
+    ["37-sidebar-640-bottom", function () { view.sidebarFlick.contentY = view.sidebarFlick.contentHeight - view.sidebarFlick.height }],
+    ["38-sidebar-640-select-last", function () { view.sidebarFlick.contentY = 0; view.selectedId = "a0000000000000000000000000000002"; view.tab = "files" }],
+    ["39-sidebar-640-moving", function () { view.sidebarFlick.contentY = 0 }, function () { view.sidebarFlick.flick(0, -1200) }, 60]
   ]
 
   function pageItem() {
@@ -174,6 +187,14 @@ Window {
       if (r) return r
     }
     return null
+  }
+
+  function camera() { return findBy(pageItem(), "objectName", "cameraCard") }
+
+  // Scrolls the content area to the end, where the camera settings are.
+  function scrollToEnd() {
+    var f = findBy(view, "objectName", "contentFlick")
+    if (f) f.contentY = Math.max(0, f.contentHeight - f.height)
   }
 
   function replyFirst() {

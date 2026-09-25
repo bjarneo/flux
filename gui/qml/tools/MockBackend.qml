@@ -59,6 +59,24 @@ QtObject {
     else if (method === "browse.list") result = { entries: fixTimes((fixture.dirs || {})[params.path] || []) }
     else if (method === "sms.thread") result = { messages: fixTimes((fixture.threads || {})[String(params.thread)] || []) }
     else if (method === "webcam.stop") setState(function (s) { s.webcam = null })
+    else if (method === "webcam.config") {
+      var restarts = false
+      setState(function (s) {
+        if (!s.webcam) return
+        if (params.reset) {
+          s.webcam.config = JSON.parse(JSON.stringify(fixture.state.webcam.config))
+          return
+        }
+        var c = params.config || {}
+        for (var k in c) {
+          if (["aspect", "resolution", "camera"].indexOf(k) >= 0 && s.webcam.config[k] !== c[k]) restarts = true
+          s.webcam.config[k] = c[k]
+        }
+        // Like the phone, a new format or camera stops the stream for a moment.
+        if (restarts) s.webcam.active = false
+      })
+      if (restarts) restartTimer.restart()
+    }
     else if (method === "commands.add") {
       var id = "c" + Date.now()
       setState(function (s) { s.commands = (s.commands || []).concat([{ id: id, name: params.name, command: params.command }]) })
@@ -67,6 +85,11 @@ QtObject {
       setState(function (s) { s.commands = (s.commands || []).filter(function (c) { return c.id !== params.id }) })
     }
     if (cb) Qt.callLater(function () { try { cb(null, result) } catch (e) {} })
+  }
+
+  property Timer restartTimer: Timer {
+    interval: 1200
+    onTriggered: root.setState(function (s) { if (s.webcam) s.webcam.active = true })
   }
 
   // The file chooser returns 2 sample paths.

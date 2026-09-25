@@ -485,6 +485,7 @@ Item {
 
     Flickable {
       id: flick
+      objectName: "contentFlick"
       anchors.left: parent.left
       anchors.right: parent.right
       anchors.top: header.bottom

@@ -297,80 +297,17 @@ Item {
       }
     }
 
-    // Phone camera
-    Card {
+    // Phone camera, with its settings. The card spans the grid while the
+    // settings are open.
+    CameraCard {
+      objectName: "cameraCard"
       visible: !!root.webcam
+      view: root.view
+      webcam: root.webcam
       Layout.fillWidth: true
       Layout.fillHeight: true
       Layout.preferredWidth: 320
-      implicitHeight: camCol.implicitHeight + 38
-
-      Column {
-        id: camCol
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.margins: 19
-        spacing: 12
-        SectionLabel { text: "PHONE CAMERA" }
-
-        Item {
-          width: parent.width
-          height: Math.max(camText.implicitHeight, stopButton.visible ? stopButton.implicitHeight : 0)
-          readonly property var cam: root.webcam || ({})
-          readonly property bool failed: !!cam.error
-
-          Column {
-            id: camText
-            anchors.left: parent.left
-            anchors.right: stopButton.visible ? stopButton.left : parent.right
-            anchors.rightMargin: stopButton.visible ? 14 : 0
-            anchors.verticalCenter: parent.verticalCenter
-            Txt {
-              width: parent.width
-              visible: !!parent.parent.cam.active && !parent.parent.failed
-              text: (parent.parent.cam.fromName || "The phone") + " is live as " + (parent.parent.cam.label || "a webcam")
-              font.weight: Font.Bold
-              elide: Text.ElideRight
-            }
-            Txt {
-              width: parent.width
-              visible: !!parent.parent.cam.active && !parent.parent.failed
-              text: {
-                var c = parent.parent.cam
-                var parts = [c.device || ""]
-                if (c.width && c.height) parts.push(c.width + "×" + c.height)
-                if (c.fps) parts.push(c.fps + " fps")
-                return parts.filter(function (p) { return p !== "" }).join(" · ")
-              }
-              color: Theme.dim
-              elide: Text.ElideRight
-            }
-            Txt {
-              width: parent.width
-              visible: !parent.parent.cam.active && !parent.parent.failed
-              text: "Starting…"
-              color: Theme.dim
-            }
-            Txt {
-              width: parent.width
-              visible: parent.parent.failed
-              text: parent.parent.cam.error || ""
-              color: Theme.err
-              wrapMode: Text.Wrap
-            }
-          }
-
-          OutlineButton {
-            id: stopButton
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            visible: !!parent.cam.active && !parent.failed
-            text: "Stop"
-            onClicked: root.view.call("webcam.stop", {})
-          }
-        }
-      }
+      Layout.columnSpan: settingsOpen ? grid.columns : 1
     }
   }
 }
