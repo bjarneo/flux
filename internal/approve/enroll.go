@@ -101,9 +101,14 @@ func Enroll(ctx context.Context, o EnrollOptions) (*Key, error) {
 		res = waitResult{}
 		err := c.call("approve.wait", map[string]any{"id": started.ID}, &res, deadline)
 		if err != nil {
+			if ctx.Err() != nil {
+				// The user stopped the command. The phone is free again at once.
+				cancelRequest(o.Socket, o.PeerUID, started.ID)
+				return nil, ctx.Err()
+			}
 			var ne net.Error
 			var re *RemoteError
-			if errors.As(err, &ne) && ne.Timeout() || errors.As(err, &re) && re.Code == "timeout" || ctx.Err() != nil {
+			if errors.As(err, &ne) && ne.Timeout() || errors.As(err, &re) && re.Code == "timeout" {
 				return nil, ErrTimeout
 			}
 			return nil, err

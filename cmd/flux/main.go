@@ -46,6 +46,9 @@ Commands:
   webcam [stop]          Show the phone camera state, or stop the phone camera
   webcam set KEY=VALUE…  Change the phone camera, for example: webcam set aspect=1:1 brightness=0.2
   webcam reset           Set the phone camera back to the neutral values
+  approve [status]       Show whether a phone can approve sudo with a fingerprint
+  approve enroll         Let the phone approve sudo. Run it with sudo.
+  approve remove         Stop the phone from approving sudo. Run it with sudo.
   watch                  Print each state change as one JSON line
   setup [--dry-run]      Start fluxd for this user and add the omarchy-shell plugin
   doctor                 Check the setup and print the fixes
@@ -101,6 +104,8 @@ func main() {
 		err = call("commands.run", map[string]any{"id": need(args, "ID")})
 	case "webcam":
 		err = webcam(args)
+	case "approve":
+		err = approveCmd(args, device)
 	case "watch":
 		err = watch()
 	case "setup":

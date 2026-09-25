@@ -69,6 +69,16 @@ func dial(path string, peerUID int, timeout time.Duration) (*conn, error) {
 
 func (c *conn) Close() error { return c.c.Close() }
 
+// cancelRequest ends a request on a new connection. It ignores errors.
+func cancelRequest(path string, peerUID int, id string) {
+	c, err := dial(path, peerUID, time.Second)
+	if err != nil {
+		return
+	}
+	defer c.Close()
+	_ = c.call("approve.cancel", map[string]any{"id": id}, nil, time.Now().Add(time.Second))
+}
+
 // call sends 1 request and waits for its response until deadline.
 func (c *conn) call(method string, params, result any, deadline time.Time) error {
 	c.next++
