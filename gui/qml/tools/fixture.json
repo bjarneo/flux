@@ -290,7 +290,18 @@
     "name": "Mute audio",
     "command": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
    }
-  ]
+  ],
+  "webcam": {
+   "active": true,
+   "device": "/dev/video51",
+   "label": "Flux Camera",
+   "from": "3f8e2a1c9b7d4e6fa0c5b8d2e1f47a93",
+   "fromName": "Pixel 8",
+   "width": 1920,
+   "height": 1080,
+   "fps": 30,
+   "error": ""
+  }
  },
  "threads": {
   "1": [

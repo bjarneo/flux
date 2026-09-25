@@ -58,6 +58,7 @@ QtObject {
     if (method === "browse.open") result = { roots: fixture.roots }
     else if (method === "browse.list") result = { entries: fixTimes((fixture.dirs || {})[params.path] || []) }
     else if (method === "sms.thread") result = { messages: fixTimes((fixture.threads || {})[String(params.thread)] || []) }
+    else if (method === "webcam.stop") setState(function (s) { s.webcam = null })
     else if (method === "commands.add") {
       var id = "c" + Date.now()
       setState(function (s) { s.commands = (s.commands || []).concat([{ id: id, name: params.name, command: params.command }]) })
