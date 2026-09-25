@@ -42,4 +42,13 @@ qt_add_resources(flux-gui "flux_app"
     FILES qml/Main.qml
 )
 
+# The app icon, so that the window has the Flux mark also when the icon
+# theme has no flux icon. It needs the Qt SVG plugin at run time.
+set(FLUX_DIST "${CMAKE_CURRENT_SOURCE_DIR}/../../dist" CACHE PATH "Folder of the Flux desktop files")
+qt_add_resources(flux-gui "flux_icon"
+    PREFIX "/flux/icons"
+    BASE "${FLUX_DIST}"
+    FILES "${FLUX_DIST}/flux.svg"
+)
+
 install(TARGETS flux-gui RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

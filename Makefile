@@ -17,7 +17,7 @@ define copy-plugin
 		while read -r f; do install -Dm644 "$$f" "$(1)/Flux/$$f"; done
 endef
 
-.PHONY: build build-go build-gui test vet install install-plugin uninstall uninstall-plugin dev open snapshot android clean
+.PHONY: build build-go build-gui test vet install install-user install-plugin uninstall uninstall-user uninstall-plugin dev open snapshot android clean
 
 build: build-go build-gui
 
@@ -83,6 +83,27 @@ install-plugin:
 
 uninstall-plugin:
 	rm -rf $(PLUGIN_DIR)
+
+# install-user installs Flux for the current user in ~/.local, with no root:
+# the binaries, the desktop entry, and the icons. The system parts (the udev
+# rule, the kernel module, and the PAM helper) need `sudo make install`.
+# Then run `flux setup` for the fluxd service and the plugin.
+USER_PREFIX ?= $(HOME)/.local
+install-user:
+	@test -x bin/fluxd -a -x bin/flux -a -x $(GUI_BUILD)/flux-gui || { echo "Run make first"; exit 1; }
+	install -Dm755 bin/fluxd $(USER_PREFIX)/bin/fluxd
+	install -Dm755 bin/flux $(USER_PREFIX)/bin/flux
+	install -Dm755 $(GUI_BUILD)/flux-gui $(USER_PREFIX)/bin/flux-gui
+	install -Dm644 dist/flux.desktop $(USER_PREFIX)/share/applications/flux.desktop
+	install -Dm644 dist/flux.svg $(USER_PREFIX)/share/icons/hicolor/scalable/apps/flux.svg
+	install -Dm644 dist/flux-symbolic.svg $(USER_PREFIX)/share/icons/hicolor/symbolic/apps/flux-symbolic.svg
+	-gtk-update-icon-cache -q -t $(USER_PREFIX)/share/icons/hicolor 2>/dev/null
+	-update-desktop-database -q $(USER_PREFIX)/share/applications 2>/dev/null
+
+uninstall-user:
+	rm -f $(USER_PREFIX)/bin/fluxd $(USER_PREFIX)/bin/flux $(USER_PREFIX)/bin/flux-gui
+	rm -f $(USER_PREFIX)/share/applications/flux.desktop
+	rm -f $(USER_PREFIX)/share/icons/hicolor/scalable/apps/flux.svg $(USER_PREFIX)/share/icons/hicolor/symbolic/apps/flux-symbolic.svg
 
 # Run fluxd from the checkout in the foreground.
 dev: build-go

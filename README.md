@@ -47,6 +47,18 @@ sudo make install
 flux setup
 ```
 
+To install for your user only, with no root, use `make install-user`. It
+puts `flux`, `fluxd`, and `flux-gui` in `~/.local/bin`, and the desktop
+entry and the icons in `~/.local/share`. `flux setup` then writes a user
+service for `~/.local/bin/fluxd`. The phone as webcam and the approval
+with fingerprint still need the system parts of `sudo make install`.
+
+```sh
+make
+make install-user
+flux setup
+```
+
 ### What the install does
 
 | Part | Runs as | What it does |

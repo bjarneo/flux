@@ -4,6 +4,7 @@
 #include <QCommandLineParser>
 #include <QDir>
 #include <QGuiApplication>
+#include <QIcon>
 #include <QProcess>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -107,6 +108,9 @@ int main(int argc, char *argv[])
     QGuiApplication::setDesktopFileName(QStringLiteral("flux"));
     QGuiApplication app(argc, argv);
     QGuiApplication::setApplicationName(QStringLiteral("flux"));
+    // The icon theme gives the icon through flux.desktop. The embedded icon
+    // is for a system with no installed flux icon.
+    QGuiApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral("flux"), QIcon(QStringLiteral(":/flux/icons/flux.svg"))));
     QGuiApplication::setApplicationVersion(QStringLiteral(FLUX_VERSION));
 
     QCommandLineParser parser;

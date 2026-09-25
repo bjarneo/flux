@@ -13,7 +13,7 @@ arch=('x86_64' 'aarch64')
 url='https://omarchy.org'
 # The repository has no license yet.
 license=('LicenseRef-unknown')
-depends=('qt6-base' 'qt6-declarative' 'ttf-font-nerd' 'wl-clipboard' 'pipewire' 'sound-theme-freedesktop' 'avahi' 'xdg-utils')
+depends=('qt6-base' 'qt6-declarative' 'qt6-svg' 'ttf-font-nerd' 'wl-clipboard' 'pipewire' 'sound-theme-freedesktop' 'avahi' 'xdg-utils')
 optdepends=(
 	'quickshell: the flux plugin for omarchy-shell'
 	'ffmpeg: the phone as webcam'
