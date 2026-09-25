@@ -175,9 +175,10 @@ flux webcam stop
 ```
 
 To change the settings in the window, open the PHONE CAMERA card on the
-Overview page and press Settings. The Settings sheet in the Webcam mode on
-the phone changes the same settings. A change to `aspect` or `resolution`
-restarts the stream. The other settings change the image while it streams.
+Overview page and press Settings. On the phone, press Settings in the
+Webcam mode. The settings open below the preview, so the preview shows
+each change. A change to `aspect` or `resolution` restarts the stream. The
+other settings change the image while it streams.
 
 | Key | Values | Default |
 | --- | --- | --- |
