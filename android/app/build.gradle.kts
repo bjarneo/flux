@@ -82,6 +82,11 @@ dependencies {
     implementation(libs.mlkit.barcode.scanning)
     implementation(libs.mlkit.document.scanner)
 
+    // Approve sudo with a fingerprint: BiometricPrompt signs with a key in
+    // the Android Keystore. docs/approve.md is the design.
+    implementation(libs.androidx.biometric)
+    implementation(libs.androidx.fragment.ktx)
+
     testImplementation(libs.junit)
     testImplementation(libs.slf4j.nop)
 }

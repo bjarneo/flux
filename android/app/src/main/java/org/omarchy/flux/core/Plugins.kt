@@ -68,6 +68,7 @@ object Plugins {
             Types.MPRIS -> receiveMpris(d, p)
             Types.SFTP -> Browse.onCredentials(core, d, p)
             Types.FLUX_WEBCAM -> org.omarchy.flux.webcam.WebcamSession.onPacket(core, d, p)
+            Types.FLUX_APPROVE -> Approvals.onPacket(core, d, p)
         }
     }
 

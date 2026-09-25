@@ -28,9 +28,11 @@ object Android {
     const val CHANNEL_SERVICE = "flux.service"
     const val CHANNEL_EVENTS = "flux.events"
     const val CHANNEL_RING = "flux.ring"
+    const val CHANNEL_APPROVE = "flux.approve"
     const val ID_SERVICE = 1
     const val ID_PAIR = 2
     const val ID_RING = 3
+    const val ID_APPROVE = 4
     private var nextId = 100
 
     fun deviceName(context: Context): String =
@@ -84,6 +86,9 @@ object Android {
         nm.createNotificationChannel(NotificationChannel(CHANNEL_RING, "Find my phone", NotificationManager.IMPORTANCE_HIGH).apply {
             description = "Rings the phone when a computer asks"
             setSound(null, null)
+        })
+        nm.createNotificationChannel(NotificationChannel(CHANNEL_APPROVE, "Approvals", NotificationManager.IMPORTANCE_HIGH).apply {
+            description = "Asks you to approve sudo on a computer with your fingerprint"
         })
     }
 
