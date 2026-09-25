@@ -46,6 +46,7 @@ Commands:
   webcam set KEY=VALUE…  Change the phone camera, for example: webcam set aspect=1:1 brightness=0.2
   webcam reset           Set the phone camera back to the neutral values
   watch                  Print each state change as one JSON line
+  setup [--dry-run]      Start fluxd for this user and add the omarchy-shell plugin
   doctor                 Check the setup and print the fixes
   version                Print the version
 
@@ -101,6 +102,8 @@ func main() {
 		err = webcam(args)
 	case "watch":
 		err = watch()
+	case "setup":
+		err = setup(args)
 	case "doctor":
 		doctor()
 	case "version", "--version":

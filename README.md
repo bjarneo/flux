@@ -21,44 +21,54 @@ Omarchy firewall allows, and it opens every connection itself.
 | `flux-gui` | `gui/app` | The same window as a Qt6 C++ app |
 | Flux for Android | `android/` | A native Kotlin app for the phone |
 
-## Install from source
+## Install
 
-Flux needs Go 1.27, CMake, Ninja, Qt 6, `wl-clipboard`, `pipewire`, and
-`avahi`. Omarchy installs all of them except Go, CMake, and Ninja.
+Flux needs no manual system setup. The install does the system part as
+root, and `flux setup` does the part for your user.
 
-1. Build and install:
+### Arch package
 
-   ```sh
-   make
-   sudo make install
-   ```
+To build and install the package from this checkout, run:
 
-2. Load the `uinput` module and apply the udev rule, so the phone touchpad
-   works without root:
+```sh
+cd dist/arch
+makepkg -si
+flux setup
+```
 
-   ```sh
-   sudo modprobe uinput
-   sudo udevadm control --reload && sudo udevadm trigger /dev/uinput
-   ```
+`makepkg` needs Go 1.27, CMake, and Ninja. Omarchy installs the other
+dependencies.
 
-3. Optional: add the plugin to `omarchy-shell` for your user:
+### From source
 
-   ```sh
-   make install-plugin
-   omarchy plugin enable flux
-   ```
+```sh
+make
+sudo make install
+flux setup
+```
 
-4. Start the daemon:
+### What the install does
 
-   ```sh
-   systemctl --user enable --now fluxd
-   ```
+| Part | Runs as | What it does |
+| --- | --- | --- |
+| `post-install.sh` | root, from pacman or `sudo make install` | Loads `uinput`. Reloads udev and applies the rules for `/dev/uinput` and `/dev/v4l2loopback`. Loads `v4l2loopback` with no devices when nothing else configures it, and keeps existing camera settings. Enables `fluxd.service` for all users. |
+| `flux setup` | your user | Enables and starts `fluxd.service`. Copies the `omarchy-shell` plugin to `~/.config/omarchy/plugins/flux`, rescans, and adds the bar item. Reports each missing system part with the command that adds it. |
 
-5. Check the setup:
+The install opens no firewall port, because Flux needs none. Run
+`flux setup --dry-run` to see the steps first, and `flux doctor` to check
+the setup later.
 
-   ```sh
-   flux doctor
-   ```
+To remove Flux, run `sudo pacman -R omarchy-flux` or `sudo make uninstall`.
+Both undo the system part.
+
+### The phone
+
+Build Flux for Android and install it over USB:
+
+```sh
+make android
+adb install android/app/build/outputs/apk/debug/app-debug.apk
+```
 
 ## Pair a phone
 
@@ -147,17 +157,22 @@ command = "omarchy-system-lock"
 ## Phone as webcam
 
 Flux for Android can stream its camera to this computer. Video apps then
-see a camera named "Flux Camera". It needs `ffmpeg` and `v4l2loopback`:
+see a camera named "Flux Camera". The webcam needs 2 optional packages.
+After you install them, run the system setup again, so it loads the module:
 
 ```sh
 sudo pacman -S ffmpeg v4l2loopback-dkms
-sudo modprobe v4l2loopback devices=0   # skip this when the module is already loaded
-sudo make install                      # installs the udev rule for the control device
-sudo udevadm trigger /dev/v4l2loopback
+sudo sh /usr/share/flux/post-install.sh
 ```
 
-On the phone, open Camera, select Webcam, and press Start. `flux webcam`
-shows the state, and `flux webcam stop` stops the stream.
+On the phone, open Camera, select Webcam, and press Start.
+
+```sh
+flux webcam                                # the state and the settings
+flux webcam set aspect=1:1 brightness=0.2  # change a setting
+flux webcam reset                          # the neutral settings
+flux webcam stop
+```
 
 ## Open the window
 

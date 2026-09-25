@@ -31,13 +31,17 @@ build-gui:
 	cmake --build $(GUI_BUILD)
 
 test:
-	$(GO) test -race ./...
+	$(GO) test -race ./cmd/... ./internal/...
 
 vet:
-	$(GO) vet ./...
+	$(GO) vet ./cmd/... ./internal/...
 	gofmt -l .
 
-install: build
+# install copies what `make build` made. It does not build, so that
+# `sudo make install` works without Go on the PATH of root. On a real
+# install (no DESTDIR), it also runs the system setup in post-install.sh.
+install:
+	@test -x bin/fluxd -a -x bin/flux -a -x $(GUI_BUILD)/flux-gui || { echo "Run make first, then sudo make install"; exit 1; }
 	install -Dm755 bin/fluxd $(DESTDIR)$(PREFIX)/bin/fluxd
 	install -Dm755 bin/flux $(DESTDIR)$(PREFIX)/bin/flux
 	install -Dm755 $(GUI_BUILD)/flux-gui $(DESTDIR)$(PREFIX)/bin/flux-gui
@@ -49,8 +53,12 @@ install: build
 	install -Dm644 dist/flux.desktop $(DESTDIR)$(PREFIX)/share/applications/flux.desktop
 	install -Dm644 dist/flux.svg $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/flux.svg
 	install -Dm644 dist/flux-symbolic.svg $(DESTDIR)$(PREFIX)/share/icons/hicolor/symbolic/apps/flux-symbolic.svg
+	install -Dm755 dist/post-install.sh $(DESTDIR)$(PREFIX)/share/flux/post-install.sh
+	install -Dm755 dist/pre-remove.sh $(DESTDIR)$(PREFIX)/share/flux/pre-remove.sh
+	@if [ -z "$(DESTDIR)" ]; then sh dist/post-install.sh; fi
 
 uninstall:
+	@if [ -z "$(DESTDIR)" ]; then sh dist/pre-remove.sh; fi
 	rm -f $(DESTDIR)$(PREFIX)/bin/fluxd $(DESTDIR)$(PREFIX)/bin/flux $(DESTDIR)$(PREFIX)/bin/flux-gui
 	rm -rf $(DESTDIR)$(PREFIX)/share/flux
 	rm -f $(DESTDIR)$(PREFIX)/lib/systemd/user/fluxd.service

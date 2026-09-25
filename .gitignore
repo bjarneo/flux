@@ -10,3 +10,6 @@
 /.claude/
 __pycache__/
 /android/.kotlin/
+/dist/arch/src/
+/dist/arch/pkg/
+/dist/arch/*.pkg.tar.*

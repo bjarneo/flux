@@ -1,0 +1,43 @@
+# Arch package for Flux, built from this checkout:
+#   cd dist/arch && makepkg -si
+# pacman then runs the system setup (udev, kernel modules, the user
+# service). After the install, run `flux setup` as your user.
+
+pkgname=omarchy-flux
+pkgver=0.1.0.r7.g52a5df5
+pkgrel=1
+pkgdesc='Connect an Omarchy computer to your phone with Flux for Android'
+arch=('x86_64' 'aarch64')
+url='https://omarchy.org'
+# The repository has no license yet.
+license=('LicenseRef-unknown')
+depends=('qt6-base' 'qt6-declarative' 'wl-clipboard' 'pipewire' 'sound-theme-freedesktop' 'avahi' 'xdg-utils')
+optdepends=(
+	'quickshell: the flux plugin for omarchy-shell'
+	'ffmpeg: the phone as webcam'
+	'v4l2loopback-dkms: the phone as webcam'
+)
+makedepends=('go' 'cmake' 'ninja' 'git')
+install=omarchy-flux.install
+
+_src() { cd "$startdir/../.."; }
+
+pkgver() {
+	_src
+	printf '0.1.0.r%s.g%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+	_src
+	make build
+}
+
+check() {
+	_src
+	go test ./cmd/... ./internal/...
+}
+
+package() {
+	_src
+	make install DESTDIR="$pkgdir" PREFIX=/usr
+}
