@@ -58,6 +58,11 @@ type Daemon struct {
 	webcamCaps   json.RawMessage
 	loopback     *desktop.Loopback
 
+	mic       *micSession
+	micErr    string
+	screen    *screenSession
+	screenErr string
+
 	subs   map[int]func(event string, data any)
 	nextID int
 	dirty  chan struct{}

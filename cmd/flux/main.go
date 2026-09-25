@@ -49,6 +49,8 @@ Commands:
   webcam [stop]          Show the phone camera state, or stop the phone camera
   webcam set KEY=VALUE…  Change the phone camera, for example: webcam set aspect=1:1 brightness=0.2
   webcam reset           Set the phone camera back to the neutral values
+  mic [stop]             Show the phone microphone state, or stop the phone microphone
+  screen [stop]          Show the phone screen mirror state, or stop the mirror
   watch                  Print each state change as one JSON line
   setup [--dry-run]      Start fluxd for this user and add the omarchy-shell plugin
   doctor                 Check the setup and print the fixes
@@ -106,6 +108,10 @@ func main() {
 		err = call("commands.run", map[string]any{"id": need(args, "ID")})
 	case "webcam":
 		err = webcam(args)
+	case "mic":
+		err = mic(args)
+	case "screen":
+		err = screen(args)
 	case "watch":
 		err = watch()
 	case "setup":

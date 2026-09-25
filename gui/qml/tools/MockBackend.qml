@@ -59,6 +59,8 @@ QtObject {
     else if (method === "browse.list") result = { entries: fixTimes((fixture.dirs || {})[params.path] || []) }
     else if (method === "sms.thread") result = { messages: fixTimes((fixture.threads || {})[String(params.thread)] || []) }
     else if (method === "webcam.stop") setState(function (s) { s.webcam = null })
+    else if (method === "mic.stop") setState(function (s) { s.mic = null })
+    else if (method === "screen.stop") setState(function (s) { s.screen = null })
     else if (method === "webcam.config") {
       var restarts = false
       setState(function (s) {

@@ -273,6 +273,46 @@ written it completely. Images from before the switch turned on stay on the
 phone. An image that no computer took goes out when a computer connects.
 The computer shows a notification with Open for each image.
 
+## Phone as microphone
+
+Flux for Android can stream its microphone to this computer. Apps then
+see an input named "Flux Microphone". fluxd plays the audio with
+`pw-cat`, which PipeWire includes, so the microphone needs no extra
+package.
+
+On the phone, open Microphone and press Start. The stream stops when
+you leave the screen. To send the microphone with the webcam, turn on
+Also send the microphone in the Webcam settings.
+
+```sh
+flux mic           # the state
+flux mic stop
+```
+
+The source exists only while the phone streams. It goes away when the
+stream stops or fluxd stops.
+
+## Phone screen in a window
+
+Flux for Android can show its screen in a window on this computer. The
+window only shows the screen. It does not control the phone. The mirror
+needs `mpv` or `ffplay`:
+
+```sh
+sudo pacman -S mpv
+```
+
+On the phone, press Mirror screen and allow the capture. To stop, close
+the window, press Stop in the phone notification, or run:
+
+```sh
+flux screen        # the state
+flux screen stop
+```
+
+The window has the app id `flux-screen`. `dist/hyprland.lua` has a rule
+that makes it float.
+
 ## Open the window
 
 `flux open [page]` opens the plugin when `omarchy-shell` runs and the plugin

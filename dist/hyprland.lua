@@ -4,4 +4,6 @@
 -- Quickshell app id and the title "Flux".
 o.window("^flux$", { float = true, center = true, size = { 1180, 760 } })
 o.window({ class = "^org\\.quickshell$", title = "^Flux$" }, { float = true, center = true, size = { 1180, 760 } })
+-- The phone screen mirror window has the app id "flux-screen".
+o.window("^flux-screen$", { float = true, center = true })
 o.bind("SUPER + ALT + P", "Flux", { launch = "flux open" })

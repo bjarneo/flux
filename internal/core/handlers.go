@@ -81,6 +81,10 @@ func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.handleWebcam(dev, l, p)
 	case proto.TypeFluxDnd:
 		d.handleDnd(dev, p)
+	case proto.TypeFluxMic:
+		d.handleMic(dev, l, p)
+	case proto.TypeFluxScreen:
+		d.handleScreen(dev, l, p)
 	case proto.TypeSmsMessages:
 		d.handleSms(dev, p)
 	case proto.TypeTelephony:

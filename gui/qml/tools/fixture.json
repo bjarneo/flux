@@ -289,6 +289,22 @@
     "command": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
    }
   ],
+  "mic": {
+   "active": true,
+   "source": "Flux Microphone",
+   "from": "3f8e2a1c9b7d4e6fa0c5b8d2e1f47a93",
+   "fromName": "Pixel 8",
+   "rate": 48000,
+   "channels": 1
+  },
+  "screen": {
+   "active": true,
+   "from": "3f8e2a1c9b7d4e6fa0c5b8d2e1f47a93",
+   "fromName": "Pixel 8",
+   "width": 496,
+   "height": 1072,
+   "player": "mpv"
+  },
   "webcam": {
    "active": true,
    "device": "/dev/video51",

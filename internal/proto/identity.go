@@ -45,6 +45,12 @@ const (
 	// TypeFluxDnd carries the Do Not Disturb state, {"on": bool}. Each side
 	// sends it after a local change. Both sides send it.
 	TypeFluxDnd = "flux.dnd"
+	// TypeFluxMic starts and stops the phone as a microphone. Both sides
+	// send it.
+	TypeFluxMic = "flux.mic"
+	// TypeFluxScreen starts and stops the mirror of the phone screen. Both
+	// sides send it.
+	TypeFluxScreen = "flux.screen"
 )
 
 // Incoming lists the packet types that Flux accepts. The phone enables a
@@ -54,7 +60,7 @@ var Incoming = []string{
 	TypeShare, TypeShareUpdate, TypeNotification, TypeFindMyPhone,
 	TypeRunCommandRequest, TypeMpris, TypeMprisRequest, TypeSftp,
 	TypeSftpRequest, TypeSmsMessages, TypeConnectivity, TypeTelephony,
-	TypeFluxTunnel, TypeFluxWebcam, TypeFluxDnd,
+	TypeFluxTunnel, TypeFluxWebcam, TypeFluxDnd, TypeFluxMic, TypeFluxScreen,
 }
 
 // Outgoing lists the packet types that Flux sends.
@@ -64,6 +70,7 @@ var Outgoing = []string{
 	TypeFindMyPhone, TypeRunCommand, TypeMpris, TypeMprisRequest,
 	TypeSftpRequest, TypeSmsRequest, TypeSmsConversations,
 	TypeSmsConversation, TypeSftp, TypeFluxWebcam, TypeFluxDnd,
+	TypeFluxMic, TypeFluxScreen,
 }
 
 // Identity is the body of a kdeconnect.identity packet.

@@ -75,6 +75,8 @@ object Plugins {
             Types.SFTP -> Browse.onCredentials(core, d, p)
             Types.FLUX_WEBCAM -> org.omarchy.flux.webcam.WebcamSession.onPacket(core, d, p)
             Types.FLUX_DND -> DndSync.onPacket(core, d, p)
+            Types.FLUX_MIC -> org.omarchy.flux.mic.MicSession.onPacket(core, d, p)
+            Types.FLUX_SCREEN -> org.omarchy.flux.screen.ScreenSession.onPacket(core, d, p)
         }
     }
 
