@@ -78,6 +78,9 @@ dependencies {
     implementation(libs.androidx.camera.view)
     implementation(libs.androidx.camera.mlkit.vision)
     implementation(libs.mlkit.text.recognition)
+    // QR and barcodes with the bundled model, and the Play services document scanner.
+    implementation(libs.mlkit.barcode.scanning)
+    implementation(libs.mlkit.document.scanner)
 
     testImplementation(libs.junit)
     testImplementation(libs.slf4j.nop)

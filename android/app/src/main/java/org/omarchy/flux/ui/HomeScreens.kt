@@ -159,7 +159,7 @@ fun HomeScreen(
     val tiles = listOf(
         TileDef("⧉", "Send clipboard", guarded { Plugins.sendClipboard(FluxCore, d.id) }),
         TileDef("↑", "Send files", guarded { pickFiles.launch(arrayOf("*/*")) }),
-        TileDef("\u2317", "Scan text", guarded { onNavigate("scan") }),
+        TileDef("\u2317", "Camera", guarded { onNavigate("camera") }),
         TileDef("◎", "Touchpad", guarded { onNavigate("touchpad") }),
         TileDef("♪", "Media", guarded { onNavigate("media") }),
         TileDef("▷", "Presentation", guarded { onNavigate("present") }),

@@ -139,6 +139,62 @@ object Share {
     }
 
     /**
+     * Sends 1 file from the camera, such as a photo or a scanned PDF. The body
+     * gets [extra] fields, for example "photo" or "scan". [onResult] runs on
+     * an IO thread after the transfer ends.
+     */
+    fun sendCapture(core: FluxCore, id: String, uri: Uri, name: String, extra: Map<String, Any?>, onResult: (Result<Unit>) -> Unit) {
+        val d = core.device(id)
+        val cert = d?.certificate
+        val tls = currentTls()
+        if (d == null || cert == null || tls == null || !d.online) {
+            onResult(Result.failure(IllegalStateException("Not connected")))
+            return
+        }
+        core.io.execute {
+            val result = runCatching {
+                val resolver = core.app.contentResolver
+                var length = -1L
+                if (uri.scheme == "file") {
+                    length = java.io.File(uri.path!!).length()
+                } else {
+                    resolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
+                        if (c.moveToFirst() && !c.isNull(0)) length = c.getLong(0)
+                    }
+                }
+                // The protocol needs the exact size before the transfer.
+                var temp: java.io.File? = null
+                if (length < 0) {
+                    val t = java.io.File.createTempFile("flux-send", null, core.app.cacheDir)
+                    resolver.openInputStream(uri)!!.use { src -> t.outputStream().use { src.copyTo(it) } }
+                    length = t.length()
+                    temp = t
+                }
+                try {
+                    (temp?.inputStream() ?: resolver.openInputStream(uri)!!).use { input ->
+                        val server = Payload.openServer()
+                        val fields = listOf<Pair<String, Any?>>("filename" to name, "open" to false) + extra.toList()
+                        if (!d.send(Packet(Types.SHARE, bodyOf(*fields.toTypedArray()), payloadSize = length, payloadPort = server.localPort))) {
+                            server.close()
+                            error("Not connected")
+                        }
+                        Payload.send(tls, server, input, length, cert)
+                    }
+                } finally {
+                    temp?.delete()
+                }
+            }.onFailure { Log.w(TAG, "send $name failed", it) }
+            onResult(result)
+        }
+    }
+
+    /** Sends a share packet with the body fields. It returns false when the device has no link. */
+    fun sendFields(core: FluxCore, id: String, fields: List<Pair<String, Any?>>): Boolean {
+        val d = core.device(id) ?: return false
+        return d.send(Packet(Types.SHARE, bodyOf(*fields.toTypedArray())))
+    }
+
+    /**
      * Sends text from Scan text. The `scan` flag tells fluxd that the text
      * comes from the camera. It returns false when the device has no link.
      */

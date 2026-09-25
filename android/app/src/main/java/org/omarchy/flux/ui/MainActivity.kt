@@ -169,7 +169,7 @@ fun FluxRoot(activity: MainActivity) {
                 route.page == "present" -> PresentationScreen(device, activity, ::pop)
                 route.page == "commands" -> CommandsScreen(device, ::pop)
                 route.page == "browse" -> BrowseScreen(device, state.browse, ::pop)
-                route.page == "scan" -> ScanScreen(device, ::pop)
+                route.page == "camera" -> org.omarchy.flux.camera.CameraScreen(device, ::pop)
                 else -> HomeScreen(device, state, ::pop) { page -> push(Route(device.id, page)) }
             }
         }

@@ -1,4 +1,4 @@
-package org.omarchy.flux.ui
+package org.omarchy.flux.camera
 
 import android.Manifest
 import android.content.Intent
@@ -68,9 +68,8 @@ import org.omarchy.flux.scan.MlKitTextReader
 import org.omarchy.flux.scan.ScanBlock
 import org.omarchy.flux.scan.TextAssembly
 import org.omarchy.flux.scan.TextReader
-
-/** The largest side of a still image that Flux reads. It keeps memory use low. */
-private const val MAX_STILL_SIDE = 2048
+import org.omarchy.flux.ui.Palette
+import org.omarchy.flux.ui.T
 
 /** The state of the scan screen. */
 private sealed interface ScanPhase {
@@ -84,9 +83,9 @@ private sealed interface ScanPhase {
     data class Result(val image: Bitmap?, val text: String) : ScanPhase
 }
 
-/** Scan text: reads text with the camera or from a photo and sends it to the computer. */
+/** Text mode: reads text with the camera or from a photo and sends it to the computer. */
 @Composable
-fun ScanScreen(d: DeviceUi, onBack: () -> Unit) {
+fun TextMode(d: DeviceUi) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val reader: TextReader = remember { MlKitTextReader() }
@@ -167,7 +166,6 @@ fun ScanScreen(d: DeviceUi, onBack: () -> Unit) {
     }
 
     Column(Modifier.fillMaxSize()) {
-        TopBar("Scan text", onBack)
         if (!granted && phase == ScanPhase.Live) {
             CameraRationale(
                 onAllow = { askCamera.launch(Manifest.permission.CAMERA) },
@@ -252,12 +250,6 @@ private fun TextBoxes(blocks: List<ScanBlock>) {
 }
 
 @Composable
-private fun Still(image: Bitmap?) {
-    if (image == null) return
-    Image(image.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-}
-
-@Composable
 private fun LiveControls(onPhoto: () -> Unit, onCapture: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 20.dp),
@@ -296,40 +288,6 @@ private fun ResultControls(d: DeviceUi, text: String, onText: (String) -> Unit, 
     }
 }
 
-@Composable
-private fun CameraRationale(onAllow: () -> Unit, onSettings: () -> Unit, onPhoto: () -> Unit) {
-    Column(
-        Modifier.fillMaxSize().padding(horizontal = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        GlyphBox("⌗")
-        T("Allow the camera to scan text", size = 20, align = TextAlign.Center)
-        T(
-            "Flux reads the text on this phone. No image leaves the phone. Only the text that you send goes to the computer.",
-            color = Palette.body, align = TextAlign.Center, lineHeight = 1.45f,
-        )
-        FilledPill("Allow camera", onAllow)
-        OutlinedPill("Open app settings", onSettings)
-        OutlinedPill("From photo", onPhoto)
-    }
-}
-
-@Composable
-private fun FilledPill(label: String, onClick: () -> Unit) {
-    Box(
-        Modifier.clip(RoundedCornerShape(20.dp)).background(Palette.accent).clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 11.dp),
-    ) { T(label, color = Palette.onAccent, weight = FontWeight.Medium, maxLines = 1) }
-}
-
-@Composable
-private fun OutlinedPill(label: String, onClick: () -> Unit) {
-    Box(
-        Modifier.clip(RoundedCornerShape(20.dp)).border(1.dp, Palette.borderStrong, RoundedCornerShape(20.dp))
-            .clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 10.dp),
-    ) { T(label, color = Palette.accent, weight = FontWeight.Medium, maxLines = 1) }
-}
-
 /** Returns the captured frame as an upright bitmap. */
 private fun upright(image: ImageProxy): Bitmap {
     val bitmap = image.toBitmap()
@@ -339,12 +297,3 @@ private fun upright(image: ImageProxy): Bitmap {
     return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, m, true)
 }
 
-/** Decodes a photo upright, with its largest side at most [MAX_STILL_SIDE] pixels. */
-private fun decodeScaled(context: android.content.Context, uri: Uri): Bitmap =
-    ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri)) { decoder, info, _ ->
-        val w = info.size.width
-        val h = info.size.height
-        val scale = MAX_STILL_SIDE.toFloat() / maxOf(w, h)
-        if (scale < 1f) decoder.setTargetSize((w * scale).toInt(), (h * scale).toInt())
-        decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-    }
