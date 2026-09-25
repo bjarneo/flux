@@ -49,6 +49,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import org.omarchy.flux.core.CaptureKind
+import org.omarchy.flux.core.CaptureWatch
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.Plugins
@@ -279,8 +281,64 @@ fun HomeScreen(
                 FluxCore.setCallAlerts(!state.callAlerts)
             }
         }
+        SwitchRow(
+            Ic.dnd,
+            "Sync Do Not Disturb",
+            if (state.dndAccess) "Turn it on or off on 1 device, and the other follows" else "Tap to allow Do Not Disturb access",
+            checked = state.syncDnd && state.dndAccess,
+        ) {
+            if (!state.dndAccess) {
+                FluxCore.setSyncDnd(true)
+                runCatching { context.startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)) }
+            } else {
+                FluxCore.setSyncDnd(!state.syncDnd)
+            }
+        }
+        CaptureSwitches(state)
         Spacer(Modifier.height(96.dp))
     }
+}
+
+/**
+ * The switches that send new screenshots and camera photos. The first
+ * switch that turns on asks for access to photos.
+ */
+@Composable
+private fun CaptureSwitches(state: UiState) {
+    val context = LocalContext.current
+    var asking by remember { mutableStateOf<CaptureKind?>(null) }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        val kind = asking ?: return@rememberLauncherForActivityResult
+        asking = null
+        when {
+            CaptureWatch.hasAccess(context) -> FluxCore.setSendCaptures(kind, true)
+            // Access to selected photos only does not show new images.
+            else -> FluxCore.toast("Allow access to all photos, so that Flux sees new images")
+        }
+    }
+    fun toggle(kind: CaptureKind, on: Boolean) {
+        when {
+            on && state.mediaAccess -> FluxCore.setSendCaptures(kind, false)
+            state.mediaAccess -> FluxCore.setSendCaptures(kind, true)
+            else -> {
+                asking = kind
+                ask.launch(CaptureWatch.permissions())
+            }
+        }
+    }
+    val noAccess = "Tap to allow access to photos"
+    SwitchRow(
+        Ic.screenshot,
+        "Send new screenshots",
+        if (state.sendScreenshots && !state.mediaAccess) noAccess else "Each new screenshot goes to the computer",
+        checked = state.sendScreenshots && state.mediaAccess,
+    ) { toggle(CaptureKind.Screenshot, state.sendScreenshots) }
+    SwitchRow(
+        Ic.gallery,
+        "Send new photos",
+        if (state.sendPhotos && !state.mediaAccess) noAccess else "Each new camera photo goes to the computer",
+        checked = state.sendPhotos && state.mediaAccess,
+    ) { toggle(CaptureKind.Photo, state.sendPhotos) }
 }
 
 /** The connection and the battery of the computer. A computer that is not reachable gets help and a retry. */

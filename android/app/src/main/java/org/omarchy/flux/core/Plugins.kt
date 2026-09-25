@@ -25,6 +25,8 @@ object Plugins {
 
     fun onConnected(core: FluxCore, d: Device) {
         sendBattery(core, d)
+        // New images that no computer took yet go out now.
+        CaptureWatch.poke()
         if (core.foreground && core.settings.syncClipboard) {
             main.post {
                 val text = Android.clipboardText(core.app) ?: return@post
@@ -72,6 +74,7 @@ object Plugins {
             Types.MPRIS -> receiveMpris(d, p)
             Types.SFTP -> Browse.onCredentials(core, d, p)
             Types.FLUX_WEBCAM -> org.omarchy.flux.webcam.WebcamSession.onPacket(core, d, p)
+            Types.FLUX_DND -> DndSync.onPacket(core, d, p)
         }
     }
 

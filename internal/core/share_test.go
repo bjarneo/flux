@@ -5,7 +5,24 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"flux/internal/config"
 )
+
+func TestDestDir(t *testing.T) {
+	cfg := &config.Config{DownloadDir: "/tmp/dl", ScanDir: "/tmp/scan", PhotoDir: "/tmp/pics"}
+	cases := map[fileDest]string{
+		destDownload:   "/tmp/dl",
+		destScan:       "/tmp/scan",
+		destPhoto:      "/tmp/pics",
+		destScreenshot: "/tmp/pics/screenshots",
+	}
+	for kind, want := range cases {
+		if got := destDir(cfg, kind); got != want {
+			t.Errorf("kind %d: got %s, want %s", kind, got, want)
+		}
+	}
+}
 
 func TestWriteScan(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "flux", "scanned")

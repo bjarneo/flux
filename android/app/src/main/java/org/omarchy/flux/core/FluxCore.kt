@@ -176,6 +176,11 @@ object FluxCore {
                 devices = devices.values.map { it.snapshot() } + DebugDemo.devices(),
                 shareNotifications = settings.shareNotifications,
                 syncClipboard = settings.syncClipboard,
+                syncDnd = settings.syncDnd,
+                dndAccess = DndSync.hasAccess(app),
+                sendScreenshots = settings.sendScreenshots,
+                sendPhotos = settings.sendPhotos,
+                mediaAccess = CaptureWatch.hasAccess(app),
                 notificationAccess = Android.hasNotificationAccess(app),
                 callAlerts = settings.callAlerts,
                 callAccess = Android.hasPhoneState(app),
@@ -259,6 +264,22 @@ object FluxCore {
 
     fun setCallAlerts(on: Boolean) {
         settings.callAlerts = on
+        publish()
+    }
+
+    fun setSyncDnd(on: Boolean) {
+        settings.syncDnd = on
+        publish()
+    }
+
+    /** Turns on or off the sending of new images of [kind]. */
+    fun setSendCaptures(kind: CaptureKind, on: Boolean) {
+        when (kind) {
+            CaptureKind.Screenshot -> settings.sendScreenshots = on
+            CaptureKind.Photo -> settings.sendPhotos = on
+        }
+        CaptureWatch.setKind(app, kind, on)
+        CaptureWatch.refresh(app)
         publish()
     }
 }

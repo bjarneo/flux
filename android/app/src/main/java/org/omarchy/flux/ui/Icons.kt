@@ -68,6 +68,8 @@ object Ic {
     val notifications = R.drawable.ic_notifications
     val notificationsActive = R.drawable.ic_notifications_active
     val call = R.drawable.ic_call
+    val dnd = R.drawable.ic_do_not_disturb_on
+    val screenshot = R.drawable.ic_screenshot
 
     val previous = R.drawable.ic_skip_previous_fill
     val next = R.drawable.ic_skip_next_fill

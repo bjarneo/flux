@@ -125,6 +125,7 @@ func (d *Daemon) Snapshot() json.RawMessage {
 			"shareHome":        d.cfg.ShareHome,
 			"pauseMediaOnCall": d.cfg.PauseMediaOnCall,
 			"downloadDir":      d.cfg.DownloadPath(),
+			"syncDnd":          d.cfg.SyncDnd,
 		},
 		"webcam":   d.webcamViewLocked(),
 		"ringing":  d.ringing,
@@ -370,6 +371,8 @@ func (d *Daemon) setSetting(key string, value any) error {
 		d.cfg.ShareHome = b
 	case key == "pauseMediaOnCall" && isBool:
 		d.cfg.PauseMediaOnCall = b
+	case key == "syncDnd" && isBool:
+		d.cfg.SyncDnd = b
 	case key == "name" && isString:
 		d.cfg.Name = strings.TrimSpace(s)
 	case key == "downloadDir" && isString:

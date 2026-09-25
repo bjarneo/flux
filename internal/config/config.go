@@ -39,6 +39,8 @@ type Config struct {
 	// PauseMediaOnCall pauses the players on this computer while the
 	// phone rings or has a call, and plays them again after the call.
 	PauseMediaOnCall bool `toml:"pause_media_on_call"`
+	// SyncDnd syncs Do Not Disturb between this computer and the phone.
+	SyncDnd bool `toml:"sync_dnd"`
 	// GUI selects the window: "plugin" for the omarchy-shell plugin, "app"
 	// for flux-gui, or empty for the plugin when it is enabled.
 	GUI      string    `toml:"gui,omitempty"`
@@ -84,7 +86,7 @@ var mu sync.Mutex
 func Load() (*Config, error) {
 	mu.Lock()
 	defer mu.Unlock()
-	c := &Config{AutoClipboard: true, Notifications: true, ShareHome: true, PauseMediaOnCall: true}
+	c := &Config{AutoClipboard: true, Notifications: true, ShareHome: true, PauseMediaOnCall: true, SyncDnd: true}
 	data, err := os.ReadFile(Path())
 	if errors.Is(err, os.ErrNotExist) {
 		c.Commands = []Command{}
