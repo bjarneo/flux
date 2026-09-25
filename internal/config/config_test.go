@@ -80,3 +80,19 @@ func TestPhotoPath(t *testing.T) {
 		t.Errorf("photo_dir: %s, want %s", got, want)
 	}
 }
+
+func TestOffMarker(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	if IsOff() {
+		t.Fatal("a new config must be on")
+	}
+	if err := os.MkdirAll(filepath.Dir(OffPath()), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(OffPath(), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !IsOff() {
+		t.Fatal("the marker must turn fluxd off")
+	}
+}

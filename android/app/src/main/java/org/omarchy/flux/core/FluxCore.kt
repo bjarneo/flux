@@ -187,6 +187,7 @@ object FluxCore {
                 ringingFrom = ringingFrom,
                 browse = browse,
                 listeningUdp = backend?.listeningUdp ?: true,
+                enabled = settings.enabled,
             )
         }
         _state.value = snapshot
@@ -255,6 +256,25 @@ object FluxCore {
     fun setShareNotifications(on: Boolean) {
         settings.shareNotifications = on
         publish()
+    }
+
+    /** True unless the user turned Flux off. Call [init] first. */
+    val enabled: Boolean get() = settings.enabled
+
+    /**
+     * Turns Flux on or off. Off stops the service, which closes every link,
+     * stops discovery, and removes the notification. Flux stays off after a
+     * restart of the phone, until the user turns it on.
+     */
+    fun setEnabled(on: Boolean) {
+        settings.enabled = on
+        publish()
+        if (on) {
+            org.omarchy.flux.service.FluxService.start(app)
+        } else {
+            org.omarchy.flux.screen.ScreenSession.stop()
+            app.stopService(android.content.Intent(app, org.omarchy.flux.service.FluxService::class.java))
+        }
     }
 
     fun setSyncClipboard(on: Boolean) {

@@ -225,5 +225,8 @@ void FluxBackend::startDaemon(const QJSValue &cb)
         if (cb.isCallable())
             invoke(cb, {false, QStringLiteral("systemctl is not available")});
     });
-    proc->start(QStringLiteral("systemctl"), {QStringLiteral("--user"), QStringLiteral("start"), QStringLiteral("fluxd")});
+    // The button turns fluxd on, so it removes the marker of `flux off` first.
+    proc->start(QStringLiteral("sh"),
+                {QStringLiteral("-c"),
+                 QStringLiteral("rm -f \"${XDG_CONFIG_HOME:-$HOME/.config}/flux/off\"; systemctl --user start fluxd")});
 }

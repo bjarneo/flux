@@ -103,6 +103,7 @@ fun DevicesScreen(
                 FluxMark(28.dp)
                 Text("Flux", Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium)
                 IconButton(onClick = { refreshing = true }) { Sym(Ic.refresh, "Search again") }
+                AppMenu()
             }
             ThisPhoneCard(state)
 
@@ -139,6 +140,46 @@ fun DevicesScreen(
             }
             Spacer(Modifier.height(96.dp))
         }
+    }
+}
+
+/** The overflow menu of the device list. */
+@Composable
+private fun AppMenu() {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) { Sym(Ic.more, "More options") }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text("Turn off Flux") },
+                leadingIcon = { Sym(Ic.power) },
+                onClick = {
+                    open = false
+                    FluxCore.setEnabled(false)
+                },
+            )
+        }
+    }
+}
+
+/** The screen while Flux is off. The phone then runs no service and uses no network. */
+@Composable
+fun FluxOffScreen() {
+    val scheme = MaterialTheme.colorScheme
+    Column(
+        Modifier.fillMaxSize().padding(horizontal = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+    ) {
+        FluxMark(72.dp)
+        Text("Flux is off", style = MaterialTheme.typography.headlineSmall)
+        Text(
+            "This phone does not connect to computers, uses no network, and shows no notification. Computers show it as not reachable.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = scheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+        IconTextButton(Ic.power, "Turn on Flux", onClick = { FluxCore.setEnabled(true) })
     }
 }
 

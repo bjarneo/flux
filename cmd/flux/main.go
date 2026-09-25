@@ -56,6 +56,8 @@ Commands:
   approve remove         Stop the phone from approving sudo. Run it with sudo.
   watch                  Print each state change as one JSON line
   setup [--dry-run]      Start fluxd for this user and add the omarchy-shell plugin
+  off                    Stop fluxd, and do not start it at login
+  on                     Start fluxd, and start it at each login
   doctor                 Check the setup and print the fixes
   version                Print the version
 
@@ -119,6 +121,10 @@ func main() {
 		err = approveCmd(args, device)
 	case "watch":
 		err = watch()
+	case "off":
+		err = power(false)
+	case "on":
+		err = power(true)
 	case "setup":
 		err = setup(args)
 	case "doctor":

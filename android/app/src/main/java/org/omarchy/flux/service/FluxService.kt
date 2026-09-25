@@ -187,6 +187,10 @@ class FluxService : Service() {
         when (intent?.action) {
             ACTION_STOP_RING -> Ringer.stop(this)
             ACTION_APPROVE_DENY -> org.omarchy.flux.core.Approvals.deny(FluxCore)
+            ACTION_TURN_OFF -> {
+                FluxCore.setEnabled(false)
+                return START_NOT_STICKY
+            }
             ACTION_REFRESH -> {
                 FluxCore.rediscover()
                 // The device name can change in the system settings.
@@ -227,6 +231,14 @@ class FluxService : Service() {
             .setContentTitle("Flux")
             .setContentText(text)
             .setContentIntent(open)
+            .addAction(
+                R.drawable.ic_power_settings_new,
+                "Turn off",
+                PendingIntent.getService(
+                    this, 1, Intent(this, FluxService::class.java).setAction(ACTION_TURN_OFF),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                ),
+            )
             .setOngoing(true)
             .setSilent(true)
             .build()
@@ -237,9 +249,13 @@ class FluxService : Service() {
         const val ACTION_STOP_RING = "org.omarchy.flux.STOP_RING"
         const val ACTION_APPROVE_DENY = "org.omarchy.flux.APPROVE_DENY"
         const val ACTION_REFRESH = "org.omarchy.flux.REFRESH"
+        const val ACTION_TURN_OFF = "org.omarchy.flux.TURN_OFF"
         const val MDNS_TYPE = "_kdeconnect._udp"
 
         fun start(context: Context, action: String? = null) {
+            // Flux stays off until the user turns it on again.
+            FluxCore.init(context)
+            if (!FluxCore.enabled) return
             val i = Intent(context, FluxService::class.java)
             if (action != null) i.action = action
             runCatching { ContextCompat.startForegroundService(context, i) }

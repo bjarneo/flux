@@ -170,6 +170,7 @@ fun FluxRoot(activity: MainActivity) {
     Box(Modifier.fillMaxSize().background(Palette.background)) {
         Box(Modifier.fillMaxSize().systemBarsPadding()) {
             when {
+                !state.enabled -> FluxOffScreen()
                 device == null -> DevicesScreen(
                     state,
                     onOpen = { push(Route(it.id)) },

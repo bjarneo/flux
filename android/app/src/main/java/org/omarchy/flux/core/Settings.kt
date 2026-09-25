@@ -15,6 +15,14 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("syncClipboard", true)
         set(v) = prefs.edit().putBoolean("syncClipboard", v).apply()
 
+    /** False after the user turns Flux off. Flux then starts no service and uses no network. */
+    var enabled: Boolean
+        get() = prefs.getBoolean("enabled", true)
+        // It is written at once, so that the state survives when the process stops next.
+        set(v) {
+            prefs.edit().putBoolean("enabled", v).commit()
+        }
+
     /** Sends the calls of this phone to the computers. It needs the phone permission. */
     var callAlerts: Boolean
         get() = prefs.getBoolean("callAlerts", false)

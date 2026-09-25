@@ -391,6 +391,22 @@ connected, the helper stops at once, and `sudo` asks for the password.
 | `/etc/flux/approve/<user>.pub` | The public key of the phone. Root owns it. |
 | `/usr/lib/flux/flux-approve` | The PAM helper |
 
+## Turn Flux off
+
+To turn Flux off on the computer, run `flux off`. It stops `fluxd`, and it
+writes `~/.config/flux/off`, so that `fluxd` also stays off after the next
+login. `flux on`, or Start fluxd in the window, turns it on again:
+
+```sh
+flux off
+flux on
+```
+
+To turn Flux off on the phone, open the menu of the device list and press
+Turn off Flux, or press Turn off in the Flux notification. The phone then
+runs no service, uses no network, and shows no notification, also after a
+restart. Press Turn on Flux in the app to turn it on again.
+
 ## Open the window
 
 `flux open [page]` opens the plugin when `omarchy-shell` runs and the plugin

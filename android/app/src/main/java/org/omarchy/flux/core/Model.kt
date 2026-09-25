@@ -75,4 +75,6 @@ data class UiState(
     val ringingFrom: String? = null,
     val browse: BrowseState? = null,
     val listeningUdp: Boolean = true,
+    /** False while the user has turned Flux off. */
+    val enabled: Boolean = true,
 )

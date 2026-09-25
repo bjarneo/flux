@@ -25,6 +25,12 @@ func main() {
 	udpPort := flag.Int("udp-port", 0, "UDP discovery port (default 1716)")
 	tcpPort := flag.Int("tcp-port", 0, "first TCP port to try (default 1716)")
 	flag.Parse()
+	// systemd sets INVOCATION_ID. A fluxd that the user starts by hand
+	// ignores the marker of `flux off`.
+	if os.Getenv("INVOCATION_ID") != "" && config.IsOff() {
+		log.Printf("fluxd is off. To turn it on, run: flux on")
+		return
+	}
 	if *showVersion {
 		fmt.Println("fluxd", version)
 		return

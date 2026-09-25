@@ -53,6 +53,17 @@ type Config struct {
 // ConfigDir returns ~/.config/flux, or $XDG_CONFIG_HOME/flux.
 func ConfigDir() string { return filepath.Join(xdg("XDG_CONFIG_HOME", ".config"), "flux") }
 
+// OffPath returns the marker file that `flux off` writes. While it exists,
+// a fluxd that systemd starts exits at once, also when the service is
+// enabled for all users.
+func OffPath() string { return filepath.Join(ConfigDir(), "off") }
+
+// IsOff reports whether the user turned fluxd off with `flux off`.
+func IsOff() bool {
+	_, err := os.Stat(OffPath())
+	return err == nil
+}
+
 // DataDir returns ~/.local/share/flux, or $XDG_DATA_HOME/flux.
 func DataDir() string { return filepath.Join(xdg("XDG_DATA_HOME", ".local/share"), "flux") }
 

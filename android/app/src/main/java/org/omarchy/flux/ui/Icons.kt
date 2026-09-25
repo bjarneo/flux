@@ -48,6 +48,7 @@ object Ic {
     val send = R.drawable.ic_send
     val download = R.drawable.ic_download
     val sync = R.drawable.ic_sync
+    val power = R.drawable.ic_power_settings_new
 
     val phone = R.drawable.ic_smartphone
     val laptop = R.drawable.ic_computer

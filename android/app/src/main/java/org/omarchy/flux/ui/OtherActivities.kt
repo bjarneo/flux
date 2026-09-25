@@ -71,7 +71,7 @@ class ShareActivity : ComponentActivity() {
         }
         setContent {
             val state by FluxCore.state.collectAsStateWithLifecycle()
-            val targets = state.devices.filter { it.paired }
+            val targets = if (state.enabled) state.devices.filter { it.paired } else emptyList()
             FluxTheme {
                 val scheme = MaterialTheme.colorScheme
                 Box(Modifier.fillMaxSize().clickable { finish() }, contentAlignment = Alignment.Center) {
@@ -90,7 +90,11 @@ class ShareActivity : ComponentActivity() {
                                 Text("Send with Flux", style = MaterialTheme.typography.headlineSmall)
                             }
                             Text(
-                                if (targets.isEmpty()) "Pair a computer in Flux first." else "Choose a computer.",
+                                when {
+                                    !state.enabled -> "Flux is off. Turn it on in the Flux app to send."
+                                    targets.isEmpty() -> "Pair a computer in Flux first."
+                                    else -> "Choose a computer."
+                                },
                                 Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = scheme.onSurfaceVariant,
