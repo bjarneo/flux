@@ -35,5 +35,6 @@ Flux connects an Omarchy desktop to Flux for Android or Flux for macOS on the sa
 | [Releases](releasing.md) | GitHub workflows, AUR publication, APK signatures, and secrets |
 | [Agent skill](agents.md) | Skill installation, scope, and example prompts |
 | [Approval security design](approve.md) | Trust anchors, signatures, enrollment, and failure behavior |
+| [macOS client status](macos-status.md) | Build plan, current state, and what was verified against `fluxd` |
 
 Return to the [project README](../README.md).
