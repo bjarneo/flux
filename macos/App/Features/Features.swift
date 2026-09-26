@@ -9,6 +9,7 @@ enum PluginRegistry {
     static func make() -> [FluxPlugin] {
         [
             PingPlugin(),
+            MicPlugin(),
         ]
     }
 }
@@ -19,6 +20,7 @@ struct FeatureSections: View {
 
     var body: some View {
         Group {
+            MicSection(device: device)
         }
     }
 }
@@ -37,6 +39,7 @@ struct FeatureMenuItems: View {
 
     var body: some View {
         Group {
+            MicMenuItem(device: device)
         }
     }
 }
