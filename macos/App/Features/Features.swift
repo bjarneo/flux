@@ -18,6 +18,7 @@ enum PluginRegistry {
             SharePlugin(),
             ClipboardPlugin(),
             CaptureWatchPlugin(),
+            ApprovePlugin(),
         ]
     }
 }
@@ -33,6 +34,7 @@ struct FeatureSections: View {
             MicSection(device: device)
             SystemSection(device: device)
             BrowseSection(device: device)
+            ApproveSection(device: device)
         }
     }
 }
@@ -57,6 +59,7 @@ struct FeatureMenuItems: View {
             MicMenuItem(device: device)
             RingMenuItem(device: device)
             BrowseMenuItem(device: device)
+            ApproveMenuItem(device: device)
         }
     }
 }
@@ -68,6 +71,7 @@ enum FeatureHooks {
         SystemFeature.didLaunch(model: model)
         BrowseFeature.didLaunch()
         ShareServices.install(model: model)
+        ApprovePromptWindow.install(model: model)
     }
 
     /// Files dropped on the Dock icon or opened with Flux.
