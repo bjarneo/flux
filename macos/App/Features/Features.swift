@@ -10,6 +10,10 @@ enum PluginRegistry {
         [
             PingPlugin(),
             MicPlugin(),
+            NotificationsPlugin(),
+            FindMyPhonePlugin(),
+            BatteryPlugin(),
+            DndPlugin(),
         ]
     }
 }
@@ -21,6 +25,7 @@ struct FeatureSections: View {
     var body: some View {
         Group {
             MicSection(device: device)
+            SystemSection(device: device)
         }
     }
 }
@@ -29,6 +34,7 @@ struct FeatureSections: View {
 struct FeatureSettings: View {
     var body: some View {
         Group {
+            DndSettings()
         }
     }
 }
@@ -40,6 +46,7 @@ struct FeatureMenuItems: View {
     var body: some View {
         Group {
             MicMenuItem(device: device)
+            RingMenuItem(device: device)
         }
     }
 }
@@ -48,6 +55,7 @@ struct FeatureMenuItems: View {
 enum FeatureHooks {
     /// Runs once after launch, before the network starts.
     static func didLaunch(model: AppModel) {
+        SystemFeature.didLaunch(model: model)
     }
 
     /// Files dropped on the Dock icon or opened with Flux.
