@@ -9,6 +9,8 @@ enum PluginRegistry {
     static func make() -> [FluxPlugin] {
         [
             PingPlugin(),
+            WebcamPlugin(),
+            ScreenPlugin(),
         ]
     }
 }
@@ -19,6 +21,7 @@ struct FeatureSections: View {
 
     var body: some View {
         Group {
+            StreamSection(device: device)
         }
     }
 }
@@ -37,6 +40,7 @@ struct FeatureMenuItems: View {
 
     var body: some View {
         Group {
+            StreamMenuItems(device: device)
         }
     }
 }
