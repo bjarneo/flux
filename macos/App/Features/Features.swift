@@ -16,6 +16,8 @@ enum PluginRegistry {
             MacMediaPlugin(),
             RunCommandPlugin(),
             BrowsePlugin(),
+            WebcamPlugin(),
+            ScreenPlugin(),
             MicPlugin(),
             NotificationsPlugin(),
             FindMyPhonePlugin(),
@@ -37,6 +39,7 @@ struct FeatureSections: View {
             MediaSection(device: device)
             CommandsSection(device: device)
             BrowseSection(device: device)
+            StreamSection(device: device)
             MicSection(device: device)
             SystemSection(device: device)
             ApproveSection(device: device)
@@ -65,6 +68,7 @@ struct FeatureMenuItems: View {
             MediaMenuItems(device: device)
             CommandsMenu(device: device)
             BrowseMenuItem(device: device)
+            StreamMenuItems(device: device)
             MicMenuItem(device: device)
             RingMenuItem(device: device)
             ApproveMenuItem(device: device)
