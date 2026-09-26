@@ -9,6 +9,7 @@ enum PluginRegistry {
     static func make() -> [FluxPlugin] {
         [
             PingPlugin(),
+            ApprovePlugin(),
         ]
     }
 }
@@ -19,6 +20,7 @@ struct FeatureSections: View {
 
     var body: some View {
         Group {
+            ApproveSection(device: device)
         }
     }
 }
@@ -37,6 +39,7 @@ struct FeatureMenuItems: View {
 
     var body: some View {
         Group {
+            ApproveMenuItem(device: device)
         }
     }
 }
@@ -45,6 +48,7 @@ struct FeatureMenuItems: View {
 enum FeatureHooks {
     /// Runs once after launch, before the network starts.
     static func didLaunch(model: AppModel) {
+        ApprovePromptWindow.install(model: model)
     }
 
     /// Files dropped on the Dock icon or opened with Flux.
