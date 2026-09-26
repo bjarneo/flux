@@ -174,10 +174,20 @@ func setupPlugin(dry bool, run func(string, string, ...string) error) error {
 
 // copyPlugin copies the plugin as `omarchy plugin validate` wants it: real
 // files, no symlinks, and no tools folder. From a checkout, the shared
-// views go into Flux/.
+// views go into Flux/. From the system install, Flux/ is already real
+// files and is copied as is.
 func copyPlugin(src, views, dest string) error {
 	skip := func(rel string) bool {
-		return rel == "tools" || strings.HasPrefix(rel, "tools/") || rel == "Flux"
+		if rel == "tools" || strings.HasPrefix(rel, "tools/") {
+			return true
+		}
+		// From a checkout, Flux is a symlink to ../qml, replaced by
+		// views below. From the system install, Flux holds the real
+		// shared views and must be kept.
+		if views != "" && (rel == "Flux" || strings.HasPrefix(rel, "Flux/")) {
+			return true
+		}
+		return false
 	}
 	if err := copyTree(src, dest, skip); err != nil {
 		return err
