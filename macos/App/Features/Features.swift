@@ -9,6 +9,9 @@ enum PluginRegistry {
     static func make() -> [FluxPlugin] {
         [
             PingPlugin(),
+            SharePlugin(),
+            ClipboardPlugin(),
+            CaptureWatchPlugin(),
         ]
     }
 }
@@ -19,6 +22,8 @@ struct FeatureSections: View {
 
     var body: some View {
         Group {
+            ShareSection(device: device)
+            ClipboardSection(device: device)
         }
     }
 }
@@ -27,6 +32,7 @@ struct FeatureSections: View {
 struct FeatureSettings: View {
     var body: some View {
         Group {
+            ShareSettings()
         }
     }
 }
@@ -37,6 +43,7 @@ struct FeatureMenuItems: View {
 
     var body: some View {
         Group {
+            ShareMenuItems(device: device)
         }
     }
 }
@@ -45,9 +52,11 @@ struct FeatureMenuItems: View {
 enum FeatureHooks {
     /// Runs once after launch, before the network starts.
     static func didLaunch(model: AppModel) {
+        ShareServices.install(model: model)
     }
 
     /// Files dropped on the Dock icon or opened with Flux.
     static func open(urls: [URL], model: AppModel) {
+        ShareActions.open(urls: urls, model: model)
     }
 }
