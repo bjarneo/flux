@@ -34,6 +34,7 @@ struct FeatureSections: View {
         Group {
             ShareSection(device: device)
             ClipboardSection(device: device)
+            CameraSection(device: device)
             MediaSection(device: device)
             CommandsSection(device: device)
             BrowseSection(device: device)
@@ -62,6 +63,7 @@ struct FeatureMenuItems: View {
     var body: some View {
         Group {
             ShareMenuItems(device: device)
+            CameraMenuItem(device: device)
             MediaMenuItems(device: device)
             CommandsMenu(device: device)
             BrowseMenuItem(device: device)
