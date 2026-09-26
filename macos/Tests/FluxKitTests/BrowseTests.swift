@@ -1,0 +1,111 @@
+import XCTest
+@testable import FluxKit
+
+final class BrowseTests: XCTestCase {
+    private func offer(_ line: String) -> SftpOffer? { SftpOffer.parse(Packet.parse(line)!) }
+
+    func testTunnelOfferFromFluxd() throws {
+        let o = try XCTUnwrap(offer(#"{"id":1,"type":"kdeconnect.sftp","body":{"tunnel":"s1","user":"kdeconnect","password":"pw","path":"/home/u","multiPaths":["/home/u","/home/u/Pictures"],"pathNames":["Home","Pictures"]}}"#))
+        XCTAssertTrue(o.viaTunnel)
+        XCTAssertEqual(o.tunnel, "s1")
+        XCTAssertEqual(o.user, "kdeconnect")
+        XCTAssertEqual(o.password, "pw")
+        XCTAssertEqual(o.roots, [BrowseRoot(name: "Home", path: "/home/u"), BrowseRoot(name: "Pictures", path: "/home/u/Pictures")])
+    }
+
+    func testDirectOfferFallsBackToHomeRoot() throws {
+        let o = try XCTUnwrap(offer(#"{"id":1,"type":"kdeconnect.sftp","body":{"ip":"192.168.1.5","port":1739,"user":"kdeconnect","password":"pw","path":"/"}}"#))
+        XCTAssertFalse(o.viaTunnel)
+        XCTAssertEqual(o.ip, "192.168.1.5")
+        XCTAssertEqual(o.port, 1739)
+        XCTAssertEqual(o.roots, [BrowseRoot(name: "Home", path: "/")])
+    }
+
+    func testAddressWinsOverTunnel() throws {
+        let o = try XCTUnwrap(offer(#"{"id":1,"type":"kdeconnect.sftp","body":{"ip":"10.0.0.2","port":1740,"tunnel":"t","user":"k","password":"p"}}"#))
+        XCTAssertFalse(o.viaTunnel)
+        XCTAssertEqual(o.path, "/")
+        // Without an IP, the tunnel wins even with a port.
+        let t = try XCTUnwrap(offer(#"{"id":1,"type":"kdeconnect.sftp","body":{"ip":"","port":1740,"tunnel":"t","user":"k","password":"p"}}"#))
+        XCTAssertTrue(t.viaTunnel)
+        XCTAssertNil(t.ip)
+    }
+
+    func testMismatchedRootListsFallBackToPath() throws {
+        let o = try XCTUnwrap(offer(#"{"id":1,"type":"kdeconnect.sftp","body":{"tunnel":"t","user":"k","password":"p","path":"/home/u","multiPaths":["/home/u","/srv"],"pathNames":["Home"]}}"#))
+        XCTAssertEqual(o.roots, [BrowseRoot(name: "Home", path: "/home/u")])
+    }
+
+    func testRejectedOffers() {
+        XCTAssertNil(offer(#"{"id":1,"type":"kdeconnect.sftp","body":{"errorMessage":"no"}}"#))
+        XCTAssertNil(offer(#"{"id":1,"type":"kdeconnect.sftp","body":{"errorMessage":"","tunnel":"t","user":"k","password":"p"}}"#))
+        XCTAssertNil(offer(#"{"id":1,"type":"kdeconnect.sftp","body":{"user":"k","password":"p"}}"#))
+        XCTAssertNil(offer(#"{"id":1,"type":"kdeconnect.sftp","body":{"tunnel":"","user":"k","password":"p"}}"#))
+        XCTAssertNil(offer(#"{"id":1,"type":"kdeconnect.sftp","body":{"tunnel":"t","password":"p"}}"#))
+        XCTAssertNil(offer(#"{"id":1,"type":"kdeconnect.sftp.request","body":{"tunnel":"t","user":"k","password":"p"}}"#))
+    }
+
+    func testListingHidesDotFilesAndSortsFoldersFirst() {
+        let raw = [
+            BrowseEntry(name: "b.txt", path: "/h/b.txt", dir: false, size: 1),
+            BrowseEntry(name: ".config", path: "/h/.config", dir: true, size: 0),
+            BrowseEntry(name: "Zeta", path: "/h/Zeta", dir: true, size: 0),
+            BrowseEntry(name: "A.txt", path: "/h/A.txt", dir: false, size: 2),
+            BrowseEntry(name: "alpha", path: "/h/alpha", dir: true, size: 0),
+        ]
+        XCTAssertEqual(BrowseEntry.listing(raw).map(\.name), ["alpha", "Zeta", "A.txt", "b.txt"])
+    }
+
+    func testDirectoryBits() {
+        XCTAssertTrue(BrowseEntry.isDirectory(permissions: 0o040755))
+        XCTAssertFalse(BrowseEntry.isDirectory(permissions: 0o100644))
+        // A symbolic link is not a folder, even when its target is one.
+        XCTAssertFalse(BrowseEntry.isDirectory(permissions: 0o120777))
+        XCTAssertFalse(BrowseEntry.isDirectory(permissions: nil))
+    }
+
+    func testParentPath() {
+        XCTAssertEqual(BrowsePath.parent("/home/u/Documents"), "/home/u")
+        XCTAssertEqual(BrowsePath.parent("/home/u/Documents/"), "/home/u")
+        XCTAssertEqual(BrowsePath.parent("/home"), "/")
+        XCTAssertEqual(BrowsePath.parent("/"), "/")
+        XCTAssertEqual(BrowsePath.join("/", "etc"), "/etc")
+        XCTAssertEqual(BrowsePath.join("/home/u", "a"), "/home/u/a")
+    }
+
+    func testDeepestRootAndComponentBoundary() {
+        let roots = [BrowseRoot(name: "Home", path: "/home/u"), BrowseRoot(name: "Downloads", path: "/home/u/Downloads/")]
+        XCTAssertEqual(BrowsePath.root(of: "/home/u/Downloads/x", in: roots)?.name, "Downloads")
+        XCTAssertEqual(BrowsePath.root(of: "/home/u/Documents", in: roots)?.name, "Home")
+        XCTAssertNil(BrowsePath.root(of: "/home/user2", in: roots))
+        XCTAssertTrue(BrowsePath.isRoot("/home/u/Downloads", in: roots))
+        XCTAssertFalse(BrowsePath.isRoot("/home/u/Documents", in: roots))
+    }
+
+    func testCrumbsStartAtTheRootName() {
+        let roots = [BrowseRoot(name: "Home", path: "/home/u"), BrowseRoot(name: "Downloads", path: "/home/u/Downloads")]
+        XCTAssertEqual(BrowsePath.crumbs("/home/u/Documents/Work", roots: roots), [
+            BrowseRoot(name: "Home", path: "/home/u"),
+            BrowseRoot(name: "Documents", path: "/home/u/Documents"),
+            BrowseRoot(name: "Work", path: "/home/u/Documents/Work"),
+        ])
+        XCTAssertEqual(BrowsePath.crumbs("/home/u/Downloads", roots: roots), [BrowseRoot(name: "Downloads", path: "/home/u/Downloads")])
+        XCTAssertEqual(BrowsePath.crumbs("/srv/x", roots: roots), [BrowseRoot(name: "/", path: "/"), BrowseRoot(name: "srv", path: "/srv"), BrowseRoot(name: "x", path: "/srv/x")])
+    }
+
+    func testDownloadNames() {
+        XCTAssertEqual(BrowseDownload.safeName("report.pdf"), "report.pdf")
+        XCTAssertEqual(BrowseDownload.safeName("../../etc/passwd"), "passwd")
+        XCTAssertEqual(BrowseDownload.safeName("a\\b.txt"), "b.txt")
+        XCTAssertEqual(BrowseDownload.safeName(".."), "download")
+        XCTAssertEqual(BrowseDownload.safeName(""), "download")
+
+        let folder = URL(fileURLWithPath: "/tmp/dl")
+        let taken: Set<String> = ["/tmp/dl/a.txt", "/tmp/dl/a (2).txt", "/tmp/dl/notes"]
+        let exists = { (u: URL) in taken.contains(u.path) }
+        XCTAssertEqual(BrowseDownload.uniqueURL(for: "b.txt", in: folder, exists: exists).path, "/tmp/dl/b.txt")
+        XCTAssertEqual(BrowseDownload.uniqueURL(for: "a.txt", in: folder, exists: exists).path, "/tmp/dl/a (3).txt")
+        XCTAssertEqual(BrowseDownload.uniqueURL(for: "notes", in: folder, exists: exists).path, "/tmp/dl/notes (2)")
+        XCTAssertEqual(BrowseDownload.uniqueURL(for: "a.tar.gz", in: folder, exists: { $0.lastPathComponent == "a.tar.gz" }).lastPathComponent, "a.tar (2).gz")
+    }
+}

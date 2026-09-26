@@ -13,6 +13,9 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-certificates.git", from: "1.5.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", "3.8.0"..<"5.0.0"),
         .package(url: "https://github.com/apple/swift-asn1.git", from: "1.1.0"),
+        // SSH and SFTP client for Browse files. 0.12.1 moves swift-nio-ssh to a
+        // third-party fork, so stay on 0.12.0, which uses the maintainer's fork.
+        .package(url: "https://github.com/orlandos-nl/Citadel.git", exact: "0.12.0"),
     ],
     targets: [
         .target(
@@ -28,6 +31,7 @@ let package = Package(
                 .product(name: "Crypto", package: "swift-crypto"),
                 .product(name: "_CryptoExtras", package: "swift-crypto"),
                 .product(name: "SwiftASN1", package: "swift-asn1"),
+                .product(name: "Citadel", package: "Citadel"),
             ],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
