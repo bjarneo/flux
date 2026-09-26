@@ -97,6 +97,15 @@ The release build runs R8 and checks release-only build errors.
 Without release credentials, it produces an unsigned APK.
 See [Android tools](android.md#test) for a test peer and phone screenshots.
 
+## macOS checks
+
+```sh
+make test-macos macos
+```
+
+The tests cover packets, certificates, the verification key, and the wire formats and logic of each feature.
+See [Flux for macOS](macos.md#test-against-a-computer-on-the-same-mac) to test the app against a local `fluxd`.
+
 ## Package and workflow checks
 
 ```sh
@@ -124,7 +133,8 @@ The [release guide](releasing.md) covers the archive-based AUR recipe.
 | Go CLI or daemon | `make test vet` and the relevant package tests |
 | Shared QML or host | `make build-gui snapshot` and both host contracts |
 | Android | JVM tests, lint, debug build, and release build |
-| Protocol | Go and Kotlin tests, plus the two-daemon end-to-end test |
+| macOS | `make test-macos macos`, then a run against `fluxd` |
+| Protocol | Go, Kotlin, and Swift tests, plus the two-daemon end-to-end test |
 | Approval | Read `docs/approve.md`, then run Go and Android approval tests |
 | Package or workflow | Shell syntax, `actionlint`, package build, and release-generator tests |
 

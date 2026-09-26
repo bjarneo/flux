@@ -31,6 +31,7 @@ targets:
         NSMicrophoneUsageDescription: Flux streams the microphone to your computer.
         NSAppleEventsUsageDescription: Flux lets your computer control music playback on this Mac.
         NSPhotoLibraryUsageDescription: Flux sends each new photo in your library to your computers when you turn on Send new photos.
+        NSDownloadsFolderUsageDescription: Flux saves the files that your computers send to this Mac.
         CFBundleDocumentTypes:
           - CFBundleTypeName: File
             CFBundleTypeRole: Viewer
