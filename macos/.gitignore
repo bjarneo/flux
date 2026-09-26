@@ -1,0 +1,5 @@
+.build/
+.swiftpm/
+build/
+Flux.xcodeproj/
+App/Info.plist

@@ -1,0 +1,44 @@
+name: Flux
+options:
+  bundleIdPrefix: org.omarchy
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+packages:
+  FluxKit:
+    path: .
+targets:
+  Flux:
+    type: application
+    platform: macOS
+    sources:
+      - App
+    dependencies:
+      - package: FluxKit
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Flux
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.utilities
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSHumanReadableCopyright: ""
+        NSLocalNetworkUsageDescription: Flux finds and connects to your Omarchy computers on the local network.
+        NSBonjourServices:
+          - _kdeconnect._udp
+        NSCameraUsageDescription: Flux streams the camera to your computer and captures photos and scans.
+        NSMicrophoneUsageDescription: Flux streams the microphone to your computer.
+        NSAppleEventsUsageDescription: Flux lets your computer control music playback on this Mac.
+    settings:
+      base:
+        PRODUCT_NAME: Flux
+        PRODUCT_BUNDLE_IDENTIFIER: org.omarchy.flux.mac
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        DEVELOPMENT_TEAM: ""
+        ENABLE_HARDENED_RUNTIME: NO
+        COMBINE_HIDPI_IMAGES: YES
