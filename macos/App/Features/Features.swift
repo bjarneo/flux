@@ -15,6 +15,9 @@ enum PluginRegistry {
             BatteryPlugin(),
             DndPlugin(),
             BrowsePlugin(),
+            SharePlugin(),
+            ClipboardPlugin(),
+            CaptureWatchPlugin(),
         ]
     }
 }
@@ -25,6 +28,8 @@ struct FeatureSections: View {
 
     var body: some View {
         Group {
+            ShareSection(device: device)
+            ClipboardSection(device: device)
             MicSection(device: device)
             SystemSection(device: device)
             BrowseSection(device: device)
@@ -36,6 +41,7 @@ struct FeatureSections: View {
 struct FeatureSettings: View {
     var body: some View {
         Group {
+            ShareSettings()
             DndSettings()
         }
     }
@@ -47,6 +53,7 @@ struct FeatureMenuItems: View {
 
     var body: some View {
         Group {
+            ShareMenuItems(device: device)
             MicMenuItem(device: device)
             RingMenuItem(device: device)
             BrowseMenuItem(device: device)
@@ -60,9 +67,11 @@ enum FeatureHooks {
     static func didLaunch(model: AppModel) {
         SystemFeature.didLaunch(model: model)
         BrowseFeature.didLaunch()
+        ShareServices.install(model: model)
     }
 
     /// Files dropped on the Dock icon or opened with Flux.
     static func open(urls: [URL], model: AppModel) {
+        ShareActions.open(urls: urls, model: model)
     }
 }

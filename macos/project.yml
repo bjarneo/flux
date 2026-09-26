@@ -30,6 +30,28 @@ targets:
         NSCameraUsageDescription: Flux streams the camera to your computer and captures photos and scans.
         NSMicrophoneUsageDescription: Flux streams the microphone to your computer.
         NSAppleEventsUsageDescription: Flux lets your computer control music playback on this Mac.
+        NSPhotoLibraryUsageDescription: Flux sends each new photo in your library to your computers when you turn on Send new photos.
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: File
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - public.item
+        NSServices:
+          - NSMenuItem:
+              default: Send to Flux
+            NSMessage: sendFilesToFlux
+            NSPortName: Flux
+            NSRequiredContext: {}
+            NSSendFileTypes:
+              - public.item
+          - NSMenuItem:
+              default: Send to Flux
+            NSMessage: sendTextToFlux
+            NSPortName: Flux
+            NSRequiredContext: {}
+            NSSendTypes:
+              - public.utf8-plain-text
     settings:
       base:
         PRODUCT_NAME: Flux
