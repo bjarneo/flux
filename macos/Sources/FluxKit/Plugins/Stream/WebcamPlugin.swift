@@ -16,6 +16,9 @@ public final class WebcamModel {
     public internal(set) var cameraError: String?
     /// A small copy of the frames while the camera runs.
     public internal(set) var preview: CGImage?
+    /// "Also send the microphone": the microphone streams to the computer
+    /// while the webcam is live.
+    public internal(set) var sendsMicrophone = false
 
     init() {}
 }
@@ -35,6 +38,7 @@ public final class WebcamPlugin: FluxPlugin, @unchecked Sendable {
     /// The shortest time between 2 config messages to the computer, while a
     /// slider moves.
     private static let configInterval = 0.12
+    private static let microphoneKey = "webcam.withMicrophone"
 
     public let incoming = [PacketType.fluxWebcam]
     public let outgoing = [PacketType.fluxWebcam]
@@ -58,6 +62,9 @@ public final class WebcamPlugin: FluxPlugin, @unchecked Sendable {
     private var status = StreamStatus()
     private var applied = WebcamConfig()
     private var sendPending = false
+    /// True while the webcam runs a microphone stream that it started. Only
+    /// the main thread uses it.
+    private var microphoneByWebcam = false
 
     @MainActor
     public init() {
@@ -83,6 +90,8 @@ public final class WebcamPlugin: FluxPlugin, @unchecked Sendable {
         }
         publishCameras(cameras)
         publishConfig()
+        let sendsMicrophone = core.defaults.bool(forKey: Self.microphoneKey)
+        ui { $0.sendsMicrophone = sendsMicrophone }
     }
 
     /// True when the user did not let Flux use the camera.
@@ -132,6 +141,27 @@ public final class WebcamPlugin: FluxPlugin, @unchecked Sendable {
             return c
         }
         if let next { changed(next) }
+    }
+
+    /// Turns "Also send the microphone" on or off. Turning it on asks for the
+    /// microphone permission when macOS has not asked yet, and stays off when
+    /// the user denies it.
+    public func setSendsMicrophone(_ on: Bool) {
+        guard on else { return applySendsMicrophone(false) }
+        Task {
+            var granted = MicPermission.current == .granted
+            if MicPermission.current == .undetermined { granted = await AVCaptureDevice.requestAccess(for: .audio) }
+            if !granted { core?.toast("Allow the microphone for Flux to send it with the webcam") }
+            applySendsMicrophone(granted)
+        }
+    }
+
+    private func applySendsMicrophone(_ on: Bool) {
+        core?.defaults.set(on, forKey: Self.microphoneKey)
+        ui { [weak self] m in
+            m.sendsMicrophone = on
+            self?.syncMicrophone()
+        }
     }
 
     /// Sets the neutral image values. The shape, the quality, and the camera stay.
@@ -343,6 +373,24 @@ public final class WebcamPlugin: FluxPlugin, @unchecked Sendable {
             guard let self else { return }
             m.status = self.lock.withLock { self.status }
             if !m.status.active { m.preview = nil }
+            self.syncMicrophone()
+        }
+    }
+
+    /// Starts the microphone when the webcam goes live with "Also send the
+    /// microphone" on, and stops the microphone that it started when the
+    /// webcam stops or the option turns off.
+    @MainActor
+    private func syncMicrophone() {
+        guard let mic = core?.plugin(MicPlugin.self) else { return }
+        let status = model.status
+        if status.phase == .live, model.sendsMicrophone, MicPermission.current == .granted,
+           !mic.model.status.active, let deviceId = status.deviceId {
+            mic.start(deviceId)
+            microphoneByWebcam = true
+        } else if (!status.active || !model.sendsMicrophone) && microphoneByWebcam {
+            microphoneByWebcam = false
+            if mic.model.status.active { mic.stop() }
         }
     }
 

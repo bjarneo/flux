@@ -104,6 +104,10 @@ private struct WebcamSection: View {
             }
             .pickerStyle(.segmented)
             Toggle("Mirror the image", isOn: binding(\.mirror))
+            Toggle(isOn: Binding(get: { model.sendsMicrophone }, set: { plugin.setSendsMicrophone($0) })) {
+                Text("Also send the microphone")
+                Text("Apps on the computer also get Flux Microphone")
+            }
             if model.caps.whiteBalance.count > 1 {
                 Picker("White balance", selection: binding(\.whiteBalance)) {
                     ForEach(model.caps.whiteBalance, id: \.self) { Text($0.capitalized).tag($0) }
