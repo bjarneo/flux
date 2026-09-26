@@ -9,6 +9,9 @@ enum PluginRegistry {
     static func make() -> [FluxPlugin] {
         [
             PingPlugin(),
+            MprisPlugin(),
+            MacMediaPlugin(),
+            RunCommandPlugin(),
         ]
     }
 }
@@ -19,6 +22,8 @@ struct FeatureSections: View {
 
     var body: some View {
         Group {
+            MediaSection(device: device)
+            CommandsSection(device: device)
         }
     }
 }
@@ -27,6 +32,7 @@ struct FeatureSections: View {
 struct FeatureSettings: View {
     var body: some View {
         Group {
+            MediaSettings()
         }
     }
 }
@@ -37,6 +43,8 @@ struct FeatureMenuItems: View {
 
     var body: some View {
         Group {
+            MediaMenuItems(device: device)
+            CommandsMenu(device: device)
         }
     }
 }
