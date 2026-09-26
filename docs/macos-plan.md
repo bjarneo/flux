@@ -177,5 +177,5 @@ Each feature gets its own branch, worktree, and isolated `fluxd`, then merges in
 
 ## Next
 
-- [ ] Push `macos-client` to the fork.
+- [x] Push `macos-client` to the fork.
 - [ ] Run the unchecked checks above.
