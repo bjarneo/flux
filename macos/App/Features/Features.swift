@@ -14,6 +14,7 @@ enum PluginRegistry {
             FindMyPhonePlugin(),
             BatteryPlugin(),
             DndPlugin(),
+            BrowsePlugin(),
         ]
     }
 }
@@ -26,6 +27,7 @@ struct FeatureSections: View {
         Group {
             MicSection(device: device)
             SystemSection(device: device)
+            BrowseSection(device: device)
         }
     }
 }
@@ -47,6 +49,7 @@ struct FeatureMenuItems: View {
         Group {
             MicMenuItem(device: device)
             RingMenuItem(device: device)
+            BrowseMenuItem(device: device)
         }
     }
 }
@@ -56,6 +59,7 @@ enum FeatureHooks {
     /// Runs once after launch, before the network starts.
     static func didLaunch(model: AppModel) {
         SystemFeature.didLaunch(model: model)
+        BrowseFeature.didLaunch()
     }
 
     /// Files dropped on the Dock icon or opened with Flux.

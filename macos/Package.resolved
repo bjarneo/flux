@@ -1,6 +1,24 @@
 {
-  "originHash" : "6ecab9a51410447b874d659f30cd817842b6aa6a016aac0bdc32e8a72bd6176d",
+  "originHash" : "c651889fb6f9efc99ceb8a066139f749731269dc758450935ecb78bdd21784a6",
   "pins" : [
+    {
+      "identity" : "bigint",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/attaswift/BigInt.git",
+      "state" : {
+        "revision" : "e07e00fa1fd435143a2dcf8b7eec9a7710b2fdfe",
+        "version" : "5.7.0"
+      }
+    },
+    {
+      "identity" : "citadel",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/orlandos-nl/Citadel.git",
+      "state" : {
+        "revision" : "a054a77eff9f2ef03051022a096377794dc16140",
+        "version" : "0.12.0"
+      }
+    },
     {
       "identity" : "swift-asn1",
       "kind" : "remoteSourceControl",
@@ -42,8 +60,17 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-crypto.git",
       "state" : {
-        "revision" : "da9d28d69ebe3894b18376c8f2395c2f37b8448f",
-        "version" : "4.5.2"
+        "revision" : "95ba0316a9b733e92bb6b071255ff46263bbe7dc",
+        "version" : "3.15.1"
+      }
+    },
+    {
+      "identity" : "swift-log",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-log.git",
+      "state" : {
+        "revision" : "9c6fb14227f55d8f711ce3847dc2f419fb0ecacb",
+        "version" : "1.15.1"
       }
     },
     {
@@ -53,6 +80,15 @@
       "state" : {
         "revision" : "21de5f08c1a166a6dd293d0e587ad977bf8dac5d",
         "version" : "2.103.0"
+      }
+    },
+    {
+      "identity" : "swift-nio-ssh",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Joannis/swift-nio-ssh.git",
+      "state" : {
+        "revision" : "791437a67f5394b13060314c778c0f63124803b1",
+        "version" : "0.3.5"
       }
     },
     {
