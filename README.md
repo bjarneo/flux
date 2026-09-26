@@ -6,7 +6,8 @@ Share files and clipboard text, read phone notifications, control media, and use
 Flux includes a CLI, a background daemon, a native Qt window, an Omarchy shell plugin, and a native Android app.
 The desktop opens the network connections, so the default Omarchy firewall needs no new inbound rule.
 
-https://github.com/user-attachments/assets/fcd223a6-af92-485f-a8af-4165906afa30
+
+https://github.com/user-attachments/assets/4b8445fe-6734-4100-b200-92f57e1b353a
 
 
 **[Install locally](docs/install.md)** · **[Set up Android](docs/android.md)** · **[Read the docs](docs/README.md)** · **[Use with agents](docs/agents.md)**
