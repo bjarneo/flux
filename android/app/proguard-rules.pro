@@ -11,3 +11,7 @@
 -dontwarn net.schmizz.**
 -dontwarn com.hierynomus.**
 -keep class uk.uuid.slf4j.android.** { *; }
+
+# ML Kit creates its component registrars by reflection. R8 full mode
+# removes their constructors unless a rule keeps them.
+-keep class * implements com.google.firebase.components.ComponentRegistrar { <init>(); }
