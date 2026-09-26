@@ -19,14 +19,10 @@ The Android app requires Android 10 or later.
 
 ## Clone the repository
 
-Replace `OWNER` with this repository's GitHub owner:
-
 ```sh
-git clone https://github.com/OWNER/omarchy-flux.git
-cd omarchy-flux
+git clone https://github.com/bjarneo/flux.git
+cd flux
 ```
-
-The examples use a placeholder because the initial checkout has no configured Git remote.
 
 ## Install the Arch package from your checkout
 
