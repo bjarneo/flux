@@ -50,6 +50,9 @@ It appears on the computer as `laptop` when it has a battery and `desktop` other
 | Media | Controls the computer's players. The computer controls Apple Music and Spotify on the Mac after you allow Automation for each app. |
 | Commands | Lists and runs the commands configured on the computer. |
 | Browse | Opens the computer's shared folders read-only through SSH inside a `flux.tunnel`, and downloads files. |
+| Webcam | Streams a Mac camera, including Continuity Camera, to the computer as a virtual webcam in H.264. Zoom is digital, and exposure is a software gain, because macOS gives apps no camera zoom or exposure control. **Also send the microphone** starts the microphone with the webcam. |
+| Screen mirror | Streams a display to a window on the computer in H.264, with the long side at most 1080 pixels. |
+| Camera modes | Text, QR, Photo, Document, and Signature, like the phone. Text, QR, and Document also read an opened, pasted, or dropped image or a screen region. Signature also accepts a drawn signature. |
 | Microphone | Streams the Mac microphone as 48 kHz mono audio. |
 | Notifications | Shows notifications from `flux notify`. |
 | Find my device | The computer rings the Mac at the current system volume. The Mac rings the computer. |
