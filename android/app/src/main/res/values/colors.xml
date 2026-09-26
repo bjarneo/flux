@@ -4,4 +4,6 @@
     <color name="flux_mark_bg">#FF16161E</color>
     <color name="flux_mark_fg">#FFC0CAF5</color>
     <color name="flux_mark_accent">#FF7AA2F7</color>
+    <!-- The window background, the same as Tn.bg. -->
+    <color name="flux_bg">#FF16161E</color>
 </resources>

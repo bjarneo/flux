@@ -12,7 +12,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -22,23 +21,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -51,7 +41,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -126,97 +115,6 @@ fun TopBar(title: String, onBack: () -> Unit, subtitle: String? = null, trailing
     )
 }
 
-@Composable
-fun SectionHeader(text: String, modifier: Modifier = Modifier, top: Dp = 16.dp, trailing: @Composable () -> Unit = {}) {
-    Row(
-        modifier.fillMaxWidth().padding(start = Gutter, end = Gutter, top = top, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text,
-            Modifier.weight(1f),
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        trailing()
-    }
-}
-
-/**
- * An action on the device screen: an icon, a label, and a short line that
- * says what the action does. [wide] lays it out in a row, for a tile that
- * takes the full width.
- */
-@Composable
-fun ActionTile(
-    @DrawableRes icon: Int,
-    label: String,
-    supporting: String,
-    enabled: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    wide: Boolean = false,
-) {
-    val scheme = MaterialTheme.colorScheme
-    Card(
-        onClick = onClick,
-        modifier = modifier,
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = scheme.surfaceContainerHigh),
-    ) {
-        val badge = @Composable {
-            IconBadge(
-                icon,
-                container = if (enabled) scheme.primaryContainer else scheme.surfaceContainerHighest,
-                content = if (enabled) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
-                size = 44.dp,
-            )
-        }
-        val labels = @Composable {
-            Column {
-                Text(
-                    label,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = if (enabled) scheme.onSurface else scheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    supporting,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = scheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        if (wide) {
-            Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                badge()
-                labels()
-            }
-        } else {
-            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                badge()
-                labels()
-            }
-        }
-    }
-}
-
-/** A setting with an icon, a title, a line of help, and a switch. The whole row toggles. */
-@Composable
-fun SwitchRow(@DrawableRes icon: Int, title: String, subtitle: String, checked: Boolean, onClick: () -> Unit) {
-    ListItem(
-        headlineContent = { Text(title) },
-        supportingContent = { Text(subtitle) },
-        leadingContent = { Sym(icon) },
-        trailingContent = { Switch(checked = checked, onCheckedChange = null) },
-        modifier = Modifier.toggleable(value = checked, role = Role.Switch, onValueChange = { onClick() }),
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-    )
-}
-
 /**
  * A screen or a section with nothing to show: an icon, a title, a line
  * that says what to do, and an optional action.
@@ -258,50 +156,6 @@ fun IconTextButton(@DrawableRes icon: Int, label: String, onClick: () -> Unit, m
         Spacer(Modifier.size(ButtonDefaults.IconSpacing))
         Text(label)
     }
-}
-
-/** Splits a verification key into groups of 4 characters, so that it is easy to compare. */
-fun formatKey(key: String): String = key.chunked(4).joinToString(" ")
-
-/** The pairing dialog with the verification key. */
-@Composable
-fun PairDialog(name: String, key: String, waiting: Boolean, onCancel: () -> Unit, onPair: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onCancel,
-        icon = { Sym(Ic.link) },
-        title = { Text("Pair with $name?", textAlign = TextAlign.Center) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(
-                    if (waiting) "Confirm the same code on $name." else "Check that $name shows the same code.",
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerHighest, modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        formatKey(key).ifEmpty { "…" },
-                        Modifier.padding(vertical = 16.dp),
-                        style = MaterialTheme.typography.headlineMedium.copy(fontFamily = Mono, letterSpacing = 2.sp),
-                        color = MaterialTheme.colorScheme.primary,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(onClick = onPair, enabled = !waiting) {
-                if (waiting) {
-                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.size(8.dp))
-                    Text("Waiting")
-                } else {
-                    Text("Pair")
-                }
-            }
-        },
-        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } },
-    )
 }
 
 /** A confirmation dialog. [destructive] shows the confirm button in the error color. */

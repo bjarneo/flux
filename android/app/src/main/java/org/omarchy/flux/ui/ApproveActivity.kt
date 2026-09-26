@@ -95,7 +95,7 @@ class ApproveActivity : FragmentActivity() {
                 }
             }
         })
-        setContent { FluxTheme { Screen() } }
+        setContent { TiledTheme { Screen() } }
     }
 
     @Composable

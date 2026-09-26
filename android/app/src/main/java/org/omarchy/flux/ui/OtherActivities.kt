@@ -43,7 +43,7 @@ class RingActivity : ComponentActivity() {
         setContent {
             val state by FluxCore.state.collectAsStateWithLifecycle()
             LaunchedEffect(state.ringingFrom) { if (state.ringingFrom == null) finish() }
-            FluxTheme {
+            TiledTheme {
                 RingOverlay(state.ringingFrom ?: "") {
                     Ringer.stop(this)
                     finish()
@@ -72,7 +72,7 @@ class ShareActivity : ComponentActivity() {
         setContent {
             val state by FluxCore.state.collectAsStateWithLifecycle()
             val targets = if (state.enabled) state.devices.filter { it.paired } else emptyList()
-            FluxTheme {
+            TiledTheme {
                 val scheme = MaterialTheme.colorScheme
                 Box(Modifier.fillMaxSize().clickable { finish() }, contentAlignment = Alignment.Center) {
                     Surface(

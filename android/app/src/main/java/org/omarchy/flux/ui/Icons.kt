@@ -24,6 +24,7 @@ import org.omarchy.flux.R
  * tools/fetch_icons.py fetches them into res/drawable.
  */
 object Ic {
+    val add = R.drawable.ic_add
     val back = R.drawable.ic_arrow_back
     val up = R.drawable.ic_arrow_upward
     val chevron = R.drawable.ic_chevron_right

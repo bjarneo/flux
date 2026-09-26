@@ -11,10 +11,13 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
@@ -26,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -43,9 +47,10 @@ class MainActivity : ComponentActivity() {
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // The theme is always dark, so the system bars use light icons.
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
         FluxCore.init(this)
@@ -56,7 +61,7 @@ class MainActivity : ComponentActivity() {
             askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
         debugShowWhenLocked(intent)
-        setContent { FluxTheme { FluxRoot(this) } }
+        setContent { TiledTheme { FluxRoot(this) } }
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -167,11 +172,11 @@ fun FluxRoot(activity: MainActivity) {
     fun pop() { if (stack.size > 1) stack = stack.dropLast(1) }
     BackHandler(enabled = stack.size > 1) { pop() }
 
-    Box(Modifier.fillMaxSize().background(Palette.background)) {
+    Box(Modifier.fillMaxSize().background(Tn.bg)) {
         Box(Modifier.fillMaxSize().systemBarsPadding()) {
             when {
                 !state.enabled -> FluxOffScreen()
-                device == null -> DevicesScreen(
+                device == null -> TiledDevicesScreen(
                     state,
                     onOpen = { push(Route(it.id)) },
                     onPair = {
@@ -180,19 +185,19 @@ fun FluxRoot(activity: MainActivity) {
                     },
                     onUnpair = { unpairing = it.id },
                 )
-                route.page == "media" -> MediaScreen(device, ::pop)
+                route.page == "media" -> TiledMediaScreen(device, ::pop)
                 route.page == "mic" -> org.omarchy.flux.mic.MicScreen(device, ::pop)
-                route.page == "commands" -> CommandsScreen(device, ::pop)
+                route.page == "commands" -> TiledCommandsScreen(device, ::pop)
                 route.page == "browse" -> BrowseScreen(device, state.browse, ::pop)
                 // Debug builds open a mode with "camera:<mode>".
                 route.page.startsWith("camera") -> key(route.page) {
                     org.omarchy.flux.camera.CameraScreen(device, ::pop, org.omarchy.flux.camera.CameraMode.fromKey(route.page.substringAfter(':', "")))
                 }
-                else -> HomeScreen(device, state, ::pop, onUnpair = { unpairing = device.id }) { page -> push(Route(device.id, page)) }
+                else -> TiledHomeScreen(device, state, ::pop, onUnpair = { unpairing = device.id }) { page -> push(Route(device.id, page)) }
             }
         }
         if (out != null && outDevice != null) {
-            PairDialog(
+            TiledPairSheet(
                 outDevice.name, out.key, waiting = out.sent,
                 onCancel = {
                     if (out.sent) FluxCore.cancelPair(out.deviceId)
@@ -205,7 +210,7 @@ fun FluxRoot(activity: MainActivity) {
             )
         } else {
             state.devices.firstOrNull { it.pairState == PairState.Incoming }?.let { d ->
-                PairDialog(d.name, d.pairKey, waiting = false, onCancel = { FluxCore.cancelPair(d.id) }, onPair = { FluxCore.acceptPair(d.id) })
+                TiledPairSheet(d.name, d.pairKey, waiting = false, onCancel = { FluxCore.cancelPair(d.id) }, onPair = { FluxCore.acceptPair(d.id) })
             }
         }
         unpairing?.let { id ->
@@ -224,8 +229,16 @@ fun FluxRoot(activity: MainActivity) {
                 destructive = true,
             )
         }
-        if (showIcons) Box(Modifier.fillMaxSize().background(Palette.background).systemBarsPadding()) { DebugIconsScreen() }
-        SnackbarHost(snacks, Modifier.align(Alignment.BottomCenter).systemBarsPadding().padding(bottom = 16.dp))
+        if (showIcons) Box(Modifier.fillMaxSize().background(Tn.bg).systemBarsPadding()) { DebugIconsScreen() }
+        SnackbarHost(snacks, Modifier.align(Alignment.BottomCenter).systemBarsPadding().padding(bottom = 16.dp)) { data ->
+            val shape = RoundedCornerShape(10.dp)
+            T(
+                data.visuals.message,
+                Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(shape).background(Tn.tileHi)
+                    .border(1.dp, Tn.lineHi, shape).padding(horizontal = 14.dp, vertical = 12.dp),
+                size = 13,
+            )
+        }
         state.ringingFrom?.let { from -> RingOverlay(from) { Ringer.stop(activity) } }
     }
 }

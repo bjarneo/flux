@@ -1,41 +1,12 @@
 package org.omarchy.flux.ui
 
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 
 /**
- * The system theme. Android 12 and later give the wallpaper colors of the
- * phone. Android 10 and 11 get the default Material 3 colors. The theme
- * follows the dark or light mode of the phone.
- */
-@Composable
-fun FluxTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
-    val context = LocalContext.current
-    val scheme = when {
-        Build.VERSION.SDK_INT >= 31 -> if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        dark -> darkColorScheme()
-        else -> lightColorScheme()
-    }
-    MaterialTheme(colorScheme = scheme) {
-        // Text and icons outside a Material surface take the color of text
-        // on the background, not black.
-        CompositionLocalProvider(LocalContentColor provides scheme.onBackground, content = content)
-    }
-}
-
-/**
- * The color roles of the app, taken from the Material 3 color scheme. The
- * names describe where the design uses each color.
+ * The color roles of the app, taken from the Material 3 color scheme of
+ * [TiledTheme]. The names describe where the design uses each color.
  */
 object Palette {
     private val c @Composable get() = MaterialTheme.colorScheme

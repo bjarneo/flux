@@ -107,7 +107,7 @@ The pages are:
 
 - `devices`, `home`, `media`, `commands`, `browse`, `mic`, and `camera`.
 - `camera:<mode>` for a camera mode: `text`, `qr`, `photo`, `document`, or `webcam`.
-- `ring`, `pair`, and `unpair` for the overlay and the dialogs.
+- `ring`, `pair`, and `unpair` for the ring overlay, the pairing sheet, and the unpair dialog.
 - `<page>@offline` for the page of a paired computer that is not reachable.
 - `empty` for the app with no computers.
 - `icon` for the launcher and notification icons.
