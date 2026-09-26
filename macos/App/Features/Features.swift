@@ -9,15 +9,18 @@ enum PluginRegistry {
     static func make() -> [FluxPlugin] {
         [
             PingPlugin(),
+            SharePlugin(),
+            ClipboardPlugin(),
+            CaptureWatchPlugin(),
+            MprisPlugin(),
+            MacMediaPlugin(),
+            RunCommandPlugin(),
+            BrowsePlugin(),
             MicPlugin(),
             NotificationsPlugin(),
             FindMyPhonePlugin(),
             BatteryPlugin(),
             DndPlugin(),
-            BrowsePlugin(),
-            SharePlugin(),
-            ClipboardPlugin(),
-            CaptureWatchPlugin(),
             ApprovePlugin(),
         ]
     }
@@ -31,9 +34,11 @@ struct FeatureSections: View {
         Group {
             ShareSection(device: device)
             ClipboardSection(device: device)
+            MediaSection(device: device)
+            CommandsSection(device: device)
+            BrowseSection(device: device)
             MicSection(device: device)
             SystemSection(device: device)
-            BrowseSection(device: device)
             ApproveSection(device: device)
         }
     }
@@ -44,6 +49,7 @@ struct FeatureSettings: View {
     var body: some View {
         Group {
             ShareSettings()
+            MediaSettings()
             DndSettings()
         }
     }
@@ -56,9 +62,11 @@ struct FeatureMenuItems: View {
     var body: some View {
         Group {
             ShareMenuItems(device: device)
+            MediaMenuItems(device: device)
+            CommandsMenu(device: device)
+            BrowseMenuItem(device: device)
             MicMenuItem(device: device)
             RingMenuItem(device: device)
-            BrowseMenuItem(device: device)
             ApproveMenuItem(device: device)
         }
     }
