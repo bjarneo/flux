@@ -50,6 +50,9 @@ object Ic {
     val download = R.drawable.ic_download
     val sync = R.drawable.ic_sync
     val power = R.drawable.ic_power_settings_new
+    val lightMode = R.drawable.ic_light_mode
+    val darkMode = R.drawable.ic_dark_mode
+    val systemTheme = R.drawable.ic_contrast
 
     val phone = R.drawable.ic_smartphone
     val laptop = R.drawable.ic_computer

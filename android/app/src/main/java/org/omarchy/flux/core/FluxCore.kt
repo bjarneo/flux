@@ -66,6 +66,8 @@ object FluxCore {
         local = LocalCertificate.loadOrCreate(File(app.filesDir, "identity"))
         trust = TrustStore(app)
         settings = Settings(app)
+        // The system keeps the night mode of the app, but a restore or a data clear can change the setting.
+        Android.setNightMode(app, settings.theme)
         for (t in trust.all()) {
             val identity = Identity(t.id, t.name, t.type, 8, if (t.isFlux) listOf(Types.FLUX_TUNNEL) else emptyList(), emptyList())
             val d = Device(this, identity)
@@ -190,6 +192,7 @@ object FluxCore {
                 browse = browse,
                 listeningUdp = backend?.listeningUdp ?: true,
                 enabled = settings.enabled,
+                theme = settings.theme,
             )
         }
         _state.value = snapshot
@@ -277,6 +280,12 @@ object FluxCore {
             org.omarchy.flux.screen.ScreenSession.stop()
             app.stopService(android.content.Intent(app, org.omarchy.flux.service.FluxService::class.java))
         }
+    }
+
+    fun setTheme(mode: ThemeMode) {
+        settings.theme = mode
+        Android.setNightMode(app, mode)
+        publish()
     }
 
     fun setSyncClipboard(on: Boolean) {

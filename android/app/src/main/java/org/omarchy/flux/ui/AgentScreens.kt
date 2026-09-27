@@ -28,6 +28,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -61,6 +62,8 @@ import org.omarchy.flux.core.HerdrSync
 /** How often the agent screen reads the output again while the agent works. */
 private const val WORKING_REFRESH_MS = 5_000L
 
+@Composable
+@ReadOnlyComposable
 private fun statusColor(s: AgentStatus): Color = when (s) {
     AgentStatus.Blocked -> Tn.red
     AgentStatus.Done -> Tn.green
@@ -252,7 +255,8 @@ private fun AgentOutput(out: HerdrOutput?, scroll: ScrollState, modifier: Modifi
             }
             out.error != null && out.lines.isEmpty() -> EmptyState(Ic.error, "No output", out.error, Modifier.padding(top = 32.dp))
             else -> {
-                val text = remember(out.lines) { termAnnotated(out.lines) }
+                val colors = Tn
+                val text = remember(out.lines, colors) { termAnnotated(out.lines, colors) }
                 Box(Modifier.fillMaxSize().clip(TileShape).background(TermBg).border(1.dp, Tn.line, TileShape)) {
                     SelectionContainer {
                         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = 12.dp, vertical = 10.dp)) {
@@ -335,7 +339,7 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
                 if (sendingPrompt) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Tn.magenta)
                 } else {
-                    Sym(Ic.send, "Send", tint = if (canSend) Tn.bg else Tn.dim, size = 22.dp)
+                    Sym(Ic.send, "Send", tint = if (canSend) Tn.onAccent else Tn.dim, size = 22.dp)
                 }
             }
         }

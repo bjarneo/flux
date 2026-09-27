@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The system bars use dark icons on the light background. values-night has the dark theme. -->
+    <bool name="flux_light_bars">true</bool>
+</resources>

@@ -23,6 +23,11 @@ class Settings(context: Context) {
             prefs.edit().putBoolean("enabled", v).commit()
         }
 
+    /** The color theme of the app. */
+    var theme: ThemeMode
+        get() = ThemeMode.fromKey(prefs.getString("theme", null))
+        set(v) = prefs.edit().putString("theme", v.key).apply()
+
     /** Sends the calls of this phone to the computers. It needs the phone permission. */
     var callAlerts: Boolean
         get() = prefs.getBoolean("callAlerts", false)

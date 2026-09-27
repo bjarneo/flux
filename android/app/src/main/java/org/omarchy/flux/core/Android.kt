@@ -3,6 +3,7 @@ package org.omarchy.flux.core
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.UiModeManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ContentValues
@@ -77,6 +78,21 @@ object Android {
     fun setClipboard(context: Context, text: String) {
         val cm = context.getSystemService(ClipboardManager::class.java) ?: return
         cm.setPrimaryClip(ClipData.newPlainText("Flux", text))
+    }
+
+    /**
+     * Android 12 and later: sets the night mode of the app, so that the
+     * system splash screen and the -night resources match the theme.
+     * [ThemeMode.System] removes the override.
+     */
+    fun setNightMode(context: Context, mode: ThemeMode) {
+        if (Build.VERSION.SDK_INT < 31) return
+        val night = when (mode) {
+            ThemeMode.System -> UiModeManager.MODE_NIGHT_AUTO
+            ThemeMode.Light -> UiModeManager.MODE_NIGHT_NO
+            ThemeMode.Dark -> UiModeManager.MODE_NIGHT_YES
+        }
+        context.getSystemService(UiModeManager::class.java)?.setApplicationNightMode(night)
     }
 
     fun createChannels(context: Context) {

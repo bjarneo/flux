@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The window background, the same as Tn.bg in the dark theme. -->
+    <color name="flux_bg">#FF16161E</color>
+</resources>

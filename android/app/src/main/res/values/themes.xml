@@ -1,11 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- The window theme before Compose draws. The app is always dark, in the Tokyo Night background color. -->
-    <style name="Theme.Flux" parent="android:Theme.Material.NoActionBar">
+    <!--
+        The window theme before Compose draws, in the Tokyo Night background color.
+        On Android 12 and later, the app sets its night mode, so the -night resources follow the theme of the app.
+    -->
+    <style name="Base.Theme.Flux" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/flux_bg</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">@bool/flux_light_bars</item>
+        <item name="android:windowLightNavigationBar">@bool/flux_light_bars</item>
     </style>
+
+    <style name="Theme.Flux" parent="Base.Theme.Flux" />
 
     <style name="Theme.Flux.Translucent" parent="Theme.Flux">
         <item name="android:windowIsTranslucent">true</item>

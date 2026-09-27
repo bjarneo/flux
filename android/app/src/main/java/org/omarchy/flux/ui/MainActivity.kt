@@ -50,7 +50,7 @@ class MainActivity : ComponentActivity() {
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // The theme is always dark, so the system bars use light icons.
+        // The system bars are transparent. TiledTheme sets the color of their icons.
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
@@ -65,7 +65,9 @@ class MainActivity : ComponentActivity() {
         }
         debugShowWhenLocked(intent)
         takeOpenAgent(intent)
-        setContent { TiledTheme { FluxRoot(this) } }
+        // The start animation plays when the launcher starts the app, not after a recreation or a notification tap.
+        val splash = savedInstanceState == null && intent?.hasCategory(android.content.Intent.CATEGORY_LAUNCHER) == true
+        setContent { TiledTheme { FluxRoot(this, splash) } }
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -124,8 +126,9 @@ private data class Route(val deviceId: String? = null, val page: String = "")
 private data class Outgoing(val deviceId: String, val timestamp: Long, val key: String, val sent: Boolean = false)
 
 @Composable
-fun FluxRoot(activity: MainActivity) {
+fun FluxRoot(activity: MainActivity, splash: Boolean = false) {
     val state by FluxCore.state.collectAsStateWithLifecycle()
+    var splashing by remember { mutableStateOf(splash) }
     var stack by remember { mutableStateOf(listOf(Route())) }
     val snacks = remember { SnackbarHostState() }
     var outgoing by remember { mutableStateOf<Outgoing?>(null) }
@@ -276,5 +279,6 @@ fun FluxRoot(activity: MainActivity) {
             )
         }
         state.ringingFrom?.let { from -> RingOverlay(from) { Ringer.stop(activity) } }
+        if (splashing) FluxSplash { splashing = false }
     }
 }

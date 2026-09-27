@@ -40,6 +40,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
@@ -67,6 +68,7 @@ import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.Plugins
 import org.omarchy.flux.core.Share
+import org.omarchy.flux.core.ThemeMode
 import org.omarchy.flux.core.UiState
 import org.omarchy.flux.screen.ScreenMirrorService
 import org.omarchy.flux.screen.ScreenSession
@@ -116,7 +118,7 @@ fun TiledDevicesScreen(
                     Sym(Ic.refresh, size = 16.dp, tint = Tn.sub)
                     T(if (refreshing) "Searching…" else "Refresh", size = 12, color = Tn.sub)
                 }
-                AppMenu()
+                AppMenu(state.theme)
             }
             Tile(Modifier.fillMaxWidth(), border = activeBorder(), padding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -166,13 +168,26 @@ fun TiledDevicesScreen(
     }
 }
 
-/** The menu of the device list. */
+/** The menu of the device list: the theme of the app, and Flux off. */
 @Composable
-private fun AppMenu() {
+private fun AppMenu(theme: ThemeMode) {
     var open by remember { mutableStateOf(false) }
     Box {
         SquareButton(Ic.more, "More options", { open = true }, size = 32.dp)
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            TileLabel("Theme", Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+            for ((mode, label, icon) in ThemeItems) {
+                DropdownMenuItem(
+                    text = { Text(label) },
+                    leadingIcon = { Sym(icon) },
+                    trailingIcon = { if (mode == theme) Sym(Ic.check, "Selected", tint = Tn.blue) },
+                    onClick = {
+                        open = false
+                        FluxCore.setTheme(mode)
+                    },
+                )
+            }
+            HorizontalDivider(Modifier.padding(vertical = 4.dp), color = Tn.line)
             DropdownMenuItem(
                 text = { Text("Turn off Flux") },
                 leadingIcon = { Sym(Ic.power) },
@@ -184,6 +199,12 @@ private fun AppMenu() {
         }
     }
 }
+
+private val ThemeItems = listOf(
+    Triple(ThemeMode.System, "System", Ic.systemTheme),
+    Triple(ThemeMode.Light, "Light", Ic.lightMode),
+    Triple(ThemeMode.Dark, "Dark", Ic.darkMode),
+)
 
 @Composable
 private fun PairedTile(d: DeviceUi, modifier: Modifier, onOpen: () -> Unit, onUnpair: () -> Unit) {
@@ -270,8 +291,8 @@ fun TiledPairSheet(name: String, key: String, waiting: Boolean, onCancel: () -> 
                         contentAlignment = Alignment.Center,
                     ) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            if (waiting) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Tn.bg)
-                            T(if (waiting) "Waiting" else "Pair", size = 14, color = Tn.bg, weight = FontWeight.SemiBold)
+                            if (waiting) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Tn.onAccent)
+                            T(if (waiting) "Waiting" else "Pair", size = 14, color = Tn.onAccent, weight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -495,7 +516,7 @@ private fun MediaTile(d: DeviceUi, modifier: Modifier, onOpen: () -> Unit) {
                     Modifier.size(34.dp).clip(CircleShape).background(Tn.green)
                         .clickable { Plugins.mediaAction(FluxCore, d.id, "PlayPause") },
                     contentAlignment = Alignment.Center,
-                ) { Sym(if (playing) Ic.pause else Ic.play, if (playing) "Pause" else "Play", tint = Tn.bg, size = 22.dp) }
+                ) { Sym(if (playing) Ic.pause else Ic.play, if (playing) "Pause" else "Play", tint = Tn.onAccent, size = 22.dp) }
             }
         }
     }
@@ -564,7 +585,7 @@ fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
                             name,
                             Modifier.clip(RoundedCornerShape(8.dp)).background(if (sel) Tn.green else Tn.tile)
                                 .clickable { Plugins.selectPlayer(FluxCore, d.id, name) }.padding(horizontal = 10.dp, vertical = 6.dp),
-                            size = 12, color = if (sel) Tn.bg else Tn.sub, family = Mono, weight = FontWeight.Medium,
+                            size = 12, color = if (sel) Tn.onAccent else Tn.sub, family = Mono, weight = FontWeight.Medium,
                         )
                     }
                 }
@@ -619,7 +640,7 @@ fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
                     container = Tn.green, border = null, padding = PaddingValues(0.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
                 ) {
-                    Sym(if (p.playing) Ic.pause else Ic.play, if (p.playing) "Pause" else "Play", tint = Tn.bg, size = 34.dp)
+                    Sym(if (p.playing) Ic.pause else Ic.play, if (p.playing) "Pause" else "Play", tint = Tn.onAccent, size = 34.dp)
                 }
                 ControlTile(Ic.next, "Next", Modifier.weight(1f)) { Plugins.mediaAction(FluxCore, d.id, "Next") }
             }
