@@ -1,5 +1,9 @@
 package org.omarchy.flux.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -42,11 +46,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import org.omarchy.flux.core.AgentChoice
@@ -58,6 +69,14 @@ import org.omarchy.flux.core.HerdrAgent
 import org.omarchy.flux.core.HerdrOutput
 import org.omarchy.flux.core.HerdrReply
 import org.omarchy.flux.core.HerdrSync
+import org.omarchy.flux.mic.MicSession
+import org.omarchy.flux.voice.Dictation
+import org.omarchy.flux.voice.DictationBar
+import org.omarchy.flux.voice.DictationSettings
+import org.omarchy.flux.voice.DictationText
+import org.omarchy.flux.voice.LanguageSheet
+import org.omarchy.flux.voice.rememberDictation
+import org.omarchy.flux.voice.rememberSpeechModels
 
 /** How often the agent screen reads the output again while the agent works. */
 private const val WORKING_REFRESH_MS = 5_000L
@@ -281,23 +300,80 @@ private fun AgentOutput(out: HerdrOutput?, scroll: ScrollState, modifier: Modifi
 private val ChoicesMaxHeight = 196.dp
 
 /**
- * The reply controls of an agent: the choices of a dialog, a key bar, and a
- * text field. Each reply asks for the phone lock first, see [ReplyLock].
+ * The reply controls of an agent: the choices of a dialog, a key bar, a
+ * text field, and a mic key for dictation. Each reply asks for the phone
+ * lock first, see [ReplyLock].
  */
 @Composable
 private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, reply: HerdrReply?) {
     val context = LocalContext.current
-    var text by rememberSaveable(d.id, agent.pane) { mutableStateOf("") }
+    var field by rememberSaveable(d.id, agent.pane, stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue()) }
     var lockError by remember { mutableStateOf<String?>(null) }
     // A prompt that the computer accepted leaves the field.
     LaunchedEffect(reply) {
-        if (reply != null && reply.action == "prompt" && !reply.sending && reply.error == null) text = ""
+        if (reply != null && reply.action == "prompt" && !reply.sending && reply.error == null) field = TextFieldValue()
     }
     fun guarded(action: () -> Unit) {
         lockError = null
         ReplyLock.run(context, action) { lockError = it }
     }
     fun keys(vararg k: String) = guarded { HerdrSync.sendKeys(FluxCore, d.id, agent.pane, k.toList()) }
+
+    // Dictation: the phone turns speech into text at the cursor of the field.
+    // The text waits there for Send, so a prompt still needs the phone lock.
+    val dictation = rememberDictation()
+    val demo = DebugDemo.isDemo(d.id)
+    val canDictate = demo || remember { Dictation.available(context) }
+    val dictating = dictation.phase != Dictation.Phase.Idle
+    var voiceError by remember { mutableStateOf<String?>(null) }
+    var startAfterGrant by remember { mutableStateOf(false) }
+    val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) startAfterGrant = true else voiceError = "Allow the microphone for Flux to dictate"
+    }
+    fun dictate(): Boolean {
+        voiceError = null
+        lockError = null
+        if (MicSession.status.value.active) {
+            voiceError = "Stop Flux Microphone to dictate"
+            return false
+        }
+        if (!demo && ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            askMic.launch(Manifest.permission.RECORD_AUDIO)
+            return false
+        }
+        val hints = listOf(agent.agent, agent.project, agent.workspace).filter { it.isNotBlank() }.distinct()
+        return dictation.start(hints, demo) { spoken ->
+            val e = DictationText.insert(field.text, field.selection.start, field.selection.end, spoken)
+            field = TextFieldValue(e.text, TextRange(e.cursor))
+        }
+    }
+    LaunchedEffect(startAfterGrant) {
+        if (!startAfterGrant) return@LaunchedEffect
+        startAfterGrant = false
+        dictate()
+    }
+    // Android gives the microphone only to a visible app. The dictation
+    // ends with its text when the app goes to the background.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, dictation) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) dictation.stopNow() }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    // The language picker. A tap on the language in the panel keeps the
+    // words so far, and a selected language starts the next dictation.
+    val models = rememberSpeechModels()
+    var picking by remember { mutableStateOf(false) }
+    var language by remember { mutableStateOf(DictationSettings.language(context)) }
+    fun choose(tag: String) {
+        DictationSettings.setLanguage(context, tag)
+        language = tag
+    }
+    val view = LocalView.current
+    DisposableEffect(dictating) {
+        view.keepScreenOn = dictating
+        onDispose { view.keepScreenOn = false }
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
         val choices = if (agent.status == AgentStatus.Blocked) out?.choices.orEmpty() else emptyList()
@@ -317,34 +393,71 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
             KeyTile("enter", "Enter", Modifier.weight(1.4f), accent = agent.status == AgentStatus.Blocked && choices.isEmpty()) { keys("enter") }
         }
         val sendingPrompt = reply?.sending == true && reply.action == "prompt"
-        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(TileGap)) {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                modifier = Modifier.weight(1f),
-                placeholder = { T("Write to ${agent.agent}", color = Tn.dim) },
-                textStyle = TextStyle(color = Tn.text, fontSize = 14.sp),
-                shape = TileShape,
-                maxLines = 4,
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-            )
-            val canSend = text.isNotBlank() && !sendingPrompt
-            Box(
-                Modifier.size(56.dp).clip(TileShape).background(if (canSend) Tn.blue else Tn.tile)
-                    .clickable(enabled = canSend, onClickLabel = "Send") {
-                        val t = text
-                        guarded { HerdrSync.sendPrompt(FluxCore, d.id, agent.pane, t) }
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                if (sendingPrompt) {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Tn.magenta)
-                } else {
-                    Sym(Ic.send, "Send", tint = if (canSend) Tn.onAccent else Tn.dim, size = 22.dp)
+        DictationBar(
+            dictation,
+            canDictate = canDictate,
+            onStart = { dictate() },
+            onLanguage = {
+                dictation.stopNow()
+                picking = true
+            },
+            field = { m ->
+                OutlinedTextField(
+                    value = field,
+                    onValueChange = { field = it },
+                    modifier = m,
+                    placeholder = { T("Write to ${agent.agent}", color = Tn.dim) },
+                    textStyle = TextStyle(color = Tn.text, fontSize = 14.sp),
+                    shape = TileShape,
+                    maxLines = 4,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                )
+            },
+            send = {
+                val canSend = field.text.isNotBlank() && !sendingPrompt
+                Box(
+                    Modifier.size(56.dp).clip(TileShape).background(if (canSend) Tn.blue else Tn.tile)
+                        .clickable(enabled = canSend, onClickLabel = "Send") {
+                            val t = field.text
+                            guarded { HerdrSync.sendPrompt(FluxCore, d.id, agent.pane, t) }
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (sendingPrompt) {
+                        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Tn.magenta)
+                    } else {
+                        Sym(Ic.send, "Send", tint = if (canSend) Tn.onAccent else Tn.dim, size = 22.dp)
+                    }
+                }
+            },
+        )
+        val problem = lockError ?: voiceError ?: dictation.error ?: reply?.error
+        if (problem != null) {
+            Row(Modifier.padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                T(problem, Modifier.weight(1f), size = 11, color = Tn.red)
+                if (problem == dictation.error && dictation.languageError) {
+                    T(
+                        "Choose a language",
+                        Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = "Choose the dictation language") { picking = true }
+                            .padding(horizontal = 6.dp, vertical = 4.dp),
+                        size = 12, color = Tn.blue, weight = FontWeight.SemiBold,
+                    )
                 }
             }
         }
-        (lockError ?: reply?.error)?.let { T(it, Modifier.padding(horizontal = 4.dp), size = 11, color = Tn.red) }
+        if (picking) {
+            LanguageSheet(
+                models,
+                selected = language,
+                onSelect = { tag ->
+                    choose(tag)
+                    picking = false
+                    dictate()
+                },
+                onDownloaded = ::choose,
+                onDismiss = { picking = false },
+            )
+        }
     }
 }
 

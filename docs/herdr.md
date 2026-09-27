@@ -94,6 +94,58 @@ It does not accept `ctrl+c`, because that key can end the agent.
 A prompt can have up to 16 KB of text.
 `fluxd` removes control characters from a prompt, except line breaks and tabs.
 
+## Dictate a reply
+
+To talk to an agent instead of typing, use the mic key next to **Send**.
+The phone changes your speech to text in the reply field.
+The audio does not go to the computer.
+
+- To start, tap the mic key. To stop, tap the red stop key in the panel.
+- To talk only while you hold the key, press and hold it. The dictation stops when you release it.
+- To drop the dictation, select the close button in the panel.
+
+While the phone listens, a panel takes the full width of the reply bar.
+It shows the language, the time, a live voice wave, and the words so far.
+The final words are bright. The words that the recognizer still hears are dim and can change.
+A pause does not end the dictation.
+The dictation ends when you stop it, after 20 seconds with no speech, or after 5 minutes.
+When the app goes to the background, the dictation ends and keeps its words.
+
+The text goes in at the cursor of the field and stays there.
+Read it, then select **Send**.
+The send asks for the phone lock, as a typed prompt does.
+
+Flux uses the on-device speech recognizer of Android when the phone has one.
+The recognizer tries the phone languages in the order of the Android language settings and uses the first one that it has a model for.
+For example, the Google on-device recognizer has no Norwegian model, so a phone with Norwegian and then English uses English.
+The panel header shows that language.
+The recognizer also gets the agent, project, and workspace names, so that it can spell them.
+When the phone has no on-device recognizer, Flux uses the default recognizer and asks it to stay offline.
+That recognizer can use a network service when it has no offline model for the phone language.
+
+### Choose or download a language
+
+To use another language, select the language button in the panel header.
+The dictation stops, and its words stay in the field.
+The language picker opens:
+
+- **Automatic** uses the phone languages in order, as described above.
+- **On this phone** lists the languages that have a model. Select one to use it. The next dictation starts at once.
+- **Download** lists the languages that the recognizer can download. Select one to download it.
+
+Android asks you to confirm each download and shows its size.
+The picker shows the progress, and it selects the language when the download is done.
+Android downloads each model from Google once.
+Dictation then runs on the phone, and the audio stays on the phone.
+Flux keeps the language that you select for the next dictations.
+
+Android 13 and later can list and download models.
+Android 14 and later also report the progress of a download.
+On Android 12 and earlier, the picker lists only the phone languages.
+
+The first dictation asks for the microphone permission.
+The mic key does not show when the phone has no speech recognizer.
+
 ## Turn the feature off
 
 To stop sending agents to the phone, set this key in `~/.config/flux/config.toml`:
@@ -222,6 +274,11 @@ A reply and its answer look like this:
 | The phone says that the feature is off | Set `herdr = true` and reload `fluxd`. |
 | The phone says that replies are off | Set `herdr_control = true` and reload `fluxd`. |
 | A reply says that the agent is not ready for input | herdr accepts input only for an agent that it detected. Run `herdr agent get PANE` on the computer. |
+| The mic key is missing | The phone has no speech recognizer. Install Speech Recognition and Synthesis from Google, or another voice input app. |
+| Dictation says that Android downloads the speech model | Wait until the download is done, then start the dictation again. |
+| Dictation says that the recognizer supports none of the phone languages | Select **Choose a language** under the field, then download a language in the picker. |
+| Dictation uses the wrong language | Select the language button in the panel header, then select the language that you want. |
+| Dictation says to stop Flux Microphone | Stop the microphone on the **Microphone** screen or in **Webcam** mode, then start the dictation again. |
 
 To read the herdr messages of the daemon, run:
 

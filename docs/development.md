@@ -92,7 +92,7 @@ cd android
 ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease --no-daemon
 ```
 
-The unit tests cover protocol, approval messages, capture plans, streams, camera geometry, and the herdr alerts, colors, and replies.
+The unit tests cover protocol, approval messages, capture plans, streams, camera geometry, the herdr alerts, colors, and replies, and the dictation text rules.
 The release build runs R8 and checks release-only build errors.
 Without release credentials, it produces an unsigned APK.
 See [Android tools](android.md#test) for a test peer and phone screenshots.
