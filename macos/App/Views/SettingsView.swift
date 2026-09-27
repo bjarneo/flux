@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
+    @AppStorage(AppIconStyle.key) private var iconStyle = AppIconStyle.automatic
 
     var body: some View {
         TabView {
@@ -23,6 +24,14 @@ struct SettingsView: View {
                 } footer: {
                     Text("Change the name in System Settings > General > Sharing.")
                 }
+                Section {
+                    Picker("App icon", selection: $iconStyle) {
+                        ForEach(AppIconStyle.allCases) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                } footer: {
+                    Text("Automatic follows the appearance of macOS. The icon changes in the Dock and the app switcher. Finder keeps the dark icon.")
+                }
             }
             .formStyle(.grouped)
             .tabItem { Label("General", systemImage: "gearshape") }
@@ -31,6 +40,7 @@ struct SettingsView: View {
                 .formStyle(.grouped)
                 .tabItem { Label("Features", systemImage: "square.grid.2x2") }
         }
-        .frame(width: 520, height: 460)
+        .frame(width: 520, height: 520)
+        .onChange(of: iconStyle) { AppIconController.shared.apply() }
     }
 }

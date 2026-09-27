@@ -51,6 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppIconController.shared.start()
         guard case .ready(let model) = launch else { return }
         FeatureHooks.didLaunch(model: model)
         model.core.start()

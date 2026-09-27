@@ -130,6 +130,7 @@ Unless noted, the peer was the headless `fluxd` described above, driven with the
 | Browse | Listed the home roots, opened subfolders, downloaded files with identical sha256, and showed the `share_home` disabled error. A link drop closed the session, and it reopened after reconnect. The app opened the files window |
 | Microphone | Headless `fluxd` refuses the microphone, and the Mac showed its error. With a copy of `fluxd` without the headless check and a fake `pw-cat`, real audio arrived: 48 kHz, mono, s16le, 96 kB/s, RMS −36 dBFS. `flux mic stop`, a stop from the Mac, input switching, and a killed daemon all stopped capture |
 | Webcam | Headless `fluxd` reported the missing v4l2loopback module, and the Mac showed it. A throwaway Go peer that uses the repo's `lan` code received real camera H.264: Main profile, level 4.1, no B-frames, SPS and PPS before each IDR, valid in `ffprobe`. Aspect changes from the Mac and from the computer restarted the stream at the new size. Config changes and stops worked |
+| Screen mirror | Mirrored to a real Omarchy computer by hand, with Screen & System Audio Recording allowed for Flux. The Mac screen showed in a window on the computer and worked well |
 | Fingerprint approval | With a copy of the repo's `internal/approve` code, the Go verifier accepted a Touch ID enrollment and approvals for sudo and polkit from the real app. Deny, timeout, the computer's cancel, and Remove Key worked |
 | Camera modes | From generated images: Text and QR arrived as Android sends them, and Photo, Document, and Signature files landed in `fluxd`'s photo and scan folders with Android's names and fields. One real camera capture in the app |
 | All plugins together | One client with the full plugin list announced the capabilities above. In the same session it paired, received the 3 MB file with an identical sha256, got ping and notify, and ran a desktop command |
@@ -138,7 +139,6 @@ Unless noted, the peer was the headless `fluxd` described above, driven with the
 
 | Item | Why | How to verify |
 | --- | --- | --- |
-| Screen mirror with real pixels | Screen & System Audio Recording is not allowed for Flux. Only the permission-denied path and the encoder with synthetic frames were tested | Allow Flux in **Privacy & Security > Screen & System Audio Recording**, start **Mirror Screen**, and check the stream on a computer |
 | **Also send the microphone** with the webcam | Each ad hoc rebuild loses the camera and microphone grants, so it was not run end to end | Start the webcam with the option on and check that `flux.mic` starts and stops with it |
 | Send new photos | Needs full Photos access and a new photo in the personal library | Turn it on, add a photo, and check the computer's photo folder |
 | Spotify control | Spotify is not installed | Install Spotify and repeat the Apple Music check |

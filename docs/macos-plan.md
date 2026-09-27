@@ -76,6 +76,7 @@ See [status](macos-status.md) for the details of each check and [Flux for macOS]
 - [x] Feature cards in a grid of equal columns, with equal heights per row.
 - [x] Collapsible card details, saved per card: webcam image settings and approval details.
 - [x] Settings window with General and Features tabs.
+- [x] App icon with the Flux mark, dark in the bundle, and a light Dock icon chosen in **Settings > General > App icon** (Automatic, Dark, Light).
 - [x] Menu bar extra that keeps Flux running after the window closes.
 - [x] Pairing request notification with Accept and Reject.
 - [x] Pairing through the app UI against `fluxd`.
@@ -139,7 +140,7 @@ Each feature gets its own branch, worktree, and isolated `fluxd`, then merges in
 - [x] **Also send the microphone** starts and stops the microphone with the webcam.
 - [x] Continuity Camera through `NSCameraUseContinuityCameraDeviceType`.
 - [x] Checked: real camera H.264 valid in `ffprobe`, aspect changes from both sides, config changes, and stops.
-- [ ] Checked: screen mirror with real pixels.
+- [x] Checked: screen mirror with real pixels on an Omarchy computer.
 - [ ] Checked: **Also send the microphone** end to end.
 - [ ] Checked: the webcam timeout when the computer never connects.
 

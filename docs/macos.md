@@ -39,6 +39,11 @@ Add `--no-open` when you run the script directly to skip the last step.
 Flux keeps running in the menu bar after the window closes.
 Quit it from the menu bar item.
 
+The app icon uses the Flux mark from the desktop and Android icons.
+**Settings > General > App icon** picks the Dock icon: Automatic follows the appearance of macOS, or choose Dark or Light.
+Finder and Launchpad keep the dark bundle icon.
+To change the icons, edit and run `swift macos/tools/render-icon.swift`.
+
 ## Pair a Mac
 
 1. Connect the Mac and the computer to the same local network.
