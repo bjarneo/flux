@@ -6,14 +6,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
-import android.provider.ContactsContract
 import android.telephony.PhoneStateListener
 import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
 import android.util.Log
 import androidx.core.content.ContextCompat
+import org.omarchy.flux.core.Android
 import org.omarchy.flux.core.CallEvent
 import org.omarchy.flux.core.CallPackets
 import org.omarchy.flux.core.CallTracker
@@ -113,20 +112,9 @@ class CallMonitor(private val context: Context) {
     private fun send(e: CallEvent) {
         val n = number
         FluxCore.io.execute {
-            val packet = CallPackets.packet(e, n, n?.let(::contactName))
+            val packet = CallPackets.packet(e, n, n?.let { Android.contactName(context, it) })
             FluxCore.connectedPaired().filter { Types.TELEPHONY in it.identity.incoming }.forEach { it.send(packet) }
         }
-    }
-
-    /** The name of the contact with the number, or null without the contacts permission. */
-    private fun contactName(n: String): String? {
-        if (!granted(Manifest.permission.READ_CONTACTS)) return null
-        val uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(n))
-        return runCatching {
-            context.contentResolver.query(uri, arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME), null, null, null)?.use { c ->
-                if (c.moveToFirst()) c.getString(0) else null
-            }
-        }.getOrNull()
     }
 
     private fun granted(permission: String) =

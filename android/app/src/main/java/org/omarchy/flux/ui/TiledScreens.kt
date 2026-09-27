@@ -68,6 +68,7 @@ import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.Plugins
 import org.omarchy.flux.core.Share
+import org.omarchy.flux.core.SmsSync
 import org.omarchy.flux.core.ThemeMode
 import org.omarchy.flux.core.UiState
 import org.omarchy.flux.screen.ScreenMirrorService
@@ -330,6 +331,15 @@ fun TiledHomeScreen(
             FluxCore.toast("Call alerts need phone access. Allow it in the app settings.")
         }
     }
+    // Text messages need to read and send SMS. The contacts add the names,
+    // and the user can refuse them.
+    val askSms = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        if (SmsSync.hasAccess(context)) {
+            FluxCore.setSyncSms(true)
+        } else {
+            FluxCore.toast("Text messages need SMS access. Allow it in the app settings.")
+        }
+    }
     // The first capture switch that turns on asks for access to photos.
     var asking by remember { mutableStateOf<CaptureKind?>(null) }
     val askPhotos = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -388,6 +398,12 @@ fun TiledHomeScreen(
                 FluxCore.setCallAlerts(!state.callAlerts)
             }
         })
+        // A tablet without a SIM slot has no text messages.
+        if (state.smsSupported) {
+            add(SyncItem(Ic.sms, "Text messages", state.smsSync && state.smsAccess) {
+                if (!state.smsAccess) askSms.launch(SmsSync.permissions()) else FluxCore.setSyncSms(!state.smsSync)
+            })
+        }
         add(SyncItem(Ic.dnd, "Sync Do Not Disturb", state.syncDnd && state.dndAccess) {
             if (!state.dndAccess) {
                 FluxCore.setSyncDnd(true)

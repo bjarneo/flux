@@ -33,6 +33,11 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("callAlerts", false)
         set(v) = prefs.edit().putBoolean("callAlerts", v).apply()
 
+    /** Offers the text messages of this phone to the computers. It needs SMS access. */
+    var syncSms: Boolean
+        get() = prefs.getBoolean("syncSms", false)
+        set(v) = prefs.edit().putBoolean("syncSms", v).apply()
+
     /** Syncs Do Not Disturb with the computers. It needs notification policy access. */
     var syncDnd: Boolean
         get() = prefs.getBoolean("syncDnd", true)

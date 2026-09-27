@@ -91,6 +91,13 @@ data class UiState(
     /** Call alerts are on. [callAccess] is true when the phone allows them. */
     val callAlerts: Boolean = false,
     val callAccess: Boolean = false,
+    /**
+     * Text messages are on. [smsAccess] is true when the phone allows them,
+     * and [smsSupported] is true when the phone can send text messages.
+     */
+    val smsSync: Boolean = false,
+    val smsAccess: Boolean = false,
+    val smsSupported: Boolean = false,
     /** Notify when a herdr agent on a computer needs input. */
     val agentInputAlerts: Boolean = true,
     /** Notify when a herdr agent on a computer finishes. */

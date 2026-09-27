@@ -84,7 +84,17 @@ object FluxCore {
     /** The TLS context of the running backend, for payload transfers. */
     val tls: org.omarchy.flux.net.Tls? get() = backend?.tls
 
-    fun identity(tcpPort: Int): Identity = Identity.self(local.deviceId, deviceName, tcpPort)
+    fun identity(tcpPort: Int): Identity = Identity.self(local.deviceId, deviceName, tcpPort, sms = SmsSync.enabled(app))
+
+    /**
+     * Sends the identity again to each connected computer. The SMS packet
+     * types in it follow the Text messages switch, and a computer shows its
+     * Messages page from them.
+     */
+    fun sendIdentity() {
+        val p = identity(0).toPacket()
+        connectedPaired().forEach { it.send(p) }
+    }
 
     // ---------------------------------------------------------------- network
 
@@ -186,6 +196,9 @@ object FluxCore {
                 notificationAccess = Android.hasNotificationAccess(app),
                 callAlerts = settings.callAlerts,
                 callAccess = Android.hasPhoneState(app),
+                smsSync = settings.syncSms,
+                smsAccess = SmsSync.hasAccess(app),
+                smsSupported = SmsSync.supported(app),
                 agentInputAlerts = settings.agentInputAlerts,
                 agentDoneAlerts = settings.agentDoneAlerts,
                 ringingFrom = ringingFrom,
@@ -295,6 +308,11 @@ object FluxCore {
 
     fun setCallAlerts(on: Boolean) {
         settings.callAlerts = on
+        publish()
+    }
+
+    fun setSyncSms(on: Boolean) {
+        settings.syncSms = on
         publish()
     }
 

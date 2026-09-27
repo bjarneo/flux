@@ -98,6 +98,10 @@ func (dev *Device) supports(typ string) bool { return slices.Contains(dev.Outgoi
 // accepts reports whether the device receives packets of the type.
 func (dev *Device) accepts(typ string) bool { return slices.Contains(dev.Incoming, typ) }
 
+// fluxApp reports whether the device runs Flux for Android or Flux for
+// macOS. Only the Flux apps send flux.tunnel.
+func (dev *Device) fluxApp() bool { return dev.supports(proto.TypeFluxTunnel) }
+
 // plugins returns the features that the device offers to this computer.
 // The window uses them to show or hide tabs. Each check looks at the
 // direction that the feature needs. For example, the Browse files tab

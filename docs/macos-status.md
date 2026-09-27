@@ -90,11 +90,10 @@ A Mac without an internal battery announces `kdeconnect.battery` as incoming onl
 | --- | --- |
 | Mirror phone notifications (`kdeconnect.notification` outgoing, `.request`, `.reply`, `.action`) | macOS gives apps no access to other apps' notifications |
 | Call alerts (`kdeconnect.telephony`) | A Mac has no telephony |
+| Text messages (`kdeconnect.sms.messages` outgoing, `kdeconnect.sms.request` and the conversation requests incoming) | macOS gives apps no access to SMS |
 | Read and set Do Not Disturb directly | No public Focus API for an ad hoc signed app. The Mac reads Focus through a Focus filter and sets it by running user-chosen Shortcuts |
 | Control any media app | MediaRemote is private. Only Apple Music and Spotify are controlled, through Apple Events |
 | Camera zoom, exposure, and white balance presets | No macOS API. Zoom is digital, and exposure is a software gain |
-
-The Android app does not send SMS either. `fluxd` supports SMS for other KDE Connect phones.
 
 ## Verified against fluxd
 

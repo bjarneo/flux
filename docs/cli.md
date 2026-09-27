@@ -102,7 +102,8 @@ MESSAGE='On my way'
 flux-cli sms "$RECIPIENT" "$MESSAGE"
 ```
 
-The phone needs SMS permission.
+Turn on **Text messages** on the phone first. See [text messages](features.md#text-messages).
+The command sends the message to 1 recipient.
 
 ## Notify when a command ends
 

@@ -96,6 +96,9 @@ For SMS, use the recipient and message from the user:
 flux-cli --device "$DEVICE" sms "$RECIPIENT" "$MESSAGE"
 ```
 
+The phone must have **Text messages** on. Without it, the device has no `sms` plugin in `flux-cli status --json`.
+The command sends to 1 recipient. It returns when the request reaches the phone, not when the message is delivered.
+
 `flux-cli commands` manages desktop commands that a paired phone can request.
 The command ID comes from the list or the add result.
 

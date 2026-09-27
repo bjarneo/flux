@@ -31,6 +31,7 @@ import org.omarchy.flux.core.DndSync
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.Plugins
 import org.omarchy.flux.core.Ringer
+import org.omarchy.flux.core.SmsSync
 import org.omarchy.flux.protocol.PROTOCOL_VERSION
 import org.omarchy.flux.protocol.cleanName
 import org.omarchy.flux.ui.MainActivity
@@ -181,6 +182,14 @@ class FluxService : Service() {
                 }
             }
         }
+        // Text messages follow the switch on the device screen and the SMS permissions.
+        scope.launch {
+            FluxCore.state.map { it.smsSync && it.smsAccess && it.smsSupported }.distinctUntilChanged().collect { on ->
+                if (on) SmsSync.start(this@FluxService) else SmsSync.stop(this@FluxService)
+                // The connected computers show or hide their Messages page.
+                FluxCore.sendIdentity()
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -203,6 +212,7 @@ class FluxService : Service() {
     override fun onDestroy() {
         scope.cancel()
         calls?.stop()
+        SmsSync.stop(this)
         runCatching { nsd?.stopServiceDiscovery(nsdListener) }
         unannounce()
         runCatching { getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(networkCallback) }

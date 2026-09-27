@@ -44,7 +44,7 @@ Received files use `download_dir`.
 The phone can browse the desktop home folder read-only when `share_home` is enabled.
 The tunnel carries SSH traffic without an inbound SSH firewall rule.
 
-## Notifications and SMS
+## Notifications
 
 Enable notification access on the phone to show its notifications on the desktop.
 To send a notification in the other direction:
@@ -55,7 +55,33 @@ flux-cli notify "Backup done" "412 files, 2.1 GB"
 
 The phone uses the **From computers** notification channel.
 The desktop name identifies the sender.
-Use the Messages page or [SMS command](cli.md#share-and-communicate) to send text messages through the phone.
+
+## Text messages
+
+Turn on **Text messages** on the phone's device screen.
+The phone asks for SMS access and contacts access.
+Flux needs SMS access. Contacts access adds names to the conversations.
+A tablet without a SIM slot does not show the switch.
+
+The desktop then shows the **Messages** page for that phone:
+
+- The list shows the latest message of each conversation. A dot marks an unread conversation.
+- Select a conversation to read its last 100 messages and to reply.
+- Select **New message** to send a text message to a phone number.
+- A new message on the phone appears on the desktop in about 1 second.
+- A reply goes out on the SIM of the conversation. A new message uses the default SMS SIM of the phone.
+
+To send a text message from a script, use the [SMS command](cli.md#share-and-communicate):
+
+```sh
+flux-cli sms '+15550100123' 'On my way'
+```
+
+Flux sends a text message to 1 phone number.
+The page shows group conversations and the text of MMS messages, but you must reply to a group on the phone.
+An MMS attachment shows as a label, for example `[Image]`.
+Flux reads the SMS and MMS database of the phone.
+Chat messages that an app keeps in its own database, for example RCS chats, do not show.
 
 ## Media and desktop commands
 

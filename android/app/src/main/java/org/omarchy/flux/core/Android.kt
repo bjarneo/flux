@@ -222,6 +222,22 @@ object Android {
         androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_PHONE_STATE) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
 
+    /** True when the phone lets Flux read the contacts. */
+    fun hasContacts(context: Context): Boolean =
+        androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_CONTACTS) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    /** The name of the contact with the phone number, or null without the contacts permission. */
+    fun contactName(context: Context, number: String): String? {
+        if (number.isBlank() || !hasContacts(context)) return null
+        val uri = Uri.withAppendedPath(android.provider.ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number))
+        return runCatching {
+            context.contentResolver.query(uri, arrayOf(android.provider.ContactsContract.PhoneLookup.DISPLAY_NAME), null, null, null)?.use { c ->
+                if (c.moveToFirst()) c.getString(0) else null
+            }
+        }.getOrNull()
+    }
+
     /** A file in the public Downloads folder that is still being written. */
     class Download(val uri: Uri, val stream: OutputStream)
 

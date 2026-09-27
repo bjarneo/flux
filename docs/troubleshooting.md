@@ -108,6 +108,22 @@ For a user-only install, install the plugin from the checkout with `make install
 See [plugin layout](omarchy.md#install-layout).
 Missing icons usually indicate a missing Nerd Font or Qt SVG package.
 
+## Text messages do not show
+
+If the Messages page is missing, the phone does not offer its text messages.
+
+1. Open the device screen of the computer in Flux for Android.
+2. Turn on **Text messages**.
+3. Allow SMS access when the phone asks.
+
+If the switch stays off, open **Settings > Apps > Flux > Permissions** on the phone and allow **SMS**.
+If Android shows **Restricted setting**, open **Settings > Apps > Flux**, open the menu, and select **Allow restricted settings**.
+Then turn on **Text messages** again.
+
+If a sent message shows **Not sent**, the phone could not send it.
+Check the signal and the SMS app on the phone.
+Flux does not send messages to a group. Reply to a group on the phone.
+
 ## Camera, microphone, or screen fails
 
 ```sh

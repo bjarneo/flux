@@ -26,6 +26,10 @@ object Types {
     const val SFTP = "kdeconnect.sftp"
     const val SFTP_REQUEST = "kdeconnect.sftp.request"
     const val TELEPHONY = "kdeconnect.telephony"
+    const val SMS_MESSAGES = "kdeconnect.sms.messages"
+    const val SMS_REQUEST = "kdeconnect.sms.request"
+    const val SMS_REQUEST_CONVERSATIONS = "kdeconnect.sms.request_conversations"
+    const val SMS_REQUEST_CONVERSATION = "kdeconnect.sms.request_conversation"
 
     /** Flux extension: this phone opens a listener that the computer connects to. */
     const val FLUX_TUNNEL = "flux.tunnel"
@@ -65,6 +69,14 @@ val OUTGOING = listOf(
     Types.SFTP_REQUEST, Types.TELEPHONY, Types.FLUX_TUNNEL, Types.FLUX_WEBCAM, Types.FLUX_DND,
     Types.FLUX_MIC, Types.FLUX_SCREEN, Types.FLUX_APPROVE, Types.FLUX_HERDR,
 )
+
+/**
+ * The SMS packet types. The phone lists them only while text messages are
+ * on and the phone allows SMS access, so that a computer shows its
+ * Messages page only when the phone can answer.
+ */
+val SMS_INCOMING = listOf(Types.SMS_REQUEST, Types.SMS_REQUEST_CONVERSATIONS, Types.SMS_REQUEST_CONVERSATION)
+val SMS_OUTGOING = listOf(Types.SMS_MESSAGES)
 
 /** The body of a kdeconnect.identity packet. */
 data class Identity(
@@ -117,8 +129,12 @@ data class Identity(
             )
         }
 
-        fun self(deviceId: String, name: String, tcpPort: Int) = Identity(
-            deviceId, cleanName(name), "phone", PROTOCOL_VERSION, INCOMING, OUTGOING, tcpPort,
+        /** The identity of this phone. [sms] adds the SMS packet types. */
+        fun self(deviceId: String, name: String, tcpPort: Int, sms: Boolean = false) = Identity(
+            deviceId, cleanName(name), "phone", PROTOCOL_VERSION,
+            if (sms) INCOMING + SMS_INCOMING else INCOMING,
+            if (sms) OUTGOING + SMS_OUTGOING else OUTGOING,
+            tcpPort,
         )
     }
 }

@@ -180,7 +180,17 @@ Window {
       view.tab = "overview"
       view.drawerOpen = true
     }],
-    ["41-messages-thread", function () { view.drawerOpen = false; view.tab = "messages" }, function () { pageItem().threadOpen = true }]
+    ["41-messages-thread", function () { view.drawerOpen = false; view.tab = "messages" }, function () { pageItem().threadOpen = true }],
+    // A group thread with a message that the phone could not send, then the New message form.
+    ["42-messages-group", function () { view.tab = "messages" }, function () {
+      var p = pageItem()
+      p.open(p.convos.filter(function (c) { return c.thread === 4 })[0])
+    }],
+    ["43-messages-new", function () { view.tab = "messages" }, function () {
+      pageItem().compose()
+      setField("Phone number", "+47 912 34 567")
+      setField("Text message via Pixel 8", "Running 10 minutes late")
+    }]
   ]
 
   function pageItem() {
