@@ -119,6 +119,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      # The full history gives the commits since the previous tag for the release notes.
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.version.outputs.tag }}
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           name: arch-package
@@ -141,14 +146,45 @@ jobs:
           tar -czf "release/omarchy-flux-$VERSION-aur.tar.gz" -C artifacts/aur PKGBUILD .SRCINFO omarchy-flux.install
           cd release
           sha256sum -- *.pkg.tar.zst *.apk *-aur.tar.gz android-certificate.txt > SHA256SUMS
+      - name: Write release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          prev=$(git describe --tags --abbrev=0 --match 'v*' "$TAG^" 2>/dev/null || true)
+          range=${prev:+$prev..}$TAG
+          {
+            echo "## What's Changed"
+            echo
+            git log "$range" --format='%H%x09%an%x09%s' | while IFS=$'\t' read -r hash author title; do
+              login=$(gh api "repos/$REPO/commits/$hash" --jq '.author.login // empty' 2>/dev/null || true)
+              by=$author
+              if [ -n "$login" ]; then by="$author ([@$login](https://github.com/$login))"; fi
+              echo "- $title by $by ([\`${hash:0:7}\`](https://github.com/$REPO/commit/$hash))"
+            done
+            echo
+            echo '## Checksums (SHA256)'
+            echo
+            echo '```'
+            cat release/SHA256SUMS
+            echo '```'
+            if [ -n "$prev" ]; then
+              echo
+              echo "**Full Changelog**: https://github.com/$REPO/compare/$prev...$TAG"
+            fi
+          } > release-notes.md
+          cat release-notes.md
       - name: Publish release assets
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.version.outputs.tag }}
         run: |
-          if ! gh release view "$TAG" > /dev/null 2>&1; then
-            gh release create "$TAG" --verify-tag --draft --title "Flux $TAG" --generate-notes
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file release-notes.md
+          else
+            gh release create "$TAG" --verify-tag --draft --title "Flux $TAG" --notes-file release-notes.md
           fi
           gh release upload "$TAG" release/* --clobber
           gh release edit "$TAG" --draft=false

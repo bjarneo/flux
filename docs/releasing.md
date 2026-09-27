@@ -184,6 +184,14 @@ The release workflow checks out the exact tag for both builds.
 It waits for desktop and Android checks before publication.
 The release starts as a draft until all assets upload.
 
+The workflow writes the release notes in the cliamp format:
+
+- **What's Changed** lists each commit since the previous stable tag, with its author and a link to the commit.
+- **Checksums (SHA256)** repeats the content of `SHA256SUMS`.
+- **Full Changelog** links to the comparison with the previous stable tag.
+
+To make the notes useful, give each commit on `master` a clear subject.
+
 Artifacts include:
 
 - `omarchy-flux-VERSION-1-x86_64.pkg.tar.zst`.
@@ -200,7 +208,7 @@ gh workflow run release.yml -f tag=v0.1.0
 ```
 
 A manual run selects the existing tag's source rather than the dispatch branch's source.
-It replaces assets with the same names and preserves the release notes.
+It replaces assets with the same names and writes the release notes again, so the checksums in the notes match the new assets.
 The AUR job refuses to replace a newer package version with an older release.
 
 ## Check the result
