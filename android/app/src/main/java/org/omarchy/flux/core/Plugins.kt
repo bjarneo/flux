@@ -25,6 +25,7 @@ object Plugins {
 
     fun onConnected(core: FluxCore, d: Device) {
         sendBattery(core, d)
+        HerdrSync.onConnected(d)
         // New images that no computer took yet go out now.
         CaptureWatch.poke()
         if (core.foreground && core.settings.syncClipboard) {
@@ -78,6 +79,7 @@ object Plugins {
             Types.FLUX_MIC -> org.omarchy.flux.mic.MicSession.onPacket(core, d, p)
             Types.FLUX_SCREEN -> org.omarchy.flux.screen.ScreenSession.onPacket(core, d, p)
             Types.FLUX_APPROVE -> Approvals.onPacket(core, d, p)
+            Types.FLUX_HERDR -> HerdrSync.onPacket(core, d, p)
         }
     }
 

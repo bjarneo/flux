@@ -184,6 +184,8 @@ object FluxCore {
                 notificationAccess = Android.hasNotificationAccess(app),
                 callAlerts = settings.callAlerts,
                 callAccess = Android.hasPhoneState(app),
+                agentInputAlerts = settings.agentInputAlerts,
+                agentDoneAlerts = settings.agentDoneAlerts,
                 ringingFrom = ringingFrom,
                 browse = browse,
                 listeningUdp = backend?.listeningUdp ?: true,
@@ -289,6 +291,16 @@ object FluxCore {
 
     fun setSyncDnd(on: Boolean) {
         settings.syncDnd = on
+        publish()
+    }
+
+    fun setAgentInputAlerts(on: Boolean) {
+        settings.agentInputAlerts = on
+        publish()
+    }
+
+    fun setAgentDoneAlerts(on: Boolean) {
+        settings.agentDoneAlerts = on
         publish()
     }
 

@@ -21,6 +21,8 @@ notifications = true
 share_home = true
 pause_media_on_call = true
 sync_dnd = true
+herdr = true
+herdr_control = false
 gui = ""
 approve_timeout = 20
 
@@ -41,6 +43,8 @@ command = "omarchy-system-lock"
 | `share_home` | Let the phone browse the desktop home folder read-only. Defaults to `true`. |
 | `pause_media_on_call` | Pause desktop media during calls. Defaults to `true`. |
 | `sync_dnd` | Sync Do Not Disturb. Defaults to `true`. |
+| `herdr` | Show the [herdr agents](herdr.md) of this computer on the phone. Defaults to `true`. |
+| `herdr_control` | Let the phone send keys and prompts to the herdr agents. Defaults to `false`. See [Answer an agent](herdr.md#answer-an-agent). |
 | `gui` | Use `app`, `plugin`, or an empty value for automatic host selection. |
 | `approve_timeout` | Wait 5 to 120 seconds for approval. Zero or an omitted value uses 20 seconds. |
 | `commands` | Desktop commands available to the phone. A new configuration has no commands. |
@@ -80,6 +84,7 @@ Its replacement changes the desktop identity and requires new pairing.
 | `FLUX_THEME_FILE` | Select a theme file for the snapshot harness. |
 | `FLUX_SNAPSHOT` | Select the output directory for the QML snapshot harness. |
 | `FLUX_SNAPSHOT_ONLY` | Filter snapshot names by text. |
+| `HERDR_SOCKET_PATH` | Select the herdr session that `fluxd` follows. See [herdr agents](herdr.md#use-another-herdr-session). |
 
 Without `XDG_RUNTIME_DIR`, the daemon uses `flux-<uid>` inside the system temporary directory.
 See [development](development.md) for an isolated test environment.

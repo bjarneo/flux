@@ -110,6 +110,7 @@ object Ic {
     val signature = R.drawable.ic_signature
     val screenShare = R.drawable.ic_screen_share
     val stopScreenShare = R.drawable.ic_stop_screen_share
+    val agent = R.drawable.ic_smart_toy
 }
 
 /** An icon from [Ic]. It takes the content color unless [tint] is set. */

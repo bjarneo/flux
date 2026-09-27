@@ -9,6 +9,20 @@ import android.os.SystemClock
  * The sample computers take no network action.
  */
 object DebugDemo {
+    /** Sample agent output with terminal colors: an approval dialog of a coding agent. */
+    private val demoOutput =
+        "\u001b[38;2;215;119;87m●\u001b[0m I added the migration in \u001b[1mdb/migrate/0042_add_invoice_status.sql\u001b[0m.\n\n" +
+            "\u001b[38;5;2m●\u001b[0m \u001b[1mBash\u001b[0m(bin/migrate --dry-run)\n" +
+            "  \u001b[38;5;8m⎿\u001b[0m  1 migration to apply: \u001b[38;5;6m0042_add_invoice_status\u001b[0m\n\n" +
+            "\u001b[38;5;4m" + "─".repeat(72) + "\u001b[0m\n" +
+            " \u001b[1;38;5;4mBash command\u001b[0m\n\n" +
+            "   bin/migrate --apply\n" +
+            "   \u001b[38;5;8mApply the pending migration\u001b[0m\n\n" +
+            " Do you want to proceed?\n" +
+            " \u001b[38;5;4m❯ 1. Yes\u001b[0m\n" +
+            "   2. Yes, and do not ask again for bin/migrate commands\n" +
+            "   3. No, and tell Codex what to do differently \u001b[38;5;8m(esc)\u001b[0m\n"
+
     const val PC = "demo-omarchy-xps"
     const val OFFLINE = "demo-omarchy-desk"
     const val NEW = "demo-framework"
@@ -35,6 +49,23 @@ object DebugDemo {
                     RemoteCommand("sleep", "Suspend", "systemctl suspend"),
                 ),
                 commandsLoaded = true,
+                herdrSupported = true,
+                herdr = HerdrState(
+                    enabled = true,
+                    running = true,
+                    control = true,
+                    agents = listOf(
+                        HerdrAgent("w1:p1", "claude", AgentStatus.Working, "Refactor the sync loop", "flux", "flux"),
+                        HerdrAgent("w2:p1", "codex", AgentStatus.Blocked, "Run the database migration", "billing", "billing"),
+                        HerdrAgent("w3:p1", "claude", AgentStatus.Done, "Fix the flaky login test", "web", "web"),
+                        HerdrAgent("w3:p2", "pi", AgentStatus.Idle, "", "web", "web"),
+                    ),
+                ),
+                herdrOutput = HerdrOutput(
+                    pane = "w2:p1",
+                    loading = false,
+                    lines = termLines(demoOutput),
+                ),
             ),
             device(OFFLINE, "omarchy-desk", "desktop", "192.168.2.40", paired = true, online = false),
             device(NEW, "framework-13", "laptop", "192.168.2.77", paired = false, online = true),

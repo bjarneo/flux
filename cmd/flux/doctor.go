@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"flux/internal/config"
+	"flux/internal/herdr"
 	"golang.org/x/sys/unix"
 )
 
@@ -74,6 +77,19 @@ func doctor() {
 	_, ffplayErr := exec.LookPath("ffplay")
 	check(mpvErr == nil || ffplayErr == nil, "mpv or ffplay is installed, so the phone screen can show here",
 		"The screen mirror needs mpv or ffplay. Install mpv with: sudo pacman -S mpv")
+
+	// herdr is optional. When it runs, the phone shows its agents.
+	if _, err := exec.LookPath("herdr"); err == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		pong, perr := herdr.Ping(ctx, herdr.SocketPath())
+		cancel()
+		if perr != nil {
+			fmt.Println("- herdr does not run. Start herdr to show its agents on the phone")
+		} else {
+			check(pong.Protocol >= herdr.MinProtocol, fmt.Sprintf("herdr %s runs, so the phone can show its agents", pong.Version),
+				fmt.Sprintf("herdr %s uses API protocol %d, and Flux needs %d or newer. Run: herdr update", pong.Version, pong.Protocol, herdr.MinProtocol))
+		}
+	}
 
 	for _, bin := range []string{"wl-copy", "wl-paste", "pw-play", "xdg-open"} {
 		_, lerr := exec.LookPath(bin)

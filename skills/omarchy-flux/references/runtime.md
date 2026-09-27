@@ -109,6 +109,8 @@ Key settings:
 | `share_home` | Share the desktop home folder read-only |
 | `pause_media_on_call` | Pause desktop media during a phone call |
 | `sync_dnd` | Sync Do Not Disturb |
+| `herdr` | Show the herdr agents of the computer on the phone |
+| `herdr_control` | Let the phone send keys and prompts to herdr agents. Off by default |
 | `gui` | Select the enabled plugin, otherwise the Qt app |
 | `approve_timeout` | Wait 20 seconds for fingerprint approval |
 
@@ -119,6 +121,26 @@ Without `XDG_RUNTIME_DIR`, Flux uses a user-specific directory in the system tem
 
 Do not delete the identity or trust store to diagnose a routine connection failure.
 Their removal changes pairing identity.
+
+## herdr agents
+
+`fluxd` sends the herdr agents of the computer to Flux for Android.
+Read `docs/herdr.md` for the phone screens, the notifications, and the wire format.
+
+```sh
+flux doctor
+flux status --json
+herdr agent list
+journalctl --user -u fluxd --no-pager | grep herdr
+```
+
+The `herdr` field of the state has `enabled`, `running`, `control`, and `agents`.
+`fluxd` and herdr must run as the same user.
+`HERDR_SOCKET_PATH` selects a herdr session other than the default.
+
+Replies from the phone need `herdr_control = true`.
+A reply can make an agent run commands on the computer.
+Do not turn on `herdr_control` unless the user asks for replies from the phone.
 
 ## Fingerprint approval
 

@@ -1,6 +1,6 @@
 ---
 name: omarchy-flux
-description: Use, install, diagnose, develop, and release Omarchy Flux. Use this skill for the flux CLI, fluxd, Flux for Android, Flux for macOS, phone and Mac pairing, file or clipboard transfers, phone notifications, webcam or microphone streams, screen mirror, fingerprint approval, the Flux Qt app, the Flux Omarchy plugin, AUR packages, and Flux APK workflows. Scope this skill to Flux tasks, not general Android or Omarchy configuration.
+description: Use, install, diagnose, develop, and release Omarchy Flux. Use this skill for the flux CLI, fluxd, Flux for Android, Flux for macOS, phone and Mac pairing, file or clipboard transfers, phone notifications, webcam or microphone streams, screen mirror, fingerprint approval, herdr agents on the phone, the Flux Qt app, the Flux Omarchy plugin, AUR packages, and Flux APK workflows. Scope this skill to Flux tasks, not general Android or Omarchy configuration.
 ---
 
 # Omarchy Flux
@@ -140,6 +140,7 @@ make build
 | Android app | `android/app/src/main/java/org/omarchy/flux/` |
 | macOS app | `macos/Sources/FluxKit/`, `macos/App/` |
 | Fingerprint approval | `internal/approve/`, `cmd/flux-approve/`, Android `core/Approve*` |
+| herdr agents | `internal/herdr/`, `internal/core/herdr.go`, Android `core/Herdr.kt` |
 | Package and system install | `dist/`, `Makefile` |
 
 Keep network state in `fluxd`.

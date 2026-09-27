@@ -126,10 +126,13 @@ func (d *Daemon) Snapshot() json.RawMessage {
 			"pauseMediaOnCall": d.cfg.PauseMediaOnCall,
 			"downloadDir":      d.cfg.DownloadPath(),
 			"syncDnd":          d.cfg.SyncDnd,
+			"herdr":            d.cfg.Herdr,
+			"herdrControl":     d.cfg.HerdrControl,
 		},
 		"webcam":   d.webcamViewLocked(),
 		"mic":      d.micViewLocked(),
 		"screen":   d.screenViewLocked(),
+		"herdr":    d.herdrViewLocked(),
 		"ringing":  d.ringing,
 		"ringFrom": d.ringFrom,
 	})
@@ -387,6 +390,10 @@ func (d *Daemon) setSetting(key string, value any) error {
 		d.cfg.PauseMediaOnCall = b
 	case key == "syncDnd" && isBool:
 		d.cfg.SyncDnd = b
+	case key == "herdr" && isBool:
+		d.cfg.Herdr = b
+	case key == "herdrControl" && isBool:
+		d.cfg.HerdrControl = b
 	case key == "name" && isString:
 		d.cfg.Name = strings.TrimSpace(s)
 	case key == "downloadDir" && isString:
@@ -403,6 +410,9 @@ func (d *Daemon) setSetting(key string, value any) error {
 	if key == "name" {
 		d.announce()
 	}
+	if key == "herdr" || key == "herdrControl" {
+		d.herdrChanged()
+	}
 	d.markDirty()
 	return nil
 }
@@ -417,6 +427,7 @@ func (d *Daemon) Reload() error {
 	d.cfg = cfg
 	d.mu.Unlock()
 	d.commandsChanged()
+	d.herdrChanged()
 	return nil
 }
 

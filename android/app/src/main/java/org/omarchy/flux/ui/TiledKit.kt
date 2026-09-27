@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -165,7 +166,7 @@ fun LineTile(
     }
 }
 
-/** A small tile: the icon over the label, centered. */
+/** A small tile: the icon over the label, centered. A [badge] above 0 shows as a red count on the icon. */
 @Composable
 fun MiniTile(
     @DrawableRes icon: Int,
@@ -175,13 +176,24 @@ fun MiniTile(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     container: Color = Tn.tile,
+    badge: Int = 0,
 ) {
     Tile(
         modifier, onClick, accent = accent, container = container, enabled = enabled,
         padding = PaddingValues(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Sym(icon, tint = accent, size = 20.dp)
+        Box {
+            Sym(icon, tint = accent, size = 20.dp)
+            if (badge > 0) {
+                T(
+                    if (badge > 9) "9+" else "$badge",
+                    Modifier.align(Alignment.TopEnd).offset(x = 10.dp, y = (-6).dp)
+                        .clip(RoundedCornerShape(7.dp)).background(Tn.red).padding(horizontal = 4.dp),
+                    size = 10, color = Tn.bg, weight = FontWeight.Bold, family = Mono,
+                )
+            }
+        }
         T(label, size = 11, weight = FontWeight.SemiBold, maxLines = 1)
     }
 }

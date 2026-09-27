@@ -87,6 +87,8 @@ func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.handleScreen(dev, l, p)
 	case proto.TypeFluxApprove:
 		d.handleApprove(dev, p)
+	case proto.TypeFluxHerdr:
+		d.handleHerdr(dev, l, p)
 	case proto.TypeSmsMessages:
 		d.handleSms(dev, p)
 	case proto.TypeTelephony:

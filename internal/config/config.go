@@ -41,6 +41,11 @@ type Config struct {
 	PauseMediaOnCall bool `toml:"pause_media_on_call"`
 	// SyncDnd syncs Do Not Disturb between this computer and the phone.
 	SyncDnd bool `toml:"sync_dnd"`
+	// Herdr shows the herdr agents of this computer on the phone.
+	Herdr bool `toml:"herdr"`
+	// HerdrControl lets the phone send keys and prompts to the herdr
+	// agents. It is off by default, because an agent can run commands.
+	HerdrControl bool `toml:"herdr_control"`
 	// GUI selects the window: "plugin" for the omarchy-shell plugin, "app"
 	// for flux-gui, or empty for the plugin when it is enabled.
 	GUI string `toml:"gui,omitempty"`
@@ -100,7 +105,7 @@ var mu sync.Mutex
 func Load() (*Config, error) {
 	mu.Lock()
 	defer mu.Unlock()
-	c := &Config{AutoClipboard: true, Notifications: true, ShareHome: true, PauseMediaOnCall: true, SyncDnd: true}
+	c := &Config{AutoClipboard: true, Notifications: true, ShareHome: true, PauseMediaOnCall: true, SyncDnd: true, Herdr: true}
 	data, err := os.ReadFile(Path())
 	if errors.Is(err, os.ErrNotExist) {
 		c.Commands = []Command{}

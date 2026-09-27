@@ -343,8 +343,8 @@ fun TiledHomeScreen(
             }
         }
     }
-    val sync = listOf(
-        SyncItem(Ic.notifications, "Share notifications", state.shareNotifications && state.notificationAccess) {
+    val sync = buildList {
+        add(SyncItem(Ic.notifications, "Share notifications", state.shareNotifications && state.notificationAccess) {
             if (!state.notificationAccess) {
                 FluxCore.setShareNotifications(true)
                 val intent = if (Build.VERSION.SDK_INT >= 30) {
@@ -358,26 +358,31 @@ fun TiledHomeScreen(
             } else {
                 FluxCore.setShareNotifications(!state.shareNotifications)
             }
-        },
-        SyncItem(Ic.paste, "Sync clipboard", state.syncClipboard) { FluxCore.setSyncClipboard(!state.syncClipboard) },
-        SyncItem(Ic.call, "Call alerts", state.callAlerts && state.callAccess) {
+        })
+        add(SyncItem(Ic.paste, "Sync clipboard", state.syncClipboard) { FluxCore.setSyncClipboard(!state.syncClipboard) })
+        add(SyncItem(Ic.call, "Call alerts", state.callAlerts && state.callAccess) {
             if (!state.callAccess) {
                 askPhone.launch(arrayOf(Manifest.permission.READ_PHONE_STATE, Manifest.permission.READ_CALL_LOG, Manifest.permission.READ_CONTACTS))
             } else {
                 FluxCore.setCallAlerts(!state.callAlerts)
             }
-        },
-        SyncItem(Ic.dnd, "Sync Do Not Disturb", state.syncDnd && state.dndAccess) {
+        })
+        add(SyncItem(Ic.dnd, "Sync Do Not Disturb", state.syncDnd && state.dndAccess) {
             if (!state.dndAccess) {
                 FluxCore.setSyncDnd(true)
                 runCatching { context.startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)) }
             } else {
                 FluxCore.setSyncDnd(!state.syncDnd)
             }
-        },
-        SyncItem(Ic.screenshot, "Send new screenshots", state.sendScreenshots && state.mediaAccess) { captureToggle(CaptureKind.Screenshot, state.sendScreenshots) },
-        SyncItem(Ic.gallery, "Send new photos", state.sendPhotos && state.mediaAccess) { captureToggle(CaptureKind.Photo, state.sendPhotos) },
-    )
+        })
+        add(SyncItem(Ic.screenshot, "Send new screenshots", state.sendScreenshots && state.mediaAccess) { captureToggle(CaptureKind.Screenshot, state.sendScreenshots) })
+        add(SyncItem(Ic.gallery, "Send new photos", state.sendPhotos && state.mediaAccess) { captureToggle(CaptureKind.Photo, state.sendPhotos) })
+        // The agent alerts apply to every computer. They show only on a computer that sends herdr agents.
+        if (d.herdrSupported) {
+            add(SyncItem(Ic.notificationsActive, "Agent needs input", state.agentInputAlerts) { FluxCore.setAgentInputAlerts(!state.agentInputAlerts) })
+            add(SyncItem(Ic.checkCircle, "Agent finished", state.agentDoneAlerts) { FluxCore.setAgentDoneAlerts(!state.agentDoneAlerts) })
+        }
+    }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = TiledGutter)) {
         TiledTopBar("${typeLabel(d)} · ${d.ip}", onBack) { DeviceMenu(d.name, onUnpair) }
@@ -413,6 +418,12 @@ fun TiledHomeScreen(
                     }, Modifier.weight(1f).fillMaxHeight(), on)
                 }
                 MiniTile(Ic.terminal, "Commands", Tn.yellow, guarded { onNavigate("commands") }, Modifier.weight(1f).fillMaxHeight(), on)
+                if (d.herdrSupported) {
+                    MiniTile(
+                        Ic.agent, "Agents", Tn.magenta, guarded { onNavigate("agents") }, Modifier.weight(1f).fillMaxHeight(), on,
+                        badge = if (on) d.herdr?.blocked ?: 0 else 0,
+                    )
+                }
             }
             LineTile(Ic.folderOpen, "Browse PC", Tn.magenta, guarded { onNavigate("browse") }, Modifier.fillMaxWidth().height(TileUnit), on, trailing = "~/ read-only")
         }

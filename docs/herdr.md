@@ -1,0 +1,230 @@
+# herdr agents
+
+[Documentation index](README.md)
+
+Flux for Android shows the coding agents that [herdr](https://herdr.dev) runs on your Omarchy computer.
+You can see the status of each agent, read its recent output in color, and get a notification when an agent needs input or finishes.
+When you turn on replies, you can also answer an agent with taps and send it text.
+
+The phone uses the Flux link that it already has.
+It needs no new port, no firewall rule, and no new pairing.
+
+```text
+herdr server ── Unix socket ── fluxd ── Flux TLS link ── Flux for Android
+```
+
+`fluxd` is the only herdr client.
+The phone never connects to the herdr socket.
+
+## Requirements
+
+- herdr with API protocol 22 or newer. herdr 0.9.1 uses protocol 22.
+- herdr and `fluxd` run as the same desktop user.
+- A `fluxd` and a Flux for Android that both include this feature.
+
+To check the desktop side, run:
+
+```sh
+flux doctor
+```
+
+When herdr runs, `flux doctor` prints this line:
+
+```text
+✓ herdr 0.9.1 runs, so the phone can show its agents
+```
+
+## See your agents
+
+1. Start herdr on the computer.
+2. Open Flux for Android and select the computer.
+3. Select **Agents**.
+4. Select an agent to read its recent output.
+
+The list puts blocked agents first, then done, working, idle, and unknown agents.
+A blocked agent waits for an approval or for the answer to a question.
+Idle and done agents are ready for new input.
+The **Agents** tile shows the number of blocked agents.
+
+The output screen shows up to 200 lines of recent output with the colors and styles of the terminal.
+It reads the output again every 5 seconds while the agent works, and after each status change.
+Select refresh to read it at once.
+herdr keeps only the recent part of the terminal for some agents, so the screen can show fewer lines.
+
+## Notifications
+
+The phone posts a notification when an agent changes to blocked.
+It also posts a notification when an agent changes from working to done or idle.
+A tap opens the output of that agent.
+
+The phone does not post notifications for the first agent list after it connects.
+It waits 2 seconds before a finished notification, because the status can change between tool calls.
+When the agent works again, the phone removes its notification.
+
+To turn off a notification type, use the **Agent needs input** or **Agent finished** switch on the phone's device page.
+The switches apply to all computers.
+Android also lists the two types as the **Agents that need input** and **Agents that finish** channels.
+
+## Answer an agent
+
+Replies are off by default, because an agent can run commands on the computer.
+To let the phone send keys and text to the agents, set this key in `~/.config/flux/config.toml`:
+
+```toml
+herdr_control = true
+```
+
+Reload the daemon:
+
+```sh
+systemctl --user reload fluxd
+```
+
+The output screen then shows the reply controls:
+
+- When the agent is blocked, the phone shows the numbered choices of the dialog as buttons. A tap sends the number of the choice.
+- The key bar sends Esc, Up, Down, and Enter.
+- The text field sends a prompt to the agent. When the agent is blocked, the phone types the text and presses Enter, which answers a question that needs free text.
+
+Before the first reply, the phone asks for its fingerprint or screen lock.
+The unlock stays valid for 5 minutes.
+
+`fluxd` accepts these keys only: `enter`, `esc`, `tab`, `shift+tab`, `up`, `down`, `left`, `right`, `backspace`, `space`, `0` to `9`, `y`, and `n`.
+It does not accept `ctrl+c`, because that key can end the agent.
+A prompt can have up to 16 KB of text.
+`fluxd` removes control characters from a prompt, except line breaks and tabs.
+
+## Turn the feature off
+
+To stop sending agents to the phone, set this key in `~/.config/flux/config.toml`:
+
+```toml
+herdr = false
+```
+
+Reload the daemon:
+
+```sh
+systemctl --user reload fluxd
+```
+
+The phone then shows that the feature is off on the computer.
+
+## Use another herdr session
+
+`fluxd` follows the default herdr session.
+It uses the first path that applies:
+
+1. `$HERDR_SOCKET_PATH`
+2. `$XDG_CONFIG_HOME/herdr/herdr.sock`
+3. `~/.config/herdr/herdr.sock`
+
+To list the socket of each session, run:
+
+```sh
+herdr session list --json
+```
+
+To follow a named session, set the variable for the service:
+
+```sh
+systemctl --user edit fluxd
+```
+
+Add these lines, then restart the service:
+
+```ini
+[Service]
+Environment=HERDR_SOCKET_PATH=SOCKET_PATH
+```
+
+Replace `SOCKET_PATH` with the `socket_path` value of the session from `herdr session list --json`.
+
+```sh
+systemctl --user restart fluxd
+```
+
+## Access and privacy
+
+The phone can read the agent list and the recent output of an agent pane.
+With `herdr_control = true`, it can also send the keys in the list above and prompts to an agent.
+An agent can run commands, so a reply has the same power as a prompt that you type on the computer.
+`fluxd` reads and sends only to panes that hold an agent in the last agent list.
+herdr also checks that an agent is in the pane before it sends a key or a prompt.
+
+`fluxd` logs each reply with the device name, the pane, and the keys.
+For a prompt, it logs the number of characters, not the text.
+
+Terminal output can contain secrets.
+The output goes only to paired phones over the Flux TLS link.
+`fluxd` does not write the output to its log.
+
+## How it works
+
+`fluxd` subscribes to herdr events for new agents, closed panes, moved panes, and workspace changes.
+It also subscribes to the status of each agent pane, because herdr needs a pane ID for that event.
+After each event, `fluxd` reads the session snapshot and sends the agent list when it changed.
+It also reads the snapshot every 10 seconds, which finds title changes.
+
+When herdr stops, `fluxd` tries to connect every 5 seconds.
+When the phone opens the agent list, `fluxd` tries at once.
+
+### Wire format
+
+The packet type is `flux.herdr`.
+Both sides send it.
+The `kind` field selects the message.
+
+| Kind | Sender | Body |
+| --- | --- | --- |
+| `state` | Computer | `enabled`, `running`, `control`, and `agents` |
+| `output` | Computer | `pane` and `format`, then `text` and `truncated`, or `error` |
+| `sent` | Computer | `pane` and `action`, and `error` when the reply failed |
+| `request` | Phone | No other fields. The computer answers with `state`. |
+| `read` | Phone | `pane`, `lines` from 1 to 400, and `format`. Zero lines means 200. |
+| `keys` | Phone | `pane` and `keys`, 1 to 8 key names. The computer answers with `sent`. |
+| `prompt` | Phone | `pane` and `text`. The computer answers with `sent`. |
+
+The computer sends `state` when the phone connects, after each change, and as the answer to `request`.
+Each agent has `pane`, `agent`, `status`, `title`, `project`, and `workspace`:
+
+```json
+{"kind":"state","enabled":true,"running":true,"control":false,"agents":[{"pane":"w5:p1","agent":"claude","status":"blocked","title":"Custom skin loading","project":"cliamp","workspace":"cliamp"}]}
+```
+
+`status` is `idle`, `working`, `blocked`, `done`, or `unknown`.
+`project` is the base name of the agent's working folder.
+`control` is `true` when `herdr = true` and `herdr_control = true`.
+
+A `read` with `"format":"ansi"` gets an `output` with `"format":"ansi"`.
+Its `text` keeps the SGR sequences of colors and styles.
+`fluxd` removes all other escape sequences and control characters, changes CRLF to LF, and removes the blanks at the end of each line.
+Without `format`, `text` has no ANSI codes.
+`text` has at most 256 KB.
+When `fluxd` removes older lines to stay in that limit, `truncated` is `true`.
+
+A reply and its answer look like this:
+
+```json
+{"kind":"keys","pane":"w5:p1","keys":["2"]}
+{"kind":"sent","pane":"w5:p1","action":"keys"}
+```
+
+`flux status --json` includes the same agent state in its `herdr` field.
+
+## Troubleshoot
+
+| Problem | Next step |
+| --- | --- |
+| The **Agents** tile is missing | Update `fluxd` and Flux for Android. The tile shows only when the computer sends `flux.herdr`. |
+| The phone says that herdr is not running | Run `herdr status` and `flux doctor` on the computer. |
+| The list is empty | Run `herdr agent list`. herdr must detect the agent in its pane. |
+| The phone says that the feature is off | Set `herdr = true` and reload `fluxd`. |
+| The phone says that replies are off | Set `herdr_control = true` and reload `fluxd`. |
+| A reply says that the agent is not ready for input | herdr accepts input only for an agent that it detected. Run `herdr agent get PANE` on the computer. |
+
+To read the herdr messages of the daemon, run:
+
+```sh
+journalctl --user -u fluxd --no-pager | grep herdr
+```

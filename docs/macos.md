@@ -78,6 +78,9 @@ It appears on the computer as `laptop` when it has a battery and `desktop` other
 The Mac cannot mirror notifications from other apps, report calls, or send SMS, because macOS gives apps no access to them.
 Flux does not advertise those capabilities.
 
+The Mac app does not show [herdr agents](herdr.md) yet.
+It does not advertise `flux.herdr`, so `fluxd` sends it no agent state.
+
 ## Focus
 
 macOS has no public API that reads or sets the Focus state for an ad hoc signed app.

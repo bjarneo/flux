@@ -43,6 +43,14 @@ class Device(private val core: FluxCore, var identity: Identity) {
     var commands: List<RemoteCommand> = emptyList()
     var commandsLoaded = false
 
+    /** The herdr agents of the computer, or null before the first agent list. */
+    var herdr: HerdrState? = null
+    /** The output of the pane on the agent screen, or null when no agent screen is open. */
+    var herdrOutput: HerdrOutput? = null
+    /** The last reply to an agent from the agent screen, or null when none is open. */
+    var herdrReply: HerdrReply? = null
+    val herdrTracker = HerdrTracker()
+
     val online: Boolean get() = link?.isOpen == true
     val paired: Boolean get() = pairState == PairState.Paired
 
@@ -76,6 +84,10 @@ class Device(private val core: FluxCore, var identity: Identity) {
         player = currentPlayer?.let { playerStates[it] },
         commands = commands,
         commandsLoaded = commandsLoaded,
+        herdrSupported = Types.FLUX_HERDR in identity.incoming,
+        herdr = herdr,
+        herdrOutput = herdrOutput,
+        herdrReply = herdrReply,
     )
 
     // ---------------------------------------------------------------- pairing

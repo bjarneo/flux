@@ -131,3 +131,17 @@ An image that no computer received waits for a computer to connect.
 The desktop notification includes an Open action.
 
 See [camera and streams](camera.md) for direct capture and live media.
+
+## herdr agents
+
+When [herdr](https://herdr.dev) runs on the computer, select **Agents** on the phone's device page.
+The phone shows the status and the colored output of each coding agent, and posts a notification when an agent needs input or finishes.
+
+To answer agents from the phone, set:
+
+```toml
+herdr_control = true
+```
+
+Reload with `systemctl --user reload fluxd`.
+See [herdr agents](herdr.md) for the replies, the notifications, and the access rules.

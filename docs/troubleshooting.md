@@ -94,6 +94,17 @@ The microphone needs PipeWire and phone microphone permission.
 The screen mirror needs `mpv` or `ffplay` and the Android capture prompt.
 See [camera and streams](camera.md) for setup commands.
 
+## herdr agents do not show
+
+```sh
+herdr status
+flux doctor
+journalctl --user -u fluxd --no-pager | grep herdr
+```
+
+`fluxd` and herdr must run as the same user.
+See [herdr agents](herdr.md#troubleshoot) for the socket path and the phone states.
+
 ## Android build or install fails
 
 Check the Java and Gradle versions from `android/`:

@@ -17,6 +17,7 @@ import (
 
 	"flux/internal/config"
 	"flux/internal/desktop"
+	"flux/internal/herdr"
 	"flux/internal/lan"
 	"flux/internal/proto"
 )
@@ -67,6 +68,14 @@ type Daemon struct {
 	screen    *screenSession
 	screenErr string
 	approvals approvalBook
+
+	// herdrPath is the API socket of herdr. herdrRunning and herdrAgents
+	// are the last state that the herdr loop read. herdrWake makes the
+	// loop check the setting and read the session again.
+	herdrPath    string
+	herdrRunning bool
+	herdrAgents  []HerdrAgent
+	herdrWake    chan struct{}
 
 	subs   map[int]func(event string, data any)
 	nextID int
@@ -154,6 +163,9 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 		dirty:   make(chan struct{}, 1),
 		ctx:     ctx,
 		logger:  logger,
+
+		herdrPath: herdr.SocketPath(),
+		herdrWake: make(chan struct{}, 1),
 	}
 	if opts.Headless {
 		d.clip, d.ringer = &memClipboard{}, silentRinger{}
@@ -273,6 +285,7 @@ func (d *Daemon) Run() error {
 	go d.publishLoop(ctx)
 	go d.discoveryLoop(ctx)
 	go d.batteryLoop(ctx)
+	go d.herdrLoop(ctx)
 
 	<-ctx.Done()
 	d.closeLinks()
@@ -540,6 +553,12 @@ func (d *Daemon) onPairedLink(dev *Device, l *lan.Link) {
 	}
 	if dev.supports(proto.TypeMpris) {
 		_ = l.Send(proto.New(proto.TypeMprisRequest, map[string]any{"requestPlayerList": true}))
+	}
+	if dev.accepts(proto.TypeFluxHerdr) {
+		d.mu.Lock()
+		state := herdrStatePacket(d.herdrViewLocked())
+		d.mu.Unlock()
+		_ = l.Send(state)
 	}
 }
 

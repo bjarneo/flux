@@ -33,6 +33,16 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("syncDnd", true)
         set(v) = prefs.edit().putBoolean("syncDnd", v).apply()
 
+    /** Notifies when a herdr agent on a computer needs input. */
+    var agentInputAlerts: Boolean
+        get() = prefs.getBoolean("agentInputAlerts", true)
+        set(v) = prefs.edit().putBoolean("agentInputAlerts", v).apply()
+
+    /** Notifies when a herdr agent on a computer finishes its work. */
+    var agentDoneAlerts: Boolean
+        get() = prefs.getBoolean("agentDoneAlerts", true)
+        set(v) = prefs.edit().putBoolean("agentDoneAlerts", v).apply()
+
     /** Sends each new screenshot to the computers. */
     var sendScreenshots: Boolean
         get() = prefs.getBoolean("sendScreenshots", false)

@@ -22,6 +22,7 @@ Flux connects an Omarchy desktop to Flux for Android or Flux for macOS on the sa
 | [Configuration](configuration.md) | TOML settings, data paths, environment variables, and service control |
 | [Omarchy integration](omarchy.md) | Shell plugin, bar item, window host, theme, and desktop integration |
 | [Fingerprint approval](approvals.md) | Enrollment, PAM services, timeout, and removal |
+| [herdr agents](herdr.md) | Agent status, colored output, notifications, and replies on the phone |
 | [Troubleshooting](troubleshooting.md) | Service, discovery, plugin, media, Android, and build failures |
 
 ## Develop and automate

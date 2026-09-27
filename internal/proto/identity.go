@@ -54,6 +54,10 @@ const (
 	// TypeFluxApprove carries approval and enrollment requests to the phone,
 	// and the signed answers back. docs/approve.md describes it.
 	TypeFluxApprove = "flux.approve"
+	// TypeFluxHerdr carries the herdr agents of the computer to the phone,
+	// and the requests of the phone for the agent list and recent output.
+	// Both sides send it. docs/herdr.md describes it.
+	TypeFluxHerdr = "flux.herdr"
 )
 
 // Incoming lists the packet types that Flux accepts. The phone enables a
@@ -64,7 +68,7 @@ var Incoming = []string{
 	TypeRunCommandRequest, TypeMpris, TypeMprisRequest, TypeSftp,
 	TypeSftpRequest, TypeSmsMessages, TypeConnectivity, TypeTelephony,
 	TypeFluxTunnel, TypeFluxWebcam, TypeFluxDnd, TypeFluxMic, TypeFluxScreen,
-	TypeFluxApprove,
+	TypeFluxApprove, TypeFluxHerdr,
 }
 
 // Outgoing lists the packet types that Flux sends.
@@ -74,7 +78,7 @@ var Outgoing = []string{
 	TypeFindMyPhone, TypeRunCommand, TypeMpris, TypeMprisRequest,
 	TypeSftpRequest, TypeSmsRequest, TypeSmsConversations,
 	TypeSmsConversation, TypeSftp, TypeFluxWebcam, TypeFluxDnd,
-	TypeFluxMic, TypeFluxScreen, TypeFluxApprove,
+	TypeFluxMic, TypeFluxScreen, TypeFluxApprove, TypeFluxHerdr,
 }
 
 // Identity is the body of a kdeconnect.identity packet.
