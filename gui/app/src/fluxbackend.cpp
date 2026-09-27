@@ -45,6 +45,14 @@ FluxBackend::FluxBackend(QJSEngine *engine, QObject *parent)
     connectNow();
 }
 
+FluxBackend::~FluxBackend()
+{
+    // ~QLocalSocket closes the connection and emits disconnected. At that
+    // time m_pending is already destroyed, and the engine that owns this
+    // object is mid-destruction. Remove the socket handlers first.
+    m_socket.disconnect(this);
+}
+
 QString FluxBackend::socketPath()
 {
     const QString override = qEnvironmentVariable("FLUX_SOCKET");

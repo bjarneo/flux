@@ -26,6 +26,7 @@ class FluxBackend : public QObject {
 
 public:
     explicit FluxBackend(QJSEngine *engine, QObject *parent = nullptr);
+    ~FluxBackend() override;
 
     bool connected() const { return m_socket.state() == QLocalSocket::ConnectedState; }
     bool attempted() const { return m_attempted; }
