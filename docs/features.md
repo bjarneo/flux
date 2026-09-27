@@ -47,6 +47,15 @@ The tunnel carries SSH traffic without an inbound SSH firewall rule.
 ## Notifications
 
 Enable notification access on the phone to show its notifications on the desktop.
+To dismiss all of them, select **Clear all** on the Notifications page, or run:
+
+```sh
+flux-cli notifications clear
+```
+
+Clear all also dismisses the notifications on the phone.
+An ongoing notification, such as a media player, stays.
+
 To send a notification in the other direction:
 
 ```sh

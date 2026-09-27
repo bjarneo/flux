@@ -3,13 +3,16 @@ import ".."
 import "../components"
 
 // Notifications from the device. A row can be dismissed, and a row with a
-// reply ID has a reply field.
+// reply ID has a reply field. Clear all dismisses each row that can be
+// dismissed.
 Item {
   id: root
   property var view
   property bool fillHeight: false
   readonly property var dev: view ? view.dev : null
+  readonly property bool online: !!dev && !!dev.online
   readonly property var notifs: dev && dev.notifications ? dev.notifications : []
+  readonly property int clearable: notifs.filter(function (n) { return n.dismissable !== false }).length
 
   implicitHeight: list.implicitHeight
 
@@ -17,6 +20,27 @@ Item {
     id: list
     width: Math.min(parent.width, 760)
     spacing: 10
+
+    Item {
+      visible: root.clearable > 0
+      width: parent.width
+      height: clearAll.implicitHeight
+      Txt {
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+        text: root.notifs.length === 1 ? "1 notification" : root.notifs.length + " notifications"
+        color: Theme.dim
+        font.pixelSize: 12
+      }
+      OutlineButton {
+        id: clearAll
+        anchors.right: parent.right
+        icon: "close"
+        text: "Clear all"
+        active: root.online
+        onClicked: root.view.call("notification.dismissAll", { device: root.dev.id })
+      }
+    }
 
     Txt {
       visible: root.notifs.length === 0

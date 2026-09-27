@@ -69,6 +69,7 @@ flux-cli watch
 | Addresses | `addresses.add`, `addresses.remove` |
 | Sharing | `clipboard.send`, `share.files`, `share.url` |
 | Commands | `commands.add`, `commands.remove`, `commands.run` |
+| Notifications | `notification.dismiss`, `notification.dismissAll`, `notification.reply` |
 | Media | `media.action` |
 | Text messages | `sms.refresh`, `sms.thread`, `sms.send` |
 | Streams | `webcam.config`, `webcam.stop`, `mic.stop`, `screen.stop` |

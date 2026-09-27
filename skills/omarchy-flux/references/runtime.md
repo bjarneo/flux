@@ -77,6 +77,7 @@ Read `docs/tailscale.md` for the limits and the troubleshooting steps.
 
 ```sh
 flux-cli --device "Pixel 8" notifications
+flux-cli --device "Pixel 8" notifications clear
 flux-cli --device "Pixel 8" notify "Build complete" "All tests passed"
 flux-cli --device "Pixel 8" notify --run -- make test
 flux-cli --device "Pixel 8" media play-pause

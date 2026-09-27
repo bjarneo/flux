@@ -44,6 +44,8 @@ Commands:
   sms NUMBER TEXT...     Send a text message through the phone
   media ACTION           play-pause, play, pause, next, previous, or stop
   notifications          List the phone notifications
+  notifications clear    Dismiss the phone notifications, on the phone and here.
+                         Ongoing notifications, such as a media player, stay
   notify TITLE [BODY]    Show a notification on the phone
   notify --run -- CMD…   Run CMD, then show on the phone how it ended. Exits with
                          the exit code of CMD
@@ -115,7 +117,11 @@ func main() {
 	case "media":
 		err = media(device, need(args, "ACTION"))
 	case "notifications":
-		err = notifications(device)
+		if first(args) == "clear" {
+			err = clearNotifications(device)
+		} else {
+			err = notifications(device)
+		}
 	case "notify":
 		err = notify(device, args)
 	case "commands":
@@ -429,6 +435,21 @@ func notifications(device string) error {
 		for _, n := range d.Notifications {
 			fmt.Printf("%s · %s: %s %s\n", d.Name, n.App, n.Title, n.Text)
 		}
+	}
+	return nil
+}
+
+func clearNotifications(device string) error {
+	var res struct {
+		Dismissed int `json:"dismissed"`
+	}
+	if err := callInto("notification.dismissAll", map[string]any{"device": device}, &res); err != nil {
+		return err
+	}
+	if res.Dismissed == 1 {
+		fmt.Println("Dismissed 1 notification")
+	} else {
+		fmt.Printf("Dismissed %d notifications\n", res.Dismissed)
 	}
 	return nil
 }

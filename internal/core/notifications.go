@@ -220,6 +220,34 @@ func (d *Daemon) DismissNotification(dev *Device, id string) error {
 	return nil
 }
 
+// DismissAllNotifications dismisses each phone notification that the user
+// can dismiss, on the phone and on this computer. It returns the number of
+// dismissed notifications. An ongoing notification, such as a media
+// player, stays.
+func (d *Daemon) DismissAllNotifications(dev *Device) (int, error) {
+	d.mu.Lock()
+	ids := dismissable(dev.notifications)
+	d.mu.Unlock()
+	for i, id := range ids {
+		if err := d.DismissNotification(dev, id); err != nil {
+			return i, err
+		}
+	}
+	return len(ids), nil
+}
+
+// dismissable returns the IDs of the notifications that the user can
+// dismiss.
+func dismissable(list []*PhoneNotification) []string {
+	var ids []string
+	for _, n := range list {
+		if n.Clear {
+			ids = append(ids, n.ID)
+		}
+	}
+	return ids
+}
+
 // ReplyNotification sends an inline reply to a phone notification.
 func (d *Daemon) ReplyNotification(dev *Device, id, message string) error {
 	d.mu.Lock()

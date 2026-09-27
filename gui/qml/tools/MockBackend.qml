@@ -57,6 +57,16 @@ QtObject {
     if (method === "browse.open") result = { roots: fixture.roots }
     else if (method === "browse.list") result = { entries: fixTimes((fixture.dirs || {})[params.path] || []) }
     else if (method === "sms.thread") result = { messages: fixTimes((fixture.threads || {})[String(params.thread)] || []) }
+    else if (method === "notification.dismissAll") {
+      var n = 0
+      updateDevice(params.device, function (d) {
+        var keep = (d.notifications || []).filter(function (x) { return x.dismissable === false })
+        n = (d.notifications || []).length - keep.length
+        d.notifications = keep
+        return d
+      })
+      result = { dismissed: n }
+    }
     else if (method === "webcam.stop") setState(function (s) { s.webcam = null })
     else if (method === "mic.stop") setState(function (s) { s.mic = null })
     else if (method === "screen.stop") setState(function (s) { s.screen = null })

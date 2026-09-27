@@ -86,6 +86,7 @@ flux-cli clip
 flux-cli clip "Text from the desktop"
 flux-cli url https://omarchy.org
 flux-cli notifications
+flux-cli notifications clear
 flux-cli notify "Backup done" "412 files, 2.1 GB"
 ```
 
@@ -93,6 +94,7 @@ flux-cli notify "Backup done" "412 files, 2.1 GB"
 `flux-cli send` starts transfers and returns their count.
 Inspect `transfers` in `flux-cli status --json` for completion.
 `flux-cli clip` without text reads the desktop clipboard.
+`flux-cli notifications clear` dismisses the phone notifications on the phone and on the desktop. Ongoing notifications stay.
 
 To send an SMS, set the recipient and message first:
 

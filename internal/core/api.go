@@ -290,6 +290,12 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		return ok, d.ShareText(dev, "url", p.URL)
 	case "notification.dismiss":
 		return ok, d.DismissNotification(dev, p.ID)
+	case "notification.dismissAll":
+		n, err := d.DismissAllNotifications(dev)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"dismissed": n}, nil
 	case "notification.reply":
 		return ok, d.ReplyNotification(dev, p.ID, p.Message)
 	case "notification.action":
