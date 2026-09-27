@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"golang.org/x/sys/unix"
 
@@ -163,7 +164,19 @@ func setupPlugin(dry bool, run func(string, string, ...string) error) error {
 	if err := run("rescan plugins", "omarchy-shell", "shell", "rescanPlugins"); err != nil {
 		return err
 	}
-	if err := run("enable the plugin", "omarchy", "plugin", "enable", "flux", "--section", "right"); err != nil {
+
+	// omarchy-shell shell rescanPlugins runs asynchronously and flux may
+	// not be listed immediately, so retry enabling the plugin on a delay a
+	// limited number of times.
+	for i := 0; i < 50; i++ {
+		if i > 0 {
+			time.Sleep(100 * time.Millisecond)
+		}
+		if err = run("enable the plugin", "omarchy", "plugin", "enable", "flux", "--section", "right"); err == nil {
+			break
+		}
+	}
+	if err != nil {
 		return err
 	}
 	if !dry {
