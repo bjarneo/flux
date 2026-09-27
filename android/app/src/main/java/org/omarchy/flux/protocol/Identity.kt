@@ -51,6 +51,9 @@ object Types {
 
     /** Flux extension: the computer sends its herdr agents, and this phone asks for their output. Both sides send it. */
     const val FLUX_HERDR = "flux.herdr"
+
+    /** Flux extension: an image that one side copied, as the payload, with {"mime": "image/png"}. Both sides send it. */
+    const val FLUX_CLIPBOARD_IMAGE = "flux.clipboard.image"
 }
 
 /** Packet types that the phone accepts. */
@@ -67,8 +70,14 @@ val OUTGOING = listOf(
     Types.PING, Types.BATTERY, Types.CLIPBOARD, Types.CLIPBOARD_CONNECT, Types.SHARE,
     Types.SHARE_UPDATE, Types.NOTIFICATION, Types.RUN_COMMAND_REQUEST, Types.MPRIS_REQUEST,
     Types.SFTP_REQUEST, Types.TELEPHONY, Types.FLUX_TUNNEL, Types.FLUX_WEBCAM, Types.FLUX_DND,
-    Types.FLUX_MIC, Types.FLUX_SCREEN, Types.FLUX_APPROVE, Types.FLUX_HERDR,
+    Types.FLUX_MIC, Types.FLUX_SCREEN, Types.FLUX_APPROVE, Types.FLUX_HERDR, Types.FLUX_CLIPBOARD_IMAGE,
 )
+
+/**
+ * The phone accepts clipboard images only while Sync clipboard is on, so
+ * that a computer does not send an image that the phone drops.
+ */
+val CLIPBOARD_IMAGE_INCOMING = listOf(Types.FLUX_CLIPBOARD_IMAGE)
 
 /**
  * The SMS packet types. The phone lists them only while text messages are
@@ -129,10 +138,13 @@ data class Identity(
             )
         }
 
-        /** The identity of this phone. [sms] adds the SMS packet types. */
-        fun self(deviceId: String, name: String, tcpPort: Int, sms: Boolean = false) = Identity(
+        /**
+         * The identity of this phone. [sms] adds the SMS packet types, and
+         * [clipboardImages] adds the incoming clipboard images.
+         */
+        fun self(deviceId: String, name: String, tcpPort: Int, sms: Boolean = false, clipboardImages: Boolean = false) = Identity(
             deviceId, cleanName(name), "phone", PROTOCOL_VERSION,
-            if (sms) INCOMING + SMS_INCOMING else INCOMING,
+            INCOMING + (if (sms) SMS_INCOMING else emptyList()) + (if (clipboardImages) CLIPBOARD_IMAGE_INCOMING else emptyList()),
             if (sms) OUTGOING + SMS_OUTGOING else OUTGOING,
             tcpPort,
         )

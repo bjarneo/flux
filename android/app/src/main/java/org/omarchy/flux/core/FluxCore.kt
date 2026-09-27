@@ -84,12 +84,14 @@ object FluxCore {
     /** The TLS context of the running backend, for payload transfers. */
     val tls: org.omarchy.flux.net.Tls? get() = backend?.tls
 
-    fun identity(tcpPort: Int): Identity = Identity.self(local.deviceId, deviceName, tcpPort, sms = SmsSync.enabled(app))
+    fun identity(tcpPort: Int): Identity =
+        Identity.self(local.deviceId, deviceName, tcpPort, sms = SmsSync.enabled(app), clipboardImages = settings.syncClipboard)
 
     /**
      * Sends the identity again to each connected computer. The SMS packet
      * types in it follow the Text messages switch, and a computer shows its
-     * Messages page from them.
+     * Messages page from them. The clipboard image type follows the Sync
+     * clipboard switch.
      */
     fun sendIdentity() {
         val p = identity(0).toPacket()
@@ -303,6 +305,7 @@ object FluxCore {
 
     fun setSyncClipboard(on: Boolean) {
         settings.syncClipboard = on
+        sendIdentity()
         publish()
     }
 

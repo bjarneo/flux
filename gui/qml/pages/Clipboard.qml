@@ -3,7 +3,7 @@ import ".."
 import "../components"
 
 // Clipboard history. Incoming entries have a down arrow, outgoing entries
-// have an up arrow.
+// have an up arrow. An image entry shows the image.
 Item {
   id: root
   property var view
@@ -28,7 +28,7 @@ Item {
     Txt {
       visible: root.entries.length === 0
       width: parent.width
-      text: "No clipboard entries yet. Copy text on this computer or on the phone."
+      text: "No clipboard entries yet. Copy text or an image on this computer or on the phone."
       color: Theme.dim
       wrapMode: Text.Wrap
     }
@@ -57,10 +57,23 @@ Item {
           anchors.right: copy.left
           anchors.rightMargin: 16
           anchors.verticalCenter: parent.verticalCenter
+          spacing: modelData.image ? 6 : 0
           Txt {
+            visible: !modelData.image
             width: parent.width
             text: (modelData.text || "").replace(/\s*\n\s*/g, " ")
             elide: Text.ElideRight
+          }
+          Image {
+            visible: !!modelData.image
+            width: parent.width
+            height: visible ? 72 : 0
+            source: modelData.image ? "file://" + modelData.image : ""
+            sourceSize.height: 144
+            fillMode: Image.PreserveAspectFit
+            horizontalAlignment: Image.AlignLeft
+            asynchronous: true
+            cache: false
           }
           Txt {
             width: parent.width
@@ -80,7 +93,8 @@ Item {
           padX: 12
           padY: 5
           fontSize: 12
-          onClicked: root.view.call("clipboard.copy", { text: modelData.text }, function () { root.view.toast("Copied to the clipboard") })
+          onClicked: root.view.call("clipboard.copy", modelData.image ? { path: modelData.image } : { text: modelData.text },
+                                    function () { root.view.toast("Copied to the clipboard") })
         }
       }
     }

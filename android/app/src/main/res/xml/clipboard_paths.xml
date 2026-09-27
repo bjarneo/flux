@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The cache folder of ClipImage, for the image on the clipboard. -->
+<paths>
+    <cache-path name="clipboard" path="clipboard/" />
+</paths>

@@ -135,7 +135,7 @@ Key settings:
 
 | Key | Default behavior |
 | --- | --- |
-| `auto_clipboard` | Sync clipboard text in both directions |
+| `auto_clipboard` | Sync clipboard text and images in both directions |
 | `notifications` | Show phone notifications on the desktop |
 | `share_home` | Share the desktop home folder read-only |
 | `pause_media_on_call` | Pause desktop media during a phone call |

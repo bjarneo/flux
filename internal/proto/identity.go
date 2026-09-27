@@ -58,6 +58,11 @@ const (
 	// and the requests of the phone for the agent list and recent output.
 	// Both sides send it. docs/herdr.md describes it.
 	TypeFluxHerdr = "flux.herdr"
+	// TypeFluxClipboardImage carries an image that one side copied. The
+	// payload is the image, and the body names its MIME type, {"mime":
+	// "image/png"}. Both sides send it. A phone lists it as incoming only
+	// while its clipboard sync is on.
+	TypeFluxClipboardImage = "flux.clipboard.image"
 )
 
 // Incoming lists the packet types that Flux accepts. The phone enables a
@@ -68,7 +73,7 @@ var Incoming = []string{
 	TypeMprisRequest, TypeSftp, TypeSftpRequest,
 	TypeSmsMessages, TypeConnectivity, TypeTelephony,
 	TypeFluxTunnel, TypeFluxWebcam, TypeFluxDnd, TypeFluxMic, TypeFluxScreen,
-	TypeFluxApprove, TypeFluxHerdr,
+	TypeFluxApprove, TypeFluxHerdr, TypeFluxClipboardImage,
 }
 
 // Outgoing lists the packet types that Flux sends.
@@ -79,6 +84,7 @@ var Outgoing = []string{
 	TypeSftpRequest, TypeSmsRequest, TypeSmsConversations,
 	TypeSmsConversation, TypeSftp, TypeFluxWebcam, TypeFluxDnd,
 	TypeFluxMic, TypeFluxScreen, TypeFluxApprove, TypeFluxHerdr,
+	TypeFluxClipboardImage,
 }
 
 // Identity is the body of a kdeconnect.identity packet.

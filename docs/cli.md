@@ -93,7 +93,9 @@ flux-cli notify "Backup done" "412 files, 2.1 GB"
 `flux-cli ring` rings only a phone or a tablet.
 `flux-cli send` starts transfers and returns their count.
 Inspect `transfers` in `flux-cli status --json` for completion.
-`flux-cli clip` without text reads the desktop clipboard.
+`flux-cli clip` without text sends the desktop clipboard.
+When the clipboard holds an image, the command sends the image and returns when the transfer ends.
+See [clipboard images](features.md#clipboard-images).
 `flux-cli notifications clear` dismisses the phone notifications on the phone and on the desktop. Ongoing notifications stay.
 
 To send an SMS, set the recipient and message first:

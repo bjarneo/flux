@@ -67,17 +67,48 @@ object Android {
         return pct to plugged
     }
 
-    /** Reads the clipboard. Android returns null when the app has no focus. */
+    /**
+     * Reads the clipboard as text. It returns null for an image. Android
+     * returns null when the app has no focus.
+     */
     fun clipboardText(context: Context): String? {
         val cm = context.getSystemService(ClipboardManager::class.java) ?: return null
         val clip = cm.primaryClip ?: return null
         if (clip.itemCount == 0) return null
-        return clip.getItemAt(0).coerceToText(context)?.toString()
+        val item = clip.getItemAt(0)
+        // For an image, coerceToText returns the content:// address.
+        if (item.text == null && item.uri != null && clip.description.hasMimeType("image/*")) return null
+        return item.coerceToText(context)?.toString()
     }
 
     fun setClipboard(context: Context, text: String) {
         val cm = context.getSystemService(ClipboardManager::class.java) ?: return
         cm.setPrimaryClip(ClipData.newPlainText("Flux", text))
+    }
+
+    /**
+     * Reads an image from the clipboard. It returns the address and the MIME
+     * type of the image, or null when the clipboard holds no image that
+     * Flux syncs. Android returns null when the app has no focus.
+     */
+    fun clipboardImage(context: Context): Pair<Uri, String>? {
+        val cm = context.getSystemService(ClipboardManager::class.java) ?: return null
+        val clip = cm.primaryClip ?: return null
+        if (clip.itemCount == 0) return null
+        val item = clip.getItemAt(0)
+        val uri = item.uri ?: return null
+        if (item.text != null) return null
+        val desc = clip.description
+        val types = (0 until desc.mimeTypeCount).map { desc.getMimeType(it) } +
+            runCatching { context.contentResolver.getType(uri) }.getOrNull()
+        val mime = ClipImage.pickType(types) ?: return null
+        return uri to mime
+    }
+
+    /** Puts the image at [uri] on the clipboard. Flux must own the address. */
+    fun setClipboardImage(context: Context, uri: Uri) {
+        val cm = context.getSystemService(ClipboardManager::class.java) ?: return
+        cm.setPrimaryClip(ClipData.newUri(context.contentResolver, "Flux", uri))
     }
 
     /**

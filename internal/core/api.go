@@ -211,6 +211,9 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 	case "approve.cancel":
 		return ok, d.ApproveCancel(p.ID)
 	case "clipboard.copy":
+		if p.Path != "" {
+			return ok, d.CopyClipImage(p.Path)
+		}
 		if p.Text == "" {
 			return nil, apiErr("bad_params", "text is empty")
 		}

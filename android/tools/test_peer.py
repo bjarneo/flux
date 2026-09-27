@@ -61,11 +61,12 @@ def make_identity(dev_id, target=None, name="flux-test-peer"):
             "kdeconnect.ping", "kdeconnect.battery", "kdeconnect.clipboard", "kdeconnect.clipboard.connect",
             "kdeconnect.share.request", "kdeconnect.notification", "kdeconnect.runcommand.request",
             "kdeconnect.mpris.request", "kdeconnect.sftp.request", "flux.tunnel",
+            "flux.clipboard.image",
         ],
         "outgoingCapabilities": [
             "kdeconnect.ping", "kdeconnect.battery", "kdeconnect.clipboard", "kdeconnect.share.request",
             "kdeconnect.notification.request", "kdeconnect.findmyphone.request", "kdeconnect.runcommand",
-            "kdeconnect.mpris", "kdeconnect.sftp",
+            "kdeconnect.mpris", "kdeconnect.sftp", "flux.clipboard.image",
         ],
     }
     if target:
@@ -79,6 +80,7 @@ def main():
     ap.add_argument("--serial", default=os.environ.get("ANDROID_SERIAL", ""))
     ap.add_argument("--seconds", type=int, default=600, help="how long to answer requests after pairing")
     ap.add_argument("--send-file", help="send this file to the phone after pairing")
+    ap.add_argument("--clipboard-image", help="put this PNG image on the clipboard of the phone after pairing")
     ap.add_argument("--sftp-port", type=int, help="answer Browse PC with an SFTP server on 127.0.0.1:<port>")
     ap.add_argument("--sftp-root", default="/", help="the folder that the SFTP server serves")
     ap.add_argument("--sftp-password", default="flux-test")
@@ -166,9 +168,13 @@ def main():
         send("kdeconnect.mpris", {"playerList": ["spotify"], "supportAlbumArtPayload": False})
         if args.send_file:
             send_file(args.send_file)
+        if args.clipboard_image:
+            send_file(args.clipboard_image, "flux.clipboard.image", {"mime": "image/png"})
 
-    def send_file(path):
+    def send_file(path, kind="kdeconnect.share.request", body=None):
         data = open(path, "rb").read()
+        if body is None:
+            body = {"filename": os.path.basename(path), "open": False}
         srv = socket.socket()
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         srv.bind(("127.0.0.1", 0))
@@ -176,8 +182,7 @@ def main():
         srv.listen(1)
         # The phone connects to 127.0.0.1:<port> on itself. adb reverse maps it here.
         sh(*adb, "reverse", f"tcp:{port}", f"tcp:{port}")
-        send("kdeconnect.share.request", {"filename": os.path.basename(path), "open": False},
-             payloadSize=len(data), payloadTransferInfo={"port": port})
+        send(kind, body, payloadSize=len(data), payloadTransferInfo={"port": port})
         conn, _ = srv.accept()
         pctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         pctx.maximum_version = ssl.TLSVersion.TLSv1_2

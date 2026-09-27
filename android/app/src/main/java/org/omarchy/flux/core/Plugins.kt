@@ -80,6 +80,7 @@ object Plugins {
             Types.FLUX_SCREEN -> org.omarchy.flux.screen.ScreenSession.onPacket(core, d, p)
             Types.FLUX_APPROVE -> Approvals.onPacket(core, d, p)
             Types.FLUX_HERDR -> HerdrSync.onPacket(core, d, p)
+            Types.FLUX_CLIPBOARD_IMAGE -> ClipImage.receive(core, d, p)
             Types.SMS_REQUEST, Types.SMS_REQUEST_CONVERSATIONS, Types.SMS_REQUEST_CONVERSATION -> SmsSync.onPacket(core, d, p)
         }
     }
@@ -104,6 +105,24 @@ object Plugins {
     /** Sends the local clipboard. Call it from the main thread while the app has focus. */
     fun sendClipboard(core: FluxCore, id: String): Boolean {
         val d = core.device(id) ?: return false
+        val name = d.identity.deviceName
+        Android.clipboardImage(core.app)?.let { (uri, mime) ->
+            if (Types.FLUX_CLIPBOARD_IMAGE !in d.identity.incoming) {
+                core.toast("Update Flux on $name to send images")
+                return false
+            }
+            core.settings.clipboardTimestamp = System.currentTimeMillis()
+            ClipImage.send(core, listOf(d), uri, mime) { sent ->
+                core.toast(
+                    when {
+                        sent > 0 -> "Image sent to $name"
+                        sent < 0 -> "The image is larger than ${ClipImage.MAX_BYTES shr 20} MB"
+                        else -> "Sending the image failed"
+                    },
+                )
+            }
+            return true
+        }
         val text = Android.clipboardText(core.app)
         if (text.isNullOrEmpty()) {
             core.toast("The clipboard is empty")
@@ -118,6 +137,14 @@ object Plugins {
     /** Called when the local clipboard changes while the app is on screen. */
     fun onLocalClipboard(core: FluxCore) {
         if (!core.settings.syncClipboard) return
+        Android.clipboardImage(core.app)?.let { (uri, mime) ->
+            if (uri == ClipImage.lastRemote) return
+            val computers = core.connectedPaired().filter { Types.FLUX_CLIPBOARD_IMAGE in it.identity.incoming }
+            if (computers.isEmpty()) return
+            core.settings.clipboardTimestamp = System.currentTimeMillis()
+            ClipImage.send(core, computers, uri, mime)
+            return
+        }
         val text = Android.clipboardText(core.app) ?: return
         if (text == lastRemoteClip) return
         core.settings.clipboardTimestamp = System.currentTimeMillis()

@@ -18,7 +18,7 @@ A paired device can also connect through [Tailscale](tailscale.md) away from tha
 | [Android](android.md) | APK installation, local builds, SDK setup, tests, and screenshots |
 | [macOS](macos.md) | Mac app build, pairing, features, permissions, and local tests |
 | [CLI](cli.md) | Commands, device selection, JSON state, and notifications from scripts |
-| [Everyday use](features.md) | Pair, share, SMS, media, calls, Do Not Disturb, and automatic photo transfers |
+| [Everyday use](features.md) | Pair, share, clipboard images, SMS, media, calls, Do Not Disturb, and automatic photo transfers |
 | [Tailscale](tailscale.md) | Extra addresses, links away from the local network, other VPNs, and connection checks |
 | [Camera and streams](camera.md) | Scans, photos, webcam settings, microphone, and screen mirror |
 | [Configuration](configuration.md) | TOML settings, data paths, environment variables, and service control |

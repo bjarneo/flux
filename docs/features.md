@@ -44,6 +44,29 @@ Received files use `download_dir`.
 The phone can browse the desktop home folder read-only when `share_home` is enabled.
 The tunnel carries SSH traffic without an inbound SSH firewall rule.
 
+## Clipboard images
+
+A copied image goes to the other device, like copied text.
+Turn on `auto_clipboard` on the desktop and **Sync clipboard** on the phone.
+Both are on by default.
+
+- Copy an image on the desktop, for example a screenshot. Then paste it in an app on the phone.
+- Copy an image on the phone, open Flux, and tap **Send clipboard**. Then paste it on the desktop.
+
+Android lets only the app on the screen read the clipboard.
+Flux sends a phone copy by itself only while Flux is on the screen.
+For a copy in another app, use **Send clipboard**.
+
+The desktop sends PNG images.
+The phone sends PNG, JPEG, GIF, and WebP images.
+Flux syncs images of up to 16 MiB.
+A copy that also has plain text syncs as text, for example cells from a spreadsheet.
+
+The Clipboard page shows the last 10 images.
+Select **Copy** to put an image on the desktop clipboard again.
+`fluxd` keeps these images in `$XDG_RUNTIME_DIR/flux/clipboard`, which is in memory.
+It empties the folder when it starts and when it stops.
+
 ## Notifications
 
 Enable notification access on the phone to show its notifications on the desktop.

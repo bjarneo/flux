@@ -94,7 +94,17 @@ Window {
       mock.setState(function (s) { s.mic = { error: "pw-cat is not installed on the computer. Install it with: sudo pacman -S pipewire", source: "Flux Microphone" } })
     }, function () { scrollToEnd() }],
     ["12-streams-stopped", function () { mock.call("mic.stop", {}, null); mock.call("screen.stop", {}, null) }],
-    ["13-clipboard", function () { mock.setState(function (s) { s.webcam = mock.fixture.state.webcam }); view.tab = "clipboard" }],
+    ["13-clipboard", function () {
+      // An image entry shows the image. The image file is in the
+      // repository, so only a harness that runs from the files shows it.
+      var icon = Qt.resolvedUrl("../../../macos/App/Assets.xcassets/AppIcon.appiconset/icon_256x256.png").toString()
+      mock.setState(function (s) {
+        s.webcam = mock.fixture.state.webcam
+        if (icon.indexOf("file://") === 0)
+          s.clipboard.splice(1, 0, { text: "", image: icon.substring(7), dir: "in", device: pixel, time: Math.floor(Date.now() / 1000) - 300 })
+      })
+      view.tab = "clipboard"
+    }],
     ["14-files", function () { view.tab = "files" }],
     ["15-notifications", function () { view.tab = "notifications" }],
     ["16-messages", function () { view.tab = "messages" }],

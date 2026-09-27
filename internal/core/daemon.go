@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -34,7 +36,12 @@ type Daemon struct {
 
 	clipboard     []ClipEntry
 	lastLocalClip time.Time
-	transfers     []*Transfer
+	// clipDir holds the images of the clipboard history. clipSend stops
+	// the image that fluxd sends to the phones, when a newer copy replaces
+	// it.
+	clipDir   string
+	clipSend  context.CancelFunc
+	transfers []*Transfer
 
 	opts     Options
 	clip     clipboard
@@ -92,8 +99,9 @@ type Options struct {
 }
 
 type clipboard interface {
-	Watch(ctx context.Context, onChange func(text string))
+	Watch(ctx context.Context, onText func(text string), onImage func(data []byte, mime string))
 	Get() (string, error)
+	GetImage() ([]byte, error)
 	Set(text string) error
 	SetImage(data []byte, mime string) error
 }
@@ -106,11 +114,18 @@ type memClipboard struct {
 	mime  string
 }
 
-func (m *memClipboard) Watch(ctx context.Context, _ func(string)) { <-ctx.Done() }
+func (m *memClipboard) Watch(ctx context.Context, _ func(string), _ func([]byte, string)) {
+	<-ctx.Done()
+}
 func (m *memClipboard) Get() (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.text, nil
+}
+func (m *memClipboard) GetImage() ([]byte, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.image, nil
 }
 func (m *memClipboard) Set(text string) error {
 	m.mu.Lock()
@@ -145,6 +160,7 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 		opts:    opts,
 		devices: map[string]*Device{},
 		clip:    desktop.NewClipboard(),
+		clipDir: filepath.Join(config.RuntimeDir(), "clipboard"),
 		subs:    map[int]func(string, any){},
 		dirty:   make(chan struct{}, 1),
 		ctx:     ctx,
@@ -155,6 +171,9 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 	}
 	if opts.Headless {
 		d.clip = &memClipboard{}
+		// A headless daemon can share the runtime folder with the daemon of
+		// the desktop, so it keeps its clipboard images in its own folder.
+		d.clipDir = filepath.Join(os.TempDir(), "fluxd-clipboard-"+config.NewID(6))
 	}
 	for _, t := range trust.All() {
 		dev := d.deviceLocked(t.ID)
@@ -267,7 +286,8 @@ func (d *Daemon) Run() error {
 		d.logf("Do Not Disturb sync off: no supported notification service")
 	}
 
-	go d.clip.Watch(ctx, d.onLocalClipboard)
+	removeClipImages(d.clipDir)
+	go d.clip.Watch(ctx, d.onLocalClipboard, d.onLocalImage)
 	go d.publishLoop(ctx)
 	go d.discoveryLoop(ctx)
 	go d.batteryLoop(ctx)
@@ -275,6 +295,8 @@ func (d *Daemon) Run() error {
 
 	<-ctx.Done()
 	d.closeLinks()
+	removeClipImages(d.clipDir)
+	_ = os.Remove(d.clipDir)
 	d.mu.Lock()
 	loop := d.loopback
 	d.mu.Unlock()

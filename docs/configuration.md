@@ -38,7 +38,7 @@ command = "omarchy-system-lock"
 | `download_dir` | Destination for received files. Defaults to the XDG Downloads directory, then `~/Downloads`. |
 | `scan_dir` | Destination for scanned text and documents. Defaults to `flux/scanned` inside the XDG Documents directory. |
 | `photo_dir` | Destination for camera photos. Defaults to `flux` inside the XDG Pictures directory. Screenshots and signatures use its `screenshots` and `signatures` folders. |
-| `auto_clipboard` | Sync clipboard text in both directions. Defaults to `true`. |
+| `auto_clipboard` | Sync clipboard text and images in both directions. Defaults to `true`. |
 | `notifications` | Show phone notifications on the desktop. Defaults to `true`. |
 | `share_home` | Let the phone browse the desktop home folder read-only. Defaults to `true`. |
 | `pause_media_on_call` | Pause desktop media during calls. Defaults to `true`. |

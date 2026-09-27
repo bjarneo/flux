@@ -56,6 +56,8 @@ func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.handleConnectivity(dev, p)
 	case proto.TypeClipboard, proto.TypeClipboardConnect:
 		d.handleClipboard(dev, p)
+	case proto.TypeFluxClipboardImage:
+		d.handleClipboardImage(dev, l, p)
 	case proto.TypeShare:
 		d.handleShare(dev, l, p)
 	case proto.TypeShareUpdate:

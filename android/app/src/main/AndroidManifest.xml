@@ -126,6 +126,18 @@
             </intent-filter>
         </service>
 
+        <!-- Serves the image that a computer put on the clipboard. The clipboard
+             gives the app that pastes it read access. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.clipboard"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/clipboard_paths" />
+        </provider>
+
         <receiver
             android:name=".service.BootReceiver"
             android:exported="false">

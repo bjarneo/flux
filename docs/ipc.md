@@ -77,6 +77,20 @@ flux-cli watch
 Read the handler before you add a client call.
 The approval helper applies additional peer and signature checks beyond this general socket protocol.
 
+## Clipboard
+
+Each `clipboard` entry has `text`, or an `image` with the path of a PNG, JPEG, GIF, or WebP file.
+The text of an image entry is empty.
+
+To put an entry on the desktop clipboard again, call `clipboard.copy` with `text`, or with `path` for an image:
+
+```json
+{"id":4,"method":"clipboard.copy","params":{"path":"/run/user/1000/flux/clipboard/clip-a1b2c3.png"}}
+```
+
+The path must be the `image` of an entry in the history.
+`clipboard.send` without `text` sends the image on the desktop clipboard, or else its text.
+
 ## Text messages
 
 `sms.refresh` asks the phone for the latest message of each conversation.

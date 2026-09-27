@@ -60,7 +60,7 @@ It appears on the computer as `laptop` when it has a battery and `desktop` other
 | Feature | Mac behavior |
 | --- | --- |
 | Files, text, and links | Send from the device page, a drop on the window or Dock icon, **Open With**, or **Services > Send to Flux**. Received files go to `~/Downloads` or the folder in Settings. |
-| Clipboard | Syncs both ways while a paired computer is connected. Password manager entries are not synced automatically. |
+| Clipboard | Syncs text both ways while a paired computer is connected. Password manager entries are not synced automatically. Images do not sync to or from the Mac. |
 | Screenshots and photos | **Send new screenshots** watches the macOS screenshot folder. **Send new photos** sends new photos from the Photos library and needs full Photos access. |
 | Media | Controls the computer's players. The computer does not control the players on the Mac. |
 | Commands | Lists and runs the commands configured on the computer. |
