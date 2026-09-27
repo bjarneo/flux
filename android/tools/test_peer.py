@@ -59,9 +59,8 @@ def make_identity(dev_id, target=None, name="flux-test-peer"):
         "protocolVersion": 8,
         "incomingCapabilities": [
             "kdeconnect.ping", "kdeconnect.battery", "kdeconnect.clipboard", "kdeconnect.clipboard.connect",
-            "kdeconnect.share.request", "kdeconnect.notification", "kdeconnect.findmyphone.request",
-            "kdeconnect.runcommand.request", "kdeconnect.mpris.request", "kdeconnect.sftp.request",
-            "flux.tunnel",
+            "kdeconnect.share.request", "kdeconnect.notification", "kdeconnect.runcommand.request",
+            "kdeconnect.mpris.request", "kdeconnect.sftp.request", "flux.tunnel",
         ],
         "outgoingCapabilities": [
             "kdeconnect.ping", "kdeconnect.battery", "kdeconnect.clipboard", "kdeconnect.share.request",

@@ -27,7 +27,7 @@ jobs:
         run: |
           pacman -Syu --noconfirm --needed go cmake ninja git python \
             qt6-base qt6-declarative qt6-svg qt6-wayland ttf-jetbrains-mono-nerd \
-            wl-clipboard pipewire sound-theme-freedesktop avahi xdg-utils
+            wl-clipboard pipewire avahi xdg-utils
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}

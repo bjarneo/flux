@@ -62,8 +62,6 @@ func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 		// The totals of a multi-file share. Flux counts files as they arrive.
 	case proto.TypeNotification:
 		d.handleNotification(dev, l, p)
-	case proto.TypeFindMyPhone:
-		d.handleFindMyPhone(dev)
 	case proto.TypeRunCommand:
 		// The command list of another desktop. fluxd does not run commands
 		// on other devices.
@@ -190,33 +188,6 @@ func (d *Daemon) handleConnectivity(dev *Device, p *proto.Packet) {
 	}
 	d.mu.Unlock()
 	d.markDirty()
-}
-
-func (d *Daemon) handleFindMyPhone(dev *Device) {
-	d.mu.Lock()
-	d.ringing, d.ringFrom = true, dev.Name
-	d.mu.Unlock()
-	d.ringer.Start()
-	d.notify(desktop.Notification{
-		AppName: "Flux", Title: dev.Name + " is ringing this computer",
-		Actions: []desktop.Action{{Key: "ring-stop", Label: "I found it"}},
-		Urgency: 2, Timeout: -1,
-	})
-	d.markDirty()
-	// Stop after 2 minutes, so a lost phone cannot ring the PC forever.
-	time.AfterFunc(2*time.Minute, func() { d.StopRing() })
-}
-
-// StopRing stops the local ring.
-func (d *Daemon) StopRing() {
-	d.ringer.Stop()
-	d.mu.Lock()
-	changed := d.ringing
-	d.ringing, d.ringFrom = false, ""
-	d.mu.Unlock()
-	if changed {
-		d.markDirty()
-	}
 }
 
 func (d *Daemon) handleRunCommand(dev *Device, l *lan.Link, p *proto.Packet) {

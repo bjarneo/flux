@@ -140,8 +140,11 @@ Item {
       rowSpacing: 10
       uniformCellWidths: true
 
+      // Flux rings only phones. A computer does not list findmyphone.
       Tile {
+        id: ringTile
         Layout.fillWidth: true
+        visible: root.view ? root.view.has("findmyphone") : true
         icon: "bell-ring"
         label: "Ring " + Fmt.noun(root.dev ? root.dev.type : "")
         active: root.online
@@ -162,6 +165,7 @@ Item {
       }
       Tile {
         Layout.fillWidth: true
+        Layout.columnSpan: ringTile.visible ? 1 : 2
         icon: "music"
         label: "Media"
         onClicked: root.view.go("media")

@@ -26,7 +26,6 @@ Scope {
   readonly property var transfers: state.transfers || []
   readonly property var commands: state.commands || []
   readonly property var settings: state.settings || ({})
-  readonly property bool ringing: !!state.ringing
   readonly property var selfDevice: state.self || ({})
 
   signal toast(string text)

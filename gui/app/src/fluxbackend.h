@@ -22,7 +22,6 @@ class FluxBackend : public QObject {
     Q_PROPERTY(QJSValue transfers READ transfers NOTIFY stateChanged)
     Q_PROPERTY(QJSValue commands READ commands NOTIFY stateChanged)
     Q_PROPERTY(QJSValue settings READ settings NOTIFY stateChanged)
-    Q_PROPERTY(bool ringing READ ringing NOTIFY stateChanged)
     Q_PROPERTY(QJSValue selfDevice READ selfDevice NOTIFY stateChanged)
 
 public:
@@ -37,7 +36,6 @@ public:
     QJSValue commands() const { return field("commands", true); }
     QJSValue settings() const { return field("settings", false); }
     QJSValue selfDevice() const { return field("self", false); }
-    bool ringing() const { return m_state.property("ringing").toBool(); }
 
     // call sends a request. cb receives (err, result). err is
     // {code, message} or null. Without cb, an error becomes a toast.

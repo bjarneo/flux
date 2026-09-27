@@ -18,7 +18,6 @@ public enum PacketType {
     public static let notificationRequest = "kdeconnect.notification.request"
     public static let notificationReply = "kdeconnect.notification.reply"
     public static let notificationAction = "kdeconnect.notification.action"
-    public static let findMyPhone = "kdeconnect.findmyphone.request"
     public static let runCommand = "kdeconnect.runcommand"
     public static let runCommandRequest = "kdeconnect.runcommand.request"
     public static let mpris = "kdeconnect.mpris"

@@ -70,7 +70,6 @@ It appears on the computer as `laptop` when it has a battery and `desktop` other
 | Camera modes | Text, QR, Photo, Document, and Signature, like the phone. Text, QR, and Document also read an opened, pasted, or dropped image or a screen region. Signature also accepts a drawn signature. |
 | Microphone | Streams the Mac microphone as 48 kHz mono audio. |
 | Notifications | Shows notifications from `flux notify`. |
-| Find my device | The computer rings the Mac at the current system volume. The Mac rings the computer. |
 | Battery | A Mac with a battery reports it. The page shows the computer's battery. |
 | Do Not Disturb | See [Focus](#focus). |
 | Fingerprint approval | Approves `sudo` and polkit with Touch ID. See [approval](#approval). |

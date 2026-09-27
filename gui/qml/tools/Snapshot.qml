@@ -69,6 +69,7 @@ Window {
   readonly property string iphone: "b71c04e9d2a84f3e9c6a5d1b0e8f2c47"
   readonly property string tablet: "5d2e9f1a7c3b4e8d9a0f6c2b1e7d4a38"
   readonly property string oneplus: "e4a1c8f2b9d3470a8c5e6f1d2b9a7c30"
+  readonly property string laptop: "d9c3a7e1f5b24c8e0a6d2f9b3c1e5a74"
 
   // Each step prepares the view. The harness waits, then saves a PNG.
   property var steps: [
@@ -132,8 +133,18 @@ Window {
     ["28-offline", function () { view.selectedId = tablet; view.tab = "overview" }],
     ["29-offline-files", function () { view.tab = "files" }],
     ["30-toast", function () { view.selectedId = pixel; view.tab = "overview"; view.toast("Clipboard sent to Pixel 8") }],
-    ["31-ringing", function () { view.toast(""); mock.setState(function (s) { s.ringing = true }) }],
-    ["32-notif-reply", function () { mock.setState(function (s) { s.ringing = false }); view.tab = "notifications" }, function () { replyFirst() }],
+    // A paired computer does not list findmyphone, so its page has no Ring button.
+    ["31-computer", function () {
+      view.toast("")
+      mock.setState(function (s) {
+        s.devices.push({ id: laptop, name: "work-thinkpad", type: "laptop", ip: "192.168.1.70", paired: true, online: true, pairState: "paired", pairedAt: "2026-09-20", battery: { charge: 64, charging: true }, plugins: ["battery", "clipboard", "share", "notification", "mpris", "runcommand"], notifications: [], conversations: [] })
+      })
+      view.selectedId = laptop
+    }],
+    ["32-notif-reply", function () {
+      mock.setState(function (s) { s.devices = s.devices.filter(function (d) { return d.id !== laptop }) })
+      view.selectedId = pixel; view.tab = "notifications"
+    }, function () { replyFirst() }],
     ["33-browse-deeper", function () { view.tab = "browse" }, function () { var p = pageItem(); p.list(p.root_, p.root_.path + "/Camera") }],
     ["34-empty", function () { mock.setState(function (s) { s.devices = [] }) }],
     ["35-not-running", function () { mock.connected = false }],

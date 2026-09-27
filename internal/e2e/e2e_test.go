@@ -76,7 +76,6 @@ type state struct {
 		State string `json:"state"`
 		Error string `json:"error"`
 	} `json:"transfers"`
-	Ringing bool `json:"ringing"`
 }
 
 func buildFluxd(t *testing.T) string {
@@ -303,11 +302,11 @@ func TestTwoDaemons(t *testing.T) {
 		return false
 	})
 
-	// Find my device.
-	alpha.call(t, "ring", map[string]any{"device": "beta"}, nil)
-	beta.wait(t, "ringing", func(s state) bool { return s.Ringing })
-	beta.call(t, "ring.stop", nil, nil)
-	beta.wait(t, "ring stopped", func(s state) bool { return !s.Ringing })
+	// Flux rings only phones and tablets. A computer does not accept a ring,
+	// so the ring call fails.
+	if err := alpha.client.Call("ring", map[string]any{"device": "beta"}, nil); err == nil {
+		t.Fatal("ring rang a computer")
+	}
 
 	// The trust survives a restart of both daemons.
 	alpha.stop()

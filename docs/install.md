@@ -97,7 +97,7 @@ From the repository root, install the full build and runtime dependencies:
 ```sh
 sudo pacman -Syu --needed base-devel git go cmake ninja \
   qt6-base qt6-declarative qt6-svg qt6-wayland ttf-jetbrains-mono-nerd \
-  wl-clipboard pipewire sound-theme-freedesktop avahi xdg-utils
+  wl-clipboard pipewire avahi xdg-utils
 ```
 
 Build before you run the root install:

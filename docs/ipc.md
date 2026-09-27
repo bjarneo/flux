@@ -36,7 +36,7 @@ Method names and parameter handling live in `internal/core/api.go`.
 ## State and events
 
 Call `state` for a snapshot.
-The snapshot includes `self`, `devices`, `clipboard`, `transfers`, `commands`, `settings`, `webcam`, `mic`, `screen`, `herdr`, and ring state.
+The snapshot includes `self`, `devices`, `clipboard`, `transfers`, `commands`, `settings`, `webcam`, `mic`, `screen`, and `herdr`.
 
 To receive events, send:
 

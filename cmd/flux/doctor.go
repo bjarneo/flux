@@ -116,9 +116,9 @@ func doctor() {
 		}
 	}
 
-	for _, bin := range []string{"wl-copy", "wl-paste", "pw-play", "xdg-open"} {
+	for _, bin := range []string{"wl-copy", "wl-paste", "xdg-open"} {
 		_, lerr := exec.LookPath(bin)
-		check(lerr == nil, bin+" is installed", bin+" is missing. Flux needs it for the clipboard, the ring sound, and opening files")
+		check(lerr == nil, bin+" is installed", bin+" is missing. Flux needs it for the clipboard and to open files")
 	}
 	_, aerr := appPath()
 	plugin := pluginInstalled()

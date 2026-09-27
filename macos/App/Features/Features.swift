@@ -20,7 +20,6 @@ enum PluginRegistry {
             ScreenPlugin(),
             MicPlugin(),
             NotificationsPlugin(),
-            FindMyPhonePlugin(),
             BatteryPlugin(),
             DndPlugin(),
             ApprovePlugin(),
@@ -55,7 +54,6 @@ struct FeatureQuickActions: View {
         Group {
             ShareQuickActions(device: device)
             BrowseQuickAction(device: device)
-            RingQuickAction(device: device)
         }
     }
 }
@@ -77,7 +75,6 @@ struct FeatureBanners: View {
 
     var body: some View {
         Group {
-            RingingBanner(device: device)
             ApproveBanner(device: device)
         }
     }
@@ -107,7 +104,6 @@ struct FeatureMenuItems: View {
             BrowseMenuItem(device: device)
             StreamMenuItems(device: device)
             MicMenuItem(device: device)
-            RingMenuItem(device: device)
             ApproveMenuItem(device: device)
         }
     }

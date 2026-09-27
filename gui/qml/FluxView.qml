@@ -652,14 +652,8 @@ Item {
         anchors.verticalCenter: title.verticalCenter
         spacing: 8
         visible: !!root.dev
-        AccentButton {
-          visible: !!root.backend && root.backend.ringing
-          icon: "bell-off"
-          text: root.compactHeader ? "" : "Stop ringing"
-          anchors.verticalCenter: parent.verticalCenter
-          onClicked: root.call("ring.stop", {})
-        }
         OutlineButton {
+          visible: root.has("findmyphone")
           icon: "bell-ring"
           text: root.compactHeader ? "" : "Ring " + Fmt.noun(root.dev ? root.dev.type : "")
           active: root.devOnline

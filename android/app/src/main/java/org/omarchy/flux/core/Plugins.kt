@@ -218,12 +218,4 @@ object Plugins {
             d.playerStates[player]?.let { d.playerStates[player] = it.copy(position = positionMs, updatedAt = SystemClock.elapsedRealtime()) }
         }
     }
-
-    // ------------------------------------------------------------------- ring
-
-    fun ring(core: FluxCore, id: String) {
-        val d = core.device(id) ?: return
-        d.send(Packet(Types.FIND_MY_PHONE))
-        core.toast("Ringing ${d.identity.deviceName}")
-    }
 }

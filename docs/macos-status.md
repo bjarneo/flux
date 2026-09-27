@@ -78,8 +78,8 @@ The integrator merged each branch into `macos-client`, resolved the composition 
 
 | Direction | Packet types |
 | --- | --- |
-| Incoming | `kdeconnect.ping`, `kdeconnect.battery`, `kdeconnect.battery.request`, `kdeconnect.clipboard`, `kdeconnect.clipboard.connect`, `kdeconnect.share.request`, `kdeconnect.share.request.update`, `kdeconnect.notification`, `kdeconnect.findmyphone.request`, `kdeconnect.runcommand`, `kdeconnect.mpris`, `kdeconnect.mpris.request`, `kdeconnect.sftp`, `flux.webcam`, `flux.screen`, `flux.mic`, `flux.dnd`, `flux.approve` |
-| Outgoing | `kdeconnect.ping`, `kdeconnect.battery`, `kdeconnect.clipboard`, `kdeconnect.clipboard.connect`, `kdeconnect.share.request`, `kdeconnect.share.request.update`, `kdeconnect.findmyphone.request`, `kdeconnect.runcommand.request`, `kdeconnect.mpris`, `kdeconnect.mpris.request`, `kdeconnect.sftp.request`, `flux.tunnel`, `flux.webcam`, `flux.screen`, `flux.mic`, `flux.dnd`, `flux.approve` |
+| Incoming | `kdeconnect.ping`, `kdeconnect.battery`, `kdeconnect.battery.request`, `kdeconnect.clipboard`, `kdeconnect.clipboard.connect`, `kdeconnect.share.request`, `kdeconnect.share.request.update`, `kdeconnect.notification`, `kdeconnect.runcommand`, `kdeconnect.mpris`, `kdeconnect.mpris.request`, `kdeconnect.sftp`, `flux.webcam`, `flux.screen`, `flux.mic`, `flux.dnd`, `flux.approve` |
+| Outgoing | `kdeconnect.ping`, `kdeconnect.battery`, `kdeconnect.clipboard`, `kdeconnect.clipboard.connect`, `kdeconnect.share.request`, `kdeconnect.share.request.update`, `kdeconnect.runcommand.request`, `kdeconnect.mpris`, `kdeconnect.mpris.request`, `kdeconnect.sftp.request`, `flux.tunnel`, `flux.webcam`, `flux.screen`, `flux.mic`, `flux.dnd`, `flux.approve` |
 
 A Mac without an internal battery announces `kdeconnect.battery` as incoming only.
 `fluxd` decides whether to use tunnels from the peer's outgoing `flux.tunnel` (`Link.CanTunnel`), so the Mac does not list it as incoming.
@@ -121,7 +121,6 @@ Unless noted, the peer was the headless `fluxd` described above, driven with the
 | Clipboard | `flux clip` reached the Mac pasteboard. A Mac pasteboard change appeared in `fluxd`'s clipboard history |
 | Screenshots | A new screenshot in a watched folder was sent once |
 | Notifications | `flux notify` and `flux notify --run` produced Mac notifications, including the exit code. The app delivered a banner |
-| Find my device | "Ring computer" set `ringing=true` in `flux status`. `flux ring` rang the Mac, and Stop and the 2-minute timeout ended it |
 | Battery | `flux status --json` showed the Mac battery, and `battery.request` was answered |
 | Do Not Disturb | With a non-headless `fluxd` and a fake `makoctl`: a Mac change made `fluxd` switch the mako mode. A change on the computer made the Mac run the configured shortcut command. The guard stopped echoes |
 | Media, computer to Mac | `flux media play-pause --device <mac>` toggled Apple Music, and the new state appeared in `flux status --json` |

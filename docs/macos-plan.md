@@ -71,8 +71,8 @@ See [status](macos-status.md) for the details of each check and [Flux for macOS]
 
 - [x] Sidebar with paired and available computers.
 - [x] Pairing screens and the pairing request sheet.
-- [x] Device dashboard: header with state, IP, battery, and quick actions (Send Files, Send Clipboard, Browse Files, Ring, Ping).
-- [x] Banners for a ringing Mac, an open approval request, and an offline computer.
+- [x] Device dashboard: header with state, IP, battery, and quick actions (Send Files, Send Clipboard, Browse Files, Ping).
+- [x] Banners for an open approval request and an offline computer.
 - [x] Feature cards in a grid of equal columns, with equal heights per row.
 - [x] Collapsible card details, saved per card: webcam image settings and approval details.
 - [x] Settings window with General and Features tabs.
@@ -99,14 +99,12 @@ Each feature gets its own branch, worktree, and isolated `fluxd`, then merges in
 - [ ] Checked: send new photos with a real new photo.
 - [ ] Checked: Services menu, Dock drop, and menu bar items in the app.
 
-### Notifications, find my device, battery, and Do Not Disturb
+### Notifications, battery, and Do Not Disturb
 
 - [x] Show notifications from `flux notify`, with replace and cancel.
-- [x] Ring the Mac at the current system volume, with Stop and a 2-minute limit.
-- [x] Ring the computer.
 - [x] Report the Mac battery and show the computer's battery.
 - [x] Report Focus through a Focus filter and follow the computer through user-chosen Shortcuts.
-- [x] Checked: notifications, ring in both directions, battery in `flux status`, Do Not Disturb both ways with a fake `makoctl`.
+- [x] Checked: notifications, battery in `flux status`, Do Not Disturb both ways with a fake `makoctl`.
 - [ ] Checked: the Flux Focus filter in System Settings with a real Focus toggle.
 - [ ] Checked: battery change events on unplug.
 - [ ] Checked: notification actions clicked in banners.

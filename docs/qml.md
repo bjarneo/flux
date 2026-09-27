@@ -76,7 +76,6 @@ Every host implements these members.
 | `state` | `var` | The last `state` event from fluxd. |
 | `devices`, `clipboard`, `transfers`, `commands` | `var` | `state.devices`, `state.clipboard`, `state.transfers`, `state.commands`, or an empty list. |
 | `settings`, `selfDevice` | `var` | `state.settings` and `state.self`, or an empty object. |
-| `ringing` | `bool` | `state.ringing`. |
 | `call(method, params, cb)` | function | Sends one IPC request. `cb(err, result)` runs once. `err` is `{code, message}` or `null`. |
 | `pickFiles(title, cb)` | function | Runs `omarchy file select --title <title> --multiple`. `cb(paths)` gets the absolute paths from the newline-separated output, or an empty list when the user cancels or the chooser fails. |
 | `startDaemon(cb)` | function | Runs `systemctl --user start fluxd`. `cb(ok, message)` runs when the command ends. |

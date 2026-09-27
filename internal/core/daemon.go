@@ -35,14 +35,11 @@ type Daemon struct {
 	clipboard     []ClipEntry
 	lastLocalClip time.Time
 	transfers     []*Transfer
-	ringing       bool
-	ringFrom      string
 
 	opts     Options
 	clip     clipboard
 	notifier *desktop.Notifier
 	media    *desktop.Media
-	ringer   ringer
 	// callPlayers are the players that a call pauses. It is the desktop
 	// media when media control works, else nil.
 	callPlayers callMedia
@@ -101,11 +98,6 @@ type clipboard interface {
 	SetImage(data []byte, mime string) error
 }
 
-type ringer interface {
-	Start()
-	Stop()
-}
-
 // memClipboard is the clipboard of a headless daemon.
 type memClipboard struct {
 	mu    sync.Mutex
@@ -133,11 +125,6 @@ func (m *memClipboard) SetImage(data []byte, mime string) error {
 	return nil
 }
 
-type silentRinger struct{}
-
-func (silentRinger) Start() {}
-func (silentRinger) Stop()  {}
-
 // New loads the identity, the configuration, and the trust store. The
 // context ends the transfers and sessions that the daemon starts.
 func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error) {
@@ -158,7 +145,6 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 		opts:    opts,
 		devices: map[string]*Device{},
 		clip:    desktop.NewClipboard(),
-		ringer:  &desktop.Ringer{},
 		subs:    map[int]func(string, any){},
 		dirty:   make(chan struct{}, 1),
 		ctx:     ctx,
@@ -168,7 +154,7 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 		herdrWake: make(chan struct{}, 1),
 	}
 	if opts.Headless {
-		d.clip, d.ringer = &memClipboard{}, silentRinger{}
+		d.clip = &memClipboard{}
 	}
 	for _, t := range trust.All() {
 		dev := d.deviceLocked(t.ID)
@@ -289,7 +275,6 @@ func (d *Daemon) Run() error {
 
 	<-ctx.Done()
 	d.closeLinks()
-	d.ringer.Stop()
 	d.mu.Lock()
 	loop := d.loopback
 	d.mu.Unlock()

@@ -85,6 +85,7 @@ flux notifications
 flux notify "Backup done" "412 files, 2.1 GB"
 ```
 
+`flux ring` rings only a phone or a tablet.
 `flux send` starts transfers and returns their count.
 Inspect `transfers` in `flux status --json` for completion.
 `flux clip` without text reads the desktop clipboard.

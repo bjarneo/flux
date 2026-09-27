@@ -129,12 +129,10 @@ func (d *Daemon) Snapshot() json.RawMessage {
 			"herdr":            d.cfg.Herdr,
 			"herdrControl":     d.cfg.HerdrControl,
 		},
-		"webcam":   d.webcamViewLocked(),
-		"mic":      d.micViewLocked(),
-		"screen":   d.screenViewLocked(),
-		"herdr":    d.herdrViewLocked(),
-		"ringing":  d.ringing,
-		"ringFrom": d.ringFrom,
+		"webcam": d.webcamViewLocked(),
+		"mic":    d.micViewLocked(),
+		"screen": d.screenViewLocked(),
+		"herdr":  d.herdrViewLocked(),
 	})
 }
 
@@ -197,9 +195,6 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		return d.Snapshot(), nil
 	case "discover":
 		d.announce()
-		return ok, nil
-	case "ring.stop":
-		d.StopRing()
 		return ok, nil
 	case "webcam.stop":
 		return ok, d.StopWebcam()
@@ -267,6 +262,9 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		}
 		return map[string]any{"device": dev.Name, "address": addr, "addresses": addrs}, nil
 	case "ring":
+		if !dev.accepts(proto.TypeFindMyPhone) {
+			return nil, apiErr("not_supported", "%s cannot ring. Flux rings only phones and tablets", dev.Name)
+		}
 		return ok, d.send(dev, proto.New(proto.TypeFindMyPhone, map[string]any{}))
 	case "ping":
 		body := map[string]any{}

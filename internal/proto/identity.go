@@ -64,9 +64,9 @@ const (
 // plugin only when the other side lists the matching type.
 var Incoming = []string{
 	TypePing, TypeBattery, TypeClipboard, TypeClipboardConnect,
-	TypeShare, TypeShareUpdate, TypeNotification, TypeFindMyPhone,
-	TypeRunCommandRequest, TypeMpris, TypeMprisRequest, TypeSftp,
-	TypeSftpRequest, TypeSmsMessages, TypeConnectivity, TypeTelephony,
+	TypeShare, TypeShareUpdate, TypeNotification, TypeRunCommandRequest,
+	TypeMpris, TypeMprisRequest, TypeSftp, TypeSftpRequest,
+	TypeSmsMessages, TypeConnectivity, TypeTelephony,
 	TypeFluxTunnel, TypeFluxWebcam, TypeFluxDnd, TypeFluxMic, TypeFluxScreen,
 	TypeFluxApprove, TypeFluxHerdr,
 }

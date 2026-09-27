@@ -422,13 +422,7 @@ fun TiledHomeScreen(
                     LineTile(Ic.camera, "Camera", Tn.cyan, guarded { onNavigate("camera") }, Modifier.weight(1f).fillMaxWidth(), on)
                 }
             }
-            TileRow(TileUnit2) {
-                MediaTile(d, Modifier.weight(4f).fillMaxHeight(), onOpen = guarded { onNavigate("media") })
-                Tile(Modifier.weight(2f).fillMaxHeight(), guarded { Plugins.ring(FluxCore, d.id) }, accent = Tn.red, enabled = on, padding = PaddingValues(12.dp)) {
-                    Sym(Ic.ring, tint = Tn.red, size = 24.dp)
-                    T("Ring PC", size = 13, weight = FontWeight.SemiBold, maxLines = 1)
-                }
-            }
+            MediaTile(d, Modifier.fillMaxWidth().height(TileUnit2), onOpen = guarded { onNavigate("media") })
             TileRow(TileUnit) {
                 MiniTile(Ic.mic, "Mic", Tn.orange, guarded { onNavigate("mic") }, Modifier.weight(1f).fillMaxHeight(), on)
                 if (mirroring) {

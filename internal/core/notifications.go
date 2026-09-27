@@ -241,8 +241,6 @@ func (d *Daemon) NotificationAction(dev *Device, id, action string) error {
 func (d *Daemon) onNotificationAction(_ uint32, key string) {
 	kind, rest, _ := strings.Cut(key, ":")
 	switch kind {
-	case "ring-stop":
-		d.StopRing()
 	case "open":
 		_ = desktop.Open(rest)
 	case "reveal":

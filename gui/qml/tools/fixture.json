@@ -271,7 +271,6 @@
    "autoClipboard": true,
    "notifications": true
   },
-  "ringing": false,
   "commands": [
    {
     "id": "lock",
