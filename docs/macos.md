@@ -26,6 +26,16 @@ open macos/build/Build/Products/Debug/Flux.app
 The generated project and `macos/build` stay out of Git.
 To work in Xcode, run `xcodegen generate` in `macos/` and open `Flux.xcodeproj`.
 
+To build a Release app and install it in `/Applications`, run:
+
+```sh
+make install-macos
+```
+
+The target runs `scripts/install-macos.sh`.
+It quits a running Flux, replaces `/Applications/Flux.app`, and opens the new app.
+Add `--no-open` when you run the script directly to skip the last step.
+
 Flux keeps running in the menu bar after the window closes.
 Quit it from the menu bar item.
 
