@@ -302,7 +302,7 @@ func (d *Daemon) handleBrowseRequest(dev *Device, l *lan.Link, p *proto.Packet) 
 		"tunnel": id, "user": "kdeconnect", "password": password,
 		"path": home, "multiPaths": roots, "pathNames": names,
 	})); err != nil {
-		l.TunnelReady(id, 0, "canceled")
+		l.CancelTunnel(id)
 		return
 	}
 	go func() {

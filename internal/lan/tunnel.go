@@ -42,19 +42,33 @@ func (l *Link) CanTunnel() bool {
 }
 
 // TunnelReady passes the body of a flux.tunnel packet to the call that
-// waits for it.
+// waits for it. A fast peer can answer before OpenTunnel waits, so the
+// reply stays in the channel until OpenTunnel reads it. A second reply for
+// the same tunnel is dropped.
 func (l *Link) TunnelReady(id string, port int, errMsg string) {
 	l.tun.mu.Lock()
 	ch := l.tun.waiting[id]
-	delete(l.tun.waiting, id)
 	l.tun.mu.Unlock()
-	if ch != nil {
-		ch <- tunnelReply{port: port, err: errMsg}
+	if ch == nil {
+		return
+	}
+	select {
+	case ch <- tunnelReply{port: port, err: errMsg}:
+	default:
 	}
 }
 
+// CancelTunnel removes tunnel id. Call it when the packet that names the
+// tunnel was not sent.
+func (l *Link) CancelTunnel(id string) {
+	l.tun.mu.Lock()
+	delete(l.tun.waiting, id)
+	l.tun.mu.Unlock()
+}
+
 // NewTunnelID returns a token for a tunnel and registers it. Call
-// OpenTunnel with the token after the packet that names it is sent.
+// OpenTunnel with the token after the packet that names it is sent, or
+// CancelTunnel when the send fails.
 func (l *Link) NewTunnelID() string {
 	b := make([]byte, 12)
 	_, _ = rand.Read(b)
@@ -77,11 +91,7 @@ func (l *Link) OpenTunnel(ctx context.Context, id string) (*tls.Conn, error) {
 	if ch == nil {
 		return nil, fmt.Errorf("no tunnel %s", id)
 	}
-	defer func() {
-		l.tun.mu.Lock()
-		delete(l.tun.waiting, id)
-		l.tun.mu.Unlock()
-	}()
+	defer l.CancelTunnel(id)
 	var reply tunnelReply
 	select {
 	case reply = <-ch:
@@ -129,7 +139,7 @@ func (l *Link) pushPayload(ctx context.Context, p *proto.Packet, r io.Reader, si
 	p.PayloadSize = size
 	p.PayloadTransferInfo = &proto.TransferInfo{Tunnel: id}
 	if err := l.Send(p); err != nil {
-		l.TunnelReady(id, 0, "canceled")
+		l.CancelTunnel(id)
 		return err
 	}
 	tc, err := l.OpenTunnel(ctx, id)
