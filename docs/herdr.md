@@ -83,7 +83,7 @@ systemctl --user reload fluxd
 The output screen then shows the reply controls:
 
 - When the agent is blocked, the phone shows the numbered choices of the dialog as buttons. A tap sends the number of the choice.
-- The key bar sends Esc, Up, Down, and Enter.
+- The key bar sends Esc, Tab, Up, Down, and Enter.
 - The text field sends a prompt to the agent. When the agent is blocked, the phone types the text and presses Enter, which answers a question that needs free text.
 
 Before the first reply, the phone asks for its fingerprint or screen lock.

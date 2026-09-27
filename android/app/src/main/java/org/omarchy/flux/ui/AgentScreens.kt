@@ -311,6 +311,7 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
         }
         Row(Modifier.fillMaxWidth().height(40.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             KeyTile("esc", "Escape", Modifier.weight(1f)) { keys("esc") }
+            KeyTile("tab", "Tab", Modifier.weight(1f)) { keys("tab") }
             KeyTile("↑", "Up", Modifier.weight(1f)) { keys("up") }
             KeyTile("↓", "Down", Modifier.weight(1f)) { keys("down") }
             KeyTile("enter", "Enter", Modifier.weight(1.4f), accent = agent.status == AgentStatus.Blocked && choices.isEmpty()) { keys("enter") }
