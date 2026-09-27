@@ -85,14 +85,15 @@ struct RootView: View {
     }
 }
 
+/// The Flux mark in the menu bar, dimmed while no paired computer is connected.
 struct MenuBarLabel: View {
     let launch: Launch
 
     var body: some View {
         if case .ready(let model) = launch, !model.connectedPaired.isEmpty {
-            Image(systemName: "point.3.filled.connected.trianglepath.dotted")
+            Image("MenuBarIcon")
         } else {
-            Image(systemName: "point.3.connected.trianglepath.dotted")
+            Image("MenuBarIconOffline")
         }
     }
 }

@@ -78,7 +78,7 @@ See [status](macos-status.md) for the details of each check and [Flux for macOS]
 - [x] Settings window with General and Features tabs.
 - [x] App icon with the Flux mark, dark in the bundle and light in the Dock in light mode.
 - [x] **Settings > General > Appearance** (Automatic, Light, Dark) for the windows and the Dock icon.
-- [x] Menu bar extra that keeps Flux running after the window closes.
+- [x] Menu bar extra that keeps Flux running after the window closes, with the Flux mark of `dist/flux-symbolic.svg`, dimmed while no computer is connected.
 - [x] Pairing request notification with Accept and Reject.
 - [x] Pairing through the app UI against `fluxd`.
 
