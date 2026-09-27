@@ -17,7 +17,6 @@ Item {
     { key: "clipboard", label: "Clipboard", page: "Clipboard", icon: "clipboard" },
     { key: "files", label: "Files", page: "Files", icon: "transfers" },
     { key: "notifications", label: "Notifications", page: "Notifications", icon: "bell" },
-    { key: "media", label: "Media", page: "Media", icon: "music" },
     { key: "messages", label: "Messages", page: "Messages", icon: "message" },
     { key: "browse", label: "Browse files", page: "Browse", icon: "browse" },
     { key: "commands", label: "Phone commands", page: "PhoneCommands", icon: "console" }

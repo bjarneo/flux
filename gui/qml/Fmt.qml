@@ -56,16 +56,6 @@ QtObject {
     return Qt.formatDate(d, "yyyy-MM-dd")
   }
 
-  // Media position in ms, for example 3:12.
-  function duration(ms) {
-    if (!ms || ms < 0) return "0:00"
-    var s = Math.floor(ms / 1000)
-    var h = Math.floor(s / 3600)
-    var m = Math.floor((s % 3600) / 60)
-    var r = s % 60
-    return (h > 0 ? h + ":" + pad(m) : m) + ":" + pad(r)
-  }
-
   function kindShort(type) {
     if (type === "tablet") return "TAB"
     if (type === "tv") return "TV"

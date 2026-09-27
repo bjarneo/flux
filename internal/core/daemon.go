@@ -558,8 +558,8 @@ func (d *Daemon) onPairedLink(dev *Device, l *lan.Link) {
 	if dev.supports(proto.TypeNotification) {
 		_ = l.Send(proto.New(proto.TypeNotificationRequest, map[string]any{"request": true}))
 	}
-	if dev.supports(proto.TypeMpris) {
-		_ = l.Send(proto.New(proto.TypeMprisRequest, map[string]any{"requestPlayerList": true}))
+	if d.media != nil && dev.supports(proto.TypeMprisRequest) {
+		d.sendPlayers(l)
 	}
 	if dev.accepts(proto.TypeFluxHerdr) {
 		d.mu.Lock()

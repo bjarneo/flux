@@ -50,7 +50,7 @@ command = "omarchy-system-lock"
 | `commands` | Desktop commands available to the phone. A new configuration has no commands. |
 
 The destination paths expand `~`.
-Use the [CLI](cli.md#media-and-desktop-commands) or the Phone commands page to add commands without editing TOML.
+Use the [CLI](cli.md#desktop-commands) or the Phone commands page to add commands without editing TOML.
 
 ## Data paths
 

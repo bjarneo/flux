@@ -163,9 +163,7 @@ type params struct {
 	Message   string          `json:"message"`
 	Paths     []string        `json:"paths"`
 	Path      string          `json:"path"`
-	Player    string          `json:"player"`
 	Action    string          `json:"action"`
-	Position  int64           `json:"position"`
 	Thread    int64           `json:"thread"`
 	Address   string          `json:"address"`
 	Addresses []string        `json:"addresses"`
@@ -300,10 +298,6 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		return ok, d.ReplyNotification(dev, p.ID, p.Message)
 	case "notification.action":
 		return ok, d.NotificationAction(dev, p.ID, p.Action)
-	case "media.action":
-		return ok, d.PhoneMediaAction(dev, p.Player, p.Action)
-	case "media.seek":
-		return ok, d.PhoneMediaSeek(dev, p.Player, p.Position)
 	case "sms.refresh":
 		return ok, d.RefreshSms(dev)
 	case "sms.thread":

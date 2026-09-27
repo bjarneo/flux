@@ -78,8 +78,8 @@ The integrator merged each branch into `macos-client`, resolved the composition 
 
 | Direction | Packet types |
 | --- | --- |
-| Incoming | `kdeconnect.ping`, `kdeconnect.battery`, `kdeconnect.battery.request`, `kdeconnect.clipboard`, `kdeconnect.clipboard.connect`, `kdeconnect.share.request`, `kdeconnect.share.request.update`, `kdeconnect.notification`, `kdeconnect.runcommand`, `kdeconnect.mpris`, `kdeconnect.mpris.request`, `kdeconnect.sftp`, `flux.webcam`, `flux.screen`, `flux.mic`, `flux.dnd`, `flux.approve` |
-| Outgoing | `kdeconnect.ping`, `kdeconnect.battery`, `kdeconnect.clipboard`, `kdeconnect.clipboard.connect`, `kdeconnect.share.request`, `kdeconnect.share.request.update`, `kdeconnect.runcommand.request`, `kdeconnect.mpris`, `kdeconnect.mpris.request`, `kdeconnect.sftp.request`, `flux.tunnel`, `flux.webcam`, `flux.screen`, `flux.mic`, `flux.dnd`, `flux.approve` |
+| Incoming | `kdeconnect.ping`, `kdeconnect.battery`, `kdeconnect.battery.request`, `kdeconnect.clipboard`, `kdeconnect.clipboard.connect`, `kdeconnect.share.request`, `kdeconnect.share.request.update`, `kdeconnect.notification`, `kdeconnect.runcommand`, `kdeconnect.mpris`, `kdeconnect.sftp`, `flux.webcam`, `flux.screen`, `flux.mic`, `flux.dnd`, `flux.approve` |
+| Outgoing | `kdeconnect.ping`, `kdeconnect.battery`, `kdeconnect.clipboard`, `kdeconnect.clipboard.connect`, `kdeconnect.share.request`, `kdeconnect.share.request.update`, `kdeconnect.runcommand.request`, `kdeconnect.mpris.request`, `kdeconnect.sftp.request`, `flux.tunnel`, `flux.webcam`, `flux.screen`, `flux.mic`, `flux.dnd`, `flux.approve` |
 
 A Mac without an internal battery announces `kdeconnect.battery` as incoming only.
 `fluxd` decides whether to use tunnels from the peer's outgoing `flux.tunnel` (`Link.CanTunnel`), so the Mac does not list it as incoming.
@@ -92,7 +92,6 @@ A Mac without an internal battery announces `kdeconnect.battery` as incoming onl
 | Call alerts (`kdeconnect.telephony`) | A Mac has no telephony |
 | Text messages (`kdeconnect.sms.messages` outgoing, `kdeconnect.sms.request` and the conversation requests incoming) | macOS gives apps no access to SMS |
 | Read and set Do Not Disturb directly | No public Focus API for an ad hoc signed app. The Mac reads Focus through a Focus filter and sets it by running user-chosen Shortcuts |
-| Control any media app | MediaRemote is private. Only Apple Music and Spotify are controlled, through Apple Events |
 | Camera zoom, exposure, and white balance presets | No macOS API. Zoom is digital, and exposure is a software gain |
 
 ## Verified against fluxd
@@ -122,7 +121,6 @@ Unless noted, the peer was the headless `fluxd` described above, driven with `fl
 | Notifications | `flux-cli notify` and `flux-cli notify --run` produced Mac notifications, including the exit code. The app delivered a banner |
 | Battery | `flux-cli status --json` showed the Mac battery, and `battery.request` was answered |
 | Do Not Disturb | With a non-headless `fluxd` and a fake `makoctl`: a Mac change made `fluxd` switch the mako mode. A change on the computer made the Mac run the configured shortcut command. The guard stopped echoes |
-| Media, computer to Mac | `flux-cli media play-pause --device <mac>` toggled Apple Music, and the new state appeared in `flux-cli status --json` |
 | Media, Mac to computer | Request packets and parsing checked in the log and in unit tests. Headless `fluxd` has no MPRIS players |
 | Commands | `flux-cli commands add`, then running it from the Mac created the file on the computer side, from the smoke client and from the app UI |
 | Browse | Listed the home roots, opened subfolders, downloaded files with identical sha256, and showed the `share_home` disabled error. A link drop closed the session, and it reopened after reconnect. The app opened the files window |
@@ -139,7 +137,6 @@ Unless noted, the peer was the headless `fluxd` described above, driven with `fl
 | --- | --- | --- |
 | **Also send the microphone** with the webcam | Each ad hoc rebuild loses the camera and microphone grants, so it was not run end to end | Start the webcam with the option on and check that `flux.mic` starts and stops with it |
 | Send new photos | Needs full Photos access and a new photo in the personal library | Turn it on, add a photo, and check the computer's photo folder |
-| Spotify control | Spotify is not installed | Install Spotify and repeat the Apple Music check |
 | Media section with real players | Headless `fluxd` on macOS has no MPRIS players | Pair with a real Omarchy computer that plays media |
 | Direct SFTP route (ip and port) | `fluxd` always answers with a tunnel | Only reachable with a peer that offers a direct address |
 | Menu bar items | The automation tool cannot open a `MenuBarExtra` menu | Open the menu bar item by hand and try each entry |

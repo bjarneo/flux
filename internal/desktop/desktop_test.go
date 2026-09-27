@@ -1,11 +1,14 @@
 package desktop
 
 import (
+	"encoding/xml"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 	"unsafe"
+
+	"github.com/godbus/dbus/v5/introspect"
 )
 
 func TestShortNames(t *testing.T) {
@@ -14,6 +17,9 @@ func TestShortNames(t *testing.T) {
 	}
 	if got := shortName("org.mpris.MediaPlayer2.chromium.instance12345"); got != "chromium" {
 		t.Errorf("chromium: got %q", got)
+	}
+	if got := shortName("org.mpris.MediaPlayer2.mpv.instance-IbWwwPyh"); got != "mpv" {
+		t.Errorf("mpv: got %q", got)
 	}
 	if got := shortName("org.mpris.MediaPlayer2.spotify"); got != "spotify" {
 		t.Errorf("spotify: got %q", got)
@@ -174,5 +180,30 @@ func TestClipboardSetReturnsWhileWlCopyServes(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("Set waits for the background wl-copy process")
+	}
+}
+
+func TestWritableVolume(t *testing.T) {
+	player := func(access string) string {
+		return `<node><interface name="org.mpris.MediaPlayer2.Player">` +
+			`<property name="Volume" type="d" access="` + access + `"/></interface></node>`
+	}
+	for _, c := range []struct {
+		name, xml string
+		want      bool
+	}{
+		{"readwrite", player("readwrite"), true},
+		{"read only", player("read"), false},
+		{"no introspection data", `<node/>`, false},
+		{"volume on another interface", `<node><interface name="org.example.Player">` +
+			`<property name="Volume" type="d" access="readwrite"/></interface></node>`, false},
+	} {
+		var node introspect.Node
+		if err := xml.Unmarshal([]byte(c.xml), &node); err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if got := writableVolume(&node); got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
 	}
 }

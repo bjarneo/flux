@@ -13,7 +13,6 @@ enum PluginRegistry {
             ClipboardPlugin(),
             CaptureWatchPlugin(),
             MprisPlugin(),
-            MacMediaPlugin(),
             RunCommandPlugin(),
             BrowsePlugin(),
             WebcamPlugin(),
@@ -85,7 +84,6 @@ struct FeatureSettings: View {
     var body: some View {
         Group {
             ShareSettings()
-            MediaSettings()
             DndSettings()
         }
     }

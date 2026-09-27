@@ -21,7 +21,7 @@ omarchy-shell shell summon flux '{"page":"files"}'
 ```
 
 The payload is optional. `page` is one of `overview`, `clipboard`, `files`,
-`notifications`, `media`, `messages`, `browse`, or `commands`.
+`notifications`, `messages`, `browse`, or `commands`.
 To open or close the window, use `omarchy-shell shell toggle flux '{}'`.
 
 ## Install layout
@@ -90,7 +90,7 @@ To select a host explicitly:
 
 ```sh
 FLUX_GUI=app flux-cli open files
-FLUX_GUI=plugin flux-cli open media
+FLUX_GUI=plugin flux-cli open notifications
 ```
 
 The `gui` key in `config.toml` accepts the same values.

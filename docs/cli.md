@@ -40,13 +40,13 @@ flux-cli on
 flux-cli open files
 ```
 
-Window pages: `overview`, `clipboard`, `files`, `notifications`, `media`, `messages`, `browse`, and `commands`.
+Window pages: `overview`, `clipboard`, `files`, `notifications`, `messages`, `browse`, and `commands`.
 
 To select the Qt app or shell plugin explicitly:
 
 ```sh
 FLUX_GUI=app flux-cli open files
-FLUX_GUI=plugin flux-cli open media
+FLUX_GUI=plugin flux-cli open notifications
 ```
 
 ## Pair and discover
@@ -120,18 +120,15 @@ The CLI returns the command's exit code.
 Ctrl+C stops the command and still sends the result.
 Put Flux flags before `--`.
 
-## Media and desktop commands
+## Desktop commands
 
 ```sh
-flux-cli media play-pause
-flux-cli media next
 flux-cli commands
 flux-cli commands add "Lock screen" omarchy-system-lock
 flux-cli commands remove COMMAND_ID
 flux-cli run COMMAND_ID
 ```
 
-Media actions: `play-pause`, `play`, `pause`, `next`, `previous`, and `stop`.
 `flux-cli commands` lists desktop commands available to the phone.
 Replace `COMMAND_ID` with an ID from that list.
 `flux-cli run` executes the command on the desktop.

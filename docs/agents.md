@@ -41,7 +41,7 @@ The skill covers:
 
 - Explicit device selection and JSON state.
 - Pairing with a user-confirmed key comparison.
-- File, clipboard, notification, SMS, media, and stream operations.
+- File, clipboard, notification, SMS, and stream operations.
 - User-service and network diagnosis, and extra addresses for Tailscale.
 - Qt and shell host compatibility.
 - Approval trust boundaries and password fallback.

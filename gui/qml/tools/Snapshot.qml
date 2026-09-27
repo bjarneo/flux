@@ -97,60 +97,59 @@ Window {
     ["13-clipboard", function () { mock.setState(function (s) { s.webcam = mock.fixture.state.webcam }); view.tab = "clipboard" }],
     ["14-files", function () { view.tab = "files" }],
     ["15-notifications", function () { view.tab = "notifications" }],
-    ["16-media", function () { view.tab = "media" }],
-    ["17-messages", function () { view.tab = "messages" }],
-    ["18-browse", function () { view.tab = "browse" }],
-    ["19-commands", function () { view.tab = "commands" }],
-    ["20-commands-form", function () { view.tab = "commands" }, function () {
+    ["16-messages", function () { view.tab = "messages" }],
+    ["17-browse", function () { view.tab = "browse" }],
+    ["18-commands", function () { view.tab = "commands" }],
+    ["19-commands-form", function () { view.tab = "commands" }, function () {
       pageItem().openForm()
       setField("Name", "Screenshot")
       setField("omarchy-system-lock", "omarchy-capture-screenshot fullscreen save")
     }],
-    ["21-commands-empty", function () { pageItem().cancel(); mock.setState(function (s) { s.commands = [] }); view.tab = "commands" }],
-    ["22-commands-offline", function () {
+    ["20-commands-empty", function () { pageItem().cancel(); mock.setState(function (s) { s.commands = [] }); view.tab = "commands" }],
+    ["21-commands-offline", function () {
       if (pageItem().cancel) pageItem().cancel()
       mock.state = mock.fixTimes(mock.fixture.state)
       view.selectedId = tablet
       view.tab = "commands"
     }],
-    ["23-pair-list", function () { view.tab = "overview"; view.pairMode = true }],
-    ["24-pair-requested", function () {
+    ["22-pair-list", function () { view.tab = "overview"; view.pairMode = true }],
+    ["23-pair-requested", function () {
       mock.updateDevice(oneplus, function (d) { d.pairState = "requested"; d.pairKey = "4F21A9C3"; return d })
     }],
-    ["25-paired", function () {
+    ["24-paired", function () {
       mock.updateDevice(oneplus, function (d) { d.pairState = "paired"; d.paired = true; d.pairedAt = "2026-09-25"; d.battery = { charge: 91, charging: false }; d.signal = { type: "5G", strength: 4 }; return d })
     }],
-    ["26-pair-incoming", function () {
+    ["25-pair-incoming", function () {
       mock.setState(function (s) {
         s.devices.push({ id: "c0ffee0000000000000000000000beef", name: "work-thinkpad", type: "laptop", ip: "192.168.1.70", paired: false, online: true, pairState: "incoming", pairKey: "9B03E7D1", plugins: [], notifications: [], conversations: [] })
       })
       view.selectedId = pixel
     }],
-    ["27-iphone", function () {
+    ["26-iphone", function () {
       mock.setState(function (s) { s.devices = s.devices.filter(function (d) { return d.pairState !== "incoming" }) })
       view.selectedId = iphone; view.tab = "overview"
     }],
-    ["28-offline", function () { view.selectedId = tablet; view.tab = "overview" }],
-    ["29-offline-files", function () { view.tab = "files" }],
-    ["30-toast", function () { view.selectedId = pixel; view.tab = "overview"; view.toast("Clipboard sent to Pixel 8") }],
+    ["27-offline", function () { view.selectedId = tablet; view.tab = "overview" }],
+    ["28-offline-files", function () { view.tab = "files" }],
+    ["29-toast", function () { view.selectedId = pixel; view.tab = "overview"; view.toast("Clipboard sent to Pixel 8") }],
     // A paired computer does not list findmyphone, so its page has no Ring button.
-    ["31-computer", function () {
+    ["30-computer", function () {
       view.toast("")
       mock.setState(function (s) {
-        s.devices.push({ id: laptop, name: "work-thinkpad", type: "laptop", ip: "192.168.1.70", paired: true, online: true, pairState: "paired", pairedAt: "2026-09-20", battery: { charge: 64, charging: true }, plugins: ["battery", "clipboard", "share", "notification", "mpris", "runcommand"], notifications: [], conversations: [] })
+        s.devices.push({ id: laptop, name: "work-thinkpad", type: "laptop", ip: "192.168.1.70", paired: true, online: true, pairState: "paired", pairedAt: "2026-09-20", battery: { charge: 64, charging: true }, plugins: ["battery", "clipboard", "share", "notification", "runcommand"], notifications: [], conversations: [] })
       })
       view.selectedId = laptop
     }],
-    ["32-notif-reply", function () {
+    ["31-notif-reply", function () {
       mock.setState(function (s) { s.devices = s.devices.filter(function (d) { return d.id !== laptop }) })
       view.selectedId = pixel; view.tab = "notifications"
     }, function () { replyFirst() }],
-    ["33-browse-deeper", function () { view.tab = "browse" }, function () { var p = pageItem(); p.list(p.root_, p.root_.path + "/Camera") }],
-    ["34-empty", function () { mock.setState(function (s) { s.devices = [] }) }],
-    ["35-not-running", function () { mock.connected = false }],
+    ["32-browse-deeper", function () { view.tab = "browse" }, function () { var p = pageItem(); p.list(p.root_, p.root_.path + "/Camera") }],
+    ["33-empty", function () { mock.setState(function (s) { s.devices = [] }) }],
+    ["34-not-running", function () { mock.connected = false }],
     // Sidebar overflow at the 640 px minimum height: 6 paired devices, a pair
     // request, and the list of discovered devices.
-    ["36-sidebar-640-top", function () {
+    ["35-sidebar-640-top", function () {
       mock.connected = true
       mock.state = mock.fixTimes(mock.fixture.state)
       mock.setState(function (s) {
@@ -168,11 +167,11 @@ Window {
       view.tab = "overview"
       view.pairMode = true
     }],
-    ["37-sidebar-640-bottom", function () { view.sidebarFlick.contentY = view.sidebarFlick.contentHeight - view.sidebarFlick.height }],
-    ["38-sidebar-640-select-last", function () { view.sidebarFlick.contentY = 0; view.selectedId = "a0000000000000000000000000000002"; view.tab = "files" }],
-    ["39-sidebar-640-moving", function () { view.sidebarFlick.contentY = 0 }, function () { view.sidebarFlick.flick(0, -1200) }, 60],
+    ["36-sidebar-640-bottom", function () { view.sidebarFlick.contentY = view.sidebarFlick.contentHeight - view.sidebarFlick.height }],
+    ["37-sidebar-640-select-last", function () { view.sidebarFlick.contentY = 0; view.selectedId = "a0000000000000000000000000000002"; view.tab = "files" }],
+    ["38-sidebar-640-moving", function () { view.sidebarFlick.contentY = 0 }, function () { view.sidebarFlick.flick(0, -1200) }, 60],
     // The drawer of the rail and the narrow layouts, and 1 open thread of a narrow Messages page.
-    ["40-drawer", function () {
+    ["39-drawer", function () {
       view.anchors.fill = win.contentItem
       mock.state = mock.fixTimes(mock.fixture.state)
       view.pairMode = false
@@ -180,13 +179,13 @@ Window {
       view.tab = "overview"
       view.drawerOpen = true
     }],
-    ["41-messages-thread", function () { view.drawerOpen = false; view.tab = "messages" }, function () { pageItem().threadOpen = true }],
+    ["40-messages-thread", function () { view.drawerOpen = false; view.tab = "messages" }, function () { pageItem().threadOpen = true }],
     // A group thread with a message that the phone could not send, then the New message form.
-    ["42-messages-group", function () { view.tab = "messages" }, function () {
+    ["41-messages-group", function () { view.tab = "messages" }, function () {
       var p = pageItem()
       p.open(p.convos.filter(function (c) { return c.thread === 4 })[0])
     }],
-    ["43-messages-new", function () { view.tab = "messages" }, function () {
+    ["42-messages-new", function () { view.tab = "messages" }, function () {
       pageItem().compose()
       setField("Phone number", "+47 912 34 567")
       setField("Text message via Pixel 8", "Running 10 minutes late")

@@ -122,7 +122,7 @@ int main(int argc, char *argv[])
                       QStringLiteral("Render every screen with test data into PNG files in <dir>, then quit."),
                       QStringLiteral("dir")});
     parser.addPositionalArgument(QStringLiteral("page"),
-                                 QStringLiteral("The page to open: overview, clipboard, files, notifications, media, "
+                                 QStringLiteral("The page to open: overview, clipboard, files, notifications, "
                                                 "messages, commands, or browse. With --snapshot: the screens to render."),
                                  QStringLiteral("[page]"));
     parser.process(app);

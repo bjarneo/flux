@@ -94,12 +94,15 @@ Chat messages that an app keeps in its own database, for example RCS chats, do n
 
 ## Media and desktop commands
 
-The phone controls desktop media players.
-The desktop can also control supported media on the phone:
+The phone controls the media players on the desktop.
+Open **Media** on the phone to play, pause, skip, seek, and set the volume.
+The controls show when a desktop player publishes its state over MPRIS.
+The phone selects the player that plays.
+If more than one player runs, select another player at the top of the screen.
 
-```sh
-flux-cli media play-pause
-```
+The volume control shows only for a player that accepts a new volume, such as mpv.
+Chromium does not accept one, so the phone shows no volume control for it.
+The desktop does not show or control the players on the phone.
 
 Add desktop commands in the Phone commands page or through the CLI:
 

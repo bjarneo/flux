@@ -4,14 +4,13 @@ import ".."
 import "../components"
 
 // Battery and device facts, quick actions, the latest notifications, and
-// the player on the device.
+// the streams from the device.
 Item {
   id: root
   property var view
   property bool fillHeight: false
   readonly property var dev: view ? view.dev : null
   readonly property bool online: !!dev && !!dev.online
-  readonly property var media: dev && dev.media ? dev.media : null
   readonly property var notifs: dev && dev.notifications ? dev.notifications.slice(0, 3) : []
   // The phone camera as a webcam on this computer. Null when it is not used.
   readonly property var webcam: view && view.backend && view.backend.state ? (view.backend.state.webcam || null) : null
@@ -20,31 +19,6 @@ Item {
   readonly property var screen: view && view.backend && view.backend.state ? (view.backend.state.screen || null) : null
 
   implicitHeight: grid.implicitHeight
-
-  // The media position moves forward while the player plays.
-  property real mediaBase: media ? (media.position || 0) : 0
-  property real mediaStamp: Date.now()
-  property real now: Date.now()
-  property string mediaKey: ""
-  onMediaChanged: {
-    var k = media ? [media.player, media.title, media.position, media.playing].join("|") : ""
-    if (k === mediaKey) return
-    mediaKey = k
-    mediaBase = media ? (media.position || 0) : 0
-    mediaStamp = Date.now()
-    now = mediaStamp
-  }
-  readonly property real position: {
-    if (!media) return 0
-    var p = mediaBase + (media.playing ? now - mediaStamp : 0)
-    return media.length > 0 ? Math.min(p, media.length) : p
-  }
-  Timer {
-    interval: 1000
-    repeat: true
-    running: !!root.media && !!root.media.playing
-    onTriggered: root.now = Date.now()
-  }
 
   GridLayout {
     id: grid
@@ -158,17 +132,11 @@ Item {
       }
       Tile {
         Layout.fillWidth: true
+        Layout.columnSpan: ringTile.visible ? 2 : 1
         icon: "browse"
         label: "Browse storage"
         active: root.view ? root.view.has("sftp") : true
         onClicked: root.view.go("browse")
-      }
-      Tile {
-        Layout.fillWidth: true
-        Layout.columnSpan: ringTile.visible ? 1 : 2
-        icon: "music"
-        label: "Media"
-        onClicked: root.view.go("media")
       }
     }
 
@@ -219,93 +187,6 @@ Item {
                 text: (modelData.text || "").replace(/\n/g, " ")
                 color: Theme.dim
                 elide: Text.ElideRight
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Now playing
-    Card {
-      Layout.fillWidth: true
-      Layout.fillHeight: true
-      Layout.preferredWidth: 320
-      implicitHeight: playCol.implicitHeight + 38
-
-      Column {
-        id: playCol
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.margins: 19
-        spacing: 12
-        SectionLabel { text: "NOW PLAYING" }
-        Item {
-          width: parent.width
-          height: 64
-
-          Item {
-            id: art
-            width: 64
-            height: 64
-            IconBox { anchors.fill: parent; icon: "music"; visible: artImage.status !== Image.Ready }
-            Image {
-              id: artImage
-              anchors.fill: parent
-              source: root.media && root.media.art ? "file://" + root.media.art : ""
-              fillMode: Image.PreserveAspectCrop
-              asynchronous: true
-              visible: status === Image.Ready
-            }
-          }
-
-          Column {
-            anchors.left: art.right
-            anchors.leftMargin: 14
-            anchors.right: playButton.left
-            anchors.rightMargin: 14
-            anchors.verticalCenter: parent.verticalCenter
-            Txt {
-              width: parent.width
-              text: root.media && root.media.title ? root.media.title : "Nothing playing"
-              font.weight: Font.Bold
-              elide: Text.ElideRight
-            }
-            Txt {
-              width: parent.width
-              text: root.media && root.media.artist ? root.media.artist : "—"
-              color: Theme.dim
-              elide: Text.ElideRight
-            }
-            Item { width: 1; height: 10 }
-            Bar {
-              width: parent.width
-              height: 4
-              value: root.media && root.media.length > 0 ? root.position / root.media.length : 0
-            }
-          }
-
-          Rectangle {
-            id: playButton
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            width: 40
-            height: 40
-            color: Theme.accent
-            opacity: root.media && root.online ? 1 : 0.4
-            Icon {
-              anchors.centerIn: parent
-              name: root.media && root.media.playing ? "pause" : "play"
-              size: 22
-              color: Theme.bg
-            }
-            MouseArea {
-              anchors.fill: parent
-              cursorShape: Qt.PointingHandCursor
-              onClicked: {
-                if (!root.media || !root.online) return
-                root.view.call("media.action", { device: root.dev.id, player: root.media.player, action: "PlayPause" })
               }
             }
           }

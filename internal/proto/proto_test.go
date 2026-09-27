@@ -2,6 +2,7 @@ package proto
 
 import (
 	"crypto/x509"
+	"slices"
 	"testing"
 )
 
@@ -106,4 +107,15 @@ func testCert(t *testing.T) *x509.Certificate {
 		t.Fatalf("bad device ID %q", id)
 	}
 	return cert.Leaf
+}
+
+func TestMediaGoesOneWay(t *testing.T) {
+	// The phone controls the players on the computer. The computer does
+	// not take the players of the phone and does not control them.
+	if !slices.Contains(Incoming, TypeMprisRequest) || !slices.Contains(Outgoing, TypeMpris) {
+		t.Error("the computer must take player requests and send player state")
+	}
+	if slices.Contains(Incoming, TypeMpris) || slices.Contains(Outgoing, TypeMprisRequest) {
+		t.Error("the computer must not take player state or send player requests")
+	}
 }

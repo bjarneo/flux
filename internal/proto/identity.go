@@ -65,7 +65,7 @@ const (
 var Incoming = []string{
 	TypePing, TypeBattery, TypeClipboard, TypeClipboardConnect,
 	TypeShare, TypeShareUpdate, TypeNotification, TypeRunCommandRequest,
-	TypeMpris, TypeMprisRequest, TypeSftp, TypeSftpRequest,
+	TypeMprisRequest, TypeSftp, TypeSftpRequest,
 	TypeSmsMessages, TypeConnectivity, TypeTelephony,
 	TypeFluxTunnel, TypeFluxWebcam, TypeFluxDnd, TypeFluxMic, TypeFluxScreen,
 	TypeFluxApprove, TypeFluxHerdr,
@@ -75,7 +75,7 @@ var Incoming = []string{
 var Outgoing = []string{
 	TypePing, TypeBattery, TypeClipboard, TypeClipboardConnect, TypeShare,
 	TypeNotification, TypeNotificationRequest, TypeNotificationReply, TypeNotificationAction,
-	TypeFindMyPhone, TypeRunCommand, TypeMpris, TypeMprisRequest,
+	TypeFindMyPhone, TypeRunCommand, TypeMpris,
 	TypeSftpRequest, TypeSmsRequest, TypeSmsConversations,
 	TypeSmsConversation, TypeSftp, TypeFluxWebcam, TypeFluxDnd,
 	TypeFluxMic, TypeFluxScreen, TypeFluxApprove, TypeFluxHerdr,

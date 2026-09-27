@@ -124,6 +124,24 @@ If a sent message shows **Not sent**, the phone could not send it.
 Check the signal and the SMS app on the phone.
 Flux does not send messages to a group. Reply to a group on the phone.
 
+## Media controls do not show on the phone
+
+The phone shows the controls of a desktop player that publishes its state over MPRIS.
+To list these players and the media log of the daemon:
+
+```sh
+busctl --user list | grep org.mpris.MediaPlayer2
+journalctl --user -u fluxd --no-pager | grep media
+```
+
+If the list does not show the player, the player has no MPRIS support.
+For mpv, install `mpv-mpris`.
+If the log shows `media control off`, `fluxd` did not connect to the session bus.
+Restart it with `systemctl --user restart fluxd`.
+
+A player that does not accept a new volume shows no volume control.
+Chromium is an example.
+
 ## Camera, microphone, or screen fails
 
 ```sh

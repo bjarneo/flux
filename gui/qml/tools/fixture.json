@@ -31,7 +31,6 @@
      "share",
      "notification",
      "findmyphone",
-     "mpris",
      "sms",
      "sftp",
      "runcommand",
@@ -86,19 +85,6 @@
       "actions": []
      }
     ],
-    "media": {
-     "player": "spotify",
-     "players": [
-      "spotify"
-     ],
-     "title": "Weightless",
-     "artist": "Marconi Union",
-     "album": "Weightless",
-     "playing": true,
-     "position": 192000,
-     "length": 489000,
-     "canSeek": true
-    },
     "conversations": [
      {
       "thread": 1,
@@ -172,12 +158,10 @@
      "share",
      "notification",
      "findmyphone",
-     "mpris",
      "runcommand",
      "connectivity"
     ],
     "notifications": [],
-    "media": null,
     "conversations": []
    },
    {
@@ -195,7 +179,6 @@
     "signal": null,
     "plugins": [],
     "notifications": [],
-    "media": null,
     "conversations": []
    },
    {
@@ -213,7 +196,6 @@
     "signal": null,
     "plugins": [],
     "notifications": [],
-    "media": null,
     "conversations": []
    }
   ],

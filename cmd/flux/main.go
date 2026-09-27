@@ -25,7 +25,7 @@ const usage = `Usage: flux-cli [command] [--device NAME] [args]
 Commands:
   open [page]            Open the Flux window: the omarchy-shell plugin when it is
                          enabled, else flux-gui. Pages: overview, clipboard, files,
-                         notifications, media, messages, commands, browse
+                         notifications, messages, commands, browse
   status [--json]        Show this computer and the known devices
   discover               Broadcast this computer on the network now
   pair DEVICE            Ask a device to pair and show the verification key
@@ -42,7 +42,6 @@ Commands:
   clip [TEXT]            Send the clipboard, or TEXT
   url URL                Open a URL on the phone
   sms NUMBER TEXT...     Send a text message through the phone
-  media ACTION           play-pause, play, pause, next, previous, or stop
   notifications          List the phone notifications
   notifications clear    Dismiss the phone notifications, on the phone and here.
                          Ongoing notifications, such as a media player, stay
@@ -114,8 +113,6 @@ func main() {
 			fail("Usage: flux-cli sms NUMBER TEXT...")
 		}
 		err = call("sms.send", map[string]any{"device": device, "addresses": []string{args[0]}, "body": strings.Join(args[1:], " ")})
-	case "media":
-		err = media(device, need(args, "ACTION"))
 	case "notifications":
 		if first(args) == "clear" {
 			err = clearNotifications(device)
@@ -406,18 +403,6 @@ func send(device string, files []string) error {
 	}
 	fmt.Printf("Sending %d file(s)\n", len(res.Transfers))
 	return nil
-}
-
-func media(device, action string) error {
-	actions := map[string]string{
-		"play-pause": "PlayPause", "play": "Play", "pause": "Pause",
-		"next": "Next", "previous": "Previous", "prev": "Previous", "stop": "Stop",
-	}
-	a, ok := actions[action]
-	if !ok {
-		return fmt.Errorf("unknown media action %q", action)
-	}
-	return call("media.action", map[string]any{"device": device, "action": a})
 }
 
 func notifications(device string) error {

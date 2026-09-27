@@ -79,6 +79,7 @@ object Ic {
 
     val previous = R.drawable.ic_skip_previous_fill
     val next = R.drawable.ic_skip_next_fill
+    val volume = R.drawable.ic_volume_up
     val play = R.drawable.ic_play_arrow_fill
     val pause = R.drawable.ic_pause_fill
 

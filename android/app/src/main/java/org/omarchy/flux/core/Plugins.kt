@@ -162,18 +162,7 @@ object Plugins {
             d.currentPlayer?.let { requestNowPlaying(d, it) }
         }
         val name = p.string("player") ?: return
-        val old = d.playerStates[name] ?: PlayerState(name)
-        val b = p.body
-        d.playerStates[name] = old.copy(
-            title = b.str("title") ?: old.title,
-            artist = b.str("artist") ?: old.artist,
-            album = b.str("album") ?: old.album,
-            playing = b.bool("isPlaying") ?: old.playing,
-            position = b.long("pos") ?: old.position,
-            length = b.long("length") ?: old.length,
-            canSeek = b.bool("canSeek") ?: old.canSeek,
-            updatedAt = SystemClock.elapsedRealtime(),
-        )
+        d.playerStates[name] = mergePlayer(d.playerStates[name] ?: PlayerState(name), p.body, SystemClock.elapsedRealtime())
         if (d.currentPlayer == null) d.currentPlayer = name
         val cur = d.currentPlayer?.let { d.playerStates[it] }
         if (cur != null && !cur.playing && d.playerStates[name]?.playing == true) d.currentPlayer = name
@@ -211,6 +200,17 @@ object Plugins {
         }
     }
 
+    /** Sets the volume of the current player, from 0 to 100. */
+    fun setVolume(core: FluxCore, id: String, volume: Int) {
+        val d = core.device(id) ?: return
+        val player = d.currentPlayer ?: return
+        val v = volume.coerceIn(0, 100)
+        d.send(Packet(Types.MPRIS_REQUEST, bodyOf("player" to player, "setVolume" to v)))
+        core.locked {
+            d.playerStates[player]?.let { d.playerStates[player] = it.copy(volume = v) }
+        }
+    }
+
     fun seek(core: FluxCore, id: String, positionMs: Long) {
         val d = core.device(id) ?: return
         val player = d.currentPlayer ?: return
@@ -220,3 +220,23 @@ object Plugins {
         }
     }
 }
+
+/**
+ * Merges a kdeconnect.mpris packet from the computer into the state of a
+ * player. A field that the packet leaves out keeps its old value. The
+ * volume is different: the computer sends the whole state with isPlaying,
+ * and leaves out the volume for a player that takes no volume.
+ */
+internal fun mergePlayer(old: PlayerState, b: JsonObject, at: Long): PlayerState = old.copy(
+    title = b.str("title") ?: old.title,
+    artist = b.str("artist") ?: old.artist,
+    album = b.str("album") ?: old.album,
+    playing = b.bool("isPlaying") ?: old.playing,
+    position = b.long("pos") ?: old.position,
+    length = b.long("length") ?: old.length,
+    canSeek = b.bool("canSeek") ?: old.canSeek,
+    canGoNext = b.bool("canGoNext") ?: old.canGoNext,
+    canGoPrevious = b.bool("canGoPrevious") ?: old.canGoPrevious,
+    volume = if ("isPlaying" in b) b.long("volume")?.toInt()?.coerceIn(0, 100) else old.volume,
+    updatedAt = at,
+)

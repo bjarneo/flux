@@ -3,7 +3,7 @@
   "id": "flux",
   "name": "Flux",
   "version": "0.1.0",
-  "description": "Connects this computer to Flux for Android and to KDE Connect. Shares the clipboard, files, notifications, and media. Summon the window with: omarchy-shell shell summon flux '{\"page\":\"files\"}'",
+  "description": "Connects this computer to Flux for Android and to KDE Connect. Shares the clipboard, files, and notifications, and lets the phone control the media players. Summon the window with: omarchy-shell shell summon flux '{\"page\":\"files\"}'",
   "kinds": ["service", "bar-widget", "panel"],
   "keepLoaded": true,
   "entryPoints": {

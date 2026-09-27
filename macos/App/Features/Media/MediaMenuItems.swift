@@ -30,19 +30,3 @@ struct CommandsMenu: View {
         }
     }
 }
-
-/// Explains how computers control Music and Spotify on this Mac.
-struct MediaSettings: View {
-    var body: some View {
-        Section("Media") {
-            LabeledContent("Music and Spotify") {
-                Button("Automation Settings…") {
-                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!)
-                }
-            }
-            Text("Paired computers can play, pause, skip, seek, and change the volume of Music and Spotify on this Mac. macOS asks once for each app.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-}

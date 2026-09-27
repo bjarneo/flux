@@ -29,7 +29,7 @@ battery_2_bar battery_1_bar battery_0_bar battery_charging_full
 upload_file photo_camera music_note terminal folder_open ring_volume
 notifications notifications_active call
 
-skip_previous+fill skip_next+fill play_arrow+fill pause+fill
+skip_previous+fill skip_next+fill play_arrow+fill pause+fill volume_up
 
 folder+fill draft description image movie audio_file picture_as_pdf
 folder_zip code home hard_drive

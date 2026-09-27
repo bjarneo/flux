@@ -27,7 +27,7 @@ FluxView {
 | --- | --- | --- |
 | `backend` | `var`, required | The backend object. The contract is below. |
 | `themeText` | `string` | The content of `~/.local/state/omarchy/current/theme/colors.toml`. Set it again when the file changes. An empty string gives the Tokyo Night defaults. |
-| `showPage(key)` | function, returns `bool` | Selects a screen: `overview`, `clipboard`, `files`, `notifications`, `media`, `messages`, `browse`, or `commands`. Returns `false` for an unknown key. |
+| `showPage(key)` | function, returns `bool` | Selects a screen: `overview`, `clipboard`, `files`, `notifications`, `messages`, `browse`, or `commands`. Returns `false` for an unknown key. |
 
 ## Layouts
 

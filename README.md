@@ -82,7 +82,6 @@ flux-cli send "$HOME/Downloads/report.txt"
 flux-cli clip
 flux-cli url https://omarchy.org
 flux-cli ring
-flux-cli media play-pause
 flux-cli notify --run -- make test
 ```
 

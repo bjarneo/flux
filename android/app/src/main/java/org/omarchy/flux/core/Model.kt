@@ -24,6 +24,10 @@ data class PlayerState(
     val position: Long = 0,
     val length: Long = 0,
     val canSeek: Boolean = false,
+    val canGoNext: Boolean = true,
+    val canGoPrevious: Boolean = true,
+    /** The volume from 0 to 100, or null when the player takes no volume. */
+    val volume: Int? = null,
     /** The time of the position value, from SystemClock.elapsedRealtime. */
     val updatedAt: Long = 0,
 )

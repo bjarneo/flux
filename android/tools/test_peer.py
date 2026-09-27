@@ -153,11 +153,12 @@ def main():
                 "bar": {"name": "Toggle bar", "command": "omarchy-toggle-bar"},
                 "mute": {"name": "Mute audio", "command": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"}}
     playing = {"v": True}
+    volume = {"v": 60}
 
     def now_playing():
         return {"player": "spotify", "title": "Weightless", "artist": "Marconi Union", "album": "Weightless",
                 "isPlaying": playing["v"], "pos": 192000, "length": 489000, "canSeek": True,
-                "canPlay": True, "canPause": True, "canGoNext": True, "canGoPrevious": True, "volume": 60}
+                "canPlay": True, "canPause": True, "canGoNext": True, "canGoPrevious": True, "volume": volume["v"]}
 
     def after_pair():
         send("kdeconnect.battery", {"currentCharge": 64, "isCharging": False, "thresholdEvent": 0})
@@ -232,6 +233,9 @@ def main():
                 send("kdeconnect.mpris", now_playing())
             if body.get("action") == "PlayPause":
                 playing["v"] = not playing["v"]
+                send("kdeconnect.mpris", now_playing())
+            if "setVolume" in body:
+                volume["v"] = max(0, min(100, int(body["setVolume"])))
                 send("kdeconnect.mpris", now_playing())
         elif kind == "kdeconnect.sftp.request":
             if args.sftp_port:

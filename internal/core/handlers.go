@@ -67,8 +67,6 @@ func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 		// on other devices.
 	case proto.TypeRunCommandRequest:
 		d.handleRunCommand(dev, l, p)
-	case proto.TypeMpris:
-		d.handlePhoneMedia(dev, l, p)
 	case proto.TypeMprisRequest:
 		d.handleDesktopMediaRequest(l, p)
 	case proto.TypeSftp:

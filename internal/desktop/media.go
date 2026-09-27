@@ -4,11 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 
 	"github.com/godbus/dbus/v5"
+	"github.com/godbus/dbus/v5/introspect"
 )
 
 const (
@@ -34,6 +36,8 @@ type Player struct {
 	// Volume is 0 to 100.
 	Volume                                               int
 	CanPlay, CanPause, CanGoNext, CanGoPrevious, CanSeek bool
+	// CanSetVolume is true when the player takes a new volume.
+	CanSetVolume bool
 }
 
 // Media controls the MPRIS media players on the session bus.
@@ -44,13 +48,15 @@ type Media struct {
 	mu       sync.Mutex
 	byName   map[string]string // short name to bus name
 	byOwner  map[string]string // unique owner name to short name
+	volume   map[string]bool   // bus name to true when the player takes a volume
 	onChange []func(name string)
 }
 
-var instanceSuffix = regexp.MustCompile(`\.instance[\w.]*$`)
+var instanceSuffix = regexp.MustCompile(`\.instance[\w.-]*$`)
 
 // shortName removes the MPRIS prefix and the instance suffix from a bus
-// name. "org.mpris.MediaPlayer2.firefox.instance_1_42" becomes "firefox".
+// name. "org.mpris.MediaPlayer2.firefox.instance_1_42" becomes "firefox",
+// and "org.mpris.MediaPlayer2.mpv.instance-IbWwwPyh" becomes "mpv".
 func shortName(bus string) string {
 	name := strings.TrimPrefix(bus, mprisPrefix)
 	name = instanceSuffix.ReplaceAllString(name, "")
@@ -86,11 +92,21 @@ func NewMedia() (*Media, error) {
 	if err != nil {
 		return nil, err
 	}
-	m := &Media{conn: conn, signals: make(chan *dbus.Signal, 64)}
+	m := &Media{conn: conn, signals: make(chan *dbus.Signal, 64), volume: map[string]bool{}}
 	if err := conn.AddMatchSignal(
 		dbus.WithMatchObjectPath(mprisPath),
 		dbus.WithMatchInterface(propsIface),
 		dbus.WithMatchMember("PropertiesChanged"),
+	); err != nil {
+		conn.Close()
+		return nil, err
+	}
+	// A player sends Seeked when the position jumps. The position does not
+	// send PropertiesChanged.
+	if err := conn.AddMatchSignal(
+		dbus.WithMatchObjectPath(mprisPath),
+		dbus.WithMatchInterface(mprisPlayerIface),
+		dbus.WithMatchMember("Seeked"),
 	); err != nil {
 		conn.Close()
 		return nil, err
@@ -132,6 +148,11 @@ func (m *Media) refresh() {
 	}
 	m.mu.Lock()
 	m.byName, m.byOwner = byName, byOwner
+	for bus := range m.volume {
+		if !slices.Contains(buses, bus) {
+			delete(m.volume, bus)
+		}
+	}
 	m.mu.Unlock()
 }
 
@@ -142,7 +163,7 @@ func (m *Media) dispatch() {
 		case "org.freedesktop.DBus.NameOwnerChanged":
 			m.refresh()
 			name = ""
-		case propsIface + ".PropertiesChanged":
+		case propsIface + ".PropertiesChanged", mprisPlayerIface + ".Seeked":
 			m.mu.Lock()
 			n, ok := m.byOwner[sig.Sender]
 			m.mu.Unlock()
@@ -200,6 +221,7 @@ func (m *Media) Player(name string) (Player, bool) {
 	if v, ok := props["Volume"]; ok {
 		if f, ok := v.Value().(float64); ok {
 			p.Volume = int(f*100 + 0.5)
+			p.CanSetVolume = boolean(props["CanControl"]) && m.takesVolume(bus)
 		}
 	}
 	p.CanPlay = boolean(props["CanPlay"])
@@ -277,7 +299,49 @@ func (m *Media) SetVolume(name string, volume int) error {
 		return err
 	}
 	volume = max(0, min(100, volume))
-	return obj.SetProperty(mprisPlayerIface+".Volume", dbus.MakeVariant(float64(volume)/100))
+	err = obj.SetProperty(mprisPlayerIface+".Volume", dbus.MakeVariant(float64(volume)/100))
+	if err != nil {
+		// Some players list Volume as writable and refuse each change.
+		// Treat the player as one that takes no volume from now on.
+		m.mu.Lock()
+		m.volume[obj.Destination()] = false
+		m.mu.Unlock()
+	}
+	return err
+}
+
+// takesVolume reports whether the player at the bus name takes a new
+// volume. Media asks each player once. Chromium, for example, gives no
+// introspection data and ignores a new volume.
+func (m *Media) takesVolume(bus string) bool {
+	m.mu.Lock()
+	ok, known := m.volume[bus]
+	m.mu.Unlock()
+	if known {
+		return ok
+	}
+	node, err := introspect.Call(m.conn.Object(bus, mprisPath))
+	ok = err == nil && writableVolume(node)
+	m.mu.Lock()
+	m.volume[bus] = ok
+	m.mu.Unlock()
+	return ok
+}
+
+// writableVolume reports whether the introspection data lists the Volume
+// property of the MPRIS player interface as writable.
+func writableVolume(node *introspect.Node) bool {
+	for _, iface := range node.Interfaces {
+		if iface.Name != mprisPlayerIface {
+			continue
+		}
+		for _, prop := range iface.Properties {
+			if prop.Name == "Volume" {
+				return prop.Access == "readwrite"
+			}
+		}
+	}
+	return false
 }
 
 // OnChange adds a function that runs when a player changes. The name is

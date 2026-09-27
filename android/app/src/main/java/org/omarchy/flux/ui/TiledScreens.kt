@@ -61,6 +61,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import org.omarchy.flux.core.CaptureKind
 import org.omarchy.flux.core.CaptureWatch
@@ -559,6 +560,9 @@ fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
     var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     // The position that the user drags to, until the drag ends.
     var dragging by remember { mutableStateOf<Float?>(null) }
+    // The volume that the user drags to, and the time of the last volume sent.
+    var volumeDrag by remember { mutableStateOf<Float?>(null) }
+    var volumeSentAt by remember { mutableLongStateOf(0L) }
     LaunchedEffect(d.id) {
         while (true) {
             Plugins.requestPlayers(FluxCore, d.id)
@@ -644,7 +648,7 @@ fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
                 }
             }
             TileRow(64.dp) {
-                ControlTile(Ic.previous, "Previous", Modifier.weight(1f)) { Plugins.mediaAction(FluxCore, d.id, "Previous") }
+                ControlTile(Ic.previous, "Previous", Modifier.weight(1f), p.canGoPrevious) { Plugins.mediaAction(FluxCore, d.id, "Previous") }
                 Tile(
                     Modifier.weight(1f).fillMaxHeight(), { Plugins.mediaAction(FluxCore, d.id, "PlayPause") },
                     container = Tn.green, border = null, padding = PaddingValues(0.dp),
@@ -652,7 +656,46 @@ fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
                 ) {
                     Sym(if (p.playing) Ic.pause else Ic.play, if (p.playing) "Pause" else "Play", tint = Tn.onAccent, size = 34.dp)
                 }
-                ControlTile(Ic.next, "Next", Modifier.weight(1f)) { Plugins.mediaAction(FluxCore, d.id, "Next") }
+                ControlTile(Ic.next, "Next", Modifier.weight(1f), p.canGoNext) { Plugins.mediaAction(FluxCore, d.id, "Next") }
+            }
+            // Only a player that takes a volume sends one. Chromium, for example, does not.
+            val volume = p.volume
+            if (volume != null) {
+                Tile(Modifier.fillMaxWidth(), border = null, padding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Sym(Ic.volume, "Volume", tint = Tn.green, size = 22.dp)
+                        val colors = SliderDefaults.colors(thumbColor = Tn.green, activeTrackColor = Tn.green, inactiveTrackColor = Tn.line)
+                        val source = remember { MutableInteractionSource() }
+                        Slider(
+                            value = volumeDrag ?: volume.toFloat(),
+                            onValueChange = {
+                                volumeDrag = it
+                                // The player follows the drag. At most one request goes out each 150 ms.
+                                val now = SystemClock.elapsedRealtime()
+                                if (now - volumeSentAt >= 150) {
+                                    volumeSentAt = now
+                                    Plugins.setVolume(FluxCore, d.id, it.roundToInt())
+                                }
+                            },
+                            onValueChangeFinished = {
+                                volumeDrag?.let { Plugins.setVolume(FluxCore, d.id, it.roundToInt()) }
+                                volumeDrag = null
+                            },
+                            valueRange = 0f..100f,
+                            modifier = Modifier.weight(1f),
+                            colors = colors,
+                            interactionSource = source,
+                            thumb = { SliderDefaults.Thumb(source, colors = colors, thumbSize = DpSize(4.dp, 18.dp)) },
+                            track = {
+                                SliderDefaults.Track(
+                                    it, Modifier.height(4.dp), colors = colors,
+                                    drawStopIndicator = null, thumbTrackGapSize = 4.dp,
+                                )
+                            },
+                        )
+                        T("${volumeDrag?.roundToInt() ?: volume}", size = 11, color = Tn.dim, family = Mono)
+                    }
+                }
             }
         }
         Spacer(Modifier.height(48.dp))
@@ -660,9 +703,9 @@ fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
 }
 
 @Composable
-private fun ControlTile(@DrawableRes icon: Int, description: String, modifier: Modifier, onClick: () -> Unit) {
+private fun ControlTile(@DrawableRes icon: Int, description: String, modifier: Modifier, enabled: Boolean = true, onClick: () -> Unit) {
     Tile(
-        modifier.fillMaxHeight(), onClick, accent = Tn.green, padding = PaddingValues(0.dp),
+        modifier.fillMaxHeight(), onClick.takeIf { enabled }, accent = Tn.green, enabled = enabled, padding = PaddingValues(0.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
     ) {
         Sym(icon, description, size = 28.dp)

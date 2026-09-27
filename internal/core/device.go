@@ -45,7 +45,6 @@ type Device struct {
 	signal        *Signal
 	notifications []*PhoneNotification
 	notifDesktop  map[string]uint32
-	media         *PhoneMedia
 	conversations map[int64]*Conversation
 	threadWait    map[int64][]chan []SmsMessage
 	sftpWait      []chan SftpInfo
@@ -117,7 +116,6 @@ func (dev *Device) plugins() []string {
 		{"share", dev.accepts(proto.TypeShare)},
 		{"notifications", dev.supports(proto.TypeNotification)},
 		{"findmyphone", dev.accepts(proto.TypeFindMyPhone)},
-		{"mpris", dev.supports(proto.TypeMpris)},
 		{"sms", dev.supports(proto.TypeSmsMessages)},
 		{"runcommand", dev.supports(proto.TypeRunCommandRequest)},
 		{"sftp", dev.sharesStorage()},
@@ -169,7 +167,6 @@ type DeviceView struct {
 	Signal        *Signal              `json:"signal"`
 	Plugins       []string             `json:"plugins"`
 	Notifications []*PhoneNotification `json:"notifications"`
-	Media         *PhoneMedia          `json:"media"`
 	Conversations []*Conversation      `json:"conversations"`
 }
 
@@ -185,7 +182,7 @@ func (dev *Device) view() DeviceView {
 		Paired: dev.Paired, Online: dev.link != nil,
 		PairState: state, PairKey: dev.pairKey, PairedAt: dev.PairedAt,
 		Battery: dev.battery, Signal: dev.signal,
-		Plugins: dev.plugins(), Notifications: dev.notifications, Media: dev.media,
+		Plugins: dev.plugins(), Notifications: dev.notifications,
 	}
 	if v.Type == "" {
 		v.Type = "phone"

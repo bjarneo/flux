@@ -24,14 +24,14 @@ flux-cli off
 flux-cli on
 flux-cli open files
 FLUX_GUI=app flux-cli open files
-FLUX_GUI=plugin flux-cli open media
+FLUX_GUI=plugin flux-cli open notifications
 ```
 
 `flux-cli off` writes an off marker that also prevents the next login from starting the daemon.
 `flux-cli on` removes the marker and starts the daemon.
 Prefer these commands when the user asks to turn Flux off or on.
 
-Pages: `overview`, `clipboard`, `files`, `notifications`, `media`, `messages`, `browse`, and `commands`.
+Pages: `overview`, `clipboard`, `files`, `notifications`, `messages`, `browse`, and `commands`.
 
 ## Devices and transfers
 
@@ -73,21 +73,19 @@ Flux cannot discover or pair a device through Tailscale.
 Pair on the local network first.
 Read `docs/tailscale.md` for the limits and the troubleshooting steps.
 
-## Notifications, media, and commands
+## Notifications and commands
 
 ```sh
 flux-cli --device "Pixel 8" notifications
 flux-cli --device "Pixel 8" notifications clear
 flux-cli --device "Pixel 8" notify "Build complete" "All tests passed"
 flux-cli --device "Pixel 8" notify --run -- make test
-flux-cli --device "Pixel 8" media play-pause
 flux-cli commands
 flux-cli commands add "Lock screen" omarchy-system-lock
 flux-cli commands remove COMMAND_ID
 flux-cli run COMMAND_ID
 ```
 
-Media actions: `play-pause`, `play`, `pause`, `next`, `previous`, and `stop`.
 Put `--device` before `--` with `notify --run`.
 The process exits with the wrapped command's exit code.
 
