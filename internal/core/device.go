@@ -41,6 +41,7 @@ type Device struct {
 	pairTimer *time.Timer
 
 	battery       *Battery
+	batteryLow    bool // the low-battery notification of this discharge showed
 	signal        *Signal
 	notifications []*PhoneNotification
 	notifDesktop  map[string]uint32

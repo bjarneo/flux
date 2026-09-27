@@ -124,11 +124,32 @@ func (d *Daemon) handleBattery(dev *Device, p *proto.Packet) {
 	} else {
 		dev.battery = &Battery{Charge: body.Charge, Charging: body.Charging}
 	}
+	alert := dev.lowBatteryAlert(body.Threshold == 1, body.Charge, body.Charging)
 	d.mu.Unlock()
-	if body.Threshold == 1 {
+	if alert {
 		d.notify(desktop.Notification{AppName: "Flux", Title: dev.Name + " battery is low", Body: strconv.Itoa(body.Charge) + "% left", Urgency: 2})
 	}
 	d.markDirty()
+}
+
+// lowCharge is the charge in percent at or below which a battery that
+// does not charge is low.
+const lowCharge = 15
+
+// lowBatteryAlert reports whether a battery packet shows the low-battery
+// notification. A Flux device marks each reading at or below lowCharge as
+// low, also after a reconnect. The notification shows once per discharge.
+// It shows again after the battery charges or rises above lowCharge.
+func (dev *Device) lowBatteryAlert(low bool, charge int, charging bool) bool {
+	switch {
+	case low:
+		alert := !dev.batteryLow
+		dev.batteryLow = true
+		return alert
+	case charging || charge > lowCharge:
+		dev.batteryLow = false
+	}
+	return false
 }
 
 // sendBattery sends the battery of this computer. A desktop without a
@@ -139,7 +160,7 @@ func (d *Daemon) sendBattery(l *lan.Link) {
 		return
 	}
 	threshold := 0
-	if b.Charge <= 15 && !b.Charging {
+	if b.Charge <= lowCharge && !b.Charging {
 		threshold = 1
 	}
 	_ = l.Send(proto.New(proto.TypeBattery, map[string]any{"currentCharge": b.Charge, "isCharging": b.Charging, "thresholdEvent": threshold}))
