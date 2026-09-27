@@ -25,7 +25,7 @@ make snapshot
 
 Outputs:
 
-- `bin/flux`
+- `bin/flux-cli`
 - `bin/fluxd`
 - `bin/flux-approve`
 - `gui/app/build/flux-gui`
@@ -38,13 +38,19 @@ To install the complete package from the checkout:
 ```sh
 cd dist/arch
 makepkg -si
-flux setup
-flux doctor
+flux-cli setup
+flux-cli doctor
 ```
 
 Run `makepkg` as a regular user.
 Its package function uses `DESTDIR`, so the build does not run live system setup.
 Pacman runs the install hook after installation.
+
+The package installs the CLI as `/usr/bin/flux-cli`.
+It must not install `/usr/bin/flux`, because the `fluxcd` package owns that path.
+The short name `flux` is the link `/usr/lib/flux/bin/flux`.
+`/etc/profile.d/flux-path.sh` adds that directory to the end of `PATH`.
+Call `flux-cli` in desktop entries, key bindings, menu actions, and printed hints.
 
 For a user-only install:
 
@@ -52,7 +58,7 @@ For a user-only install:
 make build
 make install-user
 export PATH="$HOME/.local/bin:$PATH"
-flux setup --no-plugin
+flux-cli setup --no-plugin
 ```
 
 To add the plugin from that checkout, run `make install-plugin` and follow its printed shell commands.

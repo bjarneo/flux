@@ -10,7 +10,7 @@ For the Mac app, see [Flux for macOS](macos.md#features).
 1. Install [Flux for Android](android.md).
 2. Connect the phone and desktop to the same local network.
 3. Open Flux on the phone.
-4. Run `flux open` on the desktop.
+4. Run `flux-cli open` on the desktop.
 5. Select **+ Pair new device**.
 6. Select the phone.
 7. Compare the 8-character key on both screens.
@@ -19,9 +19,9 @@ For the Mac app, see [Flux for macOS](macos.md#features).
 To pair from the terminal:
 
 ```sh
-flux discover
-flux pair "Pixel 8"
-flux status
+flux-cli discover
+flux-cli pair "Pixel 8"
+flux-cli status
 ```
 
 Flux uses TLS with pinned device certificates after pairing.
@@ -33,10 +33,10 @@ To use the phone away from the local network, see [Connect through Tailscale](ta
 Use the Files and Clipboard pages in the desktop window, or run:
 
 ```sh
-flux send "$HOME/Downloads/report.txt"
-flux clip
-flux clip "Text from the desktop"
-flux url https://omarchy.org
+flux-cli send "$HOME/Downloads/report.txt"
+flux-cli clip
+flux-cli clip "Text from the desktop"
+flux-cli url https://omarchy.org
 ```
 
 On Android, share content to Flux from the system share sheet.
@@ -50,7 +50,7 @@ Enable notification access on the phone to show its notifications on the desktop
 To send a notification in the other direction:
 
 ```sh
-flux notify "Backup done" "412 files, 2.1 GB"
+flux-cli notify "Backup done" "412 files, 2.1 GB"
 ```
 
 The phone uses the **From computers** notification channel.
@@ -63,14 +63,14 @@ The phone controls desktop media players.
 The desktop can also control supported media on the phone:
 
 ```sh
-flux media play-pause
+flux-cli media play-pause
 ```
 
 Add desktop commands in the Phone commands page or through the CLI:
 
 ```sh
-flux commands add "Lock screen" omarchy-system-lock
-flux commands
+flux-cli commands add "Lock screen" omarchy-system-lock
+flux-cli commands
 ```
 
 A new configuration has no commands.

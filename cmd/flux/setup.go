@@ -141,7 +141,7 @@ func pluginSource() (plugin, views string, err error) {
 
 func setupPlugin(dry bool, run func(string, string, ...string) error) error {
 	if _, err := exec.LookPath("omarchy-shell"); err != nil {
-		fmt.Println("  - omarchy-shell is not installed, so flux open uses flux-gui")
+		fmt.Println("  - omarchy-shell is not installed, so flux-cli open uses flux-gui")
 		return nil
 	}
 	src, views, err := pluginSource()

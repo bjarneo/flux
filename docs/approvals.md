@@ -20,7 +20,7 @@ Installation alone does not enable approval.
 3. Start setup from your desktop account:
 
    ```sh
-   sudo flux approve setup
+   sudo flux-cli approve setup
    ```
 
 4. Select Enroll on the phone.
@@ -50,7 +50,7 @@ auth sufficient pam_exec.so quiet stdout /usr/lib/flux/flux-approve
 To enable additional supported services:
 
 ```sh
-sudo flux approve enable polkit-1 hyprlock
+sudo flux-cli approve enable polkit-1 hyprlock
 ```
 
 Setup copies the vendor polkit file to `/etc/pam.d/polkit-1` when necessary.
@@ -60,14 +60,14 @@ It does not enable `sshd` or `login`, and the helper refuses `sshd`.
 ## Status, timeout, and removal
 
 ```sh
-flux approve
-sudo flux approve disable
-sudo flux approve remove
+flux-cli approve
+sudo flux-cli approve disable
+sudo flux-cli approve remove
 ```
 
 Disable removes the Flux PAM lines.
 Remove also deletes the enrolled phone public key.
-`sudo flux approve enroll` enrolls a phone without enabling a PAM service.
+`sudo flux-cli approve enroll` enrolls a phone without enabling a PAM service.
 
 `approve_timeout` in `config.toml` accepts 5 to 120 seconds.
 The default is 20 seconds.

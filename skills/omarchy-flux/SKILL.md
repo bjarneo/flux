@@ -1,13 +1,15 @@
 ---
 name: omarchy-flux
-description: Use, install, diagnose, develop, and release Omarchy Flux. Use this skill for the flux CLI, fluxd, Flux for Android, Flux for macOS, phone and Mac pairing, connections through Tailscale, file or clipboard transfers, phone notifications, webcam or microphone streams, screen mirror, fingerprint approval, herdr agents on the phone, the Flux Qt app, the Flux Omarchy plugin, AUR packages, and Flux APK workflows. Scope this skill to Flux tasks, not general Android or Omarchy configuration.
+description: Use, install, diagnose, develop, and release Omarchy Flux. Use this skill for the flux-cli command, fluxd, Flux for Android, Flux for macOS, phone and Mac pairing, connections through Tailscale, file or clipboard transfers, phone notifications, webcam or microphone streams, screen mirror, fingerprint approval, herdr agents on the phone, the Flux Qt app, the Flux Omarchy plugin, AUR packages, and Flux APK workflows. Scope this skill to Flux tasks, not general Android or Omarchy configuration.
 ---
 
 # Omarchy Flux
 
 Flux connects an Omarchy desktop to Flux for Android or Flux for macOS on the same local network.
 A paired device can also connect through Tailscale with an extra address.
-The desktop includes the `flux` CLI, `fluxd`, a Qt app, and an Omarchy shell plugin.
+The desktop includes the `flux-cli` command, `fluxd`, a Qt app, and an Omarchy shell plugin.
+`flux` is a short name for `flux-cli` when no other program uses it.
+The `fluxcd` package also installs a `flux` command, so always run `flux-cli`.
 
 ## Choose the task
 
@@ -27,9 +29,9 @@ Run repository commands from its root unless the reference names another directo
 For an installed Flux system, run:
 
 ```sh
-flux version
-flux status --json
-flux doctor
+flux-cli version
+flux-cli status --json
+flux-cli doctor
 ```
 
 For source work, run:
@@ -43,12 +45,12 @@ Preserve existing changes.
 Use the configured Git remote for clone and release URLs.
 If no remote exists, ask for the repository URL before a remote operation.
 
-`flux setup` prints failures but can still return zero.
-Inspect its output and confirm the result with `flux doctor` and `flux status --json`.
+`flux-cli setup` prints failures but can still return zero.
+Inspect its output and confirm the result with `flux-cli doctor` and `flux-cli status --json`.
 
 ## Operate Flux
 
-1. Find the requested phone in `flux status --json`.
+1. Find the requested phone in `flux-cli status --json`.
 2. Select its device ID when more than one phone is present.
 3. Run the requested command from the runtime reference.
 4. Check the result from the command or the next state event.
@@ -56,27 +58,27 @@ Inspect its output and confirm the result with `flux doctor` and `flux status --
 Example:
 
 ```sh
-flux status --json
-flux --device "Pixel 8" send "$HOME/Downloads/report.txt"
-flux status --json
+flux-cli status --json
+flux-cli --device "Pixel 8" send "$HOME/Downloads/report.txt"
+flux-cli status --json
 ```
 
 The send command starts a transfer.
 Check `transfers` in the state before you report that the file arrived.
 
-Use `flux status --json` for scripts.
-Use `flux watch` only when the task needs a continuous event stream.
+Use `flux-cli status --json` for scripts.
+Use `flux-cli watch` only when the task needs a continuous event stream.
 Stop the watch process when the task ends.
 
-`flux` without arguments opens a window.
+`flux-cli` without arguments opens a window.
 Use an explicit command for diagnostics.
 
 ## Pair and connect
 
 1. Check that both devices use the same local network.
 2. Open Flux for Android.
-3. Run `flux discover`.
-4. Run `flux pair "Pixel 8"` with the device name from the state.
+3. Run `flux-cli discover`.
+4. Run `flux-cli pair "Pixel 8"` with the device name from the state.
 5. Ask the user to compare the verification key on both devices.
 6. Let the user accept the matching request on the phone.
 7. Confirm that the device is paired and online.
@@ -91,11 +93,11 @@ To reach a paired phone away from that network, add its Tailscale name as an ext
 
 ```sh
 tailscale status
-flux --device "Pixel 8" addresses add pixel-8
-flux addresses
+flux-cli --device "Pixel 8" addresses add pixel-8
+flux-cli addresses
 ```
 
-Use the device name from `flux status --json` and the host name from `tailscale status`.
+Use the device name from `flux-cli status --json` and the host name from `tailscale status`.
 Read `docs/tailscale.md` for the dial order, limits, and checks.
 
 ## Respect the requested operation
@@ -108,8 +110,8 @@ Pairing needs the user's key comparison.
 Fingerprint enrollment needs the user's fingerprint and key comparison.
 Do not claim that these physical steps succeeded without evidence.
 
-Use `flux commands add` for desktop commands that the phone can run.
-`flux run ID` runs a configured command on the desktop, not on the phone.
+Use `flux-cli commands add` for desktop commands that the phone can run.
+`flux-cli run ID` runs a configured command on the desktop, not on the phone.
 Do not expand a command's permissions beyond the user's request.
 
 ## Install locally
@@ -122,19 +124,19 @@ From the repository root:
 ```sh
 make build
 sudo make install
-flux setup
-flux doctor
+flux-cli setup
+flux-cli doctor
 ```
 
 The root install performs system setup.
-Run `flux setup` as the desktop user.
+Run `flux-cli setup` as the desktop user.
 Use `docs/install.md` for dependencies, the pacman package, and the user-only install.
 
 For a preview without installation:
 
 ```sh
 make build
-./bin/flux setup --dry-run
+./bin/flux-cli setup --dry-run
 ```
 
 ## Develop the correct component

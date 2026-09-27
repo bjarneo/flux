@@ -18,7 +18,11 @@ const PAMLine = "auth sufficient pam_exec.so quiet stdout " + HelperPath
 
 // pamComment goes above PAMLine, so that a reader knows where the line
 // comes from and how to remove it.
-const pamComment = "# Flux: approve with the phone fingerprint. `sudo flux approve disable` removes it."
+const pamComment = "# Flux: approve with the phone fingerprint. `sudo flux-cli approve disable` removes it."
+
+// oldPAMComment is the comment of the versions that named the CLI flux.
+// RemovePAMLine also removes it.
+const oldPAMComment = "# Flux: approve with the phone fingerprint. `sudo flux approve disable` removes it."
 
 // PAMServices are the PAM services that Flux can turn approvals on for.
 // Flux never changes sshd or login, and the helper refuses sshd.
@@ -50,14 +54,14 @@ func AddPAMLine(text string) (string, bool, error) {
 }
 
 // RemovePAMLine removes each rule that runs the helper, and the comment
-// that AddPAMLine wrote. It returns false when the file does not run the
-// helper.
+// that AddPAMLine or an earlier version wrote. It returns false when the
+// file does not run the helper.
 func RemovePAMLine(text string) (string, bool) {
 	lines := strings.Split(text, "\n")
 	out := make([]string, 0, len(lines))
 	changed := false
 	for _, l := range lines {
-		if runsHelper(l) || strings.TrimSpace(l) == pamComment {
+		if t := strings.TrimSpace(l); runsHelper(l) || t == pamComment || t == oldPAMComment {
 			changed = true
 			continue
 		}

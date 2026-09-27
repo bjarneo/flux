@@ -18,7 +18,7 @@ or the approve code in Flux for Android.
 | `/etc/flux/approve/<user>.pub` | A file owned by root | The trust anchor: the public key of the phone |
 | `fluxd` | The user | Carries the messages between the helper and the phone |
 | Flux for Android | The phone user | Shows the request, asks for the fingerprint, and signs |
-| `flux approve enroll` | root, through `sudo` | Gets the public key from the phone and writes the key file |
+| `flux-cli approve enroll` | root, through `sudo` | Gets the public key from the phone and writes the key file |
 
 ## Threat model
 
@@ -48,7 +48,7 @@ These are out of scope:
 ## Trust anchor
 
 The public key of the phone is in `/etc/flux/approve/<user>.pub`. Only
-`flux approve enroll`, which runs as root, writes it. The helper uses the
+`flux-cli approve enroll`, which runs as root, writes it. The helper uses the
 key only if all of these are true:
 
 - The file is a regular file, not a symbolic link.
@@ -159,7 +159,7 @@ enrollment is never a valid approval, and the reverse.
 
 ## Enrollment flow
 
-1. The user runs `sudo flux approve enroll`. The command runs as root and
+1. The user runs `sudo flux-cli approve enroll`. The command runs as root and
    takes the user from `SUDO_USER`.
 2. The command connects to the socket of that user and checks the peer
    with `SO_PEERCRED`.

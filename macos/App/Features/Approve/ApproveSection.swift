@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Touch ID approval for 1 computer: the enrollment, the open request, and
 /// the recent requests. The computer starts each enrollment with
-/// `sudo flux approve setup` or `sudo flux approve enroll`.
+/// `sudo flux-cli approve setup` or `sudo flux-cli approve enroll`.
 struct ApproveSection: View {
     @Environment(AppModel.self) private var app
     let device: DeviceSnapshot
@@ -38,7 +38,7 @@ private struct ApproveContent: View {
                 Text("Approve sudo, polkit, and the lock screen of \(device.name) with Touch ID on this Mac. Run this command on \(device.name), then select Enroll on this Mac:")
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                CommandRow(command: "sudo flux approve setup")
+                CommandRow(command: "sudo flux-cli approve setup")
             }
             if let touchIdProblem {
                 Label(touchIdProblem, systemImage: "exclamationmark.triangle")
@@ -49,7 +49,7 @@ private struct ApproveContent: View {
                 CardRow("Key code") { Text(key.code).monospaced().textSelection(.enabled) }
                 CardRow("Enrolled") { Text(key.enrolled.formatted(date: .abbreviated, time: .shortened)) }
                 HStack {
-                    Text("To enroll again, run `sudo flux approve enroll` on \(device.name).")
+                    Text("To enroll again, run `sudo flux-cli approve enroll` on \(device.name).")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -67,7 +67,7 @@ private struct ApproveContent: View {
         .confirmationDialog("Remove the approval key for \(device.name)?", isPresented: $confirmRemove) {
             Button("Remove Key", role: .destructive) { plugin.removeKey(device.id) }
         } message: {
-            Text("This Mac can no longer approve requests of \(device.name). Run `sudo flux approve remove` on \(device.name) to delete its key file too.")
+            Text("This Mac can no longer approve requests of \(device.name). Run `sudo flux-cli approve remove` on \(device.name) to delete its key file too.")
         }
     }
 }

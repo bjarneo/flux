@@ -1,24 +1,34 @@
 # Runtime reference
 
+## Command name
+
+The CLI is `flux-cli`.
+The package adds the short name `flux` at the end of `PATH`, so another `flux` command comes first.
+The `fluxcd` package installs `/usr/bin/flux`.
+With `fluxcd`, `flux` runs fluxcd and prints errors about Kubernetes.
+Run `flux-cli` in commands, scripts, and reports.
+`flux-cli doctor` prints which program `flux` runs.
+Read `docs/install.md#the-command-name` for the files.
+
 ## Service and window
 
 ```sh
-flux setup --dry-run
-flux setup
-flux setup --no-plugin
-flux doctor
-flux status --json
+flux-cli setup --dry-run
+flux-cli setup
+flux-cli setup --no-plugin
+flux-cli doctor
+flux-cli status --json
 systemctl --user status fluxd
 journalctl --user -u fluxd -n 100 --no-pager
-flux off
-flux on
-flux open files
-FLUX_GUI=app flux open files
-FLUX_GUI=plugin flux open media
+flux-cli off
+flux-cli on
+flux-cli open files
+FLUX_GUI=app flux-cli open files
+FLUX_GUI=plugin flux-cli open media
 ```
 
-`flux off` writes an off marker that also prevents the next login from starting the daemon.
-`flux on` removes the marker and starts the daemon.
+`flux-cli off` writes an off marker that also prevents the next login from starting the daemon.
+`flux-cli on` removes the marker and starts the daemon.
 Prefer these commands when the user asks to turn Flux off or on.
 
 Pages: `overview`, `clipboard`, `files`, `notifications`, `media`, `messages`, `browse`, and `commands`.
@@ -26,20 +36,20 @@ Pages: `overview`, `clipboard`, `files`, `notifications`, `media`, `messages`, `
 ## Devices and transfers
 
 ```sh
-flux discover
-flux pair "Pixel 8"
-flux accept "Pixel 8"
-flux reject "Pixel 8"
-flux unpair "Pixel 8"
-flux --device "Pixel 8" ring
-flux --device "Pixel 8" ping "Connection check"
-flux --device "Pixel 8" send "$HOME/Downloads/report.txt"
-flux --device "Pixel 8" clip
-flux --device "Pixel 8" clip "Text from the desktop"
-flux --device "Pixel 8" url https://omarchy.org
+flux-cli discover
+flux-cli pair "Pixel 8"
+flux-cli accept "Pixel 8"
+flux-cli reject "Pixel 8"
+flux-cli unpair "Pixel 8"
+flux-cli --device "Pixel 8" ring
+flux-cli --device "Pixel 8" ping "Connection check"
+flux-cli --device "Pixel 8" send "$HOME/Downloads/report.txt"
+flux-cli --device "Pixel 8" clip
+flux-cli --device "Pixel 8" clip "Text from the desktop"
+flux-cli --device "Pixel 8" url https://omarchy.org
 ```
 
-Replace the example device with a name or ID from `flux status --json`.
+Replace the example device with a name or ID from `flux-cli status --json`.
 Names match without case.
 Use the ID when devices have the same name.
 Compare the key before the user accepts a pair request.
@@ -48,15 +58,15 @@ Compare the key before the user accepts a pair request.
 
 ```sh
 tailscale status
-flux addresses
-flux --device "Pixel 8" addresses add pixel-8
-flux --device "Pixel 8" addresses remove pixel-8
+flux-cli addresses
+flux-cli --device "Pixel 8" addresses add pixel-8
+flux-cli --device "Pixel 8" addresses remove pixel-8
 ```
 
 An extra address is a host name or an IP address without a port, for example the Tailscale name of the phone.
 `fluxd` dials the last address first, then the extra addresses. It dials 2 seconds after a link drops and every 30 seconds while the paired device is offline.
-Each device in `flux status --json` has an `addresses` list.
-`flux doctor` reports an extra host name that does not resolve.
+Each device in `flux-cli status --json` has an `addresses` list.
+`flux-cli doctor` reports an extra host name that does not resolve.
 The addresses are in `~/.local/share/flux/devices.json`. Change them with the CLI, not by hand, while `fluxd` runs.
 
 Flux cannot discover or pair a device through Tailscale.
@@ -66,14 +76,14 @@ Read `docs/tailscale.md` for the limits and the troubleshooting steps.
 ## Notifications, media, and commands
 
 ```sh
-flux --device "Pixel 8" notifications
-flux --device "Pixel 8" notify "Build complete" "All tests passed"
-flux --device "Pixel 8" notify --run -- make test
-flux --device "Pixel 8" media play-pause
-flux commands
-flux commands add "Lock screen" omarchy-system-lock
-flux commands remove COMMAND_ID
-flux run COMMAND_ID
+flux-cli --device "Pixel 8" notifications
+flux-cli --device "Pixel 8" notify "Build complete" "All tests passed"
+flux-cli --device "Pixel 8" notify --run -- make test
+flux-cli --device "Pixel 8" media play-pause
+flux-cli commands
+flux-cli commands add "Lock screen" omarchy-system-lock
+flux-cli commands remove COMMAND_ID
+flux-cli run COMMAND_ID
 ```
 
 Media actions: `play-pause`, `play`, `pause`, `next`, `previous`, and `stop`.
@@ -83,10 +93,10 @@ The process exits with the wrapped command's exit code.
 For SMS, use the recipient and message from the user:
 
 ```sh
-flux --device "$DEVICE" sms "$RECIPIENT" "$MESSAGE"
+flux-cli --device "$DEVICE" sms "$RECIPIENT" "$MESSAGE"
 ```
 
-`flux commands` manages desktop commands that a paired phone can request.
+`flux-cli commands` manages desktop commands that a paired phone can request.
 The command ID comes from the list or the add result.
 
 ## Camera, microphone, and screen
@@ -95,14 +105,14 @@ Start capture on the phone.
 The CLI reports state, changes webcam settings, and stops streams.
 
 ```sh
-flux webcam
-flux webcam set aspect=1:1 brightness=0.2
-flux webcam reset
-flux webcam stop
-flux mic
-flux mic stop
-flux screen
-flux screen stop
+flux-cli webcam
+flux-cli webcam set aspect=1:1 brightness=0.2
+flux-cli webcam reset
+flux-cli webcam stop
+flux-cli mic
+flux-cli mic stop
+flux-cli screen
+flux-cli screen stop
 ```
 
 The webcam needs `ffmpeg` and `v4l2loopback-dkms` with the matching kernel headers.
@@ -147,8 +157,8 @@ Their removal changes pairing identity.
 Read `docs/herdr.md` for the phone screens, the notifications, and the wire format.
 
 ```sh
-flux doctor
-flux status --json
+flux-cli doctor
+flux-cli status --json
 herdr agent list
 journalctl --user -u fluxd --no-pager | grep herdr
 ```
@@ -168,11 +178,11 @@ The root helper validates a phone signature against `/etc/flux/approve/<user>.pu
 The daemon carries approval messages but does not establish trust by itself.
 
 ```sh
-flux approve
-sudo flux approve setup
-sudo flux approve enable polkit-1 hyprlock
-sudo flux approve disable
-sudo flux approve remove
+flux-cli approve
+sudo flux-cli approve setup
+sudo flux-cli approve enable polkit-1 hyprlock
+sudo flux-cli approve disable
+sudo flux-cli approve remove
 ```
 
 Use root commands only for the requested setup or removal.
@@ -181,13 +191,13 @@ Do not change `sshd` or `login` PAM services.
 
 ## Connection diagnosis
 
-1. Inspect `flux doctor` and `flux status --json`.
+1. Inspect `flux-cli doctor` and `flux-cli status --json`.
 2. Inspect the user service and its logs.
 3. Check `systemctl status avahi-daemon`.
 4. Check that Flux runs on the phone.
 5. Check that the network allows communication between clients.
-6. Run `flux discover` and inspect the state again.
-7. For a phone away from the local network, check `flux addresses`, `tailscale ping HOST`, and the `connect to` lines in the `fluxd` log.
+6. Run `flux-cli discover` and inspect the state again.
+7. For a phone away from the local network, check `flux-cli addresses`, `tailscale ping HOST`, and the `connect to` lines in the `fluxd` log.
 
-If the plugin fails, test the Qt host with `FLUX_GUI=app flux open`.
+If the plugin fails, test the Qt host with `FLUX_GUI=app flux-cli open`.
 If that succeeds, inspect the plugin install and shell logs.

@@ -22,7 +22,13 @@
     {
       "id": 4,
       "prompt": "My Pixel 8 is paired with Flux at home. I use Tailscale on the phone and the desktop. Make Flux connect when I am away from home. Give the commands without running them.",
-      "expected_output": "Find the phone name with tailscale status, add it with flux --device \"Pixel 8\" addresses add HOST, and check with flux addresses and flux doctor. State that discovery and pairing still need the local network. Do not edit devices.json by hand or add a firewall rule.",
+      "expected_output": "Find the phone name with tailscale status, add it with flux-cli --device \"Pixel 8\" addresses add HOST, and check with flux-cli addresses and flux-cli doctor. State that discovery and pairing still need the local network. Do not edit devices.json by hand or add a firewall rule.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "I installed omarchy-flux, and fluxcd is also installed for work. Now flux status prints a Kubernetes error. How do I use Flux? Do not change the system.",
+      "expected_output": "Explain that fluxcd owns /usr/bin/flux, which comes before the Flux short name in PATH. Use flux-cli, for example flux-cli status and flux-cli doctor. Do not remove fluxcd, overwrite /usr/bin/flux, or edit PATH.",
       "files": []
     }
   ]

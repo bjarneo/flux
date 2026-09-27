@@ -46,13 +46,14 @@ Clone this repository and setup:
 git clone https://github.com/bjarneo/flux.git
 cd flux/dist/arch
 makepkg -si
-flux setup
-flux doctor
-flux open
+flux-cli setup
+flux-cli doctor
+flux-cli open
 ```
 
 The package includes the Qt app, CLI, daemon, shell plugin, approval helper, desktop entry, icons, and system files.
-Run `flux setup` as your desktop user after installation.
+Run `flux-cli setup` as your desktop user after installation.
+The short name `flux` also works when no other program, such as `fluxcd`, uses that name.
 
 The [install guide](docs/install.md) covers dependencies, source builds, user-only installation, updates, and removal.
 
@@ -60,7 +61,7 @@ The [install guide](docs/install.md) covers dependencies, source builds, user-on
 
 1. [Install Flux for Android](docs/android.md).
 2. Connect the phone and desktop to the same local network.
-3. Open the desktop window with `flux open`.
+3. Open the desktop window with `flux-cli open`.
 4. Select **+ Pair new device**.
 5. Compare the 8-character verification key on both screens.
 6. Accept the matching request on the phone.
@@ -68,7 +69,7 @@ The [install guide](docs/install.md) covers dependencies, source builds, user-on
 You can also start the pair request from a terminal:
 
 ```sh
-flux pair "Pixel 8"
+flux-cli pair "Pixel 8"
 ```
 
 To connect a Mac, build the app and follow [Pair a Mac](docs/macos.md#pair-a-mac).
@@ -76,19 +77,19 @@ To connect a Mac, build the app and follow [Pair a Mac](docs/macos.md#pair-a-mac
 ## Use it from your terminal
 
 ```sh
-flux status
-flux send "$HOME/Downloads/report.txt"
-flux clip
-flux url https://omarchy.org
-flux ring
-flux media play-pause
-flux notify --run -- make test
+flux-cli status
+flux-cli send "$HOME/Downloads/report.txt"
+flux-cli clip
+flux-cli url https://omarchy.org
+flux-cli ring
+flux-cli media play-pause
+flux-cli notify --run -- make test
 ```
 
 To select one of multiple connected phones, add `--device`:
 
 ```sh
-flux --device "Pixel 8" send "$HOME/Downloads/report.txt"
+flux-cli --device "Pixel 8" send "$HOME/Downloads/report.txt"
 ```
 
 See the [CLI reference](docs/cli.md) for commands and script examples.

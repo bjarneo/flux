@@ -40,18 +40,18 @@ So Flux cannot find or pair a device through Tailscale.
 3. Add the name as an extra address:
 
    ```sh
-   flux --device "Pixel 8" addresses add pixel-8
+   flux-cli --device "Pixel 8" addresses add pixel-8
    ```
 
 4. Check the result:
 
    ```sh
-   flux addresses
-   flux doctor
+   flux-cli addresses
+   flux-cli doctor
    ```
 
 When the phone is the only connected paired device, you can omit `--device`.
-`flux doctor` checks that each extra host name resolves:
+`flux-cli doctor` checks that each extra host name resolves:
 
 ```text
 ✓ pixel-8 resolves, so fluxd can reach Pixel 8 through it
@@ -61,7 +61,7 @@ A MagicDNS name needs MagicDNS on the desktop.
 Without MagicDNS, add the Tailscale IP address of the phone:
 
 ```sh
-flux --device "Pixel 8" addresses add "$(tailscale ip -4 pixel-8)"
+flux-cli --device "Pixel 8" addresses add "$(tailscale ip -4 pixel-8)"
 ```
 
 Flux for macOS listens on IPv4 only.
@@ -76,7 +76,7 @@ It dials the phone again 2 seconds later, and the link comes back through Tailsc
 To check the link, run:
 
 ```sh
-flux status
+flux-cli status
 journalctl --user -u fluxd -n 50 --no-pager | grep "link up"
 ```
 
@@ -89,10 +89,10 @@ If you turn off Tailscale on the phone, the link drops, and `fluxd` finds the ph
 ## Remove an address
 
 ```sh
-flux --device "Pixel 8" addresses remove pixel-8
+flux-cli --device "Pixel 8" addresses remove pixel-8
 ```
 
-`flux unpair` also removes the extra addresses of the device.
+`flux-cli unpair` also removes the extra addresses of the device.
 
 ## How it works
 
@@ -109,7 +109,7 @@ The addresses are in the `addresses` field of each device in `~/.local/share/flu
 A device can have 5 extra addresses.
 An address is a host name or an IP address without a port.
 
-In the state from `flux status --json`, each device has an `addresses` list.
+In the state from `flux-cli status --json`, each device has an `addresses` list.
 Scripts can change the list with the `addresses.add` and `addresses.remove` [IPC methods](ipc.md#extra-addresses).
 
 ## Other VPNs
@@ -164,6 +164,6 @@ To stop this, use Tailscale access controls to limit TCP ports 1716 to 1764 on t
 6. Check the extra addresses and their names:
 
    ```sh
-   flux addresses
-   flux doctor
+   flux-cli addresses
+   flux-cli doctor
    ```

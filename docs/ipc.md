@@ -56,8 +56,8 @@ Events can arrive before the subscription response.
 For shell scripts, use the CLI wrappers:
 
 ```sh
-flux status --json
-flux watch
+flux-cli status --json
+flux-cli watch
 ```
 
 ## Method groups

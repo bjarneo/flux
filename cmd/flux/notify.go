@@ -21,18 +21,18 @@ func notify(device string, args []string) error {
 			cmd = cmd[1:]
 		}
 		if len(cmd) == 0 {
-			fail("Usage: flux notify --run -- CMD [ARGS...]")
+			fail("Usage: flux-cli notify --run -- CMD [ARGS...]")
 		}
 		start := time.Now()
 		runErr := runForeground(cmd)
 		code, title, body := commandResult(cmd, runErr, time.Since(start))
 		if err := call("notify.send", map[string]any{"device": device, "title": title, "body": body}); err != nil {
-			fmt.Fprintln(os.Stderr, "flux:", err)
+			fmt.Fprintln(os.Stderr, "flux-cli:", err)
 		}
 		os.Exit(code)
 	}
 	if len(args) == 0 {
-		fail("Usage: flux notify [--device NAME] TITLE [BODY]")
+		fail("Usage: flux-cli notify [--device NAME] TITLE [BODY]")
 	}
 	return call("notify.send", map[string]any{"device": device, "title": args[0], "body": strings.Join(args[1:], " ")})
 }

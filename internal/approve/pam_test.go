@@ -58,6 +58,14 @@ func TestRemovePAMLine(t *testing.T) {
 	}
 }
 
+func TestRemovePAMLineOldComment(t *testing.T) {
+	with, _, _ := AddPAMLine(archSudo)
+	with = strings.Replace(with, pamComment, oldPAMComment, 1)
+	if out, changed := RemovePAMLine(with); !changed || out != archSudo {
+		t.Fatalf("remove must also delete the comment of earlier versions:\n%s", out)
+	}
+}
+
 func testPAM(t *testing.T) PAMFiles {
 	root := t.TempDir()
 	p := PAMFiles{Dir: filepath.Join(root, "etc"), Vendor: filepath.Join(root, "vendor"), Backup: filepath.Join(root, "backup")}

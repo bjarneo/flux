@@ -105,7 +105,7 @@ object Android {
             description = "Received files, links, and pairing requests"
         })
         nm.createNotificationChannel(NotificationChannel(CHANNEL_COMPUTER, "From computers", NotificationManager.IMPORTANCE_HIGH).apply {
-            description = "Notifications that a computer sends, for example with flux notify"
+            description = "Notifications that a computer sends, for example with flux-cli notify"
         })
         nm.createNotificationChannel(NotificationChannel(CHANNEL_RING, "Find my phone", NotificationManager.IMPORTANCE_HIGH).apply {
             description = "Rings the phone when a computer asks"

@@ -24,4 +24,5 @@ fi
 # Start fluxd in every graphical session.
 systemctl --global enable fluxd.service 2>/dev/null || true
 
-echo "Flux is installed. As your user, run: flux setup"
+echo "Flux is installed. As your user, run: flux-cli setup"
+echo "The short name flux works after the next login, when no other flux command exists."

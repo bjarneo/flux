@@ -51,7 +51,7 @@ To change the icons, edit and run `swift macos/tools/render-icon.swift`.
 3. Select the computer in the sidebar, then **Pair…**, then **Send request**.
 4. Accept the request on the computer when it shows the same 8-character key.
 
-You can also start from the computer with `flux pair` and accept on the Mac.
+You can also start from the computer with `flux-cli pair` and accept on the Mac.
 The Mac announces itself with UDP broadcasts on port 1716 and as `_kdeconnect._udp` through Bonjour, like the phone.
 It appears on the computer as `laptop` when it has a battery and `desktop` otherwise.
 
@@ -69,7 +69,7 @@ It appears on the computer as `laptop` when it has a battery and `desktop` other
 | Screen mirror | Streams a display to a window on the computer in H.264, with the long side at most 1080 pixels. |
 | Camera modes | Text, QR, Photo, Document, and Signature, like the phone. Text, QR, and Document also read an opened, pasted, or dropped image or a screen region. Signature also accepts a drawn signature. |
 | Microphone | Streams the Mac microphone as 48 kHz mono audio. |
-| Notifications | Shows notifications from `flux notify`. |
+| Notifications | Shows notifications from `flux-cli notify`. |
 | Battery | A Mac with a battery reports it. The page shows the computer's battery. |
 | Do Not Disturb | See [Focus](#focus). |
 | Fingerprint approval | Approves `sudo` and polkit with Touch ID. See [approval](#approval). |
@@ -134,7 +134,7 @@ FLUX_DATA_DIR=/tmp/flux-mac FLUX_UDP_PORT=28731 FLUX_PEER_UDP_PORT=28716 FLUX_LO
 | `FLUX_LOOPBACK=1` | Announce only to 127.0.0.1 and skip Bonjour |
 
 Headless `fluxd` has no clipboard, notification, media, or stream backends.
-Check its side with `flux status --json`, `flux watch`, and its log.
+Check its side with `flux-cli status --json`, `flux-cli watch`, and its log.
 
 To read the Mac logs:
 

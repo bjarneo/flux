@@ -81,7 +81,7 @@ public final class ApprovePlugin: FluxPlugin, @unchecked Sendable {
             if !ApproveMessage.fresh(r, now: Int64(Date().timeIntervalSince1970)) {
                 problem = "The clocks of this Mac and the computer differ by more than 10 minutes"
             } else if r.kind == .approve && !keys.has(computerId) {
-                problem = "This Mac has no key for the computer. Run: sudo flux approve enroll"
+                problem = "This Mac has no key for the computer. Run: sudo flux-cli approve enroll"
             } else if model.current != nil {
                 problem = "Another request is open on this Mac"
             } else {
@@ -146,7 +146,7 @@ public final class ApprovePlugin: FluxPlugin, @unchecked Sendable {
         if r.kind == .approve && keys.biometryChanged(computerId: r.computerId) {
             keys.delete(r.computerId)
             model.keys = keys.all()
-            fail(r, "The fingerprints on this Mac changed. Enroll again with: sudo flux approve enroll")
+            fail(r, "The fingerprints on this Mac changed. Enroll again with: sudo flux-cli approve enroll")
             return
         }
         model.phase = .working
@@ -181,7 +181,7 @@ public final class ApprovePlugin: FluxPlugin, @unchecked Sendable {
     }
 
     /// Deletes the key of the computer. The key file on the computer stays
-    /// until `sudo flux approve remove`.
+    /// until `sudo flux-cli approve remove`.
     @MainActor
     public func removeKey(_ computerId: String) {
         keys.delete(computerId)

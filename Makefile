@@ -23,7 +23,7 @@ build: build-go build-gui
 
 build-go:
 	$(GO) build -trimpath -ldflags "$(GO_LDFLAGS)" -o bin/fluxd ./cmd/fluxd
-	$(GO) build -trimpath -ldflags "$(GO_LDFLAGS)" -o bin/flux ./cmd/flux
+	$(GO) build -trimpath -ldflags "$(GO_LDFLAGS)" -o bin/flux-cli ./cmd/flux
 	@# The PAM helper is static, so that it depends on no shared library.
 	CGO_ENABLED=0 $(GO) build -trimpath -ldflags "$(GO_LDFLAGS)" -o bin/flux-approve ./cmd/flux-approve
 
@@ -43,9 +43,17 @@ vet:
 # `sudo make install` works without Go on the PATH of root. On a real
 # install (no DESTDIR), it also runs the system setup in post-install.sh.
 install:
-	@test -x bin/fluxd -a -x bin/flux -a -x bin/flux-approve -a -x $(GUI_BUILD)/flux-gui || { echo "Run make first, then sudo make install"; exit 1; }
+	@test -x bin/fluxd -a -x bin/flux-cli -a -x bin/flux-approve -a -x $(GUI_BUILD)/flux-gui || { echo "Run make first, then sudo make install"; exit 1; }
 	install -Dm755 bin/fluxd $(DESTDIR)$(PREFIX)/bin/fluxd
-	install -Dm755 bin/flux $(DESTDIR)$(PREFIX)/bin/flux
+	install -Dm755 bin/flux-cli $(DESTDIR)$(PREFIX)/bin/flux-cli
+	@# The short name flux. The fluxcd package owns /usr/bin/flux, so the
+	@# link is in a directory at the end of PATH. Another flux command
+	@# comes first, and flux-cli always works.
+	install -dm755 $(DESTDIR)$(PREFIX)/lib/flux/bin
+	ln -sfn ../../../bin/flux-cli $(DESTDIR)$(PREFIX)/lib/flux/bin/flux
+	install -dm755 $(DESTDIR)/etc/profile.d
+	sed 's|@BINDIR@|$(PREFIX)/lib/flux/bin|' dist/flux-path.sh >$(DESTDIR)/etc/profile.d/flux-path.sh
+	chmod 644 $(DESTDIR)/etc/profile.d/flux-path.sh
 	install -Dm755 $(GUI_BUILD)/flux-gui $(DESTDIR)$(PREFIX)/bin/flux-gui
 	@# The PAM helper for approval with a fingerprint. PAM uses it only
 	@# after the user adds it to a PAM file.
@@ -64,9 +72,10 @@ install:
 
 uninstall:
 	@if [ -z "$(DESTDIR)" ]; then sh dist/pre-remove.sh; fi
-	rm -f $(DESTDIR)$(PREFIX)/bin/fluxd $(DESTDIR)$(PREFIX)/bin/flux $(DESTDIR)$(PREFIX)/bin/flux-gui
+	rm -f $(DESTDIR)$(PREFIX)/bin/fluxd $(DESTDIR)$(PREFIX)/bin/flux-cli $(DESTDIR)$(PREFIX)/bin/flux-gui
 	rm -rf $(DESTDIR)$(PREFIX)/share/flux
 	rm -rf $(DESTDIR)$(PREFIX)/lib/flux
+	rm -f $(DESTDIR)/etc/profile.d/flux-path.sh
 	rm -f $(DESTDIR)$(PREFIX)/lib/systemd/user/fluxd.service
 	rm -f $(DESTDIR)$(PREFIX)/lib/udev/rules.d/61-flux-v4l2loopback.rules
 	rm -f $(DESTDIR)$(PREFIX)/share/applications/flux.desktop
@@ -87,12 +96,19 @@ uninstall-plugin:
 # install-user installs Flux for the current user in ~/.local, with no root:
 # the binaries, the desktop entry, and the icons. The system parts (the udev
 # rule, the kernel module, and the PAM helper) need `sudo make install`.
-# Then run `flux setup` for the fluxd service and the plugin.
+# Then run `flux-cli setup` for the fluxd service and the plugin.
 USER_PREFIX ?= $(HOME)/.local
 install-user:
-	@test -x bin/fluxd -a -x bin/flux -a -x $(GUI_BUILD)/flux-gui || { echo "Run make first"; exit 1; }
+	@test -x bin/fluxd -a -x bin/flux-cli -a -x $(GUI_BUILD)/flux-gui || { echo "Run make first"; exit 1; }
 	install -Dm755 bin/fluxd $(USER_PREFIX)/bin/fluxd
-	install -Dm755 bin/flux $(USER_PREFIX)/bin/flux
+	install -Dm755 bin/flux-cli $(USER_PREFIX)/bin/flux-cli
+	@# The short name flux, only when no other flux command exists. A link
+	@# in USER_PREFIX/bin comes before /usr/bin, so it would hide fluxcd.
+	@link=$(USER_PREFIX)/bin/flux; \
+	if [ -L "$$link" ] && [ "$$(readlink "$$link")" = flux-cli ]; then :; \
+	elif [ -e "$$link" ] || [ -L "$$link" ]; then echo "$$link exists. If it is an earlier Flux, remove it, then run make install-user again."; \
+	elif other=$$(command -v flux); then echo "$$other is another flux command, so use flux-cli."; \
+	else ln -s flux-cli "$$link"; fi
 	install -Dm755 $(GUI_BUILD)/flux-gui $(USER_PREFIX)/bin/flux-gui
 	install -Dm644 dist/flux.desktop $(USER_PREFIX)/share/applications/flux.desktop
 	install -Dm644 dist/flux.svg $(USER_PREFIX)/share/icons/hicolor/scalable/apps/flux.svg
@@ -101,7 +117,9 @@ install-user:
 	-update-desktop-database -q $(USER_PREFIX)/share/applications 2>/dev/null
 
 uninstall-user:
-	rm -f $(USER_PREFIX)/bin/fluxd $(USER_PREFIX)/bin/flux $(USER_PREFIX)/bin/flux-gui
+	rm -f $(USER_PREFIX)/bin/fluxd $(USER_PREFIX)/bin/flux-cli $(USER_PREFIX)/bin/flux-gui
+	@# Remove the flux link only when it points to flux-cli.
+	@link=$(USER_PREFIX)/bin/flux; if [ "$$(readlink "$$link")" = flux-cli ]; then rm -f "$$link"; fi
 	rm -f $(USER_PREFIX)/share/applications/flux.desktop
 	rm -f $(USER_PREFIX)/share/icons/hicolor/scalable/apps/flux.svg $(USER_PREFIX)/share/icons/hicolor/symbolic/apps/flux-symbolic.svg
 
@@ -112,7 +130,7 @@ dev: build-go
 # Open the window from the checkout: the plugin when it is enabled, else
 # flux-gui from gui/app/build.
 open: build
-	./bin/flux open
+	./bin/flux-cli open
 
 # Render every screen into PNG files without a display.
 snapshot: build-gui

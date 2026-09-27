@@ -51,10 +51,10 @@ On the phone, open Camera, select Webcam, and press Start.
 Desktop video apps see **Flux Camera**.
 
 ```sh
-flux webcam
-flux webcam set aspect=1:1 brightness=0.2
-flux webcam reset
-flux webcam stop
+flux-cli webcam
+flux-cli webcam set aspect=1:1 brightness=0.2
+flux-cli webcam reset
+flux-cli webcam stop
 ```
 
 On the desktop, open the PHONE CAMERA card on Overview and select Settings.
@@ -77,7 +77,7 @@ Other settings apply while the stream runs.
 | `saturation` | `0` to `2` | `1` |
 | `warmth` | `-1` to `1`. Higher values make the image warmer. | `0` |
 
-`flux webcam reset` restores neutral image settings and keeps the aspect, resolution, and camera.
+`flux-cli webcam reset` restores neutral image settings and keeps the aspect, resolution, and camera.
 The phone limits values to its camera's capabilities and saves them for the next stream.
 
 ## Phone as microphone
@@ -88,8 +88,8 @@ Desktop apps see **Flux Microphone**.
 The daemon uses `pw-cat` from PipeWire, so this feature needs no additional package on Omarchy.
 
 ```sh
-flux mic
-flux mic stop
+flux-cli mic
+flux-cli mic stop
 ```
 
 To include audio with the webcam, enable **Also send the microphone** in the phone's Webcam settings.
@@ -109,8 +109,8 @@ The desktop window shows the screen but does not control phone input.
 To stop, close the window, use the phone notification, or run:
 
 ```sh
-flux screen
-flux screen stop
+flux-cli screen
+flux-cli screen stop
 ```
 
 The window uses the `flux-screen` app ID.

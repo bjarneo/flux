@@ -15,7 +15,7 @@ import (
 	"flux/internal/approve"
 )
 
-// approveCmd runs flux approve status, setup, enroll, enable, disable,
+// approveCmd runs flux-cli approve status, setup, enroll, enable, disable,
 // and remove.
 func approveCmd(args []string, device string) error {
 	var rest []string
@@ -55,7 +55,7 @@ func approveSetup(device string, services []string) error {
 			return err
 		}
 	} else if err != nil {
-		return fmt.Errorf("the key file is not safe: %v. Remove it with: sudo flux approve remove", err)
+		return fmt.Errorf("the key file is not safe: %v. Remove it with: sudo flux-cli approve remove", err)
 	}
 	return enablePAM(services)
 }
@@ -71,7 +71,7 @@ func approveEnable(services []string) error {
 		return err
 	}
 	if _, err := approve.ReadKey(approve.KeyPath(u.Username), 0); err != nil {
-		return fmt.Errorf("no safe key for %s: %v. Run: sudo flux approve setup", u.Username, err)
+		return fmt.Errorf("no safe key for %s: %v. Run: sudo flux-cli approve setup", u.Username, err)
 	}
 	return enablePAM(services)
 }
@@ -80,7 +80,7 @@ func approveEnable(services []string) error {
 // from all of them.
 func approveDisable(services []string) error {
 	if os.Geteuid() != 0 {
-		return errors.New("run it with sudo: sudo flux approve disable")
+		return errors.New("run it with sudo: sudo flux-cli approve disable")
 	}
 	if len(services) == 0 {
 		services = approve.PAMServices
@@ -116,7 +116,7 @@ func enablePAM(services []string) error {
 		}
 	}
 	fmt.Println("Test it in a new terminal: sudo -k && sudo true")
-	fmt.Println("If the phone does not answer, the password works as before. To undo it, run: sudo flux approve disable")
+	fmt.Println("If the phone does not answer, the password works as before. To undo it, run: sudo flux-cli approve disable")
 	return nil
 }
 
@@ -153,11 +153,11 @@ func approveUser() (string, error) {
 // sudoUser returns the user that runs a root command through sudo.
 func sudoUser(cmd string) (*user.User, int, error) {
 	if os.Geteuid() != 0 {
-		return nil, 0, fmt.Errorf("run it with sudo: sudo flux approve %s", cmd)
+		return nil, 0, fmt.Errorf("run it with sudo: sudo flux-cli approve %s", cmd)
 	}
 	name := os.Getenv("SUDO_USER")
 	if name == "" || name == "root" {
-		return nil, 0, fmt.Errorf("run it with sudo from your own user: sudo flux approve %s", cmd)
+		return nil, 0, fmt.Errorf("run it with sudo from your own user: sudo flux-cli approve %s", cmd)
 	}
 	if !approve.ValidUser(name) {
 		return nil, 0, fmt.Errorf("%q is not a valid local user name", name)
@@ -181,7 +181,7 @@ func approveStatus() error {
 	k, err := approve.ReadKey(approve.KeyPath(name), 0)
 	switch {
 	case errors.Is(err, approve.ErrNoKey):
-		fmt.Printf("No phone can approve for %s. To set it up, run: sudo flux approve setup\n", name)
+		fmt.Printf("No phone can approve for %s. To set it up, run: sudo flux-cli approve setup\n", name)
 		return nil
 	case err != nil:
 		return fmt.Errorf("the key file is not safe, so flux-approve does not use it: %v", err)
@@ -196,7 +196,7 @@ func approveStatus() error {
 		if pam.Uses(s) {
 			fmt.Printf("%s asks the phone first.\n", s)
 		} else {
-			fmt.Printf("%s does not ask the phone. To turn it on, run: sudo flux approve enable %s\n", s, s)
+			fmt.Printf("%s does not ask the phone. To turn it on, run: sudo flux-cli approve enable %s\n", s, s)
 		}
 	}
 	return nil
@@ -206,7 +206,7 @@ func approveEnroll(device string) error {
 	if _, err := enrollKey(device); err != nil {
 		return err
 	}
-	fmt.Println("To turn it on for sudo, run: sudo flux approve enable")
+	fmt.Println("To turn it on for sudo, run: sudo flux-cli approve enable")
 	return nil
 }
 

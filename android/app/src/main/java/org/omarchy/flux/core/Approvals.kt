@@ -48,7 +48,7 @@ object Approvals {
             !ApproveMessage.fresh(r, System.currentTimeMillis() / 1000) ->
                 "The clocks of the phone and the computer differ by more than 10 minutes"
             r.kind == ApproveRequest.Kind.Approve && !ApproveKeys.has(d.id) ->
-                "This phone has no key for the computer. Run: sudo flux approve enroll"
+                "This phone has no key for the computer. Run: sudo flux-cli approve enroll"
             _current.value != null && _current.value?.id != r.id -> "Another request is open on the phone"
             else -> null
         }

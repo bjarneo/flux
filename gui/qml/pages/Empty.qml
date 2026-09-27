@@ -71,7 +71,7 @@ Item {
     }
     Txt {
       width: parent.width
-      text: "To check the setup, run flux doctor."
+      text: "To check the setup, run flux-cli doctor."
       color: Theme.dim
       wrapMode: Text.Wrap
     }

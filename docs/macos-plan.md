@@ -22,7 +22,7 @@ See [status](macos-status.md) for the details of each check and [Flux for macOS]
 - [x] Fork `bjarneo/flux` to `rogerznts/flux`, with `origin` on the fork and `upstream` on the original.
 - [x] Map the Android peer: `protocol`, `net`, `core`, and each feature folder.
 - [x] Map the Go peer: `internal/lan`, `internal/proto`, `internal/core`.
-- [x] Build a macOS test copy of `fluxd` and `flux` with `go build -overlay`, with no change to the Go sources.
+- [x] Build a macOS test copy of `fluxd` and `flux-cli` with `go build -overlay`, with no change to the Go sources.
 - [x] Run `fluxd -headless` with isolated XDG paths and custom ports as the test peer.
 
 ## Phase 1: Foundation
@@ -101,10 +101,10 @@ Each feature gets its own branch, worktree, and isolated `fluxd`, then merges in
 
 ### Notifications, battery, and Do Not Disturb
 
-- [x] Show notifications from `flux notify`, with replace and cancel.
+- [x] Show notifications from `flux-cli notify`, with replace and cancel.
 - [x] Report the Mac battery and show the computer's battery.
 - [x] Report Focus through a Focus filter and follow the computer through user-chosen Shortcuts.
-- [x] Checked: notifications, battery in `flux status`, Do Not Disturb both ways with a fake `makoctl`.
+- [x] Checked: notifications, battery in `flux-cli status`, Do Not Disturb both ways with a fake `makoctl`.
 - [ ] Checked: the Flux Focus filter in System Settings with a real Focus toggle.
 - [ ] Checked: battery change events on unplug.
 - [ ] Checked: notification actions clicked in banners.
@@ -114,7 +114,7 @@ Each feature gets its own branch, worktree, and isolated `fluxd`, then merges in
 - [x] Control the computer's players with Android's requests and state merging.
 - [x] Let the computer control Apple Music and Spotify through Apple Events.
 - [x] List and run desktop commands.
-- [x] Checked: `flux media play-pause` toggled Apple Music, and commands ran from the Mac.
+- [x] Checked: `flux-cli media play-pause` toggled Apple Music, and commands ran from the Mac.
 - [ ] Checked: Spotify control.
 - [ ] Checked: the Media section with real players on a computer.
 
@@ -129,7 +129,7 @@ Each feature gets its own branch, worktree, and isolated `fluxd`, then merges in
 
 - [x] Stream 48 kHz mono s16le over a pinned payload connection.
 - [x] Input picker, level meter, and stops on every end path.
-- [x] Checked: real audio at the computer, `flux mic stop`, stop from the Mac, and a killed daemon.
+- [x] Checked: real audio at the computer, `flux-cli mic stop`, stop from the Mac, and a killed daemon.
 - [ ] Checked: the 10-second timeout when the computer never connects.
 
 ### Webcam and screen mirror

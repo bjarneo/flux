@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -65,7 +66,7 @@ func doctor() {
 				continue
 			}
 			if len(d.Addresses) == 0 && tailscale {
-				fmt.Printf("- Tailscale runs. To reach %s away from this network, run: flux --device %q addresses add HOST\n", d.Name, d.Name)
+				fmt.Printf("- Tailscale runs. To reach %s away from this network, run: flux-cli --device %q addresses add HOST\n", d.Name, d.Name)
 			}
 			for _, a := range d.Addresses {
 				if net.ParseIP(a) != nil {
@@ -120,6 +121,8 @@ func doctor() {
 		_, lerr := exec.LookPath(bin)
 		check(lerr == nil, bin+" is installed", bin+" is missing. Flux needs it for the clipboard and to open files")
 	}
+	fmt.Println(shortName())
+
 	_, aerr := appPath()
 	plugin := pluginInstalled()
 	check(aerr == nil || plugin, "a Flux window is available: "+windowName(aerr == nil, plugin),
@@ -142,6 +145,20 @@ func windowName(app, plugin bool) string {
 		return "the flux plugin"
 	}
 	return "flux-gui"
+}
+
+// shortName tells which program the short name flux runs. The package puts
+// its flux link at the end of PATH, so another flux command, such as the
+// one of fluxcd, comes first.
+func shortName() string {
+	p, err := exec.LookPath("flux")
+	if err != nil {
+		return "- The short name flux is not in PATH. Use flux-cli, or log in again after the install"
+	}
+	if real, err := filepath.EvalSymlinks(p); err == nil && filepath.Base(real) == "flux-cli" {
+		return "✓ The short name flux runs flux-cli"
+	}
+	return fmt.Sprintf("- The short name flux runs %s, not flux-cli. Use flux-cli", p)
 }
 
 func running(name string) bool {

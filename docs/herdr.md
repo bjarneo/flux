@@ -25,10 +25,10 @@ The phone never connects to the herdr socket.
 To check the desktop side, run:
 
 ```sh
-flux doctor
+flux-cli doctor
 ```
 
-When herdr runs, `flux doctor` prints this line:
+When herdr runs, `flux-cli doctor` prints this line:
 
 ```text
 ✓ herdr 0.9.1 runs, so the phone can show its agents
@@ -210,14 +210,14 @@ A reply and its answer look like this:
 {"kind":"sent","pane":"w5:p1","action":"keys"}
 ```
 
-`flux status --json` includes the same agent state in its `herdr` field.
+`flux-cli status --json` includes the same agent state in its `herdr` field.
 
 ## Troubleshoot
 
 | Problem | Next step |
 | --- | --- |
 | The **Agents** tile is missing | Update `fluxd` and Flux for Android. The tile shows only when the computer sends `flux.herdr`. |
-| The phone says that herdr is not running | Run `herdr status` and `flux doctor` on the computer. |
+| The phone says that herdr is not running | Run `herdr status` and `flux-cli doctor` on the computer. |
 | The list is empty | Run `herdr agent list`. herdr must detect the agent in its pane. |
 | The phone says that the feature is off | Set `herdr = true` and reload `fluxd`. |
 | The phone says that replies are off | Set `herdr_control = true` and reload `fluxd`. |

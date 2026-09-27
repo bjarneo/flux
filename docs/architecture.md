@@ -8,7 +8,7 @@ The native Android app owns the phone services and its side of the connection.
 The native macOS app takes the same role on a Mac.
 
 ```text
-flux CLI ─────────────┐
+flux-cli ─────────────┐
 Qt app ──────────────┼── Unix socket ── fluxd ── TLS and tunnels ── Android or macOS
 Omarchy shell plugin ┘
 ```

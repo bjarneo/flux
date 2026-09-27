@@ -84,13 +84,13 @@ qs ipc --pid "$(pgrep -f '^qs -p /tmp/flux-shell/omarchy/shell')" call shell cal
 
 ## Select the desktop host
 
-`flux open` uses the enabled shell plugin when the Omarchy shell runs.
+`flux-cli open` uses the enabled shell plugin when the Omarchy shell runs.
 Otherwise it starts the standalone Qt app.
 To select a host explicitly:
 
 ```sh
-FLUX_GUI=app flux open files
-FLUX_GUI=plugin flux open media
+FLUX_GUI=app flux-cli open files
+FLUX_GUI=plugin flux-cli open media
 ```
 
 The `gui` key in `config.toml` accepts the same values.
@@ -101,7 +101,7 @@ Both hosts use the [shared QML views](qml.md).
 The desktop reads `~/.local/state/omarchy/current/theme/colors.toml` and follows theme changes.
 The Android app follows the phone's system theme.
 
-`dist/hyprland.lua` supplies floating-window rules and the `SUPER + ALT + P` shortcut for `flux open`.
+`dist/hyprland.lua` supplies floating-window rules and the `SUPER + ALT + P` shortcut for `flux-cli open`.
 `dist/omarchy-menu.jsonc` supplies a Flux item for the Trigger menu.
 Merge the menu item into `~/.config/omarchy/extensions/omarchy-menu.jsonc` to enable it.
 The package does not merge these examples into your desktop configuration.

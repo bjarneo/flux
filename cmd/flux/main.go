@@ -1,5 +1,6 @@
-// Command flux is the command line client of fluxd. It also opens the Flux
-// window.
+// Command flux-cli is the command line client of fluxd. It also opens the
+// Flux window. The package installs the short name flux too, when no other
+// program uses it.
 package main
 
 import (
@@ -19,7 +20,7 @@ import (
 
 var version = "dev"
 
-const usage = `Usage: flux [command] [--device NAME] [args]
+const usage = `Usage: flux-cli [command] [--device NAME] [args]
 
 Commands:
   open [page]            Open the Flux window: the omarchy-shell plugin when it is
@@ -69,7 +70,7 @@ Commands:
   doctor                 Check the setup and print the fixes
   version                Print the version
 
-Without --device, flux uses the only connected paired device.
+Without --device, flux-cli uses the only connected paired device.
 `
 
 func main() {
@@ -108,7 +109,7 @@ func main() {
 		err = call("share.url", map[string]any{"device": device, "url": need(args, "URL")})
 	case "sms":
 		if len(args) < 2 {
-			fail("Usage: flux sms NUMBER TEXT...")
+			fail("Usage: flux-cli sms NUMBER TEXT...")
 		}
 		err = call("sms.send", map[string]any{"device": device, "addresses": []string{args[0]}, "body": strings.Join(args[1:], " ")})
 	case "media":
@@ -140,15 +141,15 @@ func main() {
 	case "doctor":
 		doctor()
 	case "version", "--version":
-		fmt.Println("flux", version)
+		fmt.Println("flux-cli", version)
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 	default:
-		fmt.Fprintf(os.Stderr, "flux: unknown command %q\n\n%s", cmd, usage)
+		fmt.Fprintf(os.Stderr, "flux-cli: unknown command %q\n\n%s", cmd, usage)
 		os.Exit(2)
 	}
 	if err != nil {
-		fail("flux: %v", err)
+		fail("flux-cli: %v", err)
 	}
 }
 
@@ -182,7 +183,7 @@ func first(args []string) string {
 
 func need(args []string, name string) string {
 	if len(args) == 0 || args[0] == "" {
-		fail("flux: give %s", name)
+		fail("flux-cli: give %s", name)
 	}
 	return args[0]
 }
@@ -367,7 +368,7 @@ func addresses(device string, args []string) error {
 	case shown == 0:
 		fmt.Println("No paired devices. Pair a device on the local network first.")
 	case empty > 0:
-		fmt.Println("To add one, run: flux --device NAME addresses add HOST")
+		fmt.Println("To add one, run: flux-cli --device NAME addresses add HOST")
 	}
 	return nil
 }
@@ -381,7 +382,7 @@ func joinOrNone(list []string) string {
 
 func send(device string, files []string) error {
 	if len(files) == 0 {
-		fail("Usage: flux send FILE...")
+		fail("Usage: flux-cli send FILE...")
 	}
 	paths := make([]string, 0, len(files))
 	for _, f := range files {
@@ -436,7 +437,7 @@ func commands(args []string) error {
 	switch first(args) {
 	case "add":
 		if len(args) < 3 {
-			fail("Usage: flux commands add NAME COMMAND...")
+			fail("Usage: flux-cli commands add NAME COMMAND...")
 		}
 		var res struct {
 			ID string `json:"id"`
@@ -457,7 +458,7 @@ func commands(args []string) error {
 		return err
 	}
 	if len(s.Commands) == 0 {
-		fmt.Println(`No commands. Add one: flux commands add "Lock screen" omarchy-system-lock`)
+		fmt.Println(`No commands. Add one: flux-cli commands add "Lock screen" omarchy-system-lock`)
 		return nil
 	}
 	for _, c := range s.Commands {
@@ -529,7 +530,7 @@ var webcamKeys = []string{"aspect", "resolution", "camera", "mirror", "zoom", "e
 // false become booleans, numbers become numbers, and the rest stays text.
 func webcamSettings(args []string) (map[string]any, error) {
 	if len(args) == 0 {
-		return nil, errors.New("give at least 1 KEY=VALUE, for example: flux webcam set aspect=16:9")
+		return nil, errors.New("give at least 1 KEY=VALUE, for example: flux-cli webcam set aspect=16:9")
 	}
 	cfg := map[string]any{}
 	for _, a := range args {

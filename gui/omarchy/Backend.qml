@@ -64,7 +64,7 @@ Scope {
   // Starts the fluxd user service. cb gets true when systemctl succeeds.
   function startDaemon(cb) {
     var proc = pickerComponent.createObject(root, {
-      // The button turns fluxd on, so it removes the marker of `flux off` first.
+      // The button turns fluxd on, so it removes the marker of `flux-cli off` first.
       command: ["sh", "-c", 'rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/flux/off"; systemctl --user start fluxd']
     })
     proc.done = function (code, text) {

@@ -1,7 +1,7 @@
 import Foundation
 
 /// A notification that a computer sends to this Mac, from a
-/// kdeconnect.notification packet (`flux notify`, `flux notify --run`).
+/// kdeconnect.notification packet (`flux-cli notify`, `flux-cli notify --run`).
 public struct ComputerNotification: Equatable, Sendable {
     /// The ID of the macOS notification. The same computer and ID replace the old notification.
     public var key: String

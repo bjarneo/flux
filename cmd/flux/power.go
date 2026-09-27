@@ -30,7 +30,7 @@ func power(on bool) error {
 	if err := os.MkdirAll(filepath.Dir(config.OffPath()), 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(config.OffPath(), []byte("flux off\n"), 0o644); err != nil {
+	if err := os.WriteFile(config.OffPath(), []byte("flux-cli off\n"), 0o644); err != nil {
 		return err
 	}
 	if err := systemctl("stop", "fluxd.service"); err != nil {
@@ -44,7 +44,7 @@ func power(on bool) error {
 		fmt.Println("fluxd.service is off, but a fluxd outside systemd still runs. To stop it, run: pkill -x fluxd")
 		return nil
 	}
-	fmt.Println("fluxd is off, also after the next login. Phones cannot connect until you run: flux on")
+	fmt.Println("fluxd is off, also after the next login. Phones cannot connect until you run: flux-cli on")
 	return nil
 }
 
@@ -55,7 +55,7 @@ func systemctl(args ...string) error {
 	}
 	msg := strings.TrimSpace(string(out))
 	if strings.Contains(msg, "not found") || strings.Contains(msg, "does not exist") {
-		return errors.New("fluxd.service is not installed. Run: flux setup")
+		return errors.New("fluxd.service is not installed. Run: flux-cli setup")
 	}
 	return fmt.Errorf("systemctl --user %s: %s", strings.Join(args, " "), msg)
 }

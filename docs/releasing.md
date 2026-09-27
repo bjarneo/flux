@@ -141,7 +141,8 @@ The workflow publishes to AUR only after the GitHub release succeeds.
 
 The Arch package includes:
 
-- `flux`, `fluxd`, and `flux-gui` in `/usr/bin`.
+- `flux-cli`, `fluxd`, and `flux-gui` in `/usr/bin`.
+- The `flux` link to `flux-cli` in `/usr/lib/flux/bin`, and `/etc/profile.d/flux-path.sh`, which adds that directory to the end of `PATH`.
 - The static `flux-approve` helper in `/usr/lib/flux`.
 - Plugin files and shared views in `/usr/share/flux/omarchy-plugin`.
 - The systemd user service and webcam udev rule.
@@ -149,7 +150,7 @@ The Arch package includes:
 
 The package build uses `DESTDIR` and does not run live system setup.
 Pacman runs the install hook after installation.
-Users then run `flux setup` to start the daemon and refresh their plugin copy.
+Users then run `flux-cli setup` to start the daemon and refresh their plugin copy.
 
 CI builds the binary package on `x86_64`.
 The source recipe also supports native `aarch64` builds, which require separate verification.

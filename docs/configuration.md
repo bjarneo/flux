@@ -79,7 +79,7 @@ Its replacement changes the desktop identity and requires new pairing.
 | Variable | Use |
 | --- | --- |
 | `FLUX_SOCKET` | Override the local IPC socket path. |
-| `FLUX_GUI` | Select `app` or `plugin` for `flux open`. |
+| `FLUX_GUI` | Select `app` or `plugin` for `flux-cli open`. |
 | `FLUX_QML_DIR` | Load shared views from disk in the Qt host during development. |
 | `FLUX_THEME_FILE` | Select a theme file for the snapshot harness. |
 | `FLUX_SNAPSHOT` | Select the output directory for the QML snapshot harness. |
@@ -92,12 +92,12 @@ See [development](development.md) for an isolated test environment.
 ## Turn Flux off or on
 
 ```sh
-flux off
-flux on
+flux-cli off
+flux-cli on
 ```
 
-`flux off` stops the daemon and creates the off marker.
-`flux on` removes the marker and starts the daemon.
+`flux-cli off` stops the daemon and creates the off marker.
+`flux-cli on` removes the marker and starts the daemon.
 On Android, use **Turn off Flux** in the device-list menu or **Turn off** in its notification.
 The phone stays off after a restart until you select **Turn on Flux** in the app.
 

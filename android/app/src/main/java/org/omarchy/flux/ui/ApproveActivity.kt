@@ -226,7 +226,7 @@ class ApproveActivity : FragmentActivity() {
             signature = ApproveKeys.signer(r.computerId)
         } catch (e: KeyPermanentlyInvalidatedException) {
             ApproveKeys.delete(r.computerId)
-            fail(r, "The fingerprints on the phone changed. Enroll again with: sudo flux approve enroll")
+            fail(r, "The fingerprints on the phone changed. Enroll again with: sudo flux-cli approve enroll")
             return
         } catch (e: Exception) {
             Log.w(TAG, "the approval key failed", e)
