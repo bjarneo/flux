@@ -1,0 +1,12 @@
+# Installed, fetched, captured, and rendered files. See ../README.md.
+node_modules/
+out/
+frames/
+assets/fonts/
+assets/wallpapers/
+assets/cap/
+assets/phone/
+audio/music.mp3
+audio/mono.f32
+audio/onset.json
+scenes/herdr/*.png

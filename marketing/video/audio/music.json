@@ -1,0 +1,76 @@
+{
+  "file": "audio/music.mp3",
+  "source": "Terminal Rain, an MP3 that you copy to audio/music.mp3",
+  "title": "Terminal Rain",
+  "bpm": 71.0,
+  "beat_s": 0.84507,
+  "beat_frames": 50.704,
+  "bar_frames": 202.817,
+  "grid": "Track time of beat k is 0.664 + 0.845070 k s. Downbeats are the beats 1, 5, 9, and so on: 1.509 + 3.380282 m s. The grid holds from 0 s to 128 s.",
+  "track_events_s": {
+    "first_downbeat": 1.509,
+    "break_1": "24.0 to 27.7, quiet, no drums",
+    "hit_1": 28.55,
+    "break_2": "78.0 to 81.3, quiet, lowest at 80 to 81",
+    "hit_2": 82.65,
+    "fade_to_end": "148 to 168"
+  },
+  "videos": {
+    "herdr": {
+      "track_start_s": 0.0,
+      "frames": 3133,
+      "downbeats": [
+        91,
+        293,
+        496,
+        699,
+        902,
+        1105,
+        1307,
+        1510,
+        1713,
+        1916,
+        2119,
+        2322,
+        2524,
+        2727,
+        2930,
+        3133
+      ],
+      "break": [
+        1440,
+        1662
+      ],
+      "hit": 1713,
+      "notes": "Video frame n is track time n / 60 s. Frames 0 to 90 are the pickup before the first downbeat at 91. The break is the tension before the reply. The hit at 1713, downbeat 8, is the tap on the answer."
+    },
+    "tailscale": {
+      "track_start_s": 55.5935,
+      "frames": 3042,
+      "downbeats": [
+        0,
+        203,
+        406,
+        608,
+        811,
+        1014,
+        1217,
+        1420,
+        1623,
+        1825,
+        2028,
+        2231,
+        2434,
+        2637,
+        2839,
+        3042
+      ],
+      "break": [
+        1344,
+        1542
+      ],
+      "hit": 1623,
+      "notes": "Video frame n is track time 55.5935 + n / 60 s, and frame 0 is a downbeat. The break is the phone leaving the Wi-Fi. The hit at 1623, downbeat 8, is the link coming back through Tailscale."
+    }
+  }
+}

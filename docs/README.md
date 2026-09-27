@@ -40,5 +40,6 @@ A paired device can also connect through [Tailscale](tailscale.md) away from tha
 | [Approval security design](approve.md) | Trust anchors, signatures, enrollment, and failure behavior |
 | [macOS client plan](macos-plan.md) | Decisions, phases, and checklists for the Mac app |
 | [macOS client status](macos-status.md) | Build plan, current state, and what was verified against `fluxd` |
+| [Marketing videos](../marketing/README.md) | Video source, phone captures, music timing, render, and mux |
 
 Return to the [project README](../README.md).

@@ -1,0 +1,46 @@
+@font-face {
+  font-family: 'Inter';
+  src: url('../assets/fonts/inter.woff2') format('woff2');
+  font-weight: 100 900;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../assets/fonts/JetBrainsMonoNerdFont-Regular.ttf') format('truetype');
+  font-weight: 400;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../assets/fonts/JetBrainsMonoNerdFont-Bold.ttf') format('truetype');
+  font-weight: 700;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: #000; }
+body {
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+  font-feature-settings: 'cv11', 'ss01';
+}
+#stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #000; }
+.layer { position: absolute; inset: 0; overflow: hidden; }
+.abs { position: absolute; }
+.mono { font-family: 'JetBrains Mono', monospace; }
+img { display: block; user-select: none; }
+[data-origin='tl'] { transform-origin: 0 0; }
+
+/* Android UI text for HTML overlays on the phone screen. */
+@font-face {
+  font-family: 'Roboto';
+  src: url('../assets/fonts/Roboto-Var.ttf') format('truetype');
+  font-weight: 100 900;
+}
+@font-face {
+  font-family: 'Roboto Static';
+  src: url('../assets/fonts/RobotoStatic-Regular.ttf') format('truetype');
+  font-weight: 400;
+}
+@font-face {
+  font-family: 'Droid Sans Mono';
+  src: url('../assets/fonts/DroidSansMono.ttf') format('truetype');
+}

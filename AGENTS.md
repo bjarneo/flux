@@ -9,5 +9,6 @@ Start with [the documentation index](docs/README.md) for detailed topics.
 - Read [the approval design](docs/approve.md) before approval changes.
 - Use [the development checks](docs/development.md) for the changed component.
 - Use [the release guide](docs/releasing.md) for package and workflow changes.
+- Use [the marketing guide](marketing/README.md) for the feature videos.
 - Keep secrets and local SDK paths out of the repository.
 - Preserve the source owner's license choice. The repository currently has no selected license.
