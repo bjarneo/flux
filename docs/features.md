@@ -208,3 +208,16 @@ herdr_control = true
 Reload with `systemctl --user reload fluxd`.
 To talk to an agent, use the mic key next to **Send**. The phone changes your speech to text on the device.
 See [herdr agents](herdr.md) for the replies, dictation, the notifications, and the access rules.
+
+## Touchpad and keyboard
+
+The phone can be a touchpad and a keyboard for the computer.
+To allow it, set:
+
+```toml
+remote_input = true
+```
+
+Reload with `systemctl --user reload fluxd`.
+Then select **Touchpad and keyboard** on the phone's device page.
+See [Touchpad and keyboard](remote-input.md) for the gestures, the keys, and the slides.

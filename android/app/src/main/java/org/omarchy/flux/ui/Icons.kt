@@ -116,6 +116,9 @@ object Ic {
     val screenShare = R.drawable.ic_screen_share
     val stopScreenShare = R.drawable.ic_stop_screen_share
     val agent = R.drawable.ic_smart_toy
+    val touchpad = R.drawable.ic_touchpad_mouse
+    val keyboard = R.drawable.ic_keyboard
+    val slides = R.drawable.ic_slideshow
 }
 
 /** An icon from [Ic]. It takes the content color unless [tint] is set. */

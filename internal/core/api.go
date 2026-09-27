@@ -128,6 +128,7 @@ func (d *Daemon) Snapshot() json.RawMessage {
 			"syncDnd":          d.cfg.SyncDnd,
 			"herdr":            d.cfg.Herdr,
 			"herdrControl":     d.cfg.HerdrControl,
+			"remoteInput":      d.cfg.RemoteInput,
 		},
 		"webcam": d.webcamViewLocked(),
 		"mic":    d.micViewLocked(),
@@ -406,6 +407,8 @@ func (d *Daemon) setSetting(key string, value any) error {
 		d.cfg.Herdr = b
 	case key == "herdrControl" && isBool:
 		d.cfg.HerdrControl = b
+	case key == "remoteInput" && isBool:
+		d.cfg.RemoteInput = b
 	case key == "name" && isString:
 		d.cfg.Name = strings.TrimSpace(s)
 	case key == "downloadDir" && isString:
@@ -425,6 +428,9 @@ func (d *Daemon) setSetting(key string, value any) error {
 	if key == "herdr" || key == "herdrControl" {
 		d.herdrChanged()
 	}
+	if key == "remoteInput" {
+		d.inputChanged()
+	}
 	d.markDirty()
 	return nil
 }
@@ -440,6 +446,7 @@ func (d *Daemon) Reload() error {
 	d.mu.Unlock()
 	d.commandsChanged()
 	d.herdrChanged()
+	d.inputChanged()
 	return nil
 }
 

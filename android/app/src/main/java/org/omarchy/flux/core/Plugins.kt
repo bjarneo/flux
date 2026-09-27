@@ -81,6 +81,7 @@ object Plugins {
             Types.FLUX_APPROVE -> Approvals.onPacket(core, d, p)
             Types.FLUX_HERDR -> HerdrSync.onPacket(core, d, p)
             Types.FLUX_CLIPBOARD_IMAGE -> ClipImage.receive(core, d, p)
+            Types.FLUX_INPUT -> d.remoteInput = p.bool("enabled")
             Types.SMS_REQUEST, Types.SMS_REQUEST_CONVERSATIONS, Types.SMS_REQUEST_CONVERSATION -> SmsSync.onPacket(core, d, p)
         }
     }

@@ -458,6 +458,20 @@ fun TiledHomeScreen(
                 }
             }
             LineTile(Ic.folderOpen, "Browse PC", Tn.magenta, guarded { onNavigate("browse") }, Modifier.fillMaxWidth().height(TileUnit), on, trailing = "~/ read-only")
+            // Remote input can type in any window of the computer, so it asks for the phone lock first.
+            if (d.inputSupported) {
+                LineTile(
+                    Ic.touchpad, "Touchpad and keyboard", Tn.green,
+                    guarded {
+                        if (d.remoteInput == true) {
+                            ReplyLock.run(context, { onNavigate("touchpad") }, "Use the touchpad", "use the touchpad") { FluxCore.toast(it) }
+                        } else {
+                            onNavigate("touchpad")
+                        }
+                    },
+                    Modifier.fillMaxWidth().height(TileUnit), on, trailing = if (d.remoteInput == true) null else "off",
+                )
+            }
         }
 
         SectionLabel("Sync")

@@ -46,6 +46,10 @@ type Config struct {
 	// HerdrControl lets the phone send keys and prompts to the herdr
 	// agents. It is off by default, because an agent can run commands.
 	HerdrControl bool `toml:"herdr_control"`
+	// RemoteInput lets the phone move the pointer and type on this
+	// computer. It is off by default, because the phone can then type in
+	// any window, such as a terminal.
+	RemoteInput bool `toml:"remote_input"`
 	// GUI selects the window: "plugin" for the omarchy-shell plugin, "app"
 	// for flux-gui, or empty for the plugin when it is enabled.
 	GUI string `toml:"gui,omitempty"`

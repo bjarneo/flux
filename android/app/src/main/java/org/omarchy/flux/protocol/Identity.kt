@@ -30,6 +30,7 @@ object Types {
     const val SMS_REQUEST = "kdeconnect.sms.request"
     const val SMS_REQUEST_CONVERSATIONS = "kdeconnect.sms.request_conversations"
     const val SMS_REQUEST_CONVERSATION = "kdeconnect.sms.request_conversation"
+    const val MOUSEPAD_REQUEST = "kdeconnect.mousepad.request"
 
     /** Flux extension: this phone opens a listener that the computer connects to. */
     const val FLUX_TUNNEL = "flux.tunnel"
@@ -54,6 +55,9 @@ object Types {
 
     /** Flux extension: an image that one side copied, as the payload, with {"mime": "image/png"}. Both sides send it. */
     const val FLUX_CLIPBOARD_IMAGE = "flux.clipboard.image"
+
+    /** Flux extension: the computer tells whether it accepts remote input, {"enabled": bool}. */
+    const val FLUX_INPUT = "flux.input"
 }
 
 /** Packet types that the phone accepts. */
@@ -62,7 +66,7 @@ val INCOMING = listOf(
     Types.SHARE, Types.SHARE_UPDATE, Types.NOTIFICATION, Types.NOTIFICATION_REQUEST, Types.NOTIFICATION_REPLY,
     Types.NOTIFICATION_ACTION, Types.FIND_MY_PHONE, Types.RUN_COMMAND, Types.MPRIS,
     Types.SFTP, Types.FLUX_TUNNEL, Types.FLUX_WEBCAM, Types.FLUX_DND,
-    Types.FLUX_MIC, Types.FLUX_SCREEN, Types.FLUX_APPROVE, Types.FLUX_HERDR,
+    Types.FLUX_MIC, Types.FLUX_SCREEN, Types.FLUX_APPROVE, Types.FLUX_HERDR, Types.FLUX_INPUT,
 )
 
 /** Packet types that the phone sends. */
@@ -71,6 +75,7 @@ val OUTGOING = listOf(
     Types.SHARE_UPDATE, Types.NOTIFICATION, Types.RUN_COMMAND_REQUEST, Types.MPRIS_REQUEST,
     Types.SFTP_REQUEST, Types.TELEPHONY, Types.FLUX_TUNNEL, Types.FLUX_WEBCAM, Types.FLUX_DND,
     Types.FLUX_MIC, Types.FLUX_SCREEN, Types.FLUX_APPROVE, Types.FLUX_HERDR, Types.FLUX_CLIPBOARD_IMAGE,
+    Types.MOUSEPAD_REQUEST,
 )
 
 /**

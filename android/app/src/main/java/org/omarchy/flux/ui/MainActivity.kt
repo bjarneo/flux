@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
@@ -36,6 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.collectLatest
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.PairState
+import org.omarchy.flux.core.RemoteInput
 import org.omarchy.flux.core.Ringer
 import org.omarchy.flux.core.UiState
 import org.omarchy.flux.service.FluxService
@@ -114,6 +116,20 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         FluxService.start(this, FluxService.ACTION_REFRESH)
     }
+
+    /** On the touchpad screen, the volume keys can change the slides on the computer. */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (slideKey(keyCode)) {
+            if (event.repeatCount == 0) RemoteInput.onVolumeKey(FluxCore, keyCode == KeyEvent.KEYCODE_VOLUME_UP)
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean = slideKey(keyCode) || super.onKeyUp(keyCode, event)
+
+    private fun slideKey(keyCode: Int): Boolean =
+        (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) && RemoteInput.volumeKeysDevice != null
 }
 
 /** The page prefix of the screen of one agent. The herdr pane ID follows it. */
@@ -228,6 +244,7 @@ fun FluxRoot(activity: MainActivity, splash: Boolean = false) {
                 route.page == "agents" -> TiledAgentsScreen(device, ::pop) { pane -> push(Route(device.id, "$AGENT_PAGE$pane")) }
                 route.page.startsWith(AGENT_PAGE) -> key(route.page) { TiledAgentScreen(device, route.page.removePrefix(AGENT_PAGE), ::pop) }
                 route.page == "browse" -> BrowseScreen(device, state.browse, ::pop)
+                route.page == "touchpad" -> TouchpadScreen(device, ::pop)
                 // Debug builds open a mode with "camera:<mode>".
                 route.page.startsWith("camera") -> key(route.page) {
                     org.omarchy.flux.camera.CameraScreen(device, ::pop, org.omarchy.flux.camera.CameraMode.fromKey(route.page.substringAfter(':', "")))

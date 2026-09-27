@@ -103,6 +103,9 @@ func doctor() {
 	_, ffplayErr := exec.LookPath("ffplay")
 	check(mpvErr == nil || ffplayErr == nil, "mpv or ffplay is installed, so the phone screen can show here",
 		"The screen mirror needs mpv or ffplay. Install mpv with: sudo pacman -S mpv")
+	_, wtypeErr := exec.LookPath("wtype")
+	check(wtypeErr == nil, "wtype is installed, so the phone keyboard can type here",
+		"The phone keyboard needs wtype. Install it with: sudo pacman -S wtype")
 
 	// herdr is optional. When it runs, the phone shows its agents.
 	if _, err := exec.LookPath("herdr"); err == nil {

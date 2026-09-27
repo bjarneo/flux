@@ -15,6 +15,7 @@ optdepends=(
 	'ffmpeg: the phone as webcam'
 	'v4l2loopback-dkms: the phone as webcam'
 	'mpv: the phone screen mirror'
+	'wtype: the phone keyboard'
 )
 makedepends=('go>=1.27.1' 'cmake' 'ninja' 'git')
 install=omarchy-flux.install

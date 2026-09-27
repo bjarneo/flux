@@ -75,6 +75,10 @@ data class DeviceUi(
     val herdrOutput: HerdrOutput? = null,
     /** The last reply from the agent screen. */
     val herdrReply: HerdrReply? = null,
+    /** True when the computer can take the touchpad and the keyboard of this phone. */
+    val inputSupported: Boolean = false,
+    /** True when remote input is on at the computer, or null before it tells. */
+    val remoteInput: Boolean? = null,
 )
 
 /** A snapshot of the whole app for the UI. */

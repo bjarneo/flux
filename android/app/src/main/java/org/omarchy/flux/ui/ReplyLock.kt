@@ -23,20 +23,27 @@ object ReplyLock {
     /**
      * Runs [action] after the phone lock, or at once while an unlock is
      * valid. [onError] gets a message when the phone has no lock or the
-     * check fails. A cancel calls neither.
+     * check fails. A cancel calls neither. [title] heads the lock prompt,
+     * and [purpose] completes the message for a phone without a lock.
      */
-    fun run(context: Context, action: () -> Unit, onError: (String) -> Unit) {
+    fun run(
+        context: Context,
+        action: () -> Unit,
+        title: String = "Answer an agent",
+        purpose: String = "answer agents",
+        onError: (String) -> Unit,
+    ) {
         if (SystemClock.elapsedRealtime() < until) {
             action()
             return
         }
         val keyguard = context.getSystemService(KeyguardManager::class.java)
         if (keyguard == null || !keyguard.isDeviceSecure) {
-            onError("Set a screen lock on this phone to answer agents")
+            onError("Set a screen lock on this phone to $purpose")
             return
         }
         val builder = BiometricPrompt.Builder(context)
-            .setTitle("Answer an agent")
+            .setTitle(title)
             .setDescription("Confirm that you send input to the computer.")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             builder.setAllowedAuthenticators(

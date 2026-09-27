@@ -43,8 +43,12 @@ type Daemon struct {
 	clipSend  context.CancelFunc
 	transfers []*Transfer
 
-	opts     Options
-	clip     clipboard
+	opts Options
+	clip clipboard
+	// input moves the pointer and types for the phone. It is nil in a
+	// headless daemon. inputQ holds the actions in order.
+	input    inputBackend
+	inputQ   chan inputAction
 	notifier *desktop.Notifier
 	media    *desktop.Media
 	// callPlayers are the players that a call pauses. It is the desktop
@@ -161,6 +165,8 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 		devices: map[string]*Device{},
 		clip:    desktop.NewClipboard(),
 		clipDir: filepath.Join(config.RuntimeDir(), "clipboard"),
+		input:   desktop.NewInput(),
+		inputQ:  make(chan inputAction, inputQueue),
 		subs:    map[int]func(string, any){},
 		dirty:   make(chan struct{}, 1),
 		ctx:     ctx,
@@ -174,6 +180,7 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 		// A headless daemon can share the runtime folder with the daemon of
 		// the desktop, so it keeps its clipboard images in its own folder.
 		d.clipDir = filepath.Join(os.TempDir(), "fluxd-clipboard-"+config.NewID(6))
+		d.input = nil
 	}
 	for _, t := range trust.All() {
 		dev := d.deviceLocked(t.ID)
@@ -288,6 +295,7 @@ func (d *Daemon) Run() error {
 
 	removeClipImages(d.clipDir)
 	go d.clip.Watch(ctx, d.onLocalClipboard, d.onLocalImage)
+	go d.inputLoop(ctx)
 	go d.publishLoop(ctx)
 	go d.discoveryLoop(ctx)
 	go d.batteryLoop(ctx)
@@ -297,6 +305,9 @@ func (d *Daemon) Run() error {
 	d.closeLinks()
 	removeClipImages(d.clipDir)
 	_ = os.Remove(d.clipDir)
+	if in, ok := d.input.(*desktop.Input); ok {
+		in.Close()
+	}
 	d.mu.Lock()
 	loop := d.loopback
 	d.mu.Unlock()
@@ -579,6 +590,9 @@ func (d *Daemon) onPairedLink(dev *Device, l *lan.Link) {
 	}
 	if dev.supports(proto.TypeNotification) {
 		_ = l.Send(proto.New(proto.TypeNotificationRequest, map[string]any{"request": true}))
+	}
+	if dev.accepts(proto.TypeFluxInput) {
+		d.sendInputState(l)
 	}
 	if d.media != nil && dev.supports(proto.TypeMprisRequest) {
 		d.sendPlayers(l)

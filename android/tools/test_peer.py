@@ -5,7 +5,8 @@ The peer reaches the phone through `adb forward`, so no firewall rule is
 needed on the computer. It opens TCP to the app, sends a plain-text
 identity, runs TLS as the server, exchanges the protocol 8 identity, and
 then sends a pairing request. After the user accepts on the phone, it sends
-sample battery, theme, command, and media packets and answers requests.
+sample battery, theme, command, media, and remote input packets and answers
+requests. It prints the packets that the phone sends.
 
 Run it with a debug build installed and USB debugging on:
 
@@ -62,11 +63,12 @@ def make_identity(dev_id, target=None, name="flux-test-peer"):
             "kdeconnect.share.request", "kdeconnect.notification", "kdeconnect.runcommand.request",
             "kdeconnect.mpris.request", "kdeconnect.sftp.request", "flux.tunnel",
             "flux.clipboard.image",
+            "kdeconnect.mousepad.request",
         ],
         "outgoingCapabilities": [
             "kdeconnect.ping", "kdeconnect.battery", "kdeconnect.clipboard", "kdeconnect.share.request",
             "kdeconnect.notification.request", "kdeconnect.findmyphone.request", "kdeconnect.runcommand",
-            "kdeconnect.mpris", "kdeconnect.sftp", "flux.clipboard.image",
+            "kdeconnect.mpris", "kdeconnect.sftp", "flux.clipboard.image", "flux.input",
         ],
     }
     if target:
@@ -166,6 +168,8 @@ def main():
         send("kdeconnect.battery", {"currentCharge": 64, "isCharging": False, "thresholdEvent": 0})
         send("kdeconnect.runcommand", {"commandList": json.dumps(commands), "canAddCommand": True})
         send("kdeconnect.mpris", {"playerList": ["spotify"], "supportAlbumArtPayload": False})
+        # The touchpad screen works. The peer prints the input that it gets.
+        send("flux.input", {"enabled": True})
         if args.send_file:
             send_file(args.send_file)
         if args.clipboard_image:

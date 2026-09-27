@@ -34,6 +34,10 @@ const (
 	TypeSmsConversation     = "kdeconnect.sms.request_conversation"
 	TypeConnectivity        = "kdeconnect.connectivity_report"
 	TypeTelephony           = "kdeconnect.telephony"
+	// TypeMousepadRequest moves the pointer, clicks, scrolls, and types on
+	// this computer. The phone sends it. docs/remote-input.md describes
+	// the body.
+	TypeMousepadRequest = "kdeconnect.mousepad.request"
 
 	// TypeFluxTunnel carries the port of a listener that a Flux phone opens,
 	// so that fluxd can connect out for payloads and Browse PC. The phone
@@ -63,6 +67,10 @@ const (
 	// "image/png"}. Both sides send it. A phone lists it as incoming only
 	// while its clipboard sync is on.
 	TypeFluxClipboardImage = "flux.clipboard.image"
+	// TypeFluxInput tells the phone whether this computer accepts remote
+	// input, {"enabled": bool}. fluxd sends it after the link starts and
+	// after the setting changes.
+	TypeFluxInput = "flux.input"
 )
 
 // Incoming lists the packet types that Flux accepts. The phone enables a
@@ -73,7 +81,7 @@ var Incoming = []string{
 	TypeMprisRequest, TypeSftp, TypeSftpRequest,
 	TypeSmsMessages, TypeConnectivity, TypeTelephony,
 	TypeFluxTunnel, TypeFluxWebcam, TypeFluxDnd, TypeFluxMic, TypeFluxScreen,
-	TypeFluxApprove, TypeFluxHerdr, TypeFluxClipboardImage,
+	TypeFluxApprove, TypeFluxHerdr, TypeFluxClipboardImage, TypeMousepadRequest,
 }
 
 // Outgoing lists the packet types that Flux sends.
@@ -84,7 +92,7 @@ var Outgoing = []string{
 	TypeSftpRequest, TypeSmsRequest, TypeSmsConversations,
 	TypeSmsConversation, TypeSftp, TypeFluxWebcam, TypeFluxDnd,
 	TypeFluxMic, TypeFluxScreen, TypeFluxApprove, TypeFluxHerdr,
-	TypeFluxClipboardImage,
+	TypeFluxClipboardImage, TypeFluxInput,
 }
 
 // Identity is the body of a kdeconnect.identity packet.

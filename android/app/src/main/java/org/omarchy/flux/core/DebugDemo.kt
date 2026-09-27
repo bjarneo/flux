@@ -50,6 +50,8 @@ object DebugDemo {
                 ),
                 commandsLoaded = true,
                 herdrSupported = true,
+                inputSupported = true,
+                remoteInput = true,
                 herdr = HerdrState(
                     enabled = true,
                     running = true,

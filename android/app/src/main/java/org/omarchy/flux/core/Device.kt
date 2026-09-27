@@ -51,6 +51,9 @@ class Device(private val core: FluxCore, var identity: Identity) {
     var herdrReply: HerdrReply? = null
     val herdrTracker = HerdrTracker()
 
+    /** True when the computer accepts remote input, or null before it tells. */
+    var remoteInput: Boolean? = null
+
     val online: Boolean get() = link?.isOpen == true
     val paired: Boolean get() = pairState == PairState.Paired
 
@@ -88,6 +91,8 @@ class Device(private val core: FluxCore, var identity: Identity) {
         herdr = herdr,
         herdrOutput = herdrOutput,
         herdrReply = herdrReply,
+        inputSupported = Types.MOUSEPAD_REQUEST in identity.incoming,
+        remoteInput = remoteInput,
     )
 
     // ---------------------------------------------------------------- pairing

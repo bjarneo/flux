@@ -34,6 +34,9 @@ type Device struct {
 
 	link     *lan.Link
 	mdnsSeen time.Time
+	// inputRefused is true after fluxd logged remote input that it
+	// ignored, so that it logs that once.
+	inputRefused bool
 
 	pairState string // "", "requested", or "incoming"
 	pairTime  int64

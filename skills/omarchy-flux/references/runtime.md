@@ -142,6 +142,7 @@ Key settings:
 | `sync_dnd` | Sync Do Not Disturb |
 | `herdr` | Show the herdr agents of the computer on the phone |
 | `herdr_control` | Let the phone send keys and prompts to herdr agents. Off by default |
+| `remote_input` | Let the phone move the pointer and type on the desktop. Off by default |
 | `gui` | Select the enabled plugin, otherwise the Qt app |
 | `approve_timeout` | Wait 20 seconds for fingerprint approval |
 
@@ -172,6 +173,13 @@ The `herdr` field of the state has `enabled`, `running`, `control`, and `agents`
 Replies from the phone need `herdr_control = true`.
 A reply can make an agent run commands on the computer.
 Do not turn on `herdr_control` unless the user asks for replies from the phone.
+
+## Touchpad and keyboard
+
+The phone moves the pointer and types on the desktop only with `remote_input = true`.
+The phone can then type in any window, such as a terminal.
+Do not turn on `remote_input` unless the user asks for it.
+Read `docs/remote-input.md` for the gestures, `wtype`, and the wire format.
 
 ## Fingerprint approval
 

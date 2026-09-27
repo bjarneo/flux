@@ -15,6 +15,7 @@ The macOS app requires macOS 14 or later.
 | Native build | CMake 3.21 or later, Ninja, and a C++20 compiler |
 | Desktop services | D-Bus, systemd user services, Avahi, and PipeWire |
 | Clipboard | `wl-clipboard` |
+| Phone keyboard | `wtype`, which Omarchy installs |
 | Icons | A Nerd Font that provides `ttf-font-nerd` |
 | Android build | JDK 21, SDK platform 36, and Build Tools 36.0.0 |
 | macOS build | Xcode and XcodeGen on macOS 14 or later |
@@ -97,7 +98,7 @@ From the repository root, install the full build and runtime dependencies:
 ```sh
 sudo pacman -Syu --needed base-devel git go cmake ninja \
   qt6-base qt6-declarative qt6-svg qt6-wayland ttf-jetbrains-mono-nerd \
-  wl-clipboard pipewire avahi xdg-utils
+  wl-clipboard pipewire avahi xdg-utils wtype
 ```
 
 Build before you run the root install:
