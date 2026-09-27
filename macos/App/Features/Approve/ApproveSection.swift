@@ -25,34 +25,42 @@ private struct ApproveContent: View {
     private var model: ApproveModel { plugin.model }
 
     var body: some View {
-        Section("Touch ID approval") {
-            if let r = model.current, r.computerId == device.id {
-                LabeledContent {
-                    Button("Show…") { ApprovePromptWindow.show(plugin) }
-                } label: {
-                    Label(ApproveMessage.question(r), systemImage: "touchid")
-                }
-            }
-            if let key = model.keys[device.id] {
-                LabeledContent("Approves for", value: "\(key.user) on \(key.host)")
-                LabeledContent("Key code") {
-                    Text(key.code).monospaced().textSelection(.enabled)
-                }
-                LabeledContent("Enrolled", value: key.enrolled.formatted(date: .abbreviated, time: .shortened))
-                LabeledContent {
-                    Button("Remove Key…", role: .destructive) { confirmRemove = true }
-                } label: {
-                    Text("To enroll again, run `sudo flux approve enroll` on \(device.name).")
-                        .foregroundStyle(.secondary)
-                }
+        let key = model.keys[device.id]
+        let records = model.history.filter { $0.computerId == device.id }
+        DashboardCard("Touch ID Approval", systemImage: "touchid", tint: .pink, detailsTitle: "Details") {
+            StatusPill(text: key == nil ? "Not set up" : "Enrolled", color: key == nil ? .secondary : .green)
+        } content: {
+            if let key {
+                Text("Approves sudo, polkit, and the lock screen for \(key.user) on \(key.host).")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             } else {
-                Text("Approve sudo, polkit, and the lock screen of \(device.name) with Touch ID on this Mac. To set it up, run this command on \(device.name), then select Enroll on this Mac:")
+                Text("Approve sudo, polkit, and the lock screen of \(device.name) with Touch ID on this Mac. Run this command on \(device.name), then select Enroll on this Mac:")
+                    .font(.callout)
                     .foregroundStyle(.secondary)
                 CommandRow(command: "sudo flux approve setup")
             }
             if let touchIdProblem {
                 Label(touchIdProblem, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.orange)
+            }
+        } details: {
+            if let key {
+                CardRow("Key code") { Text(key.code).monospaced().textSelection(.enabled) }
+                CardRow("Enrolled") { Text(key.enrolled.formatted(date: .abbreviated, time: .shortened)) }
+                HStack {
+                    Text("To enroll again, run `sudo flux approve enroll` on \(device.name).")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Remove Key…", role: .destructive) { confirmRemove = true }
+                }
+            }
+            Text("Recent requests").font(.subheadline.weight(.semibold))
+            if records.isEmpty {
+                Text("No requests yet.").font(.callout).foregroundStyle(.secondary)
+            } else {
+                ForEach(records) { RecordRow(record: $0) }
             }
         }
         .task { touchIdProblem = ApprovePlugin.biometryProblem() }
@@ -61,13 +69,6 @@ private struct ApproveContent: View {
         } message: {
             Text("This Mac can no longer approve requests of \(device.name). Run `sudo flux approve remove` on \(device.name) to delete its key file too.")
         }
-
-        let records = model.history.filter { $0.computerId == device.id }
-        if !records.isEmpty {
-            Section("Recent approval requests") {
-                ForEach(records) { RecordRow(record: $0) }
-            }
-        }
     }
 }
 
@@ -75,13 +76,18 @@ private struct CommandRow: View {
     let command: String
 
     var body: some View {
-        LabeledContent {
+        HStack {
+            Text(command)
+                .monospaced()
+                .textSelection(.enabled)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(RoundedRectangle(cornerRadius: 6).fill(.quaternary))
+            Spacer()
             Button("Copy") {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(command, forType: .string)
             }
-        } label: {
-            Text(command).monospaced().textSelection(.enabled)
         }
     }
 }
@@ -90,16 +96,16 @@ private struct RecordRow: View {
     let record: ApproveRecord
 
     var body: some View {
-        LabeledContent {
-            Text(record.received.formatted(date: .omitted, time: .shortened))
-                .foregroundStyle(.secondary)
-        } label: {
-            Label {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: symbol).foregroundStyle(color)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(record.summary)
-                Text(record.outcome.text)
-            } icon: {
-                Image(systemName: symbol).foregroundStyle(color)
+                Text(record.outcome.text).font(.caption).foregroundStyle(.secondary)
             }
+            Spacer()
+            Text(record.received.formatted(date: .omitted, time: .shortened))
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -119,6 +125,20 @@ private struct RecordRow: View {
         case .denied: return .red
         case .failed, .refused: return .orange
         case .open, .cancelled, .expired: return .secondary
+        }
+    }
+}
+
+/// A banner while a request of the computer waits for Touch ID.
+struct ApproveBanner: View {
+    @Environment(AppModel.self) private var app
+    let device: DeviceSnapshot
+
+    var body: some View {
+        if let plugin = app.core.plugin(ApprovePlugin.self), let r = plugin.model.current, r.computerId == device.id {
+            Banner(ApproveMessage.question(r), systemImage: "touchid", tint: .pink) {
+                Button("Show…") { ApprovePromptWindow.show(plugin) }
+            }
         }
     }
 }

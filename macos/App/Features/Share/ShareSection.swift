@@ -12,29 +12,27 @@ struct ShareSection: View {
 
     var body: some View {
         if let share = model.core.plugin(SharePlugin.self) {
-            Section("Share") {
+            let transfers = share.model.transfers.filter { $0.deviceId == device.id }
+            DashboardCard("Share", systemImage: "square.and.arrow.up", tint: .blue) {
+                if transfers.contains(where: { $0.state != .running }) {
+                    Button("Clear") { share.model.clearFinished() }
+                        .buttonStyle(.link)
+                        .font(.callout)
+                }
+            } content: {
                 dropZone(share)
                 HStack {
                     TextField("Text or link", text: $text, prompt: Text("Text or link"))
                         .labelsHidden()
+                        .textFieldStyle(.roundedBorder)
                         .onSubmit { sendText(share) }
                     Button("Send") { sendText(share) }
                         .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
                 .disabled(!device.online)
-            }
-            let transfers = share.model.transfers.filter { $0.deviceId == device.id }
-            if !transfers.isEmpty {
-                Section {
+                if !transfers.isEmpty {
+                    Divider()
                     ForEach(transfers) { TransferRow(transfer: $0) }
-                } header: {
-                    HStack {
-                        Text("Transfers")
-                        Spacer()
-                        Button("Clear") { share.model.clearFinished() }
-                            .buttonStyle(.link)
-                            .disabled(!transfers.contains { $0.state != .running })
-                    }
                 }
             }
         }
@@ -42,16 +40,17 @@ struct ShareSection: View {
 
     private func dropZone(_ share: SharePlugin) -> some View {
         VStack(spacing: 8) {
-            Image(systemName: "square.and.arrow.up.on.square")
+            Image(systemName: "tray.and.arrow.up")
                 .font(.title2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(dropping ? Color.accentColor : .secondary)
             Text("Drop files, text, or links here")
                 .foregroundStyle(.secondary)
-            Button("Send Files…") { ShareActions.pickFiles(to: device, model: model) }
+            Button("Choose Files…") { ShareActions.pickFiles(to: device, model: model) }
+                .controlSize(.small)
         }
-        .frame(maxWidth: .infinity, minHeight: 110)
+        .frame(maxWidth: .infinity, minHeight: 104)
         .background {
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
                 .foregroundStyle(dropping ? Color.accentColor : Color.secondary.opacity(0.4))
         }
@@ -128,22 +127,37 @@ struct TransferRow: View {
     }
 }
 
-/// Clipboard sync and Send Clipboard.
+/// Clipboard sync.
 struct ClipboardSection: View {
     @Environment(AppModel.self) private var model
     let device: DeviceSnapshot
 
     var body: some View {
         if let clipboard = model.core.plugin(ClipboardPlugin.self) {
-            Section {
-                Toggle("Sync clipboard", isOn: Binding(get: { clipboard.model.sync }, set: { clipboard.setSync($0) }))
-                Button("Send Clipboard") { clipboard.sendClipboard(to: device.id) }
-                    .disabled(!device.online)
-            } header: {
-                Text("Clipboard")
-            } footer: {
-                Text("With sync on, text that you copy goes to your connected computers, and text that they copy comes here.")
+            DashboardCard("Clipboard", systemImage: "doc.on.clipboard", tint: .teal) {
+                SwitchRow(
+                    title: "Sync clipboard",
+                    subtitle: "Text that you copy goes to your connected computers, and text that they copy comes here.",
+                    isOn: Binding(get: { clipboard.model.sync }, set: { clipboard.setSync($0) })
+                )
             }
+        }
+    }
+}
+
+/// The header actions that send files and the clipboard.
+struct ShareQuickActions: View {
+    @Environment(AppModel.self) private var model
+    let device: DeviceSnapshot
+
+    var body: some View {
+        if model.core.plugin(SharePlugin.self) != nil {
+            Tile(title: "Send Files", systemImage: "doc.badge.arrow.up") { ShareActions.pickFiles(to: device, model: model) }
+                .help("Choose files to send to \(device.name)")
+        }
+        if let clipboard = model.core.plugin(ClipboardPlugin.self) {
+            Tile(title: "Send Clipboard", systemImage: "doc.on.clipboard") { clipboard.sendClipboard(to: device.id) }
+                .help("Send the clipboard of this Mac to \(device.name)")
         }
     }
 }

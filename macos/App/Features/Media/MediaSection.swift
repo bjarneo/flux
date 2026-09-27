@@ -19,16 +19,20 @@ private struct MediaControls: View {
     let media: RemoteMedia
 
     var body: some View {
-        Section("Media") {
+        DashboardCard("Now Playing", systemImage: "music.note", tint: .pink) {
+            if device.online, let player = media.player, media.players.count > 1 {
+                Picker("Player", selection: Binding(get: { player.name }, set: { plugin.select(device.id, player: $0) })) {
+                    ForEach(media.players, id: \.self) { Text($0).tag($0) }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .fixedSize()
+            }
+        } content: {
             if !device.online {
                 Text("The player controls show when \(device.name) is online.")
                     .foregroundStyle(.secondary)
             } else if let player = media.player {
-                if media.players.count > 1 {
-                    Picker("Player", selection: Binding(get: { player.name }, set: { plugin.select(device.id, player: $0) })) {
-                        ForEach(media.players, id: \.self) { Text($0).tag($0) }
-                    }
-                }
                 NowPlaying(player: player)
                 if player.length > 0 {
                     SeekBar(player: player) { plugin.seek(device.id, to: $0) }
@@ -98,8 +102,8 @@ private struct AlbumArt: View {
                 placeholder
             }
         }
-        .frame(width: 56, height: 56)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .frame(width: 64, height: 64)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private var placeholder: some View {

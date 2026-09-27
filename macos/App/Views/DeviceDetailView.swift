@@ -14,14 +14,9 @@ struct DeviceDetailView: View {
             }
         }
         .navigationTitle(device.name)
-        .navigationSubtitle(device.ip.isEmpty ? device.statusText : "\(device.statusText) · \(device.ip)")
+        .navigationSubtitle(device.paired ? "" : device.ip.isEmpty ? device.statusText : "\(device.statusText) · \(device.ip)")
         .toolbar {
             if device.paired {
-                ToolbarItem {
-                    Button { model.core.plugin(PingPlugin.self)?.ping(device.id) } label: { Label("Ping", systemImage: "bell") }
-                        .disabled(!device.online)
-                        .help("Send a ping to \(device.name)")
-                }
                 ToolbarItem {
                     Menu {
                         Button("Unpair \(device.name)", role: .destructive) { model.core.unpair(device.id) }
@@ -32,21 +27,69 @@ struct DeviceDetailView: View {
     }
 }
 
-/// The feature sections of a paired computer.
+/// The dashboard of a paired computer: a header with its state and quick
+/// actions, banners for things that need attention, and the feature cards.
 struct PairedDeviceView: View {
     let device: DeviceSnapshot
 
     var body: some View {
-        Form {
-            if !device.online {
-                Section {
-                    Label("\(device.name) is offline. Flux connects when it is on the same network.", systemImage: "wifi.slash")
-                        .foregroundStyle(.secondary)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                DeviceHeader(device: device)
+                if !device.online {
+                    Banner("\(device.name) is offline. Flux connects when it is on the same network.", systemImage: "wifi.slash", tint: .secondary) {}
+                }
+                FeatureBanners(device: device)
+                CardGridLayout(minColumnWidth: 300, spacing: 16) {
+                    FeatureSections(device: device)
                 }
             }
-            FeatureSections(device: device)
+            .padding(20)
+            .frame(maxWidth: 1500)
+            .frame(maxWidth: .infinity)
         }
-        .formStyle(.grouped)
+    }
+}
+
+/// The name, state, and quick actions of a paired computer.
+struct DeviceHeader: View {
+    @Environment(AppModel.self) private var model
+    let device: DeviceSnapshot
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 16) {
+                Image(systemName: device.symbol)
+                    .font(.system(size: 28))
+                    .foregroundStyle(.white)
+                    .frame(width: 60, height: 60)
+                    .background(
+                        RoundedRectangle(cornerRadius: 15, style: .continuous)
+                            .fill(LinearGradient(colors: [.accentColor, .accentColor.opacity(0.65)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    )
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(device.name).font(.title2.weight(.semibold))
+                    HStack(spacing: 12) {
+                        StatusPill(text: device.online ? "Connected" : "Offline", color: device.online ? .green : .secondary)
+                        if !device.ip.isEmpty {
+                            Label(device.ip, systemImage: "network")
+                        }
+                        FeatureBadges(device: device)
+                    }
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 10)], spacing: 10) {
+                FeatureQuickActions(device: device)
+                Tile(title: "Ping", systemImage: "bell") { model.core.plugin(PingPlugin.self)?.ping(device.id) }
+                    .help("Send a ping to \(device.name)")
+            }
+            .disabled(!device.online)
+        }
+        .padding(20)
+        .cardBackground()
     }
 }
 

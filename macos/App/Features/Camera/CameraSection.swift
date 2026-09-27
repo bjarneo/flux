@@ -7,22 +7,25 @@ struct CameraSection: View {
     let device: DeviceSnapshot
 
     var body: some View {
-        Section {
-            HStack(spacing: 8) {
-                ForEach(CameraMode.allCases) { mode in
-                    Button {
-                        CameraWindows.shared.show(device, mode: mode, app: model)
-                    } label: {
-                        Label(mode.label, systemImage: mode.systemImage)
-                    }
-                    .help(mode.hint)
-                }
+        DashboardCard("Camera", systemImage: "camera", tint: .purple) {
+            // All modes in one row when they fit, else 3 per row.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) { tiles.frame(minWidth: 64) }
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) { tiles }
             }
             .disabled(!device.online)
-        } header: {
-            Text("Camera")
-        } footer: {
-            Text("Scan text, codes, and documents, take photos, or capture a signature for \(device.name). Text, codes, documents, and signatures also work from an image.")
+            Text("Text, codes, documents, and signatures also work from an image.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var tiles: some View {
+        ForEach(CameraMode.allCases) { mode in
+            Tile(title: mode.label, systemImage: mode.systemImage, tint: .purple) {
+                CameraWindows.shared.show(device, mode: mode, app: model)
+            }
+            .help(mode.hint)
         }
     }
 }

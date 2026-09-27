@@ -27,44 +27,55 @@ private struct MicControls: View {
 
     private var statusText: String {
         if active || (mine && !mic.status.message.isEmpty) { return mic.status.message }
-        return "Ready. Press Start to use this Mac as a microphone on \(device.name)."
+        return "Ready to use this Mac as a microphone on \(device.name)."
     }
 
     var body: some View {
-        Section {
+        DashboardCard("Microphone", systemImage: active ? "mic.fill" : "mic", tint: .red) {
+            if mic.permission != .denied {
+                Button(active ? "Stop" : "Start") {
+                    if active { plugin.stop() } else { plugin.start(device.id) }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(active ? .red : .accentColor)
+                .controlSize(.small)
+                .disabled(!active && !device.online)
+            }
+        } content: {
             if mic.permission == .denied {
                 Label("Flux cannot use the microphone", systemImage: "mic.slash")
                 Text("Allow Flux in System Settings > Privacy & Security > Microphone, then start the microphone again.")
+                    .font(.callout)
                     .foregroundStyle(.secondary)
                 Button("Open Privacy Settings") { NSWorkspace.shared.open(Self.privacySettings) }
             } else {
-                HStack {
-                    Label(statusText, systemImage: active ? "mic.fill" : "mic")
-                        .foregroundStyle(mine && mic.status.phase == .error ? .red : .primary)
-                    Spacer()
-                    Button(active ? "Stop Microphone" : "Start Microphone") {
-                        if active { plugin.stop() } else { plugin.start(device.id) }
-                    }
-                    .disabled(!active && !device.online)
+                HStack(spacing: 8) {
+                    if active { StatusPill(text: "Live", color: .red) }
+                    Text(statusText)
+                        .font(.callout)
+                        .foregroundStyle(mine && mic.status.phase == .error ? .red : .secondary)
                 }
-                Picker("Input", selection: Binding(get: { mic.input }, set: { plugin.selectInput($0) })) {
-                    Text("System Default").tag("")
-                    ForEach(mic.inputs) { Text($0.name).tag($0.id) }
-                    if !mic.input.isEmpty && !mic.inputs.contains(where: { $0.id == mic.input }) {
-                        Text("Disconnected Input").tag(mic.input)
-                    }
-                }
-                LabeledContent("Input level") {
-                    ProgressView(value: active ? Double(mic.level) : 0)
+                if active {
+                    ProgressView(value: Double(mic.level))
                         .progressViewStyle(.linear)
-                        .frame(maxWidth: 220)
+                        .tint(.red)
                         .animation(.linear(duration: 0.09), value: mic.level)
                 }
+                CardRow("Input") {
+                    Picker("Input", selection: Binding(get: { mic.input }, set: { plugin.selectInput($0) })) {
+                        Text("System Default").tag("")
+                        ForEach(mic.inputs) { Text($0.name).tag($0.id) }
+                        if !mic.input.isEmpty && !mic.inputs.contains(where: { $0.id == mic.input }) {
+                            Text("Disconnected Input").tag(mic.input)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(maxWidth: 220, alignment: .trailing)
+                }
+                Text("Apps on \(device.name) see this Mac as Flux Microphone.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-        } header: {
-            Text("Microphone")
-        } footer: {
-            Text("Apps on \(device.name) see this Mac as Flux Microphone.")
         }
         .onAppear { plugin.refreshPermission() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in

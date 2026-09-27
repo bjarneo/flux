@@ -1,27 +1,41 @@
 import FluxKit
 import SwiftUI
 
-/// The battery of a computer and the button that rings it.
-struct SystemSection: View {
+/// The battery of a computer, next to its state in the header.
+struct BatteryBadge: View {
     @Environment(AppModel.self) private var model
     let device: DeviceSnapshot
 
     var body: some View {
-        Section("System") {
-            if let battery = model.core.plugin(BatteryPlugin.self)?.model.computers[device.id] {
-                LabeledContent("Battery") {
-                    Label(battery.charging ? "\(battery.charge)%, charging" : "\(battery.charge)%", systemImage: battery.symbol)
-                }
-            }
-            if let ring = model.core.plugin(FindMyPhonePlugin.self)?.model, ring.ringingDevice == device.id {
-                LabeledContent("\(device.name) is ringing this Mac") {
-                    Button("Stop ringing") { ring.stop() }
-                }
-            }
-            LabeledContent("Find my computer") {
-                Button("Ring") { model.core.plugin(FindMyPhonePlugin.self)?.ring(device.id) }
-                    .disabled(!device.online || !device.accepts(PacketType.findMyPhone))
-                    .help("Play a sound on \(device.name) until someone stops it")
+        if let battery = model.core.plugin(BatteryPlugin.self)?.model.computers[device.id] {
+            Label(battery.charging ? "\(battery.charge)%, charging" : "\(battery.charge)%", systemImage: battery.symbol)
+        }
+    }
+}
+
+/// The header action that rings a computer.
+struct RingQuickAction: View {
+    @Environment(AppModel.self) private var model
+    let device: DeviceSnapshot
+
+    var body: some View {
+        if device.accepts(PacketType.findMyPhone) {
+            Tile(title: "Ring", systemImage: "speaker.wave.2") { model.core.plugin(FindMyPhonePlugin.self)?.ring(device.id) }
+                .help("Play a sound on \(device.name) until someone stops it")
+        }
+    }
+}
+
+/// A banner while a computer rings this Mac.
+struct RingingBanner: View {
+    @Environment(AppModel.self) private var model
+    let device: DeviceSnapshot
+
+    var body: some View {
+        if let ring = model.core.plugin(FindMyPhonePlugin.self)?.model, ring.ringingDevice == device.id {
+            Banner("\(device.name) is ringing this Mac", systemImage: "speaker.wave.3.fill", tint: .orange) {
+                Button("Stop Ringing") { ring.stop() }
+                    .keyboardShortcut(.cancelAction)
             }
         }
     }

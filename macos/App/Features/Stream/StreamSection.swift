@@ -49,17 +49,33 @@ private struct StatusRow: View {
     let idle: String
 
     var body: some View {
-        Label {
-            Text(status.message.isEmpty ? idle : status.message)
-                .foregroundStyle(status.phase == .error ? .red : .primary)
-        } icon: {
+        HStack(spacing: 8) {
             switch status.phase {
             case .connecting, .starting: ProgressView().controlSize(.small)
-            case .live: Image(systemName: "dot.radiowaves.left.and.right").foregroundStyle(.green)
+            case .live: StatusPill(text: "Live", color: .green)
             case .error: Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
-            case .idle: Image(systemName: "pause.circle").foregroundStyle(.secondary)
+            case .idle: EmptyView()
             }
+            Text(status.message.isEmpty ? idle : status.message)
+                .font(.callout)
+                .foregroundStyle(status.phase == .error ? .red : .secondary)
         }
+    }
+}
+
+/// Start or Stop in the header of a stream card.
+private struct StreamButton: View {
+    let active: Bool
+    let start: String
+    let enabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(active ? "Stop" : start, action: action)
+            .buttonStyle(.borderedProminent)
+            .tint(active ? .red : .accentColor)
+            .controlSize(.small)
+            .disabled(!active && !enabled)
     }
 }
 
@@ -72,9 +88,17 @@ private struct WebcamSection: View {
     private var active: Bool { model.status.active(for: device.id) }
 
     var body: some View {
-        Section("Webcam") {
+        DashboardCard("Webcam", systemImage: "web.camera", tint: .green, detailsTitle: "Image settings") {
+            StreamButton(
+                active: active,
+                start: "Start",
+                enabled: device.online && device.accepts(PacketType.fluxWebcam) && !model.cameras.isEmpty
+            ) {
+                if active { plugin.stop() } else { plugin.start(device.id) }
+            }
+        } content: {
             StatusRow(status: mine ? model.status : StreamStatus(), idle: "Use the camera of this Mac as Flux Camera on \(device.name).")
-            if !device.accepts(PacketType.fluxWebcam) {
+            if device.online, !device.accepts(PacketType.fluxWebcam) {
                 Text("Update Flux on \(device.name) to use this Mac as a webcam.").foregroundStyle(.secondary)
             }
             if WebcamPlugin.cameraAccessDenied {
@@ -89,28 +113,42 @@ private struct WebcamSection: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: .infinity, maxHeight: 220)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
-            cameraPicker
             if let error = model.cameraError, active {
                 Text(error).foregroundStyle(.red)
             }
-            Picker("Shape", selection: binding(\.aspect)) {
-                ForEach(model.caps.aspects, id: \.self) { Text($0).tag($0) }
+            CardRow("Camera") { cameraPicker }
+            SwitchRow(
+                title: "Also send the microphone",
+                subtitle: "Apps on the computer also get Flux Microphone",
+                isOn: Binding(get: { model.sendsMicrophone }, set: { plugin.setSendsMicrophone($0) })
+            )
+        } details: {
+            CardRow("Shape") {
+                Picker("Shape", selection: binding(\.aspect)) {
+                    ForEach(model.caps.aspects, id: \.self) { Text($0).tag($0) }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .fixedSize()
             }
-            .pickerStyle(.segmented)
-            Picker("Resolution", selection: binding(\.resolution)) {
-                ForEach(model.caps.resolutions, id: \.self) { Text(verbatim: "\($0)p").tag($0) }
+            CardRow("Resolution") {
+                Picker("Resolution", selection: binding(\.resolution)) {
+                    ForEach(model.caps.resolutions, id: \.self) { Text(verbatim: "\($0)p").tag($0) }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .fixedSize()
             }
-            .pickerStyle(.segmented)
-            Toggle("Mirror the image", isOn: binding(\.mirror))
-            Toggle(isOn: Binding(get: { model.sendsMicrophone }, set: { plugin.setSendsMicrophone($0) })) {
-                Text("Also send the microphone")
-                Text("Apps on the computer also get Flux Microphone")
-            }
+            SwitchRow(title: "Mirror the image", isOn: binding(\.mirror))
             if model.caps.whiteBalance.count > 1 {
-                Picker("White balance", selection: binding(\.whiteBalance)) {
-                    ForEach(model.caps.whiteBalance, id: \.self) { Text($0.capitalized).tag($0) }
+                CardRow("White balance") {
+                    Picker("White balance", selection: binding(\.whiteBalance)) {
+                        ForEach(model.caps.whiteBalance, id: \.self) { Text($0.capitalized).tag($0) }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
                 }
             }
             SliderRow(title: "Zoom", value: binding(\.zoom), range: 1...max(1.01, model.caps.zoomMax), step: 0.1) { String(format: "%.1f×", $0) }
@@ -122,14 +160,8 @@ private struct WebcamSection: View {
             SliderRow(title: "Saturation", value: binding(\.saturation), range: 0...2, step: 0.05) { String(format: "%.2f", $0) }
             SliderRow(title: "Warmth", value: binding(\.warmth), range: -1...1, step: 0.05) { String(format: "%+.2f", $0) }
             HStack {
-                Button("Reset Image") { plugin.reset() }
                 Spacer()
-                if active {
-                    Button("Stop Webcam") { plugin.stop() }
-                } else {
-                    Button("Start Webcam") { plugin.start(device.id) }
-                        .disabled(!device.online || !device.accepts(PacketType.fluxWebcam) || model.cameras.isEmpty)
-                }
+                Button("Reset Image") { plugin.reset() }
             }
         }
     }
@@ -137,7 +169,7 @@ private struct WebcamSection: View {
     @ViewBuilder
     private var cameraPicker: some View {
         if model.cameras.isEmpty {
-            LabeledContent("Camera", value: "No camera")
+            Text("No camera").foregroundStyle(.secondary)
         } else {
             // A saved camera that is gone shows the camera that the stream uses instead.
             Picker("Camera", selection: Binding(
@@ -148,31 +180,13 @@ private struct WebcamSection: View {
                     Text(camera.isContinuity ? "\(camera.name) (Continuity Camera)" : camera.name).tag(camera.id)
                 }
             }
+            .labelsHidden()
+            .frame(maxWidth: 220, alignment: .trailing)
         }
     }
 
     private func binding<T>(_ key: WritableKeyPath<WebcamConfig, T>) -> Binding<T> {
         Binding(get: { model.config[keyPath: key] }, set: { value in plugin.update { $0[keyPath: key] = value } })
-    }
-}
-
-private struct SliderRow: View {
-    let title: String
-    @Binding var value: Double
-    let range: ClosedRange<Double>
-    let step: Double
-    let format: (Double) -> String
-
-    var body: some View {
-        LabeledContent(title) {
-            HStack {
-                Slider(value: $value, in: range, step: step)
-                Text(format(value))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-                    .frame(width: 64, alignment: .trailing)
-            }
-        }
     }
 }
 
@@ -185,9 +199,17 @@ private struct ScreenSection: View {
     private var active: Bool { model.status.active(for: device.id) }
 
     var body: some View {
-        Section("Screen mirror") {
+        DashboardCard("Screen Mirror", systemImage: "rectangle.on.rectangle", tint: .indigo) {
+            StreamButton(
+                active: active,
+                start: "Mirror",
+                enabled: device.online && device.accepts(PacketType.fluxScreen) && !model.displays.isEmpty
+            ) {
+                if active { plugin.stop() } else { plugin.start(device.id) }
+            }
+        } content: {
             StatusRow(status: mine ? model.status : StreamStatus(), idle: "Show a display of this Mac in a window on \(device.name).")
-            if !device.accepts(PacketType.fluxScreen) {
+            if device.online, !device.accepts(PacketType.fluxScreen) {
                 Text("Update Flux on \(device.name) to mirror this screen.").foregroundStyle(.secondary)
             }
             if !model.hasAccess {
@@ -197,25 +219,20 @@ private struct ScreenSection: View {
                     Button("Open Privacy Settings") { PrivacyPane.screen.open() }
                 }
             }
-            if model.displays.isEmpty {
-                LabeledContent("Display", value: "No display")
-            } else {
-                Picker("Display", selection: Binding(
-                    get: { model.display ?? model.displays[0].id },
-                    set: { plugin.select($0) }
-                )) {
-                    ForEach(model.displays) { display in
-                        Text(verbatim: "\(display.name) (\(display.width) × \(display.height))").tag(display.id)
-                    }
-                }
-            }
-            HStack {
-                Spacer()
-                if active {
-                    Button("Stop Screen Mirror") { plugin.stop() }
+            CardRow("Display") {
+                if model.displays.isEmpty {
+                    Text("No display").foregroundStyle(.secondary)
                 } else {
-                    Button("Mirror Screen") { plugin.start(device.id) }
-                        .disabled(!device.online || !device.accepts(PacketType.fluxScreen) || model.displays.isEmpty)
+                    Picker("Display", selection: Binding(
+                        get: { model.display ?? model.displays[0].id },
+                        set: { plugin.select($0) }
+                    )) {
+                        ForEach(model.displays) { display in
+                            Text(verbatim: "\(display.name) (\(display.width) × \(display.height))").tag(display.id)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(maxWidth: 240, alignment: .trailing)
                 }
             }
         }

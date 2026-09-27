@@ -21,7 +21,12 @@ private struct CommandList: View {
     @State private var ran: String?
 
     var body: some View {
-        Section {
+        DashboardCard("Commands", systemImage: "terminal", tint: .orange) {
+            Button { plugin.request(device.id) } label: { Image(systemName: "arrow.clockwise") }
+                .buttonStyle(.borderless)
+                .help("Refresh the commands")
+                .disabled(!device.online)
+        } content: {
             if !device.online {
                 Text("The commands show when \(device.name) is online.")
                     .foregroundStyle(.secondary)
@@ -63,15 +68,6 @@ private struct CommandList: View {
                     Text("Loading the commands of \(device.name)")
                         .foregroundStyle(.secondary)
                 }
-            }
-        } header: {
-            HStack {
-                Text("Commands")
-                Spacer()
-                Button { plugin.request(device.id) } label: { Image(systemName: "arrow.clockwise") }
-                    .buttonStyle(.borderless)
-                    .help("Refresh the commands")
-                    .disabled(!device.online)
             }
         }
         .task(id: device.online) {

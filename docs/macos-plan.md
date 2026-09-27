@@ -71,7 +71,10 @@ See [status](macos-status.md) for the details of each check and [Flux for macOS]
 
 - [x] Sidebar with paired and available computers.
 - [x] Pairing screens and the pairing request sheet.
-- [x] Device page with feature sections.
+- [x] Device dashboard: header with state, IP, battery, and quick actions (Send Files, Send Clipboard, Browse Files, Ring, Ping).
+- [x] Banners for a ringing Mac, an open approval request, and an offline computer.
+- [x] Feature cards in a grid of equal columns, with equal heights per row.
+- [x] Collapsible card details, saved per card: webcam image settings and approval details.
 - [x] Settings window with General and Features tabs.
 - [x] Menu bar extra that keeps Flux running after the window closes.
 - [x] Pairing request notification with Accept and Reject.
