@@ -26,6 +26,7 @@ flux status
 
 Flux uses TLS with pinned device certificates after pairing.
 The desktop discovers phones through mDNS and opens the connections itself.
+To use the phone away from the local network, see [Connect through Tailscale](tailscale.md).
 
 ## Files, clipboard, and links
 

@@ -58,6 +58,20 @@ flux unpair "Pixel 8"
 Compare the verification key on both devices before you accept.
 See [phone pairing](features.md#pair-a-phone).
 
+## Reach a device away from the local network
+
+```sh
+flux addresses
+flux --device "Pixel 8" addresses add pixel-8
+flux --device "Pixel 8" addresses add 100.101.102.103
+flux --device "Pixel 8" addresses remove 100.101.102.103
+```
+
+An extra address is a host name or an IP address without a port, for example the Tailscale name of the phone.
+While the device is offline, `fluxd` dials the extra addresses after the last address.
+The device must be paired.
+See [Connect through Tailscale](tailscale.md).
+
 ## Share and communicate
 
 ```sh

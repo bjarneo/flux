@@ -416,19 +416,31 @@ func (d *Daemon) onMDNS(peer lan.MDNSPeer) {
 	}
 	dev.IP, dev.Port, dev.LastSeen = peer.IP, peer.Port, time.Now()
 	dev.mdnsSeen = time.Now()
+	// Avahi can answer from its cache with an address that the device left.
+	// Dial the extra addresses too, because this dial blocks other dials to
+	// the device for 1 second.
+	hosts := dev.dialHosts()
 	d.mu.Unlock()
-	d.lan.Dial(d.ctx, peer.IP, peer.Port, proto.Identity{DeviceID: peer.DeviceID, DeviceName: peer.Name, ProtocolVersion: peer.Protocol})
+	d.lan.DialAny(d.ctx, hosts, peer.Port, proto.Identity{DeviceID: peer.DeviceID, DeviceName: peer.Name, ProtocolVersion: peer.Protocol})
 }
+
+// redialDelay is how long fluxd waits after a link drops before it dials
+// the device again. The phone needs a moment to move to another network.
+const redialDelay = 2 * time.Second
 
 // dialKnown connects to each device that is offline and has a known
 // address: paired devices, and devices that mDNS found in the last 10
-// minutes. It also sends a unicast UDP identity from port 1716. A device
-// that answers from its port 1716 passes the firewall as a reply.
+// minutes. A paired device can also have extra addresses, for example a
+// Tailscale name. dialKnown tries the last address first, then the extra
+// addresses. It also sends a unicast UDP identity from port 1716 to the
+// last address. A device that answers from its port 1716 passes the
+// firewall as a reply.
 func (d *Daemon) dialKnown() {
 	type target struct {
-		ip   string
-		port int
-		id   proto.Identity
+		ip    string
+		hosts []string
+		port  int
+		id    proto.Identity
 	}
 	var targets []target
 	var refresh []string
@@ -440,22 +452,25 @@ func (d *Daemon) dialKnown() {
 		if dev.link == nil && dev.Paired {
 			refresh = append(refresh, dev.ID)
 		}
-		if dev.link != nil || dev.IP == "" {
+		hosts := dev.dialHosts()
+		if dev.link != nil || len(hosts) == 0 {
 			continue
 		}
 		if !dev.Paired && time.Since(dev.mdnsSeen) > 10*time.Minute {
 			continue
 		}
-		targets = append(targets, target{dev.IP, dev.Port, proto.Identity{DeviceID: dev.ID, DeviceName: dev.Name, ProtocolVersion: dev.Version}})
+		targets = append(targets, target{dev.IP, hosts, dev.dialPort(), proto.Identity{DeviceID: dev.ID, DeviceName: dev.Name, ProtocolVersion: dev.Version}})
 	}
 	d.mu.Unlock()
 	for _, id := range refresh {
 		m.Refresh(id)
 	}
 	for _, t := range targets {
-		d.lan.Announce(t.ip)
+		if t.ip != "" {
+			d.lan.Announce(t.ip)
+		}
 		if t.port > 0 {
-			d.lan.Dial(d.ctx, t.ip, t.port, t.id)
+			d.lan.DialAny(d.ctx, t.hosts, t.port, t.id)
 		}
 	}
 }
@@ -518,7 +533,8 @@ func (d *Daemon) onLink(l *lan.Link) {
 	go func() {
 		err := l.Receive(func(p *proto.Packet) { d.handlePacket(dev, l, p) })
 		d.mu.Lock()
-		if dev.link == l {
+		current := dev.link == l
+		if current {
 			dev.link = nil
 			dev.LastSeen = time.Now()
 			dev.clearPairingLocked()
@@ -527,6 +543,12 @@ func (d *Daemon) onLink(l *lan.Link) {
 		d.mu.Unlock()
 		d.logf("link down: %s: %v", dev.Name, err)
 		d.markDirty()
+		// The device can be back at once on another address, for example
+		// through Tailscale after it left the Wi-Fi. Do not wait for the next
+		// round of dialKnown.
+		if current && d.ctx.Err() == nil {
+			time.AfterFunc(redialDelay, d.dialKnown)
+		}
 	}()
 }
 

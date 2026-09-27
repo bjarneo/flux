@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -47,13 +48,17 @@ func (b *syncBuffer) String() string {
 }
 
 type state struct {
+	Self struct {
+		TCPPort int `json:"tcpPort"`
+	} `json:"self"`
 	Devices []struct {
-		ID        string `json:"id"`
-		Name      string `json:"name"`
-		Online    bool   `json:"online"`
-		Paired    bool   `json:"paired"`
-		PairState string `json:"pairState"`
-		PairKey   string `json:"pairKey"`
+		ID        string   `json:"id"`
+		Name      string   `json:"name"`
+		Addresses []string `json:"addresses"`
+		Online    bool     `json:"online"`
+		Paired    bool     `json:"paired"`
+		PairState string   `json:"pairState"`
+		PairKey   string   `json:"pairKey"`
 		// Notifications are the notifications that the device sent.
 		Notifications []struct {
 			App   string `json:"app"`
@@ -199,6 +204,30 @@ func (n *node) wait(t *testing.T, what string, ok func(state) bool) state {
 	}
 }
 
+// setLastIP changes the last address of each paired device of n. The
+// daemon of n must not run.
+func setLastIP(t *testing.T, n *node, ip string) {
+	t.Helper()
+	path := filepath.Join(n.dir, "data", "flux", "devices.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var list []map[string]any
+	if err := json.Unmarshal(data, &list); err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range list {
+		d["lastIp"] = ip
+	}
+	if data, err = json.Marshal(list); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func device(s state, name string) (id string, online, paired bool, pairState, key string) {
 	for _, d := range s.Devices {
 		if d.Name == name {
@@ -289,6 +318,44 @@ func TestTwoDaemons(t *testing.T) {
 		_, on, p, _, _ := device(s, "beta")
 		return on && p
 	})
+
+	// Extra addresses. alpha keeps an extra address for beta, as for the
+	// Tailscale name of a phone. After a restart, discovery and the last
+	// address fail, and alpha reaches beta through the extra address.
+	var res struct {
+		Device    string   `json:"device"`
+		Addresses []string `json:"addresses"`
+	}
+	alpha.call(t, "addresses.add", map[string]any{"device": "beta", "address": "LocalHost"}, &res)
+	if res.Device != "beta" || !slices.Equal(res.Addresses, []string{"localhost"}) {
+		t.Fatalf("addresses.add returned %+v", res)
+	}
+	if err := alpha.client.Call("addresses.add", map[string]any{"device": "beta", "address": "localhost:1716"}, nil); err == nil {
+		t.Fatal("addresses.add accepted an address with a port")
+	}
+	alpha.stop()
+	beta.stop()
+	setLastIP(t, alpha, "192.0.2.1")
+	setLastIP(t, beta, "192.0.2.1")
+	// Different UDP ports stop the broadcasts on loopback.
+	alpha.udpPort = freePort(t, "udp")
+	for beta.udpPort = freePort(t, "udp"); beta.udpPort == alpha.udpPort; beta.udpPort = freePort(t, "udp") {
+	}
+	beta.launch(t, bin, tcpB)
+	beta.wait(t, "TCP listener", func(s state) bool { return s.Self.TCPPort > 0 })
+	alpha.launch(t, bin, tcpA)
+	alpha.wait(t, "beta online through its extra address", func(s state) bool {
+		for _, d := range s.Devices {
+			if d.Name == "beta" {
+				return d.Online && slices.Equal(d.Addresses, []string{"localhost"})
+			}
+		}
+		return false
+	})
+	alpha.call(t, "addresses.remove", map[string]any{"device": "beta", "address": "localhost"}, &res)
+	if len(res.Addresses) != 0 {
+		t.Fatalf("addresses.remove left %v", res.Addresses)
+	}
 
 	// Unpair.
 	alpha.call(t, "pair.unpair", map[string]any{"device": "beta"}, nil)

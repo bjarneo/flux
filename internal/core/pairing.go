@@ -70,6 +70,7 @@ func (d *Daemon) Unpair(dev *Device) error {
 	d.mu.Lock()
 	l := dev.link
 	dev.Paired, dev.PairedAt = false, ""
+	dev.Addresses = nil
 	dev.clearPairingLocked()
 	if l == nil {
 		delete(d.devices, dev.ID)
@@ -104,6 +105,7 @@ func (d *Daemon) handlePair(dev *Device, p *proto.Packet) {
 		dev.clearPairingLocked()
 		wasPaired := dev.Paired
 		dev.Paired, dev.PairedAt = false, ""
+		dev.Addresses = nil
 		d.mu.Unlock()
 		if wasPaired {
 			_ = d.trust.Remove(dev.ID)
@@ -124,6 +126,7 @@ func (d *Daemon) handlePair(dev *Device, p *proto.Packet) {
 		// request, so the user confirms the key again.
 		d.mu.Lock()
 		dev.Paired, dev.PairedAt = false, ""
+		dev.Addresses = nil
 		d.mu.Unlock()
 		_ = d.trust.Remove(dev.ID)
 	}

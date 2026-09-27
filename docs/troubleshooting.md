@@ -61,6 +61,20 @@ To read the Mac logs, run:
 log stream --predicate 'subsystem == "org.omarchy.flux"'
 ```
 
+## The phone does not connect away from home
+
+Flux reaches a phone outside the local network only through an extra address, for example its Tailscale name.
+
+```sh
+flux addresses
+flux doctor
+tailscale ping pixel-8
+journalctl --user -u fluxd -n 50 --no-pager | grep "connect to"
+```
+
+If `flux addresses` shows `none` for the phone, add its Tailscale name.
+See [Connect through Tailscale](tailscale.md#troubleshoot) for the other checks.
+
 ## The window or bar item is missing
 
 Try the Qt host directly:

@@ -28,6 +28,10 @@ type Device struct {
 	Cert     *x509.Certificate
 	LastSeen time.Time
 
+	// Addresses are the extra host names and IP addresses of a paired
+	// device. They come from the trust store.
+	Addresses []string
+
 	link     *lan.Link
 	mdnsSeen time.Time
 
@@ -73,6 +77,7 @@ func newDevice(id string) *Device {
 
 func (dev *Device) applyTrust(t config.TrustedDevice) {
 	dev.Name, dev.Type, dev.IP, dev.Port = t.Name, t.Type, t.LastIP, t.LastPort
+	dev.Addresses = t.Addresses
 	dev.Paired, dev.PairedAt = true, t.PairedAt
 	if c, err := proto.ParseCertPEM(t.CertPEM); err == nil {
 		dev.Cert = c
@@ -148,6 +153,7 @@ type DeviceView struct {
 	Name          string               `json:"name"`
 	Type          string               `json:"type"`
 	IP            string               `json:"ip"`
+	Addresses     []string             `json:"addresses"`
 	Paired        bool                 `json:"paired"`
 	Online        bool                 `json:"online"`
 	PairState     string               `json:"pairState"`
@@ -170,7 +176,7 @@ func (dev *Device) view() DeviceView {
 		state = "none"
 	}
 	v := DeviceView{
-		ID: dev.ID, Name: dev.Name, Type: dev.Type, IP: dev.IP,
+		ID: dev.ID, Name: dev.Name, Type: dev.Type, IP: dev.IP, Addresses: dev.Addresses,
 		Paired: dev.Paired, Online: dev.link != nil,
 		PairState: state, PairKey: dev.pairKey, PairedAt: dev.PairedAt,
 		Battery: dev.battery, Signal: dev.signal,
@@ -184,6 +190,9 @@ func (dev *Device) view() DeviceView {
 	}
 	if v.Notifications == nil {
 		v.Notifications = []*PhoneNotification{}
+	}
+	if v.Addresses == nil {
+		v.Addresses = []string{}
 	}
 	v.Conversations = sortedConversations(dev.conversations)
 	return v

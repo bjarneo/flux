@@ -60,7 +60,7 @@ Use the [CLI](cli.md#media-and-desktop-commands) or the Phone commands page to a
 | `~/.config/flux/off` | Marker that disables automatic daemon start |
 | `~/.local/share/flux/certificate.pem` | Desktop identity certificate |
 | `~/.local/share/flux/privateKey.pem` | Desktop identity private key |
-| `~/.local/share/flux/devices.json` | Paired devices and pinned certificates |
+| `~/.local/share/flux/devices.json` | Paired devices, pinned certificates, and [extra addresses](tailscale.md) |
 | `~/Documents/flux/scanned/` | Scanned text and documents by default |
 | `~/Pictures/flux/` | Camera photos by default |
 | `~/Pictures/flux/screenshots/` | Automatically received screenshots by default |

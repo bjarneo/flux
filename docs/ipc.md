@@ -66,6 +66,7 @@ flux watch
 | --- | --- |
 | State | `state`, `subscribe`, `discover` |
 | Pairing | `pair.request`, `pair.accept`, `pair.reject`, `pair.unpair` |
+| Addresses | `addresses.add`, `addresses.remove` |
 | Sharing | `clipboard.send`, `share.files`, `share.url` |
 | Commands | `commands.add`, `commands.remove`, `commands.run` |
 | Media | `media.action` |
@@ -74,3 +75,19 @@ flux watch
 
 Read the handler before you add a client call.
 The approval helper applies additional peer and signature checks beyond this general socket protocol.
+
+## Extra addresses
+
+`addresses.add` and `addresses.remove` change the extra addresses of a paired device.
+`fluxd` dials these addresses while the device is offline, for example through [Tailscale](tailscale.md).
+
+```json
+{"id":4,"method":"addresses.add","params":{"device":"Pixel 8","address":"pixel-8"}}
+{"id":4,"result":{"device":"Pixel 8","address":"pixel-8","addresses":["pixel-8"]}}
+```
+
+The result gives the address in its stored form and the new list.
+Each device in the state has the same list in its `addresses` field.
+An address with a port or a scheme returns the `bad_address` error.
+A sixth address returns `too_many`.
+An address that the device does not have returns `not_found` from `addresses.remove`.

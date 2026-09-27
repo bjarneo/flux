@@ -18,6 +18,12 @@
       "prompt": "Prepare a checklist for Flux v0.2.0 with a signed APK and AUR package. Explain manual rebuilds, secrets, artifacts, and upgrade constraints. Do not publish anything.",
       "expected_output": "Use an existing stable tag, identify all signing and AUR secrets plus AUR_PUBLISH, preserve the signing key and version-code sequence, and describe verified release artifacts.",
       "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "My Pixel 8 is paired with Flux at home. I use Tailscale on the phone and the desktop. Make Flux connect when I am away from home. Give the commands without running them.",
+      "expected_output": "Find the phone name with tailscale status, add it with flux --device \"Pixel 8\" addresses add HOST, and check with flux addresses and flux doctor. State that discovery and pairing still need the local network. Do not edit devices.json by hand or add a firewall rule.",
+      "files": []
     }
   ]
 }

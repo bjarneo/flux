@@ -31,6 +31,10 @@ Commands:
   accept DEVICE          Accept a pair request
   reject DEVICE          Reject a pair request
   unpair DEVICE          Remove a paired device
+  addresses              List the extra addresses of the paired devices
+  addresses add HOST     Add a host name or IP address, for example the Tailscale
+                         name of the phone. fluxd tries it while the device is offline
+  addresses remove HOST  Remove an extra address
   ring                   Ring the phone
   ping [MESSAGE]         Send a ping
   send FILE...           Send files
@@ -90,6 +94,8 @@ func main() {
 		err = call("pair.reject", map[string]any{"device": need(args, "DEVICE")})
 	case "unpair":
 		err = call("pair.unpair", map[string]any{"device": need(args, "DEVICE")})
+	case "addresses":
+		err = addresses(device, args)
 	case "ring":
 		err = call("ring", map[string]any{"device": device})
 	case "ping":
@@ -226,6 +232,7 @@ type State struct {
 			Charge   int  `json:"charge"`
 			Charging bool `json:"charging"`
 		} `json:"battery"`
+		Addresses     []string `json:"addresses"`
 		Notifications []struct {
 			ID    string `json:"id"`
 			App   string `json:"app"`
@@ -313,6 +320,63 @@ func pair(device string) error {
 		}
 	}
 	return errors.New("fluxd closed the connection")
+}
+
+// addresses lists, adds, or removes the extra addresses of a paired
+// device. fluxd dials them while the device is offline, for example
+// through Tailscale.
+func addresses(device string, args []string) error {
+	switch first(args) {
+	case "add", "remove", "rm":
+		method, verb := "addresses.add", "Added"
+		if args[0] != "add" {
+			method, verb = "addresses.remove", "Removed"
+		}
+		var res struct {
+			Device    string   `json:"device"`
+			Address   string   `json:"address"`
+			Addresses []string `json:"addresses"`
+		}
+		if err := callInto(method, map[string]any{"device": device, "address": need(args[1:], "HOST")}, &res); err != nil {
+			return err
+		}
+		fmt.Printf("%s %s. Addresses of %s: %s\n", verb, res.Address, res.Device, joinOrNone(res.Addresses))
+		return nil
+	case "", "list":
+	default:
+		return fmt.Errorf("unknown addresses action %q. Use add, remove, or list", args[0])
+	}
+	var s State
+	if err := callInto("state", nil, &s); err != nil {
+		return err
+	}
+	shown, empty := 0, 0
+	for _, d := range s.Devices {
+		if !d.Paired || (device != "" && d.ID != device && !strings.EqualFold(d.Name, device)) {
+			continue
+		}
+		shown++
+		if len(d.Addresses) == 0 {
+			empty++
+		}
+		fmt.Printf("  %-22s %s\n", d.Name, joinOrNone(d.Addresses))
+	}
+	switch {
+	case shown == 0 && device != "":
+		return fmt.Errorf("no paired device named %q", device)
+	case shown == 0:
+		fmt.Println("No paired devices. Pair a device on the local network first.")
+	case empty > 0:
+		fmt.Println("To add one, run: flux --device NAME addresses add HOST")
+	}
+	return nil
+}
+
+func joinOrNone(list []string) string {
+	if len(list) == 0 {
+		return "none"
+	}
+	return strings.Join(list, ", ")
 }
 
 func send(device string, files []string) error {

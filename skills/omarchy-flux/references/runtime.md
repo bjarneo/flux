@@ -44,6 +44,25 @@ Names match without case.
 Use the ID when devices have the same name.
 Compare the key before the user accepts a pair request.
 
+## Extra addresses and Tailscale
+
+```sh
+tailscale status
+flux addresses
+flux --device "Pixel 8" addresses add pixel-8
+flux --device "Pixel 8" addresses remove pixel-8
+```
+
+An extra address is a host name or an IP address without a port, for example the Tailscale name of the phone.
+`fluxd` dials the last address first, then the extra addresses. It dials 2 seconds after a link drops and every 30 seconds while the paired device is offline.
+Each device in `flux status --json` has an `addresses` list.
+`flux doctor` reports an extra host name that does not resolve.
+The addresses are in `~/.local/share/flux/devices.json`. Change them with the CLI, not by hand, while `fluxd` runs.
+
+Flux cannot discover or pair a device through Tailscale.
+Pair on the local network first.
+Read `docs/tailscale.md` for the limits and the troubleshooting steps.
+
 ## Notifications, media, and commands
 
 ```sh
@@ -168,6 +187,7 @@ Do not change `sshd` or `login` PAM services.
 4. Check that Flux runs on the phone.
 5. Check that the network allows communication between clients.
 6. Run `flux discover` and inspect the state again.
+7. For a phone away from the local network, check `flux addresses`, `tailscale ping HOST`, and the `connect to` lines in the `fluxd` log.
 
 If the plugin fails, test the Qt host with `FLUX_GUI=app flux open`.
 If that succeeds, inspect the plugin install and shell logs.

@@ -42,7 +42,7 @@ The skill covers:
 - Explicit device selection and JSON state.
 - Pairing with a user-confirmed key comparison.
 - File, clipboard, notification, SMS, media, and stream operations.
-- User-service and network diagnosis.
+- User-service and network diagnosis, and extra addresses for Tailscale.
 - Qt and shell host compatibility.
 - Approval trust boundaries and password fallback.
 - Local builds and component checks.
@@ -52,4 +52,4 @@ The skill reports tests and required user actions separately from completed work
 It does not equate a local build with a published release.
 
 Sample skill checks live in [`evals/evals.json`](../skills/omarchy-flux/evals/evals.json).
-They cover device selection, local installation, and release preparation.
+They cover device selection, local installation, release preparation, and Tailscale connections.

@@ -1,11 +1,12 @@
 ---
 name: omarchy-flux
-description: Use, install, diagnose, develop, and release Omarchy Flux. Use this skill for the flux CLI, fluxd, Flux for Android, Flux for macOS, phone and Mac pairing, file or clipboard transfers, phone notifications, webcam or microphone streams, screen mirror, fingerprint approval, herdr agents on the phone, the Flux Qt app, the Flux Omarchy plugin, AUR packages, and Flux APK workflows. Scope this skill to Flux tasks, not general Android or Omarchy configuration.
+description: Use, install, diagnose, develop, and release Omarchy Flux. Use this skill for the flux CLI, fluxd, Flux for Android, Flux for macOS, phone and Mac pairing, connections through Tailscale, file or clipboard transfers, phone notifications, webcam or microphone streams, screen mirror, fingerprint approval, herdr agents on the phone, the Flux Qt app, the Flux Omarchy plugin, AUR packages, and Flux APK workflows. Scope this skill to Flux tasks, not general Android or Omarchy configuration.
 ---
 
 # Omarchy Flux
 
 Flux connects an Omarchy desktop to Flux for Android or Flux for macOS on the same local network.
+A paired device can also connect through Tailscale with an extra address.
 The desktop includes the `flux` CLI, `fluxd`, a Qt app, and an Omarchy shell plugin.
 
 ## Choose the task
@@ -84,6 +85,18 @@ The desktop discovers phones through Avahi and mDNS.
 The desktop opens connections to the phone, including reverse payload tunnels.
 A missing connection does not require a new desktop firewall rule by default.
 Check the daemon, Avahi, Wi-Fi isolation, and phone state first.
+
+Discovery and pairing need the local network.
+To reach a paired phone away from that network, add its Tailscale name as an extra address:
+
+```sh
+tailscale status
+flux --device "Pixel 8" addresses add pixel-8
+flux addresses
+```
+
+Use the device name from `flux status --json` and the host name from `tailscale status`.
+Read `docs/tailscale.md` for the dial order, limits, and checks.
 
 ## Respect the requested operation
 

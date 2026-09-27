@@ -1,6 +1,6 @@
 # Flux
 
-Connect your Omarchy desktop to an Android phone or a Mac over your local network.
+Connect your Omarchy desktop to an Android phone or a Mac over your local network, or through Tailscale when you are away.
 Share files and clipboard text, read phone notifications, control media, and use your phone as a camera or microphone.
 
 Flux includes a CLI, a background daemon, a native Qt window, an Omarchy shell plugin, a native Android app, and a native macOS app.
@@ -22,6 +22,7 @@ https://github.com/user-attachments/assets/4b8445fe-6734-4100-b200-92f57e1b353a
 | Scan text, send photos, and use the phone as a webcam or microphone | [Camera and streams](docs/camera.md) |
 | Show the phone screen in a desktop window | [Screen mirror](docs/camera.md#screen-mirror) |
 | Approve sudo with the phone's fingerprint sensor | [Fingerprint approval](docs/approvals.md) |
+| Reach your phone away from home through Tailscale | [Connect through Tailscale](docs/tailscale.md) |
 | See herdr coding agents on the phone, read their output, and answer them | [herdr agents](docs/herdr.md) |
 
 Flux for Android requires Android 10 or later.

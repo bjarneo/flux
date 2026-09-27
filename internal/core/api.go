@@ -169,6 +169,7 @@ type params struct {
 	Action    string          `json:"action"`
 	Position  int64           `json:"position"`
 	Thread    int64           `json:"thread"`
+	Address   string          `json:"address"`
 	Addresses []string        `json:"addresses"`
 	Body      string          `json:"body"`
 	Title     string          `json:"title"`
@@ -255,6 +256,16 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		return nil, apiErr("not_paired", "%s is not paired", dev.Name)
 	}
 	switch method {
+	case "addresses.add", "addresses.remove":
+		change := d.AddAddress
+		if method == "addresses.remove" {
+			change = d.RemoveAddress
+		}
+		addr, addrs, err := change(dev, p.Address)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"device": dev.Name, "address": addr, "addresses": addrs}, nil
 	case "ring":
 		return ok, d.send(dev, proto.New(proto.TypeFindMyPhone, map[string]any{}))
 	case "ping":

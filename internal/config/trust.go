@@ -22,6 +22,10 @@ type TrustedDevice struct {
 	// LastPort is the TCP port of the device. With LastIP, fluxd connects
 	// out to the device, so no incoming connection is necessary.
 	LastPort int `json:"lastPort,omitempty"`
+	// Addresses are host names or IP addresses that the user added, for
+	// example the Tailscale name of the phone. fluxd tries them after
+	// LastIP while the device is offline.
+	Addresses []string `json:"addresses,omitempty"`
 	// Disabled lists the plugins that the user turned off for this device.
 	Disabled []string `json:"disabledPlugins,omitempty"`
 }
