@@ -34,11 +34,11 @@ On Omarchy or Arch Linux, install the build tools:
 sudo pacman -Syu --needed base-devel git go cmake ninja
 ```
 
-Replace `OWNER` with the GitHub owner of this repository:
+Clone this repository and setup:
 
 ```sh
-git clone https://github.com/OWNER/omarchy-flux.git
-cd omarchy-flux/dist/arch
+git clone https://github.com/bjarneo/flux.git
+cd flux/dist/arch
 makepkg -si
 flux setup
 flux doctor

@@ -156,10 +156,8 @@ The source recipe also supports native `aarch64` builds, which require separate 
 
 ## Prepare the AUR source locally
 
-Set `REPO` to the actual GitHub owner and repository:
-
 ```sh
-REPO=OWNER/omarchy-flux
+REPO=bjarneo/flux
 python3 scripts/prepare-aur.py --tag v0.1.0 --repo "$REPO"
 cd dist/aur
 makepkg --printsrcinfo > .SRCINFO
