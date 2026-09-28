@@ -232,7 +232,7 @@ The mic key does not show when the phone has no speech recognizer.
 ## Use a Mac
 
 Flux for macOS shows the same agents and sends the same replies as the phone.
-It shows up to 200 lines of output.
+It shows up to 1000 lines of output.
 It does not start agents, close them, or open terminals.
 
 - The page of the computer has an **Agents** card. It lists the first agents and shows the number of blocked agents.

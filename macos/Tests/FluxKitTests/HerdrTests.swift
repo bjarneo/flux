@@ -216,7 +216,7 @@ final class HerdrTests: XCTestCase {
     func testPacketsMatchTheComputer() {
         let read = HerdrWire.read(pane: "w5:p1")
         XCTAssertEqual(read.type, "flux.herdr")
-        XCTAssertEqual(read.body, ["kind": .string("read"), "pane": .string("w5:p1"), "lines": .int(200), "format": .string("ansi")])
+        XCTAssertEqual(read.body, ["kind": .string("read"), "pane": .string("w5:p1"), "lines": .int(1000), "format": .string("ansi")])
         XCTAssertEqual(HerdrWire.keys(pane: "w5:p1", ["2"]).body, ["kind": .string("keys"), "pane": .string("w5:p1"), "keys": .array([.string("2")])])
         XCTAssertEqual(HerdrWire.prompt(pane: "w5:p1", "go on").body, ["kind": .string("prompt"), "pane": .string("w5:p1"), "text": .string("go on")])
         XCTAssertEqual(HerdrWire.request().body, ["kind": .string("request")])
