@@ -77,10 +77,25 @@ struct ApproveKeys: Sendable {
         guard let url = url(computerId) else { throw FluxError("The computer ID is not valid") }
         let fm = FileManager.default
         try fm.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        try excludeFromBackup()
         let r = Record(key: blob, publicKey: publicKey, biometry: Self.biometryState(), host: host, user: user,
                        enrolled: Int64(Date().timeIntervalSince1970))
         try JSONEncoder().encode(r).write(to: url, options: .atomic)
         try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+    }
+
+    /// Keeps the folder out of iCloud and computer backups on iOS. Only the
+    /// Secure Enclave of this iPhone can use a blob, so a blob that a backup
+    /// restores on another iPhone fails. A missing folder is left alone. The
+    /// Mac keeps its backups as they were.
+    func excludeFromBackup() throws {
+        #if os(iOS)
+        guard FileManager.default.fileExists(atPath: directory.path) else { return }
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        var url = directory
+        try url.setResourceValues(values)
+        #endif
     }
 
     /// Makes a new key in the Secure Enclave. Each signature of the key asks

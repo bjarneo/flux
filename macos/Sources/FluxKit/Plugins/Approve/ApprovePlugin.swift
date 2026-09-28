@@ -35,6 +35,11 @@ public final class ApprovePlugin: FluxPlugin, @unchecked Sendable {
         self.core = core
         let keys = ApproveKeys(directory: core.paths.data.appendingPathComponent("approve", isDirectory: true))
         self.keys = keys
+        do {
+            try keys.excludeFromBackup()
+        } catch {
+            FluxLog.plugin.error("approve keys stay in backups: \(String(describing: error), privacy: .public)")
+        }
         Notifier.shared.register(category: Self.notificationCategory, actions: Self.notificationActions(platform: .current)) { [weak self] action, info, _ in
             guard let id = info["id"] as? String else { return }
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.notificationAction(action, id: id) } }
