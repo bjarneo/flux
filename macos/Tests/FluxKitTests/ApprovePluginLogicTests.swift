@@ -69,6 +69,15 @@ final class ApprovePluginLogicTests: XCTestCase {
         XCTAssertEqual(ApprovePlugin.availability(secureEnclave: true, biometryProblem: phone.notEnrolled, texts: phone), .biometry(phone.notEnrolled))
     }
 
+    /// The simulator cannot make a key that needs the biometry, so it shows
+    /// that approval is not available and refuses each request.
+    func testSimulatorHasNoUsableSecureEnclave() {
+        #if targetEnvironment(simulator)
+        XCTAssertFalse(ApprovePlugin.secureEnclaveAvailable)
+        XCTAssertEqual(ApprovePlugin.availability(), .noSecureEnclave(ApproveTexts.current.noSecureEnclave))
+        #endif
+    }
+
     func testTimeSensitiveNotificationContent() {
         let plain = Notifier.content(category: "c", title: "t", body: "b")
         XCTAssertEqual(plain.interruptionLevel, .active, "a notification without a level keeps the default")

@@ -75,7 +75,7 @@ public final class ApprovePlugin: FluxPlugin, @unchecked Sendable {
         }
         let texts = ApproveTexts.current
         #if os(iOS)
-        let secureEnclave = SecureEnclave.isAvailable
+        let secureEnclave = Self.secureEnclaveAvailable
         #else
         // A Mac without a Secure Enclave has no Touch ID either, and Approve
         // says so.
@@ -312,7 +312,18 @@ public final class ApprovePlugin: FluxPlugin, @unchecked Sendable {
     /// Whether this device can approve: it needs a Secure Enclave and the
     /// biometry. It never falls back to a key outside the Secure Enclave.
     public static func availability() -> ApproveAvailability {
-        availability(secureEnclave: SecureEnclave.isAvailable, biometryProblem: biometryProblem(), texts: .current)
+        availability(secureEnclave: secureEnclaveAvailable, biometryProblem: biometryProblem(), texts: .current)
+    }
+
+    /// Whether this device can make a Secure Enclave key that needs the
+    /// biometry. The iOS simulator reports a Secure Enclave, but it refuses
+    /// such a key with "This call is not supported on iOS Simulator".
+    static var secureEnclaveAvailable: Bool {
+        #if targetEnvironment(simulator)
+        false
+        #else
+        SecureEnclave.isAvailable
+        #endif
     }
 
     static func availability(secureEnclave: Bool, biometryProblem: String?, texts: ApproveTexts) -> ApproveAvailability {
