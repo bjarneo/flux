@@ -4,7 +4,7 @@
   "version": "0.5.0",
   "default_locale": "en",
   "description": "__MSG_extDescription__",
-  "//": "Firefox and Zen have no service worker for an extension, so the background is a list of scripts. The add-on ID is what `flux-cli browser install` looks for in prefs.js, because Firefox gives the extension a UUID per profile instead of a fixed ID.",
+  "//": "Firefox and Zen read the background as a list of scripts rather than a service worker. The add-on ID is fixed here on purpose: it is what `flux-cli browser install` writes into allowed_extensions of the host manifest, and the UUID a profile hands the add-on belongs to the profile, not to the host manifest.",
   "browser_specific_settings": {
     "gecko": {
       "id": "flux@omarchy.org"

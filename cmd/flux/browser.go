@@ -38,13 +38,18 @@ const installedExtension = "/usr/share/flux/browser-extension"
 var userExtension = filepath.Join(".local", "share", "flux", "browser-extension")
 
 // hostManifest is the file that a browser reads to find a native messaging
-// host.
+// host. The two browsers disagree on the key that names the callers: a
+// Chromium browser reads allowed_origins, which holds the origin of the
+// extension, and Firefox and Zen read allowed_extensions, which holds the
+// add-on ID. A browser ignores the key it does not know, so each manifest
+// carries only the one its browser reads.
 type hostManifest struct {
-	Name           string   `json:"name"`
-	Description    string   `json:"description"`
-	Path           string   `json:"path"`
-	Type           string   `json:"type"`
-	AllowedOrigins []string `json:"allowed_origins"`
+	Name              string   `json:"name"`
+	Description       string   `json:"description"`
+	Path              string   `json:"path"`
+	Type              string   `json:"type"`
+	AllowedOrigins    []string `json:"allowed_origins,omitempty"`
+	AllowedExtensions []string `json:"allowed_extensions,omitempty"`
 }
 
 // chromiumBrowsers are the profile roots of the Chromium browsers that
@@ -68,10 +73,10 @@ var chromiumBrowsers = []string{
 }
 
 // geckoBrowsers are Firefox and Zen, below the home directory. Each keeps
-// one folder per profile, and reads the host manifests from one place.
+// its profiles in one folder and reads the host manifests from another.
 var geckoBrowsers = []struct {
-	Profiles string // the directory with one folder per profile
-	Hosts    string // the directory with the host manifests
+	Home  string // the folder the browser keeps
+	Hosts string // the directory with the host manifests
 }{
 	{".mozilla/firefox", ".mozilla/native-messaging-hosts"},
 	{".zen", ".zen/native-messaging-hosts"},
@@ -79,9 +84,10 @@ var geckoBrowsers = []struct {
 
 // target is one host manifest to write.
 type target struct {
-	path    string
-	host    string
-	origins []string
+	path       string
+	host       string
+	origins    []string
+	extensions []string
 }
 
 func browser(args []string) error {
@@ -121,7 +127,6 @@ func browserInstall(args []string) error {
 	}
 	var targets []target
 	var chromium, gecko bool
-	var geckoPending []string
 	for _, config := range configHomes(home) {
 		for _, rel := range chromiumBrowsers {
 			dir := filepath.Join(config, rel)
@@ -137,23 +142,20 @@ func browserInstall(args []string) error {
 		}
 	}
 	for _, b := range geckoBrowsers {
-		profiles := filepath.Join(home, b.Profiles)
-		if !isDir(profiles) {
+		if !isDir(filepath.Join(home, b.Home)) {
 			continue
 		}
 		gecko = true
-		uuids := geckoUUIDs(profiles)
-		if len(uuids) == 0 {
-			// Without the UUID that the browser gave the extension, the
-			// manifest names nobody, so Flux waits for the next run.
-			geckoPending = append(geckoPending, filepath.Join(home, b.Hosts))
-			continue
-		}
-		origins := make([]string, 0, len(uuids))
-		for _, u := range uuids {
-			origins = append(origins, "moz-extension://"+u+"/")
-		}
-		targets = append(targets, target{path: filepath.Join(home, b.Hosts, nativemsg.Host+".json"), host: path, origins: origins})
+		// Firefox and Zen name the caller by its add-on ID, which
+		// manifest.firefox.json fixes. The UUID a profile hands the
+		// add-on is not in the host manifest and is not needed: the ID
+		// is the same in every profile, so the manifest is written the
+		// first time, whether or not the add-on has been loaded.
+		targets = append(targets, target{
+			path:       filepath.Join(home, b.Hosts, nativemsg.Host+".json"),
+			host:       path,
+			extensions: []string{geckoID},
+		})
 	}
 	if len(targets) == 0 {
 		fmt.Println("No browser found in your home directory. Flux writes the host manifest when a browser is there.")
@@ -167,13 +169,6 @@ func browserInstall(args []string) error {
 			return err
 		}
 		fmt.Println("  ✓", t.path)
-	}
-	if len(geckoPending) > 0 {
-		fmt.Println()
-		fmt.Println("Load the extension first, then run this command again, so that Flux can read its UUID:")
-		for _, dir := range geckoPending {
-			fmt.Println("  ", filepath.Join(dir, nativemsg.Host+".json"))
-		}
 	}
 	printExtensionHelp(chromium, gecko)
 	return nil
@@ -220,11 +215,12 @@ func browserRemove() error {
 // writeHost writes one host manifest for a browser to read.
 func writeHost(t target) error {
 	body, err := json.MarshalIndent(hostManifest{
-		Name:           nativemsg.Host,
-		Description:    "Flux host for the Flux browser extension",
-		Path:           t.host,
-		Type:           "stdio",
-		AllowedOrigins: t.origins,
+		Name:              nativemsg.Host,
+		Description:       "Flux host for the Flux browser extension",
+		Path:              t.host,
+		Type:              "stdio",
+		AllowedOrigins:    t.origins,
+		AllowedExtensions: t.extensions,
 	}, "", "  ")
 	if err != nil {
 		return err
@@ -285,62 +281,6 @@ func configHomes(home string) []string {
 		dirs = append(dirs, xdg)
 	}
 	return dirs
-}
-
-// geckoUUIDs returns the extension UUIDs that a Firefox or Zen profile gave
-// the Flux add-on. Each profile has its own UUID, so every profile that
-// has the add-on counts.
-func geckoUUIDs(profiles string) []string {
-	entries, err := os.ReadDir(profiles)
-	if err != nil {
-		return nil
-	}
-	var found []string
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		body, err := os.ReadFile(filepath.Join(profiles, e.Name(), "prefs.js"))
-		if err != nil {
-			continue
-		}
-		for _, line := range strings.Split(string(body), "\n") {
-			if u := geckoUUID(line); u != "" {
-				found = append(found, u)
-			}
-		}
-	}
-	return found
-}
-
-// geckoUUID reads the Flux UUID from one prefs.js line. The value of
-// extensions.webextensions.uuids is a JSON object inside a prefs.js string,
-// so it is decoded twice.
-func geckoUUID(line string) string {
-	const pref = "extensions.webextensions.uuids"
-	// A pref that the profile reset keeps as a comment, and a stale UUID
-	// there would leave the host manifest naming a UUID that is gone.
-	if strings.HasPrefix(strings.TrimSpace(line), "//") {
-		return ""
-	}
-	at := strings.Index(line, pref)
-	if at < 0 {
-		return ""
-	}
-	rest := line[at+len(pref):]
-	comma := strings.Index(rest, ",")
-	if comma < 0 {
-		return ""
-	}
-	var raw string
-	if json.NewDecoder(strings.NewReader(strings.TrimSpace(rest[comma+1:]))).Decode(&raw) != nil {
-		return ""
-	}
-	var uuids map[string]string
-	if json.Unmarshal([]byte(raw), &uuids) != nil {
-		return ""
-	}
-	return uuids[geckoID]
 }
 
 // hostPath returns the flux-native that the browser must start. A browser

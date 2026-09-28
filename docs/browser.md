@@ -28,8 +28,9 @@ The extension needs two halves: the native messaging host, which the browser sta
    | Chromium, Chrome, Brave, Edge, Vivaldi, Opera | The extensions page, then **Developer mode**, then **Load unpacked** |
    | Firefox, Zen | `about:debugging#/runtime/this-firefox`, then **Load Temporary Add-on**, then `manifest.firefox.json` |
 
-`flux-cli browser install` prints the folder to load and, for Firefox and Zen, it also needs a second run.
-Those browsers give an extension a different ID per profile, so Flux reads the new ID from the profile after the first load and writes it into the host manifest.
+`flux-cli browser install` prints the folder to load.
+It writes the host manifest for every browser in one pass, with the ID that browser expects: the extension ID for Chromium, and the add-on ID for Firefox and Zen.
+That add-on ID is fixed in `manifest.firefox.json`, so the manifest does not change from one profile to the next.
 
 The folder to load is `/usr/share/flux/browser-extension`, or `~/.local/share/flux/browser-extension` after a user install.
 It is unpacked on purpose: a browser refuses an extension it cannot verify, and a folder needs no signature.

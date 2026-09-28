@@ -85,57 +85,6 @@ func TestGeckoIDMatchesManifest(t *testing.T) {
 	}
 }
 
-// TestGeckoUUID reads the UUID that a Firefox or Zen profile gives the
-// add-on. The value is a JSON object inside a prefs.js string.
-func TestGeckoUUID(t *testing.T) {
-	cases := []struct {
-		name string
-		line string
-		want string
-	}{
-		{
-			"the line that Firefox writes",
-			`user_pref("extensions.webextensions.uuids", "{\"flux@omarchy.org\":\"8a1c2b3d-4e5f-6071-8293-a4b5c6d7e8f9\"}");`,
-			"8a1c2b3d-4e5f-6071-8293-a4b5c6d7e8f9",
-		},
-		{
-			"another add-on in the same object",
-			`user_pref("extensions.webextensions.uuids", "{\"uBlock0@raymondhill.net\":\"1111\",\"flux@omarchy.org\":\"2222\"}");`,
-			"2222",
-		},
-		{"a pref that a reset kept", `// user_pref("extensions.webextensions.uuids", "{\"flux@omarchy.org\":\"3333\"}");`, ""},
-		{"another pref", `user_pref("extensions.webextensions.uuids.missing", "{}");`, ""},
-		{"another add-on", `user_pref("extensions.webextensions.uuids", "{\"other@omarchy.org\":\"4444\"}");`, ""},
-		{"nothing", "", ""},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			if got := geckoUUID(c.line); got != c.want {
-				t.Errorf("got %q, want %q", got, c.want)
-			}
-		})
-	}
-}
-
-// TestGeckoUUIDsReadsProfiles checks that Flux finds the UUID in every
-// profile that has the add-on, because each profile has its own.
-func TestGeckoUUIDsReadsProfiles(t *testing.T) {
-	profiles := t.TempDir()
-	pref := func(uuid string) string {
-		return `user_pref("extensions.webextensions.uuids", "{\"flux@omarchy.org\":\"` + uuid + `\"}");`
-	}
-	write(t, filepath.Join(profiles, "abc.default-release", "prefs.js"), pref("aaaa"))
-	write(t, filepath.Join(profiles, "xyz.dev-edition", "prefs.js"), "user_pref(\"browser.shell.checkDefaultBrowser\", false);\n"+pref("bbbb"))
-	// A profile that has no prefs.js yet, such as a new one.
-	if err := os.MkdirAll(filepath.Join(profiles, "new"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	got := geckoUUIDs(profiles)
-	if len(got) != 2 || got[0] != "aaaa" || got[1] != "bbbb" {
-		t.Errorf("got %v, want [aaaa bbbb]", got)
-	}
-}
-
 // TestBrowserInstallChromium checks the manifest that a Chromium browser
 // reads. The extension starts only when the name, the path, and the origin
 // all match.
@@ -190,33 +139,42 @@ func TestBrowserInstallXDG(t *testing.T) {
 	read(t, filepath.Join(xdg, "BraveSoftware", "Brave-Browser", "NativeMessagingHosts", nativemsg.Host+".json"), &hostManifest{})
 }
 
-// TestBrowserInstallGecko checks the Firefox and Zen manifest, which names
-// the UUID that the browser gave the add-on instead of a fixed ID.
+// TestBrowserInstallGecko checks the manifest that Firefox and Zen read.
+// They name the caller by its add-on ID, in allowed_extensions, and they
+// have never heard of allowed_origins.
 func TestBrowserInstallGecko(t *testing.T) {
 	home := installable(t)
-	write(t, filepath.Join(home, ".zen", "abc.default-release", "prefs.js"),
-		`user_pref("extensions.webextensions.uuids", "{\"flux@omarchy.org\":\"abcd-1234\"}");`)
+	mkdir(t, filepath.Join(home, ".zen"))
+	mkdir(t, filepath.Join(home, ".mozilla", "firefox"))
+	if err := browser([]string{"install"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{filepath.Join(home, ".zen", "native-messaging-hosts"), filepath.Join(home, ".mozilla", "native-messaging-hosts")} {
+		var m hostManifest
+		read(t, filepath.Join(dir, nativemsg.Host+".json"), &m)
+		if len(m.AllowedExtensions) != 1 || m.AllowedExtensions[0] != geckoID {
+			t.Errorf("%s names %v, want [%s]", dir, m.AllowedExtensions, geckoID)
+		}
+		if len(m.AllowedOrigins) != 0 {
+			t.Errorf("%s has origins %v, which Firefox does not read", dir, m.AllowedOrigins)
+		}
+	}
+}
+
+// TestBrowserInstallGeckoNeedsNoLoadedAddon checks that the manifest is
+// written the first time, before the add-on has ever been loaded. Firefox
+// matches the add-on ID, not the UUID a profile would have given it, so
+// waiting for a profile would only delay a manifest that is already right.
+func TestBrowserInstallGeckoNeedsNoLoadedAddon(t *testing.T) {
+	home := installable(t)
+	mkdir(t, filepath.Join(home, ".zen"))
 	if err := browser([]string{"install"}); err != nil {
 		t.Fatal(err)
 	}
 	var m hostManifest
 	read(t, filepath.Join(home, ".zen", "native-messaging-hosts", nativemsg.Host+".json"), &m)
-	if len(m.AllowedOrigins) != 1 || m.AllowedOrigins[0] != "moz-extension://abcd-1234/" {
-		t.Errorf("origins are %v", m.AllowedOrigins)
-	}
-}
-
-// TestBrowserInstallWithoutGeckoUUID checks that Flux writes no manifest
-// for a browser where the extension is not loaded yet, because a manifest
-// that names no UUID starts the host for nobody.
-func TestBrowserInstallWithoutGeckoUUID(t *testing.T) {
-	home := installable(t)
-	mkdir(t, filepath.Join(home, ".zen", "abc.default-release"))
-	if err := browser([]string{"install"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(filepath.Join(home, ".zen", "native-messaging-hosts", nativemsg.Host+".json")); err == nil {
-		t.Error("Flux wrote a host manifest with no extension UUID")
+	if m.AllowedExtensions[0] != geckoID {
+		t.Errorf("extensions are %v, want [%s]", m.AllowedExtensions, geckoID)
 	}
 }
 
