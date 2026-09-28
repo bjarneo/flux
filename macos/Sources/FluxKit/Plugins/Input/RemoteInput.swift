@@ -211,6 +211,18 @@ public enum RemoteInput {
         default: return nil
         }
     }
+
+    /// The digit of a key in the number row of a hardware keyboard, or nil,
+    /// like digit(macKeyCode:).
+    public static func digit(hidUsage usage: UIKeyboardHIDUsage) -> Int? {
+        // The HID usages go from 1 to 9, then 0.
+        let one = UIKeyboardHIDUsage.keyboard1.rawValue
+        switch usage.rawValue {
+        case UIKeyboardHIDUsage.keyboard0.rawValue: return 0
+        case one...(one + 8): return usage.rawValue - one + 1
+        default: return nil
+        }
+    }
     #endif
 
     /// What 1 key press on this device sends to the computer.
