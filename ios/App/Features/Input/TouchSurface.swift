@@ -1,6 +1,7 @@
 import FluxKit
 import SwiftUI
 import UIKit
+import UIKit.UIGestureRecognizerSubclass
 
 /// A view that reports its fingers and takes the keys of a hardware
 /// keyboard, for the touchpad and the remote desktop. Each finger has a
@@ -27,6 +28,7 @@ final class TouchSurfaceView: UIView {
         super.init(frame: frame)
         isMultipleTouchEnabled = true
         isExclusiveTouch = true
+        addGestureRecognizer(TouchClaim())
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -91,6 +93,54 @@ final class TouchSurfaceView: UIView {
         let rest = presses.subtracting(sentKeys)
         sentKeys.subtract(presses)
         if !rest.isEmpty { super.pressesCancelled(rest, with: event) }
+    }
+}
+
+/// Claims the fingers on a touch view. iOS 26 goes back when a finger
+/// swipes right anywhere on a screen, which would end a drag or a scroll
+/// on the pad and close the screen. That swipe waits for this recognizer
+/// to fail, and it does not fail while fingers are on the view. It lets the
+/// touches through to the view.
+final class TouchClaim: UIGestureRecognizer {
+    init() {
+        super.init(target: nil, action: nil)
+        cancelsTouchesInView = false
+        delaysTouchesBegan = false
+        delaysTouchesEnded = false
+    }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        state = state == .possible ? .began : .changed
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+        state = .changed
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+        let down = (event.allTouches ?? []).filter { $0.view === view && $0.phase != .ended && $0.phase != .cancelled }
+        state = down.isEmpty ? .ended : .changed
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+        state = .cancelled
+    }
+
+    override func shouldBeRequiredToFail(by other: UIGestureRecognizer) -> Bool {
+        if #available(iOS 26.0, *), let pop = navigationController?.interactiveContentPopGestureRecognizer, other === pop {
+            return true
+        }
+        return super.shouldBeRequiredToFail(by: other)
+    }
+
+    /// The navigation controller of the view, through the responder chain.
+    private var navigationController: UINavigationController? {
+        var r: UIResponder? = view
+        while let next = r?.next {
+            if let vc = next as? UIViewController, let nav = vc.navigationController ?? (vc as? UINavigationController) { return nav }
+            r = next
+        }
+        return nil
     }
 }
 
