@@ -20,6 +20,7 @@ enum PluginRegistry {
             RingPlugin(),
             RemoteInputPlugin(),
             DesktopPlugin(),
+            HerdrPlugin(),
         ]
     }
 }
@@ -36,6 +37,7 @@ struct FeatureTiles: View {
             NotificationsTile(device: device)
             TouchpadTile(device: device)
             DesktopTile(device: device)
+            AgentsTile(device: device)
         }
     }
 }
@@ -45,6 +47,9 @@ struct FeatureTiles: View {
 enum FeatureRoute: Hashable {
     case touchpad(String)
     case desktop(String)
+    case agents(String)
+    case agent(String, String)
+    case terminal(String, String)
 }
 
 /// The screen of a feature route.
@@ -55,6 +60,9 @@ struct FeatureDestination: View {
         switch route {
         case .touchpad(let id): TouchpadScreen(deviceId: id)
         case .desktop(let id): DesktopScreen(deviceId: id)
+        case .agents(let id): AgentsScreen(deviceId: id)
+        case .agent(let id, let pane): AgentScreen(deviceId: id, pane: pane)
+        case .terminal(let id, let pane): TerminalScreen(deviceId: id, pane: pane)
         }
     }
 }
@@ -92,6 +100,7 @@ struct FeatureSettings: View {
             ShareSettings()
             DndSettings()
             NotificationSettings()
+            AgentSettings()
         }
     }
 }
@@ -112,6 +121,7 @@ enum FeatureHooks {
         NotificationAccess.shared.refresh()
         ShareFeature.didLaunch(model: model)
         SystemFeature.didLaunch(model: model)
+        AgentsFeature.didLaunch(model: model)
     }
 
     /// Runs when the app comes on the screen or leaves it.
