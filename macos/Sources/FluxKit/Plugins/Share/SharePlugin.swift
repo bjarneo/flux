@@ -251,14 +251,24 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
             core.toast("Not connected. Try again in a moment")
             return
         }
-        Task.detached { [self] in await sendBatch(list, to: peer) }
+        Task.detached { [self] in await sendBatch(list, to: peer) { _, _ in } }
     }
 
-    private func sendBatch(_ urls: [URL], to peer: Peer) async {
+    /// Sends files to a connected computer in 1 batch, like `send(files:to:)`,
+    /// and returns after the batch ends. `result` gets each file with nil
+    /// once the computer received it, or with the error. It throws when the
+    /// computer is not connected, and then no file goes out.
+    public func sendAndWait(files: [URL], to deviceId: String, result: @escaping @Sendable (URL, Error?) -> Void) async throws {
+        guard let peer = peer(deviceId) else { throw FluxError("Not connected") }
+        await sendBatch(files, to: peer, result: result)
+    }
+
+    private func sendBatch(_ urls: [URL], to peer: Peer, result: @Sendable (URL, Error?) -> Void) async {
         guard let core else { return }
         let files: [(url: URL, size: Int64)] = urls.compactMap { url in
             guard let size = Self.fileSize(url) else {
                 core.toast("Cannot read \(url.lastPathComponent)")
+                result(url, FluxError("cannot read \(url.lastPathComponent)"))
                 return nil
             }
             return (url, size)
@@ -274,9 +284,11 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
                     ShareWire.file(name: name, count: files.count, total: total, size: file.size, port: port)
                 }
                 sent.append(name)
+                result(file.url, nil)
             } catch {
                 FluxLog.plugin.error("send \(name, privacy: .public) failed: \(String(describing: error), privacy: .public)")
                 core.toast("Sending \(name) failed")
+                result(file.url, error)
             }
         }
         if sent.count == 1 {
@@ -304,18 +316,21 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
         core?.send(ShareWire.scan(text), to: deviceId) ?? false
     }
 
-    /// Sends text, or a link when the text is 1 URL.
-    public func send(text: String, to deviceId: String) {
+    /// Sends text, or a link when the text is 1 URL. It returns false when
+    /// the text did not go out.
+    @discardableResult
+    public func send(text: String, to deviceId: String) -> Bool {
         guard let core, let peer = peer(deviceId) else {
             core?.toast("Not connected. Try again in a moment")
-            return
+            return false
         }
         let p = ShareWire.text(text)
         guard core.send(p, to: deviceId) else {
             core.toast("Not connected. Try again in a moment")
-            return
+            return false
         }
         core.toast(p.has("url") ? "Link sent to \(peer.name)" : "Text sent to \(peer.name)")
+        return true
     }
 
     /// The fields of a connected, paired computer that a transfer needs.
