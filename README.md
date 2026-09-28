@@ -3,7 +3,7 @@
 Connect your Omarchy desktop to an Android phone or a Mac over your local network, or through Tailscale when you are away.
 Share files, clipboard text, and clipboard images, read phone notifications, control media, and use your phone as a camera or microphone.
 
-Flux includes a CLI, a background daemon, a native Qt window, an Omarchy shell plugin, a native Android app, and a native macOS app.
+Flux includes a CLI, a background daemon, a native Qt window, an Omarchy shell plugin, a browser extension, a native Android app, and a native macOS app.
 The desktop opens the network connections, so the default Omarchy firewall needs no new inbound rule.
 
 
@@ -17,6 +17,7 @@ https://github.com/user-attachments/assets/4b8445fe-6734-4100-b200-92f57e1b353a
 | Task | Guide |
 | --- | --- |
 | Send files, clipboard text and images, and links between devices | [Everyday use](docs/features.md) |
+| Send a link or a web page to the phone from the browser | [Browser extension](docs/browser.md) |
 | Read notifications, send SMS, control media, and run desktop commands from your phone | [CLI reference](docs/cli.md) |
 | Sync Do Not Disturb and pause media during calls | [Phone integration](docs/features.md#calls) |
 | Scan text, send photos, and use the phone as a webcam or microphone | [Camera and streams](docs/camera.md) |
@@ -53,7 +54,7 @@ flux-cli doctor
 flux-cli open
 ```
 
-The package includes the Qt app, CLI, daemon, shell plugin, approval helper, desktop entry, icons, and system files.
+The package includes the Qt app, CLI, daemon, shell plugin, approval helper, browser extension, desktop entry, icons, and system files.
 Run `flux-cli setup` as your desktop user after installation.
 The short name `flux` also works when no other program, such as `fluxcd`, uses that name.
 
@@ -122,6 +123,7 @@ See [development](docs/development.md) for local checks and [releases](docs/rele
 - [Install and update](docs/install.md)
 - [Android build and setup](docs/android.md)
 - [macOS build and setup](docs/macos.md)
+- [Browser extension](docs/browser.md)
 - [CLI reference](docs/cli.md)
 - [Configuration and data paths](docs/configuration.md)
 - [Everyday use](docs/features.md)

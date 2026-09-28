@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "__MSG_extName__",
+  "version": "0.5.0",
+  "default_locale": "en",
+  "description": "__MSG_extDescription__",
+  "//": "The key fixes the extension ID, so that the native messaging host manifest that `flux-cli browser install` writes names the same extension in every Chromium browser.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5bubqQ58Yl+ONWECiB/+JMmTpojd5DIOo3giJOi4wJnwd/wQ6myHlv4sOlUurBE1m1ASrh2jAS+GE7SYxzdciMhByzzYhWA6YOXkbjMYf4jFzlJ/jQ0+4t1wzNnb4YtEu6V1DXC1C8Ry4PwwEQXmAOlGzIm6I1aZrijzql+3iPwd6lvuELxcKlFxdcePKasPtkyogOfnl6RAc5dyW9U7jkLCjrt0cVtKaV0dgxMmZTrjoD538UkgEtIvC0KnUa+TV39HbCMuAFdV8bU93LA8X0h5mO5gPYI1ETTN6d7qcF8Y1DzqvaSuLXyR+FcnkQK8LPZ4lA3R0p4fs18yAkOu6wIDAQAB",
+  "permissions": [
+    "activeTab",
+    "contextMenus",
+    "nativeMessaging",
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "__MSG_actionTitle__",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/symbolic16.png",
+      "48": "icons/symbolic48.png"
+    }
+  },
+  "icons": {
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

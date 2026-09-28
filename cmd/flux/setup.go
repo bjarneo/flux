@@ -21,15 +21,17 @@ import (
 // module for the webcam) is done by post-install.sh, which the package runs as root. setup reports any
 // system part that is missing and prints the command that adds it.
 func setup(args []string) error {
-	dry, noPlugin := false, false
+	dry, noPlugin, noBrowser := false, false, false
 	for _, a := range args {
 		switch a {
 		case "--dry-run", "-n":
 			dry = true
 		case "--no-plugin":
 			noPlugin = true
+		case "--no-browser":
+			noBrowser = true
 		default:
-			return fmt.Errorf("unknown option %q. Use --dry-run or --no-plugin", a)
+			return fmt.Errorf("unknown option %q. Use --dry-run, --no-plugin, or --no-browser", a)
 		}
 	}
 	run := func(what string, name string, args ...string) error {
@@ -59,7 +61,23 @@ func setup(args []string) error {
 		}
 	}
 
-	fmt.Println("3. System parts")
+	fmt.Println("3. The browser extension")
+	switch {
+	case noBrowser:
+		fmt.Println("  - skipped")
+	default:
+		// The browser step takes its own flags, so it gets only what it
+		// understands.
+		var browserArgs []string
+		if dry {
+			browserArgs = []string{"--dry-run"}
+		}
+		if err := browserInstall(browserArgs); err != nil {
+			fmt.Println("  ✗", err)
+		}
+	}
+
+	fmt.Println("4. System parts")
 	setupSystemReport()
 	return nil
 }

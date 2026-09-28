@@ -6,6 +6,7 @@
 /android/keystore.properties
 *.part
 /snapshots/
+/browser/dist/
 /gui/app/build/
 /.claude/
 __pycache__/

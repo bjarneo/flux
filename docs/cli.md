@@ -49,6 +49,20 @@ FLUX_GUI=app flux-cli open files
 FLUX_GUI=plugin flux-cli open notifications
 ```
 
+## Browser extension
+
+`flux-cli browser` writes the native messaging manifests that the [browser extension](browser.md) needs.
+It never touches the extension itself: each browser loads that from a folder, once, by hand.
+
+```sh
+flux-cli browser install
+flux-cli browser install --dry-run
+flux-cli browser remove
+```
+
+Run `install` again after loading the extension in Firefox or Zen, because those browsers give it a different ID per profile.
+`--dry-run` lists what would be written or removed, which is worth doing before the first run on a machine with many browsers.
+
 ## Pair and discover
 
 ```sh

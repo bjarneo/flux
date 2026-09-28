@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "__MSG_extName__",
+  "version": "0.5.0",
+  "default_locale": "en",
+  "description": "__MSG_extDescription__",
+  "//": "Firefox and Zen have no service worker for an extension, so the background is a list of scripts. The add-on ID is what `flux-cli browser install` looks for in prefs.js, because Firefox gives the extension a UUID per profile instead of a fixed ID.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "flux@omarchy.org"
+    }
+  },
+  "permissions": [
+    "activeTab",
+    "contextMenus",
+    "nativeMessaging",
+    "storage"
+  ],
+  "background": {
+    "scripts": [
+      "host.js",
+      "background.js"
+    ]
+  },
+  "action": {
+    "default_title": "__MSG_actionTitle__",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/symbolic16.png",
+      "48": "icons/symbolic48.png"
+    }
+  },
+  "icons": {
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

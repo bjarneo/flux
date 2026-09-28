@@ -1,0 +1,74 @@
+{
+  "extName": {
+    "message": "Flux"
+  },
+  "extDescription": {
+    "message": "Send a link or a page to your phone with Flux."
+  },
+  "actionTitle": {
+    "message": "Send to the phone with Flux"
+  },
+  "menuSendLink": {
+    "message": "This link"
+  },
+  "menuSendPage": {
+    "message": "This page"
+  },
+  "onlyWebLinks": {
+    "message": "Flux sends web links only"
+  },
+  "sending": {
+    "message": "Sending to the phone…"
+  },
+  "sentTo": {
+    "message": "Sent to $1."
+  },
+  "didNotAnswer": {
+    "message": "Flux did not answer. Run: flux-cli browser install"
+  },
+  "notJSON": {
+    "message": "Flux answered something that is not JSON"
+  },
+  "noPhonePaired": {
+    "message": "No phone is paired. Pair it in Flux first."
+  },
+  "moreThanOnePhone": {
+    "message": "More than one phone is connected. Pick one in the Flux icon first."
+  },
+  "hostNotInstalled": {
+    "message": "The Flux host is not installed. Run: flux-cli browser install"
+  },
+  "popupConnected": {
+    "message": "$1/$2 connected"
+  },
+  "popupNoPhone": {
+    "message": "No phone is paired. Open Flux on the phone, on the same network."
+  },
+  "popupNoWeb": {
+    "message": "Flux sends web pages only."
+  },
+  "popupHint": {
+    "message": "Right-click a link or a page to send it to the phone."
+  },
+  "popupNoPage": {
+    "message": "No page"
+  },
+  "popupNoAddress": {
+    "message": "This page has no web address"
+  },
+  "popupPickPhone": {
+    "message": "Use this phone for the menu and the shortcut"
+  },
+  "popupOnline": {
+    "message": "connected"
+  },
+  "popupOffline": {
+    "message": "offline"
+  },
+  "popupSendPage": {
+    "message": "Send page"
+  },
+  "popupSending": {
+    "message": "Sending to $1…"
+  }
+}
