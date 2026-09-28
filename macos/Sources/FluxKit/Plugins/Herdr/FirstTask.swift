@@ -3,7 +3,9 @@ import Foundation
 /// The first task of a new agent. The text goes as a prompt when the new
 /// agent is ready for input. When the agent asks a question first, such
 /// as whether it may trust the folder, the task waits until the user
-/// answered and the agent is ready.
+/// answered and the agent is ready. The agent must stay ready with no
+/// dialog for `hold`, because an agent can show the next dialog right
+/// after the user answered the last one.
 public struct FirstTask: Sendable, Equatable {
     public enum Phase: Sendable, Equatable {
         /// The computer starts the agent.
@@ -31,6 +33,11 @@ public struct FirstTask: Sendable, Equatable {
     var reply: Int?
     /// True after the agent list had the pane.
     private var seen = false
+    /// Since when the agent is ready with no dialog, in system uptime.
+    private var readyAt: TimeInterval?
+
+    /// How long the agent must stay ready with no dialog before the task goes.
+    public static let hold: TimeInterval = 2
 
     public init(text: String, action: Int = 0) {
         self.text = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -58,21 +65,35 @@ public struct FirstTask: Sendable, Equatable {
         }
     }
 
-    /// Takes the status of the agent, nil when the agent list does not have
-    /// its pane, and whether the output on screen ends with a dialog. It
-    /// returns true when the task must go now.
-    public mutating func update(status: AgentStatus?, choices: Bool) -> Bool {
+    /// The time when the task can go, when the agent is ready now. Call
+    /// `update` again then.
+    public var due: TimeInterval? { readyAt.map { $0 + Self.hold } }
+
+    /// Takes the status of the agent at `now`, nil when the agent list does
+    /// not have its pane, and whether the output on screen ends with a
+    /// dialog. It returns true when the task must go now.
+    public mutating func update(status: AgentStatus?, choices: Bool, now: TimeInterval) -> Bool {
         guard phase == .waiting || phase == .answering else { return false }
         guard let status else {
             if seen { phase = .failed("The agent stopped before it got the task.") }
+            readyAt = nil
             return false
         }
         seen = true
         if status == .blocked || choices {
             phase = .answering
+            readyAt = nil
             return false
         }
-        guard status.ready else { return false }
+        guard status.ready else {
+            readyAt = nil
+            return false
+        }
+        guard let readyAt else {
+            self.readyAt = now
+            return false
+        }
+        guard now - readyAt >= Self.hold else { return false }
         phase = .sending
         return true
     }

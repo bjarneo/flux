@@ -104,6 +104,8 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
     /// Counts the creates and the closes, so that a late timeout does not
     /// replace a newer one.
     @MainActor private var actions = 0
+    /// The time in seconds for the first task. Tests set their own.
+    @MainActor var clock: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
 
     @MainActor
     public init() { model = HerdrModel() }
@@ -323,14 +325,26 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
         advanceFirstTask(deviceId)
     }
 
-    /// Sends the first task when its agent is ready. The output on screen
-    /// counts when it is of the new agent, so a dialog there holds the task.
+    /// Sends the first task when its agent stayed ready for
+    /// `FirstTask.hold`. The output on screen counts when it is of the new
+    /// agent, so a dialog there holds the task. When the agent becomes
+    /// ready, the output is read again, and the task is checked again at
+    /// the end of the hold.
     @MainActor
     private func advanceFirstTask(_ deviceId: String) {
         guard var task = model.firstTasks[deviceId], let pane = task.pane, let state = model.states[deviceId] else { return }
         let out = model.output(deviceId, pane: pane)
-        let go = task.update(status: state.agent(pane)?.status, choices: !(out?.choices.isEmpty ?? true))
+        let before = task.due
+        let go = task.update(status: state.agent(pane)?.status, choices: !(out?.choices.isEmpty ?? true), now: clock())
         model.firstTasks[deviceId] = task
+        if let due = task.due, due != before {
+            if out != nil { read(deviceId, pane: pane) }
+            let wait = max(0, due - clock()) + 0.05
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(wait))
+                self?.advanceFirstTask(deviceId)
+            }
+        }
         guard go else { return }
         task.reply = reply(deviceId, pane: pane, action: "prompt", HerdrWire.prompt(pane: pane, task.text))
         // The reply fails at once when the computer is not reachable.

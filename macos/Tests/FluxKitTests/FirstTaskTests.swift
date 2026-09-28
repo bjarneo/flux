@@ -4,71 +4,119 @@ import XCTest
 /// The first task of a new agent: it goes as a prompt when the agent is
 /// ready, and after the answer to a question such as the trust dialog.
 final class FirstTaskTests: XCTestCase {
-    func testSendsWhenTheNewAgentIsIdle() {
+    private var now: TimeInterval = 100
+
+    /// Updates at the current time.
+    private func update(_ t: inout FirstTask, _ status: AgentStatus?, choices: Bool = false) -> Bool {
+        t.update(status: status, choices: choices, now: now)
+    }
+
+    /// Lets the agent stay ready for the hold: the first ready update starts
+    /// it, and the update at its end sends the task.
+    private func readyForTheHold(_ t: inout FirstTask, _ status: AgentStatus = .idle) -> Bool {
+        let started = update(&t, status)
+        now += FirstTask.hold
+        return !started && update(&t, status)
+    }
+
+    func testSendsWhenTheNewAgentStaysIdle() {
         var t = FirstTask(text: "Reply with ok")
         XCTAssertEqual(t.phase, .starting)
-        XCTAssertFalse(t.update(status: .idle, choices: false), "nothing goes before the computer names the pane")
+        XCTAssertFalse(update(&t, .idle), "nothing goes before the computer names the pane")
         t.created(pane: "w4:p1", error: nil)
         XCTAssertEqual(t.phase, .waiting)
         XCTAssertEqual(t.pane, "w4:p1")
-        XCTAssertFalse(t.update(status: nil, choices: false), "a pane that is not in the list yet waits")
-        XCTAssertFalse(t.update(status: .working, choices: false))
-        XCTAssertFalse(t.update(status: .unknown, choices: false))
+        XCTAssertFalse(update(&t, nil), "a pane that is not in the list yet waits")
+        XCTAssertFalse(update(&t, .working))
+        XCTAssertFalse(update(&t, .unknown))
         XCTAssertEqual(t.phase, .waiting)
-        XCTAssertTrue(t.update(status: .idle, choices: false))
+        XCTAssertFalse(update(&t, .idle), "the first ready state starts the hold")
+        XCTAssertEqual(t.due, now + FirstTask.hold)
+        now += FirstTask.hold - 0.1
+        XCTAssertFalse(update(&t, .idle), "the task waits for the whole hold")
+        now += 0.1
+        XCTAssertTrue(update(&t, .idle))
         XCTAssertEqual(t.phase, .sending)
-        XCTAssertFalse(t.update(status: .idle, choices: false), "the task goes once")
+        XCTAssertFalse(update(&t, .idle), "the task goes once")
         t.sent(error: nil)
         XCTAssertEqual(t.phase, .sent)
-        XCTAssertFalse(t.update(status: .idle, choices: false))
+        XCTAssertFalse(update(&t, .idle))
     }
 
     func testDoneIsReadyToo() {
         var t = FirstTask(text: "go")
         t.created(pane: "w4:p1", error: nil)
-        XCTAssertTrue(t.update(status: .done, choices: false))
+        XCTAssertTrue(readyForTheHold(&t, .done))
     }
 
     func testWaitsForTheAnswerToTheTrustDialog() {
         var t = FirstTask(text: "go")
         t.created(pane: "w4:p1", error: nil)
-        XCTAssertFalse(t.update(status: .blocked, choices: true))
+        XCTAssertFalse(update(&t, .blocked, choices: true))
         XCTAssertEqual(t.phase, .answering)
-        XCTAssertFalse(t.update(status: .blocked, choices: false), "blocked without choices still waits for an answer")
-        XCTAssertFalse(t.update(status: .working, choices: false))
+        XCTAssertFalse(update(&t, .blocked), "blocked without choices still waits for an answer")
+        XCTAssertFalse(update(&t, .working))
         XCTAssertEqual(t.phase, .answering, "the phase stays until the agent is ready")
-        XCTAssertTrue(t.update(status: .idle, choices: false))
+        XCTAssertTrue(readyForTheHold(&t))
         XCTAssertEqual(t.phase, .sending)
+    }
+
+    func testANewDialogDuringTheHoldStopsIt() {
+        // Claude Code shows the next dialog right after the trust dialog.
+        var t = FirstTask(text: "go")
+        t.created(pane: "w4:p1", error: nil)
+        XCTAssertFalse(update(&t, .blocked))
+        XCTAssertFalse(update(&t, .idle))
+        now += 0.5
+        XCTAssertFalse(update(&t, .blocked), "the next dialog")
+        XCTAssertNil(t.due)
+        XCTAssertEqual(t.phase, .answering)
+        now += FirstTask.hold
+        XCTAssertFalse(update(&t, .idle), "the hold starts again after the answer")
+        now += FirstTask.hold
+        XCTAssertTrue(update(&t, .idle))
+    }
+
+    func testWorkingDuringTheHoldStopsIt() {
+        var t = FirstTask(text: "go")
+        t.created(pane: "w4:p1", error: nil)
+        XCTAssertFalse(update(&t, .idle))
+        XCTAssertFalse(update(&t, .working))
+        XCTAssertNil(t.due)
+        now += FirstTask.hold
+        XCTAssertFalse(update(&t, .idle))
     }
 
     func testChoicesOnScreenHoldTheTask() {
         var t = FirstTask(text: "go")
         t.created(pane: "w4:p1", error: nil)
-        XCTAssertFalse(t.update(status: .idle, choices: true), "a dialog on screen needs an answer, whatever the status")
+        XCTAssertFalse(update(&t, .idle))
+        now += FirstTask.hold
+        XCTAssertFalse(update(&t, .idle, choices: true), "a dialog on screen needs an answer, whatever the status")
         XCTAssertEqual(t.phase, .answering)
-        XCTAssertTrue(t.update(status: .idle, choices: false), "new output without the dialog lets the task go")
+        XCTAssertTrue(readyForTheHold(&t), "new output without the dialog lets the task go after the hold")
     }
 
     func testAFailedCreateFails() {
         var t = FirstTask(text: "go")
         t.created(pane: nil, error: "claude did not start")
         XCTAssertEqual(t.phase, .failed("claude did not start"))
-        XCTAssertFalse(t.update(status: .idle, choices: false))
+        XCTAssertFalse(update(&t, .idle))
         XCTAssertTrue(t.finished)
     }
 
     func testAnAgentThatStopsFails() {
         var t = FirstTask(text: "go")
         t.created(pane: "w4:p1", error: nil)
-        XCTAssertFalse(t.update(status: .working, choices: false))
-        XCTAssertFalse(t.update(status: nil, choices: false))
+        XCTAssertFalse(update(&t, .working))
+        XCTAssertFalse(update(&t, nil))
         XCTAssertEqual(t.phase, .failed("The agent stopped before it got the task."))
     }
 
     func testAFailedPromptFails() {
         var t = FirstTask(text: "go")
         t.created(pane: "w4:p1", error: nil)
-        XCTAssertTrue(t.update(status: .idle, choices: false))
+        XCTAssertTrue(readyForTheHold(&t))
         t.sent(error: "roger did not answer")
         XCTAssertEqual(t.phase, .failed("roger did not answer"))
         XCTAssertTrue(t.finished)
@@ -100,6 +148,11 @@ final class FirstTaskTests: XCTestCase {
         plugin.receive(packet(#"{"kind":"created","what":"agent","pane":"w4:p1"}"#), deviceId: "d", computer: "c")
         XCTAssertEqual(plugin.model.firstTasks["d"]?.phase, .answering, "the state before the created answer counts")
         XCTAssertNil(plugin.model.replies["d"])
+        var clock: TimeInterval = 50
+        plugin.clock = { clock }
+        plugin.receive(state("idle"), deviceId: "d", computer: "c")
+        XCTAssertNil(plugin.model.replies["d"], "the task waits for the hold")
+        clock += FirstTask.hold
         plugin.receive(state("idle"), deviceId: "d", computer: "c")
         // The plugin has no link here, so the prompt fails at once.
         XCTAssertEqual(plugin.model.replies["d"]?.action, "prompt")
@@ -114,7 +167,7 @@ final class FirstTaskTests: XCTestCase {
         let plugin = HerdrPlugin()
         var t = FirstTask(text: "go", action: 1)
         t.created(pane: "w4:p1", error: nil)
-        XCTAssertTrue(t.update(status: .idle, choices: false))
+        XCTAssertTrue(readyForTheHold(&t))
         plugin.model.firstTasks["d"] = t
         plugin.receive(packet(#"{"kind":"sent","pane":"w4:p1","action":"keys"}"#), deviceId: "d", computer: "c")
         XCTAssertEqual(plugin.model.firstTasks["d"]?.phase, .sending, "keys do not answer the task")
