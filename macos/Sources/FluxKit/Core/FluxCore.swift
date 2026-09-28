@@ -131,16 +131,21 @@ public final class FluxCore: @unchecked Sendable {
     public static let deviceType = "phone"
 
     /// Stores the device name. An empty name goes back to "iPhone". The new
-    /// name goes out through Bonjour and to known computers.
+    /// name goes out through Bonjour and to known computers. A computer reads
+    /// the name only when a link starts, so the open links close, and the
+    /// computers connect again with the new name.
     @MainActor
     public func setDeviceName(_ name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let old = deviceName
         if trimmed.isEmpty {
             defaults.removeObject(forKey: Self.deviceNameKey)
         } else {
             defaults.set(trimmed, forKey: Self.deviceNameKey)
         }
-        let (b, bj) = lock.withLock { (backend, bonjour) }
+        guard deviceName != old else { return }
+        let (b, bj, links) = lock.withLock { (backend, bonjour, devices.values.compactMap(\.link)) }
+        links.forEach { $0.close() }
         if let b {
             bj?.publish(name: deviceName, type: Self.deviceType, port: b.tcpPort)
             b.broadcast()
