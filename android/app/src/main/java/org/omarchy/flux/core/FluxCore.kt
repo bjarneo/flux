@@ -44,6 +44,7 @@ object FluxCore {
     private val devices = LinkedHashMap<String, Device>()
     private var backend: LanBackend? = null
     private var browse: BrowseState? = null
+    private var scanning = false
     private var ringingFrom: String? = null
     private var initialized = false
 
@@ -134,6 +135,18 @@ object FluxCore {
         publish()
     }
 
+    /**
+     * Looks for computers on the network for a short time. The service sends
+     * the identity and browses mDNS, then stops. Computers still find the
+     * phone after the scan, through its mDNS announcement.
+     */
+    fun scan() = org.omarchy.flux.service.FluxService.start(app, org.omarchy.flux.service.FluxService.ACTION_SCAN)
+
+    fun setScanning(on: Boolean) {
+        synchronized(lock) { scanning = on }
+        publish()
+    }
+
     /** Sends the identity to one host, for example one that mDNS found. */
     fun announceTo(address: InetAddress) {
         backend?.announceTo(address)
@@ -206,6 +219,7 @@ object FluxCore {
                 ringingFrom = ringingFrom,
                 browse = browse,
                 listeningUdp = backend?.listeningUdp ?: true,
+                scanning = scanning,
                 enabled = settings.enabled,
                 theme = settings.theme,
             )

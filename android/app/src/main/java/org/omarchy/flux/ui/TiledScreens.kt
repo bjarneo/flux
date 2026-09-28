@@ -97,7 +97,7 @@ fun TiledDevicesScreen(
     var refreshing by remember { mutableStateOf(false) }
     LaunchedEffect(refreshing) {
         if (refreshing) {
-            FluxCore.rediscover()
+            FluxCore.scan()
             delay(1500)
             refreshing = false
         }
@@ -113,12 +113,12 @@ fun TiledDevicesScreen(
                 T("Flux", Modifier.weight(1f).padding(start = 2.dp), size = 22, weight = FontWeight.SemiBold, letterSpacing = -0.4f)
                 Row(
                     Modifier.height(32.dp).clip(RoundedCornerShape(8.dp)).background(Tn.tile)
-                        .clickable(onClickLabel = "Search again") { refreshing = true }.padding(horizontal = 12.dp),
+                        .clickable(enabled = !state.scanning, onClickLabel = "Scan again") { refreshing = true }.padding(horizontal = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Sym(Ic.refresh, size = 16.dp, tint = Tn.sub)
-                    T(if (refreshing) "Searching…" else "Refresh", size = 12, color = Tn.sub)
+                    T(if (state.scanning) "Scanning…" else "Scan again", size = 12, color = Tn.sub)
                 }
                 AppMenu(state.theme)
             }
@@ -152,17 +152,24 @@ fun TiledDevicesScreen(
                     }
                 }
             }
+            // The phone scans once when the app opens. After the scan, a tap on the tile scans again.
             if (available.isEmpty()) {
                 Tile(
-                    Modifier.fillMaxWidth().padding(top = TileGap), onClick = { refreshing = true },
-                    accent = Tn.yellow, container = Color.Transparent,
+                    Modifier.fillMaxWidth().padding(top = TileGap), onClick = if (state.scanning) null else ({ refreshing = true }),
+                    accent = Tn.blue, container = Color.Transparent,
                     padding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = Tn.yellow)
-                        TileLabel("Looking for computers", color = Tn.yellow)
+                        if (state.scanning) {
+                            CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = Tn.yellow)
+                            TileLabel("Looking for computers", color = Tn.yellow)
+                        } else {
+                            Sym(Ic.wifiFind, size = 16.dp, tint = Tn.sub)
+                            TileLabel(if (paired.isEmpty()) "No computers found" else "No other computers found", color = Tn.sub)
+                        }
                     }
                     T("Open Flux on the computer, and use the same Wi-Fi network as this phone.", size = 13, color = Tn.sub)
+                    if (!state.scanning) T("Scan again", Modifier.padding(top = 4.dp), size = 13, color = Tn.blue, weight = FontWeight.SemiBold)
                 }
             }
             Spacer(Modifier.height(96.dp))

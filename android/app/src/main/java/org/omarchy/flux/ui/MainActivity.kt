@@ -59,7 +59,8 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
         FluxCore.init(this)
-        FluxService.start(this)
+        // The app scans for computers once when it opens, not after a recreation.
+        FluxService.start(this, if (savedInstanceState == null) FluxService.ACTION_SCAN else null)
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {

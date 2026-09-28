@@ -113,6 +113,8 @@ data class UiState(
     val ringingFrom: String? = null,
     val browse: BrowseState? = null,
     val listeningUdp: Boolean = true,
+    /** True while the phone looks for computers. See [FluxCore.scan]. */
+    val scanning: Boolean = false,
     /** False while the user has turned Flux off. */
     val enabled: Boolean = true,
     val theme: ThemeMode = ThemeMode.System,
