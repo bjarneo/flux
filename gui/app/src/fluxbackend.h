@@ -47,6 +47,9 @@ public:
     Q_INVOKABLE void pickFiles(const QString &title, const QJSValue &cb);
     // startDaemon starts the fluxd user service. cb receives (ok, message).
     Q_INVOKABLE void startDaemon(const QJSValue &cb);
+    // retryNow connects at once when the connection is down, and starts
+    // the wait between attempts again at the shortest time.
+    Q_INVOKABLE void retryNow();
 
     static QString socketPath();
 
@@ -58,6 +61,7 @@ signals:
 
 private:
     void connectNow();
+    void scheduleRetry();
     void setAttempted();
     void handleLine(const QByteArray &line);
     void failPending(const QString &code, const QString &message);
@@ -68,6 +72,7 @@ private:
     QJSEngine *m_engine;
     QLocalSocket m_socket;
     QTimer m_retry;
+    int m_retryDelay;
     bool m_attempted = false;
     QJSValue m_state;
     int m_nextId = 1;

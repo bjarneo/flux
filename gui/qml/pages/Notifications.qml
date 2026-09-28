@@ -16,6 +16,11 @@ Item {
 
   implicitHeight: list.implicitHeight
 
+  // The cards follow the notifications by ID. A new notification adds 1
+  // card, and the other cards keep their state, such as a reply that the
+  // user types.
+  KeyedModel { id: rows; values: root.notifs }
+
   Column {
     id: list
     width: Math.min(parent.width, 760)
@@ -51,10 +56,11 @@ Item {
     }
 
     Repeater {
-      model: root.notifs
+      model: rows
       delegate: Card {
         id: card
-        required property var modelData
+        required property string key
+        readonly property var modelData: rows.byId[key] || ({})
         readonly property bool replyable: !!modelData.replyId
         property bool replying: false
         width: list.width

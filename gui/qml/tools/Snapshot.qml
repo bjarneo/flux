@@ -101,7 +101,7 @@ Window {
       mock.setState(function (s) {
         s.webcam = mock.fixture.state.webcam
         if (icon.indexOf("file://") === 0)
-          s.clipboard.splice(1, 0, { text: "", image: icon.substring(7), dir: "in", device: pixel, time: Math.floor(Date.now() / 1000) - 300 })
+          s.clipboard.splice(1, 0, { id: "c0", text: "", image: icon.substring(7), dir: "in", device: pixel, time: Math.floor(Date.now() / 1000) - 300 })
       })
       view.tab = "clipboard"
     }],

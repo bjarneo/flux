@@ -201,30 +201,35 @@
   ],
   "clipboard": [
    {
+    "id": "c1",
     "text": "https://omarchy.org/manual/flux",
     "dir": "in",
     "device": "3f8e2a1c9b7d4e6fa0c5b8d2e1f47a93",
     "time": -60
    },
    {
+    "id": "c2",
     "text": "yay -S flux-git",
     "dir": "out",
     "device": "",
     "time": -1200
    },
    {
+    "id": "c3",
     "text": "Gate B14 · Boarding 15:40",
     "dir": "in",
     "device": "b71c04e9d2a84f3e9c6a5d1b0e8f2c47",
     "time": -2040
    },
    {
+    "id": "c4",
     "text": "ssh deploy@10.0.4.12",
     "dir": "out",
     "device": "",
     "time": -3120
    },
    {
+    "id": "c5",
     "text": "482913",
     "dir": "in",
     "device": "3f8e2a1c9b7d4e6fa0c5b8d2e1f47a93",

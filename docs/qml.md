@@ -61,7 +61,7 @@ its color like text:
 Icon { name: "phone"; size: 18; color: Theme.accent }
 ```
 
-To add an icon, add its name and codepoint to `codes` in `Icon.qml`. The
+To add an icon, add its name and codepoint to `icons` in `Fmt.qml`. The
 codepoints are in the Nerd Fonts `glyphnames.json`, under the `md-` names.
 The package depends on `ttf-font-nerd`, which every Nerd Font provides.
 
@@ -84,6 +84,33 @@ Every host implements these members.
 The socket is `$XDG_RUNTIME_DIR/flux/fluxd.sock`, or `$FLUX_SOCKET` when it
 is set. After the connection opens, the host calls `subscribe`. The IPC
 protocol is in the [IPC guide](ipc.md).
+
+While the connection is down, the host tries to connect again. The wait
+starts at 2 seconds and doubles after each failed attempt, up to 60 seconds.
+The host tries at once when the window opens and after `startDaemon`.
+
+## Lists
+
+A `Repeater` with a JavaScript array builds every delegate again when 1
+field of 1 element changes. Every state event from fluxd gives new arrays.
+For a list that changes often, use `KeyedModel` from `components/`. It
+inserts, moves, and removes only the rows that changed, so the other
+delegates keep their state, such as the text in a field.
+
+```qml
+KeyedModel { id: rows; values: root.transfers }
+
+Repeater {
+  model: rows
+  delegate: Card {
+    required property string key
+    readonly property var modelData: rows.byId[key] || ({})
+  }
+}
+```
+
+Each row holds only the key. `keyField` names the key, and the default is
+`id`. The delegate reads the object from `byId`.
 
 ## Layout
 

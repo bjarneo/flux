@@ -15,7 +15,7 @@ Scope {
     return (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/flux/fluxd.sock"
   }
 
-  readonly property bool connected: sock.connected
+  readonly property bool connected: !!sock && sock.connected
   // True after the first connection attempt ends, so the window does not
   // show "fluxd is not running" while the first attempt is open.
   property bool attempted: false
@@ -33,8 +33,37 @@ Scope {
   property int nextId: 1
   property var pending: ({})
 
+  // The Socket of Quickshell 0.3 does not connect again after a failed
+  // attempt, so each attempt uses a new Socket.
+  property Socket sock: null
+
+  // The wait before the next connection attempt while fluxd is down. It
+  // starts at 2 seconds and doubles after each failed attempt, up to 60
+  // seconds.
+  readonly property int minRetryDelay: 2000
+  readonly property int maxRetryDelay: 60000
+  property int retryDelay: minRetryDelay
+
+  // Connects at once when the connection is down, and starts the wait again
+  // at 2 seconds. The panel calls this when it opens.
+  function retryNow() {
+    retryDelay = minRetryDelay
+    connectNow()
+  }
+
+  function connectNow() {
+    if (sock && sock.connected) return
+    if (sock) sock.destroy()
+    // The socket connects after sock is set, so its handlers know that it
+    // is the current socket.
+    sock = socketComponent.createObject(root)
+    sock.connected = true
+  }
+
+  // The handlers of the socket call this before connected changes, so read
+  // the socket itself.
   function call(method, params, cb) {
-    if (!sock.connected) {
+    if (!sock || !sock.connected) {
       var offline = { code: "offline", message: "fluxd is not running" }
       if (cb) cb(offline, null)
       else toast(offline.message)
@@ -69,10 +98,7 @@ Scope {
     })
     proc.done = function (code, text) {
       var ok = code === 0
-      if (ok) {
-        sock.connected = false
-        sock.connected = true
-      }
+      if (ok) root.retryNow()
       try { cb(ok, ok ? "" : "systemctl could not start fluxd. Run: journalctl --user -u fluxd") } catch (e) {}
     }
     proc.running = true
@@ -118,29 +144,41 @@ Scope {
     }
   }
 
-  Socket {
-    id: sock
-    path: root.socketPath
-    connected: true
-    parser: SplitParser {
-      onRead: data => root.handle(data)
+  Component {
+    id: socketComponent
+    Socket {
+      id: socket
+      path: root.socketPath
+      parser: SplitParser {
+        onRead: data => root.handle(data)
+      }
+      // A socket from an earlier attempt can report after it is replaced.
+      onConnectedChanged: {
+        if (socket !== root.sock) return
+        root.attempted = true
+        if (connected) {
+          root.retryDelay = root.minRetryDelay
+          root.call("subscribe", {}, null)
+        } else {
+          root.pending = ({})
+        }
+      }
+      onError: root.attempted = true
     }
-    onConnectedChanged: {
-      root.attempted = true
-      if (connected) root.call("subscribe", {}, null)
-      else root.pending = ({})
-    }
-    onError: root.attempted = true
   }
 
+  Component.onCompleted: connectNow()
+
+  // A new interval starts the timer again, so retryNow() also cuts a long
+  // wait short.
   Timer {
-    interval: 2000
+    interval: root.retryDelay
     repeat: true
-    running: !sock.connected
+    running: !root.connected
     onTriggered: {
       root.attempted = true
-      sock.connected = false
-      sock.connected = true
+      root.retryDelay = Math.min(root.retryDelay * 2, root.maxRetryDelay)
+      root.connectNow()
     }
   }
 

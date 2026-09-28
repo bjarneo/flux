@@ -8,7 +8,7 @@
 // ThemeWatcher reads the colors.toml of the active Omarchy theme and reads
 // it again when it changes. A theme switch replaces the files, so the
 // watcher also looks at the parent folders and compares the content every
-// 2 seconds.
+// 30 seconds.
 class ThemeWatcher : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString text READ text NOTIFY textChanged)

@@ -6,7 +6,9 @@
 #include <QRegularExpression>
 
 namespace {
-constexpr int pollInterval = 2000;
+// The watch on the parent folders catches a theme switch, which replaces the
+// theme folder. The poll is a last check for a change that the watch misses.
+constexpr int pollInterval = 30000;
 // defaultBackground is the Tokyo Night background from the design.
 const QColor defaultBackground(QStringLiteral("#1a1b26"));
 }

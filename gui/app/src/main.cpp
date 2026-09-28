@@ -144,7 +144,10 @@ int main(int argc, char *argv[])
     if (!window)
         return 1;
 
-    QObject::connect(&instance, &SingleInstance::activate, window, [window](const QString &page, const QString &token) {
+    // A second flux-gui opens the window again. When fluxd is down, the
+    // backend then tries to connect at once.
+    QObject::connect(&instance, &SingleInstance::activate, window, [window, backend](const QString &page, const QString &token) {
+        backend->retryNow();
         if (!page.isEmpty())
             QMetaObject::invokeMethod(window, "showPage", Q_ARG(QVariant, page));
         raise(window, token);

@@ -67,6 +67,10 @@ Item {
     return Theme.dim
   }
 
+  // Progress events come 4 times a second for each transfer. The rows
+  // follow the transfers by ID, so a progress event only updates them.
+  KeyedModel { id: rows; values: root.transfers }
+
   Column {
     id: col
     width: parent.width
@@ -141,10 +145,11 @@ Item {
       width: parent.width
       spacing: 10
       Repeater {
-        model: root.transfers
+        model: rows
         delegate: Card {
           id: row
-          required property var modelData
+          required property string key
+          readonly property var modelData: rows.byId[key] || ({})
           readonly property bool incoming: modelData.dir !== "out"
           // Columns: 28 px, name, a bar of 80 to 260 px, 110 px, 16 px gaps.
           // A narrow row puts the bar under the name, so the name keeps room.
