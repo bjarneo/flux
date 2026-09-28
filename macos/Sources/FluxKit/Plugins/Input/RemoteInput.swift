@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import Foundation
 
 /// The packets of kdeconnect.mousepad.request: this Mac moves the pointer,
@@ -27,10 +31,17 @@ public enum RemoteInput {
             self.meta = meta
         }
 
+        #if os(macOS)
         /// The modifiers of a Mac key: Control, Option, Shift, and Command.
         public init(_ flags: NSEvent.ModifierFlags) {
             self.init(ctrl: flags.contains(.control), alt: flags.contains(.option), shift: flags.contains(.shift), meta: flags.contains(.command))
         }
+        #else
+        /// The modifiers of a hardware keyboard key: Control, Option, Shift, and Command.
+        public init(_ flags: UIKeyModifierFlags) {
+            self.init(ctrl: flags.contains(.control), alt: flags.contains(.alternate), shift: flags.contains(.shift), meta: flags.contains(.command))
+        }
+        #endif
 
         public var any: Bool { ctrl || alt || shift || meta }
 
@@ -167,19 +178,55 @@ public enum RemoteInput {
         }
     }
 
-    /// What 1 key press on this Mac sends to the computer.
+    #if os(iOS)
+    /// The special key of a hardware keyboard key, or nil. It gives the same
+    /// keys as key(macKeyCode:).
+    public static func key(hidUsage usage: UIKeyboardHIDUsage) -> Key? {
+        switch usage {
+        case .keyboardDeleteOrBackspace: return .backspace
+        case .keyboardTab: return .tab
+        case .keyboardLeftArrow: return .left
+        case .keyboardUpArrow: return .up
+        case .keyboardRightArrow: return .right
+        case .keyboardDownArrow: return .down
+        case .keyboardPageUp: return .pageUp
+        case .keyboardPageDown: return .pageDown
+        case .keyboardHome: return .home
+        case .keyboardEnd: return .end
+        case .keyboardReturnOrEnter, .keypadEnter: return .enter
+        case .keyboardDeleteForward: return .delete
+        case .keyboardEscape: return .escape
+        case .keyboardF1: return .f1
+        case .keyboardF2: return .f2
+        case .keyboardF3: return .f3
+        case .keyboardF4: return .f4
+        case .keyboardF5: return .f5
+        case .keyboardF6: return .f6
+        case .keyboardF7: return .f7
+        case .keyboardF8: return .f8
+        case .keyboardF9: return .f9
+        case .keyboardF10: return .f10
+        case .keyboardF11: return .f11
+        case .keyboardF12: return .f12
+        default: return nil
+        }
+    }
+    #endif
+
+    /// What 1 key press on this device sends to the computer.
     public enum Press: Equatable, Sendable {
         /// A special key with the modifiers that the Mac holds.
         case key(Key, Mods)
         /// The text of a shortcut, such as Control-C, with its modifiers.
         case text(String, Mods)
-        /// The text input system of macOS makes the text, so that dead keys
-        /// and the Option characters of the layout work.
+        /// The text input system makes the text, so that dead keys and the
+        /// Option characters of the layout work.
         case compose
-        /// The key stays on this Mac.
+        /// The key stays on this device.
         case ignore
     }
 
+    #if os(macOS)
     /// Maps 1 key press. `plain` is the text of the key without modifiers
     /// except Shift (`charactersIgnoringModifiers`). Option types the
     /// characters of the layout, such as @ on a Nordic keyboard, unless
@@ -187,9 +234,22 @@ public enum RemoteInput {
     /// is always Alt. Command is Super only when `commandIsSuper` is on, else
     /// the Mac keeps its shortcuts.
     public static func press(keyCode: UInt16, flags: NSEvent.ModifierFlags, plain: String?, optionIsAlt: Bool, commandIsSuper: Bool) -> Press {
-        let held = Mods(flags)
+        press(special: key(macKeyCode: keyCode), mods: Mods(flags), plain: plain, optionIsAlt: optionIsAlt, commandIsSuper: commandIsSuper)
+    }
+    #else
+    /// Maps 1 key press of a hardware keyboard, with the rules of the Mac:
+    /// `charactersIgnoringModifiers` is the plain text, and `.compose` means
+    /// that the text input system types the key.
+    public static func press(key k: UIKey, optionIsAlt: Bool, commandIsSuper: Bool) -> Press {
+        press(special: key(hidUsage: k.keyCode), mods: Mods(k.modifierFlags), plain: k.charactersIgnoringModifiers,
+              optionIsAlt: optionIsAlt, commandIsSuper: commandIsSuper)
+    }
+    #endif
+
+    /// Maps 1 key press from its special key, the held modifiers, and the plain text.
+    static func press(special: Key?, mods held: Mods, plain: String?, optionIsAlt: Bool, commandIsSuper: Bool) -> Press {
         if held.meta && !commandIsSuper { return .ignore }
-        if let k = key(macKeyCode: keyCode) { return .key(k, held) }
+        if let k = special { return .key(k, held) }
         guard held.ctrl || held.meta || (held.alt && optionIsAlt) else { return .compose }
         let text = printable(plain ?? "")
         return text.isEmpty ? .ignore : .text(text, held)
@@ -260,6 +320,7 @@ public struct PointerTracker: Sendable {
     }
 }
 
+#if os(macOS)
 /// Detects Control and Option that go down together and come up with no
 /// other key or click between. The touchpad then gives the pointer back to
 /// this Mac. Shortcuts such as Control-Option-T still reach the computer.
@@ -287,3 +348,4 @@ public struct ReleaseChord: Sendable {
     /// A key or a click happened, so the modifiers belong to a shortcut.
     public mutating func interrupt() { armed = false }
 }
+#endif
