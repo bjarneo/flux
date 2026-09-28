@@ -42,6 +42,15 @@ public struct ApproveRecord: Sendable, Identifiable, Equatable {
     public var outcome: ApproveOutcome
 }
 
+/// Whether this device can approve.
+public enum ApproveAvailability: Sendable, Equatable {
+    case ready
+    /// The device has no Secure Enclave, such as the simulator. Nothing fixes it.
+    case noSecureEnclave(String)
+    /// The biometry is not set up, locked, or not available now.
+    case biometry(String)
+}
+
 /// The state of the approval prompt.
 public enum ApprovePhase: Sendable, Equatable {
     /// The prompt asks the user.

@@ -49,6 +49,19 @@ final class ApproveTextTests: XCTestCase {
         XCTAssertEqual(ApproveTexts(platform: .phone, type: .touchID).notRecognized, "Touch ID did not recognize the fingerprint.")
         XCTAssertEqual(ApproveTexts(platform: .phone, type: .none).notRecognized, "The passcode was wrong.")
         XCTAssertEqual(ApproveTexts(platform: .phone, type: .none).lockedOut, "Your passcode is locked. Unlock this iPhone with the passcode first.")
+        XCTAssertEqual(t.noSecureEnclave, "This iPhone has no Secure Enclave, so it cannot keep an approval key.")
+    }
+
+    /// The symbol and the hint while the biometry runs follow the biometry.
+    func testBiometrySymbolsAndHints() {
+        XCTAssertEqual(ApproveTexts(platform: .phone, type: .faceID).symbol, "faceid")
+        XCTAssertEqual(ApproveTexts(platform: .phone, type: .touchID).symbol, "touchid")
+        XCTAssertEqual(ApproveTexts(platform: .mac, type: .touchID).symbol, "touchid")
+        XCTAssertEqual(ApproveTexts(platform: .phone, type: .none).symbol, "lock")
+        XCTAssertEqual(ApproveTexts(platform: .phone, type: .faceID).working, "Look at this iPhone.")
+        XCTAssertEqual(ApproveTexts(platform: .phone, type: .touchID).working, "Touch the Touch ID sensor.")
+        XCTAssertEqual(ApproveTexts(platform: .mac, type: .touchID).working, "Touch the Touch ID sensor.", "the text of the Mac prompt")
+        XCTAssertEqual(ApproveTexts(platform: .phone, type: .none).working, "Enter your passcode.")
     }
 
     func testCurrentPlatform() {

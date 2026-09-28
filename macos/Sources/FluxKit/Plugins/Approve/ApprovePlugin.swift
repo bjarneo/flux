@@ -35,10 +35,7 @@ public final class ApprovePlugin: FluxPlugin, @unchecked Sendable {
         self.core = core
         let keys = ApproveKeys(directory: core.paths.data.appendingPathComponent("approve", isDirectory: true))
         self.keys = keys
-        Notifier.shared.register(category: Self.notificationCategory, actions: [
-            UNNotificationAction(identifier: "approve", title: "Approve", options: [.foreground]),
-            UNNotificationAction(identifier: "deny", title: "Deny", options: [.destructive]),
-        ]) { [weak self] action, info, _ in
+        Notifier.shared.register(category: Self.notificationCategory, actions: Self.notificationActions(platform: .current)) { [weak self] action, info, _ in
             guard let id = info["id"] as? String else { return }
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.notificationAction(action, id: id) } }
         }
@@ -76,22 +73,16 @@ public final class ApprovePlugin: FluxPlugin, @unchecked Sendable {
             model.present?()
             return
         }
-        let problem: String?
         let texts = ApproveTexts.current
-        if let r {
-            if !ApproveMessage.fresh(r, now: Int64(Date().timeIntervalSince1970)) {
-                problem = texts.clockSkew
-            } else if r.kind == .approve && !keys.has(computerId) {
-                problem = texts.noKey
-            } else if model.current != nil {
-                problem = texts.anotherOpen
-            } else {
-                problem = nil
-            }
-        } else {
-            problem = "The request is not valid"
-        }
-        if let problem {
+        #if os(iOS)
+        let secureEnclave = SecureEnclave.isAvailable
+        #else
+        // A Mac without a Secure Enclave has no Touch ID either, and Approve
+        // says so.
+        let secureEnclave = true
+        #endif
+        if let problem = Self.refusal(r, now: Int64(Date().timeIntervalSince1970), hasKey: keys.has(computerId),
+                                      busy: model.current != nil, secureEnclave: secureEnclave, texts: texts) {
             FluxLog.plugin.info("approve: refused a request from \(computerName, privacy: .public): \(problem, privacy: .public)")
             core?.send(ApproveMessage.failed(id, message: problem), to: computerId)
             model.record(ApproveRecord(requestId: id, computerId: computerId, kind: r?.kind ?? (p.string("kind") == "enroll" ? .enroll : .approve),
@@ -114,8 +105,55 @@ public final class ApprovePlugin: FluxPlugin, @unchecked Sendable {
         Notifier.shared.post(id: Self.notificationId, category: Self.notificationCategory,
                              title: r.kind == .approve ? "Approve \(r.service) on \(r.host)?" : texts.enrollTitle(host: r.host),
                              body: ([ApproveMessage.question(r)] + Self.details(r)).joined(separator: "\n"),
-                             userInfo: ["id": r.id])
+                             userInfo: ["id": r.id], interruptionLevel: Self.interruptionLevel)
         model.present?()
+    }
+
+    /// Why this device refuses the request without asking the user, or nil.
+    /// `r` is nil for a request that is not valid.
+    static func refusal(_ r: ApproveRequest?, now: Int64, hasKey: Bool, busy: Bool, secureEnclave: Bool, texts: ApproveTexts) -> String? {
+        guard let r else { return "The request is not valid" }
+        if !secureEnclave { return texts.noSecureEnclave }
+        if !ApproveMessage.fresh(r, now: now) { return texts.clockSkew }
+        if r.kind == .approve && !hasKey { return texts.noKey }
+        if busy { return texts.anotherOpen }
+        return nil
+    }
+
+    /// An iPhone shows the request through a Focus that allows
+    /// time-sensitive notifications. The Mac keeps the default level.
+    private static var interruptionLevel: UNNotificationInterruptionLevel {
+        FluxPlatform.current == .phone ? .timeSensitive : .active
+    }
+
+    /// The actions of the notification. On an iPhone, Approve needs the
+    /// iPhone unlocked and opens the prompt. Deny works on the lock screen.
+    static func notificationActions(platform: FluxPlatform) -> [UNNotificationAction] {
+        let approve: UNNotificationActionOptions = platform == .phone ? [.foreground, .authenticationRequired] : [.foreground]
+        return [
+            UNNotificationAction(identifier: "approve", title: "Approve", options: approve),
+            UNNotificationAction(identifier: "deny", title: "Deny", options: [.destructive]),
+        ]
+    }
+
+    /// What a notification action does.
+    enum NotificationRoute: Equatable {
+        /// Shows the prompt.
+        case present
+        /// Shows the prompt and asks for the biometry at once.
+        case approve
+        case deny
+    }
+
+    /// The Mac asks for Touch ID right after Approve. An iPhone opens the
+    /// prompt, because Face ID needs Flux on the screen, and the Approve
+    /// button of the prompt asks for it.
+    static func notificationRoute(_ action: String, platform: FluxPlatform) -> NotificationRoute {
+        switch action {
+        case "approve": return platform == .mac ? .approve : .present
+        case "deny": return .deny
+        default: return .present
+        }
     }
 
     /// The lines under the question: the terminal, the remote host, and who asks.
@@ -193,13 +231,13 @@ public final class ApprovePlugin: FluxPlugin, @unchecked Sendable {
     @MainActor
     private func notificationAction(_ action: String, id: String) {
         guard model.current?.id == id else { return }
-        switch action {
-        case "approve":
+        switch Self.notificationRoute(action, platform: .current) {
+        case .approve:
             model.present?()
             approve()
-        case "deny":
+        case .deny:
             deny()
-        default:
+        case .present:
             model.present?()
         }
     }
@@ -270,6 +308,18 @@ public final class ApprovePlugin: FluxPlugin, @unchecked Sendable {
     }
 
     // MARK: Touch ID
+
+    /// Whether this device can approve: it needs a Secure Enclave and the
+    /// biometry. It never falls back to a key outside the Secure Enclave.
+    public static func availability() -> ApproveAvailability {
+        availability(secureEnclave: SecureEnclave.isAvailable, biometryProblem: biometryProblem(), texts: .current)
+    }
+
+    static func availability(secureEnclave: Bool, biometryProblem: String?, texts: ApproveTexts) -> ApproveAvailability {
+        if !secureEnclave { return .noSecureEnclave(texts.noSecureEnclave) }
+        if let biometryProblem { return .biometry(biometryProblem) }
+        return .ready
+    }
 
     /// Why this device cannot use Touch ID or Face ID now, or nil.
     public static func biometryProblem() -> String? {
