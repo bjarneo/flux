@@ -83,17 +83,20 @@ It shares FluxKit with [Flux for macOS](macos.md) and offers the Android feature
 
 ## Phase 5: herdr agents and browse
 
-- [ ] FluxKit: the full `flux.herdr` state with terminals, panes, workspaces, and kinds.
-- [ ] FluxKit: `create`, `close`, and `input` packets, the `created` and `closed` answers, and Android's timeouts.
-- [ ] FluxKit: the terminal keys with ctrl+a to ctrl+z, and reads of 1000 lines.
-- [ ] Agents screen: blocked agents first, status, terminals, and the add button.
-- [ ] New agent: run choice, folder search and picker, new tab or new workspace, and an optional first task.
-  The first task goes as a `prompt` when the new agent is idle.
-- [ ] Agent screen: colored output, numbered choices, key bar, reply field, dictation, and Close.
-- [ ] Terminal screen: output every 3 seconds, key bar with ^C and ^D, Run, and Close.
-- [ ] Agent notifications for needs input and finished, with a tap that opens the agent.
-- [ ] Browse the computer's shared folders read-only through SFTP in a `flux.tunnel`, and save downloads to Files.
-- [ ] Checked against `fluxd` with herdr: start an agent with a task, answer it, close it, and run a command in a terminal.
+- [x] FluxKit: the full `flux.herdr` state with terminals, panes, workspaces, and kinds.
+- [x] FluxKit: `create`, `close`, and `input` packets, the `created` and `closed` answers, and Android's timeouts.
+- [x] FluxKit: the terminal keys with ctrl+a to ctrl+z, and reads of 1000 lines.
+- [x] Agents screen: blocked agents first, status, terminals, and the add button.
+- [x] New agent: run choice, folder search and picker, new tab or new workspace, and an optional first task.
+  The first task goes as a `prompt` when the new agent stays idle or done for 2 seconds with no dialog on screen.
+  Claude Code shows its next dialog right after the trust dialog, and herdr reports it idle for a moment between the two.
+- [x] Agent screen: colored output, numbered choices, key bar, reply field, dictation, and Close.
+- [x] Terminal screen: output every 3 seconds, key bar with ^C and ^D, Run, and Close.
+- [x] Agent notifications for needs input and finished, with a tap that opens the agent.
+- [x] Browse the computer's shared folders read-only through SFTP in a `flux.tunnel`, and save downloads to Files.
+- [x] Checked against `fluxd` with herdr: start an agent with a task, answer it, close it, and run a command in a terminal.
+  Also checked: ^C in a terminal, numbered choices, a follow-up prompt, both agent notifications, the blocked badge, and a browse download with identical sha256, Quick Look, and the share sheet.
+  The simulator does not take injected taps on notifications, so the tap that opens the agent is not checked there.
 
 ## Phase 6: Camera, webcam, and microphone
 
