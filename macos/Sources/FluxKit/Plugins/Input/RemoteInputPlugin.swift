@@ -51,7 +51,8 @@ public final class RemoteInputPlugin: FluxPlugin, @unchecked Sendable {
     public func handle(_ packet: Packet, from device: Device) {
         guard let on = packet.bool("enabled") else { return }
         let desktop = packet.bool("desktop")
-        FluxLog.plugin.info("remote input is \(on ? "on" : "off", privacy: .public) on \(device.name, privacy: .public)")
+        let shows = desktop.map { $0 ? "on" : "off" } ?? "not reported"
+        FluxLog.plugin.info("remote input is \(on ? "on" : "off", privacy: .public), remote desktop is \(shows, privacy: .public) on \(device.name, privacy: .public)")
         let id = device.id
         let model = model
         DispatchQueue.main.async { MainActor.assumeIsolated { model.set(id, on, desktop: desktop) } }

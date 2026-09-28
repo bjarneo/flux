@@ -115,6 +115,7 @@ public final class DesktopPlugin: FluxPlugin, @unchecked Sendable {
             return attempt
         }
         video.reset()
+        FluxLog.plugin.info("remote desktop: asking \(name, privacy: .public) for \(monitor ?? "the focused monitor", privacy: .public), max \(maxSize) px")
         Task { await run(core, deviceId, name, monitor, maxSize, id) }
     }
 
@@ -143,6 +144,7 @@ public final class DesktopPlugin: FluxPlugin, @unchecked Sendable {
         let deviceId = device.id
         switch reply {
         case .live(let monitor, let monitors, let width, let height):
+            FluxLog.plugin.info("remote desktop: \(name, privacy: .public) shows \(monitor, privacy: .public) at \(width)x\(height), monitors \(monitors.joined(separator: ","), privacy: .public)")
             lock.withLock {
                 guard attempt == id else { return }
                 let model = model
@@ -164,6 +166,7 @@ public final class DesktopPlugin: FluxPlugin, @unchecked Sendable {
                 }
             }
         case .failed(let message):
+            FluxLog.plugin.info("remote desktop: \(name, privacy: .public) failed: \(message, privacy: .public)")
             end(.init(.error, message, deviceId: deviceId), notify: false, attempt: id)
         case .stop:
             end(.init(.idle, "Stopped on \(name)", deviceId: deviceId), notify: false, attempt: id)
