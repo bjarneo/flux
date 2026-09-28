@@ -23,6 +23,24 @@ public enum CameraImages {
         return try upright(source, maxSide: maxSide)
     }
 
+    /// Returns a picked photo as JPEG data for Photo mode, which sends JPEG
+    /// files. A JPEG keeps its bytes and its metadata. Another format, such
+    /// as HEIC or PNG, becomes an upright JPEG of the full size.
+    public static func jpegFile(_ data: Data) throws -> Data {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil), let type = CGImageSourceGetType(source) else {
+            throw FluxError("Cannot read the image")
+        }
+        if UTType(type as String)?.conforms(to: .jpeg) == true { return data }
+        let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+        let width = properties?[kCGImagePropertyPixelWidth] as? Int ?? 0
+        let height = properties?[kCGImagePropertyPixelHeight] as? Int ?? 0
+        guard width > 0, height > 0 else { throw FluxError("Cannot read the image") }
+        guard let jpeg = jpeg(try upright(source, maxSide: max(width, height)), quality: 0.92) else {
+            throw FluxError("Cannot save the photo as JPEG")
+        }
+        return jpeg
+    }
+
     private static func upright(_ source: CGImageSource, maxSide: Int) throws -> CGImage {
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
