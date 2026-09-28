@@ -64,6 +64,15 @@ When the two parts do not meet, a dim line says that more lines show when the ag
 The phone reads all lines again when the agent stops.
 herdr keeps only the recent part of the terminal for some agents, so the screen can show fewer lines.
 
+The phone fits the output to its narrow screen.
+This matters most for full-screen agents such as opencode, which draw panels across the full terminal:
+
+- A long line wraps, and its wrapped rows start under its text, after the panel bar or the list marker.
+- The phone removes the margin that all lines share, extra empty rows, scroll bars, and the half-block edges of boxes.
+- A panel, for example a message, a tool call, or a diff line in opencode, fills the width of the screen.
+- A centered drawing, for example the opencode logo, moves to the left when that makes it fit.
+- When the agent colors suit a dark background and the phone uses the light theme, the phone inverts the lightness of these colors, so the text stays readable. It does the same for colors that suit a light background in the dark theme.
+
 ## Notifications
 
 The phone posts a notification when an agent changes to blocked.
@@ -239,6 +248,7 @@ It does not start agents, close them, or open terminals.
 - The page of the computer has an **Agents** card. It lists the first agents and shows the number of blocked agents.
 - **Open Agents…** opens a window with the agent list on the left and the output of the selected agent on the right. The menu bar item has **Agents…** too.
 - The output uses the colors of Tokyo Night in dark mode and Tokyo Night Day in light mode.
+- The Mac does not yet fit the output of full-screen agents such as opencode, as the phone does.
 - Press Command-R to read the output again.
 - Return sends the text. Shift-Return adds a line break.
 - Before the first reply, the Mac asks for Touch ID or the Mac password. The unlock stays valid for 5 minutes while Flux runs.
