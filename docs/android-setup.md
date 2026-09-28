@@ -42,6 +42,7 @@ The `adb` method keeps Play Protect on, so use it when you can.
 ### Install with adb
 
 `adb install` does not go through the check for a browser, a messaging app, or a file manager.
+Install `adb` on the computer first, as in [Android requirements](android.md#requirements).
 
 1. On the phone, open **Settings > About phone** and tap **Build number** 7 times.
 2. Open **Settings > Developer options** and turn on **USB debugging**.

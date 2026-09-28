@@ -15,7 +15,7 @@ A paired device can also connect through [Tailscale](tailscale.md) away from tha
 | Guide | Topics |
 | --- | --- |
 | [Installation](install.md) | Dependencies, Arch package, source install, user-only install, updates, and removal |
-| [Android](android.md) | APK installation, local builds, SDK setup, tests, and screenshots |
+| [Android](android.md) | Requirements, `adb`, APK installation, local builds, SDK setup, tests, and screenshots |
 | [Android setup and Play Protect](android-setup.md) | Play Protect blocks, installs with `adb`, restricted settings, the service, the network, and permissions |
 | [macOS](macos.md) | Mac app build, pairing, features, permissions, and local tests |
 | [CLI](cli.md) | Commands, device selection, JSON state, and notifications from scripts |
