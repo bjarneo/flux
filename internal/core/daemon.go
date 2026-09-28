@@ -661,8 +661,6 @@ func (d *Daemon) onPairedLink(dev *Device, l *lan.Link) {
 		state := herdrStatePacket(d.herdrViewLocked())
 		d.mu.Unlock()
 		_ = l.Send(state)
-		// The loop reads the agent kinds for the new phone.
-		d.wakeHerdr()
 	}
 }
 

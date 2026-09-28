@@ -131,20 +131,11 @@ func (d *Daemon) herdrViewLocked() herdrView {
 // them, and close them.
 func (d *Daemon) herdrControlLocked() bool { return d.cfg.Herdr && d.cfg.HerdrControl }
 
-// herdrKindsWanted reports whether a connected phone can start agents and
-// so needs the list of agent kinds.
-func (d *Daemon) herdrKindsWanted() bool {
+// herdrControlOn reports whether herdr_control is on.
+func (d *Daemon) herdrControlOn() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if !d.herdrControlLocked() {
-		return false
-	}
-	for _, dev := range d.devices {
-		if dev.Paired && dev.link != nil && dev.accepts(proto.TypeFluxHerdr) {
-			return true
-		}
-	}
-	return false
+	return d.herdrControlLocked()
 }
 
 // herdrTerminalsLocked reports whether a phone can open terminals and type
@@ -219,9 +210,9 @@ func (d *Daemon) herdrSession(ctx context.Context, logged *string) error {
 			return err
 		}
 		// An agent that the user installs or removes shows after a
-		// minute. Only a connected phone with herdr_control uses the
-		// list, so fluxd skips the lookup at other times.
-		if !d.herdrKindsWanted() {
+		// minute. Only herdr_control uses the list, so fluxd skips the
+		// lookup while it is off.
+		if !d.herdrControlOn() {
 			kinds, kindsAt = nil, time.Time{}
 		} else if time.Since(kindsAt) > herdrKindsTTL {
 			kinds, kindsAt = d.herdrAvailableKinds(ctx), time.Now()
