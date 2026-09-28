@@ -22,6 +22,7 @@ enum PluginRegistry {
             DesktopPlugin(),
             HerdrPlugin(),
             BrowsePlugin(),
+            WebcamPlugin(),
         ]
     }
 }
@@ -33,6 +34,7 @@ struct FeatureTiles: View {
     var body: some View {
         Group {
             ShareTile(device: device)
+            CameraTile(device: device)
             MediaTile(device: device)
             CommandsTile(device: device)
             NotificationsTile(device: device)
@@ -53,6 +55,7 @@ enum FeatureRoute: Hashable {
     case agent(String, String)
     case terminal(String, String)
     case browse(String)
+    case camera(String)
 }
 
 /// The screen of a feature route.
@@ -67,6 +70,7 @@ struct FeatureDestination: View {
         case .agent(let id, let pane): AgentScreen(deviceId: id, pane: pane)
         case .terminal(let id, let pane): TerminalScreen(deviceId: id, pane: pane)
         case .browse(let id): BrowseScreen(deviceId: id)
+        case .camera(let id): CameraScreen(deviceId: id)
         }
     }
 }
@@ -135,5 +139,7 @@ enum FeatureHooks {
         if active { NotificationAccess.shared.refresh() }
         // A computer that connects also gets the new images, through the plugin.
         if active { model.core.plugin(CaptureWatchPlugin.self)?.catchUp() }
+        // iOS turns off the camera of an app that leaves the screen.
+        if !active { model.core.plugin(WebcamPlugin.self)?.stopInBackground() }
     }
 }
