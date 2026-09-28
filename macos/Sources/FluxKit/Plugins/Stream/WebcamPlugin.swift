@@ -132,6 +132,18 @@ public final class WebcamPlugin: FluxPlugin, @unchecked Sendable {
         stop(notify: true, status: StreamStatus())
     }
 
+    #if os(iOS)
+    /// Stops a running stream because Flux left the screen, and tells the
+    /// computer. iOS gives the camera only to the app on the screen.
+    public func stopInBackground() {
+        guard let deviceId = lock.withLock({ session?.deviceId }) else { return }
+        stop(notify: true, status: StreamStatus(.idle, Self.backgroundText, deviceId: deviceId))
+    }
+
+    /// The status after the stream stopped in the background.
+    static let backgroundText = "The webcam stopped when Flux left the screen. iOS gives the camera only to the app on the screen."
+    #endif
+
     /// Changes the settings. The image changes at once, a new camera switches
     /// without a new stream, and a new frame size starts the stream again.
     public func update(_ change: (inout WebcamConfig) -> Void) {
