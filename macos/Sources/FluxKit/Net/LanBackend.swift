@@ -15,6 +15,14 @@ public struct LanConfig: Sendable {
     public var tcpPorts: ClosedRange<Int> = 1716...1764
     /// Announces only to 127.0.0.1, for tests against a headless fluxd.
     public var loopbackOnly = false
+    /// Sends identities to broadcast addresses. iOS needs the multicast
+    /// entitlement for broadcasts, so the iPhone announces itself only to
+    /// known and Bonjour-resolved computers.
+    #if os(iOS)
+    public var sendsBroadcast = false
+    #else
+    public var sendsBroadcast = true
+    #endif
 
     public init() {}
 
@@ -120,15 +128,15 @@ public final class LanBackend: @unchecked Sendable {
 
     private func openUdp() async -> (Channel?, Bool) {
         func bootstrap() -> DatagramBootstrap {
-            DatagramBootstrap(group: group)
+            var b = DatagramBootstrap(group: group)
                 .channelOption(.socketOption(.so_reuseaddr), value: 1)
-                .channelOption(.socketOption(.so_broadcast), value: 1)
-                .channelInitializer { [weak self] ch in
-                    ch.eventLoop.makeCompletedFuture {
-                        guard let self else { throw FluxError("backend stopped") }
-                        try ch.pipeline.syncOperations.addHandler(UDPHandler(backend: self))
-                    }
+            if config.sendsBroadcast { b = b.channelOption(.socketOption(.so_broadcast), value: 1) }
+            return b.channelInitializer { [weak self] ch in
+                ch.eventLoop.makeCompletedFuture {
+                    guard let self else { throw FluxError("backend stopped") }
+                    try ch.pipeline.syncOperations.addHandler(UDPHandler(backend: self))
                 }
+            }
         }
         do {
             return (try await bootstrap().bind(host: "0.0.0.0", port: config.udpPort).get(), true)
@@ -139,17 +147,23 @@ public final class LanBackend: @unchecked Sendable {
     }
 
     /// Sends the identity to every broadcast address and to known devices.
+    /// Without broadcasts it goes to known devices only.
     public func broadcast() {
+        let targets = Self.broadcastTargets(
+            loopbackOnly: config.loopbackOnly, sendsBroadcast: config.sendsBroadcast,
+            interfaces: config.loopbackOnly || !config.sendsBroadcast ? [] : Self.broadcastAddresses(),
+            known: config.loopbackOnly ? [] : delegate?.knownAddresses() ?? [])
+        for t in targets { announceTo(t) }
+    }
+
+    /// The addresses that an announcement goes to, each once.
+    static func broadcastTargets(loopbackOnly: Bool, sendsBroadcast: Bool, interfaces: [String], known: [String]) -> [String] {
+        if loopbackOnly { return ["127.0.0.1"] }
         var targets: [String] = []
-        if config.loopbackOnly {
-            targets = ["127.0.0.1"]
-        } else {
-            targets.append("255.255.255.255")
-            targets += Self.broadcastAddresses()
-            targets += delegate?.knownAddresses() ?? []
-        }
+        if sendsBroadcast { targets = ["255.255.255.255"] + interfaces }
+        targets += known
         var seen = Set<String>()
-        for t in targets where seen.insert(t).inserted { announceTo(t) }
+        return targets.filter { seen.insert($0).inserted }
     }
 
     /// Sends the identity to one address, for example a host that mDNS found.

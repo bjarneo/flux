@@ -1,6 +1,8 @@
 import Foundation
+#if os(macOS)
 import IOKit.ps
 import SystemConfiguration
+#endif
 
 /// A snapshot of the core for the UI.
 public struct CoreState: Sendable, Equatable {
@@ -102,6 +104,7 @@ public final class FluxCore: @unchecked Sendable {
 
     // MARK: Identity
 
+    #if os(macOS)
     /// The computer name from System Settings > General > Sharing.
     public var deviceName: String {
         cleanName((SCDynamicStoreCopyComputerName(nil, nil) as String?) ?? Host.current().localizedName ?? "Mac")
@@ -117,6 +120,37 @@ public final class FluxCore: @unchecked Sendable {
         }
         return "desktop"
     }()
+    #else
+    /// The name that the user gives the iPhone in Flux, else "iPhone". iOS
+    /// gives apps only the generic device name.
+    public var deviceName: String {
+        cleanName(defaults.string(forKey: Self.deviceNameKey) ?? "", fallback: "iPhone")
+    }
+
+    /// The iPhone is a phone.
+    public static let deviceType = "phone"
+
+    /// Stores the device name. An empty name goes back to "iPhone". The new
+    /// name goes out through Bonjour and to known computers.
+    @MainActor
+    public func setDeviceName(_ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            defaults.removeObject(forKey: Self.deviceNameKey)
+        } else {
+            defaults.set(trimmed, forKey: Self.deviceNameKey)
+        }
+        let (b, bj) = lock.withLock { (backend, bonjour) }
+        if let b {
+            bj?.publish(name: deviceName, type: Self.deviceType, port: b.tcpPort)
+            b.broadcast()
+        }
+        publish()
+    }
+    #endif
+
+    /// The defaults key of the device name that the user sets on iOS.
+    public static let deviceNameKey = "deviceName"
 
     public var incomingCapabilities: [String] { unique(plugins.flatMap(\.incoming)) }
     public var outgoingCapabilities: [String] { unique(plugins.flatMap(\.outgoing)) }
