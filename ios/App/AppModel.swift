@@ -8,6 +8,8 @@ import UserNotifications
 enum Route: Hashable {
     case device(String)
     case settings
+    /// A screen of a feature, see `FeatureRoute`.
+    case feature(FeatureRoute)
 }
 
 /// A short message for the user. Each one has its own id, so that the same

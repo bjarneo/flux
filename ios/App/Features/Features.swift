@@ -18,6 +18,7 @@ enum PluginRegistry {
             BatteryPlugin(),
             DndPlugin(),
             RingPlugin(),
+            RemoteInputPlugin(),
         ]
     }
 }
@@ -32,6 +33,24 @@ struct FeatureTiles: View {
             MediaTile(device: device)
             CommandsTile(device: device)
             NotificationsTile(device: device)
+            TouchpadTile(device: device)
+        }
+    }
+}
+
+/// A screen of a feature that the app opens by code, for example after
+/// Face ID.
+enum FeatureRoute: Hashable {
+    case touchpad(String)
+}
+
+/// The screen of a feature route.
+struct FeatureDestination: View {
+    let route: FeatureRoute
+
+    var body: some View {
+        switch route {
+        case .touchpad(let id): TouchpadScreen(deviceId: id)
         }
     }
 }

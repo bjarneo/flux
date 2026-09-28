@@ -1,0 +1,125 @@
+import FluxKit
+import SwiftUI
+import UIKit
+
+/// A view that reports its fingers and takes the keys of a hardware
+/// keyboard, for the touchpad and the remote desktop. Each finger has a
+/// number that grows, so the lowest number is the earliest finger. A touch
+/// makes the view the first responder, so that the keys go to it.
+final class TouchSurfaceView: UIView {
+    /// Gets the fingers on the view after each touch event, by number. No
+    /// fingers means that the last one lifted.
+    var onTouches: (([Int: CGPoint]) -> Void)?
+    /// iOS took the touches, for example for a system gesture.
+    var onCancel: (() -> Void)?
+    /// Gets each key press of a hardware keyboard. It returns false for a
+    /// key that stays on the iPhone.
+    var onKey: ((UIKey) -> Bool)?
+    /// Gets the new size of the view.
+    var onSize: ((CGSize) -> Void)?
+
+    private var numbers: [ObjectIdentifier: Int] = [:]
+    private var points: [Int: CGPoint] = [:]
+    private var nextNumber = 1
+    private var sentKeys = Set<UIPress>()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isMultipleTouchEnabled = true
+        isExclusiveTouch = true
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override var canBecomeFirstResponder: Bool { true }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        onSize?(bounds.size)
+    }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if !isFirstResponder { becomeFirstResponder() }
+        for t in touches {
+            let n = nextNumber
+            nextNumber += 1
+            numbers[ObjectIdentifier(t)] = n
+            points[n] = t.location(in: self)
+        }
+        onTouches?(points)
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        for t in touches {
+            if let n = numbers[ObjectIdentifier(t)] { points[n] = t.location(in: self) }
+        }
+        onTouches?(points)
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        for t in touches {
+            if let n = numbers.removeValue(forKey: ObjectIdentifier(t)) { points[n] = nil }
+        }
+        onTouches?(points)
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        numbers = [:]
+        points = [:]
+        onCancel?()
+    }
+
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        var rest = Set<UIPress>()
+        for press in presses {
+            if let key = press.key, onKey?(key) == true {
+                sentKeys.insert(press)
+            } else {
+                rest.insert(press)
+            }
+        }
+        if !rest.isEmpty { super.pressesBegan(rest, with: event) }
+    }
+
+    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        let rest = presses.subtracting(sentKeys)
+        sentKeys.subtract(presses)
+        if !rest.isEmpty { super.pressesEnded(rest, with: event) }
+    }
+
+    override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        let rest = presses.subtracting(sentKeys)
+        sentKeys.subtract(presses)
+        if !rest.isEmpty { super.pressesCancelled(rest, with: event) }
+    }
+}
+
+/// Runs a check at a time in the future, such as the hold of a finger. A
+/// new time replaces the old one.
+@MainActor
+final class Deadline {
+    private var task: Task<Void, Never>?
+
+    /// Runs `action` at `time` in system uptime, or cancels with nil.
+    func set(_ time: TimeInterval?, _ action: @escaping @MainActor () -> Void) {
+        task?.cancel()
+        task = nil
+        guard let time else { return }
+        let wait = max(0, time - Self.now)
+        task = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(wait))
+            if !Task.isCancelled { action() }
+        }
+    }
+
+    func cancel() { set(nil) {} }
+
+    /// The time of touch events and deadlines, in system uptime.
+    static var now: TimeInterval { ProcessInfo.processInfo.systemUptime }
+}
+
+/// A tap of the Taptic Engine when a finger holds, as the Android app buzzes.
+@MainActor
+enum HoldFeedback {
+    static func play() { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
+}

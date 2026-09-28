@@ -19,6 +19,7 @@ struct ContentView: View {
                     switch route {
                     case .device(let id): DeviceView(deviceId: id)
                     case .settings: SettingsView()
+                    case .feature(let route): FeatureDestination(route: route)
                     }
                 }
         }
