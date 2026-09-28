@@ -35,7 +35,13 @@ public final class MicPlugin: FluxPlugin, @unchecked Sendable {
     @MainActor
     public init() {
         model = MicModel()
-        for name in [AVCaptureDevice.wasConnectedNotification, AVCaptureDevice.wasDisconnectedNotification] {
+        #if os(iOS)
+        // A headset that comes or goes changes the route of the audio session.
+        let names = [AVAudioSession.routeChangeNotification]
+        #else
+        let names = [AVCaptureDevice.wasConnectedNotification, AVCaptureDevice.wasDisconnectedNotification]
+        #endif
+        for name in names {
             observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.inputsChanged() }
             })
@@ -236,7 +242,7 @@ public final class MicPlugin: FluxPlugin, @unchecked Sendable {
             return true
         }
         guard keep else { return }
-        try await capture.start(device)
+        try await capture.start(device, route: input)
         try await stream.executeThenClose { inbound, outbound in
             try await withThrowingTaskGroup(of: Void.self) { group in
                 // The computer sends nothing. The inbound side ends when it closes.
@@ -252,8 +258,13 @@ public final class MicPlugin: FluxPlugin, @unchecked Sendable {
     /// Moves a running capture to the chosen input.
     @MainActor
     private func switchCapture() {
+        #if os(iOS)
+        // The iPhone has 1 capture device. The route of the audio session picks the input.
+        if lock.withLock({ capture }) != nil { AudioSession.prefer(model.input) }
+        #else
         guard let capture = lock.withLock({ capture }), let device = MicCapture.device(for: model.input) else { return }
         capture.use(device)
+        #endif
     }
 
     /// Reloads the inputs after a device came or went. A running capture on a

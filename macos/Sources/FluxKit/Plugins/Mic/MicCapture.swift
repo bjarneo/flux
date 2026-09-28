@@ -49,9 +49,15 @@ final class MicCapture: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, 
     }
 
     /// The audio inputs of this Mac, including external and virtual devices.
+    /// On iOS the inputs are the routes of the audio session, because the
+    /// iPhone has 1 capture device that records from the chosen route.
     static func inputs() -> [MicInput] {
+        #if os(iOS)
+        AudioSession.inputs()
+        #else
         AVCaptureDevice.DiscoverySession(deviceTypes: [.microphone, .external], mediaType: .audio, position: .unspecified)
             .devices.map { MicInput(id: $0.uniqueID, name: $0.localizedName) }
+        #endif
     }
 
     /// The device of the input ID. An empty ID or a device that is gone
@@ -61,16 +67,18 @@ final class MicCapture: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, 
         return AVCaptureDevice.default(for: .audio)
     }
 
-    /// Starts recording from the device. A capture that stopped does not start.
-    func start(_ device: AVCaptureDevice) async throws {
+    /// Starts recording from the device. On iOS the route is the input of
+    /// the audio session, or empty for the input that iOS picks. A capture
+    /// that stopped does not start.
+    func start(_ device: AVCaptureDevice, route: String = "") async throws {
         try await withCheckedThrowingContinuation { (done: CheckedContinuation<Void, Error>) in
             control.async { [self] in
-                done.resume(with: Result { try startOnControl(device) })
+                done.resume(with: Result { try startOnControl(device, route: route) })
             }
         }
     }
 
-    private func startOnControl(_ device: AVCaptureDevice) throws {
+    private func startOnControl(_ device: AVCaptureDevice, route: String) throws {
         guard !stopped else { throw CancellationError() }
         #if os(macOS)
         output.audioSettings = [
@@ -86,6 +94,7 @@ final class MicCapture: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, 
         // Flux sets the category itself, so that the session keeps Bluetooth headsets.
         session.automaticallyConfiguresApplicationAudioSession = false
         try AudioSession.activate(forRecording: false)
+        AudioSession.prefer(route)
         #endif
         output.setSampleBufferDelegate(self, queue: samples)
         let input = try makeInput(device)
@@ -106,6 +115,7 @@ final class MicCapture: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, 
         guard session.isRunning else { throw FluxError("\(device.localizedName) did not start recording") }
     }
 
+    #if os(macOS)
     /// Switches to another device while the stream keeps running.
     func use(_ device: AVCaptureDevice) {
         control.async { [self] in
@@ -126,6 +136,7 @@ final class MicCapture: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, 
             }
         }
     }
+    #endif
 
     /// Stops recording. It does not block.
     func stop() {
