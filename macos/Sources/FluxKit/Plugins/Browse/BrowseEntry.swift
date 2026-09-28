@@ -6,14 +6,23 @@ public struct BrowseEntry: Sendable, Hashable, Identifiable {
     public var path: String
     public var dir: Bool
     public var size: Int64
+    /// The last change of the entry, when the computer reports it.
+    public var modified: Date?
 
     public var id: String { path }
 
-    public init(name: String, path: String, dir: Bool, size: Int64) {
+    public init(name: String, path: String, dir: Bool, size: Int64, modified: Date? = nil) {
         self.name = name
         self.path = path
         self.dir = dir
         self.size = size
+        self.modified = modified
+    }
+
+    /// The entry `name` in `folder` from its SFTP attributes.
+    init(folder: String, name: String, permissions: UInt32?, size: UInt64?, modified: Date?) {
+        self.init(name: name, path: BrowsePath.join(folder, name), dir: Self.isDirectory(permissions: permissions),
+                  size: Int64(clamping: size ?? 0), modified: modified)
     }
 
     /// The entries of a folder as the browser shows them: no hidden files,

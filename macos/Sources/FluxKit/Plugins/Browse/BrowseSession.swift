@@ -84,12 +84,8 @@ final class BrowseSession: @unchecked Sendable {
         let entries = names.flatMap(\.components)
             .filter { $0.filename != "." && $0.filename != ".." }
             .map { c in
-                BrowseEntry(
-                    name: c.filename,
-                    path: BrowsePath.join(path, c.filename),
-                    dir: BrowseEntry.isDirectory(permissions: c.attributes.permissions),
-                    size: Int64(clamping: c.attributes.size ?? 0)
-                )
+                BrowseEntry(folder: path, name: c.filename, permissions: c.attributes.permissions, size: c.attributes.size,
+                            modified: c.attributes.accessModificationTime?.modificationTime)
             }
         return BrowseEntry.listing(entries)
     }

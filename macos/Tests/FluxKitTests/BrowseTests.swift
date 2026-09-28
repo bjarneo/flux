@@ -56,6 +56,16 @@ final class BrowseTests: XCTestCase {
         XCTAssertEqual(BrowseEntry.listing(raw).map(\.name), ["alpha", "Zeta", "A.txt", "b.txt"])
     }
 
+    func testEntryFromTheAttributes() {
+        let when = Date(timeIntervalSince1970: 1_790_000_000)
+        let file = BrowseEntry(folder: "/home/u/", name: "notes.txt", permissions: 0o100644, size: 12, modified: when)
+        XCTAssertEqual(file, BrowseEntry(name: "notes.txt", path: "/home/u/notes.txt", dir: false, size: 12, modified: when))
+        let dir = BrowseEntry(folder: "/home/u", name: "Code", permissions: 0o040755, size: nil, modified: nil)
+        XCTAssertEqual(dir, BrowseEntry(name: "Code", path: "/home/u/Code", dir: true, size: 0))
+        XCTAssertNil(dir.modified, "a server without times gives no date")
+        XCTAssertEqual(BrowseEntry(folder: "/", name: "big", permissions: nil, size: UInt64.max, modified: nil).size, Int64.max)
+    }
+
     func testDirectoryBits() {
         XCTAssertTrue(BrowseEntry.isDirectory(permissions: 0o040755))
         XCTAssertFalse(BrowseEntry.isDirectory(permissions: 0o100644))
