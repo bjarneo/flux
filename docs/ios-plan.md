@@ -71,13 +71,15 @@ It shares FluxKit with [Flux for macOS](macos.md) and offers the Android feature
 
 ## Phase 4: Touchpad, keyboard, and remote desktop
 
-- [ ] Touchpad with Android's gestures: move with acceleration, taps by finger count, two-finger scroll, hold to drag.
-- [ ] Key panel: esc, tab, arrows, one-shot ctrl, alt, shift, and super, backspace, enter, and a type field.
-- [ ] Hardware keyboard keys on the touchpad and the remote desktop.
-- [ ] Remote desktop: pinned TLS listener, H.264 frames in `AVSampleBufferDisplayLayer`, fit, pinch zoom, and pan.
-- [ ] Remote desktop touches as on Android: tap, double tap, hold for right click, hold and move to drag, two-finger tap and scroll.
-- [ ] Monitor picker, the Omarchy panel with `flux.shortcuts`, and dictation typed as text.
-- [ ] Checked: the remote desktop of an Omarchy computer shows and follows touches from the simulator.
+- [x] Touchpad with Android's gestures: move with acceleration, taps by finger count, two-finger scroll, hold to drag.
+- [x] Key panel: esc, tab, arrows, one-shot ctrl, alt, shift, and super, backspace, enter, and a type field.
+- [x] Hardware keyboard keys on the touchpad and the remote desktop.
+- [x] Remote desktop: pinned TLS listener, H.264 frames in `AVSampleBufferDisplayLayer`, fit, pinch zoom, and pan.
+- [x] Remote desktop touches as on Android: tap, double tap, hold for right click, hold and move to drag, two-finger tap and scroll.
+- [x] Monitor picker, the Omarchy panel with `flux.shortcuts`, and dictation typed as text.
+- [x] Checked: the remote desktop of an Omarchy computer shows and follows touches from the simulator.
+  Taps land at the tapped position, also zoomed and panned, and the monitor chip, the Omarchy panel, Stop, and Start Again work.
+- The volume keys do not change slides on iOS. iOS gives apps no public way to take the volume keys.
 
 ## Phase 5: herdr agents and browse
 
