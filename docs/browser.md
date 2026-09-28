@@ -28,6 +28,9 @@ The extension needs two halves: the native messaging host, which the browser sta
    | Chromium, Chrome, Brave, Edge, Vivaldi, Opera | The extensions page, then **Developer mode**, then **Load unpacked** |
    | Firefox, Zen | `about:debugging#/runtime/this-firefox`, then **Load Temporary Add-on**, then `manifest.firefox.json` |
 
+   The folder holds one manifest per browser: `manifest.json` is the one for Chromium, and `manifest.firefox.json` is the one for Firefox and Zen.
+   Loading the first one there fails with *background.service_worker is currently disabled*, because a Gecko browser reads the background as a list of scripts.
+
 `flux-cli browser install` prints the folder to load.
 It writes the host manifest for every browser in one pass, with the ID that browser expects: the extension ID for Chromium, and the add-on ID for Firefox and Zen.
 That add-on ID is fixed in `manifest.firefox.json`, so the manifest does not change from one profile to the next.

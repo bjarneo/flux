@@ -235,16 +235,22 @@ func writeHost(t target) error {
 // does on its own.
 func printExtensionHelp(chromium, gecko bool) {
 	fmt.Println()
-	if dir, ok := extensionDir(); ok {
-		fmt.Println("Load the Flux extension from", dir)
-	} else {
+	dir, ok := extensionDir()
+	if !ok {
 		fmt.Println("The Flux extension is missing. Run make install, or make browser")
+		return
 	}
+	fmt.Println("Load the Flux extension from", dir)
 	if chromium {
 		fmt.Println("  Chromium and friends: the extensions page, then Developer mode, then Load unpacked")
 	}
 	if gecko {
-		fmt.Println("  Firefox and Zen: about:debugging, then Load temporary add-on, then manifest.firefox.json")
+		// The folder holds a manifest per browser, and the file picker
+		// opens on the Chromium one, so the whole path is spelled out
+		// here. Loading manifest.json in Firefox or Zen fails with
+		// "background.service_worker is currently disabled".
+		fmt.Println("  Firefox and Zen: about:debugging, then Load temporary add-on, then")
+		fmt.Println("   ", filepath.Join(dir, "manifest.firefox.json"))
 	}
 }
 
