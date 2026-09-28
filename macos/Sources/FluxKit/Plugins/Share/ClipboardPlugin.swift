@@ -20,7 +20,8 @@ public final class ClipboardModel {
 /// sync is on and a paired computer is connected, the plugin polls the
 /// change count of the general pasteboard. iOS asks the user before each
 /// read of text from another app, so the iOS app turns the plugin inactive
-/// off the screen: then it neither polls nor reads the clipboard.
+/// off the screen: then it neither polls nor reads the clipboard. A new
+/// link reads it on iOS only when it changed since Flux last saw it.
 ///
 /// On iOS, images go both ways too, with flux.clipboard.image, like in Flux
 /// for Android: an image that is copied goes to the computers while sync is
@@ -34,6 +35,10 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
     private let lastRemote = NIOLockedValueBox<String?>(nil)
     @MainActor private var timer: Timer?
     @MainActor private var changeCount = 0
+    /// The change count when Flux last read or wrote the clipboard, or nil
+    /// before the first time. A new link reads the clipboard on iOS only
+    /// when the count changed since then.
+    @MainActor private var seenCount: Int?
     /// False while the app is off the screen. The Mac app is always active.
     @MainActor public private(set) var isActive = true
     /// True when images sync too. Only the iOS app turns it on.
@@ -117,13 +122,28 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
         sync && connected && active
     }
 
+    /// True when a new link reads the clipboard for clipboard.connect. The
+    /// Mac reads at each link. iOS asks the user before each read of text
+    /// from another app, so the iPhone reads only when the clipboard changed
+    /// since Flux last read or wrote it. Before that, it only notes the count.
+    static func readsOnConnect(platform: FluxPlatform, count: Int, lastSeen: Int?) -> Bool {
+        switch platform {
+        case .mac: return true
+        case .phone: return lastSeen.map { $0 != count } ?? false
+        }
+    }
+
     // MARK: Links
 
     public func onConnected(_ device: Device) {
         let id = device.id
         onMain { plugin in
             plugin.updatePolling()
-            guard let core = plugin.core, plugin.sync, plugin.isActive, let text = ClipboardText.text(includingPrivate: false) else { return }
+            guard let core = plugin.core, plugin.sync, plugin.isActive else { return }
+            let count = ClipboardText.changeCount
+            let reads = Self.readsOnConnect(platform: .current, count: count, lastSeen: plugin.seenCount)
+            plugin.seenCount = count
+            guard reads, let text = ClipboardText.text(includingPrivate: false) else { return }
             core.send(Packet(PacketType.clipboardConnect, ["content": text, "timestamp": plugin.timestamp]), to: id)
         }
     }
@@ -159,6 +179,7 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
         onMain { plugin in
             ClipboardText.write(text)
             plugin.changeCount = ClipboardText.changeCount
+            plugin.seenCount = plugin.changeCount
         }
     }
 
@@ -169,6 +190,7 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
     @discardableResult
     public func sendClipboard(to deviceId: String) -> Bool {
         guard let core, let device = core.device(deviceId) else { return false }
+        seenCount = ClipboardText.changeCount
         #if os(iOS)
         if images, ClipboardImage.available, let image = ClipboardImage.read() {
             return sendImage(image, to: device)
@@ -208,6 +230,7 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
         let count = ClipboardText.changeCount
         guard count != changeCount else { return }
         changeCount = count
+        seenCount = count
         onLocalClipboard()
     }
 
@@ -249,6 +272,7 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
                     plugin.lastRemoteImage = ClipboardImage.digest(data)
                     ClipboardImage.write(data, mime: mime)
                     plugin.changeCount = ClipboardText.changeCount
+                    plugin.seenCount = plugin.changeCount
                     core.toast("Image from \(name) is on the clipboard")
                 }
             } catch {

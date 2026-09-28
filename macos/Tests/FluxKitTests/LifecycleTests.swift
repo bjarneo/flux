@@ -61,6 +61,14 @@ final class LifecycleTests: XCTestCase {
         XCTAssertFalse(ClipboardPlugin.shouldPoll(sync: true, connected: false, active: true))
     }
 
+    func testClipboardReadsOnConnect() {
+        XCTAssertTrue(ClipboardPlugin.readsOnConnect(platform: .mac, count: 5, lastSeen: nil), "the Mac reads at each link")
+        XCTAssertTrue(ClipboardPlugin.readsOnConnect(platform: .mac, count: 5, lastSeen: 5))
+        XCTAssertFalse(ClipboardPlugin.readsOnConnect(platform: .phone, count: 5, lastSeen: nil), "no read before the iPhone knows the clipboard")
+        XCTAssertFalse(ClipboardPlugin.readsOnConnect(platform: .phone, count: 5, lastSeen: 5), "no read when nothing changed, so iOS asks no Allow Paste")
+        XCTAssertTrue(ClipboardPlugin.readsOnConnect(platform: .phone, count: 6, lastSeen: 5), "a new copy goes out")
+    }
+
     @MainActor
     func testClipboardActiveState() throws {
         let clipboard = ClipboardPlugin()
