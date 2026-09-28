@@ -18,24 +18,20 @@ struct TouchpadSurface: NSViewRepresentable {
 /// motion, the clicks, the scrolls, and each key to the computer. While it
 /// has the keyboard focus, keys go to the computer too, but the Mac keeps
 /// its Command shortcuts.
-final class TouchpadSurfaceView: NSView, NSTextInputClient {
+final class TouchpadSurfaceView: RemoteKeyView {
     let controller: TouchpadController
     private var chord = ReleaseChord()
     /// True when the next mouse up belongs to a press that the pad used.
     private var skipUp = false
-    /// The text of a dead key while macOS composes, such as ´ before e.
-    private var marked = ""
     private var area: NSTrackingArea?
-    private var monitor: Any?
 
     init(controller: TouchpadController) {
         self.controller = controller
-        super.init(frame: .zero)
+        super.init(keyTarget: controller)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    override var acceptsFirstResponder: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func becomeFirstResponder() -> Bool {
@@ -54,17 +50,10 @@ final class TouchpadSurfaceView: NSView, NSTextInputClient {
         super.viewWillMove(toWindow: newWindow)
     }
 
-    /// Watches the keys of the window for a held pointer, and takes the
-    /// keyboard focus, so that keys go to the computer from the start.
+    /// Takes the keyboard focus, so that keys go to the computer from the start.
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        if let monitor { NSEvent.removeMonitor(monitor) }
-        monitor = nil
         guard window != nil else { return }
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            let used = MainActor.assumeIsolated { self?.intercept(event) ?? false }
-            return used ? nil : event
-        }
         DispatchQueue.main.async { [weak self] in
             guard let self, let window = self.window else { return }
             window.makeFirstResponder(self)
@@ -151,82 +140,10 @@ final class TouchpadSurfaceView: NSView, NSTextInputClient {
 
     // MARK: Keys
 
-    override func keyDown(with event: NSEvent) {
-        guard controller.ready else { return super.keyDown(with: event) }
-        chord.interrupt()
-        let press = RemoteInput.press(keyCode: event.keyCode, flags: event.modifierFlags, plain: event.charactersIgnoringModifiers,
-                                      optionIsAlt: controller.optionIsAlt, commandIsSuper: controller.captured)
-        switch press {
-        case .key(let k, let held):
-            // A special key ends a dead key that waits.
-            if !marked.isEmpty {
-                inputContext?.discardMarkedText()
-                marked = ""
-            }
-            controller.key(k, held: held)
-        case .text(let text, let held):
-            controller.text(text, held: held)
-        case .compose:
-            interpretKeyEvents([event])
-        case .ignore:
-            super.keyDown(with: event)
-        }
-    }
-
-    /// While the pad holds the pointer, each key goes to the computer before
-    /// the menus of this Mac see it, so Command shortcuts reach the computer.
-    private func intercept(_ event: NSEvent) -> Bool {
-        guard controller.captured, event.window === window else { return false }
-        keyDown(with: event)
-        return true
-    }
+    override func willSendKey() { chord.interrupt() }
 
     override func flagsChanged(with event: NSEvent) {
         if controller.captured && chord.flags(event.modifierFlags) { controller.release() }
         super.flagsChanged(with: event)
-    }
-
-    /// Commands of the text input system, such as moveLeft:, have their own
-    /// special keys, so they do nothing here.
-    override func doCommand(by selector: Selector) {}
-
-    // MARK: NSTextInputClient
-
-    func insertText(_ string: Any, replacementRange: NSRange) {
-        marked = ""
-        controller.text(Self.plain(string))
-    }
-
-    func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) { marked = Self.plain(string) }
-
-    /// macOS keeps the marked text as typed text.
-    func unmarkText() {
-        let text = marked
-        marked = ""
-        controller.text(text)
-    }
-
-    func selectedRange() -> NSRange { NSRange(location: marked.utf16.count, length: 0) }
-
-    func markedRange() -> NSRange {
-        marked.isEmpty ? NSRange(location: NSNotFound, length: 0) : NSRange(location: 0, length: marked.utf16.count)
-    }
-
-    func hasMarkedText() -> Bool { !marked.isEmpty }
-
-    func attributedSubstring(forProposedRange range: NSRange, actualRange: NSRangePointer?) -> NSAttributedString? { nil }
-
-    func validAttributesForMarkedText() -> [NSAttributedString.Key] { [] }
-
-    /// An input method shows its window at the center of the pad.
-    func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?) -> NSRect {
-        guard let window else { return .zero }
-        return window.convertToScreen(convert(NSRect(x: bounds.midX, y: bounds.midY, width: 0, height: 20), to: nil))
-    }
-
-    func characterIndex(for point: NSPoint) -> Int { NSNotFound }
-
-    private static func plain(_ string: Any) -> String {
-        (string as? NSAttributedString)?.string ?? (string as? String) ?? ""
     }
 }

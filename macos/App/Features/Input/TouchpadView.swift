@@ -45,27 +45,8 @@ struct TouchpadView: View {
                     .strokeBorder(controller.captured ? Color.green : Color.secondary.opacity(0.35), lineWidth: controller.captured ? 2 : 1)
             )
             .frame(minHeight: 200)
-            HStack(spacing: 6) {
-                ForEach(PadKey.all) { k in
-                    Button { controller.key(k.key) } label: {
-                        Image(systemName: k.symbol).frame(maxWidth: .infinity)
-                    }
-                    .help("Press \(k.name) on \(controller.name)")
-                    .accessibilityLabel(k.name)
-                }
-            }
-            .controlSize(.large)
-            HStack(spacing: 6) {
-                ModKey(label: "ctrl", name: "Control", isOn: $controller.mods.ctrl)
-                ModKey(label: "alt", name: "Alt", isOn: $controller.mods.alt)
-                ModKey(label: "shift", name: "Shift", isOn: $controller.mods.shift)
-                ModKey(label: "super", name: "Super", isOn: $controller.mods.meta)
-                Spacer(minLength: 12)
-                Toggle("Option is Alt", isOn: $controller.optionIsAlt)
-                    .toggleStyle(.checkbox)
-                    .help("On: Option is Alt for letters too. Off: Option types the characters of the Mac layout, such as @ on a Nordic keyboard.")
-            }
-            TypeField(controller: controller, placeholder: "Type on \(controller.name)")
+            RemoteKeyRows(target: controller)
+            TypeField(target: controller, placeholder: "Type on \(controller.name)")
         }
         .padding(16)
     }
@@ -96,38 +77,5 @@ private struct PadHint: View {
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)
         .padding(20)
-    }
-}
-
-/// A special key of the key row.
-private struct PadKey: Identifiable {
-    let key: RemoteInput.Key
-    let symbol: String
-    let name: String
-
-    var id: Int { key.rawValue }
-
-    static let all = [
-        PadKey(key: .escape, symbol: "escape", name: "Escape"),
-        PadKey(key: .tab, symbol: "arrow.right.to.line", name: "Tab"),
-        PadKey(key: .left, symbol: "arrow.left", name: "Left"),
-        PadKey(key: .up, symbol: "arrow.up", name: "Up"),
-        PadKey(key: .down, symbol: "arrow.down", name: "Down"),
-        PadKey(key: .right, symbol: "arrow.right", name: "Right"),
-        PadKey(key: .backspace, symbol: "delete.left", name: "Backspace"),
-        PadKey(key: .enter, symbol: "return", name: "Enter"),
-    ]
-}
-
-/// A modifier key. It stays on for the next key or text.
-private struct ModKey: View {
-    let label: String
-    let name: String
-    @Binding var isOn: Bool
-
-    var body: some View {
-        Toggle(isOn: $isOn) { Text(label).monospaced() }
-            .toggleStyle(.button)
-            .help(isOn ? "Release \(name)" : "Hold \(name) for the next key or text")
     }
 }

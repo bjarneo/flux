@@ -7,9 +7,7 @@ import Observation
 /// and key goes to the computer.
 @MainActor
 @Observable
-final class TouchpadController {
-    static let optionKey = "input.optionIsAlt"
-
+final class TouchpadController: RemoteKeyTarget {
     let deviceId: String
     let plugin: RemoteInputPlugin
     /// The name when the window opened, for a computer that is gone.
@@ -22,12 +20,9 @@ final class TouchpadController {
     private(set) var captured = false
     /// True while the pad has the keyboard focus, so that keys go to the computer.
     var padFocused = false
-    /// The modifiers that the next key or text holds, from the modifier buttons.
     var mods = RemoteInput.Mods()
-    /// Option is Alt for letters too. Off, Option types the characters of
-    /// the Mac layout, such as @ on a Nordic keyboard.
     var optionIsAlt: Bool {
-        didSet { defaults.set(optionIsAlt, forKey: Self.optionKey) }
+        didSet { defaults.set(optionIsAlt, forKey: optionIsAltKey) }
     }
 
     init(device: DeviceSnapshot, app: AppModel, plugin: RemoteInputPlugin) {
@@ -36,7 +31,7 @@ final class TouchpadController {
         self.app = app
         self.plugin = plugin
         defaults = app.core.defaults
-        optionIsAlt = app.core.defaults.bool(forKey: Self.optionKey)
+        optionIsAlt = app.core.defaults.bool(forKey: optionIsAltKey)
     }
 
     var device: DeviceSnapshot? { app.state.devices.first { $0.id == deviceId } }
@@ -47,6 +42,11 @@ final class TouchpadController {
         guard let d = device else { return false }
         return d.paired && d.online && RemoteInputPlugin.supported(d) && plugin.model.isOn(deviceId)
     }
+
+    var keysReady: Bool { ready }
+    /// Command is Super while the pad holds the pointer.
+    var commandIsSuper: Bool { captured }
+    var workspaceKeys: Bool { device.map(DesktopPlugin.shortcutsSupported) ?? false }
 
     // MARK: Pointer
 
@@ -78,50 +78,13 @@ final class TouchpadController {
         send([p])
     }
 
-    // MARK: Keys
-
-    /// Presses a special key with the held and the sticky modifiers.
-    func key(_ k: RemoteInput.Key, held: RemoteInput.Mods = .init()) {
-        send([RemoteInput.key(k, mods: held.union(takeMods()))])
-    }
-
-    /// Types text with the held and the sticky modifiers.
-    func text(_ s: String, held: RemoteInput.Mods = .init()) {
-        guard !s.isEmpty else { return }
-        send([RemoteInput.text(s, mods: held.union(takeMods()))])
-    }
-
-    /// Handles a change of the type field and returns the text that stays in
-    /// it. Each word goes out after its space. With a sticky modifier, the
-    /// text goes out at once as a shortcut, such as ctrl and c.
-    func fieldChanged(_ value: String) -> String {
-        if mods.any && !value.isEmpty {
-            text(value)
-            return ""
-        }
-        let (words, keep) = RemoteInput.words(value)
-        text(words)
-        return keep
-    }
-
-    /// Return in the type field sends the rest of the text and presses Enter.
-    func fieldReturn(_ value: String) {
-        text(value)
-        key(.enter)
-    }
-
     /// Ends the window: the pointer comes back, and the modifiers clear.
     func close() {
         release()
         mods = .init()
     }
 
-    private func takeMods() -> RemoteInput.Mods {
-        defer { mods = .init() }
-        return mods
-    }
-
-    private func send(_ packets: [Packet]) {
+    func send(_ packets: [Packet]) {
         for p in packets { plugin.send(p, to: deviceId) }
     }
 }

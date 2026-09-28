@@ -40,8 +40,14 @@ public enum PacketType {
     public static let fluxHerdr = "flux.herdr"
     /// Flux extension: this device streams its screen to a window on the computer.
     public static let fluxScreen = "flux.screen"
-    /// Flux extension: the computer tells whether it accepts remote input, {"enabled": bool}.
+    /// Flux extension: the computer tells whether it accepts remote input and
+    /// whether it shows its screen, {"enabled": bool, "desktop": bool}.
     public static let fluxInput = "flux.input"
+    /// Flux extension: the computer streams its screen to a window on this device.
+    public static let fluxDesktop = "flux.desktop"
+    /// Flux extension: the computer sends its Hyprland key bindings and
+    /// workspaces, and runs them for this device. Both sides send it.
+    public static let fluxShortcuts = "flux.shortcuts"
     /// Flux extension: the computer asks this device to approve sudo with a fingerprint.
     public static let fluxApprove = "flux.approve"
 }

@@ -226,7 +226,7 @@ See [Touchpad and keyboard](remote-input.md) for the gestures, the keys, and the
 
 ## Remote desktop
 
-The phone can show the screen of the computer and control it with touches.
+The phone or the Mac can show the screen of the computer and control it.
 To allow it, set:
 
 ```toml
@@ -236,4 +236,5 @@ remote_input = true
 
 Reload with `systemctl --user reload fluxd`.
 Then select **Remote desktop** on the phone's device page. The phone turns to landscape.
+In Flux for macOS, select **Open Remote Desktop…** on the computer's page.
 See [Remote desktop](remote-desktop.md) for the gestures, the monitors, and the stream.

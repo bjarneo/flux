@@ -79,6 +79,40 @@ public enum RemoteInput {
 
     private static func round(_ v: Double) -> Double { v.isFinite ? (v * 100).rounded() / 100 : 0 }
 
+    // MARK: Remote desktop
+
+    /// Flux extension: puts the pointer on the position x, y of the remote
+    /// desktop, from 0 at the top left corner to 1 at the bottom right
+    /// corner. The computer runs the action of the packet after the move.
+    public static func at(x: Double, y: Double) -> Packet { Packet(PacketType.mousepadRequest, position(x, y)) }
+
+    /// Clicks at the position x, y of the remote desktop.
+    public static func clickAt(_ c: Click, x: Double, y: Double) -> Packet {
+        Packet(PacketType.mousepadRequest, position(x, y).merging([c.rawValue: true]) { $1 })
+    }
+
+    /// Presses or releases the left button at the position x, y of the remote desktop.
+    public static func holdAt(_ down: Bool, x: Double, y: Double) -> Packet {
+        Packet(PacketType.mousepadRequest, position(x, y).merging([down ? "singlehold" : "singlerelease": true]) { $1 })
+    }
+
+    /// Scrolls at the position x, y of the remote desktop. A positive `dy` scrolls down.
+    public static func scrollAt(dx: Double, dy: Double, x: Double, y: Double) -> Packet {
+        Packet(PacketType.mousepadRequest, position(x, y).merging(["scroll": true, "dx": round(dx), "dy": round(dy)]) { $1 })
+    }
+
+    /// A position with 4 decimals: a step of 0.3 pixels on a 3000-pixel monitor.
+    private static func position(_ x: Double, _ y: Double) -> [String: Any?] {
+        func clamp(_ v: Double) -> Double { v.isFinite ? (min(max(v, 0), 1) * 10_000).rounded() / 10_000 : 0 }
+        return ["x": clamp(x), "y": clamp(y)]
+    }
+
+    /// The digit of a key in the number row of a Mac keyboard, or nil. The
+    /// row has the same keys in each layout, so Command-Shift-2 is still 2.
+    public static func digit(macKeyCode code: UInt16) -> Int? { digits[code] }
+
+    private static let digits: [UInt16: Int] = [29: 0, 18: 1, 19: 2, 20: 3, 21: 4, 23: 5, 22: 6, 26: 7, 28: 8, 25: 9]
+
     // MARK: Scrolling
 
     /// The scroll distance of 1 line of a mouse wheel, in the units of a

@@ -2,8 +2,9 @@
 
 [Documentation index](README.md)
 
-Flux for Android can show the screen of the computer and control it with touches.
-The remote desktop is off by default, because the phone can then see each window, such as a password manager.
+Flux for Android and Flux for macOS can show the screen of the Omarchy computer and control it.
+The phone or the Mac controls the computer. The computer does not control the phone or the Mac.
+The remote desktop is off by default, because the phone or the Mac can then see each window, such as a password manager.
 
 ## Turn on the remote desktop
 
@@ -14,9 +15,9 @@ The remote desktop is off by default, because the phone can then see each window
    remote_input = true
    ```
 
-   `remote_desktop` lets the phone show the screen.
-   `remote_input` lets the touches and the keys control the computer.
-   Without `remote_input`, the phone shows the screen as view only.
+   `remote_desktop` lets the phone or the Mac show the screen.
+   `remote_input` lets the touches, the mouse, and the keys control the computer.
+   Without `remote_input`, the phone or the Mac shows the screen as view only.
 
 2. Reload the daemon:
 
@@ -113,6 +114,68 @@ The phone changes your speech to text on the device, and the computer types it a
 Select the mic key again to stop. A long press on the mic key records until you lift the finger.
 The Enter key next to the mic key sends Enter.
 
+## Use a Mac
+
+On the Mac, open the computer in Flux.
+In the **Remote Desktop** card, select **Open Remote Desktop…**.
+The menu bar item also has **Remote Desktop…**.
+The Mac asks for Touch ID or its password first. The unlock stays valid for 5 minutes while Flux runs.
+
+The card shows **Off** and the steps to turn it on when `remote_desktop` is off on the computer.
+Without `remote_input`, the window shows **View only**, and the mouse and the keys do nothing on the computer.
+
+The window shows the monitor with the focus.
+The video keeps the shape of the monitor, with bars at the sides or at the top and the bottom.
+You can resize the window or show it full screen.
+When the computer has more than 1 monitor, select the monitor in the bar over the video.
+
+The Mac shows 1 remote desktop at a time.
+The stream stops when you close the window.
+It stops while the window is in the Dock and while the Mac sleeps or is locked, and it starts again when you come back.
+It also stops when the link drops. Select **Start Again** to start it again.
+
+### The mouse on a Mac
+
+The pointer of the computer goes to the position of the Mac pointer on the video.
+
+| Action on the Mac | Result on the computer |
+| --- | --- |
+| Move the pointer over the video | Move the pointer |
+| Click | Click |
+| Double-click | Double-click |
+| Secondary click or Control-click | Right-click |
+| Middle button or Option-click | Middle-click |
+| Press and move | Drag. The drag ends when you release the button. |
+| Scroll with 2 fingers or the wheel | Scroll the window under the pointer, in the same direction as on the Mac |
+
+A click on the bars does nothing.
+
+### The keys on a Mac
+
+Click the video to give it the keyboard focus.
+The keys that you type then go to the computer, as on the [touchpad](remote-input.md#type-on-the-mac).
+Control, Option, Shift, and Command are **ctrl**, **alt**, **shift**, and **super**.
+Command shortcuts go to the computer only while the pointer is over the video.
+Move the pointer off the video to use a Command shortcut of the Mac, such as Command-W.
+macOS keeps its system shortcuts, such as Command-Tab and Command-Space.
+Command and a digit switch to that workspace, and Command, Shift, and a digit move the window there.
+
+Select the keyboard button in the bar to show the key rows and the text field.
+They work as on the touchpad.
+To dictate, select the mic button in the bar, or the mic key next to the text field.
+The Mac changes your speech to text, and the computer types it at the cursor.
+The Mac uses the language of the dictation of herdr agents.
+The Enter key next to the mic key sends Enter.
+
+### The Omarchy panel on a Mac
+
+Select the grid button in the bar to show the Omarchy panel at the right of the video.
+It has the same controls as on the phone.
+Click a workspace to switch to it.
+Option-click a workspace to move the focused window there, or use the menu of the workspace.
+Select **All Shortcuts…** to search the shortcuts. Select the star to pin a shortcut to Launch.
+The Mac saves the pinned shortcuts.
+
 ## Stop from the computer
 
 When the stream starts, the computer shows a notification with a **Stop** button.
@@ -130,6 +193,7 @@ The reload stops a stream that runs.
 ## How it works
 
 1. The phone opens a TLS listener and sends `flux.desktop` with `{"state": "start", "port": PORT, "maxSize": 1920}`.
+   The Mac does the same, with the longest side of its screen in pixels as `maxSize`.
 2. `fluxd` connects to the port and checks the pinned certificate of the phone.
 3. `gpu-screen-recorder` captures the monitor on the GPU and encodes H.264 into FLV.
 4. `fluxd` reads each FLV tag and writes its frame to the phone.
@@ -197,9 +261,12 @@ A binding to a key code, such as `SUPER + code:10` for workspace 1, does not mat
 
 | Problem | Next step |
 | --- | --- |
-| The phone says that the remote desktop is off | Set `remote_desktop = true` and reload `fluxd`. |
-| The phone says to update Flux on the computer | Install a `fluxd` that lists `flux.desktop`. |
+| The phone or the Mac says that the remote desktop is off | Set `remote_desktop = true` and reload `fluxd`. |
+| The phone or the Mac says to update Flux on the computer | Install a `fluxd` that lists `flux.desktop`. |
 | The phone shows the screen, but a tap does nothing | Set `remote_input = true` and reload `fluxd`. |
+| The Mac shows **View only** | Set `remote_input = true` and reload `fluxd`. |
+| The Mac shows no **Remote Desktop** card | Connect the Mac to the computer. The card shows only for a `fluxd` that lists `flux.desktop`. |
+| A Command shortcut goes to the Mac | Move the pointer over the video, then press the shortcut again. |
 | The screen capture stops | Run `journalctl --user -u fluxd --no-pager \| grep "remote desktop"` for the error of `gpu-screen-recorder`. |
 | `gpu-screen-recorder` cannot capture the monitor | Run `getcap /usr/bin/gsr-kms-server`. The result must show `cap_sys_admin`. Install the package again to restore it. |
 | The pointer goes to the wrong place | The compositor must name its monitors with `wl_output` version 4. Hyprland does. |

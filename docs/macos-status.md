@@ -70,7 +70,7 @@ The integrator merged each branch into `macos-client`, resolved the composition 
 ## Current state
 
 - Branch `macos-client`, local only, not pushed.
-- 227 `FluxKitTests` pass. The app builds with no errors. `LanBackend.swift` has 2 deprecation warnings for `removeHandler(context:promise:)` from newer swift-nio.
+- 249 `FluxKitTests` pass. The app builds with no errors. `LanBackend.swift` has 2 deprecation warnings for `removeHandler(context:promise:)` from newer swift-nio.
 - The app is signed ad hoc, not sandboxed, and has no hardened runtime. It targets macOS 14 and later.
 - Dependencies: swift-nio 2.103, swift-nio-ssl 2.37, swift-certificates 1.21, swift-crypto 3.15, swift-asn1, and Citadel 0.12.0 for SSH and SFTP. Citadel requires swift-crypto below 4.
 
@@ -78,8 +78,8 @@ The integrator merged each branch into `macos-client`, resolved the composition 
 
 | Direction | Packet types |
 | --- | --- |
-| Incoming | `kdeconnect.ping`, `kdeconnect.battery`, `kdeconnect.battery.request`, `kdeconnect.clipboard`, `kdeconnect.clipboard.connect`, `kdeconnect.share.request`, `kdeconnect.share.request.update`, `kdeconnect.notification`, `kdeconnect.runcommand`, `kdeconnect.mpris`, `kdeconnect.sftp`, `flux.webcam`, `flux.screen`, `flux.mic`, `flux.dnd`, `flux.approve`, `flux.input`, `flux.herdr` |
-| Outgoing | `kdeconnect.ping`, `kdeconnect.battery`, `kdeconnect.clipboard`, `kdeconnect.clipboard.connect`, `kdeconnect.share.request`, `kdeconnect.share.request.update`, `kdeconnect.runcommand.request`, `kdeconnect.mpris.request`, `kdeconnect.sftp.request`, `kdeconnect.mousepad.request`, `flux.tunnel`, `flux.webcam`, `flux.screen`, `flux.mic`, `flux.dnd`, `flux.approve`, `flux.herdr` |
+| Incoming | `kdeconnect.ping`, `kdeconnect.battery`, `kdeconnect.battery.request`, `kdeconnect.clipboard`, `kdeconnect.clipboard.connect`, `kdeconnect.share.request`, `kdeconnect.share.request.update`, `kdeconnect.notification`, `kdeconnect.runcommand`, `kdeconnect.mpris`, `kdeconnect.sftp`, `flux.webcam`, `flux.screen`, `flux.mic`, `flux.dnd`, `flux.approve`, `flux.input`, `flux.herdr`, `flux.desktop`, `flux.shortcuts` |
+| Outgoing | `kdeconnect.ping`, `kdeconnect.battery`, `kdeconnect.clipboard`, `kdeconnect.clipboard.connect`, `kdeconnect.share.request`, `kdeconnect.share.request.update`, `kdeconnect.runcommand.request`, `kdeconnect.mpris.request`, `kdeconnect.sftp.request`, `kdeconnect.mousepad.request`, `flux.tunnel`, `flux.webcam`, `flux.screen`, `flux.mic`, `flux.dnd`, `flux.approve`, `flux.herdr`, `flux.desktop`, `flux.shortcuts` |
 
 A Mac without an internal battery announces `kdeconnect.battery` as incoming only.
 `fluxd` decides whether to use tunnels from the peer's outgoing `flux.tunnel` (`Link.CanTunnel`), so the Mac does not list it as incoming.
@@ -140,6 +140,7 @@ Unless noted, the peer was the headless `fluxd` described above, driven with `fl
 | Media section with real players | Headless `fluxd` on macOS has no MPRIS players | Pair with a real Omarchy computer that plays media |
 | Direct SFTP route (ip and port) | `fluxd` always answers with a tunnel | Only reachable with a peer that offers a direct address |
 | Menu bar items | The automation tool cannot open a `MenuBarExtra` menu | Open the menu bar item by hand and try each entry |
+| Remote desktop | Unit tests cover the packets, the frame reader, the H.264 conversion, a VideoToolbox frame that becomes a display sample, the positions with the bars, the click and drag rules, the motion limit, and the Omarchy panel packets. Headless `fluxd` does not stream its screen, and the window needs a person at the Mac | Set `remote_desktop = true` and `remote_input = true` on an Omarchy computer, open the remote desktop on the Mac, and try each mouse action, the keys, the monitors, the Omarchy panel, dictation, sleep, and lock |
 | Touchpad and keyboard | Unit tests cover the packets, the key map, clicks and drags, the scroll direction, the release chord, and the type field. Headless `fluxd` has no input backend, and the pointer capture, the keys, and Touch ID need a person at the Mac | Set `remote_input = true` on an Omarchy computer, open the touchpad on the Mac, and try each gesture, key, and the release chord |
 | Settings window | The shell-launched app could not take keyboard focus | Open **Settings** and change each option |
 | Focus filter in System Settings | Adding the Flux filter and toggling a real Focus was not completed | Add **Flux** under **Focus > Focus filters** and toggle the Focus |

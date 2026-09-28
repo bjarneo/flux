@@ -15,6 +15,7 @@ enum PluginRegistry {
             MprisPlugin(),
             RunCommandPlugin(),
             RemoteInputPlugin(),
+            DesktopPlugin(),
             HerdrPlugin(),
             BrowsePlugin(),
             WebcamPlugin(),
@@ -42,6 +43,7 @@ struct FeatureSections: View {
             ClipboardSection(device: device)
             CommandsSection(device: device)
             InputSection(device: device)
+            DesktopSection(device: device)
             AgentsSection(device: device)
             StreamSection(device: device)
             ApproveSection(device: device)
@@ -105,6 +107,7 @@ struct FeatureMenuItems: View {
             MediaMenuItems(device: device)
             CommandsMenu(device: device)
             InputMenuItem(device: device)
+            DesktopMenuItem(device: device)
             AgentsMenuItem(device: device)
             BrowseMenuItem(device: device)
             StreamMenuItems(device: device)

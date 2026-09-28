@@ -6,7 +6,7 @@ import SwiftUI
 /// space, Return sends the rest and presses Enter, and Backspace in the empty
 /// field presses Backspace on the computer.
 struct TypeField: NSViewRepresentable {
-    let controller: TouchpadController
+    let target: any RemoteKeyTarget
     let placeholder: String
 
     func makeNSView(context: Context) -> NSTextField {
@@ -22,30 +22,30 @@ struct TypeField: NSViewRepresentable {
 
     func updateNSView(_ field: NSTextField, context: Context) { field.placeholderString = placeholder }
 
-    func makeCoordinator() -> Coordinator { Coordinator(controller: controller) }
+    func makeCoordinator() -> Coordinator { Coordinator(target: target) }
 
     @MainActor
     final class Coordinator: NSObject, NSTextFieldDelegate {
-        let controller: TouchpadController
+        let target: any RemoteKeyTarget
 
-        init(controller: TouchpadController) { self.controller = controller }
+        init(target: any RemoteKeyTarget) { self.target = target }
 
         func controlTextDidChange(_ notification: Notification) {
             guard let field = notification.object as? NSTextField else { return }
             // An input method or a dead key composes: wait for the text.
             if let editor = field.currentEditor() as? NSTextView, editor.hasMarkedText() { return }
-            let keep = controller.fieldChanged(field.stringValue)
+            let keep = target.fieldChanged(field.stringValue)
             if keep != field.stringValue { field.stringValue = keep }
         }
 
         func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
             switch selector {
             case #selector(NSResponder.insertNewline(_:)):
-                controller.fieldReturn(textView.string)
+                target.fieldReturn(textView.string)
                 control.stringValue = ""
                 return true
             case #selector(NSResponder.deleteBackward(_:)) where textView.string.isEmpty:
-                controller.key(.backspace)
+                target.key(.backspace)
                 return true
             default:
                 return false

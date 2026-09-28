@@ -125,6 +125,8 @@ Command shortcuts go to the computer only while the pad controls the pointer.
 Before that, the Mac keeps them, so Command-W closes the window.
 macOS keeps its system shortcuts, such as Command-Tab and Command-Space.
 To open the Omarchy launcher, select **super**, then press Space.
+While the pad controls the pointer, Command and a digit switch to that workspace, and Command, Shift, and a digit move the window there.
+This needs a `fluxd` that lists `flux.shortcuts`.
 
 Option types the characters of the Mac keyboard layout, such as `@` on a Nordic layout.
 With Control, Command, or a special key, Option is **alt**.
