@@ -24,7 +24,12 @@ final class CameraLogicTests: XCTestCase {
         model.mode = .qr
         XCTAssertEqual(model.cameraUse, .scan(.codes))
     }
-}
+
+    @MainActor
+    func testDictationWaitsForTheMicrophoneStream() throws {
+        let app = try TestApp.model()
+        XCTAssertNil(MicFeature.dictationProblem(app.core), "no stream, so the dictation may start")
+    }
 }
 
 /// An app model over a core that does not start the network.
@@ -37,7 +42,7 @@ enum TestApp {
         config.udpPort = 0
         config.tcpPorts = 0...0
         let core = try FluxCore(paths: FluxPaths(data: dir, suite: "org.omarchy.flux.test." + UUID().uuidString), lanConfig: config,
-                                plugins: [SharePlugin(), WebcamPlugin()])
+                                plugins: [SharePlugin(), MicPlugin(), WebcamPlugin()])
         return AppModel(core: core)
     }
 }

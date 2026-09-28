@@ -198,6 +198,10 @@ final class DesktopController {
     func dictate() {
         voiceError = nil
         panel = .keys
+        if let problem = MicFeature.dictationProblem(app.core) {
+            voiceError = problem
+            return
+        }
         Task { @MainActor [weak self] in
             if let problem = await Dictation.authorize() {
                 self?.voiceError = problem

@@ -291,6 +291,10 @@ private struct AgentReplyControls: View {
     private func dictate() {
         voiceError = nil
         lockError = nil
+        if let problem = MicFeature.dictationProblem(model.core) {
+            voiceError = problem
+            return
+        }
         Task { @MainActor in
             if let problem = await Dictation.authorize() {
                 voiceError = problem

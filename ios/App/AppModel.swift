@@ -138,12 +138,14 @@ final class AppModel {
         backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Flux links") { [weak self] in
             MainActor.assumeIsolated { self?.backgroundTimeEnded() }
         }
-        if backgroundTask == .invalid { core.stop() }
+        if backgroundTask == .invalid, !FeatureHooks.runsInBackground(model: self) { core.stop() }
     }
 
     private func backgroundTimeEnded() {
-        core.stop()
         endBackgroundTask()
+        // A live microphone keeps Flux running, and it streams over the links.
+        if FeatureHooks.runsInBackground(model: self) { return }
+        core.stop()
     }
 
     private func endBackgroundTask() {

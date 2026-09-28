@@ -23,6 +23,7 @@ enum PluginRegistry {
             HerdrPlugin(),
             BrowsePlugin(),
             WebcamPlugin(),
+            MicPlugin(),
         ]
     }
 }
@@ -36,6 +37,7 @@ struct FeatureTiles: View {
             ShareTile(device: device)
             CameraTile(device: device)
             MediaTile(device: device)
+            MicTile(device: device)
             CommandsTile(device: device)
             NotificationsTile(device: device)
             TouchpadTile(device: device)
@@ -56,6 +58,7 @@ enum FeatureRoute: Hashable {
     case terminal(String, String)
     case browse(String)
     case camera(String)
+    case mic(String)
 }
 
 /// The screen of a feature route.
@@ -71,6 +74,7 @@ struct FeatureDestination: View {
         case .terminal(let id, let pane): TerminalScreen(deviceId: id, pane: pane)
         case .browse(let id): BrowseScreen(deviceId: id)
         case .camera(let id): CameraScreen(deviceId: id)
+        case .mic(let id): MicScreen(deviceId: id)
         }
     }
 }
@@ -141,5 +145,12 @@ enum FeatureHooks {
         if active { model.core.plugin(CaptureWatchPlugin.self)?.catchUp() }
         // iOS turns off the camera of an app that leaves the screen.
         if !active { model.core.plugin(WebcamPlugin.self)?.stopInBackground() }
+    }
+
+    /// True while a feature runs in the background and needs the links:
+    /// the microphone stream, which keeps Flux running with the audio
+    /// background mode.
+    static func runsInBackground(model: AppModel) -> Bool {
+        model.core.plugin(MicPlugin.self)?.model.status.active == true
     }
 }
