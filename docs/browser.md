@@ -30,6 +30,7 @@ The extension needs two halves: the native messaging host, which the browser sta
 
    The folder holds one manifest per browser: `manifest.json` is the one for Chromium, and `manifest.firefox.json` is the one for Firefox and Zen.
    Loading the first one there fails with *background.service_worker is currently disabled*, because a Gecko browser reads the background as a list of scripts.
+   If picking a file inside the folder is awkward, `make browser` also builds `browser/dist/flux-firefox.zip`, the same add-on as one archive, which loads the same way.
 
 `flux-cli browser install` prints the folder to load.
 It writes the host manifest for every browser in one pass, with the ID that browser expects: the extension ID for Chromium, and the add-on ID for Firefox and Zen.
