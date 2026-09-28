@@ -127,7 +127,11 @@ final class ApproveMessageTests: XCTestCase {
         let r = try XCTUnwrap(ApproveMessage.parse(p, computerId: "pc1", computerName: "omarchy-xps"))
         XCTAssertEqual(r.kind, .enroll)
         XCTAssertEqual(r.service, "")
+        #if os(macOS)
         XCTAssertEqual(ApproveMessage.question(r), "Use this Mac to approve sudo for user alice on host omarchy-xps?")
+        #else
+        XCTAssertEqual(ApproveMessage.question(r), "Use this iPhone to approve sudo for user alice on host omarchy-xps?")
+        #endif
     }
 
     func testFreshness() {

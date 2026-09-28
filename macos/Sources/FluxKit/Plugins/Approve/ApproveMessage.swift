@@ -128,7 +128,7 @@ public enum ApproveMessage {
     public static func question(_ r: ApproveRequest) -> String {
         switch r.kind {
         case .approve: return "Approve \(r.service) for user \(r.user) on host \(r.host)?"
-        case .enroll: return "Use this Mac to approve sudo for user \(r.user) on host \(r.host)?"
+        case .enroll: return ApproveTexts.current.enrollQuestion(user: r.user, host: r.host)
         }
     }
 

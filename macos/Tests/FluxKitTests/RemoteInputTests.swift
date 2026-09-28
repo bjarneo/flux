@@ -68,9 +68,11 @@ final class RemoteInputTests: XCTestCase {
     }
 
     func testMacModifiersMapToTheComputer() {
+        #if os(macOS)
         let m = RemoteInput.Mods([.control, .option, .shift, .command, .function])
         XCTAssertEqual(m, .init(ctrl: true, alt: true, shift: true, meta: true))
         XCTAssertFalse(RemoteInput.Mods([.capsLock, .function]).any)
+        #endif
         XCTAssertEqual(RemoteInput.Mods(ctrl: true).union(.init(meta: true)), .init(ctrl: true, meta: true))
     }
 

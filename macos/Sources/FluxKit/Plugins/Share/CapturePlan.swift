@@ -123,3 +123,16 @@ public func planCapture(_ state: CaptureState, items: [CaptureItem], now: Int64)
     next.sent = Set(state.sent.filter { $0 > baseline }.sorted().suffix(maxCaptureSent))
     return CapturePlan(send: send, state: next)
 }
+
+/// Picks the assets of the photo library that go out on iOS: the images of
+/// the kind that were made after `after`, the date of the last image of that
+/// kind that went out, oldest first. Screenshots are the images with the
+/// screenshot subtype, and photos are the other images. Without a date the
+/// switch never turned on, so nothing is new.
+func newAssets(after: Date?, candidates: [(id: String, created: Date, screenshot: Bool)], kind: CaptureKind) -> [String] {
+    guard let after else { return [] }
+    return candidates.enumerated()
+        .filter { $0.element.created > after && $0.element.screenshot == (kind == .screenshot) }
+        .sorted { ($0.element.created, $0.offset) < ($1.element.created, $1.offset) }
+        .map(\.element.id)
+}

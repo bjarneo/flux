@@ -13,7 +13,7 @@ enum AudioSession {
         if forRecording {
             try session.setCategory(.record, mode: .measurement)
         } else {
-            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
+            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothHFP])
         }
         try session.setActive(true)
     }
