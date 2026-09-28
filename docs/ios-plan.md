@@ -59,14 +59,15 @@ It shares FluxKit with [Flux for macOS](macos.md) and offers the Android feature
 
 ## Phase 3: Share, clipboard, media, commands, and system
 
-- [ ] Send files from the Files picker and photos from the photo picker, send text and links.
-- [ ] Receive files, text, and links. Open received files with Quick Look.
-- [ ] Clipboard text both ways, and clipboard images with `flux.clipboard.image`.
-- [ ] Send new screenshots and photos when Flux opens.
-- [ ] Media control of the computer's players.
-- [ ] Desktop commands.
-- [ ] Battery both ways, ring the phone with `findmyphone.request`, and Focus reports through a Focus filter.
-- [ ] Checked against `fluxd`: files both ways with identical sha256, text, links, clipboard, media, commands, battery, and ring.
+- [x] Send files from the Files picker and photos from the photo picker, send text and links.
+- [x] Receive files, text, and links. Open received files with Quick Look.
+- [x] Clipboard text both ways, and clipboard images with `flux.clipboard.image`.
+- [x] Send new screenshots and photos when Flux opens.
+- [x] Media control of the computer's players.
+- [x] Desktop commands.
+- [x] Battery both ways, ring the phone with `findmyphone.request`, and Focus reports through a Focus filter.
+- [x] Checked against `fluxd`: files both ways with identical sha256, text, links, clipboard, media, commands, battery, and ring.
+  The simulator reports no battery, so it sends none. Unit tests check the battery mapping.
 
 ## Phase 4: Touchpad, keyboard, and remote desktop
 
