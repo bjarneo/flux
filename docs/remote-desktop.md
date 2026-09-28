@@ -60,6 +60,23 @@ The stream runs while the remote desktop shows.
 It stops when you leave the screen, when the app goes to the background, or when the link drops.
 The screen of the phone stays on while the stream runs.
 
+## Unlock the computer
+
+The stream shows the lock screen, so you can unlock the computer from the phone.
+
+1. Select **Remote desktop**. The video shows the lock screen.
+2. Tap the video to put the cursor in the password field.
+3. Select the keyboard button and type the password in the text field.
+4. Select **Send** on the phone keyboard to press Enter.
+
+The Omarchy lock screen turns the displays off 5 seconds after the last key or pointer move.
+A display that is off has no image, so `fluxd` turns the displays on to start the stream.
+When the displays go off during the stream, the video stops at the last image.
+Tap the video to turn the displays on again.
+
+If your phone keyboard corrects words, turn off the corrections before you type the password.
+The keyboard can change a word after you type it, and the computer then gets the changed text.
+
 ## Use the touches
 
 | Gesture | Result |
@@ -195,6 +212,7 @@ The reload stops a stream that runs.
 1. The phone opens a TLS listener and sends `flux.desktop` with `{"state": "start", "port": PORT, "maxSize": 1920}`.
    The Mac does the same, with the longest side of its screen in pixels as `maxSize`.
 2. `fluxd` connects to the port and checks the pinned certificate of the phone.
+   When `gpu-screen-recorder` lists no monitor, `fluxd` turns the displays on with `hyprctl` and lists them again for up to 3 seconds.
 3. `gpu-screen-recorder` captures the monitor on the GPU and encodes H.264 into FLV.
 4. `fluxd` reads each FLV tag and writes its frame to the phone.
 5. `fluxd` sends `flux.desktop` with `{"state": "live"}`, the monitor, the monitor names, and the stream size.
@@ -262,6 +280,8 @@ A binding to a key code, such as `SUPER + code:10` for workspace 1, does not mat
 | Problem | Next step |
 | --- | --- |
 | The phone or the Mac says that the remote desktop is off | Set `remote_desktop = true` and reload `fluxd`. |
+| The phone or the Mac says that `gpu-screen-recorder` finds no monitor | The displays are off. `fluxd` turns them on with `hyprctl`, so check that `hyprctl monitors` answers. |
+| The video stops at the lock screen | The lock screen turned the displays off. Tap or click the video. |
 | The phone or the Mac says to update Flux on the computer | Install a `fluxd` that lists `flux.desktop`. |
 | The phone shows the screen, but a tap does nothing | Set `remote_input = true` and reload `fluxd`. |
 | The Mac shows **View only** | Set `remote_input = true` and reload `fluxd`. |

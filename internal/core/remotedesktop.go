@@ -152,6 +152,48 @@ func listMonitors(ctx context.Context, path string) ([]monitor, error) {
 	return ms, nil
 }
 
+// desktopWakeWait is the longest time that fluxd waits for the displays to
+// turn on, and desktopWakePoll is the time between 2 lists.
+var (
+	desktopWakeWait = 3 * time.Second
+	desktopWakePoll = 200 * time.Millisecond
+)
+
+// wakeMonitors returns the monitors from list. A display that is off has no
+// image, so the recorder lists no monitor for it. The Omarchy lock screen
+// turns the displays off 5 seconds after the last key or pointer move. When
+// list finds no monitor, wakeMonitors turns the displays on with wake and
+// lists them again until desktopWakeWait ends. A recorder that runs
+// continues when the lock screen turns the displays off again.
+func wakeMonitors(ctx context.Context, list func() ([]monitor, error), wake func() error) ([]monitor, error) {
+	ms, err := list()
+	if err == nil || wake() != nil {
+		return ms, err
+	}
+	deadline := time.Now().Add(desktopWakeWait)
+	for time.Now().Before(deadline) {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(desktopWakePoll):
+		}
+		if ms, err = list(); err == nil {
+			return ms, nil
+		}
+	}
+	return nil, err
+}
+
+// wakeDisplays turns on each display that is off. A Hyprland with a Lua
+// configuration takes a Lua dispatcher. An older Hyprland takes "dpms on".
+func wakeDisplays(ctx context.Context) error {
+	if _, err := hyprctl(ctx, "dispatch", `hl.dsp.dpms({ action = "enable" })`); err == nil {
+		return nil
+	}
+	_, err := hyprctl(ctx, "dispatch", "dpms", "on")
+	return err
+}
+
 // focusedMonitor returns the monitor with the focus in Hyprland, or an
 // empty string when hyprctl does not answer.
 func focusedMonitor(ctx context.Context) string {
@@ -234,7 +276,9 @@ func (d *Daemon) runDesktop(dev *Device, l *lan.Link, b desktopStart) {
 		fail(errors.New("the remote desktop needs gpu-screen-recorder on the computer. Install it with: sudo pacman -S gpu-screen-recorder"))
 		return
 	}
-	ms, err := listMonitors(d.ctx, recorder)
+	ms, err := wakeMonitors(d.ctx,
+		func() ([]monitor, error) { return listMonitors(d.ctx, recorder) },
+		func() error { return wakeDisplays(d.ctx) })
 	if err != nil {
 		fail(err)
 		return

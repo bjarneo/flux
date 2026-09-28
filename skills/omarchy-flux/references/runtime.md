@@ -188,7 +188,8 @@ The phone shows the desktop screen only with `remote_desktop = true`.
 The phone can then see each window. Its touches also need `remote_input = true`.
 Do not turn on `remote_desktop` unless the user asks for it.
 The stream needs `gpu-screen-recorder`.
-Read `docs/remote-desktop.md` for the gestures, the monitors, the Omarchy panel, and the stream format.
+Read `docs/remote-desktop.md` for the gestures, the monitors, the lock screen, the Omarchy panel, and the stream format.
+The stream shows the lock screen. `fluxd` turns the displays on when they are off.
 The Omarchy panel runs Hyprland key bindings and workspace actions for the phone with `flux.shortcuts`. It needs `remote_input = true`.
 
 ```sh
