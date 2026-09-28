@@ -92,4 +92,19 @@ final class BatteryStateTests: XCTestCase {
         XCTAssertNil(BatteryState(packet: Packet(PacketType.battery, [:])))
         XCTAssertEqual(BatteryState(packet: Packet(PacketType.battery, ["currentCharge": 80, "isCharging": true])), BatteryState(charge: 80, charging: true))
     }
+
+    func testPacketRoundTrips() {
+        for state in [BatteryState(charge: 0, charging: false), BatteryState(charge: 57, charging: true), BatteryState(charge: 100, charging: false)] {
+            XCTAssertEqual(BatteryState(packet: state.packet), state)
+        }
+    }
+
+    func testLevelMapping() {
+        XCTAssertNil(BatteryState(level: -1, charging: false), "the simulator reports -1: no battery")
+        XCTAssertEqual(BatteryState(level: 0, charging: false), BatteryState(charge: 0, charging: false))
+        XCTAssertEqual(BatteryState(level: 0.574, charging: true), BatteryState(charge: 57, charging: true))
+        XCTAssertEqual(BatteryState(level: 0.576, charging: false), BatteryState(charge: 58, charging: false), "the level rounds")
+        XCTAssertEqual(BatteryState(level: 1, charging: true), BatteryState(charge: 100, charging: true))
+        XCTAssertEqual(BatteryState(level: 1.2, charging: false), BatteryState(charge: 100, charging: false), "the charge stays at most 100")
+    }
 }

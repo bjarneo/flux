@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import Foundation
 import NIOConcurrencyHelpers
 import Observation
@@ -14,7 +18,8 @@ public final class ClipboardModel {
 /// Clipboard sync: kdeconnect.clipboard and kdeconnect.clipboard.connect in
 /// both directions. macOS has no clipboard change notification, so while
 /// sync is on and a paired computer is connected, the plugin polls the
-/// change count of the general pasteboard.
+/// change count of the general pasteboard. iOS runs the poll only while the
+/// app is on the screen.
 public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
     private weak var core: FluxCore?
     public let model: ClipboardModel
@@ -98,7 +103,7 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
         lastRemote.withLockedValue { $0 = text }
         onMain { plugin in
             ClipboardText.write(text)
-            plugin.changeCount = NSPasteboard.general.changeCount
+            plugin.changeCount = ClipboardText.changeCount
         }
     }
 
@@ -127,7 +132,7 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
     private func updatePolling() {
         let on = sync && !(core?.connectedPaired().isEmpty ?? true)
         if on, timer == nil {
-            changeCount = NSPasteboard.general.changeCount
+            changeCount = ClipboardText.changeCount
             let t = Timer(timeInterval: Self.pollInterval, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.poll() }
             }
@@ -141,7 +146,7 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
 
     @MainActor
     private func poll() {
-        let count = NSPasteboard.general.changeCount
+        let count = ClipboardText.changeCount
         guard count != changeCount else { return }
         changeCount = count
         onLocalClipboard()
@@ -167,6 +172,7 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
 
 /// The text of the general pasteboard.
 enum ClipboardText {
+    #if os(macOS)
     /// Password managers mark secrets with these types (nspasteboard.org), so
     /// that clipboard tools leave them alone.
     static let privateTypes: Set<NSPasteboard.PasteboardType> = [
@@ -187,4 +193,25 @@ enum ClipboardText {
         pb.clearContents()
         pb.setString(text, forType: .string)
     }
+
+    /// Changes each time an app writes the pasteboard.
+    @MainActor
+    static var changeCount: Int { NSPasteboard.general.changeCount }
+    #else
+    /// iOS has no convention that marks secrets on the pasteboard, so both
+    /// reads return the text.
+    @MainActor
+    static func text(includingPrivate: Bool) -> String? {
+        UIPasteboard.general.string
+    }
+
+    @MainActor
+    static func write(_ text: String) {
+        UIPasteboard.general.string = text
+    }
+
+    /// Changes each time an app writes the pasteboard.
+    @MainActor
+    static var changeCount: Int { UIPasteboard.general.changeCount }
+    #endif
 }

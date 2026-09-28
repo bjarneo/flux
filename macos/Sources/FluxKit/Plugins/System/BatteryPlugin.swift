@@ -1,6 +1,10 @@
 import Foundation
-import IOKit.ps
 import Observation
+#if os(macOS)
+import IOKit.ps
+#else
+import UIKit
+#endif
 
 /// A battery charge and whether the charger is plugged in.
 public struct BatteryState: Equatable, Sendable {
@@ -30,6 +34,18 @@ public struct BatteryState: Equatable, Sendable {
         ])
     }
 
+    /// Maps a battery level from 0 to 1. A negative level means that the
+    /// device reports no battery, like the iOS simulator.
+    init?(level: Float, charging: Bool) {
+        guard level >= 0 else { return nil }
+        charge = Swift.min(100, Swift.max(0, Int((level * 100).rounded())))
+        self.charging = charging
+    }
+
+    #if os(macOS)
+    /// The battery of this device, or nil when it has none.
+    public static func current() -> BatteryState? { mac() }
+
     /// The internal battery of this Mac, or nil when the Mac has none.
     /// Charging means that the Mac runs on AC power, like the phone that
     /// reports "plugged in".
@@ -47,11 +63,21 @@ public struct BatteryState: Equatable, Sendable {
         }
         return nil
     }
+    #else
+    /// The battery of the iPhone, or nil in the simulator. Charging means
+    /// that the charger is plugged in, also when the battery is full.
+    @MainActor
+    public static func current() -> BatteryState? {
+        let device = UIDevice.current
+        device.isBatteryMonitoringEnabled = true
+        return BatteryState(level: device.batteryLevel, charging: device.batteryState == .charging || device.batteryState == .full)
+    }
+    #endif
 }
 
-/// kdeconnect.battery in both directions. This Mac sends its battery when a
-/// computer connects, when a computer asks (kdeconnect.battery.request), and
-/// when the battery changes. A Mac without an internal battery neither
+/// kdeconnect.battery in both directions. This device sends its battery when
+/// a computer connects, when a computer asks (kdeconnect.battery.request),
+/// and when the battery changes. A Mac without an internal battery neither
 /// advertises nor sends a battery. The battery that a computer sends shows in
 /// the computer's section.
 public final class BatteryPlugin: FluxPlugin, @unchecked Sendable {
@@ -68,7 +94,11 @@ public final class BatteryPlugin: FluxPlugin, @unchecked Sendable {
     @MainActor
     public init() {
         model = BatteryModel()
-        hasBattery = BatteryState.mac() != nil
+        let state = BatteryState.current()
+        hasBattery = state != nil
+        #if os(iOS)
+        last = state
+        #endif
         incoming = hasBattery ? [PacketType.battery, PacketType.batteryRequest] : [PacketType.battery]
         outgoing = hasBattery ? [PacketType.battery] : []
     }
@@ -76,14 +106,24 @@ public final class BatteryPlugin: FluxPlugin, @unchecked Sendable {
     public func attach(core: FluxCore) {
         self.core = core
         guard hasBattery else { return }
+        #if os(macOS)
         last = BatteryState.mac()
         let context = Unmanaged.passUnretained(self).toOpaque()
         guard let source = IOPSNotificationCreateRunLoopSource({ context in
             guard let context else { return }
-            Unmanaged<BatteryPlugin>.fromOpaque(context).takeUnretainedValue().batteryChanged()
+            let plugin = Unmanaged<BatteryPlugin>.fromOpaque(context).takeUnretainedValue()
+            plugin.batteryChanged(BatteryState.mac())
         }, context)?.takeRetainedValue() else { return }
         // The run loop keeps the source, and the plugin lives as long as the process.
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .defaultMode)
+        #else
+        // The observers stay, and the plugin lives as long as the process.
+        for name in [UIDevice.batteryLevelDidChangeNotification, UIDevice.batteryStateDidChangeNotification] {
+            _ = NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.batteryChanged(BatteryState.current()) }
+            }
+        }
+        #endif
     }
 
     public func onConnected(_ device: Device) {
@@ -111,13 +151,20 @@ public final class BatteryPlugin: FluxPlugin, @unchecked Sendable {
     }
 
     private func send(to device: Device) {
-        guard hasBattery, device.accepts(PacketType.battery), let state = BatteryState.mac() else { return }
+        #if os(macOS)
+        let current = BatteryState.mac()
+        #else
+        // Network threads do not touch UIDevice, so the last reported state goes out.
+        let current = lock.withLock { last }
+        #endif
+        guard hasBattery, device.accepts(PacketType.battery), let state = current else { return }
         _ = device.send(state.packet)
     }
 
-    /// IOKit calls it on the main run loop when a power source changes.
-    private func batteryChanged() {
-        guard let core, let state = BatteryState.mac() else { return }
+    /// Runs on the main queue when a power source changes: IOKit on macOS,
+    /// UIDevice notifications on iOS.
+    private func batteryChanged(_ state: BatteryState?) {
+        guard let core, let state else { return }
         let changed = lock.withLock {
             defer { last = state }
             return last != state

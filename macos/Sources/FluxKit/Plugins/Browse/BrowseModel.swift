@@ -154,11 +154,11 @@ public final class BrowseModel {
         if entry.dir { open(entry.path) } else { download(entry) }
     }
 
-    /// Saves a file in ~/Downloads under a free name.
+    /// Saves a file in the downloads folder under a free name.
     public func download(_ entry: BrowseEntry) {
         guard let session, !entry.dir else { return }
         let fm = FileManager.default
-        let folder = fm.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
+        let folder = FluxFolders.downloads
         let dest = BrowseDownload.uniqueURL(for: BrowseDownload.safeName(entry.name), in: folder) {
             fm.fileExists(atPath: $0.path) || fm.fileExists(atPath: $0.path + ".part")
         }
@@ -195,9 +195,9 @@ public final class BrowseModel {
             switch result {
             case .done(let url):
                 Notifier.shared.post(id: "browse-\(id.uuidString)", category: BrowsePlugin.downloadCategory,
-                                     title: "Downloaded \(url.lastPathComponent)", body: "Saved in Downloads",
+                                     title: "Downloaded \(url.lastPathComponent)", body: "Saved in \(FluxFolders.downloadsName)",
                                      subtitle: self.deviceName, userInfo: [BrowsePlugin.pathKey: url.path])
-                core.toast("Saved \(url.lastPathComponent) in Downloads")
+                core.toast("Saved \(url.lastPathComponent) in \(FluxFolders.downloadsName)")
             case .failed(let reason):
                 if !Task.isCancelled { core.toast("Downloading \(entry.name) failed: \(reason)") }
             case .running:

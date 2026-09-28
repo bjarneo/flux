@@ -1,14 +1,23 @@
+#if os(macOS)
 import AppKit
+#endif
 import Foundation
 import UserNotifications
 
 /// File, text, and link sharing: kdeconnect.share.request in both
 /// directions. A file from the computer comes on a payload port, or through a
 /// Flux tunnel when the computer blocks incoming connections. A file to the
-/// computer goes out on a payload port that this Mac opens.
+/// computer goes out on a payload port that this device opens.
 public final class SharePlugin: FluxPlugin, @unchecked Sendable {
     private weak var core: FluxCore?
     public let model: ShareModel
+    /// Opens a received file. On macOS, nil opens it with the default app.
+    /// On iOS the app sets it, for example to Quick Look. Without it the
+    /// file is saved and not opened.
+    @MainActor public var openFile: (@MainActor @Sendable (URL) -> Void)?
+    /// Opens a received link. On macOS, nil opens it in the default browser.
+    /// On iOS the app sets it. Without it the link is not opened.
+    @MainActor public var openLink: (@MainActor @Sendable (URL) -> Void)?
 
     static let fileCategory = "share.file"
     static let linkCategory = "share.link"
@@ -26,34 +35,65 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
         self.core = core
         let folder = downloadFolder
         ui { $0.downloadFolder = folder }
-        Notifier.shared.register(category: Self.fileCategory, actions: [
+        #if os(macOS)
+        let fileActions = [
             UNNotificationAction(identifier: "open", title: "Open"),
             UNNotificationAction(identifier: "reveal", title: "Show in Finder"),
-        ]) { action, info, _ in
+        ]
+        #else
+        let fileActions = [UNNotificationAction(identifier: "open", title: "Open")]
+        #endif
+        Notifier.shared.register(category: Self.fileCategory, actions: fileActions) { [weak self] action, info, _ in
             guard let path = info["path"] as? String else { return }
             let url = URL(fileURLWithPath: path)
             DispatchQueue.main.async {
-                if action == "reveal" {
-                    NSWorkspace.shared.activateFileViewerSelecting([url])
-                } else {
-                    NSWorkspace.shared.open(url)
+                MainActor.assumeIsolated {
+                    #if os(macOS)
+                    if action == "reveal" {
+                        NSWorkspace.shared.activateFileViewerSelecting([url])
+                        return
+                    }
+                    #endif
+                    self?.openReceivedFile(url)
                 }
             }
         }
-        Notifier.shared.register(category: Self.linkCategory, actions: [UNNotificationAction(identifier: "open", title: "Open")]) { _, info, _ in
+        Notifier.shared.register(category: Self.linkCategory, actions: [UNNotificationAction(identifier: "open", title: "Open")]) { [weak self] _, info, _ in
             guard let link = info["url"] as? String, let url = URL(string: link) else { return }
-            DispatchQueue.main.async { NSWorkspace.shared.open(url) }
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.openReceivedLink(url) } }
         }
+    }
+
+    /// Opens a file through openFile, or with the default app on macOS.
+    @MainActor
+    private func openReceivedFile(_ url: URL) {
+        if let openFile {
+            openFile(url)
+            return
+        }
+        #if os(macOS)
+        NSWorkspace.shared.open(url)
+        #endif
+    }
+
+    /// Opens a link through openLink, or in the default browser on macOS.
+    @MainActor
+    private func openReceivedLink(_ url: URL) {
+        if let openLink {
+            openLink(url)
+            return
+        }
+        #if os(macOS)
+        NSWorkspace.shared.open(url)
+        #endif
     }
 
     // MARK: Settings
 
-    static var defaultFolder: URL {
-        FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
-            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads", isDirectory: true)
-    }
+    static var defaultFolder: URL { FluxFolders.downloads }
 
-    /// The folder for received files. The default is ~/Downloads.
+    /// The folder for received files. The default is ~/Downloads on macOS
+    /// and the app's Documents folder on iOS.
     public var downloadFolder: URL {
         guard let path = core?.defaults.string(forKey: Self.folderKey), !path.isEmpty else { return Self.defaultFolder }
         return URL(fileURLWithPath: path, isDirectory: true)
@@ -79,7 +119,7 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
             core.toast("Text from \(from) is on the clipboard")
         case .url(let link):
             if let url = URL(string: link), ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
-                DispatchQueue.main.async { NSWorkspace.shared.open(url) }
+                DispatchQueue.main.async { MainActor.assumeIsolated { self.openReceivedLink(url) } }
             } else {
                 // Other schemes can start apps, so they wait for a click.
                 Notifier.shared.post(id: "share-\(UUID().uuidString)", category: Self.linkCategory,
@@ -145,7 +185,7 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
                                  body: "From \(job.from), saved in \(folder.lastPathComponent)",
                                  userInfo: ["path": saved.path])
             core.toast("Saved \(saved.lastPathComponent) in \(folder.lastPathComponent)")
-            if job.open { DispatchQueue.main.async { NSWorkspace.shared.open(saved) } }
+            if job.open { DispatchQueue.main.async { MainActor.assumeIsolated { self.openReceivedFile(saved) } } }
         } catch {
             try? part.handle.close()
             try? FileManager.default.removeItem(at: part.url)
