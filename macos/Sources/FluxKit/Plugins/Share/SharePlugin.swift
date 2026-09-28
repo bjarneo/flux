@@ -125,9 +125,18 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
             core.plugin(ClipboardPlugin.self)?.putFromComputer(text)
             core.toast("Text from \(from) is on the clipboard")
         case .url(let link):
-            if let url = URL(string: link), ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
-                DispatchQueue.main.async { MainActor.assumeIsolated { self.openReceivedLink(url) } }
-            } else {
+            let web = URL(string: link).flatMap { ["http", "https"].contains($0.scheme?.lowercased() ?? "") ? $0 : nil }
+            if let web {
+                DispatchQueue.main.async { MainActor.assumeIsolated { self.openReceivedLink(web) } }
+            }
+            #if os(macOS)
+            let notify = web == nil
+            #else
+            // iOS opens links only from the screen, so the link also stays
+            // in a notification.
+            let notify = true
+            #endif
+            if notify {
                 // Other schemes can start apps, so they wait for a click.
                 Notifier.shared.post(id: "share-\(UUID().uuidString)", category: Self.linkCategory,
                                      title: "Link from \(from)", body: link, userInfo: ["url": link])
