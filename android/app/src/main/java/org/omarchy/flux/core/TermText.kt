@@ -245,7 +245,7 @@ private val edgeLine = Regex("^[╵╷╹╻]?(▀{8,}|▄{8,})[╵╷╹╻]?$"
  */
 fun tidyLines(lines: List<TermLine>): List<TermLine> {
     val out = ArrayList<TermLine>()
-    for (line in lines) {
+    for (line in dropSidebar(lines)) {
         val trimmed = trimEnd(dropScrollBar(line))
         val text = trimmed.text
         when {
@@ -255,6 +255,55 @@ fun tidyLines(lines: List<TermLine>): List<TermLine> {
         }
     }
     return dropEmptyRows(dedent(out))
+}
+
+/** A sidebar starts at this column or later, see [dropSidebar]. */
+private const val SIDEBAR_MIN_COL = 40
+
+/** The widest sidebar, in columns. */
+private const val SIDEBAR_MAX_WIDTH = 60
+
+/** The fewest lines that end in a sidebar. */
+private const val SIDEBAR_MIN_ROWS = 4
+
+/**
+ * Removes the sidebar at the right of a full-screen agent, for example the
+ * sidebar that opencode shows in a wide terminal. Each line holds a row of
+ * the conversation and a row of the sidebar, so on a narrow screen the two
+ * mix. A sidebar is a column of cells with one background, from the same
+ * column to the end of the lines. At least [SIDEBAR_MIN_ROWS] lines must
+ * end in it, and no line can have other cells there.
+ */
+private fun dropSidebar(lines: List<TermLine>): List<TermLine> {
+    val ends = HashMap<Pair<Int, TermColor>, Int>()
+    for (line in lines) endRun(line)?.let { ends.merge(it, 1, Int::plus) }
+    val (start, count) = ends.maxByOrNull { it.value } ?: return lines
+    val (col, bg) = start
+    if (count < SIDEBAR_MIN_ROWS || col < SIDEBAR_MIN_COL) return lines
+    if (lines.maxOf { it.text.length } - col > SIDEBAR_MAX_WIDTH) return lines
+    for (line in lines) {
+        var at = 0
+        for (s in line.spans) {
+            if (at + s.text.length > col && (s.style.inverse || s.style.bg != bg)) return lines
+            at += s.text.length
+        }
+    }
+    return lines.map { take(it, col) }
+}
+
+/**
+ * Returns the start column and the background of the run of cells with one
+ * background at the end of a line, or null when the last cell has no background.
+ */
+private fun endRun(line: TermLine): Pair<Int, TermColor>? {
+    val last = line.spans.lastOrNull() ?: return null
+    val bg = last.style.bg?.takeIf { !last.style.inverse } ?: return null
+    var start = line.text.length
+    for (s in line.spans.asReversed()) {
+        if (s.style.inverse || s.style.bg != bg) break
+        start -= s.text.length
+    }
+    return start to bg
 }
 
 /** True when a blank cell with this style shows no color. */

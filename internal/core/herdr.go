@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -776,9 +777,6 @@ func trimLineEnds(text string) string {
 	return strings.Join(lines, "\n")
 }
 
-// sgrEnd matches an SGR sequence at the end of a line.
-var sgrEnd = regexp.MustCompile("\x1b\\[[0-9;:]*m$")
-
 // cleanANSI prepares ANSI output for a phone. It keeps the SGR sequences
 // of colors and styles and removes all other escape sequences and control
 // characters. It changes CRLF to LF and removes the blanks at the end of
@@ -827,23 +825,63 @@ func cleanANSI(text string) string {
 	return strings.Join(lines, "\n")
 }
 
-// trimStyledEnd removes the spaces and tabs at the end of a line and keeps
-// the SGR sequences among them.
+// trimStyledEnd removes the spaces and tabs with the default background at
+// the end of a line and keeps the SGR sequences among them. Blanks with a
+// background stay, because they draw the panels of full-screen agents such
+// as opencode. cleanANSI leaves only SGR sequences in the line.
 func trimStyledEnd(line string) string {
-	var tail []string
-	for {
-		line = strings.TrimRight(line, " \t")
-		loc := sgrEnd.FindStringIndex(line)
-		if loc == nil {
-			break
+	bg := false
+	keep := 0
+	for i := 0; i < len(line); {
+		if line[i] == 0x1b {
+			end := strings.IndexByte(line[i:], 'm')
+			if end < 0 {
+				break
+			}
+			bg = sgrBackground(line[i+2:i+end], bg)
+			i += end + 1
+			continue
 		}
-		tail = append(tail, line[loc[0]:])
-		line = line[:loc[0]]
+		if bg || line[i] != ' ' && line[i] != '\t' {
+			keep = i + 1
+		}
+		i++
 	}
-	for i := len(tail) - 1; i >= 0; i-- {
-		line += tail[i]
+	return line[:keep] + strings.Join(sgr.FindAllString(line[keep:], -1), "")
+}
+
+// sgrBackground reports whether a background color is set after the SGR
+// parameters params, when bg reports it before them.
+func sgrBackground(params string, bg bool) bool {
+	parts := strings.Split(params, ";")
+	for i := 0; i < len(parts); i++ {
+		p := parts[i]
+		if strings.Contains(p, ":") {
+			// The colon form keeps a color in 1 parameter, for example 48:2::1:2:3.
+			if strings.HasPrefix(p, "48:") {
+				bg = true
+			}
+			continue
+		}
+		n, _ := strconv.Atoi(p)
+		switch {
+		case n == 0 || n == 49:
+			bg = false
+		case n >= 40 && n <= 47 || n >= 100 && n <= 107:
+			bg = true
+		case n == 38 || n == 48:
+			if n == 48 {
+				bg = true
+			}
+			// Skip the color: 5;N or 2;R;G;B.
+			if i+1 < len(parts) && parts[i+1] == "5" {
+				i += 2
+			} else if i+1 < len(parts) && parts[i+1] == "2" {
+				i += 4
+			}
+		}
 	}
-	return line
+	return bg
 }
 
 // tailText returns the end of text in at most max bytes. The cut text

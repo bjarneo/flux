@@ -88,6 +88,38 @@ class TermTextTest {
         assertNull(lines[3].fill)
     }
 
+    private val sidebar = 0x202033
+
+    /** A row of a wide opencode screen: [main] in 60 columns, a gap of 2, and [side] in a sidebar of 30 columns. */
+    private fun wideRow(main: String, side: String, trimmed: Boolean = false): String {
+        val bar = if (trimmed && side.isEmpty()) "" else cell("  ", white) + cell("  $side".let { if (trimmed) it else it.padEnd(30) }, text, sidebar)
+        return cell(if (trimmed && bar.isEmpty()) main else main.padEnd(60), text) + bar + "$esc[0m"
+    }
+
+    private val wideScreen = listOf("┃  Say hello" to "Greeting", "" to "Context", "   Hello." to "1% used", "" to "", "   ▣  Build" to "LSP")
+
+    @Test
+    fun dropsTheSidebar() {
+        val expected = listOf("┃  Say hello", "", "   Hello.", "", "   ▣  Build")
+        assertEquals(expected, termLines(wideScreen.joinToString("\n") { (m, s) -> wideRow(m, s) }).map { it.text })
+        // An older fluxd removes the blanks at the end of a line, also when they have a background.
+        assertEquals(expected, termLines(wideScreen.joinToString("\n") { (m, s) -> wideRow(m, s, trimmed = true) }).map { it.text })
+    }
+
+    @Test
+    fun keepsColumnsThatAreNotASidebar() {
+        val wide = wideScreen.map { (m, s) -> wideRow(m, s) }
+        // A line with other cells in the sidebar column.
+        val other = termLines((wide + ("x".repeat(70))).joinToString("\n"))
+        assertEquals("    Greeting", other.first().text.substring(60).trimEnd())
+        // Rows with a background from a column near the left, for example diff lines.
+        val diff = List(5) { "  $it " + cell("+ added line $it" + " ".repeat(60), text, added) }
+        assertEquals("  0 + added line 0", termLines(diff.joinToString("\n")).first().text)
+        // Too few rows.
+        val few = termLines(wide.take(3).joinToString("\n"))
+        assertEquals("    Greeting", few.first().text.substring(60).trimEnd())
+    }
+
     @Test
     fun fillsWithTheBackgroundAfterTheText() {
         // A diff row: the panel, then the added code, then blanks in the color of the added code.

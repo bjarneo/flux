@@ -387,7 +387,12 @@ func TestCleanANSI(t *testing.T) {
 	cases := []struct{ name, in, want string }{
 		{"line ends", "one  \r\ntwo\r\n", "one\ntwo\n"},
 		{"styles stay", "\x1b[1m\x1b[38;5;1mred\x1b[0m plain", "\x1b[1m\x1b[38;5;1mred\x1b[0m plain"},
-		{"blanks before a reset", "\x1b[48;5;2m bg \x1b[0m   \x1b[0m  ", "\x1b[48;5;2m bg\x1b[0m\x1b[0m"},
+		{"blanks with a background stay", "\x1b[48;5;2m bg \x1b[0m   \x1b[0m  ", "\x1b[48;5;2m bg \x1b[0m\x1b[0m"},
+		{"a panel keeps its blanks", "\x1b[38;2;9;9;9m┃\x1b[48;2;1;2;3m  text    \x1b[0m  ", "\x1b[38;2;9;9;9m┃\x1b[48;2;1;2;3m  text    \x1b[0m"},
+		{"a foreground is not a background", "\x1b[38;2;48;49;50mx   \x1b[38;5;48m  \x1b[0m", "\x1b[38;2;48;49;50mx\x1b[38;5;48m\x1b[0m"},
+		{"a background ends", "\x1b[44mx\x1b[49m   \x1b[0m", "\x1b[44mx\x1b[49m\x1b[0m"},
+		{"a reset ends a background", "\x1b[1;104mx\x1b[m  ", "\x1b[1;104mx\x1b[m"},
+		{"the colon form sets a background", "x\x1b[48:2::1:2:3m  \x1b[0m ", "x\x1b[48:2::1:2:3m  \x1b[0m"},
 		{"cursor moves go", "a\x1b[2Kb\x1b[10;4Hc", "abc"},
 		{"links go", "\x1b]8;;https://x.y\x07link\x1b]8;;\x1b\\ end", "link end"},
 		{"other escapes go", "a\x1b(Bb\x1b=c", "abc"},

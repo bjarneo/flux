@@ -70,6 +70,7 @@ This matters most for full-screen agents such as opencode, which draw panels acr
 - A long line wraps, and its wrapped rows start under its text, after the panel bar or the list marker.
 - The phone removes the margin that all lines share, extra empty rows, scroll bars, and the half-block edges of boxes.
 - A panel, for example a message, a tool call, or a diff line in opencode, fills the width of the screen.
+- The phone removes the sidebar that opencode shows in a wide terminal, because its rows share the lines of the conversation. The status line at the bottom still shows the tokens and the cost.
 - A centered drawing, for example the opencode logo, moves to the left when that makes it fit.
 - When the agent colors suit a dark background and the phone uses the light theme, the phone inverts the lightness of these colors, so the text stays readable. It does the same for colors that suit a light background in the dark theme.
 
@@ -408,7 +409,8 @@ The computer sends `state` with the new pane before `created`:
 
 A `read` with `"format":"ansi"` gets an `output` with `"format":"ansi"`.
 Its `text` keeps the SGR sequences of colors and styles.
-`fluxd` removes all other escape sequences and control characters, changes CRLF to LF, and removes the blanks at the end of each line.
+`fluxd` removes all other escape sequences and control characters, changes CRLF to LF, and removes the blanks with the default background at the end of each line.
+Blanks with a background stay, because they draw the panels of full-screen agents such as opencode.
 Without `format`, `text` has no ANSI codes.
 For an agent, `fluxd` also reads the plain history and puts the ANSI screen under it, because herdr gets the history of an agent in the alternate screen only as plain text.
 `text` has at most 1 MB.
