@@ -76,6 +76,11 @@ public enum VisionScan {
 
     private static func codes(_ handler: VNImageRequestHandler) throws -> (codes: [ScannedCode], outlines: [[CGPoint]]) {
         let request = VNDetectBarcodesRequest()
+        #if targetEnvironment(simulator)
+        // The later revisions need the Neural Engine, which the simulator
+        // does not have, and fail with "Could not create inference context".
+        request.revision = VNDetectBarcodesRequestRevision1
+        #endif
         try handler.perform([request])
         let results = request.results ?? []
         let codes = results.compactMap { o -> ScannedCode? in
