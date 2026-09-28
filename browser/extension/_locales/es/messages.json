@@ -9,10 +9,10 @@
     "message": "Enviar al móvil con Flux"
   },
   "menuSendLink": {
-    "message": "Este enlace"
+    "message": "Enviar este enlace al móvil con Flux"
   },
   "menuSendPage": {
-    "message": "Esta página"
+    "message": "Enviar esta página al móvil con Flux"
   },
   "onlyWebLinks": {
     "message": "Flux solo envía enlaces web"

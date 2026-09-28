@@ -38,8 +38,8 @@ It is unpacked on purpose: a browser refuses an extension it cannot verify, and 
 
 | Action | How |
 | --- | --- |
-| Send a link | Right-click it, then **This link** |
-| Send the page you are on | Right-click the page, then **This page**, or **Send page** in the icon |
+| Send a link | Right-click it, then **Send this link to the phone with Flux** |
+| Send the page you are on | Right-click the page, then **Send this page to the phone with Flux**, or **Send page** in the icon |
 | Send to another phone | Mark it with the radio button in the icon first |
 
 The icon shows the result of a send: **…** while it works, **✓** when it is on the phone, and **!** when it is not.
