@@ -245,9 +245,23 @@ public final class Dictation {
 
     /// Starts the microphone. It returns false when this Mac has no input.
     private func startAudio() -> Bool {
+        #if os(iOS)
+        // iOS gives the engine an input only while a recording session is active.
+        do {
+            try AudioSession.activate(forRecording: true)
+        } catch {
+            FluxLog.plugin.error("dictation: the audio session did not start: \(String(describing: error), privacy: .public)")
+            return false
+        }
+        #endif
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
-        guard format.sampleRate > 0, format.channelCount > 0 else { return false }
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            #if os(iOS)
+            AudioSession.deactivate()
+            #endif
+            return false
+        }
         let feed = feed
         input.removeTap(onBus: 0)
         // The tap runs on the audio thread.
@@ -262,6 +276,9 @@ public final class Dictation {
         } catch {
             FluxLog.plugin.error("dictation: the microphone did not start: \(String(describing: error), privacy: .public)")
             input.removeTap(onBus: 0)
+            #if os(iOS)
+            AudioSession.deactivate()
+            #endif
             return false
         }
         audioOn = true
@@ -273,6 +290,9 @@ public final class Dictation {
         audioOn = false
         engine.stop()
         engine.inputNode.removeTap(onBus: 0)
+        #if os(iOS)
+        AudioSession.deactivate()
+        #endif
     }
 
     private func heard(_ db: Float) {

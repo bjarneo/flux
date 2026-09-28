@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import ScreenCaptureKit
 
@@ -126,3 +127,4 @@ final class ScreenCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
         if current { onStop("The screen capture stopped: \(error.localizedDescription)") }
     }
 }
+#endif

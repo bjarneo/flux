@@ -1,3 +1,4 @@
+#if os(macOS)
 import CoreGraphics
 import CoreVideo
 import Foundation
@@ -300,3 +301,4 @@ public final class ScreenPlugin: FluxPlugin, @unchecked Sendable {
         DispatchQueue.main.async { MainActor.assumeIsolated { change(model) } }
     }
 }
+#endif

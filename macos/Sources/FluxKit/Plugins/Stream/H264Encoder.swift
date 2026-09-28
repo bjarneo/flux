@@ -35,14 +35,21 @@ final class H264Encoder: @unchecked Sendable {
         self.height = height
         self.output = output
         self.onError = onError
-        let spec = [kVTVideoEncoderSpecification_EnableHardwareAcceleratedVideoEncoder: kCFBooleanTrue] as CFDictionary
+        #if os(macOS)
+        let spec: CFDictionary? = [kVTVideoEncoderSpecification_EnableHardwareAcceleratedVideoEncoder: kCFBooleanTrue] as CFDictionary
+        let device = "This Mac"
+        #else
+        // iOS picks the hardware encoder by itself.
+        let spec: CFDictionary? = nil
+        let device = "This device"
+        #endif
         var created: VTCompressionSession?
         let status = VTCompressionSessionCreate(
             allocator: nil, width: Int32(width), height: Int32(height), codecType: kCMVideoCodecType_H264,
             encoderSpecification: spec, imageBufferAttributes: nil, compressedDataAllocator: nil,
             outputCallback: nil, refcon: nil, compressionSessionOut: &created
         )
-        guard status == noErr, let created else { throw FluxError("This Mac cannot encode \(width) × \(height) video (\(status))") }
+        guard status == noErr, let created else { throw FluxError("\(device) cannot encode \(width) × \(height) video (\(status))") }
         session = created
         func set(_ key: CFString, _ value: CFTypeRef) -> Bool { VTSessionSetProperty(created, key: key, value: value) == noErr }
         _ = set(kVTCompressionPropertyKey_RealTime, kCFBooleanTrue)

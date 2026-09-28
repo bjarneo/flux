@@ -32,12 +32,19 @@ public struct CameraChoice: Identifiable, Hashable, Sendable {
 public final class StillCamera: NSObject, @unchecked Sendable {
     /// The cameras of this Mac, built-in cameras first.
     public static func cameras() -> [CameraChoice] {
+        #if os(macOS)
         var types: [AVCaptureDevice.DeviceType] = [.builtInWideAngleCamera, .external]
         // Without this Info.plist key, Continuity Camera reports itself as a
         // built-in camera and the first type finds it.
         if Bundle.main.object(forInfoDictionaryKey: "NSCameraUseContinuityCameraDeviceType") as? Bool == true {
             types.append(.continuityCamera)
         }
+        #else
+        // The front and back cameras of the iPhone, and cameras on USB-C.
+        let types: [AVCaptureDevice.DeviceType] = [
+            .builtInWideAngleCamera, .builtInUltraWideCamera, .builtInTelephotoCamera, .builtInTrueDepthCamera, .external,
+        ]
+        #endif
         let devices = AVCaptureDevice.DiscoverySession(deviceTypes: types, mediaType: .video, position: .unspecified).devices
         func rank(_ d: AVCaptureDevice) -> Int { d.deviceType == .builtInWideAngleCamera && !d.isContinuityCamera ? 0 : 1 }
         return devices.enumerated()

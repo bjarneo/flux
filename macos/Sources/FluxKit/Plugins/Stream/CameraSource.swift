@@ -47,12 +47,19 @@ final class CameraSource: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
 
     /// The video devices that Flux can stream, built-in cameras first.
     static func available() -> [CameraInfo] {
+        #if os(macOS)
         var types: [AVCaptureDevice.DeviceType] = [.builtInWideAngleCamera, .external]
         // Without this Info.plist key, Continuity Camera reports itself as a
         // built-in camera and the first type finds it.
         if Bundle.main.object(forInfoDictionaryKey: "NSCameraUseContinuityCameraDeviceType") as? Bool == true {
             types.append(.continuityCamera)
         }
+        #else
+        // The front and back cameras of the iPhone, and cameras on USB-C.
+        let types: [AVCaptureDevice.DeviceType] = [
+            .builtInWideAngleCamera, .builtInUltraWideCamera, .builtInTelephotoCamera, .builtInTrueDepthCamera, .external,
+        ]
+        #endif
         let devices = AVCaptureDevice.DiscoverySession(deviceTypes: types, mediaType: .video, position: .unspecified).devices
         func rank(_ d: AVCaptureDevice) -> Int {
             if d.isContinuityCamera { return 1 }

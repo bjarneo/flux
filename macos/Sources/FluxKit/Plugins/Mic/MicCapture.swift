@@ -21,8 +21,9 @@ public enum MicPermission: Sendable {
     }
 }
 
-/// Records one audio input as 48 kHz mono s16le PCM. AVFoundation converts
-/// the format of the device. Samples arrive on a private serial queue.
+/// Records one audio input as 48 kHz mono s16le PCM. On macOS the capture
+/// output converts the format of the device. On iOS MicConvert converts
+/// each buffer. Samples arrive on a private serial queue.
 final class MicCapture: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, @unchecked Sendable {
     private let session = AVCaptureSession()
     private let output = AVCaptureAudioDataOutput()
@@ -35,6 +36,10 @@ final class MicCapture: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, 
     private var input: AVCaptureDeviceInput?
     private var stopped = false
     private var observer: NSObjectProtocol?
+    #if os(iOS)
+    /// Owned by the samples queue.
+    private var converter: AVAudioConverter?
+    #endif
 
     /// onSamples gets each buffer of samples. onError gets a message for the
     /// user when the recording fails after it started.
@@ -67,6 +72,7 @@ final class MicCapture: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, 
 
     private func startOnControl(_ device: AVCaptureDevice) throws {
         guard !stopped else { throw CancellationError() }
+        #if os(macOS)
         output.audioSettings = [
             AVFormatIDKey: kAudioFormatLinearPCM,
             AVSampleRateKey: MicPackets.rate,
@@ -76,6 +82,11 @@ final class MicCapture: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, 
             AVLinearPCMIsBigEndianKey: false,
             AVLinearPCMIsNonInterleaved: false,
         ]
+        #else
+        // Flux sets the category itself, so that the session keeps Bluetooth headsets.
+        session.automaticallyConfiguresApplicationAudioSession = false
+        try AudioSession.activate(forRecording: false)
+        #endif
         output.setSampleBufferDelegate(self, queue: samples)
         let input = try makeInput(device)
         session.beginConfiguration()
@@ -123,6 +134,9 @@ final class MicCapture: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, 
             if let observer { NotificationCenter.default.removeObserver(observer) }
             observer = nil
             session.stopRunning()
+            #if os(iOS)
+            AudioSession.deactivate()
+            #endif
         }
     }
 
@@ -135,6 +149,14 @@ final class MicCapture: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, 
     }
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        #if os(iOS)
+        do {
+            let data = try MicConvert.s16Mono48k(try MicConvert.pcmBuffer(sampleBuffer), converter: &converter)
+            data.withUnsafeBytes { onSamples($0.bindMemory(to: Int16.self)) }
+        } catch {
+            onError("The microphone audio cannot go to the computer: \(error)")
+        }
+        #else
         guard let format = sampleBuffer.formatDescription?.audioStreamBasicDescription else { return }
         guard Self.isStreamFormat(format) else {
             onError("The microphone gave \(Int(format.mSampleRate)) Hz audio with \(format.mChannelsPerFrame) channels that Flux cannot send")
@@ -147,6 +169,7 @@ final class MicCapture: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, 
                 onSamples(UnsafeBufferPointer(start: data.assumingMemoryBound(to: Int16.self), count: count))
             }
         }
+        #endif
     }
 
     /// True for interleaved native 16-bit signed PCM at the stream rate and channels.
