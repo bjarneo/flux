@@ -34,10 +34,29 @@ type Pointer struct {
 	conn *wlConn
 	ptr  uint32 // the object ID of the virtual pointer
 	idle *time.Timer
+	// output is the monitor that MoveTo positions on, or empty for the
+	// monitor that the compositor selects.
+	output string
 }
 
 // NewPointer returns a pointer that connects to $WAYLAND_DISPLAY.
 func NewPointer() *Pointer { return &Pointer{} }
+
+// NewMonitorPointer returns a pointer whose MoveTo positions on the
+// monitor with the name, such as "eDP-1".
+func NewMonitorPointer(output string) *Pointer { return &Pointer{output: output} }
+
+// absExtent is the range of the positions that MoveTo sends.
+const absExtent = 1<<16 - 1
+
+// MoveTo moves the pointer to x and y on the monitor of the pointer. The
+// values go from 0 at the top left corner to 1 at the bottom right corner.
+func (p *Pointer) MoveTo(x, y float64) error {
+	pos := func(v float64) uint32 { return uint32(math.Round(max(0, min(1, v)) * absExtent)) }
+	return p.do(func(w *wlConn, ptr uint32, t uint32) [][]byte {
+		return [][]byte{w.msg(ptr, vpMotionAbsolute, t, pos(x), pos(y), uint32(absExtent), uint32(absExtent)), w.msg(ptr, vpFrame)}
+	})
+}
 
 // Move moves the pointer by dx and dy in logical pixels.
 func (p *Pointer) Move(dx, dy float64) error {
@@ -102,7 +121,7 @@ func (p *Pointer) do(build func(w *wlConn, ptr uint32, t uint32) [][]byte) error
 	for range 2 {
 		if p.conn == nil || p.conn.failed() != nil {
 			p.closeLocked()
-			if p.conn, p.ptr, err = dialPointer(); err != nil {
+			if p.conn, p.ptr, err = dialPointer(p.output); err != nil {
 				return err
 			}
 		}
@@ -133,7 +152,9 @@ const (
 	displayGetRegistry = 1 // wl_display.get_registry
 	registryBind       = 0 // wl_registry.bind
 	vpmCreate          = 0 // zwlr_virtual_pointer_manager_v1.create_virtual_pointer
+	vpmCreateOnOutput  = 2 // zwlr_virtual_pointer_manager_v1.create_virtual_pointer_with_output
 	vpMotion           = 0 // zwlr_virtual_pointer_v1.motion
+	vpMotionAbsolute   = 1
 	vpButton           = 2
 	vpAxis             = 3
 	vpFrame            = 4
@@ -150,12 +171,20 @@ const (
 
 const pointerManager = "zwlr_virtual_pointer_manager_v1"
 
+// Requests and events of wl_output. The name event needs version 4.
+const (
+	outputInterface = "wl_output"
+	outputRelease   = 0 // wl_output.release, from version 3
+	outputName      = 4 // the wl_output.name event
+)
+
 // displayID is the object ID of wl_display.
 const displayID = 1
 
-// dialPointer connects to the compositor and creates a virtual pointer. It
-// returns the connection and the object ID of the pointer.
-func dialPointer() (*wlConn, uint32, error) {
+// dialPointer connects to the compositor and creates a virtual pointer. With
+// an output name, the absolute motion of the pointer maps to that monitor.
+// It returns the connection and the object ID of the pointer.
+func dialPointer(output string) (*wlConn, uint32, error) {
 	w, err := dialWayland()
 	if err != nil {
 		return nil, 0, err
@@ -167,11 +196,9 @@ func dialPointer() (*wlConn, uint32, error) {
 	_ = w.c.SetReadDeadline(time.Now().Add(3 * time.Second))
 
 	registry := w.newID()
-	var manager struct {
-		name    uint32
-		version uint32
-		found   bool
-	}
+	var manager wlGlobal
+	var found bool
+	var outputs []wlGlobal
 	err = w.roundTrip(w.msg(displayID, displayGetRegistry, registry), func(obj uint32, op uint16, body []byte) {
 		if obj != registry || op != 0 {
 			return
@@ -180,21 +207,37 @@ func dialPointer() (*wlConn, uint32, error) {
 		name, rest := wlUint(body)
 		iface, rest := wlString(rest)
 		version, _ := wlUint(rest)
-		if iface == pointerManager {
-			manager.name, manager.version, manager.found = name, version, true
+		switch iface {
+		case pointerManager:
+			manager, found = wlGlobal{name, version}, true
+		case outputInterface:
+			outputs = append(outputs, wlGlobal{name, version})
 		}
 	})
 	if err != nil {
 		return fail(err)
 	}
-	if !manager.found {
+	if !found {
 		return fail(errors.New("the compositor does not offer " + pointerManager))
+	}
+	var out uint32
+	if output != "" {
+		if manager.version < 2 {
+			return fail(fmt.Errorf("the compositor does not offer version 2 of %s, which the monitor %s needs", pointerManager, output))
+		}
+		if out, err = w.bindOutput(registry, outputs, output); err != nil {
+			return fail(err)
+		}
 	}
 	mgr, ptr := w.newID(), w.newID()
 	// A null wl_seat selects the default seat.
+	create := w.msg(mgr, vpmCreate, uint32(0), ptr)
+	if out != 0 {
+		create = w.msg(mgr, vpmCreateOnOutput, uint32(0), out, ptr)
+	}
 	err = w.roundTrip(append(
 		w.msg(registry, registryBind, manager.name, pointerManager, min(manager.version, 2), mgr),
-		w.msg(mgr, vpmCreate, uint32(0), ptr)...,
+		create...,
 	), nil)
 	if err != nil {
 		return fail(err)
@@ -202,6 +245,54 @@ func dialPointer() (*wlConn, uint32, error) {
 	_ = w.c.SetReadDeadline(time.Time{})
 	go w.drain()
 	return w, ptr, nil
+}
+
+// wlGlobal is a global of the Wayland registry.
+type wlGlobal struct{ name, version uint32 }
+
+// bindOutput binds each wl_output global, reads the names, and returns the
+// object ID of the output with the name. It releases the other outputs.
+func (w *wlConn) bindOutput(registry uint32, globals []wlGlobal, name string) (uint32, error) {
+	var req []byte
+	ids := map[uint32]bool{}
+	for _, g := range globals {
+		if g.version < 4 {
+			continue
+		}
+		id := w.newID()
+		ids[id] = true
+		req = append(req, w.msg(registry, registryBind, g.name, outputInterface, uint32(4), id)...)
+	}
+	if len(ids) == 0 {
+		return 0, fmt.Errorf("the compositor does not name its monitors, so the pointer cannot use %s", name)
+	}
+	var match uint32
+	err := w.roundTrip(req, func(obj uint32, op uint16, body []byte) {
+		if !ids[obj] || op != outputName {
+			return
+		}
+		if s, _ := wlString(body); s == name {
+			match = obj
+		}
+	})
+	if err != nil {
+		return 0, err
+	}
+	var release []byte
+	for id := range ids {
+		if id != match {
+			release = append(release, w.msg(id, outputRelease)...)
+		}
+	}
+	if len(release) > 0 {
+		if err := w.write(release); err != nil {
+			return 0, err
+		}
+	}
+	if match == 0 {
+		return 0, fmt.Errorf("the monitor %s is not connected", name)
+	}
+	return match, nil
 }
 
 // wlConn is a small Wayland client connection. It sends requests and reads

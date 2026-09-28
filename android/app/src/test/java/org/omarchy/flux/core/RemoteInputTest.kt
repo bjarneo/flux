@@ -80,4 +80,25 @@ class RemoteInputTest {
         assertTrue(fast > slow)
         assertEquals(RemoteInput.pointerScale(100f), RemoteInput.pointerScale(1000f), 0.0001f)
     }
+
+    @Test
+    fun positionsOfTheRemoteDesktop() {
+        val at = roundTrip(RemoteInput.at(0.123456f, 2f))
+        assertEquals("0.1235", at.body["x"].toString())
+        assertEquals("1.0", at.body["y"].toString())
+        assertNull(at.body["dx"])
+
+        val click = roundTrip(RemoteInput.clickAt(RemoteInput.Click.Right, 0.5f, 0.25f))
+        assertEquals(true, click.body.bool("rightclick"))
+        assertEquals("0.5", click.body["x"].toString())
+        assertEquals("0.25", click.body["y"].toString())
+
+        assertEquals(true, RemoteInput.holdAt(true, 0f, 0f).body.bool("singlehold"))
+        assertEquals(true, RemoteInput.holdAt(false, 0f, 0f).body.bool("singlerelease"))
+
+        val scroll = roundTrip(RemoteInput.scrollAt(0f, -3f, 0.5f, 0.5f))
+        assertEquals(true, scroll.body.bool("scroll"))
+        assertEquals("-3.0", scroll.body["dy"].toString())
+        assertEquals("0.5", scroll.body["x"].toString())
+    }
 }

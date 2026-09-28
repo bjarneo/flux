@@ -119,6 +119,7 @@ object Ic {
     val touchpad = R.drawable.ic_touchpad_mouse
     val keyboard = R.drawable.ic_keyboard
     val slides = R.drawable.ic_slideshow
+    val grid = R.drawable.ic_grid_view
 }
 
 /** An icon from [Ic]. It takes the content color unless [tint] is set. */

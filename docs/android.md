@@ -92,6 +92,12 @@ To test the app against a desktop peer without a firewall rule, run the test pee
 python3 tools/test_peer.py
 ```
 
+To test the remote desktop, add `--desktop`. The peer streams the first monitor of this computer with `gpu-screen-recorder`, like `fluxd`, and prints the touches. It also answers the Omarchy panel with sample shortcuts and workspaces. It does not run the touches or the shortcuts:
+
+```bash
+python3 tools/test_peer.py --desktop
+```
+
 To take a screenshot of one page on a locked test phone, use the debug-only launch extras:
 
 ```bash

@@ -12,7 +12,12 @@ Run it with a debug build installed and USB debugging on:
 
     python3 tools/test_peer.py
 
-Requires: python3, openssl, adb.
+With --desktop, the peer streams a monitor of this computer to the Remote
+desktop screen of the phone, like fluxd, and prints the touches. It also
+answers the Omarchy panel with sample shortcuts and workspaces, and prints
+the actions. It does not run them.
+
+Requires: python3, openssl, adb. --desktop also requires gpu-screen-recorder.
 """
 
 import argparse
@@ -21,6 +26,7 @@ import json
 import os
 import socket
 import ssl
+import struct
 import subprocess
 import sys
 import threading
@@ -52,7 +58,54 @@ def verification_key(a, b, ts):
     return hashlib.sha256(a + b + str(ts).encode()).hexdigest()[:8].upper()
 
 
-def make_identity(dev_id, target=None, name="flux-test-peer"):
+def flv_frames(stream, width, height):
+    """Yields the frames of the remote desktop stream from the FLV of
+    gpu-screen-recorder, like pumpDesktop in fluxd: the video size first,
+    then the SPS and PPS, then each frame in Annex-B form."""
+    def read(n):
+        b = stream.read(n)
+        if len(b) < n:
+            raise EOFError
+        return b
+
+    start = b"\x00\x00\x00\x01"
+    try:
+        header = read(9)
+        assert header[:3] == b"FLV", header
+        read(struct.unpack(">I", header[5:9])[0] - 9 + 4)
+        yield 4, struct.pack(">HH", width, height)
+        length_size = 4
+        while True:
+            tag = read(11)
+            data = read(int.from_bytes(tag[1:4], "big"))
+            read(4)
+            if tag[0] != 9 or len(data) < 5 or data[0] & 0x0F != 7:
+                continue
+            if data[1] == 0:
+                rec = data[5:]
+                length_size = (rec[4] & 3) + 1
+                out, rest = b"", rec[5:]
+                for i in range(2):
+                    n = rest[0] & (0x1F if i == 0 else 0xFF)
+                    rest = rest[1:]
+                    for _ in range(n):
+                        size = struct.unpack(">H", rest[:2])[0]
+                        out += start + rest[2:2 + size]
+                        rest = rest[2 + size:]
+                yield 1, out
+            elif data[1] == 1:
+                out, rest = b"", data[5:]
+                while rest:
+                    size = int.from_bytes(rest[:length_size], "big")
+                    out += start + rest[length_size:length_size + size]
+                    rest = rest[length_size + size:]
+                if out:
+                    yield (2 if data[0] >> 4 == 1 else 0), out
+    except EOFError:
+        return
+
+
+def make_identity(dev_id, target=None, name="flux-test-peer", desktop=False):
     body = {
         "deviceId": dev_id,
         "deviceName": name,
@@ -64,12 +117,12 @@ def make_identity(dev_id, target=None, name="flux-test-peer"):
             "kdeconnect.mpris.request", "kdeconnect.sftp.request", "flux.tunnel",
             "flux.clipboard.image",
             "kdeconnect.mousepad.request",
-        ],
+        ] + (["flux.desktop", "flux.shortcuts"] if desktop else []),
         "outgoingCapabilities": [
             "kdeconnect.ping", "kdeconnect.battery", "kdeconnect.clipboard", "kdeconnect.share.request",
             "kdeconnect.notification.request", "kdeconnect.findmyphone.request", "kdeconnect.runcommand",
             "kdeconnect.mpris", "kdeconnect.sftp", "flux.clipboard.image", "flux.input",
-        ],
+        ] + (["flux.desktop", "flux.shortcuts"] if desktop else []),
     }
     if target:
         body["targetDeviceId"] = target
@@ -88,6 +141,8 @@ def main():
     ap.add_argument("--sftp-password", default="flux-test")
     ap.add_argument("--wait-for-pair", action="store_true", help="let the phone start the pairing")
     ap.add_argument("--name", default="flux-test-peer")
+    ap.add_argument("--desktop", nargs="?", const="", metavar="MONITOR",
+                    help="stream a monitor of this computer to Remote desktop, the first monitor by default")
     ap.add_argument("--state", default=os.path.expanduser("~/.cache/flux-test-peer"),
                     help="keeps the peer certificate and pairing between runs")
     args = ap.parse_args()
@@ -113,7 +168,8 @@ def main():
 
     sh(*adb, "forward", f"tcp:{FORWARD_PORT}", "tcp:1716")
     raw = socket.create_connection(("127.0.0.1", FORWARD_PORT), timeout=10)
-    raw.sendall(packet("kdeconnect.identity", make_identity(dev_id, target=phone_id, name=args.name)))
+    desktop = args.desktop is not None
+    raw.sendall(packet("kdeconnect.identity", make_identity(dev_id, target=phone_id, name=args.name, desktop=desktop)))
 
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.maximum_version = ssl.TLSVersion.TLSv1_2
@@ -126,7 +182,7 @@ def main():
     peer = tls.getpeercert(binary_form=True)
     assert peer == phone_der, "phone presented a different certificate"
 
-    tls.sendall(packet("kdeconnect.identity", make_identity(dev_id, name=args.name)))
+    tls.sendall(packet("kdeconnect.identity", make_identity(dev_id, name=args.name, desktop=desktop)))
     reader = tls.makefile("rb")
     ident = json.loads(reader.readline())
     assert ident["type"] == "kdeconnect.identity", ident
@@ -169,7 +225,7 @@ def main():
         send("kdeconnect.runcommand", {"commandList": json.dumps(commands), "canAddCommand": True})
         send("kdeconnect.mpris", {"playerList": ["spotify"], "supportAlbumArtPayload": False})
         # The touchpad screen works. The peer prints the input that it gets.
-        send("flux.input", {"enabled": True})
+        send("flux.input", {"enabled": True, "desktop": desktop})
         if args.send_file:
             send_file(args.send_file)
         if args.clipboard_image:
@@ -200,6 +256,70 @@ def main():
         srv.close()
         sh(*adb, "reverse", "--remove", f"tcp:{port}")
         print(f"sent {path} ({len(data)} bytes)")
+
+    recorder = {"proc": None, "stopped": False}
+
+    # Sample Omarchy shortcuts and workspaces for the Omarchy panel.
+    shortcuts = [{"ref": str(300 + i), "keys": k, "description": d} for i, (k, d) in enumerate([
+        ("SUPER SPACE", "Omarchy menu"), ("SUPER ALT SPACE", "Apps menu"), ("SUPER RETURN", "Terminal"),
+        ("SUPER SHIFT RETURN", "Browser"), ("SUPER SHIFT F", "File manager"), ("PRINT", "Screenshot"),
+        ("SUPER W", "Close window"), ("SUPER K", "Keybindings"), ("SUPER CTRL L", "Lock system"),
+        ("SUPER SHIFT M", "Music"), ("SUPER ESCAPE", "System menu"), ("SUPER CTRL E", "Emojis"),
+    ])]
+    spaces = {"active": 1, "windows": {1: 2, 2: 1, 4: 3}}
+
+    def shortcut_state(with_list):
+        body = {"workspaces": [{"id": i, "windows": n} for i, n in sorted(spaces["windows"].items())],
+                "active": spaces["active"]}
+        if with_list:
+            body["shortcuts"] = shortcuts
+        return body
+
+    def stream_desktop(body):
+        """Connects to the listener of the phone and streams a monitor, like
+        runDesktop in fluxd."""
+        port = body["port"]
+        monitors = [l.split("|") for l in sh("gpu-screen-recorder", "--list-monitors").decode().split() if "|" in l]
+        name, size = next((m for m in monitors if m[0] == (body.get("monitor") or args.desktop)), monitors[0])
+        mw, mh = map(int, size.split("x"))
+        limit = body.get("maxSize") or 1920
+        scale = min(1, limit / mw, limit / mh)
+        w, h = int(mw * scale) // 2 * 2, int(mh * scale) // 2 * 2
+        sh(*adb, "forward", f"tcp:{port}", f"tcp:{port}")
+        try:
+            cctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            cctx.check_hostname = False
+            cctx.maximum_version = ssl.TLSVersion.TLSv1_2
+            cctx.load_cert_chain(cert, key)
+            cctx.verify_mode = ssl.CERT_REQUIRED
+            cctx.load_verify_locations(cadata=phone_pem)
+            cctx.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
+            conn = cctx.wrap_socket(socket.create_connection(("127.0.0.1", port), timeout=10))
+            conn.settimeout(None)
+            proc = subprocess.Popen(
+                ["gpu-screen-recorder", "-w", name, "-c", "flv", "-k", "h264", "-s", f"{w}x{h}", "-f", "30",
+                 "-bm", "qp", "-q", "high", "-keyint", "2", "-cursor", "yes", "-fallback-cpu-encoding", "yes", "-v", "no"],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            recorder["proc"], recorder["stopped"] = proc, False
+            live = False
+            for flags, data in flv_frames(proc.stdout, w, h):
+                if not live and flags != 4:
+                    live = True
+                    send("flux.desktop", {"state": "live", "monitor": name, "monitors": [m[0] for m in monitors],
+                                          "width": w, "height": h})
+                    print(f"streams {name} at {w}x{h}")
+                conn.sendall(struct.pack(">IB", len(data), flags) + data)
+            if not recorder["stopped"]:
+                # The recorder stopped by itself. fluxd then reports an error.
+                send("flux.desktop", {"state": "error", "message": "the screen capture stopped"})
+            conn.close()
+        except (OSError, ssl.SSLError) as e:
+            print(f"remote desktop closed: {e}")
+        finally:
+            if recorder["proc"]:
+                recorder["proc"].terminate()
+                recorder["proc"] = None
+            sh(*adb, "forward", "--remove", f"tcp:{port}")
 
     deadline = None
     if already:
@@ -246,6 +366,20 @@ def main():
             if "setVolume" in body:
                 volume["v"] = max(0, min(100, int(body["setVolume"])))
                 send("kdeconnect.mpris", now_playing())
+        elif kind == "flux.desktop":
+            if body.get("state") == "start" and desktop:
+                threading.Thread(target=stream_desktop, args=(body,), daemon=True).start()
+            elif body.get("state") == "stop" and recorder["proc"]:
+                recorder["stopped"] = True
+                recorder["proc"].terminate()
+        elif kind == "flux.shortcuts" and desktop:
+            action = body.get("action")
+            if action == "workspace":
+                spaces["active"] = body.get("workspace", 1)
+            elif action == "moveToWorkspace":
+                target = body.get("workspace", 1)
+                spaces["windows"][target] = spaces["windows"].get(target, 0) + 1
+            send("flux.shortcuts", shortcut_state(bool(body.get("request"))))
         elif kind == "kdeconnect.sftp.request":
             if args.sftp_port:
                 sh(*adb, "reverse", f"tcp:{args.sftp_port}", f"tcp:{args.sftp_port}")

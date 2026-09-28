@@ -23,6 +23,11 @@ class Settings(context: Context) {
             prefs.edit().putBoolean("enabled", v).commit()
         }
 
+    /** The descriptions of the shortcuts that the Omarchy panel pins, or null for the defaults. */
+    var pinnedShortcuts: List<String>?
+        get() = prefs.getString("pinnedShortcuts", null)?.split('\n')?.filter { it.isNotEmpty() }
+        set(v) = prefs.edit().putString("pinnedShortcuts", v?.joinToString("\n")).apply()
+
     /** The color theme of the app. */
     var theme: ThemeMode
         get() = ThemeMode.fromKey(prefs.getString("theme", null))

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
 )
 
 // errNoWtype is the error when wtype is missing.
@@ -68,7 +69,39 @@ func runWtype(args []string, stdin string) error {
 type Input struct {
 	*Pointer
 	Keyboard
+
+	// monitor positions the pointer on 1 monitor for MoveTo. The
+	// compositor maps its absolute motion to that monitor.
+	mu      sync.Mutex
+	monitor *Pointer
 }
 
 // NewInput returns the input of the desktop.
 func NewInput() *Input { return &Input{Pointer: NewPointer()} }
+
+// MoveTo moves the pointer to x and y on the monitor with the name, such as
+// "eDP-1". The values go from 0 at the top left corner to 1 at the bottom
+// right corner.
+func (in *Input) MoveTo(monitor string, x, y float64) error {
+	in.mu.Lock()
+	if in.monitor == nil || in.monitor.output != monitor {
+		if in.monitor != nil {
+			in.monitor.Close()
+		}
+		in.monitor = NewMonitorPointer(monitor)
+	}
+	p := in.monitor
+	in.mu.Unlock()
+	return p.MoveTo(x, y)
+}
+
+// Close removes the virtual pointers.
+func (in *Input) Close() {
+	in.Pointer.Close()
+	in.mu.Lock()
+	defer in.mu.Unlock()
+	if in.monitor != nil {
+		in.monitor.Close()
+		in.monitor = nil
+	}
+}

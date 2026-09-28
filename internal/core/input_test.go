@@ -41,6 +41,9 @@ func (f *fakeInput) Type(text string, mods []string) error {
 func (f *fakeInput) Key(name string, mods []string) error {
 	return f.add("key %s %s", name, strings.Join(mods, "+"))
 }
+func (f *fakeInput) MoveTo(monitor string, x, y float64) error {
+	return f.add("moveTo %s %g %g", monitor, x, y)
+}
 
 func (f *fakeInput) wait(t *testing.T, n int) []string {
 	t.Helper()
@@ -85,6 +88,13 @@ func TestInputActions(t *testing.T) {
 		{`{"key":"hei\u0000 på\ndeg"}`, []inputAction{{kind: "type", text: "hei pådeg"}}},
 		{`{"key":"\n"}`, nil},
 		{`{}`, nil},
+		// A position of the remote desktop comes before the action.
+		{`{"x":0.25,"y":0.5}`, []inputAction{{kind: "moveTo", x: 0.25, y: 0.5}}},
+		{`{"x":0.25,"y":0.5,"singleclick":true}`, []inputAction{
+			{kind: "moveTo", x: 0.25, y: 0.5}, {kind: "button", button: left, pressed: true}, {kind: "button", button: left},
+		}},
+		{`{"x":-3,"y":7,"scroll":true,"dy":4}`, []inputAction{{kind: "moveTo", x: 0, y: 1}, {kind: "scroll", dy: 4}}},
+		{`{"x":0.5,"singlehold":true}`, []inputAction{{kind: "button", button: left, pressed: true}}},
 	}
 	for _, c := range cases {
 		var b mousepadBody
@@ -132,6 +142,24 @@ func TestHandleMousepad(t *testing.T) {
 	d.handleMousepad(dev, mousepad(`{"key":"ls"}`))
 	d.handleMousepad(dev, mousepad(`{"specialKey":12}`))
 	want := []string{"move 4 2", "button 0x110 true", "button 0x110 false", `type "ls" `, "key Return "}
+	if got := in.wait(t, len(want)); !reflect.DeepEqual(got, want) {
+		t.Fatalf("calls %q, want %q", got, want)
+	}
+}
+
+func TestHandleMousepadPosition(t *testing.T) {
+	d, in := inputDaemon(t, true)
+	dev := &Device{ID: "phone", Name: "Pixel 8"}
+	// Without a remote desktop, a position has no monitor.
+	d.handleMousepad(dev, mousepad(`{"x":0.5,"y":0.5,"singleclick":true}`))
+	d.desktop = &desktopSession{dev: dev, view: DesktopView{Monitor: "DP-1"}}
+	d.handleMousepad(dev, mousepad(`{"x":0.5,"y":0.25,"rightclick":true}`))
+	// A position from another phone has no monitor.
+	d.handleMousepad(&Device{ID: "tablet", Name: "Tab"}, mousepad(`{"x":0.1,"y":0.1}`))
+	want := []string{
+		"button 0x110 true", "button 0x110 false",
+		"moveTo DP-1 0.5 0.25", "button 0x111 true", "button 0x111 false",
+	}
 	if got := in.wait(t, len(want)); !reflect.DeepEqual(got, want) {
 		t.Fatalf("calls %q, want %q", got, want)
 	}

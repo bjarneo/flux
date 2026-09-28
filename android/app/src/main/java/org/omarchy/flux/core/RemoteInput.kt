@@ -48,7 +48,31 @@ object RemoteInput {
 
     fun key(k: Key, mods: Mods = Mods()) = Packet(Types.MOUSEPAD_REQUEST, bodyOf("specialKey" to k.code, *mods.fields().toTypedArray()))
 
+    /**
+     * Flux extension: puts the pointer on the position [x], [y] of the
+     * remote desktop, from 0 at the top left corner to 1 at the bottom right
+     * corner. The computer runs the action of the packet after the move.
+     */
+    fun at(x: Float, y: Float) = Packet(Types.MOUSEPAD_REQUEST, bodyOf(*at(x, y, emptyArray())))
+
+    /** Clicks at the position [x], [y] of the remote desktop. */
+    fun clickAt(c: Click, x: Float, y: Float) = Packet(Types.MOUSEPAD_REQUEST, bodyOf(*at(x, y, arrayOf(c.field to true))))
+
+    /** Presses or releases the left button at the position [x], [y] of the remote desktop. */
+    fun holdAt(down: Boolean, x: Float, y: Float) =
+        Packet(Types.MOUSEPAD_REQUEST, bodyOf(*at(x, y, arrayOf((if (down) "singlehold" else "singlerelease") to true))))
+
+    /** Scrolls at the position [x], [y] of the remote desktop. A positive [dy] scrolls down. */
+    fun scrollAt(dx: Float, dy: Float, x: Float, y: Float) =
+        Packet(Types.MOUSEPAD_REQUEST, bodyOf(*at(x, y, arrayOf("scroll" to true, "dx" to round(dx), "dy" to round(dy)))))
+
+    private fun at(x: Float, y: Float, fields: Array<Pair<String, Any?>>): Array<Pair<String, Any?>> =
+        arrayOf("x" to position(x), "y" to position(y), *fields)
+
     private fun round(v: Float): Double = (v * 100).roundToInt() / 100.0
+
+    /** A position with 4 decimals: a step of 0.3 pixels on a 3000-pixel monitor. */
+    private fun position(v: Float): Double = (v.coerceIn(0f, 1f) * 10_000).roundToInt() / 10_000.0
 
     /** Sends a packet to the device. It returns false when the device has no link. */
     fun send(core: FluxCore, id: String, p: Packet): Boolean = core.device(id)?.send(p) ?: false

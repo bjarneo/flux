@@ -81,7 +81,12 @@ object Plugins {
             Types.FLUX_APPROVE -> Approvals.onPacket(core, d, p)
             Types.FLUX_HERDR -> HerdrSync.onPacket(core, d, p)
             Types.FLUX_CLIPBOARD_IMAGE -> ClipImage.receive(core, d, p)
-            Types.FLUX_INPUT -> d.remoteInput = p.bool("enabled")
+            Types.FLUX_INPUT -> {
+                d.remoteInput = p.bool("enabled")
+                d.remoteDesktop = p.bool("desktop")
+            }
+            Types.FLUX_DESKTOP -> org.omarchy.flux.desktop.DesktopSession.onPacket(core, d, p)
+            Types.FLUX_SHORTCUTS -> d.shortcuts = Shortcuts.merge(d.shortcuts, p)
             Types.SMS_REQUEST, Types.SMS_REQUEST_CONVERSATIONS, Types.SMS_REQUEST_CONVERSATION -> SmsSync.onPacket(core, d, p)
         }
     }

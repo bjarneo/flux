@@ -129,11 +129,13 @@ func (d *Daemon) Snapshot() json.RawMessage {
 			"herdr":            d.cfg.Herdr,
 			"herdrControl":     d.cfg.HerdrControl,
 			"remoteInput":      d.cfg.RemoteInput,
+			"remoteDesktop":    d.cfg.RemoteDesktop,
 		},
-		"webcam": d.webcamViewLocked(),
-		"mic":    d.micViewLocked(),
-		"screen": d.screenViewLocked(),
-		"herdr":  d.herdrViewLocked(),
+		"webcam":  d.webcamViewLocked(),
+		"mic":     d.micViewLocked(),
+		"screen":  d.screenViewLocked(),
+		"desktop": d.desktopViewLocked(),
+		"herdr":   d.herdrViewLocked(),
 	})
 }
 
@@ -203,6 +205,8 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		return ok, d.StopMic()
 	case "screen.stop":
 		return ok, d.StopScreen()
+	case "desktop.stop":
+		return ok, d.StopDesktop()
 	case "approve.request":
 		return d.ApproveRequest(raw)
 	case "approve.enroll":
@@ -409,6 +413,8 @@ func (d *Daemon) setSetting(key string, value any) error {
 		d.cfg.HerdrControl = b
 	case key == "remoteInput" && isBool:
 		d.cfg.RemoteInput = b
+	case key == "remoteDesktop" && isBool:
+		d.cfg.RemoteDesktop = b
 	case key == "name" && isString:
 		d.cfg.Name = strings.TrimSpace(s)
 	case key == "downloadDir" && isString:
@@ -428,7 +434,7 @@ func (d *Daemon) setSetting(key string, value any) error {
 	if key == "herdr" || key == "herdrControl" {
 		d.herdrChanged()
 	}
-	if key == "remoteInput" {
+	if key == "remoteInput" || key == "remoteDesktop" {
 		d.inputChanged()
 	}
 	d.markDirty()

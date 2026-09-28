@@ -83,6 +83,10 @@ func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.handleMic(dev, l, p)
 	case proto.TypeFluxScreen:
 		d.handleScreen(dev, l, p)
+	case proto.TypeFluxDesktop:
+		d.handleDesktop(dev, l, p)
+	case proto.TypeFluxShortcuts:
+		d.handleShortcuts(dev, l, p)
 	case proto.TypeFluxApprove:
 		d.handleApprove(dev, p)
 	case proto.TypeFluxHerdr:

@@ -79,6 +79,14 @@ data class DeviceUi(
     val inputSupported: Boolean = false,
     /** True when remote input is on at the computer, or null before it tells. */
     val remoteInput: Boolean? = null,
+    /** True when the computer can stream its screen to this phone. */
+    val desktopSupported: Boolean = false,
+    /** True when the remote desktop is on at the computer, or null before it tells. */
+    val remoteDesktop: Boolean? = null,
+    /** True when the computer runs its Hyprland key bindings for this phone. */
+    val shortcutsSupported: Boolean = false,
+    /** The key bindings and workspaces of the computer, or null before the first answer. */
+    val shortcuts: ShortcutsState? = null,
 )
 
 /** A snapshot of the whole app for the UI. */

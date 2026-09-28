@@ -22,6 +22,7 @@ https://github.com/user-attachments/assets/4b8445fe-6734-4100-b200-92f57e1b353a
 | Scan text, send photos, and use the phone as a webcam or microphone | [Camera and streams](docs/camera.md) |
 | Show the phone screen in a desktop window | [Screen mirror](docs/camera.md#screen-mirror) |
 | Use the phone or the Mac as a touchpad and keyboard | [Touchpad and keyboard](docs/remote-input.md) |
+| Show and control the computer screen on the phone | [Remote desktop](docs/remote-desktop.md) |
 | Approve sudo with the phone's fingerprint sensor | [Fingerprint approval](docs/approvals.md) |
 | Reach your phone away from home through Tailscale | [Connect through Tailscale](docs/tailscale.md) |
 | See herdr coding agents on the phone or the Mac, read their output, and answer them | [herdr agents](docs/herdr.md) |

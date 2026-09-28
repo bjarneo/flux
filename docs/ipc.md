@@ -36,7 +36,7 @@ Method names and parameter handling live in `internal/core/api.go`.
 ## State and events
 
 Call `state` for a snapshot.
-The snapshot includes `self`, `devices`, `clipboard`, `transfers`, `commands`, `settings`, `webcam`, `mic`, `screen`, and `herdr`.
+The snapshot includes `self`, `devices`, `clipboard`, `transfers`, `commands`, `settings`, `webcam`, `mic`, `screen`, `desktop`, and `herdr`.
 
 To receive events, send:
 
@@ -71,7 +71,7 @@ flux-cli watch
 | Commands | `commands.add`, `commands.remove`, `commands.run` |
 | Notifications | `notification.dismiss`, `notification.dismissAll`, `notification.reply` |
 | Text messages | `sms.refresh`, `sms.thread`, `sms.send` |
-| Streams | `webcam.config`, `webcam.stop`, `mic.stop`, `screen.stop` |
+| Streams | `webcam.config`, `webcam.stop`, `mic.stop`, `screen.stop`, `desktop.stop` |
 | Approval | `approve.request`, `approve.wait`, `approve.enroll` |
 
 Read the handler before you add a client call.

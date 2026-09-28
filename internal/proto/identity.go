@@ -68,9 +68,17 @@ const (
 	// while its clipboard sync is on.
 	TypeFluxClipboardImage = "flux.clipboard.image"
 	// TypeFluxInput tells the phone whether this computer accepts remote
-	// input, {"enabled": bool}. fluxd sends it after the link starts and
-	// after the setting changes.
+	// input and whether it shows its screen on the phone, {"enabled":
+	// bool, "desktop": bool}. fluxd sends it after the link starts and
+	// after a setting changes.
 	TypeFluxInput = "flux.input"
+	// TypeFluxDesktop starts and stops the stream of this screen to the
+	// phone. Both sides send it.
+	TypeFluxDesktop = "flux.desktop"
+	// TypeFluxShortcuts carries the Hyprland key bindings and workspaces to
+	// the phone, and runs a binding or a workspace action for it. Both
+	// sides send it.
+	TypeFluxShortcuts = "flux.shortcuts"
 )
 
 // Incoming lists the packet types that Flux accepts. The phone enables a
@@ -82,6 +90,7 @@ var Incoming = []string{
 	TypeSmsMessages, TypeConnectivity, TypeTelephony,
 	TypeFluxTunnel, TypeFluxWebcam, TypeFluxDnd, TypeFluxMic, TypeFluxScreen,
 	TypeFluxApprove, TypeFluxHerdr, TypeFluxClipboardImage, TypeMousepadRequest,
+	TypeFluxDesktop, TypeFluxShortcuts,
 }
 
 // Outgoing lists the packet types that Flux sends.
@@ -92,7 +101,7 @@ var Outgoing = []string{
 	TypeSftpRequest, TypeSmsRequest, TypeSmsConversations,
 	TypeSmsConversation, TypeSftp, TypeFluxWebcam, TypeFluxDnd,
 	TypeFluxMic, TypeFluxScreen, TypeFluxApprove, TypeFluxHerdr,
-	TypeFluxClipboardImage, TypeFluxInput,
+	TypeFluxClipboardImage, TypeFluxInput, TypeFluxDesktop, TypeFluxShortcuts,
 }
 
 // Identity is the body of a kdeconnect.identity packet.

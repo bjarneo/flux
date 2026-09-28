@@ -43,6 +43,43 @@ func channelsName(n int) string {
 	return "mono"
 }
 
+// remoteDesktop shows whether a phone shows this screen, or stops it.
+func remoteDesktop(args []string) error {
+	if first(args) == "stop" {
+		return call("desktop.stop", nil)
+	}
+	var s struct {
+		Settings struct {
+			RemoteDesktop bool `json:"remoteDesktop"`
+		} `json:"settings"`
+		Desktop *struct {
+			Active  bool   `json:"active"`
+			ToName  string `json:"toName"`
+			Monitor string `json:"monitor"`
+			Width   int    `json:"width"`
+			Height  int    `json:"height"`
+			Error   string `json:"error"`
+		} `json:"desktop"`
+	}
+	if err := callInto("state", nil, &s); err != nil {
+		return err
+	}
+	v := s.Desktop
+	switch {
+	case v != nil && v.Error != "":
+		fmt.Println("The remote desktop failed:", v.Error)
+	case v != nil && v.Active:
+		fmt.Printf("%s shows %s, %dx%d. Stop it with: flux-cli desktop stop\n", v.ToName, v.Monitor, v.Width, v.Height)
+	case v != nil:
+		fmt.Printf("%s is starting the remote desktop of %s\n", v.ToName, v.Monitor)
+	case !s.Settings.RemoteDesktop:
+		fmt.Println("The remote desktop is off. To turn it on, set remote_desktop = true in ~/.config/flux/config.toml, then run: systemctl --user reload fluxd")
+	default:
+		fmt.Println("No phone shows this screen. Start it in Flux for Android: Remote desktop.")
+	}
+	return nil
+}
+
 // screen shows the screen mirror state, or stops it.
 func screen(args []string) error {
 	if first(args) == "stop" {

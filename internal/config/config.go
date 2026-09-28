@@ -50,6 +50,9 @@ type Config struct {
 	// computer. It is off by default, because the phone can then type in
 	// any window, such as a terminal.
 	RemoteInput bool `toml:"remote_input"`
+	// RemoteDesktop lets the phone show the screen of this computer. It is
+	// off by default. The touches on the screen also need RemoteInput.
+	RemoteDesktop bool `toml:"remote_desktop"`
 	// GUI selects the window: "plugin" for the omarchy-shell plugin, "app"
 	// for flux-gui, or empty for the plugin when it is enabled.
 	GUI string `toml:"gui,omitempty"`

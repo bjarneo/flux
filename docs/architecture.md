@@ -47,6 +47,7 @@ Flux for Android and Flux for macOS are the supported device apps.
 | Receive files, icons, or album art | Desktop connects to the phone's payload port |
 | Send files to the phone | Phone listens for a `flux.tunnel`, then desktop connects |
 | Browse the desktop from the phone | SSH inside a `flux.tunnel` |
+| Show the desktop on the phone | Phone listens for the stream, then desktop connects |
 
 The default Omarchy firewall permits mDNS.
 Flux needs no new inbound desktop firewall rule for these routes.

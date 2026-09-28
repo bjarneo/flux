@@ -246,6 +246,7 @@ fun FluxRoot(activity: MainActivity, splash: Boolean = false) {
                 route.page.startsWith(AGENT_PAGE) -> key(route.page) { TiledAgentScreen(device, route.page.removePrefix(AGENT_PAGE), ::pop) }
                 route.page == "browse" -> BrowseScreen(device, state.browse, ::pop)
                 route.page == "touchpad" -> TouchpadScreen(device, ::pop)
+                route.page == "desktop" -> DesktopScreen(device, ::pop)
                 // Debug builds open a mode with "camera:<mode>".
                 route.page.startsWith("camera") -> key(route.page) {
                     org.omarchy.flux.camera.CameraScreen(device, ::pop, org.omarchy.flux.camera.CameraMode.fromKey(route.page.substringAfter(':', "")))

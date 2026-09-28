@@ -52,6 +52,8 @@ object DebugDemo {
                 herdrSupported = true,
                 inputSupported = true,
                 remoteInput = true,
+                desktopSupported = true,
+                remoteDesktop = true,
                 herdr = HerdrState(
                     enabled = true,
                     running = true,

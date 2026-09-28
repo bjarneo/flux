@@ -16,6 +16,7 @@ optdepends=(
 	'v4l2loopback-dkms: the phone as webcam'
 	'mpv: the phone screen mirror'
 	'wtype: the phone keyboard'
+	'gpu-screen-recorder: the remote desktop on the phone'
 )
 makedepends=('go>=1.27.1' 'cmake' 'ninja' 'git')
 install=omarchy-flux.install

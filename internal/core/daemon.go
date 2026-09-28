@@ -75,7 +75,10 @@ type Daemon struct {
 	micErr    string
 	screen    *screenSession
 	screenErr string
-	approvals approvalBook
+	// desktop streams this screen to a phone.
+	desktop    *desktopSession
+	desktopErr string
+	approvals  approvalBook
 
 	// herdrPath is the API socket of herdr. herdrRunning and herdrAgents
 	// are the last state that the herdr loop read. herdrWake makes the

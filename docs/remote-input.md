@@ -169,6 +169,7 @@ A packet holds 1 action:
 | `key` | Type the text. Control characters are removed. |
 | `specialKey` | Press a key: 1 Backspace, 2 Tab, 4 Left, 5 Up, 6 Right, 7 Down, 8 Page Up, 9 Page Down, 10 Home, 11 End, 12 Enter, 13 Delete, 14 Escape, 21 to 32 F1 to F12. |
 | `ctrl`, `alt`, `shift`, `super` | Hold the modifier for `key` or `specialKey`. |
+| `x`, `y` | Flux extension: move the pointer to this position of the [remote desktop](remote-desktop.md) first. The values go from 0 to 1 across the monitor. |
 
 ## Troubleshooting
 

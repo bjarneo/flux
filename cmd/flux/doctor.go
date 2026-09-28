@@ -106,6 +106,18 @@ func doctor() {
 	_, wtypeErr := exec.LookPath("wtype")
 	check(wtypeErr == nil, "wtype is installed, so the phone keyboard can type here",
 		"The phone keyboard needs wtype. Install it with: sudo pacman -S wtype")
+	// The remote desktop is optional. It shows this screen on the phone.
+	// Without its capability, gsr-kms-server asks for a password at each
+	// start of the stream.
+	gsr, gsrErr := exec.LookPath("gpu-screen-recorder")
+	check(gsrErr == nil, "gpu-screen-recorder is installed, so the phone can show this screen",
+		"The remote desktop needs gpu-screen-recorder. Install it with: sudo pacman -S gpu-screen-recorder")
+	if gsrErr == nil {
+		kms := filepath.Join(filepath.Dir(gsr), "gsr-kms-server")
+		_, capErr := unix.Getxattr(kms, "security.capability", make([]byte, 64))
+		check(capErr == nil, "gsr-kms-server can capture the screen without a password",
+			"gsr-kms-server has no cap_sys_admin, so each stream asks for a password. Run: sudo setcap cap_sys_admin+ep "+kms)
+	}
 
 	// herdr is optional. When it runs, the phone shows its agents.
 	if _, err := exec.LookPath("herdr"); err == nil {

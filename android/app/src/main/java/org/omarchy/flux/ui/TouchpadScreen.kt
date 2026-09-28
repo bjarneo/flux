@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -46,12 +47,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.RemoteInput
+import org.omarchy.flux.core.Shortcuts
 import org.omarchy.flux.core.TextEdit
+import org.omarchy.flux.voice.DictationBar
+import org.omarchy.flux.voice.LanguagePicker
+import org.omarchy.flux.voice.VoiceTyping
 import kotlin.math.hypot
 import kotlin.math.max
 
@@ -122,13 +128,8 @@ fun TouchpadScreen(d: DeviceUi, onBack: () -> Unit) {
 @Composable
 private fun Touchpad(d: DeviceUi) {
     val haptic = LocalHapticFeedback.current
-    var mods by remember { mutableStateOf(RemoteInput.Mods()) }
     fun send(p: org.omarchy.flux.protocol.Packet) {
         if (!RemoteInput.send(FluxCore, d.id, p)) FluxCore.toast("${d.name} is not reachable")
-    }
-    fun key(k: RemoteInput.Key) {
-        send(RemoteInput.key(k, mods))
-        mods = RemoteInput.Mods()
     }
 
     Column(Modifier.fillMaxSize().padding(bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(TileGap)) {
@@ -154,6 +155,28 @@ private fun Touchpad(d: DeviceUi) {
             HoldButton("Left button", Modifier.weight(1f)) { down -> send(RemoteInput.hold(down)) }
             PadKey("right", "Right button", Modifier.weight(1f)) { send(RemoteInput.click(RemoteInput.Click.Right)) }
         }
+        KeyPanel(d, ::send)
+    }
+}
+
+/**
+ * The keys and the text field for the phone keyboard: Escape, Tab, the
+ * arrows, the modifiers, Backspace, and Enter. A modifier holds for the
+ * next key or text. With [voice], a mic key next to the field dictates.
+ */
+@Composable
+fun KeyPanel(
+    d: DeviceUi,
+    send: (org.omarchy.flux.protocol.Packet) -> Unit,
+    modifier: Modifier = Modifier,
+    voice: VoiceTyping? = null,
+) {
+    var mods by remember { mutableStateOf(RemoteInput.Mods()) }
+    fun key(k: RemoteInput.Key) {
+        send(RemoteInput.key(k, mods))
+        mods = RemoteInput.Mods()
+    }
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(TileGap)) {
         Row(Modifier.fillMaxWidth().height(40.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             for (k in listOf(RemoteInput.Key.Escape, RemoteInput.Key.Tab, RemoteInput.Key.Left, RemoteInput.Key.Up, RemoteInput.Key.Down, RemoteInput.Key.Right)) {
                 PadKey(k.label, k.name, Modifier.weight(1f)) { key(k) }
@@ -167,7 +190,29 @@ private fun Touchpad(d: DeviceUi) {
             PadKey(RemoteInput.Key.Backspace.label, "Backspace", Modifier.weight(1f)) { key(RemoteInput.Key.Backspace) }
             PadKey(RemoteInput.Key.Enter.label, "Enter", Modifier.weight(1f)) { key(RemoteInput.Key.Enter) }
         }
-        TypeField(d, mods, onSend = ::send, onModsUsed = { mods = RemoteInput.Mods() }, onEnter = { key(RemoteInput.Key.Enter) })
+        if (voice == null) {
+            TypeField(d, mods, onSend = send, onModsUsed = { mods = RemoteInput.Mods() }, onEnter = { key(RemoteInput.Key.Enter) }, Modifier.fillMaxWidth())
+        } else {
+            DictationBar(
+                voice.dictation,
+                canDictate = voice.available,
+                onStart = voice::start,
+                onLanguage = voice::pickLanguage,
+                field = { m ->
+                    TypeField(d, mods, onSend = send, onModsUsed = { mods = RemoteInput.Mods() }, onEnter = { key(RemoteInput.Key.Enter) }, m, 56.dp)
+                },
+                // The mic key sits before this key. Dictate, then press Enter.
+                send = {
+                    Box(
+                        Modifier.size(56.dp).clip(TileShape).background(Tn.tile).border(1.dp, Tn.line, TileShape)
+                            .clickable(onClickLabel = "Enter") { key(RemoteInput.Key.Enter) },
+                        contentAlignment = Alignment.Center,
+                    ) { T(RemoteInput.Key.Enter.label, size = 16, color = Tn.sub, weight = FontWeight.SemiBold, family = Mono) }
+                },
+            )
+            voice.error?.let { T(it, size = 11, color = Tn.red) }
+            LanguagePicker(voice)
+        }
     }
 }
 
@@ -183,6 +228,8 @@ private fun TypeField(
     onSend: (org.omarchy.flux.protocol.Packet) -> Unit,
     onModsUsed: () -> Unit,
     onEnter: () -> Unit,
+    modifier: Modifier = Modifier,
+    height: Dp = 48.dp,
 ) {
     val empty = TextFieldValue(SENTINEL, TextRange(SENTINEL.length))
     var field by remember { mutableStateOf(empty) }
@@ -207,7 +254,10 @@ private fun TypeField(
         val edit = TextEdit.between(sent, body)
         if (mods.any && edit.text.isNotEmpty()) {
             // A shortcut such as ctrl+c. The letter does not stay in the field.
-            onSend(RemoteInput.text(edit.text, mods))
+            // Omarchy binds super and a digit to a key code, which the keys of
+            // the phone cannot press, so the computer switches the workspace.
+            val workspace = if (d.shortcutsSupported) Shortcuts.forDigit(edit.text, mods) else null
+            onSend(workspace ?: RemoteInput.text(edit.text, mods))
             onModsUsed()
             reset()
             return
@@ -227,7 +277,7 @@ private fun TypeField(
     BasicTextField(
         value = field,
         onValueChange = ::change,
-        modifier = Modifier.fillMaxWidth().height(48.dp).clip(TileShape).background(Tn.tile).border(1.dp, Tn.line, TileShape),
+        modifier = modifier.height(height).clip(TileShape).background(Tn.tile).border(1.dp, Tn.line, TileShape),
         textStyle = TextStyle(color = Tn.text, fontSize = 15.sp),
         cursorBrush = SolidColor(Tn.blue),
         singleLine = true,

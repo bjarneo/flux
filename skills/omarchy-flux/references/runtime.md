@@ -143,6 +143,7 @@ Key settings:
 | `herdr` | Show the herdr agents of the computer on the phone |
 | `herdr_control` | Let the phone send keys and prompts to herdr agents. Off by default |
 | `remote_input` | Let the phone move the pointer and type on the desktop. Off by default |
+| `remote_desktop` | Let the phone show the desktop screen. Off by default |
 | `gui` | Select the enabled plugin, otherwise the Qt app |
 | `approve_timeout` | Wait 20 seconds for fingerprint approval |
 
@@ -180,6 +181,20 @@ The phone moves the pointer and types on the desktop only with `remote_input = t
 The phone can then type in any window, such as a terminal.
 Do not turn on `remote_input` unless the user asks for it.
 Read `docs/remote-input.md` for the gestures, `wtype`, and the wire format.
+
+## Remote desktop
+
+The phone shows the desktop screen only with `remote_desktop = true`.
+The phone can then see each window. Its touches also need `remote_input = true`.
+Do not turn on `remote_desktop` unless the user asks for it.
+The stream needs `gpu-screen-recorder`.
+Read `docs/remote-desktop.md` for the gestures, the monitors, the Omarchy panel, and the stream format.
+The Omarchy panel runs Hyprland key bindings and workspace actions for the phone with `flux.shortcuts`. It needs `remote_input = true`.
+
+```sh
+flux-cli desktop
+flux-cli desktop stop
+```
 
 ## Fingerprint approval
 

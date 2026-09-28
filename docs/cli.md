@@ -146,10 +146,14 @@ flux-cli mic
 flux-cli mic stop
 flux-cli screen
 flux-cli screen stop
+flux-cli desktop
+flux-cli desktop stop
 flux-cli approve
 ```
 
 Start camera, microphone, and screen capture on the phone.
+`flux-cli desktop` shows whether a phone shows the screen of this computer, and `flux-cli desktop stop` ends it.
+See [remote desktop](remote-desktop.md).
 See [camera and streams](camera.md) for settings and [fingerprint approval](approvals.md) for root setup commands.
 
 ## Watch state changes

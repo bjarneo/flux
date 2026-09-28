@@ -57,6 +57,7 @@ Commands:
   webcam reset           Set the phone camera back to the neutral values
   mic [stop]             Show the phone microphone state, or stop the phone microphone
   screen [stop]          Show the phone screen mirror state, or stop the mirror
+  desktop [stop]         Show whether a phone shows this screen, or stop it
   approve [status]       Show whether a phone can approve sudo with a fingerprint
   approve setup [SVC…]   Enroll the phone and turn approval on for sudo, or for
                          polkit-1 and hyprlock. Run it with sudo.
@@ -131,6 +132,8 @@ func main() {
 		err = mic(args)
 	case "screen":
 		err = screen(args)
+	case "desktop":
+		err = remoteDesktop(args)
 	case "approve":
 		err = approveCmd(args, device)
 	case "watch":

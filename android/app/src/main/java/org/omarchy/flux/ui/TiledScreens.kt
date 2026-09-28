@@ -479,6 +479,25 @@ fun TiledHomeScreen(
                     Modifier.fillMaxWidth().height(TileUnit), on, trailing = if (d.remoteInput == true) null else "off",
                 )
             }
+            // The screen of the computer can show private content, so it also asks for the phone lock first.
+            if (d.desktopSupported) {
+                LineTile(
+                    Ic.desktop, "Remote desktop", Tn.blue,
+                    guarded {
+                        if (d.remoteDesktop == true) {
+                            ReplyLock.run(context, { onNavigate("desktop") }, "Show the computer screen", "show the computer screen") { FluxCore.toast(it) }
+                        } else {
+                            onNavigate("desktop")
+                        }
+                    },
+                    Modifier.fillMaxWidth().height(TileUnit), on,
+                    trailing = when {
+                        d.remoteDesktop != true -> "off"
+                        d.remoteInput != true -> "view only"
+                        else -> null
+                    },
+                )
+            }
         }
 
         SectionLabel("Sync")

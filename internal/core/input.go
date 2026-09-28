@@ -18,6 +18,8 @@ type inputBackend interface {
 	Scroll(dx, dy float64) error
 	Type(text string, mods []string) error
 	Key(name string, mods []string) error
+	// MoveTo moves the pointer to x and y, from 0 to 1, on the monitor.
+	MoveTo(monitor string, x, y float64) error
 }
 
 // Limits for 1 mousepad packet. A larger value is cut to the limit.
@@ -42,39 +44,55 @@ var specialKeys = map[int]string{
 
 // mousepadBody is the body of kdeconnect.mousepad.request. A packet holds
 // 1 action: a click, a button press or release, a scroll, text or a key,
-// or a pointer motion.
+// or a pointer motion. The Flux extension X and Y puts the pointer on a
+// position of the remote desktop before the action.
 type mousepadBody struct {
-	Dx            float64 `json:"dx"`
-	Dy            float64 `json:"dy"`
-	Scroll        bool    `json:"scroll"`
-	SingleClick   bool    `json:"singleclick"`
-	DoubleClick   bool    `json:"doubleclick"`
-	MiddleClick   bool    `json:"middleclick"`
-	RightClick    bool    `json:"rightclick"`
-	SingleHold    bool    `json:"singlehold"`
-	SingleRelease bool    `json:"singlerelease"`
-	Key           string  `json:"key"`
-	SpecialKey    int     `json:"specialKey"`
-	Alt           bool    `json:"alt"`
-	Ctrl          bool    `json:"ctrl"`
-	Shift         bool    `json:"shift"`
-	Super         bool    `json:"super"`
+	Dx            float64  `json:"dx"`
+	Dy            float64  `json:"dy"`
+	X             *float64 `json:"x"`
+	Y             *float64 `json:"y"`
+	Scroll        bool     `json:"scroll"`
+	SingleClick   bool     `json:"singleclick"`
+	DoubleClick   bool     `json:"doubleclick"`
+	MiddleClick   bool     `json:"middleclick"`
+	RightClick    bool     `json:"rightclick"`
+	SingleHold    bool     `json:"singlehold"`
+	SingleRelease bool     `json:"singlerelease"`
+	Key           string   `json:"key"`
+	SpecialKey    int      `json:"specialKey"`
+	Alt           bool     `json:"alt"`
+	Ctrl          bool     `json:"ctrl"`
+	Shift         bool     `json:"shift"`
+	Super         bool     `json:"super"`
 }
 
 // inputAction is 1 step for the input backend.
 type inputAction struct {
-	kind    string // move, button, scroll, type, or key
+	kind    string // move, moveTo, button, scroll, type, or key
 	dx, dy  float64
+	x, y    float64 // the position for moveTo, from 0 to 1
+	monitor string  // the monitor for moveTo
 	button  uint32
 	pressed bool
 	text    string // the text for type, the key name for key
 	mods    []string
 }
 
-// inputActions turns a mousepad body into the steps for the backend. It
-// follows the order of KDE Connect: clicks, then a held button, then a
-// scroll, then keys, then a motion.
+// inputActions turns a mousepad body into the steps for the backend. A
+// position comes first. The action follows the order of KDE Connect:
+// clicks, then a held button, then a scroll, then keys, then a motion.
 func inputActions(b mousepadBody) []inputAction {
+	if b.X == nil || b.Y == nil || !finite(*b.X) || !finite(*b.Y) {
+		return mousepadAction(b)
+	}
+	to := inputAction{kind: "moveTo", x: max(0, min(1, *b.X)), y: max(0, min(1, *b.Y))}
+	return append([]inputAction{to}, mousepadAction(b)...)
+}
+
+func finite(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
+
+// mousepadAction returns the steps of the action of a mousepad body.
+func mousepadAction(b mousepadBody) []inputAction {
 	click := func(button uint32, times int) []inputAction {
 		var out []inputAction
 		for range times {
@@ -137,7 +155,7 @@ func inputMods(b mousepadBody) []string {
 }
 
 func clampDelta(v float64) float64 {
-	if math.IsNaN(v) || math.IsInf(v, 0) {
+	if !finite(v) {
 		return 0
 	}
 	return max(-maxInputDelta, min(maxInputDelta, v))
@@ -181,7 +199,15 @@ func (d *Daemon) handleMousepad(dev *Device, p *proto.Packet) {
 	if p.Decode(&b) != nil {
 		return
 	}
+	monitor := d.desktopMonitor(dev.ID)
 	for _, a := range inputActions(b) {
+		if a.kind == "moveTo" {
+			// A position is on the remote desktop that the phone shows.
+			if monitor == "" {
+				continue
+			}
+			a.monitor = monitor
+		}
 		select {
 		case d.inputQ <- a:
 		default:
@@ -223,6 +249,8 @@ func (d *Daemon) runInput(a inputAction) error {
 	switch a.kind {
 	case "move":
 		return in.Move(a.dx, a.dy)
+	case "moveTo":
+		return in.MoveTo(a.monitor, a.x, a.y)
 	case "button":
 		return in.Button(a.button, a.pressed)
 	case "scroll":
@@ -235,16 +263,18 @@ func (d *Daemon) runInput(a inputAction) error {
 	return nil
 }
 
-// sendInputState tells a phone whether this computer accepts remote input.
+// sendInputState tells a phone whether this computer accepts remote input,
+// and whether it shows its screen on the phone.
 func (d *Daemon) sendInputState(l *lan.Link) {
 	d.mu.Lock()
 	on := d.cfg.RemoteInput && d.input != nil
+	desktop := d.cfg.RemoteDesktop && !d.opts.Headless
 	d.mu.Unlock()
-	_ = l.Send(proto.New(proto.TypeFluxInput, map[string]any{"enabled": on}))
+	_ = l.Send(proto.New(proto.TypeFluxInput, map[string]any{"enabled": on, "desktop": desktop}))
 }
 
 // inputChanged sends the remote input state to each connected phone that
-// accepts flux.input.
+// accepts flux.input. It stops the remote desktop when its setting is off.
 func (d *Daemon) inputChanged() {
 	d.mu.Lock()
 	var links []*lan.Link
@@ -254,8 +284,12 @@ func (d *Daemon) inputChanged() {
 			links = append(links, dev.link)
 		}
 	}
+	desktop := d.cfg.RemoteDesktop
 	d.mu.Unlock()
 	for _, l := range links {
 		d.sendInputState(l)
+	}
+	if !desktop {
+		_ = d.StopDesktop()
 	}
 }
