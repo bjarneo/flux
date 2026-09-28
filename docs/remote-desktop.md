@@ -34,6 +34,10 @@ The remote desktop is off by default, because the phone or the Mac can then see 
 Omarchy installs `gpu-screen-recorder`.
 On another system, install it with `sudo pacman -S gpu-screen-recorder`.
 
+`gpu-screen-recorder` supports AMD, Intel, and NVIDIA drivers.
+On another GPU, for example an older NVIDIA card on `nouveau`, install `wf-recorder` with `sudo pacman -S wf-recorder`.
+`fluxd` then captures the monitor through Hyprland and encodes it on the CPU.
+
 A script can also call the IPC method `settings.set` with the key `remoteDesktop`:
 
 ```json
@@ -214,6 +218,7 @@ The reload stops a stream that runs.
 2. `fluxd` connects to the port and checks the pinned certificate of the phone.
    When `gpu-screen-recorder` lists no monitor, `fluxd` turns the displays on with `hyprctl` and lists them again for up to 3 seconds.
 3. `gpu-screen-recorder` captures the monitor on the GPU and encodes H.264 into FLV.
+   When `gpu-screen-recorder` fails to list the monitors and `wf-recorder` is installed, `wf-recorder` captures the monitor through Hyprland and `libx264` encodes it on the CPU.
 4. `fluxd` reads each FLV tag and writes its frame to the phone.
 5. `fluxd` sends `flux.desktop` with `{"state": "live"}`, the monitor, the monitor names, and the stream size.
 6. The phone decodes the frames with the hardware decoder of the phone and shows each frame at once.
@@ -288,6 +293,7 @@ A binding to a key code, such as `SUPER + code:10` for workspace 1, does not mat
 | The Mac shows no **Remote Desktop** card | Connect the Mac to the computer. The card shows only for a `fluxd` that lists `flux.desktop`. |
 | A Command shortcut goes to the Mac | Move the pointer over the video, then press the shortcut again. |
 | The screen capture stops | Run `journalctl --user -u fluxd --no-pager \| grep "remote desktop"` for the error of `gpu-screen-recorder`. |
+| The Mac or the phone says `list the monitors: exit status 22` | `gpu-screen-recorder` does not support the GPU. Install `wf-recorder`, then start the remote desktop again. |
 | `gpu-screen-recorder` cannot capture the monitor | Run `getcap /usr/bin/gsr-kms-server`. The result must show `cap_sys_admin`. Install the package again to restore it. |
 | The pointer goes to the wrong place | The compositor must name its monitors with `wl_output` version 4. Hyprland does. |
 | The Omarchy panel shows an error | Set `remote_input = true` and reload `fluxd`. The panel also needs `hyprctl` and a Hyprland with a Lua configuration. |

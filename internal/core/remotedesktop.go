@@ -21,6 +21,8 @@ import (
 // and sends its port in a flux.desktop packet. fluxd connects out to it, as
 // for the webcam. gpu-screen-recorder captures 1 monitor as H.264 in FLV,
 // and fluxd writes each frame to the phone with its size, see pumpDesktop.
+// On a GPU that gpu-screen-recorder does not support, such as one on
+// nouveau, wf-recorder captures the monitor and encodes it on the CPU.
 // The phone shows the stream and sends its touches as
 // kdeconnect.mousepad.request packets with a position on the monitor. The
 // stream needs remote_desktop, and the touches also need remote_input.
@@ -28,6 +30,9 @@ import (
 const (
 	// desktopRecorder captures the monitor and encodes it on the GPU.
 	desktopRecorder = "gpu-screen-recorder"
+	// desktopCPURecorder captures the monitor through Hyprland and encodes
+	// it on the CPU, for a GPU that desktopRecorder does not support.
+	desktopCPURecorder = "wf-recorder"
 	// desktopSize is the default longest side of the stream, in pixels.
 	// The phone can ask for a size from desktopMinSize to desktopMaxSize.
 	desktopSize    = 1920
@@ -137,6 +142,106 @@ func desktopArgs(name string, w, h int) []string {
 	}
 }
 
+// cpuRecorderArgs returns the arguments of wf-recorder for a monitor and a
+// stream size. wf-recorder captures a frame only when the screen changes,
+// so a still screen needs almost no CPU. x264 encodes without B-frames
+// and with a key frame each 60 frames.
+func cpuRecorderArgs(name string, w, h int) []string {
+	return []string{
+		"-o", name, "-c", "libx264", "-x", "yuv420p", "-m", "flv", "-f", "pipe:1",
+		"-F", fmt.Sprintf("scale=%d:%d", w, h),
+		"-p", "preset=ultrafast", "-p", "tune=zerolatency", "-p", "crf=23", "-p", "g=60",
+	}
+}
+
+// recorder is the program that captures a monitor as H.264 in FLV on
+// stdout.
+type recorder struct {
+	name string
+	path string
+	list func(ctx context.Context) ([]monitor, error)
+	args func(name string, w, h int) []string
+}
+
+func gpuRecorder(path string) recorder {
+	return recorder{desktopRecorder, path,
+		func(ctx context.Context) ([]monitor, error) { return listMonitors(ctx, path) }, desktopArgs}
+}
+
+func cpuRecorder(path string) recorder {
+	return recorder{desktopCPURecorder, path, hyprMonitors, cpuRecorderArgs}
+}
+
+// pickRecorder returns gpu-screen-recorder when it runs on this GPU, else
+// wf-recorder. gpu-screen-recorder fails to list the monitors on a GPU
+// that it does not support, and it lists no monitor when the displays are
+// off. Only the failure selects wf-recorder.
+func pickRecorder(ctx context.Context, lookPath func(string) (string, error)) (recorder, error) {
+	gpu, gpuErr := lookPath(desktopRecorder)
+	cpu, cpuErr := lookPath(desktopCPURecorder)
+	switch {
+	case gpuErr != nil && cpuErr != nil:
+		return recorder{}, errors.New("the remote desktop needs gpu-screen-recorder on the computer. Install it with: sudo pacman -S gpu-screen-recorder")
+	case gpuErr != nil:
+		return cpuRecorder(cpu), nil
+	case cpuErr != nil:
+		return gpuRecorder(gpu), nil
+	}
+	var exit *exec.ExitError
+	if _, err := listMonitors(ctx, gpu); errors.As(err, &exit) {
+		return cpuRecorder(cpu), nil
+	}
+	return gpuRecorder(gpu), nil
+}
+
+// hyprMonitor is 1 monitor in the output of hyprctl monitors -j.
+type hyprMonitor struct {
+	Name       string `json:"name"`
+	Width      int    `json:"width"`
+	Height     int    `json:"height"`
+	Transform  int    `json:"transform"`
+	DPMSStatus bool   `json:"dpmsStatus"`
+	Disabled   bool   `json:"disabled"`
+}
+
+// parseHyprMonitors returns the monitors in the output of hyprctl
+// monitors -j that show an image, with their size in pixels as the
+// capture has it. A rotated monitor swaps its width and height.
+func parseHyprMonitors(out []byte) ([]monitor, error) {
+	var hms []hyprMonitor
+	if err := json.Unmarshal(out, &hms); err != nil {
+		return nil, fmt.Errorf("read the Hyprland monitors: %w", err)
+	}
+	var ms []monitor
+	for _, hm := range hms {
+		if hm.Disabled || !hm.DPMSStatus || hm.Name == "" || hm.Width <= 0 || hm.Height <= 0 {
+			continue
+		}
+		w, h := hm.Width, hm.Height
+		if hm.Transform%2 == 1 {
+			w, h = h, w
+		}
+		ms = append(ms, monitor{hm.Name, w, h})
+	}
+	return ms, nil
+}
+
+// hyprMonitors returns the monitors that wf-recorder can capture.
+func hyprMonitors(ctx context.Context) ([]monitor, error) {
+	out, err := hyprctl(ctx, "monitors", "-j")
+	if err != nil {
+		return nil, fmt.Errorf("list the monitors: %w", err)
+	}
+	ms, err := parseHyprMonitors(out)
+	if err != nil {
+		return nil, err
+	}
+	if len(ms) == 0 {
+		return nil, errors.New("no monitor of Hyprland shows an image to capture")
+	}
+	return ms, nil
+}
+
 // listMonitors returns the monitors that the recorder can capture.
 func listMonitors(ctx context.Context, path string) ([]monitor, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -220,9 +325,9 @@ func focusedMonitor(ctx context.Context) string {
 
 // recorderError returns the line of the recorder output that tells why it
 // stopped: the last error line, else the last line.
-func recorderError(out string) string {
+func recorderError(name, out string) string {
 	if strings.TrimSpace(out) == "" {
-		return "gpu-screen-recorder exited"
+		return name + " exited"
 	}
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	for i := len(lines) - 1; i >= 0; i-- {
@@ -271,13 +376,13 @@ func (d *Daemon) runDesktop(dev *Device, l *lan.Link, b desktopStart) {
 		fail(fmt.Errorf("the remote desktop is off on %s. Set remote_desktop = true in ~/.config/flux/config.toml, then run: systemctl --user reload fluxd", self))
 		return
 	}
-	recorder, err := exec.LookPath(desktopRecorder)
+	rec, err := pickRecorder(d.ctx, exec.LookPath)
 	if err != nil {
-		fail(errors.New("the remote desktop needs gpu-screen-recorder on the computer. Install it with: sudo pacman -S gpu-screen-recorder"))
+		fail(err)
 		return
 	}
 	ms, err := wakeMonitors(d.ctx,
-		func() ([]monitor, error) { return listMonitors(d.ctx, recorder) },
+		func() ([]monitor, error) { return rec.list(d.ctx) },
 		func() error { return wakeDisplays(d.ctx) })
 	if err != nil {
 		fail(err)
@@ -321,7 +426,7 @@ func (d *Daemon) runDesktop(dev *Device, l *lan.Link, b desktopStart) {
 	}()
 	cancelOnLinkDown(ctx, l, cancel)
 
-	cmd := childCommand(ctx, recorder, desktopArgs(mon.Name, w, h)...)
+	cmd := childCommand(ctx, rec.path, rec.args(mon.Name, w, h)...)
 	// The recorder stops cleanly on SIGINT.
 	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 	cmd.WaitDelay = 3 * time.Second
@@ -335,7 +440,7 @@ func (d *Daemon) runDesktop(dev *Device, l *lan.Link, b desktopStart) {
 	var stderr lockedBuffer
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
-		fail(fmt.Errorf("start gpu-screen-recorder: %w", err))
+		fail(fmt.Errorf("start %s: %w", rec.name, err))
 		return
 	}
 	live := func() {
@@ -362,7 +467,7 @@ func (d *Daemon) runDesktop(dev *Device, l *lan.Link, b desktopStart) {
 		if ctx.Err() != nil && notice != 0 && d.notifier != nil {
 			_ = d.notifier.Close(notice)
 		}
-		d.logf("%s: remote desktop of %s at %dx%d", dev.Name, mon.Name, w, h)
+		d.logf("%s: remote desktop of %s at %dx%d with %s", dev.Name, mon.Name, w, h, rec.name)
 		d.markDirty()
 	}
 	err = pumpDesktop(stdout, tc, w, h, func() { go live() })
@@ -376,7 +481,7 @@ func (d *Daemon) runDesktop(dev *Device, l *lan.Link, b desktopStart) {
 	case errors.As(err, &closed):
 		d.logf("%s: remote desktop closed: %v", dev.Name, closed.err)
 	case errors.Is(err, io.EOF):
-		fail(fmt.Errorf("the screen capture stopped: %s", recorderError(stderr.String())))
+		fail(fmt.Errorf("the screen capture stopped: %s", recorderError(rec.name, stderr.String())))
 	default:
 		fail(fmt.Errorf("the screen capture failed: %w", err))
 	}

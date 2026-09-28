@@ -2,6 +2,8 @@ package core
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -129,10 +131,104 @@ func TestDesktopArgs(t *testing.T) {
 
 func TestRecorderError(t *testing.T) {
 	out := "gsr info: the monitor is connected\ngsr error: failed to create encoder\ngsr info: exiting\n"
-	if got := recorderError(out); got != "gsr error: failed to create encoder" {
+	if got := recorderError("gpu-screen-recorder", out); got != "gsr error: failed to create encoder" {
 		t.Errorf("got %q", got)
 	}
-	if got := recorderError("only info\n"); got != "only info" {
+	if got := recorderError("gpu-screen-recorder", "only info\n"); got != "only info" {
 		t.Errorf("got %q", got)
 	}
+	if got := recorderError("wf-recorder", ""); got != "wf-recorder exited" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestCPURecorderArgs(t *testing.T) {
+	args := cpuRecorderArgs("HEADLESS-1", 1280, 720)
+	for _, want := range [][]string{
+		{"-o", "HEADLESS-1"},
+		{"-c", "libx264"},
+		{"-x", "yuv420p"},
+		{"-m", "flv"},
+		{"-f", "pipe:1"},
+		{"-F", "scale=1280:720"},
+	} {
+		i := slices.Index(args, want[0])
+		if i < 0 || i+1 >= len(args) || args[i+1] != want[1] {
+			t.Errorf("args %q do not have %q", args, want)
+		}
+	}
+	// B-frames would delay each frame on the Mac or the phone.
+	if !slices.Contains(args, "tune=zerolatency") {
+		t.Errorf("args %q do not tune for latency", args)
+	}
+}
+
+func TestParseHyprMonitors(t *testing.T) {
+	out := []byte(`[
+		{"name":"HEADLESS-1","width":1280,"height":720,"transform":0,"dpmsStatus":true,"disabled":false},
+		{"name":"DP-1","width":2560,"height":1440,"transform":1,"dpmsStatus":true,"disabled":false},
+		{"name":"DP-2","width":1920,"height":1080,"transform":0,"dpmsStatus":false,"disabled":false},
+		{"name":"HDMI-A-1","width":1920,"height":1080,"transform":0,"dpmsStatus":true,"disabled":true}
+	]`)
+	got, err := parseHyprMonitors(out)
+	want := []monitor{{"HEADLESS-1", 1280, 720}, {"DP-1", 1440, 2560}}
+	if err != nil || !slices.Equal(got, want) {
+		t.Fatalf("got %+v, %v; want %+v", got, err, want)
+	}
+	if _, err := parseHyprMonitors([]byte("not json")); err == nil {
+		t.Fatal("got no error for output that is not JSON")
+	}
+}
+
+// fakeTool writes an executable shell script and returns its path.
+func fakeTool(t *testing.T, name, script string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+script+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestPickRecorder(t *testing.T) {
+	supported := fakeTool(t, "gpu-screen-recorder", `echo "eDP-1|2880x1800"`)
+	displaysOff := fakeTool(t, "gpu-screen-recorder", `exit 0`)
+	// gpu-screen-recorder on nouveau: "unknown gpu vendor: Mesa", exit 22.
+	unsupported := fakeTool(t, "gpu-screen-recorder", `echo "gsr error: unknown gpu vendor: Mesa" >&2; exit 22`)
+	cpu := "/usr/bin/wf-recorder"
+	missing := errors.New("not found")
+
+	paths := func(gpu, cpuPath string) func(string) (string, error) {
+		return func(name string) (string, error) {
+			switch {
+			case name == desktopRecorder && gpu != "":
+				return gpu, nil
+			case name == desktopCPURecorder && cpuPath != "":
+				return cpuPath, nil
+			}
+			return "", missing
+		}
+	}
+	cases := []struct {
+		name, gpu, cpu, want string
+	}{
+		{"supported GPU", supported, cpu, desktopRecorder},
+		{"displays off", displaysOff, cpu, desktopRecorder},
+		{"unsupported GPU", unsupported, cpu, desktopCPURecorder},
+		{"unsupported GPU without wf-recorder", unsupported, "", desktopRecorder},
+		{"only wf-recorder", "", cpu, desktopCPURecorder},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rec, err := pickRecorder(t.Context(), paths(c.gpu, c.cpu))
+			if err != nil || rec.name != c.want {
+				t.Fatalf("got %q, %v; want %q", rec.name, err, c.want)
+			}
+		})
+	}
+	t.Run("none", func(t *testing.T) {
+		if _, err := pickRecorder(t.Context(), paths("", "")); err == nil {
+			t.Fatal("got no error without a recorder")
+		}
+	})
 }
