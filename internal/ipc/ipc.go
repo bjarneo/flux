@@ -88,19 +88,111 @@ func Serve(ctx context.Context, path string, h Handler) error {
 	}
 }
 
-func serveConn(ctx context.Context, conn net.Conn, h Handler) {
-	defer conn.Close()
-	var wmu sync.Mutex
-	write := func(m Message) {
-		b, err := json.Marshal(m)
-		if err != nil {
+// maxQueued is the number of messages that can wait for a slow client. A
+// client that falls further behind loses its connection.
+const maxQueued = 256
+
+// writeTimeout is the time that 1 write to a client can take. A client that
+// reads nothing for this time loses its connection.
+const writeTimeout = 5 * time.Second
+
+// writer sends the messages of 1 connection from 1 goroutine, so a slow
+// client does not block fluxd. It keeps only the newest state event.
+type writer struct {
+	conn  net.Conn
+	queue chan []byte
+	mu    sync.Mutex
+	state []byte
+	wake  chan struct{}
+	done  chan struct{}
+	once  sync.Once
+}
+
+func newWriter(conn net.Conn) *writer {
+	w := &writer{
+		conn:  conn,
+		queue: make(chan []byte, maxQueued),
+		wake:  make(chan struct{}, 1),
+		done:  make(chan struct{}),
+	}
+	go w.run()
+	return w
+}
+
+func (w *writer) run() {
+	for {
+		var b []byte
+		select {
+		case <-w.done:
+			return
+		case b = <-w.queue:
+		case <-w.wake:
+			w.mu.Lock()
+			b, w.state = w.state, nil
+			w.mu.Unlock()
+			if b == nil {
+				continue
+			}
+		}
+		_ = w.conn.SetWriteDeadline(time.Now().Add(writeTimeout))
+		if _, err := w.conn.Write(b); err != nil {
+			w.close()
 			return
 		}
-		wmu.Lock()
-		defer wmu.Unlock()
-		_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		_, _ = conn.Write(append(b, '\n'))
 	}
+}
+
+// close stops the writer and closes the connection, which also ends the
+// read loop of serveConn.
+func (w *writer) close() {
+	w.once.Do(func() {
+		close(w.done)
+		w.conn.Close()
+	})
+}
+
+// reply queues a response. It waits while the queue is full.
+func (w *writer) reply(m Message) {
+	b, err := json.Marshal(m)
+	if err != nil {
+		return
+	}
+	select {
+	case w.queue <- append(b, '\n'):
+	case <-w.done:
+	}
+}
+
+// event queues an event without a wait. A new state event replaces a state
+// event that is not sent yet. When the queue is full, the client loses its
+// connection.
+func (w *writer) event(m Message) {
+	b, err := json.Marshal(m)
+	if err != nil {
+		return
+	}
+	b = append(b, '\n')
+	if m.Event == "state" {
+		w.mu.Lock()
+		w.state = b
+		w.mu.Unlock()
+		select {
+		case w.wake <- struct{}{}:
+		default:
+		}
+		return
+	}
+	select {
+	case w.queue <- b:
+	case <-w.done:
+	default:
+		w.close()
+	}
+}
+
+func serveConn(ctx context.Context, conn net.Conn, h Handler) {
+	w := newWriter(conn)
+	defer w.close()
 	var cancel func()
 	defer func() {
 		if cancel != nil {
@@ -112,7 +204,7 @@ func serveConn(ctx context.Context, conn net.Conn, h Handler) {
 	for s.Scan() {
 		var req Request
 		if err := json.Unmarshal(s.Bytes(), &req); err != nil {
-			write(Message{Error: &Error{Code: "bad_request", Message: err.Error()}})
+			w.reply(Message{Error: &Error{Code: "bad_request", Message: err.Error()}})
 			continue
 		}
 		if req.Method == "subscribe" {
@@ -120,25 +212,25 @@ func serveConn(ctx context.Context, conn net.Conn, h Handler) {
 				cancel = h.Subscribe(func(event string, data any) {
 					raw, err := marshal(data)
 					if err == nil {
-						write(Message{Event: event, Data: raw})
+						w.event(Message{Event: event, Data: raw})
 					}
 				})
 			}
-			write(Message{ID: req.ID, Result: json.RawMessage("{}")})
+			w.reply(Message{ID: req.ID, Result: json.RawMessage("{}")})
 			continue
 		}
 		go func(req Request) {
 			res, err := h.Call(ctx, req.Method, req.Params)
 			if err != nil {
-				write(Message{ID: req.ID, Error: toError(err)})
+				w.reply(Message{ID: req.ID, Error: toError(err)})
 				return
 			}
 			raw, err := marshal(res)
 			if err != nil {
-				write(Message{ID: req.ID, Error: toError(err)})
+				w.reply(Message{ID: req.ID, Error: toError(err)})
 				return
 			}
-			write(Message{ID: req.ID, Result: raw})
+			w.reply(Message{ID: req.ID, Result: raw})
 		}(req)
 	}
 }

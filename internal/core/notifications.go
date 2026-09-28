@@ -100,6 +100,9 @@ func (d *Daemon) handleNotification(dev *Device, l *lan.Link, p *proto.Packet) {
 	dev.notifications = removeNotification(dev.notifications, b.ID)
 	dev.notifications = append([]*PhoneNotification{n}, dev.notifications...)
 	if len(dev.notifications) > maxNotifications {
+		for _, gone := range dev.notifications[maxNotifications:] {
+			delete(dev.notifDesktop, gone.ID)
+		}
 		dev.notifications = dev.notifications[:maxNotifications]
 	}
 	if existing != nil {
@@ -153,9 +156,12 @@ func (d *Daemon) fetchIcon(l *lan.Link, p *proto.Packet, hash string) string {
 	if !hashRe.MatchString(hash) {
 		hash = strconv.FormatInt(int64(p.ID), 10)
 	}
-	dir := filepath.Join(cacheDir(), "icons")
+	dir := iconDir()
 	path := filepath.Join(dir, hash+".png")
 	if _, err := os.Stat(path); err == nil {
+		// pruneIcons keeps an icon that is in use.
+		now := time.Now()
+		_ = os.Chtimes(path, now, now)
 		return path
 	}
 	ctx, cancel := context.WithTimeout(d.ctx, 10*time.Second)
@@ -182,6 +188,27 @@ func (d *Daemon) fetchIcon(l *lan.Link, p *proto.Packet, hash string) string {
 		return ""
 	}
 	return path
+}
+
+// iconMaxAge is the time after which fluxd removes a notification icon
+// that no notification used.
+const iconMaxAge = 30 * 24 * time.Hour
+
+func iconDir() string { return filepath.Join(cacheDir(), "icons") }
+
+// pruneIcons removes the icons in dir that no notification used for
+// maxAge.
+func pruneIcons(dir string, maxAge time.Duration) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		info, err := e.Info()
+		if err == nil && info.Mode().IsRegular() && time.Since(info.ModTime()) > maxAge {
+			os.Remove(filepath.Join(dir, e.Name()))
+		}
+	}
 }
 
 func findNotification(list []*PhoneNotification, id string) *PhoneNotification {

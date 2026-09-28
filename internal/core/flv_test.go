@@ -116,3 +116,26 @@ func TestPumpDesktop(t *testing.T) {
 		t.Fatalf("a closed phone gave %v", err)
 	}
 }
+
+func TestAnnexB(t *testing.T) {
+	want := []byte{0, 0, 0, 1, 0x65, 0x88, 0, 0, 0, 1, 0x41}
+	// 4-byte lengths change in place.
+	four := []byte{0, 0, 0, 2, 0x65, 0x88, 0, 0, 0, 1, 0x41}
+	got, err := annexB(nil, four, 4)
+	if err != nil || !bytes.Equal(got, want) || &got[0] != &four[0] {
+		t.Errorf("4-byte lengths: % x, %v", got, err)
+	}
+	// 2-byte lengths go to dst.
+	two := []byte{0, 2, 0x65, 0x88, 0, 1, 0x41}
+	dst := make([]byte, 0, 64)
+	got, err = annexB(dst, two, 2)
+	if err != nil || !bytes.Equal(got, want) || &got[:1][0] != &dst[:1][0] {
+		t.Errorf("2-byte lengths: % x, %v", got, err)
+	}
+	if _, err := annexB(nil, []byte{0, 9, 0x65}, 2); err == nil {
+		t.Error("a long NAL unit gave no error")
+	}
+	if _, err := annexB(nil, []byte{0, 0, 0}, 4); err == nil {
+		t.Error("a short length gave no error")
+	}
+}

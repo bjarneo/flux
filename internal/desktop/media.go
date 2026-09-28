@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/godbus/dbus/v5"
 	"github.com/godbus/dbus/v5/introspect"
@@ -19,6 +20,15 @@ const (
 	mprisRootIface   = "org.mpris.MediaPlayer2"
 	mprisPlayerIface = "org.mpris.MediaPlayer2.Player"
 	propsIface       = "org.freedesktop.DBus.Properties"
+)
+
+// Media reports a change changeDelay after the last signal of the player,
+// and at most changeMaxWait after the first signal. A player sends a
+// burst of signals for 1 change, such as a new track, and each report
+// sends a packet to each phone.
+const (
+	changeDelay   = 200 * time.Millisecond
+	changeMaxWait = time.Second
 )
 
 // Player is the state of one MPRIS media player on the desktop.
@@ -45,11 +55,12 @@ type Media struct {
 	conn    *dbus.Conn
 	signals chan *dbus.Signal
 
-	mu       sync.Mutex
-	byName   map[string]string // short name to bus name
-	byOwner  map[string]string // unique owner name to short name
-	volume   map[string]bool   // bus name to true when the player takes a volume
-	onChange []func(name string)
+	mu         sync.Mutex
+	byName     map[string]string // short name to bus name
+	byOwner    map[string]string // unique owner name to short name
+	volume     map[string]bool   // bus name to true when the player takes a volume
+	identities map[string]string // bus name to the Identity of the player
+	onChange   []func(name string)
 }
 
 var instanceSuffix = regexp.MustCompile(`\.instance[\w.-]*$`)
@@ -92,7 +103,7 @@ func NewMedia() (*Media, error) {
 	if err != nil {
 		return nil, err
 	}
-	m := &Media{conn: conn, signals: make(chan *dbus.Signal, 64), volume: map[string]bool{}}
+	m := &Media{conn: conn, signals: make(chan *dbus.Signal, 64), volume: map[string]bool{}, identities: map[string]string{}}
 	if err := conn.AddMatchSignal(
 		dbus.WithMatchObjectPath(mprisPath),
 		dbus.WithMatchInterface(propsIface),
@@ -153,34 +164,125 @@ func (m *Media) refresh() {
 			delete(m.volume, bus)
 		}
 	}
+	for bus := range m.identities {
+		if !slices.Contains(buses, bus) {
+			delete(m.identities, bus)
+		}
+	}
 	m.mu.Unlock()
 }
 
+// dispatch reports the changes of the players until Shutdown. It joins
+// the signals of 1 player that come close together into 1 report.
 func (m *Media) dispatch() {
-	for sig := range m.signals {
-		var name string
-		switch sig.Name {
-		case "org.freedesktop.DBus.NameOwnerChanged":
-			m.refresh()
-			name = ""
-		case propsIface + ".PropertiesChanged", mprisPlayerIface + ".Seeked":
-			m.mu.Lock()
-			n, ok := m.byOwner[sig.Sender]
-			m.mu.Unlock()
+	var pending changes
+	timer := time.NewTimer(time.Hour)
+	timer.Stop()
+	defer timer.Stop()
+	for {
+		select {
+		case sig, ok := <-m.signals:
+			if !ok {
+				return
+			}
+			name, ok := m.changed(sig)
 			if !ok {
 				continue
 			}
-			name = n
-		default:
-			continue
+			pending.add(name, time.Now())
+		case <-timer.C:
+			for _, name := range pending.take(time.Now()) {
+				m.report(name)
+			}
 		}
-		m.mu.Lock()
-		fns := append([]func(string){}, m.onChange...)
-		m.mu.Unlock()
-		for _, fn := range fns {
-			fn(name)
+		if due, ok := pending.next(); ok {
+			timer.Reset(time.Until(due))
 		}
 	}
+}
+
+// changed returns the short name of the player that sig changes. The name
+// is empty when a player starts or stops. ok is false for a signal that
+// Media does not report.
+func (m *Media) changed(sig *dbus.Signal) (name string, ok bool) {
+	switch sig.Name {
+	case "org.freedesktop.DBus.NameOwnerChanged":
+		// A new owner of the bus name can be a different player.
+		if len(sig.Body) > 0 {
+			if bus, ok := sig.Body[0].(string); ok {
+				m.mu.Lock()
+				delete(m.identities, bus)
+				m.mu.Unlock()
+			}
+		}
+		m.refresh()
+		return "", true
+	case propsIface + ".PropertiesChanged", mprisPlayerIface + ".Seeked":
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		name, ok = m.byOwner[sig.Sender]
+		return name, ok
+	}
+	return "", false
+}
+
+// report calls the OnChange functions with the short name.
+func (m *Media) report(name string) {
+	m.mu.Lock()
+	fns := append([]func(string){}, m.onChange...)
+	m.mu.Unlock()
+	for _, fn := range fns {
+		fn(name)
+	}
+}
+
+// changes holds the players with a change that Media has not reported.
+type changes struct {
+	first map[string]time.Time // the time of the first signal
+	due   map[string]time.Time // the time of the report
+}
+
+// add records a signal of the player name at the time now.
+func (c *changes) add(name string, now time.Time) {
+	if c.due == nil {
+		c.first, c.due = map[string]time.Time{}, map[string]time.Time{}
+	}
+	first, ok := c.first[name]
+	if !ok {
+		first = now
+		c.first[name] = now
+	}
+	due := now.Add(changeDelay)
+	if limit := first.Add(changeMaxWait); due.After(limit) {
+		due = limit
+	}
+	c.due[name] = due
+}
+
+// next returns the earliest time of a report. ok is false when no change
+// waits.
+func (c *changes) next() (due time.Time, ok bool) {
+	for _, t := range c.due {
+		if !ok || t.Before(due) {
+			due, ok = t, true
+		}
+	}
+	return due, ok
+}
+
+// take removes the players with a report due at the time now and returns
+// their names, sorted.
+func (c *changes) take(now time.Time) []string {
+	var names []string
+	for name, t := range c.due {
+		if !t.After(now) {
+			names = append(names, name)
+			delete(c.due, name)
+			delete(c.first, name)
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 // Players returns the state of every player, sorted by name.
@@ -212,10 +314,7 @@ func (m *Media) Player(name string) (Player, bool) {
 	if err := obj.Call(propsIface+".GetAll", 0, mprisPlayerIface).Store(&props); err != nil {
 		return Player{}, false
 	}
-	p := Player{Name: name, Bus: bus}
-	if v, err := obj.GetProperty(mprisRootIface + ".Identity"); err == nil {
-		p.Identity, _ = v.Value().(string)
-	}
+	p := Player{Name: name, Bus: bus, Identity: m.identity(obj)}
 	p.Playing = str(props["PlaybackStatus"]) == "Playing"
 	p.Position = toInt64(props["Position"]) / 1000
 	if v, ok := props["Volume"]; ok {
@@ -326,6 +425,27 @@ func (m *Media) takesVolume(bus string) bool {
 	m.volume[bus] = ok
 	m.mu.Unlock()
 	return ok
+}
+
+// identity returns the Identity property of the player obj. Media reads it
+// once for each player and keeps it until the player stops.
+func (m *Media) identity(obj dbus.BusObject) string {
+	bus := obj.Destination()
+	m.mu.Lock()
+	id, ok := m.identities[bus]
+	m.mu.Unlock()
+	if ok {
+		return id
+	}
+	v, err := obj.GetProperty(mprisRootIface + ".Identity")
+	if err != nil {
+		return ""
+	}
+	id, _ = v.Value().(string)
+	m.mu.Lock()
+	m.identities[bus] = id
+	m.mu.Unlock()
+	return id
 }
 
 // writableVolume reports whether the introspection data lists the Volume

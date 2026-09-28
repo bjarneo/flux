@@ -211,6 +211,9 @@ func (d *Daemon) receiveFile(dev *Device, l *lan.Link, p *proto.Packet, name str
 	t := d.newTransfer(dev, name, "in", p.PayloadSize)
 	ctx, cancel := context.WithCancel(d.ctx)
 	defer cancel()
+	// A dropped link ends the transfer at once. Without it, a dead peer
+	// holds the socket until TCP gives up.
+	cancelOnLinkDown(ctx, l, cancel)
 	d.mu.Lock()
 	t.cancel = cancel
 	dir := destDir(d.cfg, kind)
@@ -398,6 +401,7 @@ func (d *Daemon) sendFile(l *lan.Link, t *Transfer, path string, info os.FileInf
 	defer f.Close()
 	ctx, cancel := context.WithCancel(d.ctx)
 	defer cancel()
+	cancelOnLinkDown(ctx, l, cancel)
 	d.mu.Lock()
 	t.cancel = cancel
 	d.mu.Unlock()

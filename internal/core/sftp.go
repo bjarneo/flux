@@ -76,6 +76,9 @@ func (d *Daemon) BrowseOpen(dev *Device) ([]BrowseRoot, error) {
 		roots := dev.sftpRoots
 		d.mu.Unlock()
 		if _, err := dev.sftpClient.Getwd(); err == nil {
+			d.mu.Lock()
+			d.touchSftpLocked(dev)
+			d.mu.Unlock()
 			return roots, nil
 		}
 		d.mu.Lock()
@@ -128,14 +131,53 @@ func (d *Daemon) BrowseOpen(dev *Device) ([]BrowseRoot, error) {
 		roots = append(roots, BrowseRoot{Name: path.Base(info.Path), Path: info.Path})
 	}
 	d.mu.Lock()
+	if dev.sftpClient != nil {
+		// A parallel call connected first. Keep its session.
+		roots = dev.sftpRoots
+		d.mu.Unlock()
+		client.Close()
+		conn.Close()
+		return roots, nil
+	}
 	dev.sftpSSH, dev.sftpClient, dev.sftpRoots = conn, client, roots
+	d.touchSftpLocked(dev)
 	d.mu.Unlock()
 	return roots, nil
+}
+
+// sftpIdle is the time after the last browse call when fluxd closes the
+// SFTP session to the phone. A download keeps the session open.
+const sftpIdle = 5 * time.Minute
+
+// touchSftpLocked starts the idle time of the SFTP session again.
+func (d *Daemon) touchSftpLocked(dev *Device) {
+	if dev.sftpClient == nil {
+		return
+	}
+	if dev.sftpTimer != nil {
+		dev.sftpTimer.Reset(sftpIdle)
+		return
+	}
+	var t *time.Timer
+	t = time.AfterFunc(sftpIdle, func() {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		if dev.sftpTimer != t {
+			return
+		}
+		if dev.sftpBusy > 0 {
+			t.Reset(sftpIdle)
+			return
+		}
+		dev.closeSftp()
+	})
+	dev.sftpTimer = t
 }
 
 func (d *Daemon) sftpFor(dev *Device) (*sftp.Client, error) {
 	d.mu.Lock()
 	c := dev.sftpClient
+	d.touchSftpLocked(dev)
 	d.mu.Unlock()
 	if c != nil {
 		return c, nil
@@ -191,9 +233,16 @@ func (d *Daemon) BrowseGet(dev *Device, remote string) (*Transfer, error) {
 	d.mu.Lock()
 	t.cancel = cancel
 	dir := d.cfg.DownloadPath()
+	dev.sftpBusy++
 	d.mu.Unlock()
 	go func() {
 		defer cancel()
+		defer func() {
+			d.mu.Lock()
+			dev.sftpBusy--
+			d.touchSftpLocked(dev)
+			d.mu.Unlock()
+		}()
 		err := func() error {
 			src, err := c.Open(remote)
 			if err != nil {
@@ -308,6 +357,7 @@ func (d *Daemon) handleBrowseRequest(dev *Device, l *lan.Link, p *proto.Packet) 
 	go func() {
 		ctx, cancel := context.WithTimeout(d.ctx, maxBrowseSession)
 		defer cancel()
+		cancelOnLinkDown(ctx, l, cancel)
 		tc, err := l.OpenTunnel(ctx, id)
 		if err != nil {
 			d.logf("%s: Browse PC tunnel: %v", dev.Name, err)

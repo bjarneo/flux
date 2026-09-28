@@ -13,10 +13,12 @@ import (
 // the kernel closes a link. Keepalive probes find a dead peer only while no
 // data waits. Without this limit, a phone that leaves the Wi-Fi while data
 // is in flight keeps its link open for about 15 minutes. fluxd then counts
-// the phone as online and does not dial its other addresses.
+// the phone as online and does not dial its other addresses. A payload or
+// tunnel connection to that phone also stays open for that time.
 const userTimeout = 30 * time.Second
 
-// setUserTimeout sets TCP_USER_TIMEOUT on a link connection.
+// setUserTimeout sets TCP_USER_TIMEOUT on a link, payload, or tunnel
+// connection.
 func setUserTimeout(c net.Conn) {
 	tc, ok := c.(*net.TCPConn)
 	if !ok {

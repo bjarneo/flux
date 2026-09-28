@@ -135,6 +135,9 @@ func (d *Daemon) runMic(dev *Device, l *lan.Link, b micStart) {
 		return
 	}
 	defer tc.Close()
+	// A stop or a dropped link closes the stream, so that the copy to the
+	// process ends at once.
+	defer context.AfterFunc(ctx, func() { tc.Close() })()
 	s := &micSession{dev: dev, link: l, cancel: cancel, view: MicView{
 		Source: micSource, From: dev.ID, FromName: dev.Name, Rate: b.Rate, Channels: b.Channels,
 	}}

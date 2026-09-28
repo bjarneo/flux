@@ -51,6 +51,7 @@ func (l *Link) SendWithPayload(ctx context.Context, p *proto.Packet, r io.Reader
 			return errors.New("payload listener closed")
 		}
 		conn = c
+		setUserTimeout(conn)
 	case <-time.After(20 * time.Second):
 		return errors.New("the device did not fetch the file. It can receive files only through an incoming connection, and the firewall blocks it")
 	case <-ctx.Done():
@@ -85,6 +86,7 @@ func (l *Link) FetchPayload(ctx context.Context, p *proto.Packet) (io.ReadCloser
 	if err != nil {
 		return nil, err
 	}
+	setUserTimeout(conn)
 	tc := tls.Client(conn, clientConfig(l.provider.cfg.Cert))
 	_ = tc.SetDeadline(time.Now().Add(15 * time.Second))
 	if err := tc.HandshakeContext(ctx); err != nil {

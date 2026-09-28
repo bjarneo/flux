@@ -38,6 +38,10 @@ type flvReader struct {
 	// lengthSize is the size of each NAL unit length in a frame. The
 	// sequence header gives it.
 	lengthSize int
+	// tag and out hold the current tag and frame. next uses them again for
+	// the next frame, so a frame is valid only until the next call.
+	tag []byte
+	out []byte
 }
 
 func newFLVReader(r io.Reader) *flvReader {
@@ -62,7 +66,10 @@ func (f *flvReader) next() (videoFrame, error) {
 			return videoFrame{}, fmt.Errorf("an FLV tag of %d bytes", size)
 		}
 		// The data, then the size of the previous tag.
-		data := make([]byte, size+4)
+		if cap(f.tag) < size+4 {
+			f.tag = make([]byte, size+4)
+		}
+		data := f.tag[:size+4]
 		if _, err := io.ReadFull(f.r, data); err != nil {
 			return videoFrame{}, eof(err)
 		}
@@ -116,9 +123,12 @@ func (f *flvReader) video(b []byte) (videoFrame, bool, error) {
 		f.lengthSize = lengthSize
 		return videoFrame{frameConfig, data}, true, nil
 	case 1:
-		data, err := annexB(b[5:], f.lengthSize)
+		data, err := annexB(f.out[:0], b[5:], f.lengthSize)
 		if err != nil {
 			return videoFrame{}, false, err
+		}
+		if f.lengthSize != 4 {
+			f.out = data
 		}
 		if len(data) == 0 {
 			return videoFrame{}, false, nil
@@ -168,12 +178,29 @@ func avcConfig(b []byte) ([]byte, int, error) {
 }
 
 // annexB turns NAL units with length prefixes into NAL units with start
-// codes.
-func annexB(b []byte, lengthSize int) ([]byte, error) {
-	out := make([]byte, 0, len(b)+16)
+// codes and appends them to dst. A 4-byte length has the size of a start
+// code, so annexB then replaces each length in b and returns b with no copy.
+func annexB(dst, b []byte, lengthSize int) ([]byte, error) {
+	errLength := errors.New("an H.264 frame ends inside a NAL unit length")
+	errUnit := errors.New("an H.264 NAL unit is longer than its frame")
+	if lengthSize == 4 {
+		for i := 0; i < len(b); {
+			if len(b)-i < 4 {
+				return nil, errLength
+			}
+			size := binary.BigEndian.Uint32(b[i:])
+			if uint64(size) > uint64(len(b)-i-4) {
+				return nil, errUnit
+			}
+			copy(b[i:], startCode)
+			i += 4 + int(size)
+		}
+		return b, nil
+	}
+	out := dst
 	for len(b) > 0 {
 		if len(b) < lengthSize {
-			return nil, errors.New("an H.264 frame ends inside a NAL unit length")
+			return nil, errLength
 		}
 		size := 0
 		for _, c := range b[:lengthSize] {
@@ -181,7 +208,7 @@ func annexB(b []byte, lengthSize int) ([]byte, error) {
 		}
 		b = b[lengthSize:]
 		if size > len(b) {
-			return nil, errors.New("an H.264 NAL unit is longer than its frame")
+			return nil, errUnit
 		}
 		out = append(append(out, startCode...), b[:size]...)
 		b = b[size:]
@@ -197,14 +224,19 @@ func eof(err error) error {
 	return err
 }
 
-// writeFrame writes 1 frame to the phone: the size of the data as a
-// big-endian uint32, the flags, and the data. It writes all in 1 call, so
-// that a frame goes out in as few TLS records as possible.
-func writeFrame(w io.Writer, flags byte, data []byte) error {
-	b := make([]byte, 5, 5+len(data))
-	binary.BigEndian.PutUint32(b, uint32(len(data)))
-	b[4] = flags
-	_, err := w.Write(append(b, data...))
+// frameWriter writes frames to the phone: the size of the data as a
+// big-endian uint32, the flags, and the data. It writes each frame in 1
+// call, so that a frame goes out in as few TLS records as possible. It uses
+// 1 buffer for all frames.
+type frameWriter struct {
+	w   io.Writer
+	buf []byte
+}
+
+func (fw *frameWriter) write(flags byte, data []byte) error {
+	fw.buf = binary.BigEndian.AppendUint32(fw.buf[:0], uint32(len(data)))
+	fw.buf = append(append(fw.buf, flags), data...)
+	_, err := fw.w.Write(fw.buf)
 	return err
 }
 
@@ -220,6 +252,7 @@ func (e writeError) Unwrap() error { return e.err }
 // a writeError when the phone closes it.
 func pumpDesktop(r io.Reader, w io.Writer, width, height int, live func()) error {
 	fr := newFLVReader(r)
+	fw := &frameWriter{w: w}
 	first := true
 	for {
 		f, err := fr.next()
@@ -230,11 +263,11 @@ func pumpDesktop(r io.Reader, w io.Writer, width, height int, live func()) error
 			first = false
 			live()
 			size := binary.BigEndian.AppendUint16(binary.BigEndian.AppendUint16(nil, uint16(width)), uint16(height))
-			if err := writeFrame(w, frameFormat, size); err != nil {
+			if err := fw.write(frameFormat, size); err != nil {
 				return writeError{err}
 			}
 		}
-		if err := writeFrame(w, f.flags, f.data); err != nil {
+		if err := fw.write(f.flags, f.data); err != nil {
 			return writeError{err}
 		}
 	}

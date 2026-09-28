@@ -1,8 +1,12 @@
 package core
 
 import (
+	"context"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"flux/internal/config"
 )
 
 func TestDndGuardLocalChanges(t *testing.T) {
@@ -66,5 +70,35 @@ func TestDndGuardRemoteFirst(t *testing.T) {
 	}
 	if g.local(true, now) {
 		t.Fatal("the applied state is not a local change")
+	}
+}
+
+// countDnd counts the reads of the desktop state.
+type countDnd struct{ gets atomic.Int32 }
+
+func (c *countDnd) Get() (bool, bool) { c.gets.Add(1); return false, true }
+func (c *countDnd) Set(bool) error    { return nil }
+
+// With no phone that accepts flux.dnd, the loop does not read the desktop.
+func TestDndLoopIdleWithoutPhone(t *testing.T) {
+	dnd := &countDnd{}
+	d := &Daemon{
+		cfg:     &config.Config{SyncDnd: true},
+		devices: map[string]*Device{},
+		dnd:     dnd,
+		dndWake: make(chan struct{}, 1),
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		d.dndLoop(ctx)
+		close(done)
+	}()
+	d.wakeDnd()
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+	<-done
+	if n := dnd.gets.Load(); n != 0 {
+		t.Errorf("the loop read the desktop state %d times", n)
 	}
 }

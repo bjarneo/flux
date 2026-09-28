@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"flux/internal/config"
@@ -30,9 +31,19 @@ const maxClipImages = 10
 // clipImageTimeout limits the transfer of 1 clipboard image.
 const clipImageTimeout = time.Minute
 
+// maxClipPreview is the number of text bytes that each state event holds for
+// one clipboard entry. A copy by ID gives the full text.
+const maxClipPreview = 1024
+
 // ClipEntry is one clipboard history entry.
 type ClipEntry struct {
+	// ID identifies the entry for clipboard.copy.
+	ID   string `json:"id"`
 	Text string `json:"text"`
+	// Truncated is true when the state holds only the start of Text. Size
+	// is then the full length of Text in bytes.
+	Truncated bool `json:"truncated,omitempty"`
+	Size      int  `json:"size,omitempty"`
 	// Image is the path of a copied image. Text is empty for an image.
 	Image      string `json:"image,omitempty"`
 	Dir        string `json:"dir"` // "in" or "out"
@@ -59,6 +70,7 @@ func (d *Daemon) addClipLocked(e ClipEntry) {
 			return
 		}
 	}
+	e.ID = config.NewID(6)
 	all := append([]ClipEntry{e}, d.clipboard...)
 	kept := all[:0]
 	images := 0
@@ -99,6 +111,21 @@ func (d *Daemon) addClipImage(e ClipEntry, data []byte, mime string) error {
 	d.mu.Unlock()
 	d.markDirty()
 	return nil
+}
+
+// clipPreviewLocked returns the clipboard history for the state. A long text
+// holds only its first maxClipPreview bytes.
+func (d *Daemon) clipPreviewLocked() []ClipEntry {
+	out := make([]ClipEntry, len(d.clipboard))
+	copy(out, d.clipboard)
+	for i := range out {
+		if len(out[i].Text) > maxClipPreview {
+			out[i].Size = len(out[i].Text)
+			out[i].Text = strings.ToValidUTF8(out[i].Text[:maxClipPreview], "")
+			out[i].Truncated = true
+		}
+	}
+	return out
 }
 
 // removeClipImages removes the images that an earlier fluxd left in dir.
@@ -343,6 +370,28 @@ func (d *Daemon) sendImageTo(dev *Device, data []byte) error {
 		return err
 	}
 	return d.addClipImage(ClipEntry{Dir: "out", Device: dev.ID, DeviceName: "this pc", Time: time.Now().Unix()}, data, desktop.ImageType)
+}
+
+// CopyClip puts the full text or the image of a history entry on the local
+// clipboard.
+func (d *Daemon) CopyClip(id string) error {
+	d.mu.Lock()
+	var e ClipEntry
+	found := false
+	for _, c := range d.clipboard {
+		if c.ID == id {
+			e, found = c, true
+			break
+		}
+	}
+	d.mu.Unlock()
+	if !found {
+		return apiErr("not_found", "The clipboard history has no entry %s", id)
+	}
+	if e.Image != "" {
+		return d.CopyClipImage(e.Image)
+	}
+	return d.clip.Set(e.Text)
 }
 
 // CopyClipImage puts an image from the clipboard history on the local
