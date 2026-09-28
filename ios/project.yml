@@ -25,6 +25,7 @@ targets:
         NSLocalNetworkUsageDescription: Flux finds and connects to your Omarchy computers on the local network.
         NSBonjourServices:
           - _kdeconnect._udp
+        NSPhotoLibraryUsageDescription: Flux sends your new screenshots and photos to your computers when you turn that on in Settings.
         NSFaceIDUsageDescription: Flux checks that it is you before your iPhone types, replies, or shows the screen on a computer.
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
