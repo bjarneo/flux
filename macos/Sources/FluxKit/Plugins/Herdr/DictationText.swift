@@ -116,19 +116,31 @@ public enum DictationText {
         return name
     }
 
-    /// The message when the recognizer supports none of the Mac languages.
-    public static func unsupported(_ tags: [String]) -> String {
-        "The speech recognizer of this Mac supports none of its languages: \(tags.map(languageName).joined(separator: ", ")). Choose a language."
+    /// The message when the recognizer supports none of the device languages.
+    public static func unsupported(_ tags: [String], platform: FluxPlatform = .current) -> String {
+        "The speech recognizer of \(platform.deviceNoun) supports none of its languages: \(tags.map(languageName).joined(separator: ", ")). Choose a language."
     }
 
     /// The message when the recognizer does not support the language `tag` that the user chose.
-    public static func notSupported(_ tag: String) -> String {
-        "The speech recognizer of this Mac does not support \(languageName(tag)). Choose another language."
+    public static func notSupported(_ tag: String, platform: FluxPlatform = .current) -> String {
+        "The speech recognizer of \(platform.deviceNoun) does not support \(languageName(tag)). Choose another language."
     }
 
-    public static let speechDenied = "Allow Flux in System Settings > Privacy & Security > Speech Recognition to dictate"
-    public static let micDenied = "Allow Flux in System Settings > Privacy & Security > Microphone to dictate"
-    public static let noMicrophone = "This Mac has no microphone input. Connect a microphone, then try again."
+    public static var speechDenied: String { speechDenied(platform: .current) }
+    public static var micDenied: String { micDenied(platform: .current) }
+    public static var noMicrophone: String { noMicrophone(platform: .current) }
+
+    static func speechDenied(platform: FluxPlatform) -> String {
+        "Allow Flux in \(platform.settingsApp) > Privacy & Security > Speech Recognition to dictate"
+    }
+
+    static func micDenied(platform: FluxPlatform) -> String {
+        "Allow Flux in \(platform.settingsApp) > Privacy & Security > Microphone to dictate"
+    }
+
+    static func noMicrophone(platform: FluxPlatform) -> String {
+        "\(platform.deviceNounStart) has no microphone input. Connect a microphone, then try again."
+    }
 
     /// True for a recognizer error that means only that nobody spoke.
     public static func isSilence(domain: String, code: Int) -> Bool {
@@ -136,9 +148,9 @@ public enum DictationText {
     }
 
     /// The message for a recognizer error.
-    public static func message(domain: String, code: Int, description: String) -> String {
+    public static func message(domain: String, code: Int, description: String, platform: FluxPlatform = .current) -> String {
         if domain == NSURLErrorDomain {
-            return "Apple's speech servers are not reachable. Check the network, or choose a language that this Mac transcribes on the device."
+            return "Apple's speech servers are not reachable. Check the network, or choose a language that \(platform.deviceNoun) transcribes on the device."
         }
         return "Dictation stopped: \(description) (\(domain) \(code)). Try again."
     }

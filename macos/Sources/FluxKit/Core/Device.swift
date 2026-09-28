@@ -104,6 +104,11 @@ public final class Device: @unchecked Sendable {
         resetPair()
     }
 
+    /// The message after a computer ends the pairing.
+    static func unpairedText(computer: String, platform: FluxPlatform = .current) -> String {
+        "\(computer) unpaired \(platform.deviceNoun)"
+    }
+
     /// Handles a kdeconnect.pair packet.
     func onPairPacket(_ p: Packet) {
         let wants = p.bool("pair") ?? false
@@ -113,7 +118,7 @@ public final class Device: @unchecked Sendable {
             if pairState == .requested {
                 core.toast("\(name) rejected the pairing")
             } else if wasPaired {
-                core.toast("\(name) unpaired this Mac")
+                core.toast(Self.unpairedText(computer: name))
             }
             resetPair()
             if wasPaired { core.didUnpair(self) }

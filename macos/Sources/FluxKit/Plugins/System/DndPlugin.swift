@@ -56,7 +56,7 @@ public final class DndPlugin: FluxPlugin, @unchecked Sendable {
         let model = model
         Task { @MainActor in model.focusOn = on }
         guard let core, dndGuard.local(on, now: Self.now()), sync(core) else { return }
-        FluxLog.plugin.info("Do Not Disturb is \(on ? "on" : "off", privacy: .public) on this Mac")
+        FluxLog.plugin.info("Do Not Disturb is \(on ? "on" : "off", privacy: .public) on \(FluxPlatform.current.deviceNoun, privacy: .public)")
         send(on, except: nil)
     }
 

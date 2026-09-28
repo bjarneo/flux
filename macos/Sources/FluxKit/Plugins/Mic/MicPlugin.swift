@@ -121,6 +121,18 @@ public final class MicPlugin: FluxPlugin, @unchecked Sendable {
         lock.withLock { deviceId == device.id ? attempt : nil }
     }
 
+    // MARK: Texts
+
+    /// The error when the computer's Flux has no microphone support.
+    static func updateText(computer: String, platform: FluxPlatform = .current) -> String {
+        "Update Flux on \(computer) to use \(platform.deviceNoun) as a microphone"
+    }
+
+    /// The error when no microphone input exists.
+    static func noMicrophoneText(platform: FluxPlatform = .current) -> String {
+        "\(platform.deviceNounStart) has no microphone"
+    }
+
     // MARK: Stream
 
     private func run(_ core: FluxCore, _ deviceId: String, _ name: String, _ id: Int) async {
@@ -128,7 +140,7 @@ public final class MicPlugin: FluxPlugin, @unchecked Sendable {
             try await authorize()
             let peer = core.locked { core.device(deviceId).map { (accepts: $0.accepts(PacketType.fluxMic), certificate: $0.certificate) } }
             guard let peer else { throw FluxError("\(name) is not known") }
-            guard peer.accepts else { throw FluxError("Update Flux on \(name) to use this Mac as a microphone") }
+            guard peer.accepts else { throw FluxError(Self.updateText(computer: name)) }
             guard let certificate = peer.certificate else { throw FluxError("\(name) is not connected") }
             let stream = try await connect(core, deviceId, name, certificate, id)
             let keep = lock.withLock {
@@ -217,7 +229,7 @@ public final class MicPlugin: FluxPlugin, @unchecked Sendable {
             self?.fail(message, id)
         })
         let input = core?.defaults.string(forKey: Self.inputKey) ?? ""
-        guard let device = MicCapture.device(for: input) else { throw FluxError("This Mac has no microphone") }
+        guard let device = MicCapture.device(for: input) else { throw FluxError(Self.noMicrophoneText()) }
         let keep = lock.withLock {
             guard attempt == id else { return false }
             self.capture = capture

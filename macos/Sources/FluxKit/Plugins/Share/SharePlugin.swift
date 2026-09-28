@@ -92,6 +92,13 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
 
     static var defaultFolder: URL { FluxFolders.downloads }
 
+    /// The name of a folder in messages. The default folder has the name
+    /// that users know: Downloads on macOS, Files on iOS, where the Files
+    /// app shows the Documents folder of the app.
+    static func placeName(_ folder: URL) -> String {
+        folder.standardizedFileURL == FluxFolders.downloads.standardizedFileURL ? FluxFolders.downloadsName : folder.lastPathComponent
+    }
+
     /// The folder for received files. The default is ~/Downloads on macOS
     /// and the app's Documents folder on iOS.
     public var downloadFolder: URL {
@@ -182,9 +189,9 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
             ui { $0.finish(transfer.id, file: saved, error: nil) }
             Notifier.shared.post(id: "share-\(transfer.id.uuidString)", category: Self.fileCategory,
                                  title: "Received \(saved.lastPathComponent)",
-                                 body: "From \(job.from), saved in \(folder.lastPathComponent)",
+                                 body: "From \(job.from), saved in \(Self.placeName(folder))",
                                  userInfo: ["path": saved.path])
-            core.toast("Saved \(saved.lastPathComponent) in \(folder.lastPathComponent)")
+            core.toast("Saved \(saved.lastPathComponent) in \(Self.placeName(folder))")
             if job.open { DispatchQueue.main.async { MainActor.assumeIsolated { self.openReceivedFile(saved) } } }
         } catch {
             try? part.handle.close()

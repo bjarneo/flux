@@ -183,6 +183,11 @@ public final class DesktopPlugin: FluxPlugin, @unchecked Sendable {
         lock.withLock { deviceId == device.id ? attempt : nil }
     }
 
+    /// The error when the video decoder rejects the stream.
+    static func cannotShowText(platform: FluxPlatform = .current) -> String {
+        "\(platform.deviceNounStart) cannot show the stream"
+    }
+
     // MARK: Stream
 
     private func run(_ core: FluxCore, _ deviceId: String, _ name: String, _ monitor: String?, _ maxSize: Int, _ id: Int) async {
@@ -256,7 +261,7 @@ public final class DesktopPlugin: FluxPlugin, @unchecked Sendable {
                         showSize(size.width, size.height, id)
                     } else if frame.isConfig {
                         if let sets = DesktopH264.parameterSets(frame.data), !video.configure(sps: sets.sps, pps: sets.pps) {
-                            throw FluxError("This Mac cannot show the stream")
+                            throw FluxError(Self.cannotShowText())
                         }
                     } else {
                         video.show(frame.data, key: frame.isKey)

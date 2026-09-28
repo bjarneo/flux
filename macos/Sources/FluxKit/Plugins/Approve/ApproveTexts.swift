@@ -3,7 +3,7 @@ import LocalAuthentication
 /// The texts of approvals, with the name of the device and of its biometry.
 /// A Mac approves only with Touch ID. An iPhone has Face ID or Touch ID.
 struct ApproveTexts: Sendable {
-    enum Platform: Sendable { case mac, phone }
+    typealias Platform = FluxPlatform
 
     let platform: Platform
     /// "Touch ID", "Face ID", "Optic ID", or the passcode or password.
@@ -44,10 +44,10 @@ struct ApproveTexts: Sendable {
         }
     }
 
-    var deviceNoun: String { platform == .mac ? "this Mac" : "this iPhone" }
-    private var device: String { platform == .mac ? "This Mac" : "This iPhone" }
+    var deviceNoun: String { platform.deviceNoun }
+    private var device: String { platform.deviceNounStart }
     private var secret: String { platform == .mac ? "password" : "passcode" }
-    private var settings: String { platform == .mac ? "System Settings" : "Settings" }
+    private var settings: String { platform.settingsApp }
     /// The biometry at the start of a sentence.
     private var biometryStart: String { biometry.prefix(1).uppercased() + biometry.dropFirst() }
 
@@ -70,7 +70,7 @@ struct ApproveTexts: Sendable {
     var lockedOut: String { "\(biometryStart) is locked. Unlock \(deviceNoun) with the \(secret) first." }
     var unavailable: String {
         platform == .mac
-            ? "\(biometryStart) is not available. Open the lid of this Mac, or connect a keyboard with \(biometry)."
+            ? "\(biometryStart) is not available. Open the lid of \(deviceNoun), or connect a keyboard with \(biometry)."
             : "\(biometryStart) is not available on \(deviceNoun)."
     }
     var unavailableShort: String { "\(biometryStart) is not available." }
