@@ -71,6 +71,17 @@ final class ProtocolTests: XCTestCase {
         XCTAssertNil(Identity.from(bad))
     }
 
+    func testOnlyOmarchyComputersAreFlux() {
+        func identity(_ type: String, _ incoming: [String]) -> Identity {
+            Identity(deviceId: "9f1c0e5b7a2d4c3e8b6a1f0d2c4e6a8b", deviceName: "x", deviceType: type, protocolVersion: 8, incoming: incoming, outgoing: [])
+        }
+        XCTAssertTrue(identity("desktop", ["flux.tunnel"]).isFlux, "fluxd on a desktop")
+        XCTAssertTrue(identity("laptop", ["flux.tunnel"]).isFlux, "fluxd on a laptop")
+        XCTAssertFalse(identity("phone", ["flux.tunnel"]).isFlux, "Flux for Android also accepts flux.tunnel")
+        XCTAssertFalse(identity("tablet", ["flux.tunnel"]).isFlux)
+        XCTAssertFalse(identity("laptop", ["kdeconnect.ping"]).isFlux, "another Mac or a KDE Connect desktop")
+    }
+
     func testGeneratedCertificateAndVerificationKey() throws {
         let a = try LocalCertificate.generate(deviceId: "9f1c0e5b7a2d4c3e8b6a1f0d2c4e6a8b")
         let b = try LocalCertificate.generate(deviceId: "0f1c0e5b7a2d4c3e8b6a1f0d2c4e6a8b")

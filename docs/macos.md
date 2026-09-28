@@ -55,6 +55,15 @@ You can also start from the computer with `flux-cli pair` and accept on the Mac.
 The Mac announces itself with UDP broadcasts on port 1716 and as `_kdeconnect._udp` through Bonjour, like the phone.
 It appears on the computer as `laptop` when it has a battery and `desktop` otherwise.
 
+The Mac is a remote for Omarchy computers.
+It connects and pairs only with a computer that runs `fluxd`.
+It ignores phones, tablets, other Macs, and other KDE Connect devices, and it removes old pairings with them when it starts.
+
+Flux searches the network for 10 seconds when it starts.
+It does not search all the time.
+If the sidebar shows **No computer found**, select **Search again**.
+A computer that runs `fluxd` still finds the Mac after the search ends, because the Mac keeps its Bonjour service and its UDP port open.
+
 ## Features
 
 | Feature | Mac behavior |
@@ -73,12 +82,11 @@ It appears on the computer as `laptop` when it has a battery and `desktop` other
 | Battery | A Mac with a battery reports it. The page shows the computer's battery. |
 | Do Not Disturb | See [Focus](#focus). |
 | Fingerprint approval | Approves `sudo` and polkit with Touch ID. See [approval](#approval). |
+| Touchpad and keyboard | The trackpad, the mouse, and the keyboard of the Mac control the pointer and the keys of the Omarchy computer. The computer does not control the Mac. The computer needs `remote_input = true`. The Mac asks for Touch ID or its password before the touchpad opens. Control and Option together give the pointer back to the Mac. See [Touchpad and keyboard](remote-input.md#use-a-mac). |
+| herdr agents | Shows the coding agents that herdr runs on the computer, their output in color, and notifications. Answers them after Touch ID or the password when the computer allows replies, with dictation on the Mac. See [herdr agents](herdr.md#use-a-mac). |
 
 The Mac cannot mirror notifications from other apps, report calls, or send SMS, because macOS gives apps no access to them.
 Flux does not advertise those capabilities.
-
-The Mac app does not show [herdr agents](herdr.md) yet.
-It does not advertise `flux.herdr`, so `fluxd` sends it no agent state.
 
 ## Focus
 
@@ -107,9 +115,10 @@ macOS asks for each permission on first use:
 | Permission | Used by |
 | --- | --- |
 | Local network | Discovery and links |
-| Notifications | Pairing requests, received files, notifications, approval |
+| Notifications | Pairing requests, received files, notifications, approval, herdr agents |
 | Camera | Webcam and camera modes |
-| Microphone | Microphone |
+| Microphone | Microphone, dictated replies to herdr agents |
+| Speech Recognition | Dictated replies to herdr agents |
 | Screen & System Audio Recording | Screen mirror |
 | Photos | Send new photos |
 | Downloads folder | Received files |

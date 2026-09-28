@@ -24,6 +24,9 @@ public enum PacketType {
     public static let mprisRequest = "kdeconnect.mpris.request"
     public static let sftp = "kdeconnect.sftp"
     public static let sftpRequest = "kdeconnect.sftp.request"
+    /// Moves the pointer, clicks, scrolls, and types on the computer. This Mac
+    /// sends it. docs/remote-input.md describes the body.
+    public static let mousepadRequest = "kdeconnect.mousepad.request"
 
     /// Flux extension: this device opens a listener that the computer connects to.
     public static let fluxTunnel = "flux.tunnel"
@@ -33,8 +36,12 @@ public enum PacketType {
     public static let fluxDnd = "flux.dnd"
     /// Flux extension: this device streams its microphone to the computer as a virtual source.
     public static let fluxMic = "flux.mic"
+    /// Flux extension: the computer sends its herdr agents, and this device asks for their output and answers them. Both sides send it.
+    public static let fluxHerdr = "flux.herdr"
     /// Flux extension: this device streams its screen to a window on the computer.
     public static let fluxScreen = "flux.screen"
+    /// Flux extension: the computer tells whether it accepts remote input, {"enabled": bool}.
+    public static let fluxInput = "flux.input"
     /// Flux extension: the computer asks this device to approve sudo with a fingerprint.
     public static let fluxApprove = "flux.approve"
 }
@@ -79,8 +86,13 @@ public struct Identity: Sendable, Equatable {
         return Packet(PacketType.identity, body)
     }
 
-    /// True when the peer is an Omarchy desktop that runs fluxd. fluxd accepts flux.tunnel.
-    public var isFlux: Bool { incoming.contains(PacketType.fluxTunnel) }
+    /// True when the peer is an Omarchy computer that runs fluxd. fluxd is a
+    /// desktop or laptop that accepts flux.tunnel. Flux for Android also
+    /// accepts flux.tunnel, but it is a phone or tablet. The Mac is a remote
+    /// for Omarchy, so it connects and pairs only with these peers.
+    public var isFlux: Bool {
+        (deviceType == "desktop" || deviceType == "laptop") && incoming.contains(PacketType.fluxTunnel)
+    }
 
     public static func from(_ p: Packet) -> Identity? {
         guard p.type == PacketType.identity, let id = p.string("deviceId"), validDeviceId(id) else { return nil }

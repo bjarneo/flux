@@ -46,7 +46,7 @@ command = "omarchy-system-lock"
 | `sync_dnd` | Sync Do Not Disturb. Defaults to `true`. |
 | `herdr` | Show the [herdr agents](herdr.md) of this computer on the phone. Defaults to `true`. |
 | `herdr_control` | Let the phone send keys and prompts to the herdr agents. Defaults to `false`. See [Answer an agent](herdr.md#answer-an-agent). |
-| `remote_input` | Let the phone move the pointer and type on this computer. Defaults to `false`. See [Touchpad and keyboard](remote-input.md). |
+| `remote_input` | Let the phone or the Mac move the pointer and type on this computer. Defaults to `false`. See [Touchpad and keyboard](remote-input.md). |
 | `gui` | Use `app`, `plugin`, or an empty value for automatic host selection. |
 | `approve_timeout` | Wait 5 to 120 seconds for approval. Zero or an omitted value uses 20 seconds. |
 | `commands` | Desktop commands available to the phone. A new configuration has no commands. |

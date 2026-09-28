@@ -174,7 +174,7 @@ public final class LanBackend: @unchecked Sendable {
 
     func onDatagram(_ data: ByteBuffer, from address: SocketAddress) {
         guard let p = Packet.parse(Data(data.readableBytesView)), let id = Identity.from(p),
-              id.deviceId != localDeviceId, id.tcpPort > 0, let ip = address.ipAddress else { return }
+              id.deviceId != localDeviceId, id.tcpPort > 0, id.isFlux, let ip = address.ipAddress else { return }
         if delegate?.hasLink(deviceId: id.deviceId) == true { return }
         let now = Date()
         let allowed = state.withLockedValue { s -> Bool in

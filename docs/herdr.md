@@ -2,12 +2,13 @@
 
 [Documentation index](README.md)
 
-Flux for Android shows the coding agents that [herdr](https://herdr.dev) runs on your Omarchy computer.
+Flux for Android and Flux for macOS show the coding agents that [herdr](https://herdr.dev) runs on your Omarchy computer.
 You can see the status of each agent, read its recent output in color, and get a notification when an agent needs input or finishes.
 When you turn on replies, you can also answer an agent with taps and send it text.
 
 The phone uses the Flux link that it already has.
 It needs no new port, no firewall rule, and no new pairing.
+This page describes the phone. A Mac works the same way, and [Use a Mac](#use-a-mac) describes where it differs.
 
 ```text
 herdr server ── Unix socket ── fluxd ── Flux TLS link ── Flux for Android
@@ -20,7 +21,7 @@ The phone never connects to the herdr socket.
 
 - herdr with API protocol 22 or newer. herdr 0.9.1 uses protocol 22.
 - herdr and `fluxd` run as the same desktop user.
-- A `fluxd` and a Flux for Android that both include this feature.
+- A `fluxd` and a Flux for Android or Flux for macOS that both include this feature.
 
 To check the desktop side, run:
 
@@ -145,6 +146,40 @@ On Android 12 and earlier, the picker lists only the phone languages.
 
 The first dictation asks for the microphone permission.
 The mic key does not show when the phone has no speech recognizer.
+
+## Use a Mac
+
+Flux for macOS shows the same agents and sends the same replies as the phone.
+
+- The page of the computer has an **Agents** card. It lists the first agents and shows the number of blocked agents.
+- **Open Agents…** opens a window with the agent list on the left and the output of the selected agent on the right. The menu bar item has **Agents…** too.
+- The output uses the colors of Tokyo Night in dark mode and Tokyo Night Day in light mode.
+- Press Command-R to read the output again.
+- Return sends the text. Shift-Return adds a line break.
+- Before the first reply, the Mac asks for Touch ID or the Mac password. The unlock stays valid for 5 minutes while Flux runs.
+- The **Agent needs input** and **Agent finished** switches are in **Settings > Features**. They apply to all computers. A click on a notification opens the agent in the agents window.
+
+### Dictate on a Mac
+
+The mic key works as on the phone: click to start and stop, press and hold to talk, and select the close button to drop the dictation.
+The dictation ends when you stop it, after 20 seconds with no speech, or after 5 minutes.
+It does not end when Flux goes to the background.
+
+The Mac uses the Speech framework of macOS.
+When the Mac has the speech model of a language, the recognizer runs on the Mac and the audio stays on the Mac.
+For other languages, Apple transcribes the speech, so the audio goes to Apple.
+The language button in the panel shows a laptop for a language on the Mac and a cloud for a language that Apple transcribes.
+The audio never goes to the computer.
+
+- **Automatic** tries the languages in **System Settings > General > Language & Region** in order. It uses the first one that has a speech model on the Mac. When none has a model, it uses the first one that Apple transcribes.
+- A Mac language often has the region of the Mac, for example English (Norway). Flux then uses another region of the same language. It prefers the language that the speech recognizer of macOS uses by default.
+- To choose a language, select the language button in the panel. The picker lists **On this Mac** and **Transcribed by Apple**. Flux keeps the language for the next dictations.
+
+macOS downloads the speech models itself, so the picker has no download list.
+To get the model of a language, add the language under **Dictation** in **System Settings > Keyboard**, then open the picker again.
+
+The first dictation asks for Speech Recognition and the microphone.
+The mic key does not show when the Mac has no speech recognizer.
 
 ## Turn the feature off
 
@@ -275,6 +310,9 @@ A reply and its answer look like this:
 | The phone says that replies are off | Set `herdr_control = true` and reload `fluxd`. |
 | A reply says that the agent is not ready for input | herdr accepts input only for an agent that it detected. Run `herdr agent get PANE` on the computer. |
 | The mic key is missing | The phone has no speech recognizer. Install Speech Recognition and Synthesis from Google, or another voice input app. |
+| The **Agents** card is missing on the Mac | Update `fluxd` and Flux for macOS. The card shows only when the computer accepts `flux.herdr`. |
+| Dictation on the Mac says to allow Speech Recognition or the microphone | Select **Open Privacy Settings**, allow Flux, then start the dictation again. |
+| Dictation on the Mac sends the audio to Apple | The Mac has no speech model for the language. Add the language under **Dictation** in **System Settings > Keyboard**, or choose a language under **On this Mac**. |
 | Dictation says that Android downloads the speech model | Wait until the download is done, then start the dictation again. |
 | Dictation says that the recognizer supports none of the phone languages | Select **Choose a language** under the field, then download a language in the picker. |
 | Dictation uses the wrong language | Select the language button in the panel header, then select the language that you want. |

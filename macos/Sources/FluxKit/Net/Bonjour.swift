@@ -67,6 +67,17 @@ public final class Bonjour: @unchecked Sendable {
         }
     }
 
+    /// Ends the browse and the lookups that it started. The service of this
+    /// device stays, so that computers still find it.
+    public func stopBrowsing() {
+        queue.sync {
+            if let b = browser { DNSServiceRefDeallocate(b) }
+            resolving.forEach { DNSServiceRefDeallocate($0) }
+            browser = nil
+            resolving = []
+        }
+    }
+
     public func stop() {
         queue.sync {
             if let r = registration { DNSServiceRefDeallocate(r) }

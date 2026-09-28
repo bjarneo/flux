@@ -10,6 +10,8 @@ public struct CoreState: Sendable, Equatable {
     public var listeningUdp = true
     public var tcpPort = 0
     public var enabled = true
+    /// True while a search for computers runs.
+    public var searching = false
 
     public init() {}
 }
@@ -54,7 +56,9 @@ public final class FluxCore: @unchecked Sendable {
     private var order: [String] = []
     private var backend: LanBackend?
     private var bonjour: Bonjour?
-    private var rebroadcast: DispatchSourceTimer?
+    /// Counts the searches, so that the end of an old search does not end a new one.
+    private var searchCount = 0
+    private var searching = false
     private var routes: [String: [FluxPlugin]] = [:]
 
     /// Called on the main queue after each state change.
@@ -76,6 +80,13 @@ public final class FluxCore: @unchecked Sendable {
         for t in trust.all() {
             let identity = Identity(deviceId: t.id, deviceName: t.name, deviceType: t.type, protocolVersion: protocolVersion,
                                     incoming: t.isFlux ? [PacketType.fluxTunnel] : [], outgoing: [])
+            // Older versions paired with any KDE Connect device, for example
+            // a phone with Flux for Android. Drop those pairings.
+            guard identity.isFlux else {
+                FluxLog.core.info("removed the pairing with \(t.name, privacy: .public), which is not an Omarchy computer")
+                trust.remove(t.id)
+                continue
+            }
             let d = Device(core: self, identity: identity)
             d.pairState = .paired
             d.lastIp = t.lastIp
@@ -149,48 +160,59 @@ public final class FluxCore: @unchecked Sendable {
             if !lanConfig.loopbackOnly {
                 let bonjour = Bonjour(selfId: local.deviceId) { [weak self] ip in self?.announceTo(ip) }
                 bonjour.publish(name: deviceName, type: Self.deviceType, port: b.tcpPort)
-                bonjour.browse()
                 lock.withLock { self.bonjour = bonjour }
             }
-            startRebroadcast()
-            publish()
+            search()
         }
     }
 
     /// Closes every link and stops discovery.
     public func stop() {
-        let (b, bj, timer, links) = lock.withLock { () -> (LanBackend?, Bonjour?, DispatchSourceTimer?, [Link]) in
-            defer { backend = nil; bonjour = nil; rebroadcast = nil }
-            return (backend, bonjour, rebroadcast, devices.values.compactMap(\.link))
+        let (b, bj, links) = lock.withLock { () -> (LanBackend?, Bonjour?, [Link]) in
+            defer { backend = nil; bonjour = nil; searching = false; searchCount += 1 }
+            return (backend, bonjour, devices.values.compactMap(\.link))
         }
-        timer?.cancel()
         bj?.stop()
         b?.stop()
         links.forEach { $0.close() }
         publish()
     }
 
-    /// Paired devices that are offline get the identity again every 30
-    /// seconds, so that they reconnect after a network change.
-    private func startRebroadcast() {
-        let timer = DispatchSource.makeTimerSource(queue: .global())
-        timer.schedule(deadline: .now() + 30, repeating: 30)
-        timer.setEventHandler { [weak self] in
-            guard let self else { return }
-            let anyOffline = self.lock.withLock { self.devices.values.contains { $0.paired && !$0.online } }
-            if anyOffline { self.rediscover() }
-        }
-        timer.resume()
-        lock.withLock {
-            rebroadcast?.cancel()
-            rebroadcast = timer
-        }
-    }
+    /// How long a search for computers runs.
+    static let searchSeconds: Double = 10
 
-    /// Sends the identity again, for example after the network changes.
-    public func rediscover() {
-        lock.withLock { backend }?.broadcast()
+    /// Looks for computers for 10 seconds: Bonjour browses, and the identity
+    /// goes out at once and again after 3 and 6 seconds. Flux does not search
+    /// all the time. A computer that runs fluxd still finds this Mac after a
+    /// search ends, because the Mac keeps its Bonjour service and answers
+    /// identities that it receives.
+    public func search() {
+        let (b, bj, count) = lock.withLock { () -> (LanBackend?, Bonjour?, Int) in
+            searchCount += 1
+            searching = backend != nil
+            return (backend, bonjour, searchCount)
+        }
+        guard let b else { return }
+        bj?.browse()
+        b.broadcast()
         publish()
+        for delay in [3.0, 6.0] {
+            DispatchQueue.global().asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, self.lock.withLock({ self.searchCount == count }) else { return }
+                b.broadcast()
+            }
+        }
+        DispatchQueue.global().asyncAfter(deadline: .now() + Self.searchSeconds) { [weak self] in
+            guard let self else { return }
+            let bonjour = self.lock.withLock { () -> Bonjour? in
+                guard self.searchCount == count else { return nil }
+                self.searching = false
+                return self.bonjour
+            }
+            guard let bonjour else { return }
+            bonjour.stopBrowsing()
+            self.publish()
+        }
     }
 
     /// Sends the identity to one host, for example one that mDNS found.
@@ -199,6 +221,11 @@ public final class FluxCore: @unchecked Sendable {
     }
 
     fileprivate func attach(_ link: Link) {
+        guard link.identity.isFlux else {
+            FluxLog.core.info("closed the link from \(link.identity.deviceName, privacy: .public), which is not an Omarchy computer")
+            link.close()
+            return
+        }
         locked {
             let id = link.identity.deviceId
             let existing = devices[id]
@@ -278,6 +305,7 @@ public final class FluxCore: @unchecked Sendable {
             s.listeningUdp = backend?.listeningUdp ?? true
             s.tcpPort = backend?.tcpPort ?? 0
             s.enabled = enabled
+            s.searching = searching
             return s
         }
     }

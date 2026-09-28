@@ -24,8 +24,8 @@ A paired device can also connect through [Tailscale](tailscale.md) away from tha
 | [Configuration](configuration.md) | TOML settings, data paths, environment variables, and service control |
 | [Omarchy integration](omarchy.md) | Shell plugin, bar item, window host, theme, and desktop integration |
 | [Fingerprint approval](approvals.md) | Enrollment, PAM services, timeout, and removal |
-| [herdr agents](herdr.md) | Agent status, colored output, notifications, and replies on the phone |
-| [Touchpad and keyboard](remote-input.md) | Remote input from the phone, gestures, typing, slides, and the wire format |
+| [herdr agents](herdr.md) | Agent status, colored output, notifications, and replies on the phone and the Mac |
+| [Touchpad and keyboard](remote-input.md) | Remote input from the phone or the Mac, gestures, typing, slides, and the wire format |
 | [Troubleshooting](troubleshooting.md) | Service, discovery, plugin, media, Android, and build failures |
 
 ## Develop and automate

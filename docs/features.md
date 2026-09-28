@@ -211,7 +211,7 @@ See [herdr agents](herdr.md) for the replies, dictation, the notifications, and 
 
 ## Touchpad and keyboard
 
-The phone can be a touchpad and a keyboard for the computer.
+The phone or the Mac can be a touchpad and a keyboard for the computer.
 To allow it, set:
 
 ```toml
@@ -219,5 +219,5 @@ remote_input = true
 ```
 
 Reload with `systemctl --user reload fluxd`.
-Then select **Touchpad and keyboard** on the phone's device page.
+Then select **Touchpad and keyboard** on the phone's device page, or **Open Touchpad…** on the computer's page in Flux for macOS.
 See [Touchpad and keyboard](remote-input.md) for the gestures, the keys, and the slides.

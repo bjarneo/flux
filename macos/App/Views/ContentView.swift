@@ -17,9 +17,10 @@ struct ContentView: View {
                 ContentUnavailableView {
                     Label("No computer found", systemImage: "desktopcomputer")
                 } description: {
-                    Text("Start fluxd on an Omarchy computer on the same network.")
+                    Text(model.state.searching ? "Searching…" : "Start fluxd on an Omarchy computer on the same network.")
                 } actions: {
-                    Button("Search again") { model.core.rediscover() }
+                    Button("Search again") { model.core.search() }
+                        .disabled(model.state.searching)
                 }
             }
         }
@@ -55,16 +56,27 @@ struct DeviceListView: View {
                 }
             }
             Section("Available") {
-                if model.available.isEmpty {
-                    Text("Searching…").foregroundStyle(.secondary)
+                if model.state.searching {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text("Searching…")
+                    }
+                    .foregroundStyle(.secondary)
+                } else if model.available.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(model.paired.isEmpty ? "No computer found" : "No other computer found")
+                            .foregroundStyle(.secondary)
+                        Button("Search again") { model.core.search() }
+                    }
                 }
                 ForEach(model.available) { DeviceRow(device: $0).tag($0.id) }
             }
         }
         .toolbar {
             ToolbarItem {
-                Button { model.core.rediscover() } label: { Label("Search again", systemImage: "arrow.clockwise") }
-                    .help("Announce this Mac on the network again")
+                Button { model.core.search() } label: { Label("Search again", systemImage: "arrow.clockwise") }
+                    .help("Search the network for Omarchy computers")
+                    .disabled(model.state.searching)
             }
         }
         .safeAreaInset(edge: .bottom) {
