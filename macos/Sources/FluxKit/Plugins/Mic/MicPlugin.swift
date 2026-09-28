@@ -157,7 +157,7 @@ public final class MicPlugin: FluxPlugin, @unchecked Sendable {
                 return true
             }
             guard keep else {
-                stream.channel.channel.close(promise: nil)
+                await stream.discard()
                 return
             }
             try await record(stream, name, id)
@@ -205,7 +205,7 @@ public final class MicPlugin: FluxPlugin, @unchecked Sendable {
             throw FluxError("\(name) did not connect. Update Flux on the computer.")
         }
         guard stream.peerCertificate == certificate else {
-            stream.channel.channel.close(promise: nil)
+            await stream.discard()
             throw FluxError("The connection did not come from \(name)")
         }
         return stream
@@ -235,15 +235,23 @@ public final class MicPlugin: FluxPlugin, @unchecked Sendable {
             self?.fail(message, id)
         })
         let input = core?.defaults.string(forKey: Self.inputKey) ?? ""
-        guard let device = MicCapture.device(for: input) else { throw FluxError(Self.noMicrophoneText()) }
-        let keep = lock.withLock {
-            guard attempt == id else { return false }
-            self.capture = capture
-            return true
-        }
-        guard keep else { return }
-        try await capture.start(device, route: input)
+        // The capture starts inside executeThenClose, so that a capture that
+        // fails still closes the stream the way NIO requires.
         try await stream.executeThenClose { inbound, outbound in
+            #if os(macOS)
+            guard let device = MicCapture.device(for: input) else { throw FluxError(Self.noMicrophoneText()) }
+            #endif
+            let keep = lock.withLock {
+                guard attempt == id else { return false }
+                self.capture = capture
+                return true
+            }
+            guard keep else { return }
+            #if os(macOS)
+            try await capture.start(device)
+            #else
+            try await capture.start(route: input)
+            #endif
             try await withThrowingTaskGroup(of: Void.self) { group in
                 // The computer sends nothing. The inbound side ends when it closes.
                 group.addTask { for try await _ in inbound {} }

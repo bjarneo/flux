@@ -27,6 +27,16 @@ public final class TLSStream: Sendable {
         try await channel.executeThenClose { inbound, outbound in try await body(inbound, outbound) }
     }
 
+    /// Closes a stream that is not used. NIO requires that the writer of
+    /// each stream finishes, and executeThenClose finishes it.
+    public func discard() async {
+        do {
+            try await executeThenClose { _, _ in }
+        } catch {
+            FluxLog.net.info("an unused stream did not close cleanly: \(String(describing: error), privacy: .public)")
+        }
+    }
+
     /// Reads size bytes into the file, or until the peer closes when size is
     /// negative, and closes the stream.
     public func receive(into handle: FileHandle, size: Int64, progress: @escaping @Sendable (Int64) -> Void = { _ in }) async throws {

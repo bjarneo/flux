@@ -1,5 +1,4 @@
 import AVFoundation
-import CoreMedia
 import XCTest
 @testable import FluxKit
 
@@ -48,25 +47,5 @@ final class MicConvertTests: XCTestCase {
         XCTAssertFalse(first === converter, "a new format builds a new converter")
         XCTAssertEqual(converter?.inputFormat.sampleRate, 48_000)
         XCTAssertEqual(Double(out.count), 48_000, accuracy: 48_000 * 0.01)
-    }
-
-    func testCaptureBufferCopiesIntoPCM() throws {
-        let source = try sine(frames: 1024)
-        var timing = CMSampleTimingInfo(duration: CMTime(value: 1, timescale: 44_100), presentationTimeStamp: .zero, decodeTimeStamp: .invalid)
-        var created: CMSampleBuffer?
-        XCTAssertEqual(CMSampleBufferCreate(allocator: nil, dataBuffer: nil, dataReady: false, makeDataReadyCallback: nil, refcon: nil,
-                                            formatDescription: source.format.formatDescription, sampleCount: 1024,
-                                            sampleTimingEntryCount: 1, sampleTimingArray: &timing, sampleSizeEntryCount: 0,
-                                            sampleSizeArray: nil, sampleBufferOut: &created), noErr)
-        let sample = try XCTUnwrap(created)
-        XCTAssertEqual(CMSampleBufferSetDataBufferFromAudioBufferList(sample, blockBufferAllocator: nil, blockBufferMemoryAllocator: nil,
-                                                                      flags: 0, bufferList: source.audioBufferList), noErr)
-        let copy = try MicConvert.pcmBuffer(sample)
-        XCTAssertEqual(copy.format, source.format)
-        XCTAssertEqual(copy.frameLength, 1024)
-        let a = try XCTUnwrap(source.floatChannelData), b = try XCTUnwrap(copy.floatChannelData)
-        for c in 0..<2 {
-            XCTAssertEqual(Array(UnsafeBufferPointer(start: b[c], count: 1024)), Array(UnsafeBufferPointer(start: a[c], count: 1024)))
-        }
     }
 }
