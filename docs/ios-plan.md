@@ -31,20 +31,20 @@ It shares FluxKit with [Flux for macOS](macos.md) and offers the Android feature
 
 ## Phase 1: FluxKit on iOS
 
-- [ ] `platforms: [.macOS(.v14), .iOS(.v17)]`.
-- [ ] Device name: editable in Settings, "iPhone" by default. Device type: `phone`.
-- [ ] Battery from `UIDevice`, with level and state notifications.
-- [ ] Clipboard from `UIPasteboard`, read only while the app is active.
-- [ ] Received files in the app's Documents folder, visible in the Files app.
-- [ ] Opening files and links through a closure that each app provides.
-- [ ] Screenshot and photo sends from the Photos library.
-- [ ] Remote input: packet builders without AppKit, a key table for `UIKey` HID codes.
-- [ ] Microphone and dictation through `AVAudioSession` and `AVAudioEngine`.
-- [ ] Hardware encoder settings and camera device types per platform.
-- [ ] Screen capture with ScreenCaptureKit stays macOS only.
-- [ ] Approval texts name Face ID, Touch ID, or the passcode from `LAContext.biometryType`.
-- [ ] No UDP broadcast on iOS. Unicast UDP identity to Bonjour-resolved computers.
-- [ ] `swift test` passes on macOS, and the FluxKit tests pass in the iOS simulator.
+- [x] `platforms: [.macOS(.v14), .iOS(.v17)]`.
+- [x] Device name: editable in Settings, "iPhone" by default. Device type: `phone`.
+- [x] Battery from `UIDevice`, with level and state notifications.
+- [x] Clipboard from `UIPasteboard`, read only while the app is active.
+- [x] Received files in the app's Documents folder, visible in the Files app.
+- [x] Opening files and links through a closure that each app provides.
+- [x] Screenshot and photo sends from the Photos library.
+- [x] Remote input: packet builders without AppKit, a key table for `UIKey` HID codes.
+- [x] Microphone and dictation through `AVAudioSession` and `AVAudioEngine`.
+- [x] Hardware encoder settings and camera device types per platform.
+- [x] Screen capture with ScreenCaptureKit stays macOS only.
+- [x] Approval texts name Face ID, Touch ID, or the passcode from `LAContext.biometryType`.
+- [x] No UDP broadcast on iOS. Unicast UDP identity to Bonjour-resolved computers.
+- [x] `swift test` passes on macOS, and the FluxKit tests pass in the iOS simulator.
 
 ## Phase 2: App shell
 
