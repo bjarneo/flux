@@ -9,8 +9,15 @@ enum PluginRegistry {
     static func make() -> [FluxPlugin] {
         [
             PingPlugin(),
+            SharePlugin(),
+            ClipboardPlugin(images: true),
+            CaptureWatchPlugin(),
+            MprisPlugin(),
+            RunCommandPlugin(),
             NotificationsPlugin(),
             BatteryPlugin(),
+            DndPlugin(),
+            RingPlugin(),
         ]
     }
 }
@@ -21,6 +28,9 @@ struct FeatureTiles: View {
 
     var body: some View {
         Group {
+            ShareTile(device: device)
+            MediaTile(device: device)
+            CommandsTile(device: device)
             NotificationsTile(device: device)
         }
     }
@@ -32,6 +42,9 @@ struct FeatureQuickActions: View {
 
     var body: some View {
         Group {
+            SendFilesQuickAction(device: device)
+            SendPhotosQuickAction(device: device)
+            SendClipboardQuickAction(device: device)
             PingQuickAction(device: device)
         }
     }
@@ -44,6 +57,7 @@ struct FeatureBadges: View {
     var body: some View {
         Group {
             BatteryBadge(device: device)
+            DndBadge(device: device)
         }
     }
 }
@@ -52,8 +66,19 @@ struct FeatureBadges: View {
 struct FeatureSettings: View {
     var body: some View {
         Group {
+            ShareSettings()
+            DndSettings()
             NotificationSettings()
         }
+    }
+}
+
+/// Views over the whole app, such as Quick Look and the ring.
+struct FeatureRoot: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .modifier(ShareRoot())
+            .modifier(RingRoot())
     }
 }
 
@@ -62,11 +87,15 @@ enum FeatureHooks {
     /// Runs once after launch, before the network starts.
     static func didLaunch(model: AppModel) {
         NotificationAccess.shared.refresh()
+        ShareFeature.didLaunch(model: model)
+        SystemFeature.didLaunch(model: model)
     }
 
     /// Runs when the app comes on the screen or leaves it.
     static func sceneChanged(active: Bool, model: AppModel) {
         model.core.plugin(ClipboardPlugin.self)?.setActive(active)
         if active { NotificationAccess.shared.refresh() }
+        // A computer that connects also gets the new images, through the plugin.
+        if active { model.core.plugin(CaptureWatchPlugin.self)?.catchUp() }
     }
 }

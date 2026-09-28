@@ -32,6 +32,7 @@ struct ContentView: View {
             }
         }
         .animation(.snappy, value: model.toast)
+        .modifier(FeatureRoot())
         .sheet(item: Binding(
             get: { model.pairSheetDevice.map(PairSheetItem.init) },
             set: { if $0 == nil { model.pairingSheet = nil } }

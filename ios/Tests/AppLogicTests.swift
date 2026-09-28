@@ -1,3 +1,4 @@
+import AVFoundation
 import FluxKit
 import UserNotifications
 import XCTest
@@ -44,5 +45,30 @@ final class AppLogicTests: XCTestCase {
         XCTAssertEqual(NotificationAccess.text(.notDetermined), "Not set up")
         XCTAssertTrue(NotificationAccess.isOn(.provisional))
         XCTAssertFalse(NotificationAccess.isOn(.denied))
+    }
+
+    func testCommandsSubtitle() {
+        XCTAssertEqual(CommandsTile.subtitle(nil), "Run commands on the computer", "before the list arrives")
+        XCTAssertEqual(CommandsTile.subtitle([]), "No commands yet")
+        let lock = RemoteCommand(key: "a", name: "Lock", command: "omarchy-system-lock")
+        XCTAssertEqual(CommandsTile.subtitle([lock]), "1 command")
+        XCTAssertEqual(CommandsTile.subtitle([lock, lock]), "2 commands")
+    }
+
+    func testMediaSubtitle() {
+        var player = RemotePlayer(name: "mpv")
+        XCTAssertEqual(MediaTile.subtitle(player), "Paused · mpv", "a player without a title shows its name")
+        player.title = "Song"
+        player.playing = true
+        XCTAssertEqual(MediaTile.subtitle(player), "Song")
+    }
+
+    func testTransferSizes() {
+        XCTAssertEqual(TransferRow.bytes(0), ByteCountFormatter.string(fromByteCount: 0, countStyle: .file))
+    }
+
+    func testRingToneLoops() throws {
+        let player = try AVAudioPlayer(data: RingTone.wav(), fileTypeHint: AVFileType.wav.rawValue)
+        XCTAssertEqual(player.duration, 1.2, accuracy: 0.01, "AVAudioPlayer reads the tone that FluxKit builds")
     }
 }
