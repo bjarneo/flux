@@ -71,3 +71,16 @@ final class RemoteKeysTests: XCTestCase {
         XCTAssertEqual(sent.count, 3)
     }
 }
+
+@MainActor
+final class DesktopViewTests: XCTestCase {
+    func testTileSubtitle() {
+        XCTAssertEqual(DesktopTile.subtitle(desktop: false, input: true), "Off")
+        XCTAssertEqual(DesktopTile.subtitle(desktop: true, input: false), "View only")
+        XCTAssertEqual(DesktopTile.subtitle(desktop: true, input: true), "Show and control the screen")
+    }
+
+    func testMaxSizeIsAndroids() {
+        XCTAssertEqual(DesktopController.maxSize, 1920)
+    }
+}

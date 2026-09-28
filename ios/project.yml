@@ -26,6 +26,8 @@ targets:
         NSBonjourServices:
           - _kdeconnect._udp
         NSPhotoLibraryUsageDescription: Flux sends your new screenshots and photos to your computers when you turn that on in Settings.
+        NSMicrophoneUsageDescription: Flux listens while you dictate, and the computer types the words.
+        NSSpeechRecognitionUsageDescription: Flux changes your speech to text for the computer to type. The iPhone recognizes it on the device when it has the language.
         NSFaceIDUsageDescription: Flux checks that it is you before your iPhone types, replies, or shows the screen on a computer.
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true

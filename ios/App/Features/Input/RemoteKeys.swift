@@ -15,11 +15,18 @@ final class RemoteKeys {
     var mods = RemoteInput.Mods()
     /// True when the computer switches the workspace for super and a digit.
     @ObservationIgnored var workspaceKeys: Bool
-    @ObservationIgnored private let send: (Packet) -> Void
+    /// Runs before each key or text goes out.
+    @ObservationIgnored var willSend: (() -> Void)?
+    @ObservationIgnored private let sendPacket: (Packet) -> Void
 
     init(workspaceKeys: Bool, send: @escaping (Packet) -> Void) {
         self.workspaceKeys = workspaceKeys
-        self.send = send
+        sendPacket = send
+    }
+
+    private func send(_ p: Packet) {
+        willSend?()
+        sendPacket(p)
     }
 
     /// Presses a special key with the held and the sticky modifiers.

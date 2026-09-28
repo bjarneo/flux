@@ -19,6 +19,7 @@ enum PluginRegistry {
             DndPlugin(),
             RingPlugin(),
             RemoteInputPlugin(),
+            DesktopPlugin(),
         ]
     }
 }
@@ -34,6 +35,7 @@ struct FeatureTiles: View {
             CommandsTile(device: device)
             NotificationsTile(device: device)
             TouchpadTile(device: device)
+            DesktopTile(device: device)
         }
     }
 }
@@ -42,6 +44,7 @@ struct FeatureTiles: View {
 /// Face ID.
 enum FeatureRoute: Hashable {
     case touchpad(String)
+    case desktop(String)
 }
 
 /// The screen of a feature route.
@@ -51,6 +54,7 @@ struct FeatureDestination: View {
     var body: some View {
         switch route {
         case .touchpad(let id): TouchpadScreen(deviceId: id)
+        case .desktop(let id): DesktopScreen(deviceId: id)
         }
     }
 }
