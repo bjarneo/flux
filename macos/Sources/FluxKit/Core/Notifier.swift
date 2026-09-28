@@ -18,7 +18,9 @@ public final class Notifier: NSObject, UNUserNotificationCenterDelegate, @unchec
     private let categories = NIOLockedValueBox<[String: Category]>([:])
 
     private var center: UNUserNotificationCenter? {
-        Bundle.main.bundleIdentifier == nil ? nil : UNUserNotificationCenter.current()
+        // UNUserNotificationCenter needs an app bundle. The xctest tool has
+        // a bundle identifier but is no app, and the center raises there.
+        Bundle.main.bundleIdentifier != nil && Bundle.main.bundleURL.pathExtension == "app" ? UNUserNotificationCenter.current() : nil
     }
 
     /// Installs the delegate and asks for permission. Call it once at launch.
