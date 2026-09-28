@@ -48,13 +48,14 @@ It shares FluxKit with [Flux for macOS](macos.md) and offers the Android feature
 
 ## Phase 2: App shell
 
-- [ ] `make ios` builds the app for the simulator, `make test-ios` runs the tests in the simulator.
-- [ ] Computer list with paired and available computers, pairing in both directions with the key, and unpair.
-- [ ] Device screen: header with state and battery, quick actions, and one tile per feature, like the Android home screen.
-- [ ] Settings: device name, appearance, and feature switches.
-- [ ] Face ID or passcode lock that stays valid for 5 minutes, before replies, new agents, terminals, the touchpad, and the remote desktop.
-- [ ] Notifications for pairing requests, received files, and `flux-cli notify`.
-- [ ] Checked: the simulator pairs with `fluxd` on an Omarchy computer, pings both ways, and reconnects after the app returns.
+- [x] `make ios` builds the app for the simulator, `make test-ios` runs the tests in the simulator.
+- [x] Computer list with paired and available computers, pairing in both directions with the key, and unpair.
+- [x] Device screen: header with state and battery, quick actions, and one tile per feature, like the Android home screen.
+- [x] Settings: device name, appearance, and feature switches.
+- [x] Face ID or passcode lock that stays valid for 5 minutes, before replies, new agents, terminals, the touchpad, and the remote desktop.
+  The features that use it come in their phases.
+- [x] Notifications for pairing requests and `flux-cli notify`. Received files notify with the share feature in Phase 3.
+- [x] Checked: the simulator pairs with `fluxd` on an Omarchy computer, pings both ways, and reconnects after the app returns.
 
 ## Phase 3: Share, clipboard, media, commands, and system
 
