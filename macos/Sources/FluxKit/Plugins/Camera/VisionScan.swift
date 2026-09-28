@@ -79,7 +79,9 @@ public enum VisionScan {
         #if targetEnvironment(simulator)
         // The later revisions need the Neural Engine, which the simulator
         // does not have, and fail with "Could not create inference context".
-        request.revision = VNDetectBarcodesRequestRevision1
+        // Revision 1 is VNDetectBarcodesRequestRevision1, which the SDK marks
+        // deprecated, so the number stands here.
+        request.revision = 1
         #endif
         try handler.perform([request])
         let results = request.results ?? []
