@@ -200,6 +200,24 @@ public final class FluxCore: @unchecked Sendable {
         }
     }
 
+    /// True while the network runs.
+    public var isRunning: Bool { lock.withLock { backend != nil } }
+
+    /// Brings the network back when the app returns to the screen. A stopped
+    /// network starts. A running one announces this device again and
+    /// searches, so that the computers connect at once. iOS stops the network
+    /// after the app leaves the screen.
+    public func resume() {
+        guard enabled else { return }
+        let (b, bj) = lock.withLock { (backend, bonjour) }
+        guard let b else {
+            start()
+            return
+        }
+        bj?.publish(name: deviceName, type: Self.deviceType, port: b.tcpPort)
+        search()
+    }
+
     /// Closes every link and stops discovery.
     public func stop() {
         let (b, bj, links) = lock.withLock { () -> (LanBackend?, Bonjour?, [Link]) in

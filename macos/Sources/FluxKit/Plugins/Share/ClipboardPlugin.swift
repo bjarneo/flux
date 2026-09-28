@@ -18,8 +18,9 @@ public final class ClipboardModel {
 /// Clipboard sync: kdeconnect.clipboard and kdeconnect.clipboard.connect in
 /// both directions. macOS has no clipboard change notification, so while
 /// sync is on and a paired computer is connected, the plugin polls the
-/// change count of the general pasteboard. iOS runs the poll only while the
-/// app is on the screen.
+/// change count of the general pasteboard. iOS asks the user before each
+/// read of text from another app, so the iOS app turns the plugin inactive
+/// off the screen: then it neither polls nor reads the clipboard.
 public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
     private weak var core: FluxCore?
     public let model: ClipboardModel
@@ -27,6 +28,8 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
     private let lastRemote = NIOLockedValueBox<String?>(nil)
     @MainActor private var timer: Timer?
     @MainActor private var changeCount = 0
+    /// False while the app is off the screen. The Mac app is always active.
+    @MainActor public private(set) var isActive = true
 
     static let syncKey = "clipboard.sync"
     static let timestampKey = "clipboard.timestamp"
@@ -65,13 +68,29 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
         updatePolling()
     }
 
+    /// Sets whether the app is on the screen. The poll stops while it is off
+    /// the screen, and a change from that time does not go out.
+    @MainActor
+    public func setActive(_ active: Bool) {
+        isActive = active
+        updatePolling()
+    }
+
+    /// True while the plugin polls the clipboard.
+    @MainActor public var isPolling: Bool { timer != nil }
+
+    /// Polls while sync is on, a paired computer is connected, and the app is active.
+    static func shouldPoll(sync: Bool, connected: Bool, active: Bool) -> Bool {
+        sync && connected && active
+    }
+
     // MARK: Links
 
     public func onConnected(_ device: Device) {
         let id = device.id
         onMain { plugin in
             plugin.updatePolling()
-            guard let core = plugin.core, plugin.sync, let text = ClipboardText.text(includingPrivate: false) else { return }
+            guard let core = plugin.core, plugin.sync, plugin.isActive, let text = ClipboardText.text(includingPrivate: false) else { return }
             core.send(Packet(PacketType.clipboardConnect, ["content": text, "timestamp": plugin.timestamp]), to: id)
         }
     }
@@ -127,10 +146,9 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
         return true
     }
 
-    /// Polls while sync is on and a paired computer is connected.
     @MainActor
     private func updatePolling() {
-        let on = sync && !(core?.connectedPaired().isEmpty ?? true)
+        let on = Self.shouldPoll(sync: sync, connected: !(core?.connectedPaired().isEmpty ?? true), active: isActive)
         if on, timer == nil {
             changeCount = ClipboardText.changeCount
             let t = Timer(timeInterval: Self.pollInterval, repeats: true) { [weak self] _ in
