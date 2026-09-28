@@ -1,9 +1,9 @@
 import FluxKit
 import SwiftUI
 
-/// The touchpad and the keyboard for a computer: the pad, the key rows, and
-/// the type field. The computer runs the input only while its remote_input
-/// setting is on.
+/// The touchpad and the keyboard for a computer: the pad, the key rows, the
+/// type field, and the mic key. The computer runs the input only while its
+/// remote_input setting is on.
 struct TouchpadView: View {
     @Bindable var controller: TouchpadController
 
@@ -46,7 +46,17 @@ struct TouchpadView: View {
             )
             .frame(minHeight: 200)
             RemoteKeyRows(target: controller)
-            TypeField(target: controller, placeholder: "Type on \(controller.name)")
+            VoiceBar(language: controller.app.dictationLanguage, onText: { controller.typeSpoken($0) }) {
+                TypeField(target: controller, placeholder: "Type on \(controller.name)")
+            } send: {
+                Button { controller.key(.enter) } label: {
+                    Image(systemName: "return")
+                        .frame(width: DictationLayout.keySize - 12, height: DictationLayout.keySize - 12)
+                }
+                .buttonStyle(.bordered)
+                .help("Press Enter on \(controller.name)")
+                .accessibilityLabel("Enter")
+            }
         }
         .padding(16)
     }

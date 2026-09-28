@@ -8,6 +8,9 @@ The Android Camera screen includes text, QR, photo, document, signature, and web
 Text recognition and barcode recognition use models bundled in the app.
 Document capture uses the Google Play services document scanner.
 
+To add words to scanned text, select the mic key next to the text field and speak.
+The words go in at the cursor on the phone and at the end of the text on the Mac.
+
 Scanned text and documents use the desktop `scan_dir`.
 Photos use `photo_dir`.
 See [configuration](configuration.md) for their default paths.

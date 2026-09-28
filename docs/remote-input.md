@@ -65,6 +65,10 @@ Flux sends each word after the keyboard stops composing it.
 A correction from the keyboard replaces the word on the computer.
 **Send** on the keyboard presses Enter.
 
+To dictate, select the mic key next to the field.
+The phone changes your speech to text on the device, and the computer types it at the cursor.
+The Enter key next to the mic key sends Enter.
+
 The key rows send Escape, Tab, the arrow keys, Backspace, and Enter.
 **ctrl**, **alt**, **shift**, and **super** hold for the next key or letter.
 For example, select **ctrl**, then type `c` to send Ctrl+C.
@@ -144,6 +148,10 @@ The field at the bottom sends each word after you type a space.
 Return sends the rest of the field and presses Enter.
 Backspace in the empty field presses Backspace on the computer.
 The field does not correct the spelling and does not change quotes or dashes.
+
+To dictate, select the mic key next to the field.
+The Mac changes your speech to text, and the computer types it at the cursor.
+The Enter key next to the mic key sends Enter.
 
 ### Change slides on the Mac
 

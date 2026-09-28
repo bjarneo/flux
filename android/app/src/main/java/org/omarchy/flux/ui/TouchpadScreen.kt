@@ -55,9 +55,9 @@ import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.RemoteInput
 import org.omarchy.flux.core.Shortcuts
 import org.omarchy.flux.core.TextEdit
-import org.omarchy.flux.voice.DictationBar
-import org.omarchy.flux.voice.LanguagePicker
+import org.omarchy.flux.voice.VoiceField
 import org.omarchy.flux.voice.VoiceTyping
+import org.omarchy.flux.voice.rememberVoiceTyping
 import kotlin.math.hypot
 import kotlin.math.max
 
@@ -131,6 +131,16 @@ private fun Touchpad(d: DeviceUi) {
     fun send(p: org.omarchy.flux.protocol.Packet) {
         if (!RemoteInput.send(FluxCore, d.id, p)) FluxCore.toast("${d.name} is not reachable")
     }
+    // Dictation types its words on the computer. A dictation right after another starts with a space.
+    var afterVoice by remember { mutableStateOf(false) }
+    val voice = rememberVoiceTyping { spoken ->
+        send(RemoteInput.text(if (afterVoice) " $spoken" else spoken))
+        afterVoice = true
+    }
+    fun sendKey(p: org.omarchy.flux.protocol.Packet) {
+        afterVoice = false
+        send(p)
+    }
 
     Column(Modifier.fillMaxSize().padding(bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(TileGap)) {
         Box(
@@ -155,7 +165,7 @@ private fun Touchpad(d: DeviceUi) {
             HoldButton("Left button", Modifier.weight(1f)) { down -> send(RemoteInput.hold(down)) }
             PadKey("right", "Right button", Modifier.weight(1f)) { send(RemoteInput.click(RemoteInput.Click.Right)) }
         }
-        KeyPanel(d, ::send)
+        KeyPanel(d, ::sendKey, voice = voice)
     }
 }
 
@@ -193,14 +203,8 @@ fun KeyPanel(
         if (voice == null) {
             TypeField(d, mods, onSend = send, onModsUsed = { mods = RemoteInput.Mods() }, onEnter = { key(RemoteInput.Key.Enter) }, Modifier.fillMaxWidth())
         } else {
-            DictationBar(
-                voice.dictation,
-                canDictate = voice.available,
-                onStart = voice::start,
-                onLanguage = voice::pickLanguage,
-                field = { m ->
-                    TypeField(d, mods, onSend = send, onModsUsed = { mods = RemoteInput.Mods() }, onEnter = { key(RemoteInput.Key.Enter) }, m, 56.dp)
-                },
+            VoiceField(
+                voice,
                 // The mic key sits before this key. Dictate, then press Enter.
                 send = {
                     Box(
@@ -209,9 +213,9 @@ fun KeyPanel(
                         contentAlignment = Alignment.Center,
                     ) { T(RemoteInput.Key.Enter.label, size = 16, color = Tn.sub, weight = FontWeight.SemiBold, family = Mono) }
                 },
-            )
-            voice.error?.let { T(it, size = 11, color = Tn.red) }
-            LanguagePicker(voice)
+            ) { m ->
+                TypeField(d, mods, onSend = send, onModsUsed = { mods = RemoteInput.Mods() }, onEnter = { key(RemoteInput.Key.Enter) }, m, 56.dp)
+            }
         }
     }
 }

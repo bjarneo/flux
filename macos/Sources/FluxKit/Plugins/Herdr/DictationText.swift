@@ -17,6 +17,8 @@ public struct DictationEdit: Sendable, Equatable {
 public enum DictationText {
     /// Characters that follow a word with no space before them.
     private static let closing = ",.;:!?)]}'\""
+    /// Characters at the end of a dictation that a search drops.
+    private static let queryEnd: Set<Character> = [",", ".", ";", ":", "!", "?"]
 
     /// Puts `spoken` in `text` in place of the selection from `start` to
     /// `end`, in UTF-16 units. A space goes between the spoken text and a
@@ -36,6 +38,14 @@ public enum DictationText {
         let trail = !after.isEmpty && !(after.first?.isWhitespace ?? true) && !closing.contains(after.first ?? " ") ? " " : ""
         let inserted = lead + words + trail
         return DictationEdit(before + inserted + after, before.utf16.count + inserted.utf16.count)
+    }
+
+    /// The words of a dictation as a search. The recognizer ends a sentence
+    /// with punctuation, which a search does not need.
+    public static func query(_ spoken: String) -> String {
+        var s = Substring(spoken.trimmingCharacters(in: .whitespacesAndNewlines))
+        while let last = s.last, queryEnd.contains(last) { s = s.dropLast() }
+        return s.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Joins 2 texts with 1 space.

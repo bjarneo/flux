@@ -12,9 +12,11 @@ final class TouchpadController: RemoteKeyTarget {
     let plugin: RemoteInputPlugin
     /// The name when the window opened, for a computer that is gone.
     @ObservationIgnored private let firstName: String
-    @ObservationIgnored private let app: AppModel
+    @ObservationIgnored let app: AppModel
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var tracker = PointerTracker()
+    /// True after a dictation typed its text, so that the next one starts with a space.
+    @ObservationIgnored private var afterVoice = false
 
     /// True while the pad holds the pointer of this Mac.
     private(set) var captured = false
@@ -62,7 +64,7 @@ final class TouchpadController: RemoteKeyTarget {
     /// Gives the pointer back to this Mac. A drag on the computer ends.
     func release() {
         guard captured else { return }
-        send(tracker.cancel())
+        post(tracker.cancel())
         _ = CGAssociateMouseAndMouseCursorPosition(1)
         NSCursor.unhide()
         captured = false
@@ -70,12 +72,12 @@ final class TouchpadController: RemoteKeyTarget {
 
     func leftDown() { tracker.leftDown() }
     func leftUp() { send(tracker.leftUp()) }
-    func moved(dx: Double, dy: Double) { send(tracker.move(dx: dx, dy: dy)) }
+    func moved(dx: Double, dy: Double) { post(tracker.move(dx: dx, dy: dy)) }
     func click(_ c: RemoteInput.Click) { send([RemoteInput.click(c)]) }
 
     func scrolled(_ event: NSEvent) {
         guard let p = RemoteInput.scroll(macDeltaX: event.scrollingDeltaX, macDeltaY: event.scrollingDeltaY, precise: event.hasPreciseScrollingDeltas) else { return }
-        send([p])
+        post([p])
     }
 
     /// Ends the window: the pointer comes back, and the modifiers clear.
@@ -84,7 +86,22 @@ final class TouchpadController: RemoteKeyTarget {
         mods = .init()
     }
 
+    /// Sends keys and clicks. They can move the cursor of the computer, so the next dictation starts with no space.
     func send(_ packets: [Packet]) {
+        afterVoice = false
+        post(packets)
+    }
+
+    /// Types the words of a dictation. A dictation right after another starts with a space.
+    func typeSpoken(_ spoken: String) {
+        let words = spoken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard ready, !words.isEmpty else { return }
+        post([RemoteInput.text(afterVoice ? " " + words : words)])
+        afterVoice = true
+    }
+
+    /// Sends packets that do not move the cursor of the computer: motion and scrolls.
+    private func post(_ packets: [Packet]) {
         for p in packets { plugin.send(p, to: deviceId) }
     }
 }

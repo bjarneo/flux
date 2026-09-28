@@ -240,3 +240,23 @@ Reload with `systemctl --user reload fluxd`.
 Then select **Remote desktop** on the phone's device page. The phone turns to landscape.
 In Flux for macOS, select **Open Remote Desktop…** on the computer's page.
 See [Remote desktop](remote-desktop.md) for the gestures, the monitors, and the stream.
+
+## Dictation in text fields
+
+Each text field of the app has a mic key.
+The phone changes your speech to text on the device.
+
+| Field | Where the words go |
+| --- | --- |
+| Reply to a herdr agent | At the cursor of the field |
+| Command of a herdr terminal | At the cursor of the field, without the capital and the period of a sentence |
+| Folder search when you start a herdr agent | In place of the search |
+| Text field of the touchpad and the remote desktop | The computer types them at its cursor |
+| Scanned text in the text mode of the camera | At the cursor of the field |
+| Search of **All shortcuts** in the Omarchy panel | In place of the search |
+| Search of the dictation language picker | In place of the search |
+
+Tap the mic key to start, and tap it again to stop.
+To talk only while you hold the key, press and hold it.
+All fields use the same dictation language.
+See [herdr agents](herdr.md#dictate-a-reply) for the panel, the languages, and the model downloads.

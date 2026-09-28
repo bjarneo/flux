@@ -114,7 +114,7 @@ With `herdr_control = true`, the phone can start a coding agent on the computer.
 1. Open **Agents**.
 2. Select the add button in the top bar.
 3. Under **Run**, select the agent, for example `claude` or `codex`.
-4. Under **Folder**, select a folder. To find a folder, type a part of its name. To use another folder, type its path, for example `~/Code/app`. The folder must exist on the computer.
+4. Under **Folder**, select a folder. To find a folder, type or speak a part of its name. To use another folder, type its path, for example `~/Code/app`. The folder must exist on the computer.
 5. When the folder has a herdr workspace, select **New tab in** that workspace or **New workspace**. A folder without a workspace opens in a new workspace.
 6. Select **Start**.
 
@@ -164,6 +164,7 @@ The **Agents** screen then lists each herdr pane that has no agent under **Termi
 Select a terminal to see its output and to type in it:
 
 - Type a command in the field, then select **Run**. The phone types the command and presses Enter.
+- To speak a command, select the mic key next to **Run**. The command goes in at the cursor without the capital and the period of a sentence. Read it, then select **Run**.
 - The key bar sends Esc, Tab, Ctrl-C, Ctrl-D, Up, Down, and Enter.
 - The screen reads the output again every 3 seconds.
 - To close the terminal, select **Close**, then confirm.

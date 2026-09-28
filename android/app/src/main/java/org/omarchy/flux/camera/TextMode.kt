@@ -59,7 +59,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -76,6 +78,9 @@ import org.omarchy.flux.scan.TextAssembly
 import org.omarchy.flux.scan.TextReader
 import org.omarchy.flux.ui.Palette
 import org.omarchy.flux.ui.T
+import org.omarchy.flux.voice.DictationText
+import org.omarchy.flux.voice.VoiceField
+import org.omarchy.flux.voice.rememberVoiceTyping
 
 /** The state of the scan screen. */
 private sealed interface ScanPhase {
@@ -272,8 +277,17 @@ private fun LiveControls(onPhoto: () -> Unit, onCapture: () -> Unit) {
     }
 }
 
+/** The scanned text to edit and send. A dictation puts its words at the cursor. */
 @Composable
 private fun ResultControls(d: DeviceUi, text: String, onText: (String) -> Unit, onRetake: () -> Unit, onSend: () -> Unit) {
+    // The field keeps the cursor. A new text puts the cursor at its end.
+    var field by remember { mutableStateOf(TextFieldValue(text, TextRange(text.length))) }
+    val value = if (field.text == text) field else TextFieldValue(text, TextRange(text.length))
+    val voice = rememberVoiceTyping { spoken ->
+        val e = DictationText.insert(value.text, value.selection.start, value.selection.end, spoken)
+        field = TextFieldValue(e.text, TextRange(e.cursor))
+        onText(e.text)
+    }
     Column(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -281,12 +295,17 @@ private fun ResultControls(d: DeviceUi, text: String, onText: (String) -> Unit, 
         if (text.isEmpty()) {
             T("No text found. Move closer or add light.", Modifier.fillMaxWidth().padding(vertical = 12.dp), color = Palette.secondary, align = TextAlign.Center)
         } else {
-            OutlinedTextField(
-                value = text,
-                onValueChange = onText,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 260.dp),
-                minLines = 4,
-            )
+            VoiceField(voice) { m ->
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = {
+                        field = it
+                        onText(it.text)
+                    },
+                    modifier = m.heightIn(min = 120.dp, max = 260.dp),
+                    minLines = 4,
+                )
+            }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
             OutlinedPill("Retake", onRetake, Ic.refresh)

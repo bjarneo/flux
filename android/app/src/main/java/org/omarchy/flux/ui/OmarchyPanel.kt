@@ -55,6 +55,9 @@ import org.omarchy.flux.core.Shortcut
 import org.omarchy.flux.core.Shortcuts
 import org.omarchy.flux.core.ShortcutsState
 import org.omarchy.flux.protocol.Packet
+import org.omarchy.flux.voice.DictationText
+import org.omarchy.flux.voice.VoiceField
+import org.omarchy.flux.voice.rememberVoiceTyping
 
 /** The panel reads the workspaces again at this interval, because the computer can change them too. */
 private const val REFRESH_MS = 3_000L
@@ -267,27 +270,30 @@ private fun LaunchKey(s: Shortcut, modifier: Modifier, onClick: () -> Unit) {
 
 /**
  * All shortcuts of the computer, with a search. A tap runs a shortcut. The
- * star pins it to the panel.
+ * star pins it to the panel. A dictation replaces the search.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ShortcutSheet(all: List<Shortcut>, pins: List<String>, onRun: (Shortcut) -> Unit, onPin: (Shortcut) -> Unit, onDismiss: () -> Unit) {
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var query by rememberSaveable { mutableStateOf("") }
+    val voice = rememberVoiceTyping { query = DictationText.query(it) }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = Tn.bg) {
         Column(Modifier.fillMaxWidth().padding(horizontal = TiledGutter), verticalArrangement = Arrangement.spacedBy(TileGap)) {
             TileLabel("All shortcuts · ${all.size}")
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { T("Search, for example workspace or browser", color = Tn.dim) },
-                leadingIcon = { Sym(Ic.search, tint = Tn.sub, size = 20.dp) },
-                singleLine = true,
-                textStyle = TextStyle(color = Tn.text, fontSize = 14.sp),
-                shape = TileShape,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            )
+            VoiceField(voice) { m ->
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    modifier = m,
+                    placeholder = { T("Search, for example workspace or browser", color = Tn.dim) },
+                    leadingIcon = { Sym(Ic.search, tint = Tn.sub, size = 20.dp) },
+                    singleLine = true,
+                    textStyle = TextStyle(color = Tn.text, fontSize = 14.sp),
+                    shape = TileShape,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                )
+            }
             val found = remember(all, query) { Shortcuts.search(all, query) }
             LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 items(found, key = { it.ref }) { s ->

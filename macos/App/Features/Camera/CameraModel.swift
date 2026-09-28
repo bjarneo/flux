@@ -51,6 +51,7 @@ func offMain<T>(_ work: @escaping () throws -> T) async throws -> T {
 @MainActor
 @Observable
 final class CameraWindowModel {
+    @ObservationIgnored let app: AppModel
     let output: CameraOutput
     let camera: CameraController
     var mode: CameraMode
@@ -65,6 +66,7 @@ final class CameraWindowModel {
     init(deviceId: String, app: AppModel, mode: CameraMode) {
         let output = CameraOutput(deviceId: deviceId, app: app)
         let camera = CameraController(defaults: app.core.defaults)
+        self.app = app
         self.output = output
         self.camera = camera
         self.mode = mode

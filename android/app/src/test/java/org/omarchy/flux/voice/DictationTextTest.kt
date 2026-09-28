@@ -27,6 +27,28 @@ class DictationTextTest {
     }
 
     @Test
+    fun makesASearchFromADictation() {
+        assertEquals("Workspace", DictationText.query(" Workspace. "))
+        assertEquals("Open the browser", DictationText.query("Open the browser?!"))
+        assertEquals("a period inside the words stays", "node.js", DictationText.query("node.js"))
+        assertEquals("", DictationText.query(" . "))
+    }
+
+    @Test
+    fun makesACommandFromADictation() {
+        assertEquals("git status", DictationText.command("Git status."))
+        assertEquals("a word in capitals stays", "README first", DictationText.command("README first"))
+        assertEquals("I stays", "I", DictationText.command("I"))
+        assertEquals("ls -la", DictationText.command("ls -la"))
+    }
+
+    @Test
+    fun keepsTheCaseOfACommand() {
+        assertEquals(Edit("git status", 10), DictationText.insert("", 0, 0, "git status", sentences = false))
+        assertEquals(Edit("cd ~/Code && git status", 23), DictationText.insert("cd ~/Code &&", 12, 12, "git status", sentences = false))
+    }
+
+    @Test
     fun insertsAtTheCursor() {
         // "Run tests" with the cursor after "Run".
         assertEquals(Edit("Run the unit tests", 12), DictationText.insert("Run tests", 3, 3, "the unit"))
