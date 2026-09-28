@@ -77,6 +77,20 @@ object DictationText {
     }
 
     /**
+     * True when the partial text [next] starts again and drops the words of
+     * the partial text [previous]. Some recognizers start the partial text
+     * again after a pause and send no final text for the words before it. A
+     * partial text can also change its words, so only a shorter text counts:
+     * one with a new first word, or one with half of the words or fewer.
+     */
+    fun restarts(previous: String, next: String): Boolean {
+        val old = words(previous)
+        val new = words(next)
+        if (new.isEmpty() || new.size >= old.size) return false
+        return key(new[0]) != key(old[0]) || new.size * 2 <= old.size
+    }
+
+    /**
      * The input level from 0 to 1 for the RMS value of `onRmsChanged`.
      * Recognizers report about -2 dB for silence and about 10 dB for a loud
      * voice. The square root lifts quiet speech, so the wave shows it.

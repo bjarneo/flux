@@ -104,6 +104,24 @@ class DictationTextTest {
     }
 
     @Test
+    fun findsARestartedPartialText() {
+        // After a pause, the recognizer drops the words before it and hears only the new words.
+        assertTrue(DictationText.restarts("Run the tests on the phone first", "then"))
+        assertTrue("the same first word", DictationText.restarts("Run the tests on the phone first", "run it"))
+        assertTrue("a new first word", DictationText.restarts("Okay so", "then"))
+    }
+
+    @Test
+    fun keepsAChangedPartialText() {
+        assertFalse("more words", DictationText.restarts("Run the", "Run the tests"))
+        assertFalse("a changed last word", DictationText.restarts("Run the test", "Run the tests"))
+        assertFalse("changed words", DictationText.restarts("I scream", "ice cream"))
+        assertFalse("a number in digits", DictationText.restarts("It costs twenty five", "It costs 25"))
+        assertFalse("no partial text before", DictationText.restarts("", "Run"))
+        assertFalse("an empty partial text", DictationText.restarts("Run the tests", "  "))
+    }
+
+    @Test
     fun splitsWords() {
         assertEquals(listOf("one", "two", "three"), DictationText.words("  one two\n three "))
         assertEquals(emptyList<String>(), DictationText.words("   "))

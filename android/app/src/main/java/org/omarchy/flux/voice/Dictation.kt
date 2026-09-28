@@ -38,7 +38,9 @@ private const val TAG = "FluxDictation"
  * keeps 1 session open through pauses and sends a final text at each pause.
  * Other recognizers end the session with the first final text. [Dictation]
  * collects each final text and starts a new session only when the old one
- * ended, so a long prompt with pauses stays one dictation. After a stop, it
+ * ended, so a long prompt with pauses stays one dictation. Some recognizers
+ * start the partial text again after a pause and send no final text for the
+ * words before it. [Dictation] then makes those words final. After a stop, it
  * waits until the recognizer is quiet, so the last words are not lost.
  *
  * The dictation ends when the user stops it, after [SILENCE_STOP_MS] with
@@ -90,6 +92,8 @@ class Dictation(private val context: Context) {
     private var recognizer: SpeechRecognizer? = null
     /** True from startListening until the recognizer ends the session. */
     private var session = false
+    /** The last partial text as the recognizer sent it. A final text clears it. */
+    private var partial = ""
     private var hints: List<String> = emptyList()
     private var onDone: ((String) -> Unit)? = null
     /** The last time that the user spoke, in elapsed realtime. */
@@ -245,6 +249,7 @@ class Dictation(private val context: Context) {
     private fun commit(text: String?) {
         settled = DictationText.merge(settled, text?.takeIf { it.isNotBlank() } ?: pending)
         pending = ""
+        partial = ""
     }
 
     /** A final text. The session can go on after it, so the dictation waits for the next event. */
@@ -385,6 +390,7 @@ class Dictation(private val context: Context) {
         level = 0f
         settled = ""
         pending = ""
+        partial = ""
     }
 
     private val listener = object : RecognitionListener {
@@ -418,7 +424,16 @@ class Dictation(private val context: Context) {
             spokeAt = eventAt
             // After a final text, a partial text holds only the new words,
             // or, with some recognizers, the whole text again.
-            pending = DictationText.unsettled(settled, t)
+            val words = DictationText.unsettled(settled, t)
+            // Some recognizers start the partial text again after a pause and
+            // send no final text for the words before it. Those words become
+            // final, so a long dictation keeps its start.
+            if (DictationText.restarts(partial, t)) {
+                Log.d(TAG, "partial text started again, keep ${DictationText.words(pending).size} words")
+                commit(null)
+            }
+            partial = t
+            pending = words
         }
 
         override fun onResults(results: Bundle?) {
