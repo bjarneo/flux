@@ -24,6 +24,7 @@ enum PluginRegistry {
             BrowsePlugin(),
             WebcamPlugin(),
             MicPlugin(),
+            ApprovePlugin(),
         ]
     }
 }
@@ -44,6 +45,7 @@ struct FeatureTiles: View {
             DesktopTile(device: device)
             AgentsTile(device: device)
             BrowseTile(device: device)
+            ApproveTile(device: device)
         }
     }
 }
@@ -59,6 +61,7 @@ enum FeatureRoute: Hashable {
     case browse(String)
     case camera(String)
     case mic(String)
+    case approve(String)
 }
 
 /// The screen of a feature route.
@@ -75,6 +78,7 @@ struct FeatureDestination: View {
         case .browse(let id): BrowseScreen(deviceId: id)
         case .camera(let id): CameraScreen(deviceId: id)
         case .mic(let id): MicScreen(deviceId: id)
+        case .approve(let id): ApproveScreen(deviceId: id)
         }
     }
 }
@@ -89,6 +93,17 @@ struct FeatureQuickActions: View {
             SendPhotosQuickAction(device: device)
             SendClipboardQuickAction(device: device)
             PingQuickAction(device: device)
+        }
+    }
+}
+
+/// Banners on a computer's screen for something that waits for the user.
+struct FeatureBanners: View {
+    let device: DeviceSnapshot
+
+    var body: some View {
+        Group {
+            ApproveBanner(device: device)
         }
     }
 }
@@ -123,6 +138,7 @@ struct FeatureRoot: ViewModifier {
         content
             .modifier(ShareRoot())
             .modifier(RingRoot())
+            .modifier(ApproveRoot())
     }
 }
 
@@ -135,6 +151,7 @@ enum FeatureHooks {
         SystemFeature.didLaunch(model: model)
         AgentsFeature.didLaunch(model: model)
         BrowseFeature.didLaunch()
+        ApproveFeature.didLaunch(model: model)
     }
 
     /// Runs when the app comes on the screen or leaves it.

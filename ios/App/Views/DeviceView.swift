@@ -28,6 +28,7 @@ struct DeviceView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 DeviceHeader(device: device)
+                FeatureBanners(device: device)
                 QuickActions(device: device)
                 FeatureGrid {
                     FeatureTiles(device: device)
