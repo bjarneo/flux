@@ -100,10 +100,17 @@ It shares FluxKit with [Flux for macOS](macos.md) and offers the Android feature
 
 ## Phase 6: Camera, webcam, and microphone
 
-- [ ] Camera modes: Text, QR, Photo, Document, and Signature, from the camera or a picked image.
-- [ ] Webcam in H.264 with the front and back cameras.
-- [ ] Microphone as a 48 kHz mono stream, with the webcam option to also send the microphone.
-- [ ] Checked: every mode's output at `fluxd` from picked images in the simulator.
+- [x] Camera modes: Text, QR, Photo, Document, and Signature, from the camera, a picked photo, or a pasted image.
+  Webcam is the sixth mode of the Camera screen, like on Android.
+- [x] Webcam in H.264 with the front and back cameras, offered as `back` and `front` like Android.
+  The stream stops with a notice when Flux leaves the screen, because iOS gives the camera only to the app on the screen.
+- [x] Microphone as a 48 kHz mono stream, with the webcam option to also send the microphone.
+  It records with `AVAudioEngine`, picks the input by the route of the audio session, and keeps streaming in the background with the `audio` background mode.
+- [x] Checked: every mode's output at `fluxd` from picked images in the simulator.
+  Text saves a scan file, QR copies the link on the computer, Photo saves a JPEG, Document saves a 1-page PDF with the page flattened, and Signature puts a transparent PNG on the clipboard, drawn or from paper.
+  The simulator has no camera, so the camera screens and the webcam show No camera.
+- [ ] Checked in the simulator: the microphone stream at `fluxd`.
+  The audio input of this simulator stops the app with an RPC timeout in `AURemoteIO`, also in a bare `AVAudioEngine` test, so the stream is not checked yet.
 - [ ] Checked on a device: camera capture, webcam, and microphone.
 
 ## Phase 7: Fingerprint approval
