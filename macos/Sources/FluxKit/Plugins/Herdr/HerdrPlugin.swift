@@ -16,6 +16,8 @@ public final class HerdrModel {
     public internal(set) var replies: [String: HerdrReply] = [:]
     /// The last new agent, new terminal, or close on a computer.
     public internal(set) var actions: [String: HerdrAction] = [:]
+    /// The first task of the last new agent on a computer.
+    public internal(set) var firstTasks: [String: FirstTask] = [:]
 
     /// Notify when an agent on a computer needs input. It applies to all computers.
     public var inputAlerts = true {
@@ -139,12 +141,19 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
             model.states[deviceId] = state
             let alerts = trackers[deviceId, default: HerdrTracker()].update(state.agents)
             alert(alerts, deviceId: deviceId, computer: computer)
+            advanceFirstTask(deviceId)
         case "output":
             // Only the pane on screen keeps its output.
             guard let out = HerdrWire.output(p.body), model.outputs[deviceId]?.pane == out.pane else { return }
             model.outputs[deviceId] = out
+            advanceFirstTask(deviceId)
         case "sent":
-            guard let sent = HerdrWire.sent(p.body), var reply = model.replies[deviceId], reply.pane == sent.pane, reply.sending else { return }
+            guard let sent = HerdrWire.sent(p.body) else { return }
+            if sent.action == "prompt", var task = model.firstTasks[deviceId], task.phase == .sending, task.pane == sent.pane {
+                task.sent(error: sent.error)
+                model.firstTasks[deviceId] = task
+            }
+            guard var reply = model.replies[deviceId], reply.pane == sent.pane, reply.sending else { return }
             reply.sending = false
             reply.error = sent.error
             model.replies[deviceId] = reply
@@ -162,6 +171,7 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
             action.pane = done.pane ?? action.pane
             action.error = done.error
             model.actions[deviceId] = action
+            settleFirstTask(deviceId, action)
         default:
             FluxLog.plugin.debug("herdr: ignored kind \(p.string("kind") ?? "", privacy: .public)")
         }
@@ -245,11 +255,25 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
     /// Asks the computer to open a pane: an agent of `kind` when `what` is
     /// "agent", or a shell when it is "terminal". The pane opens in `cwd`,
     /// as a new tab of `workspace`, or in a new workspace when `workspace`
-    /// is empty. `model.actions` has the answer.
+    /// is empty. `model.actions` has the answer. A new agent gets `task` as
+    /// its first prompt when it is ready, see `FirstTask`.
     @MainActor
-    public func create(_ deviceId: String, what: String, kind: String, cwd: String, workspace: String) {
+    public func create(_ deviceId: String, what: String, kind: String, cwd: String, workspace: String, task: String? = nil) {
+        let text = what == "agent" ? task?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" : ""
+        if !text.isEmpty {
+            // The task belongs to the next action.
+            model.firstTasks[deviceId] = FirstTask(text: text, action: actions + 1)
+        } else {
+            model.firstTasks[deviceId] = nil
+        }
         action(deviceId, HerdrAction(action: "create", seq: 0, what: what), timeout: Self.createTimeout,
                HerdrWire.create(what: what, agent: kind, cwd: cwd, workspace: workspace))
+    }
+
+    /// Forgets the first task of the last new agent, after the UI showed its end.
+    @MainActor
+    public func clearFirstTask(_ deviceId: String) {
+        model.firstTasks[deviceId] = nil
     }
 
     /// Asks the computer to close `pane`. The agent or the shell in it ends.
@@ -275,6 +299,7 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
             a.sending = false
             a.error = "\(computerName(deviceId)) is not reachable"
             model.actions[deviceId] = a
+            settleFirstTask(deviceId, a)
             return
         }
         Task { @MainActor [weak self] in
@@ -283,26 +308,62 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
             a.sending = false
             a.error = "\(self.computerName(deviceId)) did not answer"
             self.model.actions[deviceId] = a
+            self.settleFirstTask(deviceId, a)
         }
     }
 
+    // MARK: First task
+
+    /// Gives the answer to a create to the first task of that create.
     @MainActor
-    private func reply(_ deviceId: String, pane: String, action: String, _ packet: Packet) {
+    private func settleFirstTask(_ deviceId: String, _ action: HerdrAction) {
+        guard action.action == "create", var task = model.firstTasks[deviceId], task.action == action.seq else { return }
+        task.created(pane: action.pane, error: action.error)
+        model.firstTasks[deviceId] = task
+        advanceFirstTask(deviceId)
+    }
+
+    /// Sends the first task when its agent is ready. The output on screen
+    /// counts when it is of the new agent, so a dialog there holds the task.
+    @MainActor
+    private func advanceFirstTask(_ deviceId: String) {
+        guard var task = model.firstTasks[deviceId], let pane = task.pane, let state = model.states[deviceId] else { return }
+        let out = model.output(deviceId, pane: pane)
+        let go = task.update(status: state.agent(pane)?.status, choices: !(out?.choices.isEmpty ?? true))
+        model.firstTasks[deviceId] = task
+        guard go else { return }
+        task.reply = reply(deviceId, pane: pane, action: "prompt", HerdrWire.prompt(pane: pane, task.text))
+        // The reply fails at once when the computer is not reachable.
+        if let r = model.replies[deviceId], r.seq == task.reply, !r.sending { task.sent(error: r.error) }
+        model.firstTasks[deviceId] = task
+    }
+
+    /// Sends a reply and returns its number.
+    @MainActor
+    @discardableResult
+    private func reply(_ deviceId: String, pane: String, action: String, _ packet: Packet) -> Int {
         replies += 1
         let seq = replies
         model.replies[deviceId] = HerdrReply(pane: pane, action: action, seq: seq)
         guard core?.send(packet, to: deviceId) == true else {
             model.replies[deviceId] = HerdrReply(pane: pane, action: action, seq: seq, sending: false,
                                                  error: "\(computerName(deviceId)) is not reachable")
-            return
+            return seq
         }
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: Self.replyTimeout)
-            guard let self, var r = self.model.replies[deviceId], r.seq == seq, r.sending else { return }
+            guard let self else { return }
+            let error = "\(self.computerName(deviceId)) did not answer"
+            if var task = self.model.firstTasks[deviceId], task.reply == seq, task.phase == .sending {
+                task.sent(error: error)
+                self.model.firstTasks[deviceId] = task
+            }
+            guard var r = self.model.replies[deviceId], r.seq == seq, r.sending else { return }
             r.sending = false
-            r.error = "\(self.computerName(deviceId)) did not answer"
+            r.error = error
             self.model.replies[deviceId] = r
         }
+        return seq
     }
 
     private func computerName(_ deviceId: String) -> String { core?.device(deviceId)?.name ?? "The computer" }
