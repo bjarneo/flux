@@ -97,7 +97,7 @@ public final class FluxCore: @unchecked Sendable {
             order.append(t.id)
         }
         for p in plugins {
-            for type in p.incoming { routes[type, default: []].append(p) }
+            for type in p.handledTypes { routes[type, default: []].append(p) }
         }
         for p in plugins { p.attach(core: self) }
     }
@@ -168,6 +168,14 @@ public final class FluxCore: @unchecked Sendable {
     public func identity(tcpPort: Int) -> Identity {
         Identity(deviceId: local.deviceId, deviceName: deviceName, deviceType: Self.deviceType, protocolVersion: protocolVersion,
                  incoming: incomingCapabilities, outgoing: outgoingCapabilities, tcpPort: tcpPort)
+    }
+
+    /// Sends the identity again to each connected, paired computer, after
+    /// the capabilities changed. fluxd takes the new capabilities from it.
+    public func sendIdentity() {
+        let port = lock.withLock { backend?.tcpPort ?? 0 }
+        let p = identity(tcpPort: port).packet()
+        for d in connectedPaired() { d.send(p) }
     }
 
     // MARK: Settings

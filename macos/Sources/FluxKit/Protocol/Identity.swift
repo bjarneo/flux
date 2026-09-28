@@ -24,6 +24,8 @@ public enum PacketType {
     public static let mprisRequest = "kdeconnect.mpris.request"
     public static let sftp = "kdeconnect.sftp"
     public static let sftpRequest = "kdeconnect.sftp.request"
+    /// The computer asks this device to ring, so that the user finds it.
+    public static let findMyPhone = "kdeconnect.findmyphone.request"
     /// Moves the pointer, clicks, scrolls, and types on the computer. This Mac
     /// sends it. docs/remote-input.md describes the body.
     public static let mousepadRequest = "kdeconnect.mousepad.request"
@@ -50,6 +52,9 @@ public enum PacketType {
     public static let fluxShortcuts = "flux.shortcuts"
     /// Flux extension: the computer asks this device to approve sudo with a fingerprint.
     public static let fluxApprove = "flux.approve"
+    /// Flux extension: an image that was copied, as the payload, with
+    /// {"mime": type}. Both sides send it.
+    public static let fluxClipboardImage = "flux.clipboard.image"
 }
 
 /// The body of a kdeconnect.identity packet.

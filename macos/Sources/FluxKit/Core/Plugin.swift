@@ -10,6 +10,11 @@ public protocol FluxPlugin: AnyObject, Sendable {
     var incoming: [String] { get }
     /// Packet types that this device sends because of this plugin.
     var outgoing: [String] { get }
+    /// Packet types that the core routes to this plugin. The core reads them
+    /// once, before the network starts. The default is `incoming`. A plugin
+    /// whose `incoming` changes with a setting lists every type that it may
+    /// accept.
+    var handledTypes: [String] { get }
     /// Called once, after the core exists and before the network starts.
     func attach(core: FluxCore)
     /// A paired device connected, or a connected device finished pairing.
@@ -21,6 +26,7 @@ public protocol FluxPlugin: AnyObject, Sendable {
 }
 
 public extension FluxPlugin {
+    var handledTypes: [String] { incoming }
     func attach(core: FluxCore) {}
     func onConnected(_ device: Device) {}
     func onDisconnected(_ device: Device) {}

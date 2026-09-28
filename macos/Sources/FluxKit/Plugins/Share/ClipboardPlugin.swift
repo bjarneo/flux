@@ -21,6 +21,12 @@ public final class ClipboardModel {
 /// change count of the general pasteboard. iOS asks the user before each
 /// read of text from another app, so the iOS app turns the plugin inactive
 /// off the screen: then it neither polls nor reads the clipboard.
+///
+/// On iOS, images go both ways too, with flux.clipboard.image, like in Flux
+/// for Android: an image that is copied goes to the computers while sync is
+/// on, Send Clipboard sends it, and an image from a computer goes on the
+/// clipboard. The iPhone accepts images only while sync is on, so it sends
+/// its identity again when the switch changes.
 public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
     private weak var core: FluxCore?
     public let model: ClipboardModel
@@ -30,6 +36,12 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
     @MainActor private var changeCount = 0
     /// False while the app is off the screen. The Mac app is always active.
     @MainActor public private(set) var isActive = true
+    /// True when images sync too. Only the iOS app turns it on.
+    let images: Bool
+    #if os(iOS)
+    /// The last image that a computer put on the clipboard. Flux does not send it back.
+    @MainActor private var lastRemoteImage: Data?
+    #endif
 
     static let syncKey = "clipboard.sync"
     static let timestampKey = "clipboard.timestamp"
@@ -39,10 +51,29 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
     @MainActor
     public init() {
         model = ClipboardModel()
+        images = false
     }
 
-    public let incoming = [PacketType.clipboard, PacketType.clipboardConnect]
-    public let outgoing = [PacketType.clipboard, PacketType.clipboardConnect]
+    #if os(iOS)
+    /// `images` syncs clipboard images too.
+    @MainActor
+    public init(images: Bool) {
+        model = ClipboardModel()
+        self.images = images
+    }
+    #endif
+
+    public var incoming: [String] { Self.capabilities(images: images, sync: sync).incoming }
+    public var outgoing: [String] { Self.capabilities(images: images, sync: sync).outgoing }
+    public var handledTypes: [String] { Self.capabilities(images: images, sync: true).incoming }
+
+    /// The packet types of the plugin. Images come in only while sync is on,
+    /// and go out also by the Send Clipboard action, like on Android.
+    static func capabilities(images: Bool, sync: Bool) -> (incoming: [String], outgoing: [String]) {
+        let text = [PacketType.clipboard, PacketType.clipboardConnect]
+        guard images else { return (text, text) }
+        return (sync ? text + [PacketType.fluxClipboardImage] : text, text + [PacketType.fluxClipboardImage])
+    }
 
     public func attach(core: FluxCore) {
         self.core = core
@@ -66,6 +97,8 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
         core?.defaults.set(on, forKey: Self.syncKey)
         model.sync = on
         updatePolling()
+        // The computers learn whether this device takes images.
+        if images { core?.sendIdentity() }
     }
 
     /// Sets whether the app is on the screen. The poll stops while it is off
@@ -105,6 +138,9 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
         switch packet.type {
         case PacketType.clipboard: receive(packet.string("content"), timestamp: nil)
         case PacketType.clipboardConnect: receive(packet.string("content"), timestamp: packet.long("timestamp") ?? 0)
+        #if os(iOS)
+        case PacketType.fluxClipboardImage: receiveImage(packet, from: device)
+        #endif
         default: break
         }
     }
@@ -133,6 +169,11 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
     @discardableResult
     public func sendClipboard(to deviceId: String) -> Bool {
         guard let core, let device = core.device(deviceId) else { return false }
+        #if os(iOS)
+        if images, ClipboardImage.available, let image = ClipboardImage.read() {
+            return sendImage(image, to: device)
+        }
+        #endif
         guard let text = ClipboardText.text(includingPrivate: true), !text.isEmpty else {
             core.toast("The clipboard is empty")
             return false
@@ -173,12 +214,117 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
     /// Sends a local clipboard change to every connected computer.
     @MainActor
     private func onLocalClipboard() {
-        guard let core, sync, let text = ClipboardText.text(includingPrivate: false) else { return }
+        guard let core, sync else { return }
+        #if os(iOS)
+        if images, ClipboardImage.available {
+            if let image = ClipboardImage.read() { onLocalImage(image) }
+            return
+        }
+        #endif
+        guard let text = ClipboardText.text(includingPrivate: false) else { return }
         if text == lastRemote.withLockedValue({ $0 }) { return }
         timestamp = Packet.now()
         let p = Packet(PacketType.clipboard, ["content": text])
         for d in core.connectedPaired() { core.send(p, to: d.id) }
     }
+
+    #if os(iOS)
+    // MARK: Images
+
+    /// Takes an image from a computer while sync is on. The transfer runs in
+    /// a Task, because the core lock is held.
+    private func receiveImage(_ p: Packet, from device: Device) {
+        guard let core else { return }
+        guard images, sync, ClipImage.accepts(p), let address = device.link?.address, let cert = device.certificate else {
+            if let token = p.payloadTunnel { device.send(Tunnel.failed(token: token, error: ClipImage.rejected)) }
+            return
+        }
+        let (id, name, mime) = (device.id, device.name, ClipImage.mime(of: p))
+        Task.detached { [self] in
+            do {
+                let data = try await ClipImageTransfer.receive(p, tls: core.tls, address: address, cert: cert) { [weak core] packet in
+                    core?.send(packet, to: id)
+                }
+                onMain { plugin in
+                    plugin.lastRemoteImage = ClipboardImage.digest(data)
+                    ClipboardImage.write(data, mime: mime)
+                    plugin.changeCount = ClipboardText.changeCount
+                    core.toast("Image from \(name) is on the clipboard")
+                }
+            } catch {
+                FluxLog.plugin.error("receive clipboard image from \(name, privacy: .public) failed: \(String(describing: error), privacy: .public)")
+            }
+        }
+    }
+
+    /// Sends a copied image to each connected computer that takes images,
+    /// unless a computer put it there.
+    @MainActor
+    private func onLocalImage(_ image: ClipboardImage.Image) {
+        guard let core, ClipboardImage.digest(image.data) != lastRemoteImage else { return }
+        let targets = core.connectedPaired().filter { $0.accepts(PacketType.fluxClipboardImage) }
+        guard !targets.isEmpty else { return }
+        guard Int64(image.data.count) <= ClipImage.maxBytes else {
+            FluxLog.plugin.info("clipboard image of \(image.data.count) bytes not sent, larger than the limit")
+            return
+        }
+        timestamp = Packet.now()
+        let ids = targets.map(\.id)
+        Task.detached { [self] in _ = await send(image, to: ids) }
+    }
+
+    /// The Send Clipboard action for an image.
+    @MainActor
+    private func sendImage(_ image: ClipboardImage.Image, to device: Device) -> Bool {
+        guard let core else { return false }
+        let (id, name) = (device.id, device.name)
+        guard device.online else {
+            core.toast("Not connected. Try again in a moment")
+            return false
+        }
+        guard device.accepts(PacketType.fluxClipboardImage) else {
+            core.toast("Update Flux on \(name) to send images")
+            return false
+        }
+        guard Int64(image.data.count) <= ClipImage.maxBytes else {
+            core.toast("The image is larger than \(ClipImage.maxBytes >> 20) MB")
+            return false
+        }
+        timestamp = Packet.now()
+        Task.detached { [self] in
+            let sent = await send(image, to: [id])
+            core.toast(sent > 0 ? "Image sent to \(name)" : "Sending the image failed")
+        }
+        return true
+    }
+
+    /// Sends the image to the computers one after the other and returns the
+    /// number of computers that got it.
+    private func send(_ image: ClipboardImage.Image, to ids: [String]) async -> Int {
+        guard let core else { return 0 }
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("flux-clip-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("image")
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try image.data.write(to: file)
+        } catch {
+            FluxLog.plugin.error("cannot write the clipboard image: \(String(describing: error), privacy: .public)")
+            return 0
+        }
+        var sent = 0
+        for id in ids {
+            guard let cert = core.device(id)?.certificate else { continue }
+            do {
+                try await ClipImageTransfer.send(file, size: Int64(image.data.count), mime: image.mime, to: id, cert: cert, core: core)
+                sent += 1
+            } catch {
+                FluxLog.plugin.error("send clipboard image to \(id, privacy: .public) failed: \(String(describing: error), privacy: .public)")
+            }
+        }
+        return sent
+    }
+    #endif
 
     private func onMain(_ body: @escaping @MainActor (ClipboardPlugin) -> Void) {
         DispatchQueue.main.async { [weak self] in
