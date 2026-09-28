@@ -25,7 +25,7 @@ import (
 const MinProtocol = 22
 
 // maxLine is the largest reply line that the client reads. An agent read
-// with 400 lines is much smaller.
+// with 1000 lines is much smaller.
 const maxLine = 32 << 20
 
 // callTimeout limits a call when the context has no deadline.
@@ -66,6 +66,16 @@ type Error struct {
 
 func (e *Error) Error() string { return "herdr: " + e.Message }
 
+// Code returns the code of a herdr error, or an empty string for another
+// error.
+func Code(err error) string {
+	var he *Error
+	if errors.As(err, &he) {
+		return he.Code
+	}
+	return ""
+}
+
 // Pong is the result of ping.
 type Pong struct {
 	Version  string `json:"version"`
@@ -77,25 +87,57 @@ type Snapshot struct {
 	Version    string      `json:"version"`
 	Protocol   int         `json:"protocol"`
 	Workspaces []Workspace `json:"workspaces"`
+	Tabs       []Tab       `json:"tabs"`
+	Panes      []Pane      `json:"panes"`
 	Agents     []Agent     `json:"agents"`
 }
 
 // Workspace is one herdr workspace. Number is its place in the sidebar.
 type Workspace struct {
-	ID     string `json:"workspace_id"`
-	Label  string `json:"label"`
-	Number int    `json:"number"`
+	ID        string `json:"workspace_id"`
+	Label     string `json:"label"`
+	Number    int    `json:"number"`
+	ActiveTab string `json:"active_tab_id"`
 }
 
-// Agent is a coding agent that herdr found in a pane.
+// Tab is one tab of a workspace. Number is its place in the workspace.
+type Tab struct {
+	ID          string `json:"tab_id"`
+	WorkspaceID string `json:"workspace_id"`
+	Label       string `json:"label"`
+	Number      int    `json:"number"`
+}
+
+// Pane is one terminal of the session. A pane can hold an agent.
+type Pane struct {
+	ID            string `json:"pane_id"`
+	WorkspaceID   string `json:"workspace_id"`
+	TabID         string `json:"tab_id"`
+	Cwd           string `json:"cwd"`
+	ForegroundCwd string `json:"foreground_cwd"`
+	Title         string `json:"terminal_title_stripped"`
+}
+
+// Agent is a coding agent that herdr found in a pane. Agent is empty
+// while herdr starts the agent and has not found it yet. Name is empty
+// when nobody named the agent.
 type Agent struct {
 	PaneID        string `json:"pane_id"`
 	WorkspaceID   string `json:"workspace_id"`
 	Agent         string `json:"agent"`
+	Name          string `json:"name"`
 	Status        string `json:"agent_status"`
 	Cwd           string `json:"cwd"`
 	ForegroundCwd string `json:"foreground_cwd"`
 	Title         string `json:"terminal_title_stripped"`
+}
+
+// Created is the result of workspace.create and tab.create. RootPane is
+// the first pane of the new tab.
+type Created struct {
+	Workspace Workspace `json:"workspace"`
+	Tab       Tab       `json:"tab"`
+	RootPane  Pane      `json:"root_pane"`
 }
 
 // Read is the recent terminal output of an agent.
@@ -163,6 +205,79 @@ func ReadAgent(ctx context.Context, path, pane string, lines int, ansi bool) (Re
 	return r.Read, err
 }
 
+// ReadPane returns up to lines rows of recent output from any pane. It
+// does not check for an agent. With ansi, the text keeps the ANSI codes
+// of colors and styles.
+func ReadPane(ctx context.Context, path, pane string, lines int, ansi bool) (Read, error) {
+	params := map[string]any{"pane_id": pane, "source": "recent_unwrapped", "lines": lines}
+	if ansi {
+		params["format"], params["strip_ansi"] = "ansi", false
+	}
+	var r struct {
+		Read Read `json:"read"`
+	}
+	err := Call(ctx, path, "pane.read", params, &r)
+	return r.Read, err
+}
+
+// GetAgent returns the agent in the pane.
+func GetAgent(ctx context.Context, path, pane string) (Agent, error) {
+	var r struct {
+		Agent Agent `json:"agent"`
+	}
+	err := Call(ctx, path, "agent.get", map[string]any{"target": pane}, &r)
+	return r.Agent, err
+}
+
+// AgentKinds returns the agent kinds that herdr can detect and start.
+func AgentKinds(ctx context.Context, path string) ([]string, error) {
+	var r struct {
+		Manifests []struct {
+			Agent string `json:"agent"`
+		} `json:"manifests"`
+	}
+	if err := Call(ctx, path, "server.agent_manifests", nil, &r); err != nil {
+		return nil, err
+	}
+	kinds := make([]string, 0, len(r.Manifests))
+	for _, m := range r.Manifests {
+		if m.Agent != "" {
+			kinds = append(kinds, m.Agent)
+		}
+	}
+	return kinds, nil
+}
+
+// CreateWorkspace opens a workspace with one tab and one shell pane in
+// the folder. The workspace does not take the focus.
+func CreateWorkspace(ctx context.Context, path, cwd string) (Created, error) {
+	var c Created
+	err := Call(ctx, path, "workspace.create", map[string]any{"cwd": cwd, "focus": false}, &c)
+	return c, err
+}
+
+// CreateTab opens a tab with one shell pane in the folder, in an existing
+// workspace. The tab does not take the focus.
+func CreateTab(ctx context.Context, path, workspace, cwd string) (Created, error) {
+	var c Created
+	err := Call(ctx, path, "tab.create", map[string]any{"workspace_id": workspace, "cwd": cwd, "focus": false}, &c)
+	return c, err
+}
+
+// StartAgent types the command of an agent kind in the shell of the pane.
+// herdr refuses it with agent_pane_busy until the shell shows its prompt,
+// and with agent_name_taken when another agent has the name. The call
+// returns before herdr finds the agent.
+func StartAgent(ctx context.Context, path, name, kind, pane string) error {
+	return Call(ctx, path, "agent.start", map[string]any{"name": name, "kind": kind, "pane_id": pane}, nil)
+}
+
+// ClosePane closes the pane and ends its process. herdr also closes a tab
+// that has no pane left, and a workspace that has no tab left.
+func ClosePane(ctx context.Context, path, pane string) error {
+	return Call(ctx, path, "pane.close", map[string]any{"pane_id": pane}, nil)
+}
+
 // SendKeys sends key presses to the agent in the pane. herdr checks that
 // an agent is in the pane and that each key name is valid before it
 // writes a byte.
@@ -177,7 +292,7 @@ func Prompt(ctx context.Context, path, pane, text string) error {
 }
 
 // SendInput types text in the pane and then sends the keys. It does not
-// check for an agent. Use it only after herdr reported one.
+// check for an agent.
 func SendInput(ctx context.Context, path, pane, text string, keys []string) error {
 	return Call(ctx, path, "pane.send_input", map[string]any{"pane_id": pane, "text": text, "keys": keys}, nil)
 }

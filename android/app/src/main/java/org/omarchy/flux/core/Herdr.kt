@@ -13,8 +13,11 @@ private const val TAG = "FluxHerdr"
 /** How long a finished agent must stay ready before the phone posts it. Status can flap between tool calls. */
 private const val FINISH_HOLD_MS = 2_000L
 
-/** How long a read waits for the output. */
-private const val READ_TIMEOUT_MS = 10_000L
+/** How long a read waits for the output. fluxd can take 10 seconds to collect the history of an agent. */
+private const val READ_TIMEOUT_MS = 15_000L
+
+/** How long a new agent or terminal waits. fluxd waits up to 45 seconds for herdr to start an agent. */
+private const val CREATE_TIMEOUT_MS = 60_000L
 
 /** How long a reply waits for the answer of the computer. */
 private const val REPLY_TIMEOUT_MS = 10_000L
@@ -22,14 +25,16 @@ private const val REPLY_TIMEOUT_MS = 10_000L
 /** How long the phone waits after a reply before it reads the output again. The agent needs a moment to draw. */
 private const val REREAD_DELAY_MS = 700L
 
-/** The number of lines that a read asks for. fluxd allows 1 to 400. */
-const val HERDR_READ_LINES = 200
+/** The number of lines that a read asks for. fluxd allows 1 to 1000. */
+const val HERDR_READ_LINES = 1000
 
 /**
  * Shows the herdr agents of a computer with flux.herdr. The computer sends
  * the agent list, and this phone asks for the recent output of a pane.
  * When the computer allows it, the phone also sends keys and prompts to an
- * agent. The UI asks for the phone lock before the first reply.
+ * agent, starts agents, and closes them. When the computer allows
+ * terminals, the phone also opens terminals and types in them. The UI
+ * asks for the phone lock before the first reply.
  */
 object HerdrSync {
     /**
@@ -43,6 +48,9 @@ object HerdrSync {
 
     /** Counts the replies, so that a late timeout does not replace a newer reply. The core lock guards it. */
     private var replies = 0L
+
+    /** Counts the creates and closes, so that a late timeout does not replace a newer one. The core lock guards it. */
+    private var actions = 0L
 
     private fun key(deviceId: String, pane: String) = "$deviceId|$pane"
 
@@ -79,6 +87,13 @@ object HerdrSync {
                     val id = d.id
                     core.scheduler.schedule({ read(core, id, sent.pane) }, REREAD_DELAY_MS, TimeUnit.MILLISECONDS)
                 }
+            }
+            "created", "closed" -> {
+                val done = parseHerdrDone(p.body) ?: return
+                val action = d.herdrAction
+                if (action == null || action.action != done.action || !action.sending) return
+                if (done.action == "close" && action.pane != done.pane) return
+                d.herdrAction = action.copy(sending = false, pane = done.pane ?: action.pane, error = done.error)
             }
             else -> Log.d(TAG, "ignored flux.herdr kind ${p.string("kind")}")
         }
@@ -134,6 +149,70 @@ object HerdrSync {
     fun sendKeys(core: FluxCore, id: String, pane: String, keys: List<String>) {
         if (keys.isEmpty() || keys.size > HERDR_MAX_KEYS || keys.any { it !in HERDR_KEYS }) return
         reply(core, id, pane, "keys", bodyOf("kind" to "keys", "pane" to pane, "keys" to keys))
+    }
+
+    /**
+     * Types [text] in the terminal [pane], then sends [keys], for example
+     * "ls" and "enter". Only the keys in [HERDR_TERMINAL_KEYS] go out.
+     */
+    fun sendInput(core: FluxCore, id: String, pane: String, text: String, keys: List<String>) {
+        if (keys.size > HERDR_MAX_KEYS || keys.any { it !in HERDR_TERMINAL_KEYS }) return
+        if (text.isEmpty() && keys.isEmpty()) return
+        if (text.toByteArray(Charsets.UTF_8).size > HERDR_MAX_PROMPT) {
+            core.locked {
+                val d = core.device(id) ?: return@locked
+                d.herdrReply = HerdrReply(pane, "input", ++replies, sending = false, error = "The text is too long. The limit is 16 KB.")
+            }
+            return
+        }
+        reply(core, id, pane, "input", bodyOf("kind" to "input", "pane" to pane, "text" to text, "keys" to keys))
+    }
+
+    /**
+     * Asks the computer to open a pane: an agent of [kind] when [what] is
+     * "agent", or a shell when it is "terminal". The pane opens in [cwd]
+     * and in a new tab of [workspace], or in a new workspace when
+     * [workspace] is empty.
+     */
+    fun create(core: FluxCore, id: String, what: String, kind: String, cwd: String, workspace: String) {
+        action(core, id, HerdrAction("create", 0, what = what), CREATE_TIMEOUT_MS, bodyOf(
+            "kind" to "create", "what" to what, "agent" to kind, "cwd" to cwd.trim(), "workspace" to workspace,
+        ))
+    }
+
+    /** Asks the computer to close [pane]. The agent or the shell in it ends. */
+    fun close(core: FluxCore, id: String, pane: String) {
+        action(core, id, HerdrAction("close", 0, pane = pane), REPLY_TIMEOUT_MS, bodyOf("kind" to "close", "pane" to pane))
+    }
+
+    /** Forgets the last create or close, after the UI used its answer. */
+    fun clearAction(core: FluxCore, id: String, seq: Long) {
+        core.locked {
+            val d = core.device(id) ?: return@locked
+            if (d.herdrAction?.seq == seq) d.herdrAction = null
+        }
+    }
+
+    private fun action(core: FluxCore, id: String, start: HerdrAction, timeout: Long, body: JsonObject) {
+        val token = core.locked {
+            val d = core.device(id) ?: return@locked null
+            val seq = ++actions
+            d.herdrAction = start.copy(seq = seq)
+            if (!d.send(Packet(Types.FLUX_HERDR, body))) {
+                d.herdrAction = start.copy(seq = seq, sending = false, error = "${d.identity.deviceName} is not reachable")
+                return@locked null
+            }
+            seq
+        } ?: return
+        core.scheduler.schedule({
+            core.locked {
+                val d = core.device(id) ?: return@locked
+                val a = d.herdrAction
+                if (a != null && a.seq == token && a.sending) {
+                    d.herdrAction = a.copy(sending = false, error = "${d.identity.deviceName} did not answer")
+                }
+            }
+        }, timeout, TimeUnit.MILLISECONDS)
     }
 
     /** Sends [text] to the agent in [pane]. The computer submits it as a prompt, or types it into a dialog. */

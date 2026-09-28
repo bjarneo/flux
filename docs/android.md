@@ -114,6 +114,8 @@ The pages are:
 
 - `devices`, `home`, `media`, `commands`, `browse`, `mic`, `agents`, and `camera`.
 - `agent:<pane>` for the output of one herdr agent. The sample blocked agent is `agent:w2:p1`.
+- `newpane` for the screen that starts a herdr agent or opens a terminal.
+- `terminal:<pane>` for one herdr terminal. The sample terminals are `terminal:w1:p2` and `terminal:w3:p3`.
 - `camera:<mode>` for a camera mode: `text`, `qr`, `photo`, `document`, `signature`, or `webcam`.
 - `ring`, `pair`, and `unpair` for the ring overlay, the pairing sheet, and the unpair dialog.
 - `<page>@offline` for the page of a paired computer that is not reachable.

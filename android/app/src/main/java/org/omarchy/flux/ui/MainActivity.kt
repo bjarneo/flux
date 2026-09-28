@@ -136,6 +136,12 @@ class MainActivity : ComponentActivity() {
 /** The page prefix of the screen of one agent. The herdr pane ID follows it. */
 private const val AGENT_PAGE = "agent:"
 
+/** The page prefix of the screen of one herdr terminal. The pane ID follows it. */
+private const val TERMINAL_PAGE = "terminal:"
+
+/** The page that starts a herdr agent or opens a terminal. */
+private const val NEW_PANE_PAGE = "newpane"
+
 /** One entry of the screen stack. [page] is empty for the device home screen. */
 private data class Route(val deviceId: String? = null, val page: String = "")
 
@@ -242,8 +248,19 @@ fun FluxRoot(activity: MainActivity, splash: Boolean = false) {
                 route.page == "media" -> TiledMediaScreen(device, ::pop)
                 route.page == "mic" -> org.omarchy.flux.mic.MicScreen(device, ::pop)
                 route.page == "commands" -> TiledCommandsScreen(device, ::pop)
-                route.page == "agents" -> TiledAgentsScreen(device, ::pop) { pane -> push(Route(device.id, "$AGENT_PAGE$pane")) }
+                route.page == "agents" -> TiledAgentsScreen(
+                    device, ::pop,
+                    onOpen = { pane -> push(Route(device.id, "$AGENT_PAGE$pane")) },
+                    onOpenTerminal = { pane -> push(Route(device.id, "$TERMINAL_PAGE$pane")) },
+                    onNew = { push(Route(device.id, NEW_PANE_PAGE)) },
+                )
                 route.page.startsWith(AGENT_PAGE) -> key(route.page) { TiledAgentScreen(device, route.page.removePrefix(AGENT_PAGE), ::pop) }
+                route.page.startsWith(TERMINAL_PAGE) -> key(route.page) { TiledTerminalScreen(device, route.page.removePrefix(TERMINAL_PAGE), ::pop) }
+                // The new pane replaces the new pane page, so Back goes to the agent list.
+                route.page == NEW_PANE_PAGE -> TiledNewPaneScreen(device, ::pop) { what, pane ->
+                    val page = if (what == "terminal") "$TERMINAL_PAGE$pane" else "$AGENT_PAGE$pane"
+                    stack = stack.dropLast(1) + Route(device.id, page)
+                }
                 route.page == "browse" -> BrowseScreen(device, state.browse, ::pop)
                 route.page == "touchpad" -> TouchpadScreen(device, ::pop)
                 route.page == "desktop" -> DesktopScreen(device, ::pop)

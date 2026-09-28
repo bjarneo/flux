@@ -80,12 +80,18 @@ type Daemon struct {
 	desktopErr string
 	approvals  approvalBook
 
-	// herdrPath is the API socket of herdr. herdrRunning and herdrAgents
-	// are the last state that the herdr loop read. herdrWake makes the
-	// loop check the setting and read the session again.
+	// herdrPath is the API socket of herdr. herdrRunning, herdrAgents,
+	// herdrTerms, herdrPlaces, and herdrKinds are the last state that the
+	// herdr loop read. herdrHistory keeps the last plain history of each
+	// agent for the reads while it works. herdrWake makes the loop check
+	// the setting and read the session again.
 	herdrPath    string
 	herdrRunning bool
 	herdrAgents  []HerdrAgent
+	herdrTerms   []HerdrTerminal
+	herdrPlaces  []HerdrWorkspace
+	herdrKinds   []string
+	herdrHistory map[string][]string
 	herdrWake    chan struct{}
 
 	subs   map[int]func(event string, data any)

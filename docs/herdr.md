@@ -4,7 +4,8 @@
 
 Flux for Android and Flux for macOS show the coding agents that [herdr](https://herdr.dev) runs on your Omarchy computer.
 You can see the status of each agent, read its recent output in color, and get a notification when an agent needs input or finishes.
-When you turn on replies, you can also answer an agent with taps and send it text.
+When you turn on control, you can also answer an agent with taps, send it text, start new agents, and close agents.
+When you also turn on terminals, Flux for Android opens herdr terminals and types commands in them.
 
 The phone uses the Flux link that it already has.
 It needs no new port, no firewall rule, and no new pairing.
@@ -47,9 +48,20 @@ A blocked agent waits for an approval or for the answer to a question.
 Idle and done agents are ready for new input.
 The **Agents** tile shows the number of blocked agents.
 
-The output screen shows up to 200 lines of recent output with the colors and styles of the terminal.
+The output screen of the phone shows up to 1000 lines of recent output.
+The screen part of the output has the colors and styles of the terminal.
+The older lines above it are plain text.
 It reads the output again every 5 seconds while the agent works, and after each status change.
 Select refresh to read it at once.
+
+When you scroll up to read older lines, the screen stays there when new output comes.
+To go back to the newest lines, select the arrow at the bottom of the output.
+
+Many agents, such as Claude Code, draw in the alternate screen of the terminal.
+herdr gets the older lines of such an agent only while the agent is idle, and only as plain text.
+While the agent works, the phone shows the older lines from the last idle read above the current screen.
+When the two parts do not meet, a dim line says that more lines show when the agent stops.
+The phone reads all lines again when the agent stops.
 herdr keeps only the recent part of the terminal for some agents, so the screen can show fewer lines.
 
 ## Notifications
@@ -94,6 +106,76 @@ The unlock stays valid for 5 minutes.
 It does not accept `ctrl+c`, because that key can end the agent.
 A prompt can have up to 16 KB of text.
 `fluxd` removes control characters from a prompt, except line breaks and tabs.
+
+## Start an agent
+
+With `herdr_control = true`, the phone can start a coding agent on the computer.
+
+1. Open **Agents**.
+2. Select the add button in the top bar.
+3. Under **Run**, select the agent, for example `claude` or `codex`.
+4. Under **Folder**, select a folder. To find a folder, type a part of its name. To use another folder, type its path, for example `~/Code/app`. The folder must exist on the computer.
+5. When the folder has a herdr workspace, select **New tab in** that workspace or **New workspace**. A folder without a workspace opens in a new workspace.
+6. Select **Start**.
+
+The folder list shows your home folder and the folder of each herdr workspace, in the order of the herdr sidebar.
+Each folder shows the number of agents in its workspace.
+The phone keeps the last agent and folder of each computer for the next start.
+
+Before the first start, the phone asks for its fingerprint or screen lock.
+herdr opens a shell in the folder, runs the agent command there, and waits until it finds the agent.
+The start can take 30 seconds.
+The phone then opens the screen of the new agent.
+
+The list shows only the agents that can run on the computer.
+`fluxd` looks for the command of each agent kind in its `PATH`.
+A mise shim or an Omarchy launcher counts only when `mise which` finds the tool active in your home folder.
+`fluxd` never runs an agent command to check it, because an Omarchy launcher installs its tool on the first run.
+`fluxd` checks the agents again each minute, so a new install shows within a minute.
+When the agent does not start, `fluxd` closes the new pane and the phone shows the last line of the shell, for example `command not found`.
+
+A new agent in a new folder can ask if you trust the folder.
+The agent is then blocked, and the phone shows the choices.
+
+## Close an agent
+
+With `herdr_control = true`, select **Close** on the screen of an agent, then confirm.
+herdr closes the pane, and the agent in it stops.
+When the pane is the last one of its tab, herdr also closes the tab.
+When the tab is the last one of its workspace, herdr also closes the workspace.
+
+## Use terminals
+
+Terminals give the phone a shell on the computer, so they are off by default.
+To let the phone open herdr terminals and type in them, set these keys in `~/.config/flux/config.toml`:
+
+```toml
+herdr_control = true
+herdr_terminals = true
+```
+
+Reload the daemon:
+
+```sh
+systemctl --user reload fluxd
+```
+
+The **Agents** screen then lists each herdr pane that has no agent under **Terminals**.
+Select a terminal to see its output and to type in it:
+
+- Type a command in the field, then select **Run**. The phone types the command and presses Enter.
+- The key bar sends Esc, Tab, Ctrl-C, Ctrl-D, Up, Down, and Enter.
+- The screen reads the output again every 3 seconds.
+- To close the terminal, select **Close**, then confirm.
+
+To open a new terminal, select the add button on the **Agents** screen, then select **terminal** under **Run**.
+
+Before the first input, the phone asks for its fingerprint or screen lock.
+The unlock stays valid for 5 minutes.
+
+`fluxd` accepts these keys for a terminal: `enter`, `esc`, `tab`, `shift+tab`, `up`, `down`, `left`, `right`, `backspace`, `space`, and `ctrl+a` to `ctrl+z`.
+A command can have up to 16 KB of text.
+`fluxd` removes control characters from a command and changes line breaks and tabs to spaces.
 
 ## Dictate a reply
 
@@ -150,6 +232,8 @@ The mic key does not show when the phone has no speech recognizer.
 ## Use a Mac
 
 Flux for macOS shows the same agents and sends the same replies as the phone.
+It shows up to 200 lines of output.
+It does not start agents, close them, or open terminals.
 
 - The page of the computer has an **Agents** card. It lists the first agents and shows the number of blocked agents.
 - **Open Agents…** opens a window with the agent list on the left and the output of the selected agent on the right. The menu bar item has **Agents…** too.
@@ -234,13 +318,18 @@ systemctl --user restart fluxd
 ## Access and privacy
 
 The phone can read the agent list and the recent output of an agent pane.
-With `herdr_control = true`, it can also send the keys in the list above and prompts to an agent.
+With `herdr_control = true`, it can also send the keys in the list above and prompts to an agent, start agents, and close agent panes.
 An agent can run commands, so a reply has the same power as a prompt that you type on the computer.
 `fluxd` reads and sends only to panes that hold an agent in the last agent list.
 herdr also checks that an agent is in the pane before it sends a key or a prompt.
 
+With `herdr_terminals = true` and `herdr_control = true`, the phone can also read, type in, open, and close each herdr pane that has no agent.
+A terminal is a shell, so the phone can then run any command as your user.
+Turn it on only for phones that you trust.
+
 `fluxd` logs each reply with the device name, the pane, and the keys.
-For a prompt, it logs the number of characters, not the text.
+For a prompt and a terminal command, it logs the number of characters, not the text.
+It also logs each new agent, new terminal, and closed pane.
 
 Terminal output can contain secrets.
 The output goes only to paired phones over the Flux TLS link.
@@ -264,13 +353,18 @@ The `kind` field selects the message.
 
 | Kind | Sender | Body |
 | --- | --- | --- |
-| `state` | Computer | `enabled`, `running`, `control`, and `agents` |
+| `state` | Computer | `enabled`, `running`, `control`, `terminals`, `agents`, `panes`, `workspaces`, and `kinds` |
 | `output` | Computer | `pane` and `format`, then `text` and `truncated`, or `error` |
 | `sent` | Computer | `pane` and `action`, and `error` when the reply failed |
+| `created` | Computer | `what`, then `pane` or `error` |
+| `closed` | Computer | `pane`, and `error` when the close failed |
 | `request` | Phone | No other fields. The computer answers with `state`. |
-| `read` | Phone | `pane`, `lines` from 1 to 400, and `format`. Zero lines means 200. |
+| `read` | Phone | `pane`, `lines` from 1 to 1000, and `format`. Zero lines means 200. |
 | `keys` | Phone | `pane` and `keys`, 1 to 8 key names. The computer answers with `sent`. |
 | `prompt` | Phone | `pane` and `text`. The computer answers with `sent`. |
+| `input` | Phone | `pane` of a terminal, `text`, and 0 to 8 `keys`. The computer answers with `sent`. |
+| `create` | Phone | `what` is `agent` or `terminal`, then `agent`, `cwd`, and `workspace`. The computer answers with `created`. |
+| `close` | Phone | `pane`. The computer answers with `closed`. |
 
 The computer sends `state` when the phone connects, after each change, and as the answer to `request`.
 Each agent has `pane`, `agent`, `status`, `title`, `project`, and `workspace`:
@@ -282,12 +376,31 @@ Each agent has `pane`, `agent`, `status`, `title`, `project`, and `workspace`:
 `status` is `idle`, `working`, `blocked`, `done`, or `unknown`.
 `project` is the base name of the agent's working folder.
 `control` is `true` when `herdr = true` and `herdr_control = true`.
+`terminals` is `true` when `control` is `true` and `herdr_terminals = true`.
+
+`panes` lists the terminals, and it is empty when `terminals` is `false`.
+Each terminal has `pane`, `title`, `project`, and `workspace`.
+`workspaces` lists the workspaces with `id`, `label`, and `cwd`, the folder of the active tab.
+A `cwd` in the home folder starts with `~/`.
+`kinds` lists the agent kinds that the computer can start. It has only the agents that can run, as [Start an agent](#start-an-agent) describes.
+Both lists are empty when `control` is `false`.
+
+A `create` with `"what":"agent"` names the agent kind in `agent`, for example `claude`.
+`cwd` is a full path, `~`, or a path that starts with `~/`. An empty `cwd` is the home folder.
+An empty `workspace` opens a new workspace. A workspace ID opens a new tab in that workspace.
+The computer sends `state` with the new pane before `created`:
+
+```json
+{"kind":"create","what":"agent","agent":"claude","cwd":"~/Code/flux","workspace":""}
+{"kind":"created","what":"agent","pane":"w7:p1"}
+```
 
 A `read` with `"format":"ansi"` gets an `output` with `"format":"ansi"`.
 Its `text` keeps the SGR sequences of colors and styles.
 `fluxd` removes all other escape sequences and control characters, changes CRLF to LF, and removes the blanks at the end of each line.
 Without `format`, `text` has no ANSI codes.
-`text` has at most 256 KB.
+For an agent, `fluxd` also reads the plain history and puts the ANSI screen under it, because herdr gets the history of an agent in the alternate screen only as plain text.
+`text` has at most 1 MB.
 When `fluxd` removes older lines to stay in that limit, `truncated` is `true`.
 
 A reply and its answer look like this:
@@ -308,6 +421,11 @@ A reply and its answer look like this:
 | The list is empty | Run `herdr agent list`. herdr must detect the agent in its pane. |
 | The phone says that the feature is off | Set `herdr = true` and reload `fluxd`. |
 | The phone says that replies are off | Set `herdr_control = true` and reload `fluxd`. |
+| The add button is missing on the **Agents** screen | Set `herdr_control = true` and reload `fluxd`. herdr must run. |
+| The phone says that terminals are off | Set `herdr_control = true` and `herdr_terminals = true`, then reload `fluxd`. |
+| An agent kind is missing from the list | Run the agent once in a terminal, so that mise installs it. Then wait 1 minute. The command must also be in the `PATH` of `fluxd`. Run `systemctl --user show-environment` to see that `PATH`. |
+| A new agent says that it did not start | Read the last line in the error. Run the agent command in a terminal on the computer to see the problem. |
+| The output shows a dim line about more lines | The agent works, and more lines came than one screen. The phone reads them when the agent stops. |
 | A reply says that the agent is not ready for input | herdr accepts input only for an agent that it detected. Run `herdr agent get PANE` on the computer. |
 | The mic key is missing | The phone has no speech recognizer. Install Speech Recognition and Synthesis from Google, or another voice input app. |
 | The **Agents** card is missing on the Mac | Update `fluxd` and Flux for macOS. The card shows only when the computer accepts `flux.herdr`. |

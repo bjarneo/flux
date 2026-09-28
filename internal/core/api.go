@@ -128,6 +128,7 @@ func (d *Daemon) Snapshot() json.RawMessage {
 			"syncDnd":          d.cfg.SyncDnd,
 			"herdr":            d.cfg.Herdr,
 			"herdrControl":     d.cfg.HerdrControl,
+			"herdrTerminals":   d.cfg.HerdrTerminals,
 			"remoteInput":      d.cfg.RemoteInput,
 			"remoteDesktop":    d.cfg.RemoteDesktop,
 		},
@@ -411,6 +412,8 @@ func (d *Daemon) setSetting(key string, value any) error {
 		d.cfg.Herdr = b
 	case key == "herdrControl" && isBool:
 		d.cfg.HerdrControl = b
+	case key == "herdrTerminals" && isBool:
+		d.cfg.HerdrTerminals = b
 	case key == "remoteInput" && isBool:
 		d.cfg.RemoteInput = b
 	case key == "remoteDesktop" && isBool:
@@ -431,7 +434,7 @@ func (d *Daemon) setSetting(key string, value any) error {
 	if key == "name" {
 		d.announce()
 	}
-	if key == "herdr" || key == "herdrControl" {
+	if key == "herdr" || key == "herdrControl" || key == "herdrTerminals" {
 		d.herdrChanged()
 	}
 	if key == "remoteInput" || key == "remoteDesktop" {

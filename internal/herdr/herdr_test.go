@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"path/filepath"
 	"strings"
@@ -133,6 +134,66 @@ func TestControlRequests(t *testing.T) {
 		if got := req.Method + " " + string(params); got != w {
 			t.Errorf("request %s, want %s", got, w)
 		}
+	}
+}
+
+func TestLayoutRequests(t *testing.T) {
+	path, reqs := fakeServer(t, func(req request) []string {
+		switch req.Method {
+		case "workspace.create":
+			return []string{`{"id":"flux","result":{"type":"workspace_created","workspace":{"workspace_id":"w2","label":"flux"},` +
+				`"tab":{"tab_id":"w2:t1","workspace_id":"w2"},"root_pane":{"pane_id":"w2:p1","tab_id":"w2:t1","cwd":"/src/flux"}}}`}
+		case "server.agent_manifests":
+			return []string{`{"id":"flux","result":{"type":"agent_manifest_status","manifests":[{"agent":"claude"},{"agent":""},{"agent":"codex"}]}}`}
+		case "agent.get":
+			return []string{`{"id":"flux","result":{"type":"agent_info","agent":{"pane_id":"w2:p1","agent":null,"name":"claude-flux"}}}`}
+		}
+		return []string{`{"id":"flux","result":{"type":"ok"}}`}
+	})
+	ctx := context.Background()
+	c, err := CreateWorkspace(ctx, path, "/src/flux")
+	if err != nil || c.Workspace.ID != "w2" || c.Tab.ID != "w2:t1" || c.RootPane.ID != "w2:p1" || c.RootPane.Cwd != "/src/flux" {
+		t.Fatalf("created %+v %v", c, err)
+	}
+	if _, err := CreateTab(ctx, path, "w2", "/src/web"); err != nil {
+		t.Fatal(err)
+	}
+	if err := StartAgent(ctx, path, "claude-flux", "claude", "w2:p1"); err != nil {
+		t.Fatal(err)
+	}
+	if a, err := GetAgent(ctx, path, "w2:p1"); err != nil || a.Agent != "" || a.Name != "claude-flux" {
+		t.Fatalf("agent %+v %v", a, err)
+	}
+	if kinds, err := AgentKinds(ctx, path); err != nil || strings.Join(kinds, ",") != "claude,codex" {
+		t.Fatalf("kinds %v %v", kinds, err)
+	}
+	if _, err := ReadPane(ctx, path, "w2:p1", 1000, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := ClosePane(ctx, path, "w2:p1"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		`workspace.create {"cwd":"/src/flux","focus":false}`,
+		`tab.create {"cwd":"/src/web","focus":false,"workspace_id":"w2"}`,
+		`agent.start {"kind":"claude","name":"claude-flux","pane_id":"w2:p1"}`,
+		`agent.get {"target":"w2:p1"}`,
+		`server.agent_manifests {}`,
+		`pane.read {"format":"ansi","lines":1000,"pane_id":"w2:p1","source":"recent_unwrapped","strip_ansi":false}`,
+		`pane.close {"pane_id":"w2:p1"}`,
+	}
+	for _, w := range want {
+		req := <-reqs
+		params, _ := json.Marshal(req.Params)
+		if got := req.Method + " " + string(params); got != w {
+			t.Errorf("request %s, want %s", got, w)
+		}
+	}
+}
+
+func TestCode(t *testing.T) {
+	if Code(fmt.Errorf("read: %w", &Error{Code: "agent_not_idle"})) != "agent_not_idle" || Code(errors.New("x")) != "" || Code(nil) != "" {
+		t.Fatal("Code")
 	}
 }
 

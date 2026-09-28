@@ -50,6 +50,47 @@ class HerdrTest {
     }
 
     @Test
+    fun parsesTerminalsWorkspacesAndKinds() {
+        val s = parseHerdrState(
+            body(
+                """{"kind":"state","enabled":true,"running":true,"control":true,"terminals":true,"agents":[],
+                "panes":[{"pane":"w1:p2","title":"npm run dev","project":"web","workspace":"web"},{"title":"no pane"}],
+                "workspaces":[{"id":"w1","label":"web","cwd":"/src/web"},{"id":"w2"},{"label":"no id"}],
+                "kinds":["claude","","codex"]}""",
+            ),
+        )!!
+        assertTrue(s.control)
+        assertTrue(s.terminals)
+        assertEquals(listOf(HerdrTerminal("w1:p2", "npm run dev", "web", "web")), s.panes)
+        assertEquals(HerdrTerminal("w1:p2", "npm run dev", "web", "web"), s.terminal("w1:p2"))
+        assertEquals(listOf(HerdrWorkspace("w1", "web", "/src/web"), HerdrWorkspace("w2", "w2")), s.workspaces)
+        assertEquals("an empty kind is dropped", listOf("claude", "codex"), s.kinds)
+
+        val noControl = parseHerdrState(
+            body("""{"kind":"state","enabled":true,"running":true,"control":false,"terminals":true,"panes":[{"pane":"w1:p2"}],"kinds":["claude"]}"""),
+        )!!
+        assertFalse("terminals need control", noControl.terminals)
+        assertTrue(noControl.panes.isEmpty())
+        assertTrue(noControl.kinds.isEmpty())
+    }
+
+    @Test
+    fun parsesCreatedAndClosed() {
+        assertEquals(HerdrDone("create", "w4:p1", null), parseHerdrDone(body("""{"kind":"created","what":"agent","pane":"w4:p1"}""")))
+        assertEquals(HerdrDone("create", null, "The folder /x does not exist"), parseHerdrDone(body("""{"kind":"created","error":"The folder /x does not exist"}""")))
+        assertEquals(HerdrDone("close", "w4:p1", null), parseHerdrDone(body("""{"kind":"closed","pane":"w4:p1"}""")))
+        assertNull(parseHerdrDone(body("""{"kind":"sent","pane":"w4:p1"}""")))
+    }
+
+    @Test
+    fun terminalKeys() {
+        assertTrue("ctrl+c" in HERDR_TERMINAL_KEYS)
+        assertTrue("ctrl+z" in HERDR_TERMINAL_KEYS)
+        assertFalse("f1" in HERDR_TERMINAL_KEYS)
+        assertFalse("ctrl+c" in HERDR_KEYS)
+    }
+
+    @Test
     fun parsesOutput() {
         val o = parseHerdrOutput(body("""{"kind":"output","pane":"w5:p1","text":"a  \nb\n\n","truncated":true}"""))!!
         assertEquals("w5:p1", o.pane)

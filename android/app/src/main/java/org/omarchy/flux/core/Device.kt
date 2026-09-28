@@ -49,6 +49,8 @@ class Device(private val core: FluxCore, var identity: Identity) {
     var herdrOutput: HerdrOutput? = null
     /** The last reply to an agent from the agent screen, or null when none is open. */
     var herdrReply: HerdrReply? = null
+    /** The last new agent, new terminal, or close from this phone. */
+    var herdrAction: HerdrAction? = null
     val herdrTracker = HerdrTracker()
 
     /** True when the computer accepts remote input, or null before it tells. */
@@ -97,6 +99,7 @@ class Device(private val core: FluxCore, var identity: Identity) {
         herdr = herdr,
         herdrOutput = herdrOutput,
         herdrReply = herdrReply,
+        herdrAction = herdrAction,
         inputSupported = Types.MOUSEPAD_REQUEST in identity.incoming,
         remoteInput = remoteInput,
         desktopSupported = Types.FLUX_DESKTOP in identity.incoming,

@@ -208,8 +208,10 @@ herdr_control = true
 ```
 
 Reload with `systemctl --user reload fluxd`.
+The same key lets the phone start new agents and close agents.
 To talk to an agent, use the mic key next to **Send**. The phone changes your speech to text on the device.
-See [herdr agents](herdr.md) for the replies, dictation, the notifications, and the access rules.
+To also open herdr terminals and type commands in them, set `herdr_terminals = true`.
+See [herdr agents](herdr.md) for the replies, new agents, terminals, dictation, the notifications, and the access rules.
 
 ## Touchpad and keyboard
 

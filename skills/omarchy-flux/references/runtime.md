@@ -141,7 +141,8 @@ Key settings:
 | `pause_media_on_call` | Pause desktop media during a phone call |
 | `sync_dnd` | Sync Do Not Disturb |
 | `herdr` | Show the herdr agents of the computer on the phone |
-| `herdr_control` | Let the phone send keys and prompts to herdr agents. Off by default |
+| `herdr_control` | Let the phone send keys and prompts to herdr agents, start agents, and close them. Off by default |
+| `herdr_terminals` | Let the phone open herdr terminals and type commands in them. Needs `herdr_control`. Off by default |
 | `remote_input` | Let the phone move the pointer and type on the desktop. Off by default |
 | `remote_desktop` | Let the phone show the desktop screen. Off by default |
 | `gui` | Select the enabled plugin, otherwise the Qt app |
@@ -167,13 +168,17 @@ herdr agent list
 journalctl --user -u fluxd --no-pager | grep herdr
 ```
 
-The `herdr` field of the state has `enabled`, `running`, `control`, and `agents`.
+The `herdr` field of the state has `enabled`, `running`, `control`, `terminals`, `agents`, `panes`, `workspaces`, and `kinds`.
 `fluxd` and herdr must run as the same user.
 `HERDR_SOCKET_PATH` selects a herdr session other than the default.
 
-Replies from the phone need `herdr_control = true`.
+Replies, new agents, and closes from the phone need `herdr_control = true`.
 A reply can make an agent run commands on the computer.
 Do not turn on `herdr_control` unless the user asks for replies from the phone.
+
+Terminals from the phone need `herdr_terminals = true` as well.
+A terminal gives the phone a shell as the desktop user.
+Do not turn on `herdr_terminals` unless the user asks for terminals on the phone.
 
 ## Touchpad and keyboard
 

@@ -23,6 +23,7 @@ pause_media_on_call = true
 sync_dnd = true
 herdr = true
 herdr_control = false
+herdr_terminals = false
 remote_input = false
 remote_desktop = false
 gui = ""
@@ -46,7 +47,8 @@ command = "omarchy-system-lock"
 | `pause_media_on_call` | Pause desktop media during calls. Defaults to `true`. |
 | `sync_dnd` | Sync Do Not Disturb. Defaults to `true`. |
 | `herdr` | Show the [herdr agents](herdr.md) of this computer on the phone. Defaults to `true`. |
-| `herdr_control` | Let the phone send keys and prompts to the herdr agents. Defaults to `false`. See [Answer an agent](herdr.md#answer-an-agent). |
+| `herdr_control` | Let the phone send keys and prompts to the herdr agents, start agents, and close them. Defaults to `false`. See [Answer an agent](herdr.md#answer-an-agent). |
+| `herdr_terminals` | Let the phone open herdr terminals, read them, and type commands in them. Needs `herdr_control`. Defaults to `false`. See [Use terminals](herdr.md#use-terminals). |
 | `remote_input` | Let the phone or the Mac move the pointer and type on this computer. Defaults to `false`. See [Touchpad and keyboard](remote-input.md). |
 | `remote_desktop` | Let the phone or the Mac show the screen of this computer. Defaults to `false`. The touches and the mouse on the screen also need `remote_input`. See [Remote desktop](remote-desktop.md). |
 | `gui` | Use `app`, `plugin`, or an empty value for automatic host selection. |

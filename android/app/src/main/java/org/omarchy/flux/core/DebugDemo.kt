@@ -64,6 +64,17 @@ object DebugDemo {
                         HerdrAgent("w3:p1", "claude", AgentStatus.Done, "Fix the flaky login test", "web", "web"),
                         HerdrAgent("w3:p2", "pi", AgentStatus.Idle, "", "web", "web"),
                     ),
+                    terminals = true,
+                    panes = listOf(
+                        HerdrTerminal("w1:p2", "user@desk:~/Code/flux", "flux", "flux"),
+                        HerdrTerminal("w3:p3", "npm run dev", "web", "web"),
+                    ),
+                    workspaces = listOf(
+                        HerdrWorkspace("w1", "flux", "~/Code/flux"),
+                        HerdrWorkspace("w2", "billing", "~/Code/billing"),
+                        HerdrWorkspace("w3", "web", "~/Code/web"),
+                    ),
+                    kinds = listOf("claude", "codex", "opencode"),
                 ),
                 herdrOutput = HerdrOutput(
                     pane = "w2:p1",

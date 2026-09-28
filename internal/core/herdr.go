@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"flux/internal/herdr"
@@ -29,15 +31,25 @@ const herdrRetry = 5 * time.Second
 // herdrSettle collects a burst of herdr events into one read.
 const herdrSettle = 200 * time.Millisecond
 
-// herdrReadTimeout limits an output read for a phone.
-const herdrReadTimeout = 5 * time.Second
+// herdrReadTimeout limits an output read for a phone. herdr scrolls an
+// idle agent to collect its history, which can take 2 seconds for 1000
+// lines.
+const herdrReadTimeout = 10 * time.Second
+
+// herdrCallTimeout limits a reply, a close, and the other short calls.
+const herdrCallTimeout = 5 * time.Second
 
 // Limits of an output read for a phone.
 const (
 	herdrDefaultLines = 200
-	herdrMaxLines     = 400
-	herdrMaxText      = 256 << 10
+	herdrMaxLines     = 1000
+	herdrMaxText      = 1 << 20
 )
+
+// herdrGap separates the history of an agent from its screen when fluxd
+// cannot find where they meet. The rows between them come with the first
+// read after the agent stops.
+const herdrGap = "\x1b[2m··· More lines show here when the agent stops ···\x1b[0m"
 
 // errHerdrOff ends a herdr session when the user turns the feature off.
 var errHerdrOff = errors.New("herdr sync is off")
@@ -52,29 +64,81 @@ type HerdrAgent struct {
 	Workspace string `json:"workspace"`
 }
 
+// HerdrTerminal is a herdr pane without an agent, as the phone sees it.
+type HerdrTerminal struct {
+	Pane      string `json:"pane"`
+	Title     string `json:"title"`
+	Project   string `json:"project"`
+	Workspace string `json:"workspace"`
+}
+
+// HerdrWorkspace is a herdr workspace that can get a new tab. Cwd is the
+// folder of the first pane in its active tab.
+type HerdrWorkspace struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Cwd   string `json:"cwd"`
+}
+
+// herdrLive is what the herdr loop read from the session. Kinds are the
+// agent kinds that this computer can start.
+type herdrLive struct {
+	Agents     []HerdrAgent
+	Terminals  []HerdrTerminal
+	Workspaces []HerdrWorkspace
+	Kinds      []string
+}
+
 // herdrView is the herdr state in a flux.herdr state packet and in the
-// IPC state. Control is true when a phone can reply to the agents.
+// IPC state. Control is true when a phone can reply to the agents, start
+// agents, and close them. Terminals is true when a phone can also open
+// terminals and type in them. Panes are the terminals, and they are empty
+// when Terminals is false. Workspaces and Kinds are empty when Control is
+// false.
 type herdrView struct {
-	Enabled bool         `json:"enabled"`
-	Running bool         `json:"running"`
-	Control bool         `json:"control"`
-	Agents  []HerdrAgent `json:"agents"`
+	Enabled    bool             `json:"enabled"`
+	Running    bool             `json:"running"`
+	Control    bool             `json:"control"`
+	Terminals  bool             `json:"terminals"`
+	Agents     []HerdrAgent     `json:"agents"`
+	Panes      []HerdrTerminal  `json:"panes"`
+	Workspaces []HerdrWorkspace `json:"workspaces"`
+	Kinds      []string         `json:"kinds"`
 }
 
 func (d *Daemon) herdrViewLocked() herdrView {
 	v := herdrView{
 		Enabled: d.cfg.Herdr, Running: d.cfg.Herdr && d.herdrRunning,
-		Control: d.cfg.Herdr && d.cfg.HerdrControl, Agents: d.herdrAgents,
+		Control: d.herdrControlLocked(), Terminals: d.herdrTerminalsLocked(),
+		Agents: d.herdrAgents, Panes: d.herdrTerms, Workspaces: d.herdrPlaces, Kinds: d.herdrKinds,
 	}
 	if !v.Enabled || v.Agents == nil {
 		v.Agents = []HerdrAgent{}
 	}
+	if !v.Terminals || v.Panes == nil {
+		v.Panes = []HerdrTerminal{}
+	}
+	if !v.Control || v.Workspaces == nil {
+		v.Workspaces = []HerdrWorkspace{}
+	}
+	if !v.Control || v.Kinds == nil {
+		v.Kinds = []string{}
+	}
 	return v
 }
 
+// herdrControlLocked reports whether a phone can reply to agents, start
+// them, and close them.
+func (d *Daemon) herdrControlLocked() bool { return d.cfg.Herdr && d.cfg.HerdrControl }
+
+// herdrTerminalsLocked reports whether a phone can open terminals and type
+// in them. It needs herdr_control too.
+func (d *Daemon) herdrTerminalsLocked() bool { return d.herdrControlLocked() && d.cfg.HerdrTerminals }
+
 func herdrStatePacket(v herdrView) *proto.Packet {
 	return proto.New(proto.TypeFluxHerdr, map[string]any{
-		"kind": "state", "enabled": v.Enabled, "running": v.Running, "control": v.Control, "agents": v.Agents,
+		"kind": "state", "enabled": v.Enabled, "running": v.Running, "control": v.Control,
+		"terminals": v.Terminals, "agents": v.Agents, "panes": v.Panes, "workspaces": v.Workspaces, "kinds": v.Kinds,
 	})
 }
 
@@ -84,12 +148,12 @@ func (d *Daemon) herdrLoop(ctx context.Context) {
 	logged := ""
 	for ctx.Err() == nil {
 		if !d.herdrEnabled() {
-			d.setHerdr(false, nil)
+			d.setHerdr(false, herdrLive{})
 			d.herdrPause(ctx, 0)
 			continue
 		}
 		err := d.herdrSession(ctx, &logged)
-		d.setHerdr(false, nil)
+		d.setHerdr(false, herdrLive{})
 		if ctx.Err() != nil {
 			return
 		}
@@ -121,6 +185,8 @@ func (d *Daemon) herdrSession(ctx context.Context, logged *string) error {
 	}
 	d.logf("herdr %s: following its agents", pong.Version)
 	*logged = ""
+	var kinds []string
+	var kindsAt time.Time
 
 	var feed *herdrFeed
 	var panes []string
@@ -136,7 +202,13 @@ func (d *Daemon) herdrSession(ctx context.Context, logged *string) error {
 		if err != nil {
 			return err
 		}
+		// An agent that the user installs or removes shows after a
+		// minute.
+		if time.Since(kindsAt) > herdrKindsTTL {
+			kinds, kindsAt = d.herdrAvailableKinds(ctx), time.Now()
+		}
 		agents := herdrAgents(snap)
+		live := herdrLive{Agents: agents, Terminals: herdrTerminals(snap), Workspaces: herdrWorkspaces(snap), Kinds: kinds}
 		if want := herdrPanes(agents); feed == nil || !slices.Equal(want, panes) {
 			if feed != nil {
 				feed.stream.Close()
@@ -150,7 +222,7 @@ func (d *Daemon) herdrSession(ctx context.Context, logged *string) error {
 			// event, so read the session again.
 			continue
 		}
-		d.setHerdr(true, agents)
+		d.setHerdr(true, live)
 
 		select {
 		case <-ctx.Done():
@@ -202,12 +274,16 @@ func follow(s *herdr.Stream) *herdrFeed {
 	return f
 }
 
-// herdrSubscriptions returns the events that change the agent list: new
-// and removed agents, pane moves, workspace labels, and the status of each
-// agent pane.
+// herdrSubscriptions returns the events that change the state: new and
+// removed agents, panes, tabs, and workspaces, pane moves, workspace
+// labels, and the status of each agent pane.
 func herdrSubscriptions(panes []string) []herdr.Subscription {
 	subs := []herdr.Subscription{
 		{Type: "pane.agent_detected"},
+		{Type: "pane.created"},
+		{Type: "tab.created"},
+		{Type: "tab.closed"},
+		{Type: "workspace.created"},
 		{Type: "pane.closed"},
 		{Type: "pane.exited"},
 		{Type: "pane.moved"},
@@ -245,20 +321,98 @@ func herdrAgents(snap herdr.Snapshot) []HerdrAgent {
 		if cwd == "" {
 			cwd = a.Cwd
 		}
-		project := ""
-		if cwd != "" {
-			project = filepath.Base(cwd)
-		}
 		status := a.Status
 		if status == "" {
 			status = herdr.StatusUnknown
 		}
 		out = append(out, HerdrAgent{
 			Pane: a.PaneID, Agent: a.Agent, Status: status, Title: a.Title,
-			Project: project, Workspace: workspaces[a.WorkspaceID].Label,
+			Project: projectName(cwd), Workspace: workspaces[a.WorkspaceID].Label,
 		})
 	}
 	return out
+}
+
+// herdrTerminals returns the panes without an agent, in the sidebar order
+// of their workspaces.
+func herdrTerminals(snap herdr.Snapshot) []HerdrTerminal {
+	workspaces := map[string]herdr.Workspace{}
+	for _, w := range snap.Workspaces {
+		workspaces[w.ID] = w
+	}
+	agents := map[string]bool{}
+	for _, a := range snap.Agents {
+		agents[a.PaneID] = true
+	}
+	order := func(p herdr.Pane) int {
+		if w, ok := workspaces[p.WorkspaceID]; ok {
+			return w.Number
+		}
+		return math.MaxInt
+	}
+	panes := slices.Clone(snap.Panes)
+	sort.SliceStable(panes, func(i, j int) bool { return order(panes[i]) < order(panes[j]) })
+	out := []HerdrTerminal{}
+	for _, p := range panes {
+		if p.ID == "" || agents[p.ID] {
+			continue
+		}
+		out = append(out, HerdrTerminal{
+			Pane: p.ID, Title: p.Title, Project: projectName(paneCwd(p)), Workspace: workspaces[p.WorkspaceID].Label,
+		})
+	}
+	return out
+}
+
+// herdrWorkspaces returns the workspaces in sidebar order, each with the
+// folder of the first pane in its active tab. A folder in the home folder
+// starts with ~/, which is shorter on the phone. herdrDir reads it back.
+func herdrWorkspaces(snap herdr.Snapshot) []HerdrWorkspace {
+	home, _ := os.UserHomeDir()
+	ws := slices.Clone(snap.Workspaces)
+	sort.SliceStable(ws, func(i, j int) bool { return ws[i].Number < ws[j].Number })
+	out := make([]HerdrWorkspace, 0, len(ws))
+	for _, w := range ws {
+		cwd := ""
+		for _, p := range snap.Panes {
+			if p.WorkspaceID == w.ID && (w.ActiveTab == "" || p.TabID == w.ActiveTab) {
+				cwd = paneCwd(p)
+				break
+			}
+		}
+		out = append(out, HerdrWorkspace{ID: w.ID, Label: w.Label, Cwd: homeRelative(cwd, home)})
+	}
+	return out
+}
+
+// paneCwd returns the folder of the program in the pane, or the folder of
+// the pane when herdr does not know it.
+func paneCwd(p herdr.Pane) string {
+	if p.ForegroundCwd != "" {
+		return p.ForegroundCwd
+	}
+	return p.Cwd
+}
+
+// homeRelative writes a folder in the home folder as ~ or ~/path.
+func homeRelative(dir, home string) string {
+	switch {
+	case home == "" || home == "/" || dir == "":
+		return dir
+	case dir == home:
+		return "~"
+	case strings.HasPrefix(dir, home+"/"):
+		return "~/" + dir[len(home)+1:]
+	}
+	return dir
+}
+
+// projectName returns the base name of a folder, or an empty string.
+func projectName(cwd string) string {
+	if cwd == "" {
+		return ""
+	}
+	return filepath.Base(cwd)
 }
 
 // herdrPanes returns the sorted pane IDs of the agents.
@@ -303,14 +457,20 @@ func (d *Daemon) wakeHerdr() {
 }
 
 // setHerdr records the herdr state and sends it to the phones when it
-// changed.
-func (d *Daemon) setHerdr(running bool, agents []HerdrAgent) {
+// changed. It forgets the history of the agents that are gone.
+func (d *Daemon) setHerdr(running bool, live herdrLive) {
 	d.mu.Lock()
-	if d.herdrRunning == running && slices.Equal(d.herdrAgents, agents) {
+	if d.herdrRunning == running && slices.Equal(d.herdrAgents, live.Agents) && slices.Equal(d.herdrTerms, live.Terminals) &&
+		slices.Equal(d.herdrPlaces, live.Workspaces) && slices.Equal(d.herdrKinds, live.Kinds) {
 		d.mu.Unlock()
 		return
 	}
-	d.herdrRunning, d.herdrAgents = running, agents
+	d.herdrRunning, d.herdrAgents, d.herdrTerms, d.herdrPlaces, d.herdrKinds = running, live.Agents, live.Terminals, live.Workspaces, live.Kinds
+	for pane := range d.herdrHistory {
+		if !slices.ContainsFunc(live.Agents, func(a HerdrAgent) bool { return a.Pane == pane }) {
+			delete(d.herdrHistory, pane)
+		}
+	}
 	d.mu.Unlock()
 	d.sendHerdr()
 }
@@ -341,15 +501,21 @@ func (d *Daemon) sendHerdr() {
 
 // handleHerdr answers a flux.herdr packet from a phone. A phone asks for
 // the state or for the recent output of an agent. When herdr_control is
-// on, it also sends keys and prompts to an agent.
+// on, it also sends keys and prompts to an agent, starts agents, and
+// closes them. When herdr_terminals is on too, it opens terminals and
+// types in them.
 func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 	var body struct {
-		Kind   string   `json:"kind"`
-		Pane   string   `json:"pane"`
-		Lines  int      `json:"lines"`
-		Format string   `json:"format"`
-		Keys   []string `json:"keys"`
-		Text   string   `json:"text"`
+		Kind      string   `json:"kind"`
+		Pane      string   `json:"pane"`
+		Lines     int      `json:"lines"`
+		Format    string   `json:"format"`
+		Keys      []string `json:"keys"`
+		Text      string   `json:"text"`
+		What      string   `json:"what"`
+		Agent     string   `json:"agent"`
+		Cwd       string   `json:"cwd"`
+		Workspace string   `json:"workspace"`
 	}
 	if p.Decode(&body) != nil {
 		return
@@ -369,15 +535,31 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 		go func() { _ = l.Send(d.herdrKeys(dev, body.Pane, body.Keys)) }()
 	case "prompt":
 		go func() { _ = l.Send(d.herdrPrompt(dev, body.Pane, body.Text)) }()
+	case "input":
+		go func() { _ = l.Send(d.herdrInput(dev, body.Pane, body.Text, body.Keys)) }()
+	case "create":
+		go func() {
+			reply := d.herdrCreate(dev, body.What, body.Agent, body.Cwd, body.Workspace)
+			// The phone opens the new pane at once, so it must know the
+			// pane before the answer.
+			d.mu.Lock()
+			state := herdrStatePacket(d.herdrViewLocked())
+			d.mu.Unlock()
+			_ = l.Send(state)
+			_ = l.Send(reply)
+		}()
+	case "close":
+		go func() { _ = l.Send(d.herdrClose(dev, body.Pane)) }()
 	default:
 		d.logf("%s: unknown flux.herdr kind %q", dev.Name, body.Kind)
 	}
 }
 
 // readHerdr returns an output packet with the recent output of an agent.
-// It reads only a pane that holds an agent in the last state, so a phone
-// cannot read other terminals. With ansi, the text keeps its colors and
-// styles as SGR sequences.
+// It reads only a pane that holds an agent in the last state, or a
+// terminal when herdr_terminals is on, so a phone cannot read other
+// terminals. With ansi, the text keeps its colors and styles as SGR
+// sequences.
 func (d *Daemon) readHerdr(pane string, lines int, ansi bool) *proto.Packet {
 	reply := map[string]any{"kind": "output", "pane": pane}
 	if ansi {
@@ -385,29 +567,166 @@ func (d *Daemon) readHerdr(pane string, lines int, ansi bool) *proto.Packet {
 	}
 	d.mu.Lock()
 	enabled := d.cfg.Herdr
-	known := slices.ContainsFunc(d.herdrAgents, func(a HerdrAgent) bool { return a.Pane == pane })
+	agent := d.herdrAgentLocked(pane)
+	terminal := d.herdrTerminalsLocked() && d.herdrTerminalLocked(pane)
 	d.mu.Unlock()
 	switch {
 	case !enabled:
 		reply["error"] = "herdr sync is off on this computer"
-	case !known:
+	case !agent && !terminal:
 		reply["error"] = fmt.Sprintf("No agent runs in %s", pane)
 	default:
 		ctx, cancel := context.WithTimeout(d.ctx, herdrReadTimeout)
-		r, err := herdr.ReadAgent(ctx, d.herdrPath, pane, herdrLines(lines), ansi)
+		var text string
+		var truncated bool
+		var err error
+		if agent {
+			text, truncated, err = d.readAgentOutput(ctx, pane, herdrLines(lines), ansi)
+		} else {
+			text, truncated, err = d.readTerminal(ctx, pane, herdrLines(lines), ansi)
+		}
 		cancel()
 		if err != nil {
 			reply["error"] = herdrError(pane, err)
 			break
 		}
-		text := trimLineEnds(r.Text)
-		if ansi {
-			text = cleanANSI(r.Text)
-		}
 		text, cut := tailText(text, herdrMaxText)
-		reply["text"], reply["truncated"] = text, r.Truncated || cut
+		reply["text"], reply["truncated"] = text, truncated || cut
 	}
 	return proto.New(proto.TypeFluxHerdr, reply)
+}
+
+// herdrAgentLocked reports whether an agent is in the pane.
+func (d *Daemon) herdrAgentLocked(pane string) bool {
+	return slices.ContainsFunc(d.herdrAgents, func(a HerdrAgent) bool { return a.Pane == pane })
+}
+
+// herdrTerminalLocked reports whether the pane is a terminal without an
+// agent.
+func (d *Daemon) herdrTerminalLocked(pane string) bool {
+	return slices.ContainsFunc(d.herdrTerms, func(t HerdrTerminal) bool { return t.Pane == pane })
+}
+
+// readTerminal reads the recent output of a terminal. A shell keeps its
+// scrollback in herdr, so one read gets the history with its colors.
+func (d *Daemon) readTerminal(ctx context.Context, pane string, lines int, ansi bool) (string, bool, error) {
+	r, err := herdr.ReadPane(ctx, d.herdrPath, pane, lines, ansi)
+	if err != nil {
+		return "", false, err
+	}
+	if ansi {
+		return cleanANSI(r.Text), r.Truncated, nil
+	}
+	return trimLineEnds(r.Text), r.Truncated, nil
+}
+
+// readAgentOutput reads the recent output of an agent. Many agents draw in
+// the alternate screen. herdr collects the history of such an agent only
+// in a plain read and only while the agent is idle. An ANSI read gets only
+// the screen. So for ANSI, fluxd reads both and puts the colored screen
+// under the plain history. While the agent works, it uses the history of
+// the last idle read.
+func (d *Daemon) readAgentOutput(ctx context.Context, pane string, lines int, ansi bool) (string, bool, error) {
+	r, err := herdr.ReadAgent(ctx, d.herdrPath, pane, lines, ansi)
+	if err != nil {
+		return "", false, err
+	}
+	if !ansi {
+		return trimLineEnds(r.Text), r.Truncated, nil
+	}
+	screen := strings.Split(cleanANSI(r.Text), "\n")
+	if len(screen) >= lines {
+		return strings.Join(screen, "\n"), r.Truncated, nil
+	}
+	truncated := r.Truncated
+	var history []string
+	h, err := herdr.ReadAgent(ctx, d.herdrPath, pane, lines, false)
+	switch {
+	case err == nil:
+		history = strings.Split(trimLineEnds(h.Text), "\n")
+		truncated = truncated || h.Truncated
+		d.mu.Lock()
+		if d.herdrHistory == nil {
+			d.herdrHistory = map[string][]string{}
+		}
+		d.herdrHistory[pane] = history
+		d.mu.Unlock()
+	case herdr.Code(err) == "agent_not_idle":
+		d.mu.Lock()
+		history = d.herdrHistory[pane]
+		d.mu.Unlock()
+	}
+	out := spliceScreen(history, screen)
+	if len(out) > lines {
+		out, truncated = out[len(out)-lines:], true
+	}
+	return strings.Join(out, "\n"), truncated, nil
+}
+
+// spliceScreen puts the colored screen rows of an agent under its plain
+// history rows. When both come from the same moment, the history ends
+// with the rows of the screen. While the agent works, the history is
+// older, and the screen shows newer rows. spliceScreen finds the first
+// screen row with text in the history, and the screen replaces the
+// history from there. The place with the most rows in common wins, and
+// the newest place wins a tie. A place needs 2 rows in common. One row is
+// enough at the end of the history, or when the row is only once in the
+// history. When no place is good, spliceScreen keeps the whole history
+// and puts herdrGap between.
+func spliceScreen(history, screen []string) []string {
+	if len(history) == 0 {
+		return screen
+	}
+	rows := make([]string, len(screen))
+	for i, l := range screen {
+		rows[i] = plainRow(l)
+	}
+	anchor := slices.IndexFunc(rows, hasWord)
+	if anchor < 0 {
+		return append(slices.Clip(history), screen...)
+	}
+	past := make([]string, len(history))
+	copies := 0
+	for i, l := range history {
+		past[i] = plainRow(l)
+		if past[i] == rows[anchor] {
+			copies++
+		}
+	}
+	best, bestRun := -1, 0
+	for i := len(past) - 1; i >= 0; i-- {
+		run := 0
+		for i+run < len(past) && anchor+run < len(rows) && past[i+run] == rows[anchor+run] {
+			run++
+		}
+		if run == 0 || run == 1 && i+1 < len(past) && copies > 1 {
+			continue
+		}
+		if run > bestRun {
+			best, bestRun = i, run
+		}
+	}
+	if best < 0 {
+		out := append(slices.Clip(history), herdrGap)
+		return append(out, screen...)
+	}
+	return append(slices.Clip(history[:max(best-anchor, 0)]), screen...)
+}
+
+// sgr matches an SGR sequence.
+var sgr = regexp.MustCompile("\x1b\\[[0-9;:]*m")
+
+// plainRow returns a row without SGR sequences and without the blanks,
+// no-break spaces, and carriage returns at its end. A plain read and an
+// ANSI read of the same row can differ in these.
+func plainRow(row string) string {
+	return strings.TrimRight(sgr.ReplaceAllString(row, ""), " \t\r\u00a0")
+}
+
+// hasWord reports whether the row has a letter or a digit. A row of only
+// frame characters or blanks is in many places of a screen.
+func hasWord(row string) bool {
+	return strings.IndexFunc(row, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }) >= 0
 }
 
 // herdrError returns the text for a phone about a failed herdr call.
