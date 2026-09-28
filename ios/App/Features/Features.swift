@@ -21,6 +21,7 @@ enum PluginRegistry {
             RemoteInputPlugin(),
             DesktopPlugin(),
             HerdrPlugin(),
+            BrowsePlugin(),
         ]
     }
 }
@@ -38,6 +39,7 @@ struct FeatureTiles: View {
             TouchpadTile(device: device)
             DesktopTile(device: device)
             AgentsTile(device: device)
+            BrowseTile(device: device)
         }
     }
 }
@@ -50,6 +52,7 @@ enum FeatureRoute: Hashable {
     case agents(String)
     case agent(String, String)
     case terminal(String, String)
+    case browse(String)
 }
 
 /// The screen of a feature route.
@@ -63,6 +66,7 @@ struct FeatureDestination: View {
         case .agents(let id): AgentsScreen(deviceId: id)
         case .agent(let id, let pane): AgentScreen(deviceId: id, pane: pane)
         case .terminal(let id, let pane): TerminalScreen(deviceId: id, pane: pane)
+        case .browse(let id): BrowseScreen(deviceId: id)
         }
     }
 }
@@ -122,6 +126,7 @@ enum FeatureHooks {
         ShareFeature.didLaunch(model: model)
         SystemFeature.didLaunch(model: model)
         AgentsFeature.didLaunch(model: model)
+        BrowseFeature.didLaunch()
     }
 
     /// Runs when the app comes on the screen or leaves it.
