@@ -17,6 +17,7 @@ sha256sum --check --ignore-missing SHA256SUMS
 ```
 
 Open the APK on the phone and allow installation from that source.
+If Play Protect shows **App blocked to protect your device**, see [Android setup and Play Protect](android-setup.md).
 With USB debugging enabled, you can also install through ADB:
 
 ```sh

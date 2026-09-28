@@ -185,6 +185,9 @@ A lower version code cannot replace a higher version code through a normal updat
 Use the original release key and a higher code for release upgrades.
 See [APK signatures](releasing.md#android-release-key).
 
+If Play Protect shows **App blocked to protect your device**, install with `adb`.
+See [Android setup and Play Protect](android-setup.md#install-flux-past-the-block).
+
 ## Fingerprint approval falls back to a password
 
 ```sh
