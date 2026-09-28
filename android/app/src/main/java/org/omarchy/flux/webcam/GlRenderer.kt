@@ -38,6 +38,12 @@ class GlRenderer {
     private var pbuffer: EGLSurface = EGL14.EGL_NO_SURFACE
     private var program = 0
     private var texture = 0
+    // The locations in [program], which setUpEgl() reads once.
+    private var uTex = 0
+    private var uCrop = 0
+    private var uColor = 0
+    private var aPos = 0
+    private var aUv = 0
     private var cameraTexture: SurfaceTexture? = null
     private var cameraSize = Size(1920, 1080)
 
@@ -52,6 +58,14 @@ class GlRenderer {
     private var previewHeight = 0
 
     private val texMatrix = FloatArray(16)
+
+    // The crop of the last frame and its inputs. The crop changes only when
+    // the device turns or a setting changes.
+    private var crop: FloatArray? = null
+    private var cropRotation = 0
+    private var cropContent = 0f
+    private var cropOutput = 0f
+    private var cropMirror = false
     private val quad: FloatBuffer = floatBuffer(
         // x, y, u, v for a triangle strip over the whole target.
         -1f, -1f, 0f, 0f,
@@ -131,7 +145,7 @@ class GlRenderer {
         val natural = FrameGeometry.swapsAxes(texMatrix)
         val contentAspect = if (natural) cameraSize.height.toFloat() / cameraSize.width else cameraSize.width.toFloat() / cameraSize.height
         val rotation = FrameGeometry.uprightRotation(deviceOrientation, sensorOrientation, front, natural) + extraRotation
-        val crop = FrameGeometry.matrix(rotation, contentAspect, outputAspect, mirror)
+        val crop = cropFor(rotation, contentAspect, outputAspect, mirror)
         val c = color
         encoder?.let { t ->
             draw(t, crop, c)
@@ -144,23 +158,33 @@ class GlRenderer {
         }
     }
 
+    /** Returns the crop matrix, and makes a new one only when an input changed. */
+    private fun cropFor(rotation: Int, contentAspect: Float, outputAspect: Float, mirror: Boolean): FloatArray {
+        crop?.let {
+            if (rotation == cropRotation && contentAspect == cropContent && outputAspect == cropOutput && mirror == cropMirror) return it
+        }
+        cropRotation = rotation
+        cropContent = contentAspect
+        cropOutput = outputAspect
+        cropMirror = mirror
+        return FrameGeometry.matrix(rotation, contentAspect, outputAspect, mirror).also { crop = it }
+    }
+
     private fun draw(t: Target, crop: FloatArray, c: Color) {
         makeCurrent(t.surface)
         GLES20.glViewport(0, 0, t.width, t.height)
         GLES20.glUseProgram(program)
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, texture)
-        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(program, "uTex"), 1, false, texMatrix, 0)
-        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(program, "uCrop"), 1, false, crop, 0)
-        GLES20.glUniform4f(GLES20.glGetUniformLocation(program, "uColor"), c.brightness, c.contrast, c.saturation, c.warmth)
-        val pos = GLES20.glGetAttribLocation(program, "aPos")
-        val uv = GLES20.glGetAttribLocation(program, "aUv")
+        GLES20.glUniformMatrix4fv(uTex, 1, false, texMatrix, 0)
+        GLES20.glUniformMatrix4fv(uCrop, 1, false, crop, 0)
+        GLES20.glUniform4f(uColor, c.brightness, c.contrast, c.saturation, c.warmth)
         quad.position(0)
-        GLES20.glVertexAttribPointer(pos, 2, GLES20.GL_FLOAT, false, 16, quad)
-        GLES20.glEnableVertexAttribArray(pos)
+        GLES20.glVertexAttribPointer(aPos, 2, GLES20.GL_FLOAT, false, 16, quad)
+        GLES20.glEnableVertexAttribArray(aPos)
         quad.position(2)
-        GLES20.glVertexAttribPointer(uv, 2, GLES20.GL_FLOAT, false, 16, quad)
-        GLES20.glEnableVertexAttribArray(uv)
+        GLES20.glVertexAttribPointer(aUv, 2, GLES20.GL_FLOAT, false, 16, quad)
+        GLES20.glEnableVertexAttribArray(aUv)
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
     }
 
@@ -184,6 +208,11 @@ class GlRenderer {
         pbuffer = EGL14.eglCreatePbufferSurface(display, config, intArrayOf(EGL14.EGL_WIDTH, 1, EGL14.EGL_HEIGHT, 1, EGL14.EGL_NONE), 0)
         makeCurrent(pbuffer)
         program = buildProgram(VERTEX, FRAGMENT)
+        uTex = GLES20.glGetUniformLocation(program, "uTex")
+        uCrop = GLES20.glGetUniformLocation(program, "uCrop")
+        uColor = GLES20.glGetUniformLocation(program, "uColor")
+        aPos = GLES20.glGetAttribLocation(program, "aPos")
+        aUv = GLES20.glGetAttribLocation(program, "aUv")
         val tex = IntArray(1)
         GLES20.glGenTextures(1, tex, 0)
         texture = tex[0]

@@ -59,15 +59,18 @@ sealed interface DesktopReply {
     }
 }
 
-/** 1 frame of the stream. [data] is H.264 in Annex-B form, or the video size for [FORMAT]. */
-class Frame(val flags: Int, val data: ByteArray) {
+/**
+ * 1 frame of the stream. The first [length] bytes of [data] are H.264 in
+ * Annex-B form, or the video size for [FORMAT].
+ */
+class Frame(val flags: Int, val data: ByteArray, val length: Int = data.size) {
     val isConfig: Boolean get() = flags and CONFIG != 0
     val isKey: Boolean get() = flags and KEY != 0
     val isFormat: Boolean get() = flags and FORMAT != 0
 
     /** The width and the height of a [FORMAT] frame. */
     fun size(): Pair<Int, Int>? {
-        if (!isFormat || data.size < 4) return null
+        if (!isFormat || length < 4) return null
         fun u16(i: Int) = (data[i].toInt() and 0xff) shl 8 or (data[i + 1].toInt() and 0xff)
         return u16(0) to u16(2)
     }
@@ -92,7 +95,13 @@ class Frame(val flags: Int, val data: ByteArray) {
 class FrameReader(input: InputStream, private val maxFrame: Int = MAX_FRAME) {
     private val input = DataInputStream(BufferedInputStream(input, 64 * 1024))
 
-    /** Returns the next frame, or null at the end of the stream. */
+    // All frames use 1 array, which grows to the largest frame.
+    private var buffer = ByteArray(0)
+
+    /**
+     * Returns the next frame, or null at the end of the stream. The frame
+     * uses the array of the reader, so it is valid only until the next call.
+     */
     fun next(): Frame? {
         val size = try {
             input.readInt()
@@ -101,9 +110,9 @@ class FrameReader(input: InputStream, private val maxFrame: Int = MAX_FRAME) {
         }
         if (size < 0 || size > maxFrame) throw IOException("A frame of $size bytes is too large")
         val flags = input.readUnsignedByte()
-        val data = ByteArray(size)
-        input.readFully(data)
-        return Frame(flags, data)
+        if (buffer.size < size) buffer = ByteArray(size)
+        input.readFully(buffer, 0, size)
+        return Frame(flags, buffer, size)
     }
 
     companion object {
@@ -112,18 +121,18 @@ class FrameReader(input: InputStream, private val maxFrame: Int = MAX_FRAME) {
 }
 
 /**
- * Returns the SPS and the PPS of a [Frame.CONFIG] frame, each with its
- * start code, as the decoder takes them in csd-0 and csd-1. It returns
- * null when one of them is missing.
+ * Returns the SPS and the PPS of a [Frame.CONFIG] frame in the first
+ * [length] bytes of [data], each with its start code, as the decoder takes
+ * them in csd-0 and csd-1. It returns null when one of them is missing.
  */
-fun codecConfig(data: ByteArray): Pair<ByteArray, ByteArray>? {
-    val starts = AnnexB.nalStarts(data)
+fun codecConfig(data: ByteArray, length: Int = data.size): Pair<ByteArray, ByteArray>? {
+    val starts = AnnexB.nalStarts(data, length)
     var sps: ByteArray? = null
     var pps: ByteArray? = null
     for ((i, start) in starts.withIndex()) {
-        if (start >= data.size) continue
+        if (start >= length) continue
         // The unit ends at the start code of the next unit, without the zero bytes before it.
-        var end = if (i + 1 < starts.size) starts[i + 1] - 3 else data.size
+        var end = if (i + 1 < starts.size) starts[i + 1] - 3 else length
         while (end > start && data[end - 1] == 0.toByte()) end--
         val unit = byteArrayOf(0, 0, 0, 1) + data.copyOfRange(start, end)
         when (data[start].toInt() and 0x1f) {

@@ -44,6 +44,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
@@ -71,12 +74,15 @@ fun OmarchyPanel(d: DeviceUi, modifier: Modifier = Modifier) {
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         if (!RemoteInput.send(FluxCore, d.id, p)) FluxCore.toast("${d.name} is not reachable")
     }
-    // The list comes once. The workspaces come again while the panel shows.
+    // The list comes once. The workspaces come again while the panel is visible.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(d.id) {
         RemoteInput.send(FluxCore, d.id, Shortcuts.request())
-        while (true) {
-            delay(REFRESH_MS)
-            RemoteInput.send(FluxCore, d.id, Shortcuts.refresh())
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                delay(REFRESH_MS)
+                RemoteInput.send(FluxCore, d.id, Shortcuts.refresh())
+            }
         }
     }
     val state = d.shortcuts

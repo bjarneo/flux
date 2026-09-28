@@ -60,6 +60,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -218,20 +219,24 @@ private fun TerminalTile(t: HerdrTerminal, onClick: () -> Unit) {
 /**
  * The recent output of one herdr agent in terminal colors, with the newest
  * lines at the bottom. The screen reads the output again when the status
- * changes, and every few seconds while the agent works. When the computer
- * allows it, the screen also sends keys and text to the agent.
+ * changes, and every few seconds while the agent works and the screen is
+ * visible. When the computer allows it, the screen also sends keys and text
+ * to the agent.
  */
 @Composable
 fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
     val agent = d.herdr?.agent(pane)
     val status = agent?.status
     val demo = DebugDemo.isDemo(d.id)
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(d.id, pane, d.online, status) {
         if (!d.online || demo) return@LaunchedEffect
-        HerdrSync.read(FluxCore, d.id, pane)
-        while (status == AgentStatus.Working) {
-            delay(WORKING_REFRESH_MS)
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             HerdrSync.read(FluxCore, d.id, pane)
+            while (status == AgentStatus.Working) {
+                delay(WORKING_REFRESH_MS)
+                HerdrSync.read(FluxCore, d.id, pane)
+            }
         }
     }
     DisposableEffect(d.id, pane) { onDispose { HerdrSync.closeOutput(FluxCore, d.id, pane) } }

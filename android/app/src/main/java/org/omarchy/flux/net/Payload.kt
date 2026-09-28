@@ -45,7 +45,12 @@ object Payload {
     ) {
         server.use { srv ->
             val socket = srv.accept()
-            val ssl = tls.wrap(socket, server = true)
+            val ssl = try {
+                tls.wrap(socket, server = true)
+            } catch (e: Exception) {
+                runCatching { socket.close() }
+                throw e
+            }
             ssl.use {
                 val cert = Tls.peerCertificate(ssl)
                 if (cert == null || !cert.encoded.contentEquals(expected.encoded)) error("payload peer is not the paired device")
@@ -65,8 +70,13 @@ object Payload {
         progress: (Long) -> Unit = {},
     ) {
         val socket = Socket()
-        socket.connect(InetSocketAddress(address, port), 10_000)
-        val ssl = tls.wrap(socket, server = false)
+        val ssl = try {
+            socket.connect(InetSocketAddress(address, port), 10_000)
+            tls.wrap(socket, server = false)
+        } catch (e: Exception) {
+            runCatching { socket.close() }
+            throw e
+        }
         ssl.use { copy(it.inputStream, output, size, progress) }
     }
 

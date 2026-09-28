@@ -73,11 +73,7 @@ object HerdrSync {
                     core.scheduler.execute { alert(core, id, name, alerts) }
                 }
             }
-            "output" -> {
-                val out = parseHerdrOutput(p.body) ?: return
-                // Only the pane on screen keeps its output.
-                if (d.herdrOutput?.pane == out.pane) d.herdrOutput = out
-            }
+            "output" -> onOutput(d, parseHerdrOutput(p.body) ?: return)
             "sent" -> {
                 val sent = parseHerdrSent(p.body) ?: return
                 val reply = d.herdrReply
@@ -97,6 +93,15 @@ object HerdrSync {
             }
             else -> Log.d(TAG, "ignored flux.herdr kind ${p.string("kind")}")
         }
+    }
+
+    /**
+     * Keeps the output of a pane that [parseHerdrOutput] read. The core lock
+     * is held. The core parses the output before it takes the lock.
+     */
+    fun onOutput(d: Device, out: HerdrOutput) {
+        // Only the pane on screen keeps its output.
+        if (d.herdrOutput?.pane == out.pane) d.herdrOutput = out
     }
 
     /** Asks the computer for its agent list now. */

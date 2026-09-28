@@ -10,6 +10,7 @@ import org.omarchy.flux.protocol.OUTGOING
 import org.omarchy.flux.protocol.Packet
 import org.omarchy.flux.protocol.Types
 import org.omarchy.flux.protocol.bodyOf
+import java.io.ByteArrayOutputStream
 
 class WebcamTest {
     private val sps = byteArrayOf(0, 0, 0, 1, 0x67, 0x42, 0x00, 0x1f)
@@ -59,17 +60,33 @@ class WebcamTest {
         assertEquals(WebcamReply.Live("/dev/video42", "Flux Camera"), live)
     }
 
+    private fun mask(vararg types: Int) = types.fold(0) { m, t -> m or (1 shl t) }
+
     @Test
     fun findsNalTypes() {
-        assertEquals(listOf(7, 8, 5), AnnexB.nalTypes(sps + pps + idr))
+        assertEquals(mask(7, 8, 5), AnnexB.leadingTypes(sps + pps + idr))
         // A 3-byte start code works too.
-        assertEquals(listOf(1), AnnexB.nalTypes(byteArrayOf(0, 0, 1, 0x41, 0x01)))
+        assertEquals(mask(1), AnnexB.leadingTypes(byteArrayOf(0, 0, 1, 0x41, 0x01)))
+    }
+
+    @Test
+    fun nalScanStopsAtTheFirstSlice() {
+        assertEquals(mask(1), AnnexB.leadingTypes(pFrame + sps + idr))
+        // Only the first bytes count.
+        assertEquals(mask(7), AnnexB.leadingTypes(sps + pps, sps.size))
     }
 
     @Test
     fun addsMissingStartCode() {
         assertArrayEquals(idr, AnnexB.withStartCode(byteArrayOf(0x65, 0x11, 0x22)))
         assertArrayEquals(idr, AnnexB.withStartCode(idr))
+    }
+
+    /** Returns the bytes that the framer writes for 1 frame, or null when it writes none. */
+    private fun AnnexBFramer.onFrame(data: ByteArray, keyFrame: Boolean): ByteArray? {
+        val out = ByteArrayOutputStream()
+        write(out, data, data.size, keyFrame)
+        return out.toByteArray().takeIf { it.isNotEmpty() }
     }
 
     @Test
@@ -101,5 +118,27 @@ class WebcamTest {
         val f = AnnexBFramer()
         f.onConfig(sps + pps)
         assertArrayEquals(sps + pps + idr, f.onFrame(idr, keyFrame = false))
+    }
+
+    @Test
+    fun framerWritesOnlyTheFrameLength() {
+        val f = AnnexBFramer()
+        f.onConfig(sps + pps)
+        // The encoder uses 1 array for all frames. Old bytes follow a short frame.
+        val buffer = idr + ByteArray(16) { 0x7f }
+        val out = ByteArrayOutputStream()
+        f.write(out, buffer, idr.size, keyFrame = true)
+        pFrame.copyInto(buffer)
+        f.write(out, buffer, pFrame.size, keyFrame = false)
+        assertArrayEquals(sps + pps + idr + pFrame, out.toByteArray())
+    }
+
+    @Test
+    fun framerAddsMissingStartCode() {
+        val f = AnnexBFramer()
+        f.onConfig(sps + pps)
+        val out = ByteArrayOutputStream()
+        f.write(out, byteArrayOf(0x65, 0x11, 0x22, 0x7f), 3, keyFrame = true)
+        assertArrayEquals(sps + pps + idr, out.toByteArray())
     }
 }

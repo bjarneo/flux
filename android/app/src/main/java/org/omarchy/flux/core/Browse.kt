@@ -28,6 +28,12 @@ object Browse {
     private var sftp: SFTPClient? = null
     private var bridge: LoopbackBridge? = null
 
+    /**
+     * Changes with each [start] and [close]. A connect that ends after a
+     * change closes its own session, because nobody browses it.
+     */
+    @Volatile private var generation = 0
+
     fun start(core: FluxCore, id: String) {
         val d = core.device(id) ?: return
         close()
@@ -55,37 +61,59 @@ object Browse {
         }
         val cert = d.certificate
         val tls = FluxCore.tls
+        val gen = generation
         core.io.execute {
+            // The session until the browser keeps it. The finally block ends
+            // a session that the browser did not keep, also on the computer.
+            var client: SSHClient? = null
+            var b: LoopbackBridge? = null
             try {
                 ensureBouncyCastle()
-                val client = SSHClient(DefaultConfig())
-                client.addHostKeyVerifier(PromiscuousVerifier())
-                client.connectTimeout = 8_000
+                val c = SSHClient(DefaultConfig()).also { client = it }
+                c.addHostKeyVerifier(PromiscuousVerifier())
+                c.connectTimeout = 8_000
                 if (offer.viaTunnel) {
                     // The computer blocks incoming connections. It connects to
                     // this phone, and the TLS stream carries the SSH session.
                     // sshj opens its own socket, so a loopback bridge feeds it.
                     if (cert == null || tls == null) error("the link is not ready")
                     val tunnel = Tunnel.accept(tls, cert, offer.tunnel!!, announce = { d.send(it) })
-                    val b = LoopbackBridge(tunnel)
-                    bridge = b
-                    client.connect(b.host, b.port)
+                    val loop = LoopbackBridge(tunnel).also { b = it }
+                    if (generation != gen) return@execute
+                    c.connect(loop.host, loop.port)
                 } else {
                     val ip = offer.ip ?: d.link?.address?.hostAddress ?: error("no address")
-                    client.connect(ip, offer.port)
+                    c.connect(ip, offer.port)
                 }
-                client.authPassword(offer.user, offer.password)
-                ssh = client
-                sftp = client.newSFTPClient()
+                if (generation != gen) return@execute
+                c.authPassword(offer.user, offer.password)
+                if (generation != gen) return@execute
+                val s = c.newSFTPClient()
+                if (!keep(gen, c, s, b)) return@execute
+                client = null
+                b = null
                 core.setBrowse(state.copy(loading = false, roots = offer.roots))
                 list(core, offer.roots.first().second)
             } catch (e: Exception) {
-                Log.w(TAG, "SFTP connect failed", e)
-                bridge?.close()
-                bridge = null
-                core.setBrowse(state.copy(loading = false, error = "Cannot open files on ${d.identity.deviceName}: ${e.message}"))
+                if (generation == gen) {
+                    Log.w(TAG, "SFTP connect failed", e)
+                    core.setBrowse(state.copy(loading = false, error = "Cannot open files on ${d.identity.deviceName}: ${e.message}"))
+                }
+            } finally {
+                client?.let { runCatching { it.disconnect() } }
+                b?.close()
             }
         }
+    }
+
+    /** Keeps a new session, unless a close or a new start came after [gen]. */
+    @Synchronized
+    private fun keep(gen: Int, client: SSHClient, s: SFTPClient, b: LoopbackBridge?): Boolean {
+        if (generation != gen) return false
+        ssh = client
+        sftp = s
+        bridge = b
+        return true
     }
 
     fun list(core: FluxCore, path: String) {
@@ -131,7 +159,9 @@ object Browse {
     }
 
     /** Ends the SSH session. A tunnel carries 1 session, so the next start asks for a new one. */
+    @Synchronized
     fun close() {
+        generation++
         val s = sftp
         val c = ssh
         val b = bridge

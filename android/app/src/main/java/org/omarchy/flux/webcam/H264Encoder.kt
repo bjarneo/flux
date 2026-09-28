@@ -79,20 +79,24 @@ class H264Encoder(
 
     private fun drainLoop() {
         val info = MediaCodec.BufferInfo()
+        // All frames use 1 array, which grows to the largest frame. The
+        // framer writes each frame before the next one comes.
+        var data = ByteArray(0)
         try {
             while (running) {
                 val index = codec.dequeueOutputBuffer(info, 10_000)
                 if (index < 0) continue
                 val buffer = codec.getOutputBuffer(index)
                 if (buffer != null && info.size > 0) {
-                    val data = ByteArray(info.size)
+                    if (data.size < info.size) data = ByteArray(info.size)
                     buffer.position(info.offset)
                     buffer.get(data, 0, info.size)
                     if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) {
-                        framer.onConfig(data)
+                        // The framer keeps the config, so it gets its own copy.
+                        framer.onConfig(data.copyOf(info.size))
                     } else {
                         val key = info.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0
-                        framer.onFrame(data, key)?.let { out.write(it) }
+                        framer.write(out, data, info.size, key)
                     }
                 }
                 codec.releaseOutputBuffer(index, false)

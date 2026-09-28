@@ -51,10 +51,12 @@ class FluxService : Service() {
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
+            FluxCore.refreshWifi()
             FluxCore.rediscover()
         }
 
         override fun onLost(network: Network) {
+            FluxCore.refreshWifi()
             FluxCore.publish()
         }
     }
@@ -70,7 +72,10 @@ class FluxService : Service() {
     }
 
     private val dndReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) = DndSync.onLocalChange(FluxCore)
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == NotificationManager.ACTION_NOTIFICATION_POLICY_ACCESS_GRANTED_CHANGED) FluxCore.refresh()
+            else DndSync.onLocalChange(FluxCore)
+        }
     }
 
     private var nsd: NsdManager? = null
@@ -188,11 +193,12 @@ class FluxService : Service() {
         }
         getSystemService(ConnectivityManager::class.java)?.registerDefaultNetworkCallback(networkCallback)
         ContextCompat.registerReceiver(this, batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
-        // The system sends this broadcast only to receivers that register at run time.
+        // The system sends these broadcasts only to receivers that register at run time.
         DndSync.start(this)
-        ContextCompat.registerReceiver(
-            this, dndReceiver, IntentFilter(NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED,
-        )
+        val dndChanges = IntentFilter(NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED).apply {
+            addAction(NotificationManager.ACTION_NOTIFICATION_POLICY_ACCESS_GRANTED_CHANGED)
+        }
+        ContextCompat.registerReceiver(this, dndReceiver, dndChanges, ContextCompat.RECEIVER_NOT_EXPORTED)
         CaptureWatch.refresh(this)
         FluxCore.startNetwork()
         nsd = getSystemService(NsdManager::class.java)
@@ -231,6 +237,9 @@ class FluxService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_REFRESH -> {
+                // The app came to the front. A permission or the network can have changed.
+                FluxCore.refreshAccess()
+                FluxCore.refreshWifi()
                 FluxCore.rediscover()
                 // The device name can change in the system settings.
                 announce()

@@ -137,16 +137,22 @@ fun WebcamPanel(deviceId: String) {
     LaunchedEffect(rotation) { controller.extraRotation = rotation }
 
     // The stream stops when the app goes to the background, and the camera
-    // closes, so that other apps can use it.
+    // closes, so that other apps can use it. The microphone that the webcam
+    // started stops too, because the composition does not run in the
+    // background.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_STOP -> {
                     controller.stopLive()
-                    controller.stopCamera()
+                    controller.pause()
+                    if (micByWebcam) {
+                        MicSession.stop(FluxCore, notify = true)
+                        micByWebcam = false
+                    }
                 }
-                Lifecycle.Event.ON_START -> controller.resumeCamera()
+                Lifecycle.Event.ON_START -> controller.resume()
                 else -> Unit
             }
         }

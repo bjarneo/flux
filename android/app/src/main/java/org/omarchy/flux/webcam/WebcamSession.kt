@@ -49,6 +49,11 @@ object WebcamSession {
 
     private val watchdog = Executors.newSingleThreadScheduledExecutor { Thread(it, "flux-webcam-watch").apply { isDaemon = true } }
     private val lock = Any()
+    /**
+     * Keeps [Listener.onConnected] and [Listener.onEnded] apart. A stop that
+     * comes while the encoder starts waits, and then frees the new encoder.
+     */
+    private val listenerLock = Any()
     private var deviceId: String? = null
     private var server: ServerSocket? = null
     private var socket: SSLSocket? = null
@@ -100,8 +105,12 @@ object WebcamSession {
                         this.listener
                     }
                 } ?: return@execute runCatching { ssl.close() }.let { }
-                _status.value = Status(Phase.Starting, "Starting Flux Camera on $name…")
-                l.onConnected(ssl.outputStream, width, height)
+                synchronized(listenerLock) {
+                    // A stop can come before the lock. Then end() has closed the socket.
+                    if (!current(id)) return@execute
+                    _status.value = Status(Phase.Starting, "Starting Flux Camera on $name…")
+                    l.onConnected(ssl.outputStream, width, height)
+                }
                 watch(core, d, id)
             } catch (e: Exception) {
                 if (!current(id)) return@execute
@@ -157,10 +166,14 @@ object WebcamSession {
 
     /** Checks the link every second and stops the stream when it drops. */
     private fun watch(core: FluxCore, d: Device, id: Int) {
-        val future = watchdog.scheduleWithFixedDelay({
-            if (current(id) && !d.online) end(core, notify = false, Status(Phase.Error, "The connection to ${d.identity.deviceName} closed"), id)
-        }, 1, 1, TimeUnit.SECONDS)
-        synchronized(lock) { watch?.cancel(false); watch = future }
+        synchronized(lock) {
+            // An attempt that ended must not replace the watch of a newer attempt.
+            if (attempt != id) return
+            watch?.cancel(false)
+            watch = watchdog.scheduleWithFixedDelay({
+                if (current(id) && !d.online) end(core, notify = false, Status(Phase.Error, "The connection to ${d.identity.deviceName} closed"), id)
+            }, 1, 1, TimeUnit.SECONDS)
+        }
     }
 
     private fun end(core: FluxCore, notify: Boolean, status: Status, id: Int) {
@@ -177,7 +190,7 @@ object WebcamSession {
             r
         }
         w?.cancel(false)
-        l?.onEnded()
+        if (l != null) synchronized(listenerLock) { l.onEnded() }
         runCatching { srv?.close() }
         runCatching { sock?.close() }
         if (notify && target != null && (sock != null || srv != null)) core.device(target)?.send(WebcamPackets.stop())
