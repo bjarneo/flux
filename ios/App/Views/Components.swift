@@ -44,7 +44,8 @@ struct FeatureGrid<Content: View>: View {
 }
 
 /// One feature on a computer's screen: a rounded tile with an icon, a title,
-/// and a short state. It runs an action or opens a screen.
+/// and a short state. It runs an action or opens a screen. Every tile has the
+/// same height, so the grid stays even.
 struct FeatureTile<Destination: View>: View {
     let title: String
     let systemImage: String
@@ -52,6 +53,9 @@ struct FeatureTile<Destination: View>: View {
     var subtitle: String?
     var badge: Int = 0
     private let kind: Kind
+
+    /// The height of the content of every tile, inside the padding.
+    static var height: CGFloat { 100 }
 
     private enum Kind {
         case action(() -> Void)
@@ -106,17 +110,16 @@ struct FeatureTile<Destination: View>: View {
                 Text(title)
                     .font(.headline)
                     .foregroundStyle(.primary)
-                    .lineLimit(2)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Text(subtitle ?? " ")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2, reservesSpace: true)
             }
         }
         .multilineTextAlignment(.leading)
-        .frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: Self.height, alignment: .topLeading)
         .padding(14)
         .accessibilityElement(children: .combine)
     }
@@ -143,7 +146,50 @@ struct TileButtonStyle: ButtonStyle {
     }
 }
 
-/// A compact button with an icon over a short title, for the quick actions.
+/// The look of a quick action: a round tinted icon over a short title. The
+/// quick actions sit side by side in one bar, apart from the feature tiles.
+struct QuickActionLabel: View {
+    let title: String
+    let systemImage: String
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: systemImage)
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 48, height: 48)
+                .background(Circle().fill(Color.accentColor.opacity(0.14)))
+                .accessibilityHidden(true)
+            Text(title)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
+    }
+}
+
+/// A quick action that dims while pressed or disabled.
+struct QuickActionStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        QuickBody(configuration: configuration)
+    }
+
+    private struct QuickBody: View {
+        let configuration: Configuration
+        @Environment(\.isEnabled) private var enabled
+
+        var body: some View {
+            configuration.label
+                .opacity(enabled ? (configuration.isPressed ? 0.5 : 1) : 0.4)
+                .animation(.snappy(duration: 0.15), value: configuration.isPressed)
+        }
+    }
+}
+
+/// A quick action that runs at once.
 struct QuickAction: View {
     let title: String
     let systemImage: String
@@ -151,21 +197,9 @@ struct QuickAction: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 6) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 19, weight: .medium))
-                    .foregroundStyle(Color.accentColor)
-                    .accessibilityHidden(true)
-                Text(title)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .frame(maxWidth: .infinity, minHeight: 64)
-            .padding(.horizontal, 6)
+            QuickActionLabel(title: title, systemImage: systemImage)
         }
-        .buttonStyle(TileButtonStyle())
+        .buttonStyle(QuickActionStyle())
     }
 }
 

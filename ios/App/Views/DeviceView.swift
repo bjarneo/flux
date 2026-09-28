@@ -116,14 +116,19 @@ struct DeviceHeader: View {
     }
 }
 
-/// The actions that a tap runs at once, in a row under the header.
+/// The actions that a tap runs at once, side by side in one bar under the
+/// header, like the action row of the Android app.
 struct QuickActions: View {
     let device: DeviceSnapshot
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 10)], spacing: 10) {
+        HStack(alignment: .top, spacing: 4) {
             FeatureQuickActions(device: device)
         }
+        .padding(.vertical, 14)
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity)
+        .cardBackground()
         .disabled(!device.online)
     }
 }
