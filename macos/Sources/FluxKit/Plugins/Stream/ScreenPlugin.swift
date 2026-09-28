@@ -193,7 +193,9 @@ public final class ScreenPlugin: FluxPlugin, @unchecked Sendable {
     }
 
     private func newEncoder(width: Int, height: Int, sink: VideoSink, deviceId: String, id: Int) throws -> H264Encoder {
-        try H264Encoder(width: width, height: height, bitrate: MirrorSize.bitrate(width: width, height: height), output: { [sink] bytes in
+        try H264Encoder(width: width, height: height, bitrate: MirrorSize.bitrate(width: width, height: height), backlogged: { [sink] in
+            sink.backlogged
+        }, output: { [sink] bytes in
             sink.push(bytes)
         }, onError: { [weak self] message in
             Task { self?.end(notify: true, status: StreamStatus(.error, message, deviceId: deviceId), id: id) }

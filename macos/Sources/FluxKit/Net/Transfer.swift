@@ -9,6 +9,23 @@ public let payloadPorts: ClosedRange<Int> = 1739...1764
 /// How long a tunnel listener waits for the computer.
 public let tunnelTimeout: TimeAmount = .seconds(30)
 
+/// Lets through at most 1 progress report per interval. A fast transfer
+/// otherwise redraws the UI hundreds of times per second. The caller sends
+/// the final report itself.
+struct ProgressThrottle {
+    /// The shortest time between 2 reports, in nanoseconds.
+    static let interval: UInt64 = 100_000_000
+
+    private var last: UInt64?
+
+    /// True when a report is due now, in nanoseconds of uptime.
+    mutating func due(at now: UInt64 = DispatchTime.now().uptimeNanoseconds) -> Bool {
+        if let last, now < last + Self.interval { return false }
+        last = now
+        return true
+    }
+}
+
 /// An open TLS byte stream: one payload transfer or one tunnel.
 public final class TLSStream: Sendable {
     public let channel: NIOAsyncChannel<ByteBuffer, ByteBuffer>
@@ -32,7 +49,7 @@ public final class TLSStream: Sendable {
     public func receive(into handle: FileHandle, size: Int64, progress: @escaping @Sendable (Int64) -> Void = { _ in }) async throws {
         let done: Int64 = try await executeThenClose { inbound, _ in
             var done: Int64 = 0
-            var lastReport: Int64 = 0
+            var throttle = ProgressThrottle()
             for try await var buffer in inbound {
                 var chunk = buffer.readableBytes
                 if size >= 0 { chunk = Int(min(Int64(chunk), size - done)) }
@@ -40,10 +57,7 @@ public final class TLSStream: Sendable {
                     try handle.write(contentsOf: bytes)
                 }
                 done += Int64(chunk)
-                if done - lastReport > 256 * 1024 {
-                    lastReport = done
-                    progress(done)
-                }
+                if throttle.due() { progress(done) }
                 if size >= 0 && done >= size { break }
             }
             return done
@@ -57,16 +71,13 @@ public final class TLSStream: Sendable {
     public func send(from handle: FileHandle, size: Int64, progress: @escaping @Sendable (Int64) -> Void = { _ in }) async throws {
         let done: Int64 = try await executeThenClose { _, outbound in
             var done: Int64 = 0
-            var lastReport: Int64 = 0
+            var throttle = ProgressThrottle()
             while size < 0 || done < size {
                 let want = size < 0 ? 64 * 1024 : Int(min(64 * 1024, size - done))
                 guard let data = try handle.read(upToCount: want), !data.isEmpty else { break }
                 try await outbound.write(ByteBuffer(bytes: data))
                 done += Int64(data.count)
-                if done - lastReport > 256 * 1024 {
-                    lastReport = done
-                    progress(done)
-                }
+                if throttle.due() { progress(done) }
             }
             outbound.finish()
             return done

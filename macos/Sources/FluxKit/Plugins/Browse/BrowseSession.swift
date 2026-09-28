@@ -95,11 +95,12 @@ final class BrowseSession: @unchecked Sendable {
     }
 
     /// Copies a remote file into the handle and reports the bytes written so
-    /// far. Several reads stay in flight, so the round trip time does not
-    /// limit the speed.
+    /// far, at most 10 times per second and once at the end. Several reads
+    /// stay in flight, so the round trip time does not limit the speed.
     func download(_ path: String, into handle: FileHandle, progress: @escaping @Sendable (Int64) -> Void) async throws {
         try await sftp.withFile(filePath: path, flags: .read) { file in
             var offset: UInt64 = 0
+            var throttle = ProgressThrottle()
             while true {
                 try Task.checkCancellation()
                 let start = offset
@@ -125,7 +126,7 @@ final class BrowseSession: @unchecked Sendable {
                     offset += UInt64(data.readableBytes)
                     if data.readableBytes < Self.chunk { break }
                 }
-                progress(Int64(offset))
+                if end || throttle.due() { progress(Int64(offset)) }
                 if end { return }
             }
         }

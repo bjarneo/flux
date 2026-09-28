@@ -164,6 +164,10 @@ private struct WebcamSection: View {
                 Button("Reset Image") { plugin.reset() }
             }
         }
+        // The preview image shows inside this card. The webcam makes preview
+        // images only while the card is on screen.
+        .onAppear { plugin.setPreviewShown(true) }
+        .onDisappear { plugin.setPreviewShown(false) }
     }
 
     @ViewBuilder

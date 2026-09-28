@@ -71,9 +71,14 @@ struct OmarchyPanel: View {
             }
             .padding(12)
         }
-        // The list comes once. The workspaces come again while the panel shows.
+        // The list comes once.
         .task(id: controller.deviceId) {
             controller.shortcut(DesktopShortcuts.request())
+        }
+        // The workspaces come again while the panel shows. They stop while
+        // the stream pauses, for example while the window is in the Dock.
+        .task(id: controller.paused) {
+            guard !controller.paused else { return }
             while !Task.isCancelled {
                 try? await Task.sleep(for: Self.refresh)
                 if Task.isCancelled { return }

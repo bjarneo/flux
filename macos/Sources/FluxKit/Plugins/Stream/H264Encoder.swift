@@ -7,7 +7,9 @@ import VideoToolbox
 /// second, and realtime priority. Frames keep their order, for a low delay.
 /// It writes the stream in Annex-B form, with SPS and PPS in front of each
 /// IDR frame, through output. After 100 ms without a new frame it encodes
-/// the last frame again, so a still scene keeps feeding the computer.
+/// the last frame again, so a still scene keeps feeding the computer. It
+/// does not repeat while backlogged returns true, so a slow network does
+/// not get more frames.
 final class H264Encoder: @unchecked Sendable {
     static let repeatAfter: Double = 0.1
 
@@ -16,6 +18,7 @@ final class H264Encoder: @unchecked Sendable {
     private let session: VTCompressionSession
     private let output: @Sendable ([UInt8]) -> Void
     private let onError: @Sendable (String) -> Void
+    private let backlogged: @Sendable () -> Bool
     private let timer: DispatchSourceTimer
 
     private let lock = NSLock()
@@ -30,11 +33,15 @@ final class H264Encoder: @unchecked Sendable {
     private let outputLock = NSLock()
     private var framer = AnnexBFramer()
 
-    init(width: Int, height: Int, bitrate: Int, output: @escaping @Sendable ([UInt8]) -> Void, onError: @escaping @Sendable (String) -> Void) throws {
+    init(
+        width: Int, height: Int, bitrate: Int, backlogged: @escaping @Sendable () -> Bool = { false },
+        output: @escaping @Sendable ([UInt8]) -> Void, onError: @escaping @Sendable (String) -> Void
+    ) throws {
         self.width = width
         self.height = height
         self.output = output
         self.onError = onError
+        self.backlogged = backlogged
         let spec = [kVTVideoEncoderSpecification_EnableHardwareAcceleratedVideoEncoder: kCFBooleanTrue] as CFDictionary
         var created: VTCompressionSession?
         let status = VTCompressionSessionCreate(
@@ -92,6 +99,8 @@ final class H264Encoder: @unchecked Sendable {
     }
 
     private func repeatLast() {
+        // A repeat adds no new image, so it waits while the network is behind.
+        guard !backlogged() else { return }
         lock.withLock {
             guard let last, DispatchTime.now().uptimeNanoseconds - lastSubmit.uptimeNanoseconds >= UInt64(Self.repeatAfter * 1e9) else { return }
             submit(last)

@@ -60,6 +60,8 @@ public final class FluxCore: @unchecked Sendable {
     private var searchCount = 0
     private var searching = false
     private var routes: [String: [FluxPlugin]] = [:]
+    /// The last state that went to onChange.
+    private var published: CoreState?
 
     /// Called on the main queue after each state change.
     public var onChange: (@Sendable (CoreState) -> Void)?
@@ -204,13 +206,14 @@ public final class FluxCore: @unchecked Sendable {
         }
         DispatchQueue.global().asyncAfter(deadline: .now() + Self.searchSeconds) { [weak self] in
             guard let self else { return }
-            let bonjour = self.lock.withLock { () -> Bonjour? in
-                guard self.searchCount == count else { return nil }
+            // A newer search keeps the state. Without Bonjour the search ends too.
+            let (ended, bonjour) = self.lock.withLock { () -> (Bool, Bonjour?) in
+                guard self.searchCount == count else { return (false, nil) }
                 self.searching = false
-                return self.bonjour
+                return (true, self.bonjour)
             }
-            guard let bonjour else { return }
-            bonjour.stopBrowsing()
+            guard ended else { return }
+            bonjour?.stopBrowsing()
             self.publish()
         }
     }
@@ -261,7 +264,13 @@ public final class FluxCore: @unchecked Sendable {
             link.start(
                 onPacket: { [weak self, weak d] p in
                     guard let self, let d else { return }
-                    self.locked { self.dispatch(d, p) }
+                    // Only a pair packet changes the state. Plugin packets
+                    // skip the publish.
+                    if p.type == PacketType.pair {
+                        self.locked { self.dispatch(d, p) }
+                    } else {
+                        self.lock.withLock { self.dispatch(d, p) }
+                    }
                 },
                 onClose: { [weak self, weak d] in
                     guard let self, let d else { return }
@@ -310,10 +319,16 @@ public final class FluxCore: @unchecked Sendable {
         }
     }
 
+    /// Sends the state to onChange when it differs from the last state that
+    /// went out. The lock keeps the snapshots in order on the main queue.
     public func publish() {
         guard let onChange else { return }
-        let snapshot = state
-        DispatchQueue.main.async { onChange(snapshot) }
+        lock.withLock {
+            let snapshot = state
+            guard snapshot != published else { return }
+            published = snapshot
+            DispatchQueue.main.async { onChange(snapshot) }
+        }
     }
 
     public func toast(_ message: String) {

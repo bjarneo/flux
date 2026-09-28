@@ -164,6 +164,12 @@ public final class WebcamPlugin: FluxPlugin, @unchecked Sendable {
         }
     }
 
+    /// Tells the webcam that a view shows the preview, or stopped to show
+    /// it. Without a view, the frames make no preview images.
+    public func setPreviewShown(_ shown: Bool) {
+        pipeline.setPreviewShown(shown)
+    }
+
     /// Sets the neutral image values. The shape, the quality, and the camera stay.
     public func reset() {
         if let next = settings.update({ $0.reset() }) { changed(next) }

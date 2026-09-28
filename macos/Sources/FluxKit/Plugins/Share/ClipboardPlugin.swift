@@ -131,6 +131,8 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
             let t = Timer(timeInterval: Self.pollInterval, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.poll() }
             }
+            // The tolerance lets macOS group the poll with other wake-ups.
+            t.tolerance = 0.2
             RunLoop.main.add(t, forMode: .common)
             timer = t
         } else if !on, let t = timer {

@@ -79,6 +79,7 @@ public final class StillCamera: NSObject, @unchecked Sendable {
     /// Receives each live frame on a private queue. Nil stops the frames.
     public func setFrameHandler(_ handler: (@Sendable (CVPixelBuffer) -> Void)?) {
         lock.withLock { onFrame = handler }
+        queue.async { [self] in updateFrames() }
     }
 
     /// Starts the camera with the ID, or the first camera when that camera
@@ -139,10 +140,20 @@ public final class StillCamera: NSObject, @unchecked Sendable {
                 .max { $0.width * $0.height < $1.width * $1.height } ?? photoOutput.maxPhotoDimensions
             session.commitConfiguration()
             followRotation(device)
+            updateFrames()
         }
         if !session.isRunning { session.startRunning() }
         guard session.isRunning else { throw FluxError("Cannot start \(choice.name)") }
         return choice
+    }
+
+    /// Turns the video output on only while a frame handler is set. Without
+    /// a handler, the camera converts no frames to BGRA. A new input gives a
+    /// new connection, so it runs again after each camera change. It runs on
+    /// the queue.
+    private func updateFrames() {
+        let wanted = lock.withLock { onFrame != nil }
+        videoOutput.connection(with: .video)?.isEnabled = wanted
     }
 
     /// Keeps photos, frames, and the preview upright, for example when a

@@ -47,7 +47,7 @@ final class AppModel {
     var connectedPaired: [DeviceSnapshot] { state.devices.filter { $0.paired && $0.online } }
 
     private func apply(_ s: CoreState) {
-        state = s
+        if s != state { state = s }
         if let sel = selection, !s.devices.contains(where: { $0.id == sel }) { selection = nil }
         if selection == nil { selection = s.devices.first(where: \.paired)?.id ?? s.devices.first?.id }
         for d in s.devices where d.pairState != .incoming { Notifier.shared.remove(id: "pair-\(d.id)") }
