@@ -1,3 +1,4 @@
+import AVFoundation
 import CoreMedia
 import CoreVideo
 import XCTest
@@ -263,5 +264,19 @@ final class DesktopTests: XCTestCase {
         XCTAssertEqual(attachments.first?[kCMSampleAttachmentKey_DisplayImmediately] as? Bool, true)
         XCTAssertEqual(attachments.first?[kCMSampleAttachmentKey_NotSync] as? Bool, false)
         XCTAssertNil(DesktopVideo.sample([], format: format, key: false))
+    }
+
+    /// A rotation makes a new view before the old one goes away. The old
+    /// view must not take the video from the new one.
+    func testAnOldLayerDoesNotDetachTheNewOne() {
+        let video = DesktopVideo()
+        let old = AVSampleBufferDisplayLayer()
+        let new = AVSampleBufferDisplayLayer()
+        video.attach(old)
+        video.attach(new)
+        video.detach(old)
+        XCTAssertTrue(video.shows(on: new))
+        video.detach(new)
+        XCTAssertFalse(video.shows(on: new))
     }
 }

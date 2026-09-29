@@ -76,41 +76,36 @@ private struct DesktopContent: View {
         GeometryReader { geo in
             let wide = geo.size.width > geo.size.height
             let panel = controller.control ? controller.panel : nil
-            Group {
+            // 1 layout for both orientations, so that the video keeps its
+            // view, and its display layer, when the iPhone turns.
+            let layout = wide ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(VStackLayout(spacing: 0))
+            layout {
                 if wide {
-                    HStack(spacing: 0) {
-                        VStack(spacing: 10) {
-                            RailButton(systemImage: "chevron.backward", name: "Back", on: false) { dismiss() }
-                            Spacer(minLength: 0)
-                            DesktopButtons(controller: controller, showsMonitor: true)
-                        }
-                        .padding(8)
-                        video(hint: false, wide: true)
-                        if let panel {
-                            panelView(panel)
-                                .frame(width: 300)
-                        }
+                    VStack(spacing: 10) {
+                        RailButton(systemImage: "chevron.backward", name: "Back", on: false) { dismiss() }
+                        Spacer(minLength: 0)
+                        DesktopButtons(controller: controller, showsMonitor: true)
                     }
-                    .background(Color(.systemGroupedBackground))
-                    .toolbar(.hidden, for: .navigationBar)
-                    .statusBarHidden()
-                    .persistentSystemOverlays(.hidden)
-                } else {
-                    VStack(spacing: 0) {
-                        video(hint: panel == nil, wide: false)
-                        if let panel {
-                            panelView(panel)
-                                .frame(maxHeight: panel == .omarchy ? 380 : nil)
-                        }
-                    }
-                    .background(Color(.systemGroupedBackground))
-                    .toolbar {
-                        ToolbarItemGroup(placement: .topBarTrailing) {
-                            DesktopButtons(controller: controller, showsMonitor: false)
-                        }
+                    .padding(8)
+                }
+                video(hint: !wide && panel == nil, wide: wide)
+                if let panel {
+                    panelView(panel)
+                        .frame(width: wide ? 300 : nil)
+                        .frame(maxHeight: !wide && panel == .omarchy ? 380 : nil)
+                }
+            }
+            .background(Color(.systemGroupedBackground))
+            .toolbar(wide ? .hidden : .automatic, for: .navigationBar)
+            .toolbar {
+                if !wide {
+                    ToolbarItemGroup(placement: .topBarTrailing) {
+                        DesktopButtons(controller: controller, showsMonitor: false)
                     }
                 }
             }
+            .statusBarHidden(wide)
+            .persistentSystemOverlays(wide ? .hidden : .automatic)
         }
         .navigationTitle("Remote desktop")
         .navigationBarTitleDisplayMode(.inline)

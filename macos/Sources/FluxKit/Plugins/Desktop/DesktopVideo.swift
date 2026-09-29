@@ -25,6 +25,22 @@ public final class DesktopVideo: @unchecked Sendable {
         }
     }
 
+    /// Takes the video from the layer, when the video still shows on it.
+    /// A view that goes away calls it, so that the layer of a new view that
+    /// took the video keeps it.
+    public func detach(_ layer: AVSampleBufferDisplayLayer) {
+        lock.withLock {
+            guard let renderer, renderer === layer.sampleBufferRenderer else { return }
+            self.renderer = nil
+            needKey = true
+        }
+    }
+
+    /// True when the video shows on the layer.
+    func shows(on layer: AVSampleBufferDisplayLayer) -> Bool {
+        lock.withLock { renderer != nil && renderer === layer.sampleBufferRenderer }
+    }
+
     /// Forgets the stream, so that the next stream starts clean.
     func reset() {
         lock.withLock {

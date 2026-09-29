@@ -30,7 +30,10 @@ struct DesktopVideoSurface: UIViewRepresentable {
         view.touches.onCancel = { controller.endTouches() }
         view.touches.onKey = { controller.control && controller.keys.press($0) }
         view.touches.onSize = { controller.layout(view: $0) }
-        view.detach = { [weak plugin = controller.plugin] in plugin?.video.attach(nil) }
+        // A new surface can take the video before this one goes away.
+        view.detach = { [weak plugin = controller.plugin, weak display = view.display] in
+            if let display { plugin?.video.detach(display) }
+        }
     }
 }
 
