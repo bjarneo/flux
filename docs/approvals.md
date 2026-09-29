@@ -26,7 +26,7 @@ Installation alone does not enable approval.
 
 4. Select Enroll on the phone.
 5. Touch the fingerprint sensor.
-6. Type the key code that the phone shows, all 16 characters. Spaces, hyphens, and case do not matter.
+6. Type the key code that the phone shows, all 16 characters. Spaces, hyphens, and case do not matter. You have 3 tries.
 7. Test in a new terminal:
 
    ```sh
@@ -36,6 +36,7 @@ Installation alone does not enable approval.
 
 `flux-cli` compares the typed code with the code of the key that `fluxd` sent.
 If the codes differ, it writes no key.
+If the phone tells you to type `y`, type the code instead. The terminal needs all 16 characters.
 The terminal does not show the code, because a program that runs as your user can write to your terminal.
 It cannot change the screen of the phone.
 
@@ -110,6 +111,15 @@ The key files in `/etc/flux/approve` stay.
 `flux-cli approve` also checks that `fluxd` answers on `/run/user/<uid>/flux/fluxd.sock`.
 The helper uses only this socket. It does not read `FLUX_SOCKET` or `XDG_RUNTIME_DIR`.
 The helper finds the user in `/etc/passwd`, so setup refuses a user of systemd-homed, SSSD, or LDAP.
+
+The helper of `hyprlock` runs as your user, so it must reach the key file.
+Setup sets the mode of `/etc/flux/approve` to 0755.
+It also sets the mode of `/etc/flux` to 0755 when an earlier setup under a strict umask made it private.
+If `flux-cli approve` cannot read the key file, run `sudo flux-cli approve setup` again, or run:
+
+```sh
+sudo chmod 755 /etc/flux /etc/flux/approve
+```
 
 `approve_timeout` in `config.toml` accepts 5 to 120 seconds.
 The default is 20 seconds.

@@ -100,4 +100,22 @@ func TestTypedCode(t *testing.T) {
 			t.Errorf("%q must not match", typed)
 		}
 	}
+
+	// An earlier phone app says to type y. The user gets a hint and
+	// types the code on the next try.
+	var out strings.Builder
+	if !typedCode(bufio.NewReader(strings.NewReader("y\n5EE6-825F-974E-D59A\n")), &out, "Pixel 8", code) {
+		t.Error("the code after y must match")
+	}
+	if !strings.Contains(out.String(), "Do not type y. Type the 16 characters that Pixel 8 shows.") {
+		t.Errorf("no hint after y:\n%s", out.String())
+	}
+	// The user has 3 tries.
+	wrong := strings.Repeat("5EE6 825F 974E D59B\n", codeTries)
+	if typedCode(bufio.NewReader(strings.NewReader(wrong+"5EE6 825F 974E D59A\n")), io.Discard, "Pixel 8", code) {
+		t.Errorf("a code after %d wrong codes must not match", codeTries)
+	}
+	if !typedCode(bufio.NewReader(strings.NewReader(wrong[20:]+"5EE6 825F 974E D59A\n")), io.Discard, "Pixel 8", code) {
+		t.Error("the code on the last try must match")
+	}
 }

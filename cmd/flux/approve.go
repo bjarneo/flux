@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/signal"
 	"os/user"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -229,6 +231,10 @@ func approveStatus() error {
 	case errors.Is(err, approve.ErrNoKey):
 		fmt.Printf("No phone can approve for %s. To set it up, run: sudo flux-cli approve setup\n", name)
 		return nil
+	case errors.Is(err, fs.ErrPermission):
+		// A setup under a strict umask closed /etc/flux. The helper of a
+		// lock screen runs as the user, so it cannot read the key either.
+		return fmt.Errorf("cannot read the key file: %v. To fix it, run: sudo chmod 755 %s %s", err, filepath.Dir(approve.KeyDir), approve.KeyDir)
 	case err != nil:
 		return fmt.Errorf("the key file is not safe, so flux-approve does not use it: %v", err)
 	}
@@ -318,14 +324,31 @@ func confirmCode(phone, code string) bool {
 	return typedCode(bufio.NewReader(in), os.Stdout, phone, code)
 }
 
+// codeTries is the number of times that typedCode asks for the key code.
+const codeTries = 3
+
+// typedCode reads the key code that the user types, and it asks again
+// after a wrong code. An earlier phone app tells the user to type y, so y
+// gets a hint.
 func typedCode(in *bufio.Reader, out io.Writer, phone, code string) bool {
-	fmt.Fprintf(out, "Type the key code that %s shows, all 16 characters: ", phone)
-	line, _ := in.ReadString('\n')
-	if !approve.SameCode(line, code) {
-		fmt.Fprintln(out, "The code is not the code of the new key. Flux wrote no key.")
-		return false
+	for try := 1; try <= codeTries; try++ {
+		fmt.Fprintf(out, "Type the key code that %s shows, all 16 characters: ", phone)
+		line, err := in.ReadString('\n')
+		if approve.SameCode(line, code) {
+			return true
+		}
+		if err != nil || try == codeTries {
+			break
+		}
+		switch strings.ToLower(strings.TrimSpace(line)) {
+		case "y", "yes":
+			fmt.Fprintf(out, "Do not type y. Type the 16 characters that %s shows.\n", phone)
+		default:
+			fmt.Fprintln(out, "This is not the code of the new key. Try again.")
+		}
 	}
-	return true
+	fmt.Fprintln(out, "The code is not the code of the new key. Flux wrote no key.")
+	return false
 }
 
 // approveRemove deletes the key of the user. It turns approvals off in PAM

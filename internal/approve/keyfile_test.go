@@ -154,6 +154,50 @@ func TestWriteKeyIgnoresTheUmask(t *testing.T) {
 	}
 }
 
+// An earlier setup under a strict umask left /etc/flux with mode 0700.
+// A new setup opens it, but only when it belongs to the owner of the key.
+func TestOpenFolder(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "flux")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := openFolder(dir, os.Getuid()+1); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := os.Stat(dir); st.Mode().Perm() != 0o700 {
+		t.Fatalf("a folder of another owner changed to %v", st.Mode())
+	}
+	if err := openFolder(dir, os.Getuid()); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := os.Stat(dir); st.Mode().Perm() != 0o755 {
+		t.Fatalf("mode %v", st.Mode())
+	}
+	// A folder that others can pass through keeps its mode.
+	if err := os.Chmod(dir, 0o711); err != nil {
+		t.Fatal(err)
+	}
+	if err := openFolder(dir, os.Getuid()); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := os.Stat(dir); st.Mode().Perm() != 0o711 {
+		t.Fatalf("mode %v", st.Mode())
+	}
+	link := filepath.Join(filepath.Dir(dir), "link")
+	if err := os.Symlink(dir, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := openFolder(link, os.Getuid()); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := os.Stat(dir); st.Mode().Perm() != 0o700 {
+		t.Fatalf("openFolder followed a symlink: %v", st.Mode())
+	}
+}
+
 func TestOtherKeys(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"alice.pub", "bob.pub", "notes.txt", "Bad.pub"} {

@@ -171,6 +171,8 @@ func EncodeKey(spki []byte, deviceID, deviceName string, enrolled time.Time) ([]
 // WriteKey writes a key file atomically: a temporary file in the same
 // folder, mode 0644 and owner, a sync, and a rename. It makes the folder
 // and each missing folder above it with mode 0755 when they are missing.
+// For KeyDir, it also gives /etc/flux mode 0755 when other users cannot
+// pass through it.
 func WriteKey(path string, owner int, content []byte) error {
 	dir := filepath.Dir(path)
 	// Root gets the root group. Another owner keeps its group, because a
@@ -181,6 +183,13 @@ func WriteKey(path string, owner int, content []byte) error {
 	}
 	if err := mkdirOpen(dir); err != nil {
 		return err
+	}
+	if dir == KeyDir {
+		// An earlier WriteKey under a strict umask made /etc/flux with
+		// mode 0700, and mkdirOpen does not change a folder that exists.
+		if err := openFolder(filepath.Dir(dir), owner); err != nil {
+			return err
+		}
 	}
 	if err := os.Chown(dir, owner, group); err != nil {
 		return err
@@ -244,6 +253,22 @@ func mkdirOpen(dir string) error {
 	}
 	if err := os.Mkdir(dir, 0o755); err != nil && !errors.Is(err, fs.ErrExist) {
 		return err
+	}
+	return os.Chmod(dir, 0o755)
+}
+
+// openFolder gives dir mode 0755 when it belongs to owner and other users
+// cannot pass through it. The helper of a lock screen runs as the user,
+// and it must reach the key. openFolder does not change a symlink or a
+// folder of another owner.
+func openFolder(dir string, owner int) error {
+	st, err := os.Lstat(dir)
+	if err != nil {
+		return err
+	}
+	sys, ok := st.Sys().(*syscall.Stat_t)
+	if !ok || !st.IsDir() || int(sys.Uid) != owner || st.Mode().Perm()&0o001 != 0 {
+		return nil
 	}
 	return os.Chmod(dir, 0o755)
 }

@@ -182,11 +182,13 @@ enrollment is never a valid approval, and the reverse.
 7. The command asks the user to type the key code that the phone shows. It
    compares the typed code with the code of the public key that it got. It
    ignores spaces, hyphens, and case, and it needs all 16 hex digits. The
-   terminal does not show the code of the public key, because code that runs
-   as the user can write to the terminal of the user.
+   user has 3 tries. The terminal does not show the code of the public key,
+   because code that runs as the user can write to the terminal of the user.
 8. The command writes the key file. It writes a temporary file in the same
    folder, sets the mode to 0644 and the owner to root, syncs it, and
-   renames it.
+   renames it. It sets the mode of `/etc/flux/approve` to 0755. It sets
+   the mode of `/etc/flux` to 0755 when other users cannot pass through
+   it. The `hyprlock` helper runs as the user and must read the key.
 
 The typed key code in step 7 is the protection against a changed `fluxd`.
 A changed `fluxd` can send its own key, but it cannot make the phone show
