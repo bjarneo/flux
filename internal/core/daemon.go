@@ -108,7 +108,7 @@ type Daemon struct {
 	herdrTerms   []HerdrTerminal
 	herdrPlaces  []HerdrWorkspace
 	herdrKinds   []string
-	herdrHistory map[string][]string
+	herdrHistory map[string]agentHistory
 	herdrWake    chan struct{}
 
 	subs   map[int]func(event string, data any)
@@ -116,6 +116,9 @@ type Daemon struct {
 	dirty  chan struct{}
 	ctx    context.Context
 	logger *log.Logger
+
+	// herdrJobs keeps the herdr work that runs for the phones.
+	herdrJobs herdrJobs
 }
 
 // Options change how the daemon runs. The zero value is the normal mode.

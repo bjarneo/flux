@@ -2,12 +2,14 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime/debug"
 	"slices"
 	"sort"
 	"strconv"
@@ -39,6 +41,11 @@ const herdrReadTimeout = 10 * time.Second
 
 // herdrCallTimeout limits a reply, a close, and the other short calls.
 const herdrCallTimeout = 5 * time.Second
+
+// herdrHistoryTTL is how long fluxd uses the plain history of an idle
+// agent again without a new read. herdr scrolls the agent for each read of
+// the history.
+const herdrHistoryTTL = 3 * time.Second
 
 // Limits of an output read for a phone.
 const (
@@ -90,6 +97,39 @@ type herdrLive struct {
 	Kinds      []string
 }
 
+// herdrJobs keeps the herdr work that runs for the phones. d.mu guards
+// it. reads has a key for each read that runs. Its value is true when
+// another read of the same pane came on the same link during the read.
+// creating has the ID of each device that starts an agent or opens a
+// terminal. kinds is the result of the last lookup of the agent kinds, at
+// kindsAt. kindsBusy is true while a lookup runs.
+type herdrJobs struct {
+	reads     map[herdrReadKey]bool
+	creating  map[string]bool
+	kinds     []string
+	kindsAt   time.Time
+	kindsBusy bool
+}
+
+// herdrReadKey selects the reads of one pane on one link.
+type herdrReadKey struct {
+	link *lan.Link
+	pane string
+}
+
+// agentHistory is the last plain history of an agent. asked is the line
+// count of the read. agent is the kind of the agent, so a new agent in the
+// same pane does not show it. The history is fresh from at until
+// herdrHistoryTTL passes. A new status of the agent and a reply to it
+// clear at, because the agent then writes new lines.
+type agentHistory struct {
+	lines     []string
+	truncated bool
+	asked     int
+	agent     string
+	at        time.Time
+}
+
 // herdrView is the herdr state in a flux.herdr state packet and in the
 // IPC state. Control is true when a phone can reply to the agents, start
 // agents, and close them. Terminals is true when a phone can also open
@@ -131,13 +171,6 @@ func (d *Daemon) herdrViewLocked() herdrView {
 // herdrControlLocked reports whether a phone can reply to agents, start
 // them, and close them.
 func (d *Daemon) herdrControlLocked() bool { return d.cfg.Herdr && d.cfg.HerdrControl }
-
-// herdrControlOn reports whether herdr_control is on.
-func (d *Daemon) herdrControlOn() bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return d.herdrControlLocked()
-}
 
 // herdrTerminalsLocked reports whether a phone can open terminals and type
 // in them. It needs herdr_control too.
@@ -193,8 +226,8 @@ func (d *Daemon) herdrSession(ctx context.Context, logged *string) error {
 	}
 	d.logf("herdr %s: following its agents", pong.Version)
 	*logged = ""
-	var kinds []string
-	var kindsAt time.Time
+	// This herdr can have other agent kinds than the last one.
+	d.herdrKindsDue()
 
 	var feed *herdrFeed
 	var panes []string
@@ -210,16 +243,8 @@ func (d *Daemon) herdrSession(ctx context.Context, logged *string) error {
 		if err != nil {
 			return err
 		}
-		// An agent that the user installs or removes shows after a
-		// minute. Only herdr_control uses the list, so fluxd skips the
-		// lookup while it is off.
-		if !d.herdrControlOn() {
-			kinds, kindsAt = nil, time.Time{}
-		} else if time.Since(kindsAt) > herdrKindsTTL {
-			kinds, kindsAt = d.herdrAvailableKinds(ctx), time.Now()
-		}
 		agents := herdrAgents(snap)
-		live := herdrLive{Agents: agents, Terminals: herdrTerminals(snap), Workspaces: herdrWorkspaces(snap), Kinds: kinds}
+		live := herdrLive{Agents: agents, Terminals: herdrTerminals(snap), Workspaces: herdrWorkspaces(snap), Kinds: d.herdrKindsNow(ctx)}
 		if want := herdrPanes(agents); feed == nil || !slices.Equal(want, panes) {
 			if feed != nil {
 				feed.stream.Close()
@@ -228,7 +253,7 @@ func (d *Daemon) herdrSession(ctx context.Context, logged *string) error {
 			if err != nil {
 				return err
 			}
-			feed, panes = follow(s), want
+			feed, panes = follow(s, d.forgetHerdrHistory), want
 			// A change between the read and the subscription has no
 			// event, so read the session again.
 			continue
@@ -260,21 +285,28 @@ func (d *Daemon) herdrSession(ctx context.Context, logged *string) error {
 }
 
 // herdrFeed turns the events of a subscription into signals. fluxd reads
-// the whole session after an event, so the content of an event does not
-// matter.
+// the whole session after an event, so the content of most events does
+// not matter.
 type herdrFeed struct {
 	stream *herdr.Stream
 	events chan struct{}
 	done   chan error
 }
 
-func follow(s *herdr.Stream) *herdrFeed {
+// follow reads the events of s. It calls detected with the pane of each
+// new agent before the signal, so the history of an agent that ran in
+// that pane before goes away.
+func follow(s *herdr.Stream, detected func(pane string)) *herdrFeed {
 	f := &herdrFeed{stream: s, events: make(chan struct{}, 1), done: make(chan error, 1)}
 	go func() {
 		for {
-			if _, err := s.Next(); err != nil {
+			ev, err := s.Next()
+			if err != nil {
 				f.done <- err
 				return
+			}
+			if pane := detectedPane(ev); pane != "" {
+				detected(pane)
 			}
 			select {
 			case f.events <- struct{}{}:
@@ -283,6 +315,21 @@ func follow(s *herdr.Stream) *herdrFeed {
 		}
 	}()
 	return f
+}
+
+// detectedPane returns the pane of a pane_agent_detected event, or an
+// empty string for another event.
+func detectedPane(ev herdr.Event) string {
+	if ev.Name != "pane_agent_detected" && ev.Name != "pane.agent_detected" {
+		return ""
+	}
+	var data struct {
+		PaneID string `json:"pane_id"`
+	}
+	if json.Unmarshal(ev.Data, &data) != nil {
+		return ""
+	}
+	return data.PaneID
 }
 
 // herdrSubscriptions returns the events that change the state: new and
@@ -468,7 +515,9 @@ func (d *Daemon) wakeHerdr() {
 }
 
 // setHerdr records the herdr state and sends it to the phones when it
-// changed. It forgets the history of the agents that are gone.
+// changed. It forgets the history of the agents that are gone, and of a
+// pane that has an agent of another kind now. A new status makes the
+// history of the agent old.
 func (d *Daemon) setHerdr(running bool, live herdrLive) {
 	d.mu.Lock()
 	if d.herdrRunning == running && slices.Equal(d.herdrAgents, live.Agents) && slices.Equal(d.herdrTerms, live.Terminals) &&
@@ -476,14 +525,37 @@ func (d *Daemon) setHerdr(running bool, live herdrLive) {
 		d.mu.Unlock()
 		return
 	}
-	d.herdrRunning, d.herdrAgents, d.herdrTerms, d.herdrPlaces, d.herdrKinds = running, live.Agents, live.Terminals, live.Workspaces, live.Kinds
-	for pane := range d.herdrHistory {
-		if !slices.ContainsFunc(live.Agents, func(a HerdrAgent) bool { return a.Pane == pane }) {
+	for pane, h := range d.herdrHistory {
+		i := slices.IndexFunc(live.Agents, func(a HerdrAgent) bool { return a.Pane == pane })
+		switch {
+		case i < 0 || live.Agents[i].Agent != h.agent:
 			delete(d.herdrHistory, pane)
+		case live.Agents[i].Status != d.herdrStatusLocked(pane):
+			h.at = time.Time{}
+			d.herdrHistory[pane] = h
 		}
 	}
+	d.herdrRunning, d.herdrAgents, d.herdrTerms, d.herdrPlaces, d.herdrKinds = running, live.Agents, live.Terminals, live.Workspaces, live.Kinds
 	d.mu.Unlock()
 	d.sendHerdr()
+}
+
+// forgetHerdrHistory removes the history of the agent in the pane.
+func (d *Daemon) forgetHerdrHistory(pane string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	delete(d.herdrHistory, pane)
+}
+
+// staleHerdrHistory makes the history of the agent in the pane old, so
+// the next read gets it from herdr again.
+func (d *Daemon) staleHerdrHistory(pane string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if h, ok := d.herdrHistory[pane]; ok {
+		h.at = time.Time{}
+		d.herdrHistory[pane] = h
+	}
 }
 
 // herdrChanged sends the state after the user changes the herdr setting.
@@ -527,6 +599,7 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 		Agent     string   `json:"agent"`
 		Cwd       string   `json:"cwd"`
 		Workspace string   `json:"workspace"`
+		Answer    bool     `json:"answer"`
 	}
 	if p.Decode(&body) != nil {
 		return
@@ -541,15 +614,25 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.mu.Unlock()
 		_ = l.Send(state)
 	case "read":
-		go func() { _ = l.Send(d.readHerdr(body.Pane, body.Lines, body.Format == "ansi")) }()
+		d.readHerdrOnce(dev, l, body.Pane, body.Lines, body.Format == "ansi", func(p *proto.Packet) { _ = l.Send(p) })
 	case "keys":
-		go func() { _ = l.Send(d.herdrKeys(dev, body.Pane, body.Keys)) }()
+		go func() {
+			defer d.herdrRecover("keys")
+			_ = l.Send(d.herdrKeys(dev, body.Pane, body.Keys))
+		}()
 	case "prompt":
-		go func() { _ = l.Send(d.herdrPrompt(dev, body.Pane, body.Text)) }()
+		go func() {
+			defer d.herdrRecover("prompt")
+			_ = l.Send(d.herdrPrompt(dev, body.Pane, body.Text, body.Answer))
+		}()
 	case "input":
-		go func() { _ = l.Send(d.herdrInput(dev, body.Pane, body.Text, body.Keys)) }()
+		go func() {
+			defer d.herdrRecover("input")
+			_ = l.Send(d.herdrInput(dev, body.Pane, body.Text, body.Keys))
+		}()
 	case "create":
 		go func() {
+			defer d.herdrRecover("create")
 			reply := d.herdrCreate(dev, body.What, body.Agent, body.Cwd, body.Workspace)
 			// The phone opens the new pane at once, so it must know the
 			// pane before the answer.
@@ -560,10 +643,75 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 			_ = l.Send(reply)
 		}()
 	case "close":
-		go func() { _ = l.Send(d.herdrClose(dev, body.Pane)) }()
+		go func() {
+			defer d.herdrRecover("close")
+			_ = l.Send(d.herdrClose(dev, body.Pane))
+		}()
 	default:
 		d.logf("%s: unknown flux.herdr kind %q", dev.Name, body.Kind)
 	}
+}
+
+// herdrRecover logs a panic in the answer to a flux.herdr packet and ends
+// that answer, so one bad reply from herdr does not stop fluxd. Call it
+// with defer at the start of the goroutine.
+func (d *Daemon) herdrRecover(what string) {
+	if r := recover(); r != nil {
+		d.logf("herdr: the %s failed: %v\n%s", what, r, debug.Stack())
+	}
+}
+
+// readHerdrOnce answers a read of the pane that came on the link l. One
+// read of a pane runs at a time for each link, from the herdr calls until
+// the answer is sent. A read that comes during the herdr calls gets the
+// answer of that read, so a flood of reads does not make more herdr calls
+// and large packets. fluxd reads once more when the agent status changed
+// during the herdr calls, or when a read came during the send. That read
+// can be newer than the answer. send sends the answer.
+func (d *Daemon) readHerdrOnce(dev *Device, l *lan.Link, pane string, lines int, ansi bool, send func(*proto.Packet)) {
+	key := herdrReadKey{link: l, pane: pane}
+	d.mu.Lock()
+	if _, running := d.herdrJobs.reads[key]; running {
+		d.herdrJobs.reads[key] = true
+		d.mu.Unlock()
+		return
+	}
+	if d.herdrJobs.reads == nil {
+		d.herdrJobs.reads = map[herdrReadKey]bool{}
+	}
+	d.herdrJobs.reads[key] = false
+	d.mu.Unlock()
+	go func() {
+		defer d.herdrRecover("read")
+		finished := false
+		defer func() {
+			// After a panic, the next read of the pane must run.
+			if !finished {
+				d.mu.Lock()
+				delete(d.herdrJobs.reads, key)
+				d.mu.Unlock()
+			}
+		}()
+		for !finished {
+			d.mu.Lock()
+			status := d.herdrStatusLocked(pane)
+			d.mu.Unlock()
+			p := d.readHerdr(pane, lines, ansi)
+			d.mu.Lock()
+			again := d.herdrJobs.reads[key] && d.herdrStatusLocked(pane) != status
+			d.herdrJobs.reads[key] = false
+			d.mu.Unlock()
+			send(p)
+			d.mu.Lock()
+			if (again || d.herdrJobs.reads[key]) && dev.Paired {
+				d.herdrJobs.reads[key] = false
+			} else {
+				delete(d.herdrJobs.reads, key)
+				finished = true
+			}
+			d.mu.Unlock()
+		}
+	}()
 }
 
 // readHerdr returns an output packet with the recent output of an agent.
@@ -612,6 +760,24 @@ func (d *Daemon) herdrAgentLocked(pane string) bool {
 	return slices.ContainsFunc(d.herdrAgents, func(a HerdrAgent) bool { return a.Pane == pane })
 }
 
+// herdrStatusLocked returns the status of the agent in the pane, or an
+// empty string when the pane has no agent.
+func (d *Daemon) herdrStatusLocked(pane string) string {
+	if i := slices.IndexFunc(d.herdrAgents, func(a HerdrAgent) bool { return a.Pane == pane }); i >= 0 {
+		return d.herdrAgents[i].Status
+	}
+	return ""
+}
+
+// herdrKindLocked returns the kind of the agent in the pane, or an empty
+// string when the pane has no agent.
+func (d *Daemon) herdrKindLocked(pane string) string {
+	if i := slices.IndexFunc(d.herdrAgents, func(a HerdrAgent) bool { return a.Pane == pane }); i >= 0 {
+		return d.herdrAgents[i].Agent
+	}
+	return ""
+}
+
 // herdrTerminalLocked reports whether the pane is a terminal without an
 // agent.
 func (d *Daemon) herdrTerminalLocked(pane string) bool {
@@ -628,7 +794,7 @@ func (d *Daemon) readTerminal(ctx context.Context, pane string, lines int, ansi 
 	if ansi {
 		return cleanANSI(r.Text), r.Truncated, nil
 	}
-	return trimLineEnds(r.Text), r.Truncated, nil
+	return cleanPlain(r.Text), r.Truncated, nil
 }
 
 // readAgentOutput reads the recent output of an agent. Many agents draw in
@@ -643,35 +809,50 @@ func (d *Daemon) readAgentOutput(ctx context.Context, pane string, lines int, an
 		return "", false, err
 	}
 	if !ansi {
-		return trimLineEnds(r.Text), r.Truncated, nil
+		return cleanPlain(r.Text), r.Truncated, nil
 	}
 	screen := strings.Split(cleanANSI(r.Text), "\n")
 	if len(screen) >= lines {
 		return strings.Join(screen, "\n"), r.Truncated, nil
 	}
-	truncated := r.Truncated
-	var history []string
-	h, err := herdr.ReadAgent(ctx, d.herdrPath, pane, lines, false)
-	switch {
-	case err == nil:
-		history = strings.Split(trimLineEnds(h.Text), "\n")
-		truncated = truncated || h.Truncated
-		d.mu.Lock()
-		if d.herdrHistory == nil {
-			d.herdrHistory = map[string][]string{}
-		}
-		d.herdrHistory[pane] = history
-		d.mu.Unlock()
-	case herdr.Code(err) == "agent_not_idle":
-		d.mu.Lock()
-		history = d.herdrHistory[pane]
-		d.mu.Unlock()
-	}
+	history, truncated := d.readAgentHistory(ctx, pane, lines)
+	truncated = truncated || r.Truncated
 	out := spliceScreen(history, screen)
 	if len(out) > lines {
 		out, truncated = out[len(out)-lines:], true
 	}
 	return strings.Join(out, "\n"), truncated, nil
+}
+
+// readAgentHistory returns the plain history of an agent and reports
+// whether herdr cut it. A fresh history from the last read needs no new
+// read. While the agent works, herdr refuses the read, and the history of
+// the last idle read stays.
+func (d *Daemon) readAgentHistory(ctx context.Context, pane string, lines int) ([]string, bool) {
+	d.mu.Lock()
+	last, ok := d.herdrHistory[pane]
+	d.mu.Unlock()
+	if ok && !last.at.IsZero() && time.Since(last.at) < herdrHistoryTTL && last.asked >= lines {
+		return last.lines, last.truncated
+	}
+	h, err := herdr.ReadAgent(ctx, d.herdrPath, pane, lines, false)
+	switch {
+	case err == nil:
+		next := agentHistory{lines: strings.Split(cleanPlain(h.Text), "\n"), truncated: h.Truncated, asked: lines, at: time.Now()}
+		d.mu.Lock()
+		next.agent = d.herdrKindLocked(pane)
+		if d.herdrHistory == nil {
+			d.herdrHistory = map[string]agentHistory{}
+		}
+		d.herdrHistory[pane] = next
+		d.mu.Unlock()
+		return next.lines, next.truncated
+	case herdr.Code(err) == "agent_not_idle":
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		return d.herdrHistory[pane].lines, false
+	}
+	return nil, false
 }
 
 // spliceScreen puts the colored screen rows of an agent under its plain
@@ -777,45 +958,93 @@ func trimLineEnds(text string) string {
 	return strings.Join(lines, "\n")
 }
 
+// cleanPlain prepares plain output for a phone. It removes and marks
+// characters as textRune does, and it removes the blanks at the end of
+// each line.
+func cleanPlain(text string) string {
+	return trimLineEnds(strings.Map(textRune, text))
+}
+
+// textRune returns the character that a phone gets for a character of
+// terminal output, or -1 to remove it. It removes the C0 and C1 control
+// characters except line breaks and tabs. The phone shows text with the
+// Unicode bidirectional algorithm, and a terminal does not. So a
+// character that sets the direction of text can show a command in another
+// order on the phone. textRune changes each such character, and the line
+// and paragraph separators, to U+FFFD, so the phone shows a mark in its
+// place.
+func textRune(r rune) rune {
+	switch {
+	case r == '\n' || r == '\t':
+		return r
+	case r < 0x20 || r >= 0x7f && r <= 0x9f:
+		return -1
+	case r == 0x061c || r == 0x200e || r == 0x200f || r >= 0x202a && r <= 0x202e || r >= 0x2066 && r <= 0x2069,
+		r == 0x2028 || r == 0x2029:
+		return utf8.RuneError
+	}
+	return r
+}
+
 // cleanANSI prepares ANSI output for a phone. It keeps the SGR sequences
-// of colors and styles and removes all other escape sequences and control
-// characters. It changes CRLF to LF and removes the blanks at the end of
-// each line, also when SGR sequences follow them.
+// of colors and styles and removes all other escape sequences. It removes
+// and marks the other characters as textRune does. It changes CRLF to LF
+// and removes the blanks at the end of each line, also when SGR sequences
+// follow them.
 func cleanANSI(text string) string {
 	var b strings.Builder
 	b.Grow(len(text))
-	for i := 0; i < len(text); i++ {
+	for i := 0; i < len(text); {
 		c := text[i]
 		switch {
 		case c == 0x1b && i+1 < len(text) && text[i+1] == '[':
-			// A CSI sequence ends with a byte from 0x40 to 0x7e.
+			// A CSI sequence has parameter and intermediate bytes from 0x20
+			// to 0x3f, and then a final byte from 0x40 to 0x7e. Another
+			// byte ends the sequence, and fluxd drops the sequence. That
+			// byte, for example a line break, then goes through the loop.
 			j := i + 2
-			for j < len(text) && (text[j] < 0x40 || text[j] > 0x7e) {
+			for j < len(text) && text[j] >= 0x20 && text[j] <= 0x3f {
 				j++
 			}
-			if j < len(text) && text[j] == 'm' {
-				b.WriteString(text[i : j+1])
+			if j < len(text) && text[j] >= 0x40 && text[j] <= 0x7e {
+				if text[j] == 'm' && sgrParams(text[i+2:j]) {
+					b.WriteString(text[i : j+1])
+				}
+				j++
 			}
 			i = j
-		case c == 0x1b && i+1 < len(text) && text[i+1] == ']':
-			// An OSC sequence ends with BEL or with ESC and a backslash.
+		case c == 0x1b && i+1 < len(text) && strings.IndexByte("]PX^_", text[i+1]) >= 0:
+			// An OSC, DCS, SOS, PM, or APC string ends with BEL or with ST,
+			// which is ESC and a backslash. Another ESC ends the string
+			// and starts the next sequence.
 			j := i + 2
-			for j < len(text) && text[j] != 0x07 && (text[j] != 0x1b || j+1 >= len(text) || text[j+1] != '\\') {
+			for j < len(text) && text[j] != 0x07 && text[j] != 0x1b {
 				j++
 			}
-			if j < len(text) && text[j] == 0x1b {
+			switch {
+			case j < len(text) && text[j] == 0x07:
 				j++
+			case j+1 < len(text) && text[j+1] == '\\':
+				j += 2
 			}
 			i = j
 		case c == 0x1b:
 			// Another escape sequence has intermediate bytes from 0x20 to
-			// 0x2f and then one final byte.
-			i++
-			for i < len(text) && text[i] >= 0x20 && text[i] <= 0x2f {
-				i++
+			// 0x2f and then a final byte from 0x30 to 0x7e.
+			j := i + 1
+			for j < len(text) && text[j] >= 0x20 && text[j] <= 0x2f {
+				j++
 			}
-		case c == '\n' || c == '\t' || c >= 0x20 && c != 0x7f:
-			b.WriteByte(c)
+			if j < len(text) && text[j] >= 0x30 && text[j] <= 0x7e {
+				j++
+			}
+			i = j
+		default:
+			r, n := utf8.DecodeRuneInString(text[i:])
+			if r = textRune(r); r >= 0 {
+				b.WriteRune(r)
+			}
+			i += n
 		}
 	}
 	lines := strings.Split(b.String(), "\n")
@@ -823,6 +1052,18 @@ func cleanANSI(text string) string {
 		lines[i] = trimStyledEnd(l)
 	}
 	return strings.Join(lines, "\n")
+}
+
+// sgrParams reports whether params can be the parameters of an SGR
+// sequence: digits, semicolons, and colons. sgr matches the same
+// sequences.
+func sgrParams(params string) bool {
+	for i := 0; i < len(params); i++ {
+		if c := params[i]; (c < '0' || c > '9') && c != ';' && c != ':' {
+			return false
+		}
+	}
+	return true
 }
 
 // trimStyledEnd removes the spaces and tabs with the default background at
@@ -835,8 +1076,11 @@ func trimStyledEnd(line string) string {
 	for i := 0; i < len(line); {
 		if line[i] == 0x1b {
 			end := strings.IndexByte(line[i:], 'm')
-			if end < 0 {
-				break
+			if end < 2 || line[i+1] != '[' {
+				// This is not an SGR sequence. Skip the ESC and do not
+				// parse the bytes after it.
+				i++
+				continue
 			}
 			bg = sgrBackground(line[i+2:i+end], bg)
 			i += end + 1
