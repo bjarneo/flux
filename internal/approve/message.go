@@ -6,6 +6,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/sha256"
+	"crypto/subtle"
 	"crypto/x509"
 	"encoding/hex"
 	"errors"
@@ -13,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -163,6 +165,21 @@ func Fingerprint(spki []byte) string {
 	sum := sha256.Sum256(spki)
 	h := strings.ToUpper(hex.EncodeToString(sum[:8]))
 	return h[0:4] + " " + h[4:8] + " " + h[8:12] + " " + h[12:16]
+}
+
+// SameCode reports whether typed is the key code code. It ignores white
+// space, hyphens, and case, and it needs all 16 hex digits.
+func SameCode(typed, code string) bool {
+	norm := func(s string) string {
+		return strings.ToUpper(strings.Map(func(r rune) rune {
+			if unicode.IsSpace(r) || r == '-' {
+				return -1
+			}
+			return r
+		}, s))
+	}
+	a, b := norm(typed), norm(code)
+	return len(b) == 16 && subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
 // verify checks an ASN.1 DER ECDSA signature over the SHA-256 of msg.

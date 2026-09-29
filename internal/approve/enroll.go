@@ -29,8 +29,10 @@ type EnrollOptions struct {
 	KeyPath  string
 	KeyOwner int
 
-	// Confirm shows the key code and returns true only when the user says
-	// that the phone shows the same code.
+	// Confirm gets the key code of the new key. It returns true only when
+	// the user typed the code that the phone shows and SameCode accepts
+	// it. The terminal must not show the code, because code that runs as
+	// the user can write to the terminal.
 	Confirm func(phone, code string) bool
 	// Waiting gets the name of the phone before the wait starts.
 	Waiting func(phone string)
@@ -75,11 +77,7 @@ func Enroll(ctx context.Context, o EnrollOptions) (*Key, error) {
 	stop := context.AfterFunc(ctx, func() { c.Close() })
 	defer stop()
 
-	var started struct {
-		ID     string `json:"id"`
-		Device string `json:"device"`
-		Name   string `json:"name"`
-	}
+	var started Started
 	params := map[string]any{"device": o.Device, "host": e.Host, "user": e.User, "time": e.Time, "nonce": e.Nonce}
 	if err := c.call("approve.enroll", params, &started, start.Add(requestTimeout)); err != nil {
 		return nil, err

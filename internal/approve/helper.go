@@ -30,6 +30,9 @@ var (
 	ErrTimeout = errors.New("the phone did not answer in time")
 	// ErrService means that the PAM service cannot use approvals.
 	ErrService = errors.New("this PAM service cannot use approvals")
+	// ErrRequester means that another user asks for the approval, or that
+	// the helper cannot see who asks.
+	ErrRequester = errors.New("another user asks for this approval")
 )
 
 var userName = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
@@ -61,6 +64,13 @@ type Options struct {
 	Out  io.Writer
 	Now  func() time.Time
 	Rand io.Reader
+
+	// RUser is PAM_RUSER, the user that asks. CallerUID is the real user
+	// ID of the PAM caller, and UserUID the user ID of User. Run refuses
+	// a request that another user makes for User.
+	RUser     string
+	CallerUID int
+	UserUID   int
 }
 
 func (o *Options) defaults() {
@@ -87,6 +97,40 @@ func newNonce(r io.Reader) (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
+// Started is the result of approve.request and approve.enroll. fluxd
+// returns this type and the helper and the CLI read it, so the 2 sides
+// cannot use different names.
+type Started struct {
+	ID string `json:"id"`
+	// Timeout is the wait for the phone in seconds.
+	Timeout int `json:"timeout"`
+	// Device is the device ID of the phone. Only approve.enroll sets it.
+	Device string `json:"device,omitempty"`
+	Name   string `json:"name"`
+}
+
+// checkRequester refuses a request that another user makes for User.
+//   - sudo sets PAM_RUSER to the user that runs sudo. PAM_USER differs
+//     from it with the sudoers options targetpw and runaspw.
+//   - A PAM caller that runs with setuid root keeps the user that asks as
+//     its real user ID.
+//   - polkit gives no PAM item for the user that asks. So a polkit-1
+//     request needs the real user ID of User, which only a polkit agent
+//     helper with setuid root gives. A polkit helper that runs as a
+//     service has the real user ID 0, and the helper refuses it.
+func (o *Options) checkRequester() error {
+	if o.RUser != "" && o.RUser != o.User {
+		return ErrRequester
+	}
+	if o.CallerUID != 0 && o.CallerUID != o.UserUID {
+		return ErrRequester
+	}
+	if o.Service == "polkit-1" && (o.CallerUID <= 0 || o.CallerUID != o.UserUID) {
+		return ErrRequester
+	}
+	return nil
+}
+
 // waitResult is the result of approve.wait.
 type waitResult struct {
 	State     string `json:"state"`
@@ -105,6 +149,9 @@ func Run(ctx context.Context, o Options) error {
 	}
 	if !ValidUser(o.User) {
 		return fmt.Errorf("%q is not a valid local user name", o.User)
+	}
+	if err := o.checkRequester(); err != nil {
+		return err
 	}
 	key, err := ReadKey(o.KeyPath, o.KeyOwner)
 	if err != nil {
@@ -128,10 +175,7 @@ func Run(ctx context.Context, o Options) error {
 	stop := context.AfterFunc(ctx, func() { c.Close() })
 	defer stop()
 
-	var started struct {
-		ID      string `json:"id"`
-		Timeout int    `json:"timeout"`
-	}
+	var started Started
 	params := map[string]any{
 		"device": key.DeviceID, "host": req.Host, "user": req.User, "service": req.Service,
 		"tty": req.TTY, "rhost": req.RHost, "time": req.Time, "nonce": req.Nonce,
@@ -149,15 +193,26 @@ func Run(ctx context.Context, o Options) error {
 		deadline = d
 	}
 
-	fmt.Fprintf(o.Out, "Approve on %s, or wait for the password prompt.\n", key.DeviceName)
+	// The phone shows the terminal too, so the user can compare it.
+	if req.TTY != "" {
+		fmt.Fprintf(o.Out, "Approve on %s for terminal %s, or wait for the password prompt.\n", key.DeviceName, req.TTY)
+	} else {
+		fmt.Fprintf(o.Out, "Approve on %s, or wait for the password prompt.\n", key.DeviceName)
+	}
 
 	for {
 		var res waitResult
 		err := c.call("approve.wait", map[string]any{"id": started.ID}, &res, deadline)
 		if err != nil {
+			if ctx.Err() != nil {
+				// The PAM caller stopped, or the time of the helper ended.
+				// fluxd also ends the request when the connection closes.
+				cancelRequest(o.Socket, o.PeerUID, started.ID)
+				return ErrTimeout
+			}
 			var ne net.Error
 			var re *RemoteError
-			if errors.As(err, &ne) && ne.Timeout() || errors.As(err, &re) && re.Code == "timeout" || ctx.Err() != nil {
+			if errors.As(err, &ne) && ne.Timeout() || errors.As(err, &re) && re.Code == "timeout" {
 				return ErrTimeout
 			}
 			return err

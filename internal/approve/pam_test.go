@@ -138,3 +138,74 @@ func TestEnableRefusesOtherServices(t *testing.T) {
 		t.Error("a service with no file must give an error")
 	}
 }
+
+// Disable removes a copy of the vendor file that Enable made, so that
+// later changes of the vendor file work again.
+func TestDisableRemovesTheVendorCopy(t *testing.T) {
+	p := testPAM(t)
+	vendorPath := filepath.Join(p.Vendor, "polkit-1")
+	vendor := "#%PAM-1.0\nauth include system-auth\naccount include system-auth\n"
+	if err := os.WriteFile(vendorPath, []byte(vendor), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Enable("polkit-1"); err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := p.Disable("polkit-1"); err != nil || !changed {
+		t.Fatalf("disable: changed=%v err=%v", changed, err)
+	}
+	if _, err := os.Stat(filepath.Join(p.Dir, "polkit-1")); !os.IsNotExist(err) {
+		t.Fatalf("the copy stays: %v", err)
+	}
+
+	// An update of the vendor file between enable and disable.
+	if _, err := p.Enable("polkit-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(vendorPath, []byte(vendor+"session include system-auth\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Disable("polkit-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(p.Dir, "polkit-1")); !os.IsNotExist(err) {
+		t.Fatalf("the copy stays after a vendor update: %v", err)
+	}
+
+	// A copy that the administrator changed stays, without the Flux lines.
+	if _, err := p.Enable("polkit-1"); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(p.Dir, "polkit-1")
+	b, _ := os.ReadFile(path)
+	if err := os.WriteFile(path, append(b, "# own rule\n"...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Disable("polkit-1"); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(path); err != nil || p.Uses("polkit-1") || !strings.Contains(string(b), "# own rule") {
+		t.Fatalf("the changed copy: %q %v", b, err)
+	}
+}
+
+// A file that existed before Flux stays, also when it equals the vendor
+// file.
+func TestDisableKeepsAnOwnFile(t *testing.T) {
+	p := testPAM(t)
+	text := "#%PAM-1.0\nauth include system-auth\n"
+	for _, dir := range []string{p.Dir, p.Vendor} {
+		if err := os.WriteFile(filepath.Join(dir, "polkit-1"), []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := p.Enable("polkit-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Disable("polkit-1"); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(filepath.Join(p.Dir, "polkit-1")); err != nil || string(b) != text {
+		t.Fatalf("the own file: %q %v", b, err)
+	}
+}

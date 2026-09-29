@@ -26,6 +26,8 @@ type fakeFluxd struct {
 	// startErr, when set, is the error of approve.request.
 	startErr map[string]any
 	timeout  int
+	// cancels gets the ID of each approve.cancel.
+	cancels chan string
 }
 
 func newFakeFluxd(t *testing.T) *fakeFluxd {
@@ -41,7 +43,7 @@ func newFakeFluxd(t *testing.T) *fakeFluxd {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
-	f := &fakeFluxd{path: filepath.Join(dir, "s"), timeout: 20}
+	f := &fakeFluxd{path: filepath.Join(dir, "s"), timeout: 20, cancels: make(chan string, 4)}
 	ln, err := net.Listen("unix", f.path)
 	if err != nil {
 		t.Fatal(err)
@@ -79,11 +81,19 @@ func (f *fakeFluxd) serve(c net.Conn) {
 			f.requests = append(f.requests, req.Params)
 			f.mu.Unlock()
 			last = req.Params
-			if f.startErr != nil {
+			switch {
+			case f.startErr != nil:
 				reply["error"] = f.startErr
-			} else {
-				reply["result"] = map[string]any{"id": "req1", "timeout": f.timeout, "device": "3f8e2a1c9b7d4e6fa0c5b8d2e1f47a93", "name": "Pixel 8"}
+			case req.Method == "approve.request":
+				// The result of fluxd has no device for a request.
+				reply["result"] = Started{ID: "req1", Timeout: f.timeout, Name: "Pixel 8"}
+			default:
+				reply["result"] = Started{ID: "req1", Timeout: 120, Device: "3f8e2a1c9b7d4e6fa0c5b8d2e1f47a93", Name: "Pixel 8"}
 			}
+		case "approve.cancel":
+			id, _ := req.Params["id"].(string)
+			f.cancels <- id
+			reply["result"] = map[string]any{}
 		case "approve.wait":
 			res, rpcErr := f.answer(last)
 			if res == nil && rpcErr == nil {
@@ -132,7 +142,8 @@ func TestHelperApproves(t *testing.T) {
 	if err := Run(context.Background(), helperOptions(t, key, f.path, &out)); err != nil {
 		t.Fatalf("a valid approval: %v", err)
 	}
-	if out.String() != "Approve on Pixel 8, or wait for the password prompt.\n" {
+	// The phone shows the terminal too, so the user can compare it.
+	if out.String() != "Approve on Pixel 8 for terminal /dev/pts/3, or wait for the password prompt.\n" {
 		t.Fatalf("output %q", out.String())
 	}
 	p := f.requests[0]
@@ -292,6 +303,60 @@ func TestHelperRefusesServicesAndUsers(t *testing.T) {
 		o.User = u
 		if err := Run(context.Background(), o); err == nil {
 			t.Errorf("user %q: want an error", u)
+		}
+	}
+}
+
+// The helper ends the request on the phone when its PAM caller stops it.
+func TestHelperCancelsWhenStopped(t *testing.T) {
+	key := writeTestKey(t, newPhone(t))
+	f := newFakeFluxd(t)
+	f.answer = func(map[string]any) (map[string]any, map[string]any) { return nil, nil }
+	ctx, stop := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		stop()
+	}()
+	if err := Run(ctx, helperOptions(t, key, f.path, &bytes.Buffer{})); !errors.Is(err, ErrTimeout) {
+		t.Fatalf("got %v", err)
+	}
+	select {
+	case id := <-f.cancels:
+		if id != "req1" {
+			t.Fatalf("cancel of %q", id)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the helper did not cancel the request")
+	}
+}
+
+// Another user cannot put a request for this user on the phone.
+func TestHelperRefusesOtherRequesters(t *testing.T) {
+	key := writeTestKey(t, newPhone(t))
+	cases := []struct {
+		name    string
+		change  func(o *Options)
+		refused bool
+	}{
+		{"sudo by the same user", func(o *Options) { o.RUser = "alice"; o.UserUID = 1000 }, false},
+		{"sudo with targetpw", func(o *Options) { o.RUser = "bob"; o.UserUID = 1000 }, true},
+		{"a caller of another user", func(o *Options) { o.CallerUID = 1001; o.UserUID = 1000 }, true},
+		{"a lock screen of the user", func(o *Options) { o.Service = "hyprlock"; o.CallerUID = 1000; o.UserUID = 1000 }, false},
+		{"polkit from the same user", func(o *Options) { o.Service = "polkit-1"; o.RUser = "alice"; o.CallerUID = 1000; o.UserUID = 1000 }, false},
+		{"polkit from another user", func(o *Options) { o.Service = "polkit-1"; o.RUser = "alice"; o.CallerUID = 1001; o.UserUID = 1000 }, true},
+		{"polkit from a service", func(o *Options) { o.Service = "polkit-1"; o.RUser = "alice"; o.CallerUID = 0; o.UserUID = 1000 }, true},
+	}
+	for _, c := range cases {
+		f := newFakeFluxd(t)
+		f.answer = func(map[string]any) (map[string]any, map[string]any) { return map[string]any{"state": "denied"}, nil }
+		o := helperOptions(t, key, f.path, &bytes.Buffer{})
+		c.change(&o)
+		err := Run(context.Background(), o)
+		if c.refused != errors.Is(err, ErrRequester) {
+			t.Errorf("%s: got %v", c.name, err)
+		}
+		if c.refused && len(f.requests) != 0 {
+			t.Errorf("%s: the helper sent a request", c.name)
 		}
 	}
 }
