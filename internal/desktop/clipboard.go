@@ -167,17 +167,22 @@ func clipboardLimit(typ string) int {
 // observe records key as the last content. It reports whether the content
 // is a new local change. Initial content is never a change, and content
 // that Set or SetImage wrote is not a change.
+//
+// wrote also sets lastSeen, so observe looks in written first. Otherwise
+// the key stays in written, and a later local copy of the same content
+// does not count as a change.
 func (c *Clipboard) observe(key string, initial bool) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if i := slices.Index(c.written, key); i >= 0 {
+		c.written = slices.Delete(c.written, 0, i+1)
+		c.lastSeen = key
+		return false
+	}
 	if key == c.lastSeen {
 		return false
 	}
 	c.lastSeen = key
-	if i := slices.Index(c.written, key); i >= 0 {
-		c.written = slices.Delete(c.written, 0, i+1)
-		return false
-	}
 	return !initial
 }
 
