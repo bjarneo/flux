@@ -15,6 +15,16 @@ targets:
       - App
     dependencies:
       - package: FluxKit
+    # The hardened runtime blocks injected libraries, so that no other
+    # program uses the camera, microphone, and Photos grants of Flux. Each
+    # of these resources then needs its entitlement. Screen capture and
+    # speech recognition need none.
+    entitlements:
+      path: App/Flux.entitlements
+      properties:
+        com.apple.security.device.camera: true
+        com.apple.security.device.audio-input: true
+        com.apple.security.personal-information.photos-library: true
     info:
       path: App/Info.plist
       properties:
@@ -65,5 +75,5 @@ targets:
         CODE_SIGN_IDENTITY: "-"
         CODE_SIGN_STYLE: Manual
         DEVELOPMENT_TEAM: ""
-        ENABLE_HARDENED_RUNTIME: NO
+        ENABLE_HARDENED_RUNTIME: YES
         COMBINE_HIDPI_IMAGES: YES

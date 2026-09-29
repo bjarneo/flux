@@ -22,7 +22,7 @@ make test-macos
 open macos/build/Build/Products/Debug/Flux.app
 ```
 
-`make macos` generates `macos/Flux.xcodeproj` from `macos/project.yml` and signs the app ad hoc.
+`make macos` generates `macos/Flux.xcodeproj` from `macos/project.yml` and signs the app ad hoc with the hardened runtime.
 The app version is the last release tag, such as `0.7.0`. The app sends it to `fluxd`, and the Flux window on the computer shows it.
 The generated project and `macos/build` stay out of Git.
 To work in Xcode, run `xcodegen generate` in `macos/` and open `Flux.xcodeproj`.
@@ -47,6 +47,18 @@ To open it, remove the quarantine attribute:
 ```sh
 xattr -dr com.apple.quarantine Flux.app
 ```
+
+The app runs with the hardened runtime.
+macOS then loads no library that another program injects, so no other program can use the camera, microphone, and Photos access of Flux.
+`macos/project.yml` gives the entitlements for the camera, the microphone, and the Photos library, and XcodeGen writes them to `macos/App/Flux.entitlements`.
+When a feature starts to use another protected resource, add its entitlement there, or macOS refuses the access without a prompt.
+To check a build, run:
+
+```sh
+codesign -dv Flux.app 2>&1 | grep flags
+```
+
+The output shows `flags=0x10002(adhoc,runtime)`.
 
 Flux keeps running in the menu bar after the window closes.
 Quit it from the menu bar item.

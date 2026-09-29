@@ -3,3 +3,4 @@
 build/
 Flux.xcodeproj/
 App/Info.plist
+App/Flux.entitlements
