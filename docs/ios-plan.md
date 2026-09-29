@@ -139,7 +139,26 @@ It shares FluxKit with [Flux for macOS](macos.md) and offers the Android feature
 ## Phase 9: Screen mirror
 
 - [ ] A ReplayKit broadcast upload extension that encodes the screen in H.264 with the stream format of `flux.screen`.
-- [ ] Build it when the stream runs inside the extension's memory limit. Else document that iOS does not mirror the screen.
+  Not built: iOS does not mirror the screen to a computer. The iPhone does not announce `flux.screen`, and the app has no Screen Mirror tile.
+- [x] Build it when the stream runs inside the extension's memory limit. Else document that iOS does not mirror the screen.
+  The stream could not be shown to run inside the limit of about 50 MB, and the design needs a change to `fluxd`, so it is documented here instead.
+
+Why iOS does not mirror the screen:
+
+- The simulator cannot run a broadcast, so nothing here can check an extension.
+  The iOS 26.3 simulator runtime has no `replayd`. `RPSystemBroadcastPickerView` logs the button press and shows no picker, and `RPScreenRecorder.startCapture` for the app's own screen reports that it started but delivers no frame.
+- The memory limit could not be checked.
+  A broadcast upload extension gets about 50 MB. In the simulator, the stream at the `flux.screen` size of 496 × 1080 took about 1 MB for `FluxTLS`, the TLS listener, and 1 connection, and about 120 MB with the VideoToolbox H.264 encoder running, because the simulator encodes in software inside the process.
+  A device encodes in hardware outside the process, so the real figure needs an iPhone.
+- The stream would end soon after it starts.
+  The broadcast runs in the extension process, and the app goes to the background when the user leaves it to show another app. The app then closes its links when its background time ends, and `fluxd` ends a mirror when the link that started it drops (`cancelOnLinkDown` in `internal/core/screen.go`).
+  Keeping the app awake with the `audio` background mode while no audio streams is not acceptable. A second link from the extension would give 2 processes with 1 device id and 1 certificate, which `fluxd` sees as the same device.
+- A design that keeps it alive needs 3 changes that cannot be checked without a device:
+  `fluxd` keeps an iPhone's mirror while the stream socket is open, also after the link drops, with a flag in the "start" packet so Android and the Mac keep their behavior;
+  the app shares its private key and certificate with the extension through the App Group or a keychain access group, which puts the identity key in a second process;
+  and the app sends "start" for the extension, which announces its port through the App Group while the app is still on the screen.
+
+- [ ] Checked on a device: whether an extension with the encoder and the TLS listener stays under the memory limit, before the design above is built.
 
 ## Phase 10: Documentation and integration
 

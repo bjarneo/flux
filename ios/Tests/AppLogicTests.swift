@@ -12,6 +12,16 @@ final class AppLogicTests: XCTestCase {
         XCTAssertEqual(AppModel.newlyPaired(old: new, new: new), [])
     }
 
+    /// iOS does not mirror the screen (docs/ios-plan.md, Phase 9), so the
+    /// iPhone never tells a computer that it can.
+    @MainActor
+    func testTheIPhoneDoesNotAnnounceTheScreenMirror() {
+        let plugins = PluginRegistry.make()
+        XCTAssertFalse(plugins.flatMap(\.incoming).contains(PacketType.fluxScreen))
+        XCTAssertFalse(plugins.flatMap(\.outgoing).contains(PacketType.fluxScreen))
+        XCTAssertTrue(plugins.flatMap(\.outgoing).contains(PacketType.fluxWebcam), "the list is the one that the app registers")
+    }
+
     func testUnlockLastsFiveMinutes() {
         var window = UnlockWindow(validFor: 300)
         XCTAssertFalse(window.isUnlocked(at: 1000), "locked at start")
