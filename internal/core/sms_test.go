@@ -210,7 +210,8 @@ func TestSmsThreadWaitersShareSortedAnswer(t *testing.T) {
 }
 
 // TestHandleSmsLimits checks that fluxd keeps the newest conversations
-// only, and cuts the last message and the addresses of each one.
+// only, cuts the last message and the name of each one, and keeps a
+// limited number of short addresses.
 func TestHandleSmsLimits(t *testing.T) {
 	d := &Daemon{}
 	dev := newDevice("p1")
@@ -218,9 +219,10 @@ func TestHandleSmsLimits(t *testing.T) {
 	for i := range maxConversations + 100 {
 		msgs = append(msgs, wireMessage(int64(i), int64(i), 1790000000000+int64(i), 1, 0))
 	}
-	var many []map[string]any
+	// A long address is dropped, not cut.
+	many := []map[string]any{addr(strings.Repeat("8", maxSmsAddress+1), "")}
 	for range maxSmsAddresses + 10 {
-		many = append(many, addr(strings.Repeat("9", maxSmsAddress+10), strings.Repeat("N", maxSmsAddress+10)))
+		many = append(many, addr(strings.Repeat("9", maxSmsAddress), strings.Repeat("N", maxSmsName+10)))
 	}
 	long := wireMessage(99999, 99999, 1800000000000, 1, 0, many...)
 	long["body"] = strings.Repeat("x", 100<<10)
@@ -236,8 +238,11 @@ func TestHandleSmsLimits(t *testing.T) {
 	if c == nil {
 		t.Fatal("the newest conversation is gone")
 	}
-	if len(c.Last) != maxSmsLast || len(c.Addresses) != maxSmsAddresses || len(c.Address) != maxSmsAddress {
-		t.Errorf("last %d bytes, %d addresses, address %d bytes", len(c.Last), len(c.Addresses), len(c.Address))
+	if len(c.Last) != maxSmsLast || len(c.Addresses) != maxSmsAddresses || c.Address != strings.Repeat("9", maxSmsAddress) {
+		t.Errorf("last %d bytes, %d addresses, address %q", len(c.Last), len(c.Addresses), c.Address)
+	}
+	if len(c.Name) != maxSmsName {
+		t.Errorf("name %d bytes", len(c.Name))
 	}
 }
 

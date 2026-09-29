@@ -145,6 +145,7 @@ The desktop then shows the **Messages** page for that phone:
 - A new message on the phone appears on the desktop in about 1 second.
 - A reply goes out on the SIM of the conversation. A new message uses the default SMS SIM of the phone.
 - The list keeps the 500 newest conversations and shows the first 1 KiB of each latest message.
+- A conversation keeps up to 20 addresses and the first 256 bytes of its name. `fluxd` ignores an address that is longer than 64 bytes.
 - A message from the desktop has at most 1600 characters, which is about 10 SMS parts.
 
 To send a text message from a script, use the [SMS command](cli.md#share-and-communicate):

@@ -13,11 +13,16 @@ import (
 // Limits on the SMS data of a phone. The state holds each conversation,
 // so a device cannot make the state large. fluxd keeps the newest
 // maxConversations conversations. Flux for Android sends at most 500.
+// maxSmsAddress is the longest address that fluxd keeps. A phone number
+// is shorter. fluxd drops a longer address and does not cut it, because a
+// cut address can name another person. maxSmsName is the longest contact
+// name and the longest name of a conversation.
 const (
 	maxConversations = 500
 	maxSmsLast       = 1 << 10
 	maxSmsAddresses  = 20
-	maxSmsAddress    = 256
+	maxSmsAddress    = 64
+	maxSmsName       = 256
 )
 
 // maxSmsSend is the longest text message in characters that fluxd sends.
@@ -103,14 +108,14 @@ func (w smsWire) message() SmsMessage {
 		m.subID = *w.SubID
 	}
 	for _, a := range w.Addresses {
-		addr := cutText(strings.TrimSpace(a.Address), maxSmsAddress)
-		if addr == "" {
+		addr := strings.TrimSpace(a.Address)
+		if addr == "" || len(addr) > maxSmsAddress {
 			continue
 		}
 		if len(m.Addresses) == maxSmsAddresses {
 			break
 		}
-		name := cutText(strings.TrimSpace(a.ContactName), maxSmsAddress)
+		name := cutText(strings.TrimSpace(a.ContactName), maxSmsName)
 		if name == "" {
 			name = addr
 		}
@@ -125,7 +130,7 @@ func (w smsWire) message() SmsMessage {
 
 func (m SmsMessage) conversation() *Conversation {
 	return &Conversation{
-		Thread: m.Thread, Name: strings.Join(m.names, ", "), Address: m.Address, Addresses: m.Addresses,
+		Thread: m.Thread, Name: cutText(strings.Join(m.names, ", "), maxSmsName), Address: m.Address, Addresses: m.Addresses,
 		Last: cutText(m.Body, maxSmsLast), Time: m.Time, Unread: !m.Read && !m.Outgoing,
 		Outgoing: m.Outgoing, Pending: m.Pending, Failed: m.Failed,
 		id: m.ID, ms: m.ms, subID: m.subID,
