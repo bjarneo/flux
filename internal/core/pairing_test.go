@@ -927,8 +927,15 @@ func TestConnectClipboardSkipsHiddenCopy(t *testing.T) {
 }
 
 // TestRecoverPacket checks that a panic in a packet handler ends in a log
-// line with the stack.
+// line with the stack, and that fluxd stops only when the panic leaves
+// d.mu locked.
 func TestRecoverPacket(t *testing.T) {
+	oldWait, oldExit := muWait, exitProcess
+	t.Cleanup(func() { muWait, exitProcess = oldWait, oldExit })
+	muWait = 500 * time.Millisecond
+	code := -1
+	exitProcess = func(c int) { code = c }
+
 	logs := &logLines{}
 	d := &Daemon{logger: log.New(logs, "", 0)}
 	func() {
@@ -937,6 +944,30 @@ func TestRecoverPacket(t *testing.T) {
 	}()
 	if !logs.has("broken handler") || !logs.has(`"flux.test\n"`) || !logs.has("goroutine") {
 		t.Fatalf("log %q", logs.lines)
+	}
+	if code != -1 {
+		t.Fatalf("fluxd stopped with %d after a panic without the lock", code)
+	}
+
+	// Another goroutine holds d.mu for a short time.
+	d.mu.Lock()
+	time.AfterFunc(20*time.Millisecond, d.mu.Unlock)
+	func() {
+		defer d.recoverPacket(nil, proto.New("flux.test", nil))
+		panic("broken handler")
+	}()
+	if code != -1 {
+		t.Fatalf("fluxd stopped with %d while another goroutine held the lock", code)
+	}
+
+	// The handler panics while it holds d.mu.
+	func() {
+		defer d.recoverPacket(nil, proto.New("flux.test", nil))
+		d.mu.Lock()
+		panic("broken handler")
+	}()
+	if code != 1 || !logs.has("left the daemon locked") {
+		t.Fatalf("exit code %d after a panic with the lock, log %q", code, logs.lines)
 	}
 }
 

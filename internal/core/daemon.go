@@ -905,11 +905,19 @@ func (d *Daemon) receive(dev *Device, l *lan.Link) {
 }
 
 // dispatch handles 1 packet of a link. A panic in a handler drops the
-// packet, logs the stack, and keeps the link and fluxd running.
+// packet, logs the stack, and keeps the link and fluxd running. When the
+// handler left d.mu locked, fluxd stops instead.
 func (d *Daemon) dispatch(dev *Device, l *lan.Link, p *proto.Packet) {
 	defer d.recoverPacket(l, p)
 	d.handlePacket(dev, l, p)
 }
+
+// muWait is how long recoverPacket waits for d.mu after a panic. Tests
+// make it shorter.
+var muWait = 2 * time.Second
+
+// exitProcess stops fluxd. Tests replace it.
+var exitProcess = os.Exit
 
 // recoverPacket stops a panic of a packet handler and logs it with the
 // stack. Only a deferred call can stop the panic.
@@ -924,6 +932,29 @@ func (d *Daemon) recoverPacket(l *lan.Link, p *proto.Packet) {
 		name = l.Identity.DeviceName
 	}
 	d.logf("%s: the %s packet failed: %v\n%s", name, logType(p.Type), r, debug.Stack())
+	// A handler that panics between d.mu.Lock and d.mu.Unlock leaves d.mu
+	// locked, and then each link and each API call waits for ever. fluxd
+	// then stops with an error, and systemd starts it again.
+	if !d.muFree(muWait) {
+		d.logf("%s: the %s packet left the daemon locked, so fluxd stops", name, logType(p.Type))
+		exitProcess(1)
+	}
+}
+
+// muFree reports whether d.mu becomes free within wait. Another goroutine
+// can hold d.mu for a short time, so muFree tries again until wait ends.
+func (d *Daemon) muFree(wait time.Duration) bool {
+	end := time.Now().Add(wait)
+	for {
+		if d.mu.TryLock() {
+			d.mu.Unlock()
+			return true
+		}
+		if time.Now().After(end) {
+			return false
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 // logType returns a packet type for a log line: quoted, and cut to 64

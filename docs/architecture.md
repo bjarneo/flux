@@ -70,7 +70,7 @@ A received payload fails when the device sends nothing for 60 seconds.
 - A trust entry with a certificate that does not parse counts as not paired, and it refuses every link.
 - An unpair on either side sends `pair: false`, and `fluxd` closes the link. `fluxd` then sends no feature packet to the device.
 - The `fingerprint` of a device in the state is the first 8 bytes of the SHA-256 hash of the SubjectPublicKeyInfo of its certificate, as 16 uppercase hex digits.
-- A panic in a packet handler drops the packet and writes the stack to the journal.
+- A panic in a packet handler drops the packet and writes the stack to the journal. When the handler leaves the daemon lock taken for 2 seconds, `fluxd` stops with an error, and systemd starts it again.
 
 UDP and mDNS never change the address of a paired device.
 `fluxd` dials the reported address after the last address, and a link that passes the pin check sets the new address.
