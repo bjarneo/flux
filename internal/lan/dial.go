@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -13,14 +12,15 @@ import (
 // the next host. RFC 8305 uses the same idea for IPv6 and IPv4.
 const dialDelay = 300 * time.Millisecond
 
-// dialFirst opens a TCP connection to the first host that accepts on port.
-// It starts with hosts[0]. It starts the next host when the previous host
-// fails or does not answer within dialDelay. So the first host wins when
-// it answers in time, and a host that does not answer delays the others
-// by dialDelay only. dialFirst returns the connection and the index of its
-// host, and it closes the connections that come later.
-func dialFirst(ctx context.Context, d *net.Dialer, hosts []string, port int) (net.Conn, int, error) {
-	if len(hosts) == 0 {
+// dialFirst opens a TCP connection to the first address that accepts.
+// Each address is a host and a port. It starts with addrs[0]. It starts
+// the next address when the previous address fails or does not answer
+// within dialDelay. So the first address wins when it answers in time, and
+// an address that does not answer delays the others by dialDelay only.
+// dialFirst returns the connection and the index of its address, and it
+// closes the connections that come later.
+func dialFirst(ctx context.Context, d *net.Dialer, addrs []string) (net.Conn, int, error) {
+	if len(addrs) == 0 {
 		return nil, -1, errors.New("no address")
 	}
 	ctx, cancel := context.WithCancel(ctx)
@@ -30,14 +30,14 @@ func dialFirst(ctx context.Context, d *net.Dialer, hosts []string, port int) (ne
 		i    int
 		err  error
 	}
-	results := make(chan result, len(hosts))
+	results := make(chan result, len(addrs))
 	next, pending := 0, 0
 	start := func() {
 		i := next
 		next++
 		pending++
 		go func() {
-			c, err := d.DialContext(ctx, "tcp", net.JoinHostPort(hosts[i], strconv.Itoa(port)))
+			c, err := d.DialContext(ctx, "tcp", addrs[i])
 			results <- result{c, i, err}
 		}()
 	}
@@ -64,7 +64,7 @@ func dialFirst(ctx context.Context, d *net.Dialer, hosts []string, port int) (ne
 			errs = append(errs, r.err.Error())
 		case <-timer.C:
 		}
-		if next < len(hosts) {
+		if next < len(addrs) {
 			start()
 			timer.Reset(dialDelay)
 		}
