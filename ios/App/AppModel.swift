@@ -55,6 +55,7 @@ final class AppModel {
                 }
             }
         }
+        watchBackgroundWork()
     }
 
     static let pairCategory = "pair"
@@ -144,10 +145,29 @@ final class AppModel {
     }
 
     private func backgroundTimeEnded() {
-        endBackgroundTask()
         // A live microphone keeps Flux running, and it streams over the links.
-        if FeatureHooks.runsInBackground(model: self) { return }
-        core.stop()
+        // Else the links close while iOS still gives Flux time.
+        if !FeatureHooks.runsInBackground(model: self) { core.stop() }
+        endBackgroundTask()
+    }
+
+    /// Closes the links when the work that kept Flux running in the
+    /// background ends after its background time, such as a microphone
+    /// stream that the computer stops.
+    private func watchBackgroundWork() {
+        withObservationTracking {
+            _ = FeatureHooks.runsInBackground(model: self)
+        } onChange: { [weak self] in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.watchBackgroundWork()
+                    if !self.isActive, self.backgroundTask == .invalid, !FeatureHooks.runsInBackground(model: self) {
+                        self.core.stop()
+                    }
+                }
+            }
+        }
     }
 
     private func endBackgroundTask() {
