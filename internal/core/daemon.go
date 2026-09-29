@@ -113,6 +113,9 @@ type Options struct {
 	// UDPPort and FirstTCPPort change the protocol ports. Zero means 1716.
 	UDPPort      int
 	FirstTCPPort int
+	// Version is the build version of fluxd. The state carries it, so the
+	// CLI can notice a daemon that an upgrade left running.
+	Version string
 }
 
 type clipboard interface {

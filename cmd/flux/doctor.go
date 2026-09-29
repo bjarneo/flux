@@ -33,6 +33,11 @@ func doctor() {
 	check(err == nil, "fluxd is running",
 		"fluxd is not running. Run: systemctl --user enable --now fluxd")
 	if err == nil {
+		ok, pass, fix, note := versionCheck(s.Self.Version, version)
+		check(ok, pass, fix)
+		if note != "" {
+			fmt.Println(note)
+		}
 		check(s.Self.TCPPort > 0, fmt.Sprintf("fluxd listens on TCP %d", s.Self.TCPPort),
 			"fluxd has no TCP port. Check: journalctl --user -u fluxd")
 	}
@@ -186,4 +191,37 @@ func running(name string) bool {
 
 func active(unit string) bool {
 	return exec.Command("systemctl", "is-active", "--quiet", unit).Run() == nil
+}
+
+// releasePart drops the commit that a build from a checkout appends, so
+// that build and a package build of the same release do not differ. The
+// literal dev, which the Makefile stamps when there is no git, carries
+// no release and compares as nothing.
+func releasePart(v string) string {
+	if v == "dev" {
+		return ""
+	}
+	v = strings.TrimPrefix(v, "v")
+	if i := strings.IndexAny(v, "-+"); i >= 0 {
+		return v[:i]
+	}
+	return v
+}
+
+// versionCheck compares the version of the running daemon with the version
+// of flux-cli. A daemon that started before the state carried a version
+// reports none, so an empty version is a mismatch too. A build that carries
+// no release cannot be compared and gets a note instead of a problem.
+func versionCheck(running, cli string) (ok bool, pass, fix, note string) {
+	if running == "" {
+		return false, "", fmt.Sprintf("fluxd a build with no version runs, but flux-cli is %s. Run: systemctl --user restart fluxd", cli), ""
+	}
+	r, c := releasePart(running), releasePart(cli)
+	switch {
+	case r == c:
+		return true, fmt.Sprintf("fluxd %s runs, the same release as flux-cli %s", running, cli), "", ""
+	case r == "" || c == "":
+		return true, "", "", fmt.Sprintf("- fluxd %s runs and flux-cli is %s, and a build with no release cannot be compared", running, cli)
+	}
+	return false, "", fmt.Sprintf("fluxd %s runs, but flux-cli is %s. Run: systemctl --user restart fluxd", running, cli), ""
 }

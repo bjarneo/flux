@@ -225,6 +225,7 @@ type State struct {
 		Name    string `json:"name"`
 		Type    string `json:"type"`
 		TCPPort int    `json:"tcpPort"`
+		Version string `json:"version"`
 	} `json:"self"`
 	Devices []struct {
 		ID        string `json:"id"`
