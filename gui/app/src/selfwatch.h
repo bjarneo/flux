@@ -23,8 +23,9 @@ public:
 
 signals:
     void replacedChanged();
-    // aboutToRestart asks the owner to release the single-instance socket,
-    // so that the new process opens the window.
+    // aboutToRestart asks the owner to release the single-instance socket
+    // and lock, so that the new process opens the window. It comes after
+    // the new process started.
     void aboutToRestart();
 
 private:
