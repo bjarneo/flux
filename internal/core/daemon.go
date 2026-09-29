@@ -116,6 +116,10 @@ type Daemon struct {
 	dirty  chan struct{}
 	ctx    context.Context
 	logger *log.Logger
+
+	// sessions is the state of the remote sessions: the input queue, the
+	// streams, and the shortcut requests.
+	sessions sessionState
 }
 
 // Options change how the daemon runs. The zero value is the normal mode.

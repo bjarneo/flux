@@ -4,7 +4,9 @@ import (
 	"context"
 	"math"
 	"strings"
+	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"flux/internal/desktop"
 	"flux/internal/lan"
@@ -16,8 +18,9 @@ type inputBackend interface {
 	Move(dx, dy float64) error
 	Button(button uint32, pressed bool) error
 	Scroll(dx, dy float64) error
-	Type(text string, mods []string) error
-	Key(name string, mods []string) error
+	// Type and Key stop when ctx ends.
+	Type(ctx context.Context, text string, mods []string) error
+	Key(ctx context.Context, name string, mods []string) error
 	// MoveTo moves the pointer to x and y, from 0 to 1, on the monitor.
 	MoveTo(monitor string, x, y float64) error
 }
@@ -30,6 +33,15 @@ const (
 	// link drops actions when the desktop falls behind, so a slow wtype
 	// does not stop the packets of the phone.
 	inputQueue = 256
+	// inputReserve is the number of queue places that only a button
+	// release can take, so that a full queue does not keep a button down.
+	inputReserve = 4
+	// maxInputBacklog is the number of characters of text that the queue
+	// holds at most. wtype types about 250 characters each second.
+	maxInputBacklog = 4 * maxInputText
+	// heldCheck is the time between 2 checks that the device that holds a
+	// button is still allowed.
+	heldCheck = 500 * time.Millisecond
 )
 
 // specialKeys maps the specialKey numbers of flux.mousepad.request
@@ -75,6 +87,13 @@ type inputAction struct {
 	pressed bool
 	text    string // the text for type, the key name for key
 	mods    []string
+
+	// dev is the device that sent the action, link is its link at that
+	// time, and gen is the input generation. The action runs only while
+	// remote input stays on, the device stays paired, and the link stays.
+	dev  *Device
+	link *lan.Link
+	gen  uint64
 }
 
 // inputActions turns a mousepad body into the steps for the backend. A
@@ -177,26 +196,34 @@ func cleanInputText(s string) string {
 }
 
 // handleMousepad runs the input of a phone on the desktop while
-// remote_input is on.
+// remote_input is on. The actions of 1 packet go into the queue together,
+// or not at all, so that a click is never only a press.
 func (d *Daemon) handleMousepad(dev *Device, p *proto.Packet) {
+	var b mousepadBody
+	if p.Decode(&b) != nil {
+		return
+	}
 	d.mu.Lock()
 	on := d.cfg.RemoteInput && d.input != nil
-	warn := !on && !dev.inputRefused
 	if !on {
+		warn := !dev.inputRefused
 		dev.inputRefused = true
-	}
-	d.mu.Unlock()
-	if !on {
+		d.mu.Unlock()
 		if warn {
 			d.logf("%s: ignored remote input, because remote_input is off", dev.Name)
 		}
 		return
 	}
-	var b mousepadBody
-	if p.Decode(&b) != nil {
+	if !dev.Paired || dev.link == nil {
+		d.mu.Unlock()
 		return
 	}
-	monitor := d.desktopMonitor(dev.ID)
+	monitor := ""
+	if d.desktop != nil && d.desktop.dev.ID == dev.ID {
+		monitor = d.desktop.view.Monitor
+	}
+	var actions []inputAction
+	text, releases := 0, true
 	for _, a := range inputActions(b) {
 		if a.kind == "moveTo" {
 			// A position is on the remote desktop that the phone shows.
@@ -204,25 +231,95 @@ func (d *Daemon) handleMousepad(dev *Device, p *proto.Packet) {
 				continue
 			}
 			a.monitor = monitor
+		} else if a.kind != "button" || a.pressed {
+			releases = false
 		}
+		if a.kind == "type" {
+			text += utf8.RuneCountInString(a.text)
+		}
+		a.dev, a.link, a.gen = dev, dev.link, d.sessions.inputGen
+		actions = append(actions, a)
+	}
+	free := cap(d.inputQ) - len(d.inputQ)
+	if !releases {
+		free -= inputReserve
+	}
+	if len(actions) > free || d.sessions.inputText+text > maxInputBacklog {
+		// Log once for each burst, not for each packet.
+		warn := !d.sessions.inputDropped
+		d.sessions.inputDropped = true
+		d.mu.Unlock()
+		if warn {
+			d.logf("%s: dropped remote input, because the desktop is slow", dev.Name)
+		}
+		return
+	}
+	// Only this function adds to the queue, and it holds d.mu, so the
+	// actions fit.
+	for _, a := range actions {
 		select {
 		case d.inputQ <- a:
 		default:
-			d.logf("%s: dropped remote input, because the desktop is slow", dev.Name)
-			return
 		}
+	}
+	d.sessions.inputText += text
+	d.sessions.inputDropped = false
+	d.mu.Unlock()
+}
+
+// inputWakeLocked returns the channel that makes inputLoop check the held
+// buttons at once. d.mu must be held.
+func (d *Daemon) inputWakeLocked() chan struct{} {
+	if d.sessions.inputWake == nil {
+		d.sessions.inputWake = make(chan struct{}, 1)
+	}
+	return d.sessions.inputWake
+}
+
+// inputAllowedLocked reports whether an action can still run: remote input
+// is on, the action is not older than the last time it turned off, and its
+// device is paired and has the same link. d.mu must be held.
+func (d *Daemon) inputAllowedLocked(a inputAction) bool {
+	return d.cfg.RemoteInput && d.input != nil && a.gen == d.sessions.inputGen &&
+		a.dev != nil && a.dev.Paired && a.link != nil && a.dev.link == a.link && !linkClosed(a.link)
+}
+
+func linkClosed(l *lan.Link) bool {
+	select {
+	case <-l.Done():
+		return true
+	default:
+		return false
 	}
 }
 
-// inputLoop runs the input actions in order until ctx ends.
+// inputLoop runs the input actions in order until ctx ends. It releases a
+// button that it pressed when the device that pressed it is no longer
+// allowed, for example when its link drops during a drag.
 func (d *Daemon) inputLoop(ctx context.Context) {
 	var lastErr string
+	d.mu.Lock()
+	wake := d.inputWakeLocked()
+	d.mu.Unlock()
+	// held holds the press action of each button that is down.
+	held := map[uint32]inputAction{}
+	tick := time.NewTicker(heldCheck)
+	defer tick.Stop()
 	for {
+		// The check runs also while another device sends actions.
+		var check <-chan time.Time
+		if len(held) > 0 {
+			check = tick.C
+		}
 		select {
 		case <-ctx.Done():
 			return
+		case <-wake:
+			d.releaseHeld(held)
+		case <-check:
+			d.releaseHeld(held)
 		case a := <-d.inputQ:
-			err := d.runInput(a)
+			err := d.runQueued(ctx, a, held)
 			// Log a failure once, not for each motion.
 			if msg := errString(err); msg != lastErr {
 				if err != nil {
@@ -234,6 +331,70 @@ func (d *Daemon) inputLoop(ctx context.Context) {
 	}
 }
 
+// runQueued runs 1 action from the queue when it is still allowed.
+func (d *Daemon) runQueued(ctx context.Context, a inputAction, held map[uint32]inputAction) error {
+	d.mu.Lock()
+	if a.kind == "type" {
+		d.sessions.inputText = max(0, d.sessions.inputText-utf8.RuneCountInString(a.text))
+	}
+	ok := d.inputAllowedLocked(a)
+	var actx context.Context
+	var stop context.CancelFunc
+	if ok && (a.kind == "type" || a.kind == "key") {
+		// inputChanged stops the wtype that runs when remote input turns off.
+		actx, stop = context.WithCancel(ctx)
+		d.sessions.inputStop = stop
+	}
+	d.mu.Unlock()
+	if !ok {
+		// The button that the device holds must not stay down.
+		d.releaseHeld(held)
+		return nil
+	}
+	if stop != nil {
+		defer func() {
+			stop()
+			d.mu.Lock()
+			d.sessions.inputStop = nil
+			d.mu.Unlock()
+		}()
+		// A link that drops or an unpair stops the text that wtype still
+		// types.
+		d.watchSession(actx, stop, a.dev, a.link, func() bool { return d.inputAllowedLocked(a) })
+	}
+	err := d.runInput(actx, a)
+	if a.kind == "button" {
+		if a.pressed {
+			held[a.button] = a
+		} else {
+			delete(held, a.button)
+		}
+	}
+	return err
+}
+
+// releaseHeld releases each held button whose device is no longer allowed.
+func (d *Daemon) releaseHeld(held map[uint32]inputAction) {
+	if len(held) == 0 {
+		return
+	}
+	var stale []uint32
+	d.mu.Lock()
+	in := d.input
+	for b, a := range held {
+		if !d.inputAllowedLocked(a) {
+			stale = append(stale, b)
+		}
+	}
+	d.mu.Unlock()
+	for _, b := range stale {
+		if in != nil {
+			_ = in.Button(b, false)
+		}
+		delete(held, b)
+	}
+}
+
 func errString(err error) string {
 	if err == nil {
 		return ""
@@ -241,7 +402,7 @@ func errString(err error) string {
 	return err.Error()
 }
 
-func (d *Daemon) runInput(a inputAction) error {
+func (d *Daemon) runInput(ctx context.Context, a inputAction) error {
 	in := d.input
 	switch a.kind {
 	case "move":
@@ -253,9 +414,9 @@ func (d *Daemon) runInput(a inputAction) error {
 	case "scroll":
 		return in.Scroll(a.dx, a.dy)
 	case "type":
-		return in.Type(a.text, a.mods)
+		return in.Type(ctx, a.text, a.mods)
 	case "key":
-		return in.Key(a.text, a.mods)
+		return in.Key(ctx, a.text, a.mods)
 	}
 	return nil
 }
@@ -272,8 +433,10 @@ func (d *Daemon) sendInputState(l *lan.Link) {
 
 // inputChanged sends the remote input state to each connected phone that
 // accepts flux.input. It stops the remote desktop when its setting is off.
-// It also clears the error of the last remote desktop start, because that
-// error can say that the setting is off.
+// When remote input is off, it drops the queued actions, stops the wtype
+// that runs, and releases the held buttons. It also clears the error of
+// the last remote desktop start, because that error can say that the
+// setting is off.
 func (d *Daemon) inputChanged() {
 	d.mu.Lock()
 	var links []*lan.Link
@@ -285,7 +448,30 @@ func (d *Daemon) inputChanged() {
 	}
 	desktop := d.cfg.RemoteDesktop
 	d.desktopErr = ""
+	var stop context.CancelFunc
+	if !d.cfg.RemoteInput {
+		// A new generation drops the actions that a loop already took.
+		d.sessions.inputGen++
+	drain:
+		for {
+			select {
+			case <-d.inputQ:
+			default:
+				break drain
+			}
+		}
+		d.sessions.inputText = 0
+		stop = d.sessions.inputStop
+	}
+	wake := d.inputWakeLocked()
 	d.mu.Unlock()
+	if stop != nil {
+		stop()
+	}
+	select {
+	case wake <- struct{}{}:
+	default:
+	}
 	for _, l := range links {
 		d.sendInputState(l)
 	}

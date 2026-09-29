@@ -365,6 +365,10 @@ func (w *wlConn) msg(obj uint32, op uint16, args ...any) []byte {
 	return b
 }
 
+// wlWriteWait is the longest time that a write to the compositor can
+// take. A compositor that does not read then does not stop the input.
+const wlWriteWait = 2 * time.Second
+
 // write sends messages in 1 write.
 func (w *wlConn) write(msgs ...[]byte) error {
 	if err := w.failed(); err != nil {
@@ -374,6 +378,7 @@ func (w *wlConn) write(msgs ...[]byte) error {
 	for _, m := range msgs {
 		b = append(b, m...)
 	}
+	_ = w.c.SetWriteDeadline(time.Now().Add(wlWriteWait))
 	_, err := w.c.Write(b)
 	return err
 }

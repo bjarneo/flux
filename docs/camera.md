@@ -86,6 +86,15 @@ Other settings apply while the stream runs.
 `flux-cli webcam reset` restores neutral image settings and keeps the aspect, resolution, and camera.
 The phone limits values to its camera's capabilities and saves them for the next stream.
 
+`fluxd` takes the settings and the camera capabilities only from the phone that streams.
+It refuses settings with more than 4096 bytes, a list with more than 16 values, or a text with more than 32 characters.
+It forgets the settings when the stream stops.
+
+The udev rule `61-flux-v4l2loopback.rules` gives the user at the seat access to the control device of `v4l2loopback`.
+Each process of that user can then add and remove the loopback devices that no app has open.
+`fluxd` removes only the device with the label **Flux Camera**.
+A headless `fluxd` does not start the webcam.
+
 ## Phone as microphone
 
 On the phone, open Microphone and press Start.
@@ -100,6 +109,10 @@ flux-cli mic stop
 
 To include audio with the webcam, enable **Also send the microphone** in the phone's Webcam settings.
 The virtual source exists only while the phone streams.
+
+`fluxd` keeps at most 150 milliseconds of audio in front of `pw-cat`.
+After a stall of the network, it drops the oldest audio, so the delay does not grow.
+The journal then shows `dropped audio after a network stall` once for the stream.
 
 ## Screen mirror
 
@@ -122,4 +135,13 @@ flux-cli screen stop
 ```
 
 The window uses the `flux-screen` app ID.
-`dist/hyprland.lua` includes a floating-window rule for it.
+`dist/hyprland.lua` includes a rule that floats the window and keeps it from taking the keyboard focus.
+`ffplay` closes its window at the end of the stream, as `mpv` does.
+A phone can start a new mirror at most once in 3 seconds.
+
+## Stream sessions
+
+The webcam, the microphone, and the screen mirror each have 1 session.
+A new start stops the session that runs.
+The new `ffmpeg`, `pw-cat`, or player starts after the old one stopped, so 2 of them never write to 1 device.
+A stream stops when the phone stops it, when the link drops, when the device is unpaired, or when you stop it on the computer.
