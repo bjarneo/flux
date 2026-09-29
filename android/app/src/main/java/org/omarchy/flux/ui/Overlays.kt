@@ -1,0 +1,50 @@
+package org.omarchy.flux.ui
+
+import android.os.Build
+import android.view.MotionEvent
+import android.view.Window
+import androidx.activity.compose.LocalActivity
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+
+/**
+ * Guards the pair sheet and the approval screen against windows of other
+ * apps. An overlay can show a false code or a false request over the real
+ * one, so that the user taps Pair or Approve.
+ */
+object Overlays {
+    /** True when a window of another app covered the window, fully or in part, during [ev]. */
+    fun obscured(ev: MotionEvent): Boolean =
+        ev.flags and (MotionEvent.FLAG_WINDOW_IS_OBSCURED or MotionEvent.FLAG_WINDOW_IS_PARTIALLY_OBSCURED) != 0
+
+    /** Android 12 and later: hides the windows that other apps draw over [window] while [hide] is true. */
+    fun hide(window: Window, hide: Boolean) {
+        if (Build.VERSION.SDK_INT >= 31) window.setHideOverlayWindows(hide)
+    }
+}
+
+/** Hides the windows that other apps draw over the activity while this composable shows. */
+@Composable
+fun HideOverlays() {
+    val activity = LocalActivity.current ?: return
+    DisposableEffect(activity) {
+        Overlays.hide(activity.window, true)
+        onDispose { Overlays.hide(activity.window, false) }
+    }
+}
+
+/**
+ * The verification key of a pairing as the screen shows it: 16 hex digits
+ * in 4 groups of 4, such as 5EE6 825F 974E D59A. The user compares all 16
+ * digits with the computer.
+ */
+object PairKey {
+    /** Returns the groups of 4 digits. A key that is not ready gives 4 groups of dots. */
+    fun groups(key: String): List<String> {
+        val digits = key.filterNot { it.isWhitespace() }.uppercase()
+        return if (digits.isEmpty()) List(4) { "…" } else digits.chunked(4)
+    }
+
+    /** Returns the key with a space between the groups. */
+    fun display(key: String): String = groups(key).joinToString(" ")
+}

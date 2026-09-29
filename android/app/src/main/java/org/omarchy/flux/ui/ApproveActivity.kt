@@ -3,6 +3,7 @@ package org.omarchy.flux.ui
 import android.os.Bundle
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.util.Log
+import android.view.MotionEvent
 import androidx.activity.compose.setContent
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
@@ -29,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -51,8 +53,9 @@ import java.util.Locale
 /**
  * The Approve screen: 1 request from a computer, with Approve and Deny.
  * Approve opens BiometricPrompt, and the phone signs only after a strong
- * biometric. It shows over the lock screen, like the ring screen.
- * docs/approve.md is the security design.
+ * biometric. It shows over the lock screen, like the ring screen. Windows
+ * of other apps hide while it shows, and a tap that such a window covered
+ * does not approve. docs/approve.md is the security design.
  */
 class ApproveActivity : FragmentActivity() {
     private sealed interface Phase {
@@ -66,9 +69,16 @@ class ApproveActivity : FragmentActivity() {
     private lateinit var prompt: BiometricPrompt
     private var onSigned: ((Signature) -> Unit)? = null
 
+    // The new key of an enrollment until the computer gets it. A cancel deletes it, and the old key stays.
+    private var pending: ApproveKeys.Pending? = null
+
+    // True when a window of another app covered this window during the last touch.
+    private var touchObscured = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         FluxCore.init(this)
+        Overlays.hide(window, true)
         // BiometricPrompt must exist before the activity starts.
         prompt = BiometricPrompt(this, ContextCompat.getMainExecutor(this), object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
@@ -76,6 +86,7 @@ class ApproveActivity : FragmentActivity() {
                 val done = onSigned
                 onSigned = null
                 if (s == null || done == null) {
+                    discardPending()
                     phase.value = Phase.Failed("The fingerprint check gave no key. Try again.")
                     return
                 }
@@ -83,12 +94,14 @@ class ApproveActivity : FragmentActivity() {
                     done(s)
                 } catch (e: Exception) {
                     Log.w(TAG, "signing failed", e)
+                    discardPending()
                     phase.value = Phase.Failed("The phone could not sign the request.")
                 }
             }
 
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                 onSigned = null
+                discardPending()
                 phase.value = when (errorCode) {
                     BiometricPrompt.ERROR_NEGATIVE_BUTTON, BiometricPrompt.ERROR_USER_CANCELED, BiometricPrompt.ERROR_CANCELED -> Phase.Ask
                     else -> Phase.Failed(errString.toString())
@@ -96,6 +109,25 @@ class ApproveActivity : FragmentActivity() {
             }
         })
         setContent { TiledTheme { Screen() } }
+    }
+
+    override fun onDestroy() {
+        discardPending()
+        super.onDestroy()
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> touchObscured = Overlays.obscured(ev)
+            MotionEvent.ACTION_UP -> touchObscured = touchObscured || Overlays.obscured(ev)
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
+    /** Deletes the new key of an enrollment that did not end. The old key stays. */
+    private fun discardPending() {
+        pending?.let { ApproveKeys.discard(it) }
+        pending = null
     }
 
     @Composable
@@ -141,8 +173,17 @@ class ApproveActivity : FragmentActivity() {
                     add("Flux makes a key for ${r.computerName}. Each approval then needs your fingerprint.")
                 }
             }
+            val replaces = remember(r.computerId, r.kind) { r.kind == ApproveRequest.Kind.Enroll && ApproveKeys.has(r.computerId) }
             for (d in details) {
                 Text(d, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant, textAlign = TextAlign.Center)
+            }
+            if (replaces) {
+                Text(
+                    "This replaces the current approval key for ${r.computerName}.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.error,
+                    textAlign = TextAlign.Center,
+                )
             }
             if (r.kind == ApproveRequest.Kind.Approve) {
                 Text(
@@ -193,12 +234,14 @@ class ApproveActivity : FragmentActivity() {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
             IconBadge(Ic.error, size = 72.dp)
             Text(message, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
-            Text(
-                "The computer asks for the password.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
+            if (last?.kind != ApproveRequest.Kind.Enroll) {
+                Text(
+                    "The computer asks for the password.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
             Button(onClick = { finish() }) { Text("Close") }
         }
     }
@@ -214,39 +257,59 @@ class ApproveActivity : FragmentActivity() {
     }
 
     private fun start(r: ApproveRequest) {
+        if (touchObscured) {
+            FluxCore.toast("Another app draws over Flux. Close that app, then approve.")
+            return
+        }
         if (BiometricManager.from(this).canAuthenticate(BIOMETRIC_STRONG) != BiometricManager.BIOMETRIC_SUCCESS) {
             fail(r, "Set up a fingerprint in the phone settings first.")
             return
         }
         phase.value = Phase.Working
-        val spki: ByteArray?
+        discardPending()
+        val key: ApproveKeys.Pending?
         val signature: Signature
         try {
-            spki = if (r.kind == ApproveRequest.Kind.Enroll) ApproveKeys.create(r.computerId) else null
-            signature = ApproveKeys.signer(r.computerId)
+            key = if (r.kind == ApproveRequest.Kind.Enroll) ApproveKeys.create(r.computerId).also { pending = it } else null
+            signature = if (key != null) ApproveKeys.signer(key) else ApproveKeys.signer(r.computerId)
         } catch (e: KeyPermanentlyInvalidatedException) {
             ApproveKeys.delete(r.computerId)
+            pending = null
             fail(r, "The fingerprints on the phone changed. Enroll again with: sudo flux-cli approve enroll")
             return
         } catch (e: Exception) {
             Log.w(TAG, "the approval key failed", e)
+            discardPending()
             fail(r, "The phone could not use its approval key.")
             return
         }
         onSigned = { s ->
-            if (spki == null) {
+            if (key == null) {
                 s.update(ApproveMessage.approval(r))
                 Approvals.approve(FluxCore, r, s.sign())
                 finish()
             } else {
-                s.update(ApproveMessage.enrollment(r, spki))
-                Approvals.enrolled(FluxCore, r, spki, s.sign())
-                phase.value = Phase.Enrolled(ApproveMessage.fingerprint(spki))
+                s.update(ApproveMessage.enrollment(r, key.spki))
+                // The old key stays until the new key reaches the computer.
+                if (Approvals.enrolled(FluxCore, r, key.spki, s.sign())) {
+                    ApproveKeys.commit(key)
+                    pending = null
+                    phase.value = Phase.Enrolled(ApproveMessage.fingerprint(key.spki))
+                } else {
+                    discardPending()
+                    phase.value = Phase.Failed("The new key did not reach ${r.computerName}. The old key stays.")
+                }
             }
         }
+        // The prompt shows the terminal too, because the user must approve the request that the screen showed.
+        val where = listOfNotNull(
+            r.tty.takeIf { it.isNotEmpty() }?.let { "Terminal: $it" },
+            r.rhost.takeIf { it.isNotEmpty() }?.let { "From: $it" },
+        ).joinToString(" · ")
         val info = BiometricPrompt.PromptInfo.Builder()
-            .setTitle(if (spki == null) "Approve ${r.service}" else "Enroll this phone")
+            .setTitle(if (key == null) "Approve ${r.service}" else "Enroll this phone")
             .setSubtitle("For ${r.user} on ${r.host}")
+            .apply { if (key == null && where.isNotEmpty()) setDescription(where) }
             .setNegativeButtonText("Cancel")
             .setAllowedAuthenticators(BIOMETRIC_STRONG)
             .setConfirmationRequired(true)
