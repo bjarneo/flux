@@ -33,17 +33,30 @@ final class ShareFeature {
 
     /// Copies the picked files into the outbox and sends them. The picker
     /// gives access to its files only for a short time, and the transfer
-    /// runs later, so the copies go out.
+    /// runs later, so the copies go out. A folder does not go out.
     static func send(picked urls: [URL], to device: DeviceSnapshot, model: AppModel) {
         guard let share = model.core.plugin(SharePlugin.self), !urls.isEmpty else { return }
+        let (files, folders) = Outbox.splitFolders(urls)
+        if let folder = folders.first { model.show("\(folder.lastPathComponent) is a folder. Send the files inside it") }
+        guard !files.isEmpty else { return }
         Task {
             do {
-                let copies = try await Outbox.copy(urls)
-                share.send(files: copies, to: device.id)
+                let copies = try await Outbox.copy(files)
+                await sendCopies(copies, to: device, share: share, model: model)
             } catch {
                 model.show("Cannot read the files: \(error.localizedDescription)")
             }
         }
+    }
+
+    /// Sends copies in the outbox and removes them after the transfer.
+    private static func sendCopies(_ copies: [URL], to device: DeviceSnapshot, share: SharePlugin, model: AppModel) async {
+        do {
+            try await share.sendAndWait(files: copies, to: device.id) { _, _ in }
+        } catch {
+            model.show("Not connected. Try again in a moment")
+        }
+        Outbox.remove(copies)
     }
 
     /// Loads the picked photos and videos into the outbox and sends them.
@@ -58,18 +71,39 @@ final class ShareFeature {
                     model.show("Cannot read a photo: \(error.localizedDescription)")
                 }
             }
-            if !files.isEmpty { share.send(files: files, to: device.id) }
+            if !files.isEmpty { await sendCopies(files, to: device, share: share, model: model) }
         }
     }
 }
 
-/// The folder of the copies of files that go out. Flux empties it at launch,
-/// when no transfer runs.
+/// The folder of the copies of files that go out. Each send removes its
+/// copies after the transfer, and Flux empties the folder at launch, for
+/// copies of a send that did not end.
 enum Outbox {
     static var folder: URL { FileManager.default.temporaryDirectory.appendingPathComponent("Outbox", isDirectory: true) }
 
     static func clear() {
         try? FileManager.default.removeItem(at: folder)
+    }
+
+    /// Removes copies with their folders in the outbox.
+    static func remove(_ copies: [URL]) {
+        let root = folder.standardizedFileURL.path
+        for dir in Set(copies.map { $0.deletingLastPathComponent().standardizedFileURL }) where dir.path.hasPrefix(root + "/") {
+            try? FileManager.default.removeItem(at: dir)
+        }
+    }
+
+    /// Splits picked URLs into files and folders.
+    static func splitFolders(_ urls: [URL]) -> (files: [URL], folders: [URL]) {
+        var files: [URL] = []
+        var folders: [URL] = []
+        for url in urls {
+            let access = url.startAccessingSecurityScopedResource()
+            defer { if access { url.stopAccessingSecurityScopedResource() } }
+            if (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true { folders.append(url) } else { files.append(url) }
+        }
+        return (files, folders)
     }
 
     /// A new folder in the outbox, so that files with the same name do not clash.
@@ -121,7 +155,7 @@ struct SendFilesQuickAction: View {
             QuickAction(title: "Files", systemImage: "doc.badge.arrow.up") { picking = true }
                 .accessibilityLabel("Send files")
                 .accessibilityHint("Choose files to send to \(device.name)")
-                .fileImporter(isPresented: $picking, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+                .fileImporter(isPresented: $picking, allowedContentTypes: [.data], allowsMultipleSelection: true) { result in
                     switch result {
                     case .success(let urls): ShareFeature.send(picked: urls, to: device, model: model)
                     case .failure(let error): model.show("Cannot open the files: \(error.localizedDescription)")

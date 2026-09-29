@@ -134,7 +134,7 @@ Flux for iOS does not advertise notifications of other apps, SMS, calls, or the 
 | Other apps' notifications, text messages, and calls | iOS gives apps no access to them. Flux does not advertise `notification.request`, `sms.*`, or `telephony`. |
 | Clipboard | iOS asks before each read of text that another app copied. Flux reads the clipboard only while it is on the screen, and when a computer connects only after the clipboard changed. |
 | Screenshots and photos | They go to the computer when Flux opens, not in the background. |
-| Share sheet | The share extension runs apart from the app and cannot open Flux or hold a link. It queues the items in the App Group. Flux sends them when it opens and connects, and keeps failed items with the reason on the **Share** screen. |
+| Share sheet | The share extension runs apart from the app and cannot open Flux or hold a link. It queues the items in the App Group. Flux sends them when it opens and connects, and keeps failed items with the reason on the **Share** screen. The queue holds up to 200 items and 1 GB, and an item that failed 5 times or waited 7 days goes, with a notification. Folders do not go. |
 | Focus | Flux cannot read or set the Focus. It reports the Focus through the Focus filter and ignores Do Not Disturb from the computer. |
 | Camera | iOS gives the camera only to the app on the screen, so the webcam stops when Flux leaves it. |
 | Volume keys | iOS gives apps no public way to take the volume keys, so they do not change slides. |

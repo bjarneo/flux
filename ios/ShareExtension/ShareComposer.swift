@@ -50,7 +50,9 @@ final class ShareComposer {
         }
     }
 
-    /// Copies the items into the queue for the chosen computer.
+    /// Copies the items into the queue for the chosen computer. The items
+    /// show to the app only when the share is complete, so the app never
+    /// sends a part of it, and a failure removes only items it never saw.
     func send() {
         guard canSend, let root = ShareGroup.root, let id = chosen,
               let computer = computers.first(where: { $0.id == id }) else { return }
@@ -59,17 +61,22 @@ final class ShareComposer {
         Task {
             let queue = ShareQueue(root: root)
             let created = Date()
+            let share = UUID().uuidString
             var added: [String] = []
             do {
+                try queue.checkRoom(adding: items.count)
                 for (order, item) in items.enumerated() {
                     if item.isFile {
-                        added.append(try await item.queueFile(in: queue, computerId: id, created: created, order: order).id)
+                        added.append(try await item.queueFile(in: queue, computerId: id, created: created, order: order, share: share).id)
                     } else {
                         let text = try await item.loadText()
                         added.append(try queue.add(text: text, kind: item.kind == .link ? .link : .text,
-                                                   computerId: id, created: created, order: order).id)
+                                                   computerId: id, created: created, order: order, share: share).id)
                     }
                 }
+                // The copies can take the queue over its size.
+                try queue.checkRoom(adding: 0)
+                try queue.complete(share)
                 ShareGroup.lastComputer = id
                 ShareGroup.postQueued()
                 phase = .queued(computer.name)

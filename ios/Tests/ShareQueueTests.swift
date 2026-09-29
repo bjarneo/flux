@@ -94,6 +94,83 @@ final class ShareQueueTests: XCTestCase {
         XCTAssertEqual(queue.items().map(\.id), [done.id], "finished items stay")
     }
 
+    func testAShareShowsWhenItIsComplete() throws {
+        let queue = try makeQueue()
+        let alone = try queue.add(text: "alone", kind: .text, computerId: "a", created: t0, order: 0)
+        let a = try queue.add(text: "a", kind: .text, computerId: "a", created: t0, order: 1, share: "s1")
+        let b = try queue.add(file: try makeFile("b.txt", "b"), computerId: "a", created: t0, order: 2, share: "s1")
+        XCTAssertEqual(queue.items().map(\.id), [alone.id], "the app never sees a part of a share")
+        try queue.complete("s1")
+        XCTAssertEqual(queue.items().map(\.id), [alone.id, a.id, b.id])
+        XCTAssertThrowsError(try queue.complete("../x"))
+    }
+
+    func testAnUnfinishedShareIsRemovedLater() throws {
+        let queue = try makeQueue()
+        let left = try queue.add(text: "left", kind: .text, computerId: "a", created: t0, order: 0, share: "s1")
+        let done = try queue.add(text: "done", kind: .text, computerId: "a", created: t0, order: 0, share: "s2")
+        try queue.complete("s2")
+        queue.removeAbandoned(now: t0.addingTimeInterval(60), olderThan: 3600)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: queue.folder.appendingPathComponent(left.id).path), "the extension may still copy")
+        queue.removeAbandoned(now: t0.addingTimeInterval(7200), olderThan: 3600)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: queue.folder.appendingPathComponent(left.id).path))
+        XCTAssertEqual(queue.items().map(\.id), [done.id], "a complete share stays")
+        queue.remove(done.id)
+        queue.removeAbandoned(now: Date().addingTimeInterval(120), olderThan: 3600)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: queue.shares.appendingPathComponent("s2").path), "the mark of a sent share goes")
+    }
+
+    func testAFolderDoesNotGoInTheQueue() throws {
+        let queue = try makeQueue()
+        let dir = try makeFile("x", "x").deletingLastPathComponent()
+        XCTAssertThrowsError(try queue.add(file: dir, computerId: "a", created: t0, order: 0)) { error in
+            XCTAssertEqual(error as? ShareQueueError, .folder(dir.lastPathComponent))
+        }
+        XCTAssertTrue(queue.items().isEmpty)
+    }
+
+    func testTheQueueIsFullAtItsItemLimit() throws {
+        let queue = try makeQueue()
+        XCTAssertNoThrow(try queue.checkRoom(adding: ShareQueue.maxItems))
+        try queue.add(text: "a", kind: .text, computerId: "a", created: t0, order: 0)
+        XCTAssertThrowsError(try queue.checkRoom(adding: ShareQueue.maxItems)) { XCTAssertEqual($0 as? ShareQueueError, .full) }
+        let file = try makeFile("big.bin", String(repeating: "x", count: 10_000))
+        try queue.add(file: file, computerId: "a", created: t0, order: 1)
+        XCTAssertGreaterThanOrEqual(queue.bytes(), 10_000, "the size counts the copies")
+    }
+
+    func testItemsThatFailTooOftenOrWaitTooLongExpire() throws {
+        let queue = try makeQueue()
+        let a = try queue.add(text: "a", kind: .text, computerId: "a", created: t0, order: 0)
+        let b = try queue.add(text: "b", kind: .text, computerId: "a", created: t0, order: 1)
+        for _ in 1..<ShareQueue.maxTries { try queue.markFailed(a.id, message: "Not connected") }
+        XCTAssertEqual(queue.items().first?.failures, ShareQueue.maxTries - 1)
+        XCTAssertTrue(ShareQueue.expired(queue.items(), now: t0).isEmpty)
+        try queue.markFailed(a.id, message: "Not connected")
+        XCTAssertEqual(ShareQueue.expired(queue.items(), now: t0).map(\.id), [a.id])
+        XCTAssertEqual(Set(ShareQueue.expired(queue.items(), now: t0.addingTimeInterval(ShareQueue.maxAge + 1)).map(\.id)), [a.id, b.id])
+    }
+
+    func testDroppedText() {
+        let file = QueuedShare(id: "1", computerId: "a", kind: .file, name: "a.txt", created: t0, order: 0)
+        XCTAssertEqual(QueuedShares.droppedText([file]), "1 file that you shared did not go out in 5 tries or 7 days, so Flux removed it.")
+        XCTAssertEqual(QueuedShares.droppedText([file, file]), "2 files that you shared did not go out in 5 tries or 7 days, so Flux removed them.")
+    }
+
+    @MainActor
+    func testTheOutboxRemovesOnlyItsCopies() throws {
+        let outside = try makeFile("keep.txt", "keep")
+        let dir = try Outbox.newFolder()
+        let copy = dir.appendingPathComponent("a.txt")
+        try Data("a".utf8).write(to: copy)
+        Outbox.remove([copy, outside])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: dir.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: outside.path), "a file outside the outbox stays")
+        let (files, folders) = Outbox.splitFolders([outside, outside.deletingLastPathComponent()])
+        XCTAssertEqual(files, [outside])
+        XCTAssertEqual(folders, [outside.deletingLastPathComponent()])
+    }
+
     func testItemsOfForgottenComputersGo() throws {
         let queue = try makeQueue()
         try queue.add(text: "a", kind: .text, computerId: "a", created: t0, order: 0)

@@ -46,10 +46,18 @@ final class QueuedShares {
         stateChanged(model.state)
     }
 
-    /// Reads the queue again.
+    /// Reads the queue again. Items that failed too often or waited too
+    /// long go, see `ShareQueue.expired`, and a notification says so.
     func refresh() {
         guard let queue else { return }
         queue.removeAbandoned(now: Date(), olderThan: Self.abandonedAfter)
+        let expired = ShareQueue.expired(queue.items(), now: Date())
+        for item in expired { queue.remove(item.id) }
+        for (computer, items) in Dictionary(grouping: expired, by: \.computerId) {
+            let name = model?.device(computer)?.name ?? "your computer"
+            Notifier.shared.post(id: "share-queue-dropped-\(computer)", category: Self.notificationCategory,
+                                 title: "Not sent to \(name)", body: Self.droppedText(items))
+        }
         items = queue.items()
     }
 
@@ -141,8 +149,14 @@ final class QueuedShares {
         }
     }
 
-    /// For example "2 files and 1 link that you shared went out."
-    nonisolated static func sentText(_ items: [QueuedShare]) -> String {
+    /// For example "2 files that you shared did not go out in 5 tries or 7 days, so Flux removed them."
+    nonisolated static func droppedText(_ items: [QueuedShare]) -> String {
+        let s = summary(items)
+        let them = s.count == 1 ? "it" : "them"
+        return "\(ShareSummary.text(s)) that you shared did not go out in \(ShareQueue.maxTries) tries or \(Int(ShareQueue.maxAge / 86400)) days, so Flux removed \(them)."
+    }
+
+    nonisolated private static func summary(_ items: [QueuedShare]) -> ShareSummary {
         var s = ShareSummary()
         for item in items {
             switch item.kind {
@@ -151,6 +165,11 @@ final class QueuedShares {
             case .text: s.texts += 1
             }
         }
-        return "\(ShareSummary.text(s)) that you shared went out."
+        return s
+    }
+
+    /// For example "2 files and 1 link that you shared went out."
+    nonisolated static func sentText(_ items: [QueuedShare]) -> String {
+        "\(ShareSummary.text(summary(items))) that you shared went out."
     }
 }

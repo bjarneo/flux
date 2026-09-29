@@ -80,12 +80,12 @@ struct SharedItem {
 
     /// Copies a file item into the queue. The loaded file exists only in the
     /// callback, so the copy happens there.
-    func queueFile(in queue: ShareQueue, computerId: String, created: Date, order: Int) async throws -> QueuedShare {
+    func queueFile(in queue: ShareQueue, computerId: String, created: Date, order: Int, share: String? = nil) async throws -> QueuedShare {
         if kind == .file, type.conforms(to: .fileURL) {
             let url = try await loadURL()
             let access = url.startAccessingSecurityScopedResource()
             defer { if access { url.stopAccessingSecurityScopedResource() } }
-            return try queue.add(file: url, computerId: computerId, created: created, order: order)
+            return try queue.add(file: url, computerId: computerId, created: created, order: order, share: share)
         }
         let suggested = provider.suggestedName
         let type = type
@@ -97,7 +97,7 @@ struct SharedItem {
                 }
                 do {
                     done.resume(returning: try queue.add(file: url, computerId: computerId, created: created, order: order,
-                                                         name: Self.fileName(suggested: suggested, type: type, loaded: url)))
+                                                         name: Self.fileName(suggested: suggested, type: type, loaded: url), share: share))
                 } catch {
                     done.resume(throwing: error)
                 }
