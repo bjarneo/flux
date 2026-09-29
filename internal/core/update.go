@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"flux/internal/desktop"
 	"flux/internal/release"
 )
 
@@ -229,7 +230,8 @@ func (d *Daemon) installUpdate() error {
 	if p, err := exec.LookPath("omarchy-launch-floating-terminal-with-presentation"); err == nil {
 		cmd = exec.Command(p, line)
 	} else if p, err := exec.LookPath("xdg-terminal-exec"); err == nil {
-		cmd = exec.Command(p, "sh", "-c", line+`; printf '\nPress Enter to close. '; read _`)
+		// The terminal must outlive the restart of fluxd after the update.
+		cmd = desktop.UserCommand(p, "sh", "-c", line+`; printf '\nPress Enter to close. '; read _`)
 	} else {
 		return apiErr("no_terminal", "No terminal found. Run: flux-cli update")
 	}

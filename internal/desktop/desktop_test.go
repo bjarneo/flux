@@ -446,7 +446,7 @@ func TestClipboardRecordLimit(t *testing.T) {
 	var got []int
 	onText := func(s string) { got = append(got, len(s)) }
 	onImage := func([]byte, string) { t.Fatal("a text selection reported an image") }
-	sizes := []int{maxClipboardText - 1, maxClipboardText, maxClipboardText + 1}
+	sizes := []int{MaxClipboardText - 1, MaxClipboardText, MaxClipboardText + 1}
 	for i, n := range sizes {
 		data := bytes.Repeat([]byte{'a' + byte(i)}, n)
 		c.record("text", record("data", data, "text/plain"), false, onText, onImage)
