@@ -480,8 +480,13 @@ func (d *Daemon) saveFile(ctx context.Context, dev *Device, t *Transfer, dir str
 		return err
 	}
 	// os.CreateTemp makes a file that only the user can read. A received
-	// file gets the mode of a file that the user creates.
-	if err := os.Chmod(f.Name(), 0o644); err != nil {
+	// file gets the mode of the reserved file, which uniquePath made with
+	// the umask of fluxd.
+	mode := fs.FileMode(0o600)
+	if info, err := os.Stat(dest); err == nil {
+		mode = info.Mode().Perm()
+	}
+	if err := os.Chmod(f.Name(), mode); err != nil {
 		return err
 	}
 	return os.Rename(f.Name(), dest)

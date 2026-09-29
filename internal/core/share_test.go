@@ -14,6 +14,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"golang.org/x/sys/unix"
+
 	"flux/internal/config"
 	"flux/internal/desktop"
 	"flux/internal/proto"
@@ -340,6 +342,34 @@ func TestSaveFileFailureLeavesNoFile(t *testing.T) {
 	}
 	if names, _ := os.ReadDir(dir); len(names) != 0 {
 		t.Errorf("folder has %d files", len(names))
+	}
+}
+
+// TestSaveFileUsesUmask checks that a received file gets the mode of a
+// file that the user creates, and not a fixed mode.
+func TestSaveFileUsesUmask(t *testing.T) {
+	bigDisk(t)
+	d := testDaemon()
+	dev := &Device{ID: "p1", Name: "Pixel 8", Paired: true}
+	dir := t.TempDir()
+	for _, c := range []struct {
+		umask int
+		want  os.FileMode
+	}{{0o077, 0o600}, {0o022, 0o644}} {
+		old := unix.Umask(c.umask)
+		tr := d.newTransfer(dev, "a.txt", "", "in", 5)
+		err := d.saveFile(context.Background(), dev, tr, dir, payload("hello", nil))
+		unix.Umask(old)
+		if err != nil {
+			t.Fatal(err)
+		}
+		info, err := os.Stat(tr.Path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := info.Mode().Perm(); got != c.want {
+			t.Errorf("umask %o: mode %o, want %o", c.umask, got, c.want)
+		}
 	}
 }
 
