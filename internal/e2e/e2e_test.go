@@ -26,6 +26,9 @@ type node struct {
 	client  *ipc.Client
 	log     *syncBuffer
 	udpPort int
+	// env sets or clears variables for the process. An empty value
+	// clears the variable.
+	env []string
 }
 
 // syncBuffer collects the process output. The test reads it while the
@@ -109,6 +112,15 @@ func freePort(t *testing.T, network string) int {
 
 func start(t *testing.T, bin, name string, udpPort, tcpPort int) *node {
 	t.Helper()
+	n := newNode(t, name)
+	n.udpPort = udpPort
+	n.launch(t, bin, tcpPort)
+	return n
+}
+
+// newNode makes the folders and the configuration of a daemon.
+func newNode(t *testing.T, name string) *node {
+	t.Helper()
 	dir := t.TempDir()
 	n := &node{name: name, dir: dir, log: &syncBuffer{}}
 	cfgDir := filepath.Join(dir, "config", "flux")
@@ -120,8 +132,6 @@ func start(t *testing.T, bin, name string, udpPort, tcpPort int) *node {
 	if err := os.WriteFile(filepath.Join(cfgDir, "config.toml"), []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	n.udpPort = udpPort
-	n.launch(t, bin, tcpPort)
 	return n
 }
 
@@ -129,12 +139,20 @@ func (n *node) launch(t *testing.T, bin string, tcpPort int) {
 	t.Helper()
 	sock := filepath.Join(n.dir, "fluxd.sock")
 	n.cmd = exec.Command(bin, "-headless", "-udp-port", fmt.Sprint(n.udpPort), "-tcp-port", fmt.Sprint(tcpPort))
-	n.cmd.Env = append(os.Environ(),
-		"XDG_CONFIG_HOME="+filepath.Join(n.dir, "config"),
-		"XDG_DATA_HOME="+filepath.Join(n.dir, "data"),
-		"XDG_CACHE_HOME="+filepath.Join(n.dir, "cache"),
-		"FLUX_SOCKET="+sock,
-	)
+	env := append([]string{
+		"XDG_CONFIG_HOME=" + filepath.Join(n.dir, "config"),
+		"XDG_DATA_HOME=" + filepath.Join(n.dir, "data"),
+		"XDG_CACHE_HOME=" + filepath.Join(n.dir, "cache"),
+		"FLUX_SOCKET=" + sock,
+	}, n.env...)
+	n.cmd.Env = os.Environ()
+	for _, kv := range env {
+		key := kv[:strings.Index(kv, "=")+1]
+		n.cmd.Env = slices.DeleteFunc(n.cmd.Env, func(e string) bool { return strings.HasPrefix(e, key) })
+		if !strings.HasSuffix(kv, "=") {
+			n.cmd.Env = append(n.cmd.Env, kv)
+		}
+	}
 	n.cmd.Stdout, n.cmd.Stderr = n.log, n.log
 	if err := n.cmd.Start(); err != nil {
 		t.Fatal(err)

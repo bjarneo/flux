@@ -31,6 +31,8 @@ Window {
 
     onLoaded: {
       item.themeText = Qt.binding(function () { return fluxTheme.text })
+      item.appReplaced = Qt.binding(function () { return fluxSelf.replaced })
+      item.restartApp.connect(fluxSelf.restart)
       item.forceActiveFocus()
       if (fluxInitialPage) root.showPage(fluxInitialPage)
     }

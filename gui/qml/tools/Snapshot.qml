@@ -199,7 +199,9 @@ Window {
       pageItem().compose()
       setField("Phone number", "+47 912 34 567")
       setField("Text message via Pixel 8", "Running 10 minutes late")
-    }]
+    }],
+    // An update replaced flux-gui while its window is open.
+    ["43-app-updated", function () { view.tab = "overview"; view.appReplaced = true }]
   ]
 
   function pageItem() {

@@ -25,6 +25,7 @@ Omarchy shell plugin ┘
 | IPC | `internal/ipc/` | JSON-line Unix socket server and client |
 | Configuration | `internal/config/` | TOML settings, data paths, and trust store |
 | Desktop services | `internal/desktop/` | Clipboard, notifications, media, audio, and camera integration |
+| Updates | `internal/upgrade/`, `internal/plugin/` | The restart of fluxd into a new binary, and the copy of the shell plugin |
 | herdr client | `internal/herdr/` | API socket client that reads the [herdr agents](herdr.md) for the phone |
 | Approval | `internal/approve/`, `cmd/flux-approve/` | Root trust anchor, PAM setup, and signature verification |
 | Shared views | `gui/qml/` | Qt Quick screens and controls for both desktop hosts |

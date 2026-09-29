@@ -23,6 +23,7 @@ import (
 const pluginID = "flux"
 
 func openWindow(page string) error {
+	startDaemon()
 	switch guiChoice() {
 	case "plugin":
 		return summonPlugin(page)
@@ -33,6 +34,20 @@ func openWindow(page string) error {
 		return nil
 	}
 	return launchApp(page)
+}
+
+// startDaemon starts fluxd.service when no fluxd answers, so that the
+// window works right after an install. After `flux-cli off`, fluxd stays
+// off.
+func startDaemon() {
+	if config.IsOff() {
+		return
+	}
+	if c, err := dial(); err == nil {
+		c.Close()
+		return
+	}
+	_ = exec.Command("systemctl", "--user", "start", "fluxd.service").Run()
 }
 
 func guiChoice() string {

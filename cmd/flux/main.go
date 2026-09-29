@@ -70,7 +70,7 @@ Commands:
   off                    Stop fluxd, and do not start it at login
   on                     Start fluxd, and start it at each login
   doctor                 Check the setup and print the fixes
-  version                Print the version
+  version                Print the versions of flux-cli and the running fluxd
 
 Without --device, flux-cli uses the only connected paired device.
 `
@@ -147,7 +147,7 @@ func main() {
 	case "doctor":
 		doctor()
 	case "version", "--version":
-		fmt.Println("flux-cli", version)
+		printVersion()
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 	default:
@@ -221,10 +221,12 @@ func callInto(method string, params, result any) error {
 // State mirrors the parts of the fluxd state that the CLI prints.
 type State struct {
 	Self struct {
-		ID      string `json:"id"`
-		Name    string `json:"name"`
-		Type    string `json:"type"`
-		TCPPort int    `json:"tcpPort"`
+		ID             string `json:"id"`
+		Name           string `json:"name"`
+		Type           string `json:"type"`
+		TCPPort        int    `json:"tcpPort"`
+		Version        string `json:"version"`
+		PendingVersion string `json:"pendingVersion"`
 	} `json:"self"`
 	Devices []struct {
 		ID        string `json:"id"`

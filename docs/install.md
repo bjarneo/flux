@@ -124,22 +124,17 @@ From the repository root:
 make build
 make install-user
 export PATH="$HOME/.local/bin:$PATH"
-flux-cli setup --no-plugin
+flux-cli setup
 flux-cli doctor
 ```
 
 The binaries go into `~/.local/bin`.
+The plugin files go into `~/.local/share/flux/omarchy-plugin`.
 The desktop entry and icons go into `~/.local/share`.
 If no system service exists, `flux-cli setup` creates a user service for the daemon beside the installed CLI.
 An existing system package takes precedence for the service path.
-
-To add the Omarchy plugin from the checkout:
-
-```sh
-make install-plugin
-omarchy-shell shell rescanPlugins
-omarchy plugin enable flux --section right
-```
+`flux-cli setup` adds the plugin to omarchy-shell.
+To skip the plugin, run `flux-cli setup --no-plugin`.
 
 The user-only install omits the root approval helper and webcam system setup.
 Use the complete package or root install for those features.
@@ -182,6 +177,8 @@ rm ~/.local/bin/flux
 | `dist/post-install.sh` | Reloads udev and enables the user service globally. Loads the optional webcam module when no existing configuration controls it. |
 | `flux-cli setup` | Enables and starts the user service. Copies and enables the shell plugin when the shell is available. |
 | `flux-cli setup --dry-run` | Prints the user setup actions without applying them. |
+| Each start of `fluxd` | Updates the files of an added plugin to the plugin of the same install. |
+| `flux-cli open` | Starts the user service when no `fluxd` answers, except after `flux-cli off`. |
 
 Setup reports missing system parts and their install commands.
 Inspect the output because setup can report an error without a nonzero exit code.
@@ -197,18 +194,85 @@ sudo systemctl enable --now avahi-daemon
 
 ## Update
 
-For a checkout package, update and rebuild from the repository root:
+An update replaces the files on disk.
+Flux then moves the running parts to the new version:
+
+| Part | After the update |
+| --- | --- |
+| `fluxd` | The service restarts into the new binary about 10 seconds after the install. It waits while a file transfer, a stream, or a fingerprint approval runs. |
+| Omarchy plugin | `fluxd` copies the new plugin files into `~/.config/omarchy/plugins/flux` when it starts. omarchy-shell then reloads the plugin. |
+| Qt window | An open window shows **Flux was updated**. Select **Restart** to open the new version. |
+| Phones | The phones connect again about 2 seconds after the restart. |
+
+Only `fluxd.service` restarts by itself.
+A `fluxd` that you started by hand logs the new version and keeps running.
+
+To check the versions after an update, run:
+
+```sh
+flux-cli version
+```
+
+The output names both programs:
+
+```text
+flux-cli 0.7.0
+fluxd 0.7.0
+```
+
+If the output says `fluxd runs an earlier version`, restart the service once:
+
+```sh
+systemctl --user restart fluxd
+```
+
+Versions of `fluxd` before this feature do not restart by themselves.
+
+### Update an AUR install
+
+```sh
+yay -S omarchy-flux
+```
+
+### Update a release package
+
+Download the new `.pkg.tar.zst` package and `SHA256SUMS` from the same GitHub release.
+From the download directory, run:
+
+```sh
+sha256sum --check --ignore-missing SHA256SUMS
+sudo pacman -U ./omarchy-flux-0.7.0-1-x86_64.pkg.tar.zst
+```
+
+### Update a checkout package
+
+From the repository root:
 
 ```sh
 git pull --ff-only
 cd dist/arch
 makepkg -si
-flux-cli setup
-systemctl --user restart fluxd
 ```
 
-`flux-cli setup` refreshes the user's plugin copy.
-Close and reopen the Qt window after an update.
+### Update a direct source install
+
+From the repository root:
+
+```sh
+git pull --ff-only
+make build
+sudo make install
+```
+
+### Update a user-only install
+
+From the repository root:
+
+```sh
+git pull --ff-only
+make build
+make install-user
+```
 
 ## Remove
 

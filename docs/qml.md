@@ -28,6 +28,8 @@ FluxView {
 | `backend` | `var`, required | The backend object. The contract is below. |
 | `themeText` | `string` | The content of `~/.local/state/omarchy/current/theme/colors.toml`. Set it again when the file changes. An empty string gives the Tokyo Night defaults. |
 | `showPage(key)` | function, returns `bool` | Selects a screen: `overview`, `clipboard`, `files`, `notifications`, `messages`, `browse`, or `commands`. Returns `false` for an unknown key. |
+| `appReplaced` | `bool` | The host sets it when an update replaced the host program. The window then shows **Flux was updated** with a **Restart** button. The shell plugin does not set it, because omarchy-shell reloads the plugin. |
+| `restartApp()` | signal | The user selected **Restart**. The host starts its new program and quits. |
 
 ## Layouts
 

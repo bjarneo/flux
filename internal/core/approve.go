@@ -78,6 +78,19 @@ func (b *approvalBook) add(a *approval) error {
 	return nil
 }
 
+// pending returns the number of requests that wait for an answer.
+func (b *approvalBook) pending() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	n := 0
+	for _, a := range b.byID {
+		if a.result == nil && time.Now().Before(a.deadline) {
+			n++
+		}
+	}
+	return n
+}
+
 // deliver stores the answer of a phone. It accepts only an answer from the
 // phone that got the request, of the kind that the request expects, and
 // only once.

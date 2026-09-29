@@ -38,6 +38,15 @@ Method names and parameter handling live in `internal/core/api.go`.
 Call `state` for a snapshot.
 The snapshot includes `self`, `devices`, `clipboard`, `transfers`, `commands`, `settings`, `webcam`, `mic`, `screen`, `desktop`, and `herdr`.
 
+`self` describes this computer:
+
+| Field | Value |
+| --- | --- |
+| `id`, `name`, `type` | The device ID, the name, and the device type that fluxd announces. |
+| `tcpPort` | The TCP port of fluxd. |
+| `version` | The build version of the running fluxd. An earlier fluxd has no `version`. |
+| `pendingVersion` | The version of a new fluxd binary on disk, or an empty string. `fluxd.service` restarts into it when no transfer or stream runs. |
+
 To receive events, send:
 
 ```json

@@ -26,14 +26,16 @@ func main() {
 	udpPort := flag.Int("udp-port", 0, "UDP discovery port (default 1716)")
 	tcpPort := flag.Int("tcp-port", 0, "first TCP port to try (default 1716)")
 	flag.Parse()
+	// A running fluxd reads the version of a new binary, so the version
+	// comes before the off marker.
+	if *showVersion {
+		fmt.Println("fluxd", version)
+		return
+	}
 	// systemd sets INVOCATION_ID. A fluxd that the user starts by hand
 	// ignores the marker of `flux-cli off`.
 	if os.Getenv("INVOCATION_ID") != "" && config.IsOff() {
 		log.Printf("fluxd is off. To turn it on, run: flux-cli on")
-		return
-	}
-	if *showVersion {
-		fmt.Println("fluxd", version)
 		return
 	}
 	logger := log.New(os.Stderr, "", 0)
@@ -54,10 +56,20 @@ func main() {
 			}
 		}
 	}
-	d, err := core.New(ctx, logger, core.Options{Headless: *headless, UDPPort: *udpPort, FirstTCPPort: *tcpPort})
+	d, err := core.New(ctx, logger, core.Options{Headless: *headless, UDPPort: *udpPort, FirstTCPPort: *tcpPort, Version: version})
 	if err != nil {
 		logger.Fatalf("fluxd: %v", err)
 	}
+	if !*headless {
+		go refreshPlugin(logger)
+	}
+	upgraded := make(chan string, 1)
+	go func() {
+		if v := watchBinary(ctx, d, logger); v != "" {
+			upgraded <- v
+			stop()
+		}
+	}()
 
 	hup := make(chan os.Signal, 1)
 	signal.Notify(hup, syscall.SIGHUP)
@@ -94,5 +106,11 @@ func main() {
 	}
 	if failure != nil {
 		logger.Fatalf("fluxd: %v", failure)
+	}
+	select {
+	case v := <-upgraded:
+		logger.Printf("fluxd %s stopped, so that systemd starts fluxd %s", version, v)
+		os.Exit(exitUpgrade)
+	default:
 	}
 }

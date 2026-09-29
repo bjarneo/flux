@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "fluxbackend.h"
+#include "selfwatch.h"
 #include "singleinstance.h"
 #include "themewatcher.h"
 
@@ -137,6 +138,12 @@ int main(int argc, char *argv[])
     QQmlApplicationEngine engine;
     FluxBackend *backend = expose(engine);
     engine.rootContext()->setContextProperty(QStringLiteral("fluxInitialPage"), page);
+    // An update replaces flux-gui and restarts fluxd. The window then
+    // offers a restart into the new version.
+    auto *self = new SelfWatch(&engine);
+    engine.rootContext()->setContextProperty(QStringLiteral("fluxSelf"), self);
+    QObject::connect(self, &SelfWatch::aboutToRestart, &instance, &SingleInstance::close);
+    QObject::connect(backend, &FluxBackend::connectedChanged, self, &SelfWatch::check);
     engine.load(QUrl(QStringLiteral("qrc:/flux/app/Main.qml")));
     if (engine.rootObjects().isEmpty())
         return 1;

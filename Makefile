@@ -94,9 +94,11 @@ uninstall-plugin:
 	rm -rf $(PLUGIN_DIR)
 
 # install-user installs Flux for the current user in ~/.local, with no root:
-# the binaries, the desktop entry, and the icons. The system parts (the udev
-# rule, the kernel module, and the PAM helper) need `sudo make install`.
-# Then run `flux-cli setup` for the fluxd service and the plugin.
+# the binaries, the plugin files, the desktop entry, and the icons. The
+# system parts (the udev rule, the kernel module, and the PAM helper) need
+# `sudo make install`. Then run `flux-cli setup` for the fluxd service and
+# the plugin. After an update, fluxd copies the new plugin files into an
+# added plugin.
 USER_PREFIX ?= $(HOME)/.local
 install-user:
 	@test -x bin/fluxd -a -x bin/flux-cli -a -x $(GUI_BUILD)/flux-gui || { echo "Run make first"; exit 1; }
@@ -110,6 +112,8 @@ install-user:
 	elif other=$$(command -v flux); then echo "$$other is another flux command, so use flux-cli."; \
 	else ln -s flux-cli "$$link"; fi
 	install -Dm755 $(GUI_BUILD)/flux-gui $(USER_PREFIX)/bin/flux-gui
+	rm -rf $(USER_PREFIX)/share/flux/omarchy-plugin
+	$(call copy-plugin,$(USER_PREFIX)/share/flux/omarchy-plugin)
 	install -Dm644 dist/flux.desktop $(USER_PREFIX)/share/applications/flux.desktop
 	install -Dm644 dist/flux.svg $(USER_PREFIX)/share/icons/hicolor/scalable/apps/flux.svg
 	install -Dm644 dist/flux-symbolic.svg $(USER_PREFIX)/share/icons/hicolor/symbolic/apps/flux-symbolic.svg
@@ -120,6 +124,7 @@ uninstall-user:
 	rm -f $(USER_PREFIX)/bin/fluxd $(USER_PREFIX)/bin/flux-cli $(USER_PREFIX)/bin/flux-gui
 	@# Remove the flux link only when it points to flux-cli.
 	@link=$(USER_PREFIX)/bin/flux; if [ "$$(readlink "$$link")" = flux-cli ]; then rm -f "$$link"; fi
+	rm -rf $(USER_PREFIX)/share/flux/omarchy-plugin
 	rm -f $(USER_PREFIX)/share/applications/flux.desktop
 	rm -f $(USER_PREFIX)/share/icons/hicolor/scalable/apps/flux.svg $(USER_PREFIX)/share/icons/hicolor/symbolic/apps/flux-symbolic.svg
 

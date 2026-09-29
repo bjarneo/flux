@@ -84,6 +84,10 @@ type Daemon struct {
 	desktopErr string
 	approvals  approvalBook
 
+	// pendingVersion is the version of a new fluxd binary on disk. fluxd
+	// restarts into it when no transfer or stream runs.
+	pendingVersion string
+
 	// herdrPath is the API socket of herdr. herdrRunning, herdrAgents,
 	// herdrTerms, herdrPlaces, and herdrKinds are the last state that the
 	// herdr loop read. herdrHistory keeps the last plain history of each
@@ -113,6 +117,8 @@ type Options struct {
 	// UDPPort and FirstTCPPort change the protocol ports. Zero means 1716.
 	UDPPort      int
 	FirstTCPPort int
+	// Version is the build version of fluxd.
+	Version string
 }
 
 type clipboard interface {
@@ -204,6 +210,42 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 }
 
 func (d *Daemon) logf(format string, args ...any) { d.logger.Printf(format, args...) }
+
+// SetPendingVersion records the version of a new fluxd binary on disk.
+func (d *Daemon) SetPendingVersion(v string) {
+	d.mu.Lock()
+	d.pendingVersion = v
+	d.mu.Unlock()
+	d.markDirty()
+}
+
+// Busy names the transfer, stream, or approval that a restart would stop.
+// It returns "" when fluxd can restart.
+func (d *Daemon) Busy() string {
+	d.mu.Lock()
+	for _, t := range d.transfers {
+		if t.State == "queued" || t.State == "active" {
+			d.mu.Unlock()
+			return "a file transfer"
+		}
+	}
+	what := ""
+	switch {
+	case d.webcam != nil:
+		what = "the webcam"
+	case d.mic != nil:
+		what = "the microphone"
+	case d.screen != nil:
+		what = "the screen mirror"
+	case d.desktop != nil:
+		what = "the remote desktop"
+	}
+	d.mu.Unlock()
+	if what == "" && d.approvals.pending() > 0 {
+		what = "a fingerprint approval"
+	}
+	return what
+}
 
 // SelfID returns the device ID of this computer.
 func (d *Daemon) SelfID() string { return d.selfID }

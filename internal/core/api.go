@@ -110,7 +110,8 @@ func (d *Daemon) Snapshot() json.RawMessage {
 	return mustJSON(map[string]any{
 		"self": map[string]any{
 			"id": d.selfID, "name": d.nameLocked(), "type": proto.DeviceType(),
-			"tcpPort": d.lanPort(),
+			"tcpPort": d.lanPort(), "version": d.opts.Version,
+			"pendingVersion": d.pendingVersion,
 		},
 		"devices":   views,
 		"clipboard": clip,

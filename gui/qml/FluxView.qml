@@ -9,6 +9,10 @@ Item {
   id: root
   required property var backend
   property string themeText: ""
+  // The host sets appReplaced when an update replaced its program. The
+  // window then offers a restart, and restartApp asks the host for it.
+  property bool appReplaced: false
+  signal restartApp()
   onThemeTextChanged: Theme.load(themeText)
   Component.onCompleted: Theme.load(themeText)
 
@@ -776,6 +780,17 @@ Item {
         }
       }
     }
+  }
+
+  NoticeBar {
+    anchors.bottom: parent.bottom
+    anchors.right: parent.right
+    anchors.margins: 16
+    visible: root.appReplaced
+    title: "Flux was updated"
+    message: "This window runs the earlier version. Restart it to use the new version."
+    action: "Restart"
+    onActivated: root.restartApp()
   }
 
   Toast {

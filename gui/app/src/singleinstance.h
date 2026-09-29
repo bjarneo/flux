@@ -17,6 +17,8 @@ public:
     bool forward(const QString &page);
     // listen starts the server for later instances.
     bool listen();
+    // close stops the server, so that a new instance takes over.
+    void close() { m_server.close(); }
 
     static QString socketPath();
 

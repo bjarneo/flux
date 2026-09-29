@@ -132,6 +132,15 @@ The root install performs system setup.
 Run `flux-cli setup` as the desktop user.
 Use `docs/install.md` for dependencies, the pacman package, and the user-only install.
 
+After an update, `fluxd.service` restarts into the new binary when no transfer or stream runs.
+Confirm the running version:
+
+```sh
+flux-cli version
+```
+
+Use `docs/install.md` for the update command of each install method.
+
 For a preview without installation:
 
 ```sh

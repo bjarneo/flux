@@ -47,6 +47,25 @@ If another daemon holds the socket, stop that process before you start the servi
 A foreground development daemon and the user service cannot share one socket.
 See [isolated development](development.md#isolated-daemon).
 
+## fluxd runs an earlier version
+
+`flux-cli version` shows the version of the running `fluxd`.
+`fluxd.service` restarts by itself after an update, when no transfer or stream runs.
+If `flux-cli version` says `fluxd runs an earlier version`, restart the service once:
+
+```sh
+systemctl --user restart fluxd
+```
+
+If the new version still does not start, read the log:
+
+```sh
+journalctl --user -u fluxd -n 50 --no-pager
+```
+
+The line `the new ... does not run` means that the new binary failed its version check.
+Install the update again.
+
 ## The phone does not appear
 
 1. Open Flux for Android or Flux for macOS.

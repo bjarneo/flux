@@ -12,6 +12,7 @@ qt_add_executable(flux-gui
     src/fluxbackend.cpp
     src/themewatcher.cpp
     src/singleinstance.cpp
+    src/selfwatch.cpp
 )
 
 set(FLUX_VERSION "${PROJECT_VERSION}" CACHE STRING "Flux release version")

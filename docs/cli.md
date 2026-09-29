@@ -42,6 +42,13 @@ flux-cli open files
 
 Window pages: `overview`, `clipboard`, `files`, `notifications`, `messages`, `browse`, and `commands`.
 
+`flux-cli version` prints the version of `flux-cli` and of the running `fluxd`.
+After an update, it also prints the new `fluxd` version that waits for its restart.
+See [update](install.md#update).
+
+`flux-cli open` starts `fluxd.service` when no `fluxd` answers.
+After `flux-cli off`, it leaves `fluxd` off.
+
 To select the Qt app or shell plugin explicitly:
 
 ```sh

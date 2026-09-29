@@ -35,6 +35,7 @@ func doctor() {
 	if err == nil {
 		check(s.Self.TCPPort > 0, fmt.Sprintf("fluxd listens on TCP %d", s.Self.TCPPort),
 			"fluxd has no TCP port. Check: journalctl --user -u fluxd")
+		checkVersion(s, check)
 	}
 
 	check(!running("kdeconnectd"), "kdeconnectd is not running",

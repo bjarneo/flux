@@ -70,6 +70,14 @@ omarchy-shell shell rescanPlugins
 omarchy plugin enable flux --section right
 ```
 
+## Updates
+
+`fluxd` keeps an added plugin at the version of its own install.
+At each start, it compares `~/.config/omarchy/plugins/flux` with `PREFIX/share/flux/omarchy-plugin` beside its binary.
+It writes only the changed files, removes the files of the earlier version, and runs `omarchy-shell shell rescanPlugins`.
+It does not add a plugin that you removed.
+It does not change a symlink to a checkout.
+
 ## Offscreen test
 
 `gui/omarchy/tools/test-offscreen.sh` starts a separate omarchy-shell with this plugin.

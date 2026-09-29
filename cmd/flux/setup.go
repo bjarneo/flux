@@ -1,10 +1,7 @@
 package main
 
 import (
-	"errors"
 	"fmt"
-	"io"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +11,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"flux/internal/config"
+	"flux/internal/plugin"
 )
 
 // setup does the per-user part of the install: the fluxd service and the
@@ -77,7 +75,8 @@ func setupService(dry bool, run func(string, string, ...string) error) error {
 			return fmt.Errorf("fluxd is not installed and not next to flux (%s). Run make first", fluxd)
 		}
 		unit := "[Unit]\nDescription=Flux daemon that connects this computer to your phone\nPartOf=graphical-session.target\nAfter=graphical-session.target\n\n" +
-			"[Service]\nExecStart=" + fluxd + "\nExecReload=/bin/kill -HUP $MAINPID\nRestart=on-failure\nRestartSec=2\n\n" +
+			"[Service]\nExecStart=" + fluxd + "\nExecReload=/bin/kill -HUP $MAINPID\nRestart=on-failure\nRestartSec=2\n" +
+			"# fluxd exits with 75 after an update replaced its binary.\nSuccessExitStatus=75\nRestartForceExitStatus=75\n\n" +
 			"[Install]\nWantedBy=graphical-session.target\n"
 		path := filepath.Join(unitDir, "fluxd.service")
 		if dry {
@@ -123,43 +122,43 @@ func setupService(dry bool, run func(string, string, ...string) error) error {
 	return nil
 }
 
-// pluginSource returns the files of the plugin: the installed copy, or the
-// checkout next to this flux.
-func pluginSource() (plugin, views string, err error) {
-	if _, err := os.Stat("/usr/share/flux/omarchy-plugin/manifest.json"); err == nil {
-		return "/usr/share/flux/omarchy-plugin", "", nil
-	}
-	exe, err := os.Executable()
-	if err != nil {
-		return "", "", err
-	}
-	root := filepath.Join(filepath.Dir(exe), "..")
-	if _, err := os.Stat(filepath.Join(root, "gui", "omarchy", "manifest.json")); err != nil {
-		return "", "", errors.New("the plugin files are missing. Install Flux, or run flux from its checkout")
-	}
-	return filepath.Join(root, "gui", "omarchy"), filepath.Join(root, "gui", "qml"), nil
-}
-
 func setupPlugin(dry bool, run func(string, string, ...string) error) error {
 	if _, err := exec.LookPath("omarchy-shell"); err != nil {
 		fmt.Println("  - omarchy-shell is not installed, so flux-cli open uses flux-gui")
 		return nil
 	}
-	src, views, err := pluginSource()
+	exe, err := os.Executable()
 	if err != nil {
 		return err
 	}
-	dest := filepath.Join(config.ConfigDir(), "..", "omarchy", "plugins", "flux")
+	src, views, err := plugin.Source(exe)
+	if err != nil {
+		return err
+	}
+	dest := plugin.UserDir()
 	if dry {
 		fmt.Println("  would copy:", src, "to", dest)
 	} else {
-		if err := os.RemoveAll(dest); err != nil {
+		// A symlink to a checkout is a development plugin. Replace it
+		// with real files, as `omarchy plugin validate` wants them.
+		if fi, err := os.Lstat(dest); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+			if err := os.Remove(dest); err != nil {
+				return err
+			}
+		}
+		files, err := plugin.Files(src, views)
+		if err != nil {
 			return err
 		}
-		if err := copyPlugin(src, views, dest); err != nil {
+		changed, err := plugin.Sync(files, dest)
+		if err != nil {
 			return err
 		}
-		fmt.Println("  ✓ copied the plugin to", dest)
+		if changed {
+			fmt.Println("  ✓ copied the plugin to", dest)
+		} else {
+			fmt.Println("  ✓ the plugin in", dest, "is up to date")
+		}
 	}
 	if err := run("rescan plugins", "omarchy-shell", "shell", "rescanPlugins"); err != nil {
 		return err
@@ -183,73 +182,6 @@ func setupPlugin(dry bool, run func(string, string, ...string) error) error {
 		fmt.Println("  ✓ the plugin is enabled, with the bar item on the right")
 	}
 	return nil
-}
-
-// copyPlugin copies the plugin as `omarchy plugin validate` wants it: real
-// files, no symlinks, and no tools folder. From a checkout, the shared
-// views go into Flux/. From the system install, Flux/ is already real
-// files and is copied as is.
-func copyPlugin(src, views, dest string) error {
-	skip := func(rel string) bool {
-		if rel == "tools" || strings.HasPrefix(rel, "tools/") {
-			return true
-		}
-		// From a checkout, Flux is a symlink to ../qml, replaced by
-		// views below. From the system install, Flux holds the real
-		// shared views and must be kept.
-		if views != "" && (rel == "Flux" || strings.HasPrefix(rel, "Flux/")) {
-			return true
-		}
-		return false
-	}
-	if err := copyTree(src, dest, skip); err != nil {
-		return err
-	}
-	if views == "" {
-		return nil
-	}
-	return copyTree(views, filepath.Join(dest, "Flux"), func(rel string) bool {
-		return rel == "tools" || strings.HasPrefix(rel, "tools/") || strings.HasSuffix(rel, ".md") || strings.HasPrefix(filepath.Base(rel), ".")
-	})
-}
-
-func copyTree(src, dest string, skip func(rel string) bool) error {
-	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, _ := filepath.Rel(src, path)
-		if rel == "." {
-			return os.MkdirAll(dest, 0o755)
-		}
-		if skip(rel) {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		target := filepath.Join(dest, rel)
-		if d.IsDir() {
-			return os.MkdirAll(target, 0o755)
-		}
-		if d.Type()&fs.ModeSymlink != 0 {
-			return nil
-		}
-		in, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer in.Close()
-		out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
-		if err != nil {
-			return err
-		}
-		if _, err := io.Copy(out, in); err != nil {
-			out.Close()
-			return err
-		}
-		return out.Close()
-	})
 }
 
 // setupSystemReport checks the parts that need root and prints the command
