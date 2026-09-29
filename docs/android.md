@@ -96,6 +96,7 @@ Earlier versions of Flux show only 8 characters, so update Flux on all devices b
 
 Open Flux on the phone before you pair.
 The phone takes a connection from a new computer only while the app is on screen or while it scans.
+When the app comes to the front, the phone sends its identity, so a computer on the network connects at once.
 A paired computer connects at any time, also through Tailscale.
 
 Flux for Android applies these limits to the network:

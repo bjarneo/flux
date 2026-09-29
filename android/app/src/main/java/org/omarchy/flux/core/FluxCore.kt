@@ -54,8 +54,17 @@ object FluxCore {
     private var ringingFrom: String? = null
     private var initialized = false
 
-    /** True while an activity of the app is on screen. */
+    /**
+     * True while an activity of the app is on screen. When the app comes to
+     * the front, the phone sends its identity. A new computer then connects
+     * and shows in the list at once, because the phone takes new devices now.
+     */
     @Volatile var foreground = false
+        set(value) {
+            val cameToFront = value && !field
+            field = value
+            if (cameToFront) backend?.broadcast()
+        }
 
     // The flags of the state that need calls to the system. publish() runs
     // for each packet, so it reads these copies. refreshWifi() and
