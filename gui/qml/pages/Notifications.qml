@@ -13,13 +13,16 @@ Item {
   readonly property bool online: !!dev && !!dev.online
   readonly property var notifs: dev && dev.notifications ? dev.notifications : []
   readonly property int clearable: notifs.filter(function (n) { return n.dismissable !== false }).length
+  // A card shows at most this number of action buttons.
+  readonly property int maxActions: 5
 
   implicitHeight: list.implicitHeight
 
   // The cards follow the notifications by ID. A new notification adds 1
   // card, and the other cards keep their state, such as a reply that the
-  // user types.
-  KeyedModel { id: rows; values: root.notifs }
+  // user types. Another device gets new cards, so a reply does not go to a
+  // notification of that device with the same ID.
+  KeyedModel { id: rows; values: root.notifs; scope: root.dev ? root.dev.id : "" }
 
   Column {
     id: list
@@ -63,6 +66,10 @@ Item {
         readonly property var modelData: rows.byId[key] || ({})
         readonly property bool replyable: !!modelData.replyId
         property bool replying: false
+        // The action buttons. The text changes only when the actions
+        // change, so a state event does not build the buttons again.
+        readonly property string actionsText: JSON.stringify((modelData.actions || []).slice(0, root.maxActions))
+        readonly property var actions: JSON.parse(actionsText)
         width: list.width
         implicitHeight: Math.max(36, body.implicitHeight) + 30
 
@@ -143,7 +150,7 @@ Item {
             width: parent.width
             spacing: 8
             topPadding: 8
-            visible: card.replyable || (modelData.actions && modelData.actions.length > 0)
+            visible: card.replyable || card.actions.length > 0
             OutlineButton {
               visible: card.replyable && !card.replying
               icon: "reply"
@@ -157,7 +164,7 @@ Item {
               }
             }
             Repeater {
-              model: modelData.actions || []
+              model: card.actions
               delegate: OutlineButton {
                 required property var modelData
                 text: modelData

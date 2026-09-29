@@ -13,6 +13,10 @@ QtObject {
   property var fixture: ({})
   property bool ready: false
   property var calls: []
+  // Each call as {method, params}, for the view tests.
+  property var requests: []
+  // Errors by method name. A call of such a method gets the error.
+  property var failures: ({})
 
   readonly property var devices: state.devices || []
   readonly property var clipboard: state.clipboard || []
@@ -53,6 +57,12 @@ QtObject {
 
   function call(method, params, cb) {
     calls.push(method)
+    requests.push({ method: method, params: params || {} })
+    if (Object.prototype.hasOwnProperty.call(failures, method)) {
+      var err = failures[method]
+      if (cb) Qt.callLater(function () { try { cb(err, null) } catch (e) {} })
+      return
+    }
     var result = {}
     if (method === "sms.thread") result = { messages: fixTimes((fixture.threads || {})[String(params.thread)] || []) }
     else if (method === "notification.dismissAll") {

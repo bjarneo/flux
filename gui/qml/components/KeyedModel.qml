@@ -22,24 +22,35 @@ ListModel {
   // The field that identifies an object in values.
   property string keyField: "id"
   // The objects of values by key. A new array gives a new map, so the
-  // bindings of the delegates read the new objects.
-  property var byId: ({})
+  // bindings of the delegates read the new objects. The map has no
+  // prototype, so a key from a phone such as "__proto__" or
+  // "hasOwnProperty" is an ordinary key.
+  property var byId: Object.create(null)
+  // A new scope, for example the ID of another device, removes every row
+  // first. Then no delegate keeps the state of an object from the earlier
+  // scope that has the same key.
+  property string scope: ""
 
   // The keys of the rows, in the order of the rows.
   property var rowKeys: []
 
   onValuesChanged: sync()
+  onScopeChanged: {
+    root.clear()
+    rowKeys = []
+    sync()
+  }
 
   function sync() {
     var list = values || []
     var keys = []
-    var map = {}
+    var map = Object.create(null)
     for (var i = 0; i < list.length; i++) {
       var k = list[i] ? list[i][keyField] : undefined
       // An object with no key, or with the key of an earlier object, gets
       // a key from its position.
       k = k === undefined || k === null || k === "" ? "#" + i : String(k)
-      if (map.hasOwnProperty(k)) k = k + "#" + i
+      while (k in map) k = k + "#" + i
       keys.push(k)
       map[k] = list[i]
     }
@@ -47,7 +58,7 @@ ListModel {
     // Remove the old rows first, while byId still has their objects.
     var rows = rowKeys.slice()
     for (var r = rows.length - 1; r >= 0; r--) {
-      if (!map.hasOwnProperty(rows[r])) {
+      if (!(rows[r] in map)) {
         root.remove(r)
         rows.splice(r, 1)
       }
