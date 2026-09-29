@@ -176,7 +176,11 @@ public final class MicPlugin: FluxPlugin, @unchecked Sendable {
             granted = await AVCaptureDevice.requestAccess(for: .audio)
         }
         await MainActor.run { [model] in model.permission = .current }
-        guard granted else { throw FluxError("Allow the microphone for Flux in System Settings > Privacy & Security > Microphone") }
+        guard granted else { throw FluxError(Self.deniedText()) }
+    }
+
+    static func deniedText(platform: FluxPlatform = .current) -> String {
+        "Allow the microphone for Flux in \(platform.settingsApp) > Privacy & Security > Microphone"
     }
 
     /// Opens a listener, sends flux.mic "start" with its port, and waits for

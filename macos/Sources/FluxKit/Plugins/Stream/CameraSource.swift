@@ -76,7 +76,7 @@ final class CameraSource: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
         #endif
     }
 
-    /// Asks for the camera permission when macOS has not asked yet.
+    /// Asks for the camera permission when the system has not asked yet.
     static func authorize() async throws {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
@@ -86,10 +86,12 @@ final class CameraSource: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
         default:
             break
         }
-        throw FluxError(accessMessage)
+        throw FluxError(accessMessage())
     }
 
-    static let accessMessage = "Flux has no access to the camera. Allow Flux in System Settings, Privacy & Security, Camera."
+    static func accessMessage(platform: FluxPlatform = .current) -> String {
+        "Flux has no access to the camera. Allow Flux in \(platform.settingsApp), Privacy & Security, Camera."
+    }
 
     static var accessDenied: Bool {
         let status = AVCaptureDevice.authorizationStatus(for: .video)

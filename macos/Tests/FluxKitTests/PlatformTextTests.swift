@@ -36,6 +36,8 @@ final class PlatformTextTests: XCTestCase {
                        "Apple's speech servers are not reachable. Check the network, or choose a language that this Mac transcribes on the device.")
         XCTAssertEqual(DictationText.speechDenied(platform: .mac), "Allow Flux in System Settings > Privacy & Security > Speech Recognition to dictate")
         XCTAssertEqual(DictationText.micDenied(platform: .mac), "Allow Flux in System Settings > Privacy & Security > Microphone to dictate")
+        XCTAssertEqual(MicPlugin.deniedText(platform: .mac), "Allow the microphone for Flux in System Settings > Privacy & Security > Microphone")
+        XCTAssertEqual(CameraSource.accessMessage(platform: .mac), "Flux has no access to the camera. Allow Flux in System Settings, Privacy & Security, Camera.")
     }
 
     func testPhoneTexts() {
@@ -52,6 +54,8 @@ final class PlatformTextTests: XCTestCase {
             .hasSuffix("a language that this iPhone transcribes on the device."))
         XCTAssertEqual(DictationText.speechDenied(platform: .phone), "Allow Flux in Settings > Privacy & Security > Speech Recognition to dictate")
         XCTAssertEqual(DictationText.micDenied(platform: .phone), "Allow Flux in Settings > Privacy & Security > Microphone to dictate")
+        XCTAssertEqual(MicPlugin.deniedText(platform: .phone), "Allow the microphone for Flux in Settings > Privacy & Security > Microphone")
+        XCTAssertEqual(CameraSource.accessMessage(platform: .phone), "Flux has no access to the camera. Allow Flux in Settings, Privacy & Security, Camera.")
     }
 
     /// Received files name the folder. The default folder on iOS is the
