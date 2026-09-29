@@ -280,6 +280,13 @@ Item {
       request("c0ffee0000000000000000000000beef", "1111222233334444")
       verify(!card.armed)
       tryCompare(card, "armed", true, 3000)
+      // A resend without the address hides a line, which moves Accept.
+      mock.setState(function (s) {
+        s.devices.forEach(function (d) { if (d.id === "c0ffee0000000000000000000000beef") d.ip = "" })
+      })
+      // The column lays out its lines before the next frame.
+      tryVerify(function () { return !card.armed }, 500)
+      tryCompare(card, "armed", true, 3000)
     }
 
     function test_discoveredTwinIsMarked() {

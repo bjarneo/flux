@@ -33,6 +33,9 @@ Rectangle {
   onArmKeyChanged: hold()
   onVisibleChanged: hold()
   onYChanged: hold()
+  // A new name or address can wrap a line, or show or hide a line. This
+  // moves Accept in the card.
+  onHeightChanged: hold()
   onMotionChanged: hold()
   Component.onCompleted: hold()
 
@@ -82,6 +85,7 @@ Rectangle {
     Row {
       spacing: 8
       topPadding: 2
+      onYChanged: root.hold()
       AccentButton { icon: "link"; text: "Accept"; padX: 12; padY: 6; fontSize: 12; active: root.armed; onClicked: root.accept() }
       OutlineButton { icon: "close"; text: "Reject"; padX: 12; padY: 6; fontSize: 12; onClicked: root.reject() }
     }
