@@ -105,3 +105,37 @@ jobs:
         with:
           name: android-reports
           path: android/app/build/reports/
+
+  macos:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: macos
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
+          persist-credentials: false
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Test FluxKit
+        run: swift test
+      # The generic destination builds a universal app for Apple silicon and Intel.
+      - name: Build the app
+        run: |
+          xcodegen generate --quiet
+          xcodebuild -project Flux.xcodeproj -scheme Flux -configuration Release \
+            -derivedDataPath build -destination 'generic/platform=macOS' -quiet build
+      # ditto keeps the executable bits and symbolic links that upload-artifact drops.
+      - name: Verify and package the app
+        run: |
+          app=build/Build/Products/Release/Flux.app
+          codesign --verify --deep --strict "$app"
+          lipo -info "$app/Contents/MacOS/Flux"
+          ditto -c -k --keepParent "$app" flux-macos.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-app
+          path: macos/flux-macos.zip
+          if-no-files-found: error
+          retention-days: 14
