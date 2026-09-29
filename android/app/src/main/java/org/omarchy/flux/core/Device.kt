@@ -165,8 +165,11 @@ class Device(private val core: FluxCore, var identity: Identity) {
     /** The user accepted an incoming request. */
     fun acceptPair() {
         if (pairState != PairState.Incoming) return
+        // Check the certificate first, so the computer never gets pair true
+        // and then pair false.
+        val cert = pinnableCertificate() ?: return
         send(Packet(Types.PAIR, bodyOf("pair" to true)))
-        pairingDone()
+        pairingDone(cert)
     }
 
     /** The user canceled a request or rejected an incoming request. */
@@ -198,7 +201,7 @@ class Device(private val core: FluxCore, var identity: Identity) {
             return
         }
         when (pairState) {
-            PairState.Requested -> pairingDone()
+            PairState.Requested -> pinnableCertificate()?.let { pairingDone(it) }
             PairState.Incoming -> Unit
             PairState.Paired -> {
                 // The peer lost the pairing, for example after a reinstall.
@@ -229,18 +232,24 @@ class Device(private val core: FluxCore, var identity: Identity) {
         core.notifyPairRequest(this)
     }
 
-    private fun pairingDone() {
-        pairTimer?.cancel(false)
-        // Pin the certificate from which the shown key came. The current
-        // link must present the same certificate.
+    /**
+     * Returns the certificate from which the shown key came, when the current
+     * link presents the same certificate. Else it refuses the pairing and
+     * returns null.
+     */
+    private fun pinnableCertificate(): X509Certificate? {
         val cert = pairCertificate
         val current = link?.peerCertificate
-        if (cert == null || current == null || !cert.encoded.contentEquals(current.encoded)) {
-            send(Packet(Types.PAIR, bodyOf("pair" to false)))
-            core.toast("Pairing with ${identity.deviceName} failed: the certificate changed")
-            resetPair()
-            return
-        }
+        if (cert != null && current != null && cert.encoded.contentEquals(current.encoded)) return cert
+        send(Packet(Types.PAIR, bodyOf("pair" to false)))
+        core.toast("Pairing with ${identity.deviceName} failed: the certificate changed")
+        resetPair()
+        return null
+    }
+
+    /** Pins [cert], which [pinnableCertificate] checked. */
+    private fun pairingDone(cert: X509Certificate) {
+        pairTimer?.cancel(false)
         pairState = PairState.Paired
         pairCertificate = null
         core.trust.put(
