@@ -3,6 +3,7 @@ package lan
 import (
 	"context"
 	"net"
+	"strconv"
 	"testing"
 	"time"
 
@@ -31,9 +32,18 @@ func listenLoopback(t *testing.T) int {
 	return l.Addr().(*net.TCPAddr).Port
 }
 
+// addrs joins each host with port.
+func addrs(port int, hosts ...string) []string {
+	out := make([]string, 0, len(hosts))
+	for _, h := range hosts {
+		out = append(out, net.JoinHostPort(h, strconv.Itoa(port)))
+	}
+	return out
+}
+
 func TestDialFirstPrefersFirstHost(t *testing.T) {
 	port := listenLoopback(t)
-	conn, i, err := dialFirst(context.Background(), &net.Dialer{Timeout: 5 * time.Second}, []string{"127.0.0.1", "localhost"}, port)
+	conn, i, err := dialFirst(context.Background(), &net.Dialer{Timeout: 5 * time.Second}, addrs(port, "127.0.0.1", "localhost"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +58,7 @@ func TestDialFirstPrefersFirstHost(t *testing.T) {
 func TestDialFirstSkipsSilentHost(t *testing.T) {
 	port := listenLoopback(t)
 	began := time.Now()
-	conn, i, err := dialFirst(context.Background(), &net.Dialer{Timeout: 5 * time.Second}, []string{unreachable, "127.0.0.1"}, port)
+	conn, i, err := dialFirst(context.Background(), &net.Dialer{Timeout: 5 * time.Second}, addrs(port, unreachable, "127.0.0.1"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,10 +78,10 @@ func TestDialFirstFails(t *testing.T) {
 	}
 	port := l.Addr().(*net.TCPAddr).Port
 	l.Close()
-	if _, i, err := dialFirst(context.Background(), &net.Dialer{Timeout: time.Second}, []string{"127.0.0.1"}, port); err == nil || i != -1 {
+	if _, i, err := dialFirst(context.Background(), &net.Dialer{Timeout: time.Second}, addrs(port, "127.0.0.1")); err == nil || i != -1 {
 		t.Fatalf("dial to a closed port: index %d, error %v", i, err)
 	}
-	if _, _, err := dialFirst(context.Background(), &net.Dialer{}, nil, port); err == nil {
+	if _, _, err := dialFirst(context.Background(), &net.Dialer{}, nil); err == nil {
 		t.Fatal("dial with no host must fail")
 	}
 }

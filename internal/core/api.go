@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -26,29 +27,61 @@ func apiErr(code, format string, args ...any) *Error {
 
 func offline(dev *Device) *Error { return apiErr("offline", "%s is offline", dev.Name) }
 
-// lookup finds a device by ID or by name. Names match without case.
+// lookup finds a device by ID or by name. It returns nil when no device
+// or more than 1 device matches. See find.
 func (d *Daemon) lookup(key string) *Device {
+	dev, _ := d.find(key, nil)
+	return dev
+}
+
+// find returns the device that key names. An exact device ID wins. A name
+// matches without case, and only a device that is paired or connected,
+// because any host on the network can send a name. match, when it is not
+// nil, limits the devices that a name finds, and runs under d.mu. When more
+// than 1 device has the name, find takes the paired ones. It returns an
+// ambiguous error that lists the IDs when that leaves more than 1 device.
+func (d *Daemon) find(key string, match func(*Device) bool) (*Device, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if dev, ok := d.devices[key]; ok {
-		return dev
+		return dev, nil
 	}
+	var found, paired []*Device
 	for _, dev := range d.devices {
-		if strings.EqualFold(dev.Name, key) {
-			return dev
+		if !strings.EqualFold(dev.Name, key) || (!dev.Paired && dev.link == nil) || (match != nil && !match(dev)) {
+			continue
+		}
+		found = append(found, dev)
+		if dev.Paired {
+			paired = append(paired, dev)
 		}
 	}
-	return nil
+	if len(paired) > 0 {
+		found = paired
+	}
+	switch len(found) {
+	case 0:
+		return nil, apiErr("not_found", "No device named %q", key)
+	case 1:
+		return found[0], nil
+	}
+	ids := make([]string, 0, len(found))
+	for _, dev := range found {
+		ids = append(ids, dev.ID)
+	}
+	sort.Strings(ids)
+	return nil, apiErr("ambiguous", "%d devices are named %q: %s. Give the device ID", len(found), key, strings.Join(ids, ", "))
 }
 
 // pick returns the device that a request names. Without a name it returns
 // the only connected paired device.
-func (d *Daemon) pick(key string) (*Device, error) {
+func (d *Daemon) pick(key string) (*Device, error) { return d.pickMatch(key, nil) }
+
+// pickMatch is pick with a limit on the devices that a name finds. See
+// find.
+func (d *Daemon) pickMatch(key string, match func(*Device) bool) (*Device, error) {
 	if key != "" {
-		if dev := d.lookup(key); dev != nil {
-			return dev, nil
-		}
-		return nil, apiErr("not_found", "No device named %q", key)
+		return d.find(key, match)
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -78,7 +111,10 @@ func (d *Daemon) Snapshot() json.RawMessage {
 	defer d.mu.Unlock()
 	devs := make([]*Device, 0, len(d.devices))
 	for _, dev := range d.devices {
-		devs = append(devs, dev)
+		// A device that is not paired shows only while it is connected.
+		if dev.Paired || dev.link != nil {
+			devs = append(devs, dev)
+		}
 	}
 	sort.Slice(devs, func(i, j int) bool {
 		a, b := devs[i], devs[j]
@@ -92,10 +128,6 @@ func (d *Daemon) Snapshot() json.RawMessage {
 	})
 	views := make([]DeviceView, 0, len(devs))
 	for _, dev := range devs {
-		// A device that is not paired shows only while it is connected.
-		if !dev.Paired && dev.link == nil {
-			continue
-		}
 		v := dev.view()
 		v.AppUpdate = d.appUpdateLocked(dev)
 		views = append(views, v)
@@ -253,22 +285,38 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		return ok, d.sendAppUpdate(dev)
 	}
 
-	dev, err := d.pick(p.Device)
+	// A name finds only the devices that the pairing method can act on.
+	var match func(*Device) bool
+	switch method {
+	case "pair.request":
+		match = func(dev *Device) bool { return !dev.Paired && dev.link != nil }
+	case "pair.accept", "pair.reject":
+		match = func(dev *Device) bool { return dev.pairState == "incoming" }
+	}
+	dev, err := d.pickMatch(p.Device, match)
+	var e *Error
+	if errors.As(err, &e) && e.Code == "not_found" {
+		switch method {
+		case "pair.request":
+			// A paired device with the name gets the answer that it is
+			// paired.
+			dev, err = d.pick(p.Device)
+		case "pair.accept", "pair.reject":
+			err = apiErr("no_request", "No device named %q has an open pair request", p.Device)
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
 	switch method {
-	case "pair.request":
-		return ok, d.RequestPair(dev)
-	case "pair.accept":
-		return ok, d.AcceptPair(dev)
-	case "pair.reject":
-		return ok, d.RejectPair(dev)
-	case "pair.unpair":
-		return ok, d.Unpair(dev)
+	case "pair.request", "pair.accept", "pair.reject", "pair.unpair":
+		return d.pairCall(method, dev)
 	}
-	if !dev.Paired {
-		return nil, apiErr("not_paired", "%s is not paired", dev.Name)
+	d.mu.Lock()
+	paired, ring, name := dev.Paired, dev.accepts(proto.TypeFindMyPhone), dev.Name
+	d.mu.Unlock()
+	if !paired {
+		return nil, apiErr("not_paired", "%s is not paired", name)
 	}
 	switch method {
 	case "addresses.add", "addresses.remove":
@@ -280,10 +328,10 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{"device": dev.Name, "address": addr, "addresses": addrs}, nil
+		return map[string]any{"device": name, "address": addr, "addresses": addrs}, nil
 	case "ring":
-		if !dev.accepts(proto.TypeFindMyPhone) {
-			return nil, apiErr("not_supported", "%s cannot ring. Flux rings only phones and tablets", dev.Name)
+		if !ring {
+			return nil, apiErr("not_supported", "%s cannot ring. Flux rings only phones and tablets", name)
 		}
 		return ok, d.send(dev, proto.New(proto.TypeFindMyPhone, map[string]any{}))
 	case "ping":

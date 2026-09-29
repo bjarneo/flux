@@ -57,7 +57,7 @@ def spki(der_cert):
 def verification_key(a, b, ts):
     if a < b:
         a, b = b, a
-    return hashlib.sha256(a + b + str(ts).encode()).hexdigest()[:8].upper()
+    return hashlib.sha256(a + b + str(ts).encode()).hexdigest()[:16].upper()
 
 
 def flv_frames(stream, width, height):

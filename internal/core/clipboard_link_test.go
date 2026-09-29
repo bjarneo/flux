@@ -16,30 +16,29 @@ import (
 // side and the device ID of each side.
 func linkPair(t *testing.T, ctx context.Context) (desk, phone *lan.Link, deskID, phoneID string) {
 	t.Helper()
-	start := func(name string, port int) (*lan.Provider, chan *lan.Link, string) {
+	start := func(name string) (*lan.Provider, chan *lan.Link, string) {
 		cert, id, err := proto.LoadOrCreateCert(t.TempDir())
 		if err != nil {
 			t.Fatal(err)
 		}
 		links := make(chan *lan.Link, 1)
 		p := lan.New(lan.Config{
-			Cert:         cert,
-			Identity:     func() proto.Identity { return proto.NewIdentity(id, name, 0) },
-			Trusted:      func(string) (*x509.Certificate, bool) { return nil, false },
-			HasLink:      func(string) bool { return false },
-			OnLink:       func(l *lan.Link) { links <- l },
-			Logf:         t.Logf,
-			UDPPort:      port,
-			FirstTCPPort: port + 1,
+			Cert:      cert,
+			Identity:  func() proto.Identity { return proto.NewIdentity(id, name, 0) },
+			Trusted:   func(string) (*x509.Certificate, bool) { return nil, false },
+			HasLink:   func(string) bool { return false },
+			OnLink:    func(l *lan.Link) { links <- l },
+			Logf:      t.Logf,
+			FreePorts: true,
 		})
 		if err := p.Start(ctx); err != nil {
 			t.Fatal(err)
 		}
 		return p, links, id
 	}
-	deskProv, deskLinks, deskID := start("desk", 29260)
-	_, phoneLinks, phoneID := start("phone", 29320)
-	deskProv.AnnounceTo(&net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 29320})
+	deskProv, deskLinks, deskID := start("desk")
+	phoneProv, phoneLinks, phoneID := start("phone")
+	deskProv.AnnounceTo(&net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: phoneProv.UDPPort()})
 	wait := func(ch chan *lan.Link) *lan.Link {
 		select {
 		case l := <-ch:

@@ -3,9 +3,12 @@ package proto
 import (
 	"crypto/x509"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"unicode"
 )
 
 func TestPacketIDAcceptsNumberAndString(t *testing.T) {
@@ -57,7 +60,10 @@ func TestCleanName(t *testing.T) {
 		`Bob's "Pixel" (8)!`:                            "Bobs Pixel 8",
 		"omarchy-framework":                             "omarchy-framework",
 		"a name that is much longer than 32 characters": "a name that is much longer than",
-		"...": "omarchy",
+		"...":                           "omarchy",
+		"Pixel\x1bc 8\r\npaired=true":   "Pixelc 8paired=true",
+		"Pixel \u202egnp.exe\u2066 8":   "Pixel gnpexe 8",
+		"\u200fPixel\u0085 8\x7f\u009b": "Pixel 8",
 	}
 	for in, want := range cases {
 		if got := CleanName(in); got != want {
@@ -83,6 +89,98 @@ func TestTargetVersion(t *testing.T) {
 	}
 }
 
+func TestCleanType(t *testing.T) {
+	for _, typ := range []string{"phone", "tablet", "desktop", "laptop", "tv"} {
+		if CleanType(typ) != typ {
+			t.Errorf("CleanType(%q) = %q", typ, CleanType(typ))
+		}
+	}
+	for _, typ := range []string{"", "smartphone", "Phone", "\x1b]52;c;aGk=\x07", strings.Repeat("x", 60000)} {
+		if got := CleanType(typ); got != "" {
+			t.Errorf("CleanType(%.20q) = %q, want an empty type", typ, got)
+		}
+	}
+}
+
+func TestCleanText(t *testing.T) {
+	if got := CleanText(" 0.7.0\x1b[2J\u202e ", 32); got != "0.7.0[2J" {
+		t.Errorf("CleanText = %q", got)
+	}
+	if got := CleanText(strings.Repeat("é", 40), 32); got != strings.Repeat("é", 32) {
+		t.Errorf("CleanText keeps %d characters", len([]rune(got)))
+	}
+}
+
+// TestVerificationKeyVector checks the key against the test vector that
+// Flux for Android, Flux for iOS, and Flux for macOS share.
+func TestVerificationKeyVector(t *testing.T) {
+	a := []byte{0x30, 0x82, 0x01, 0x22, 0x80}
+	b := []byte{0x30, 0x82, 0x01, 0x22, 0x7f}
+	ca, cb := &x509.Certificate{RawSubjectPublicKeyInfo: a}, &x509.Certificate{RawSubjectPublicKeyInfo: b}
+	for _, c := range []struct {
+		ts   int64
+		want string
+	}{{1790000000, "5EE6825F974ED59A"}, {0, "5BB22DB11047F34B"}} {
+		if got := VerificationKey(ca, cb, c.ts); got != c.want {
+			t.Errorf("VerificationKey(a, b, %d) = %s, want %s", c.ts, got, c.want)
+		}
+		if got := VerificationKey(cb, ca, c.ts); got != c.want {
+			t.Errorf("VerificationKey(b, a, %d) = %s, want %s", c.ts, got, c.want)
+		}
+	}
+	if got := FormatKey("5EE6825F974ED59A"); got != "5EE6 825F 974E D59A" {
+		t.Errorf("FormatKey = %q", got)
+	}
+}
+
+func TestFingerprint(t *testing.T) {
+	a := testCert(t)
+	fp := Fingerprint(a)
+	if len(fp) != 16 || strings.ToUpper(fp) != fp || strings.ContainsFunc(fp, func(r rune) bool { return !unicode.Is(unicode.ASCII_Hex_Digit, r) }) {
+		t.Fatalf("fingerprint %q is not 16 uppercase hex digits", fp)
+	}
+	if Fingerprint(a) != fp || Fingerprint(testCert(t)) == fp {
+		t.Fatal("the fingerprint does not identify the certificate")
+	}
+	if Fingerprint(nil) != "" {
+		t.Fatal("a missing certificate must have no fingerprint")
+	}
+}
+
+// TestKeyPermissions checks that the private key and the data directory
+// lose the access of other users when the certificate loads.
+func TestKeyPermissions(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "flux")
+	if _, _, err := LoadOrCreateCert(dir); err != nil {
+		t.Fatal(err)
+	}
+	key := filepath.Join(dir, keyFile)
+	if err := os.Chmod(key, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := LoadOrCreateCert(dir); err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]os.FileMode{key: 0o600, dir: 0o700} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := info.Mode().Perm(); got != want {
+			t.Errorf("%s has mode %o, want %o", path, got, want)
+		}
+	}
+}
+
+func TestUnmarshalLongType(t *testing.T) {
+	if _, err := Unmarshal([]byte(`{"type":"` + strings.Repeat("x", maxTypeSize+1) + `"}`)); err == nil {
+		t.Fatal("a packet type longer than the limit must fail")
+	}
+}
+
 func TestVerificationKeyIsSymmetric(t *testing.T) {
 	a := testCert(t)
 	b := testCert(t)
@@ -91,8 +189,8 @@ func TestVerificationKeyIsSymmetric(t *testing.T) {
 	if ka != kb {
 		t.Fatalf("keys differ: %s and %s", ka, kb)
 	}
-	if len(ka) != 8 {
-		t.Fatalf("key %q does not have 8 characters", ka)
+	if len(ka) != 16 {
+		t.Fatalf("key %q does not have 16 characters", ka)
 	}
 	if VerificationKey(a, b, 1727260001) == ka {
 		t.Error("the timestamp does not change the key")

@@ -13,8 +13,12 @@ For the Mac app, see [Flux for macOS](macos.md#features). For the iPhone, see [F
 4. Run `flux-cli open` on the desktop.
 5. Select **+ Pair new device**.
 6. Select the phone.
-7. Compare the 8-character key on both screens.
+7. Compare the 16-character key on both screens, for example `5EE6 825F 974E D59A`.
 8. Accept the matching request on the phone.
+
+Compare all 16 characters.
+An earlier Flux app shows only 8 characters. Update Flux on each phone, iPhone, and Mac before you pair.
+If the keys differ, reject the request and pair again.
 
 To pair from the terminal:
 
@@ -24,11 +28,37 @@ flux-cli pair "Pixel 8"
 flux-cli status
 ```
 
+`flux-cli pair` and `flux-cli accept` print the device ID and the key of the pairing.
+`flux-cli unpair` prints the device ID and the fingerprint of the certificate that it removed.
+When 2 devices have the same name, `fluxd` refuses the name and lists the device IDs.
+Give the ID instead of the name:
+
+```sh
+flux-cli pair 9f1c0e5b7a2d4c3e8b6a1f0d2c4e6a8b
+```
+
 Flux uses TLS with pinned device certificates after pairing.
 The desktop discovers phones through mDNS and opens the connections itself.
 The phone scans for computers for 10 seconds when the app opens.
 If the desktop is not in the list, tap **Scan again** on the phone.
 To use the phone away from the local network, see [Connect through Tailscale](tailscale.md).
+
+### Pairing security
+
+- The key comes from the certificates of both devices and the time of the request. It has 64 bits, so a device between the phone and the computer cannot find a certificate with the same key while the request is open.
+- A pairing stays on the connection and the certificate on which it started. While a pairing is open, `fluxd` refuses a second connection with another certificate for the same device ID. When the connection of the pairing closes, the pairing stops.
+- After the pairing, `fluxd` refuses each connection that does not show the pinned certificate.
+- The state from `flux-cli status --json` has the `fingerprint` of each device: 16 hex digits from its certificate. Use it to tell 2 devices with the same name apart.
+- When you unpair on either side, the other side gets the unpair message and `fluxd` closes the connection. `fluxd` also removes the notifications, messages, and battery state of the device.
+- A device that is not paired can send packets of at most 64 KiB. `fluxd` closes its connection when it sends no pair request for 2 minutes.
+- `fluxd` shows at most 1 pair notification for each device and at most 4 open pair requests.
+
+If `devices.json` has a certificate that `fluxd` cannot read, the device counts as not paired, and `fluxd` refuses its connections.
+The journal names the device. To pair it again, run:
+
+```sh
+flux-cli unpair DEVICE_ID
+```
 
 ## Files, clipboard, and links
 

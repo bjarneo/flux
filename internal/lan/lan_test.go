@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -24,9 +25,9 @@ type peer struct {
 	links chan *Link
 	mu    sync.Mutex
 	pins  map[string]*x509.Certificate
+	// logs receives each log line of the provider.
+	logs chan string
 }
-
-var nextPort = 27160
 
 func newPeer(t *testing.T, ctx context.Context, name string, extraOutgoing ...string) *peer {
 	t.Helper()
@@ -34,8 +35,7 @@ func newPeer(t *testing.T, ctx context.Context, name string, extraOutgoing ...st
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := &peer{id: id, cert: cert, links: make(chan *Link, 4), pins: map[string]*x509.Certificate{}}
-	nextPort += 60
+	p := &peer{id: id, cert: cert, links: make(chan *Link, 4), pins: map[string]*x509.Certificate{}, logs: make(chan string, 64)}
 	p.prov = New(Config{
 		Cert: cert,
 		Identity: func() proto.Identity {
@@ -49,11 +49,17 @@ func newPeer(t *testing.T, ctx context.Context, name string, extraOutgoing ...st
 			c, ok := p.pins[dev]
 			return c, ok
 		},
-		HasLink:      func(string) bool { return false },
-		OnLink:       func(l *Link) { p.links <- l },
-		Logf:         t.Logf,
-		UDPPort:      nextPort,
-		FirstTCPPort: nextPort + 1,
+		HasLink: func(string) bool { return false },
+		OnLink:  func(l *Link) { p.links <- l },
+		Logf: func(format string, args ...any) {
+			line := fmt.Sprintf(format, args...)
+			t.Log(line)
+			select {
+			case p.logs <- line:
+			default:
+			}
+		},
+		FreePorts: true,
 	})
 	if err := p.prov.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -62,7 +68,23 @@ func newPeer(t *testing.T, ctx context.Context, name string, extraOutgoing ...st
 }
 
 func (p *peer) udpAddr() *net.UDPAddr {
-	return &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: p.prov.cfg.UDPPort}
+	return &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: p.prov.UDPPort()}
+}
+
+// waitLog waits for a log line of the peer that contains text.
+func (p *peer) waitLog(t *testing.T, text string) {
+	t.Helper()
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case line := <-p.logs:
+			if strings.Contains(line, text) {
+				return
+			}
+		case <-deadline:
+			t.Fatalf("no log line with %q within 5 seconds", text)
+		}
+	}
 }
 
 func waitLink(t *testing.T, ch chan *Link) *Link {
@@ -161,25 +183,313 @@ func TestPayload(t *testing.T) {
 }
 
 // TestPinnedCertificate refuses a link when the certificate differs from
-// the pinned one.
+// the pinned one, in both roles: when the phone connects to the desk, and
+// when the desk dials the phone. A link with the pinned certificate
+// passes.
 func TestPinnedCertificate(t *testing.T) {
+	for _, dial := range []bool{false, true} {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		desk := newPeer(t, ctx, "desk")
+		phone := newPeer(t, ctx, "phone")
+		other, _, err := proto.LoadOrCreateCert(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		connect := func() {
+			if dial {
+				desk.prov.Dial(ctx, "127.0.0.1", phone.prov.TCPPort(), proto.Identity{DeviceID: phone.id, ProtocolVersion: 8})
+			} else {
+				desk.prov.AnnounceTo(phone.udpAddr())
+			}
+		}
+		desk.mu.Lock()
+		desk.pins[phone.id] = other.Leaf
+		desk.mu.Unlock()
+		connect()
+		desk.waitLog(t, "certificate differs from the pinned certificate")
+		select {
+		case l := <-desk.links:
+			t.Fatalf("dial=%v: the desk accepted a link with a changed certificate from %s", dial, l.DeviceID())
+		default:
+		}
+
+		// A pin without a valid certificate refuses every link.
+		desk.mu.Lock()
+		desk.pins[phone.id] = nil
+		desk.mu.Unlock()
+		time.Sleep(attemptWindow)
+		connect()
+		desk.waitLog(t, "no valid pinned certificate")
+
+		// The pinned certificate passes.
+		desk.mu.Lock()
+		desk.pins[phone.id] = phone.cert.Leaf
+		desk.mu.Unlock()
+		time.Sleep(attemptWindow)
+		connect()
+		if l := waitLink(t, desk.links); !bytes.Equal(l.Cert.Raw, phone.cert.Leaf.Raw) {
+			t.Fatalf("dial=%v: the link has another certificate", dial)
+		}
+	}
+}
+
+// TestLineLimit checks that a link of a device that is not paired reads
+// lines of up to 64 KiB, and that a paired link reads longer lines.
+func TestLineLimit(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	desk := newPeer(t, ctx, "desk")
 	phone := newPeer(t, ctx, "phone")
-	other, _, err := proto.LoadOrCreateCert(t.TempDir())
+	desk.prov.AnnounceTo(phone.udpAddr())
+	onDesk := waitLink(t, desk.links)
+	onPhone := waitLink(t, phone.links)
+
+	big := proto.New(proto.TypePing, map[string]any{"message": strings.Repeat("x", 100<<10)})
+	got := make(chan *proto.Packet, 1)
+	done := make(chan error, 1)
+	onDesk.SetPaired(true)
+	go func() { done <- onDesk.Receive(func(p *proto.Packet) { got <- p }) }()
+	if err := onPhone.Send(big); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-got:
+	case <-time.After(5 * time.Second):
+		t.Fatal("a paired link did not read a packet of 100 KiB")
+	}
+	onDesk.SetPaired(false)
+	_ = onPhone.Send(big)
+	select {
+	case err := <-done:
+		if err != errLineTooLong {
+			t.Fatalf("Receive ended with %v, want %v", err, errLineTooLong)
+		}
+	case <-got:
+		t.Fatal("a link that is not paired read a packet of 100 KiB")
+	case <-time.After(5 * time.Second):
+		t.Fatal("the link did not end")
+	}
+}
+
+// TestHandshakeLimit closes an incoming connection when too many
+// connections from the same address wait for their link.
+func TestHandshakeLimit(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	desk := newPeer(t, ctx, "desk")
+	addr := fmt.Sprintf("127.0.0.1:%d", desk.prov.TCPPort())
+	for range maxHandshakesPerIP {
+		c, err := net.Dial("tcp", addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c.Close()
+	}
+	// The provider counts a connection when it accepts it. Wait until it
+	// counted all of them.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		desk.prov.mu.Lock()
+		n := desk.prov.perIP["127.0.0.1"]
+		desk.prov.mu.Unlock()
+		if n == maxHandshakesPerIP {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%d connections wait, want %d", n, maxHandshakesPerIP)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	c, err := net.Dial("tcp", addr)
 	if err != nil {
 		t.Fatal(err)
 	}
-	desk.mu.Lock()
-	desk.pins[phone.id] = other.Leaf
-	desk.mu.Unlock()
+	defer c.Close()
+	_ = c.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if _, err := c.Read(make([]byte, 1)); err != io.EOF {
+		t.Fatalf("the extra connection got %v, want EOF", err)
+	}
+}
 
+// TestPeerPort checks the ports that discovery can make fluxd dial.
+func TestPeerPort(t *testing.T) {
+	p := New(Config{Identity: func() proto.Identity { return proto.Identity{} }})
+	for port, want := range map[int]bool{MinTCPPort: true, MaxTCPPort: true, 22: false, 80: false, 1715: false, 1765: false, 0: false, 70000: false} {
+		if got := p.peerPort(port); got != want {
+			t.Errorf("peerPort(%d) = %v, want %v", port, got, want)
+		}
+	}
+	if p := New(Config{Identity: func() proto.Identity { return proto.Identity{} }, FirstTCPPort: 28720}); !p.peerPort(28721) || p.peerPort(0) {
+		t.Error("a provider with other ports must accept the ports of its peers")
+	}
+}
+
+// TestAttemptsArePruned checks that the attempts map keeps only the
+// devices of the last second.
+func TestAttemptsArePruned(t *testing.T) {
+	p := New(Config{Identity: func() proto.Identity { return proto.Identity{} }})
+	for i := range 100 {
+		if !p.shouldAttempt(fmt.Sprintf("%032d", i)) {
+			t.Fatal("a new device must get an attempt")
+		}
+	}
+	if p.shouldAttempt(fmt.Sprintf("%032d", 1)) {
+		t.Fatal("a second attempt within 1 second must wait")
+	}
+	p.mu.Lock()
+	for id := range p.attempts {
+		p.attempts[id] = time.Now().Add(-2 * attemptWindow)
+	}
+	p.pruned = time.Now().Add(-2 * attemptWindow)
+	p.mu.Unlock()
+	p.shouldAttempt("new")
+	p.mu.Lock()
+	n := len(p.attempts)
+	p.mu.Unlock()
+	if n != 1 {
+		t.Fatalf("%d attempts after the prune, want 1", n)
+	}
+}
+
+// TestPayloadAfterStranger checks that a connection from another host with
+// another certificate does not make a transfer fail.
+func TestPayloadAfterStranger(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	desk := newPeer(t, ctx, "desk")
+	phone := newPeer(t, ctx, "phone")
 	desk.prov.AnnounceTo(phone.udpAddr())
+	onDesk := waitLink(t, desk.links)
+	onPhone := waitLink(t, phone.links)
+	stranger, _, err := proto.LoadOrCreateCert(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data := []byte("payload for the phone")
+	packets := make(chan *proto.Packet, 1)
+	go onPhone.Receive(func(p *proto.Packet) { packets <- p })
+	sent := make(chan error, 1)
+	go func() {
+		sent <- onDesk.SendWithPayload(ctx, proto.New(proto.TypeShare, nil), bytes.NewReader(data), int64(len(data)), nil)
+	}()
+	var p *proto.Packet
 	select {
-	case l := <-desk.links:
-		t.Fatalf("the desk accepted a link with a changed certificate from %s", l.DeviceID())
-	case <-time.After(1500 * time.Millisecond):
+	case p = <-packets:
+	case <-time.After(5 * time.Second):
+		t.Fatal("share packet did not arrive")
+	}
+	// The stranger connects first and shows its own certificate.
+	c, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", p.PayloadTransferInfo.Port))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tc := tls.Client(c, clientConfig(stranger))
+	_ = tc.Handshake()
+	desk.waitLog(t, "payload connection")
+	tc.Close()
+
+	rc, err := onPhone.FetchPayload(ctx, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := io.ReadAll(rc)
+	rc.Close()
+	if err != nil || !bytes.Equal(got, data) {
+		t.Fatalf("payload %q, %v", got, err)
+	}
+	if err := <-sent; err != nil {
+		t.Fatalf("sender: %v", err)
+	}
+}
+
+// TestPayloadIdle checks that a received payload fails when the device
+// shows its certificate and then sends nothing.
+func TestPayloadIdle(t *testing.T) {
+	old := payloadIdle
+	payloadIdle = 100 * time.Millisecond
+	t.Cleanup(func() { payloadIdle = old })
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	desk := newPeer(t, ctx, "desk")
+	phone := newPeer(t, ctx, "phone")
+	desk.prov.AnnounceTo(phone.udpAddr())
+	onDesk := waitLink(t, desk.links)
+	waitLink(t, phone.links)
+	ln, port, err := listenPayload(ctx, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		tc := tls.Server(c, serverConfig(phone.cert))
+		defer tc.Close()
+		if tc.Handshake() == nil {
+			<-ctx.Done()
+		}
+	}()
+	p := proto.New(proto.TypeShare, nil)
+	p.PayloadSize, p.PayloadTransferInfo = 18, &proto.TransferInfo{Port: port}
+	rc, err := onDesk.FetchPayload(ctx, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rc.Close()
+	if _, err := io.ReadAll(rc); err == nil || !strings.Contains(err.Error(), "sent nothing") {
+		t.Fatalf("read of a silent payload: %v", err)
+	}
+}
+
+// TestPeerCertificateChecks checks that FetchPayload and DialPeer refuse a
+// listener with another certificate, and that FetchPayload refuses a port
+// outside the payload ports.
+func TestPeerCertificateChecks(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	desk := newPeer(t, ctx, "desk")
+	phone := newPeer(t, ctx, "phone")
+	desk.prov.AnnounceTo(phone.udpAddr())
+	onDesk := waitLink(t, desk.links)
+	waitLink(t, phone.links)
+	stranger, _, err := proto.LoadOrCreateCert(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ln, port, err := listenPayload(ctx, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				tc := tls.Server(c, serverConfig(stranger))
+				_ = tc.Handshake()
+				_, _ = tc.Write([]byte("not from the phone"))
+				tc.Close()
+			}()
+		}
+	}()
+	p := proto.New(proto.TypeShare, nil)
+	p.PayloadSize, p.PayloadTransferInfo = 18, &proto.TransferInfo{Port: port}
+	if _, err := onDesk.FetchPayload(ctx, p); err == nil || !strings.Contains(err.Error(), "does not match") {
+		t.Fatalf("FetchPayload from a stranger: %v", err)
+	}
+	if _, err := onDesk.DialPeer(ctx, port); err == nil || !strings.Contains(err.Error(), "does not match") {
+		t.Fatalf("DialPeer to a stranger: %v", err)
+	}
+	p.PayloadTransferInfo.Port = 22
+	if _, err := onDesk.FetchPayload(ctx, p); err == nil || !strings.Contains(err.Error(), "outside") {
+		t.Fatalf("FetchPayload from port 22: %v", err)
 	}
 }
 
@@ -287,7 +597,7 @@ func TestTunnelPayload(t *testing.T) {
 		if p.PayloadTransferInfo == nil || p.PayloadTransferInfo.Tunnel == "" || p.PayloadTransferInfo.Port != 0 {
 			return
 		}
-		ln, port, err := listenPayload(ctx)
+		ln, port, err := listenPayload(ctx, "127.0.0.1")
 		if err != nil {
 			t.Error(err)
 			return
