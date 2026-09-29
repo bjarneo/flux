@@ -117,6 +117,7 @@ final class AppModel {
     /// links for the background time that iOS gives, then closes them, so
     /// that the computers see it leave. It connects again when it returns.
     func scenePhaseChanged(_ phase: ScenePhase) {
+        if phase != .active { FeatureHooks.leftActive(model: self) }
         switch phase {
         case .active:
             isActive = true

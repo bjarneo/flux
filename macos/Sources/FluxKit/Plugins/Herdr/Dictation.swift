@@ -170,6 +170,9 @@ public final class Dictation {
         startedAt = Self.now()
         spokeAt = startedAt
         phase = .listening
+        #if os(iOS)
+        Self.running[ObjectIdentifier(self)] = WeakDictation(self)
+        #endif
         listen()
         watch = Task { @MainActor [weak self] in
             while !Task.isCancelled {
@@ -217,6 +220,18 @@ public final class Dictation {
         onDone = nil
         finish()
     }
+
+    #if os(iOS)
+    /// The dictations that run.
+    private static var running: [ObjectIdentifier: WeakDictation] = [:]
+
+    /// Ends each dictation that runs and drops its text, for example when
+    /// the app leaves the screen, so that no words go out later.
+    public static func cancelAll() {
+        for d in running.values.compactMap(\.value) { d.cancel() }
+        running = [:]
+    }
+    #endif
 
     // MARK: Language
 
@@ -425,6 +440,9 @@ public final class Dictation {
 
     /// Ends the dictation and gives the text to the caller of `start`.
     private func finish() {
+        #if os(iOS)
+        Self.running[ObjectIdentifier(self)] = nil
+        #endif
         watch?.cancel()
         watch = nil
         finishTimer?.cancel()
@@ -446,6 +464,18 @@ public final class Dictation {
 
     private static func now() -> TimeInterval { ProcessInfo.processInfo.systemUptime }
 }
+
+#if os(iOS)
+/// A dictation that `Dictation.cancelAll` can reach, without keeping it.
+@MainActor
+private struct WeakDictation {
+    weak var value: Dictation?
+
+    init(_ value: Dictation) {
+        self.value = value
+    }
+}
+#endif
 
 /// Carries the microphone buffers from the audio thread to the running
 /// recognition request.

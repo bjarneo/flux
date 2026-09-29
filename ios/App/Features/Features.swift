@@ -186,6 +186,13 @@ enum FeatureHooks {
         if !active { model.core.plugin(WebcamPlugin.self)?.stopInBackground() }
     }
 
+    /// Runs when the app stops being active: it leaves the screen, or iOS
+    /// covers it, for example with Notification Center.
+    static func leftActive(model: AppModel) {
+        // The words of a dictation that runs on would go out later.
+        Dictation.cancelAll()
+    }
+
     /// True while a feature runs in the background and needs the links:
     /// the microphone stream, which keeps Flux running with the audio
     /// background mode.
