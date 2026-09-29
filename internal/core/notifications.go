@@ -301,21 +301,32 @@ func (d *Daemon) showNotification(dev *Device, n *PhoneNotification) {
 // closeNotification closes the desktop notification of the phone
 // notification id when the phone no longer has it.
 func (d *Daemon) closeNotification(dev *Device, id string) {
-	if d.notifier == nil {
+	d.closeNotifications(dev, []string{id})
+}
+
+// closeNotifications closes the desktop notifications of the phone
+// notifications ids that the phone no longer has. 1 job closes all of
+// them, so a long list does not fill the queue of the notification worker.
+func (d *Daemon) closeNotifications(dev *Device, ids []string) {
+	if d.notifier == nil || len(ids) == 0 {
 		return
 	}
 	d.runNotify(func() {
+		var desk []uint32
 		d.mu.Lock()
-		deskID, ok := dev.notifDesktop[id]
-		if findNotification(dev.notifications, id) != nil {
-			// The phone sent the notification again after the cancel.
-			ok = false
-		}
-		if ok {
+		for _, id := range ids {
+			deskID, ok := dev.notifDesktop[id]
+			// The phone can send the notification again after the cancel.
+			if !ok || findNotification(dev.notifications, id) != nil {
+				continue
+			}
 			delete(dev.notifDesktop, id)
+			if deskID != 0 {
+				desk = append(desk, deskID)
+			}
 		}
 		d.mu.Unlock()
-		if ok && deskID != 0 {
+		for _, deskID := range desk {
 			_ = d.notifier.Close(deskID)
 		}
 	})
@@ -345,9 +356,7 @@ func (d *Daemon) requestNotifications(dev *Device, l *lan.Link) {
 			}
 		}
 		d.mu.Unlock()
-		for _, id := range stale {
-			d.closeNotification(dev, id)
-		}
+		d.closeNotifications(dev, stale)
 	})
 }
 
@@ -372,14 +381,24 @@ func removeNotification(list []*PhoneNotification, id string) []*PhoneNotificati
 
 // DismissNotification removes a notification on the phone.
 func (d *Daemon) DismissNotification(dev *Device, id string) error {
+	if err := d.dismissOnPhone(dev, id); err != nil {
+		return err
+	}
+	d.closeNotification(dev, id)
+	d.markDirty()
+	return nil
+}
+
+// dismissOnPhone asks the phone to remove the notification id and removes
+// it from the list of the device. The caller closes the desktop
+// notification.
+func (d *Daemon) dismissOnPhone(dev *Device, id string) error {
 	if err := d.send(dev, proto.New(proto.TypeNotificationRequest, map[string]any{"cancel": id})); err != nil {
 		return err
 	}
 	d.mu.Lock()
 	dev.notifications = removeNotification(dev.notifications, id)
 	d.mu.Unlock()
-	d.closeNotification(dev, id)
-	d.markDirty()
 	return nil
 }
 
@@ -391,12 +410,19 @@ func (d *Daemon) DismissAllNotifications(dev *Device) (int, error) {
 	d.mu.Lock()
 	ids := dismissable(dev.notifications)
 	d.mu.Unlock()
-	for i, id := range ids {
-		if err := d.DismissNotification(dev, id); err != nil {
-			return i, err
+	var done []string
+	var err error
+	for _, id := range ids {
+		if err = d.dismissOnPhone(dev, id); err != nil {
+			break
 		}
+		done = append(done, id)
 	}
-	return len(ids), nil
+	if len(done) > 0 {
+		d.closeNotifications(dev, done)
+		d.markDirty()
+	}
+	return len(done), err
 }
 
 // dismissable returns the IDs of the notifications that the user can
