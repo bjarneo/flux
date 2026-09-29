@@ -34,11 +34,10 @@ struct ContentView: View {
         }
         .animation(.snappy, value: model.toast)
         .modifier(FeatureRoot())
-        .sheet(item: Binding(
-            get: { model.pairSheetDevice.map(PairSheetItem.init) },
-            set: { if $0 == nil { model.pairingSheet = nil } }
-        )) { item in
-            PairSheet(deviceId: item.id)
+        .onAppear { Overlays.install(model: model) }
+        // An overlay sheet shows above the keyboard of the app only when the keyboard goes.
+        .onChange(of: FeatureOverlays.shown(model: model)) { _, shown in
+            if shown { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
         }
         .onChange(of: scenePhase, initial: true) { _, phase in model.scenePhaseChanged(phase) }
         .onChange(of: appearance, initial: true) { _, value in AppearanceController.apply(value) }

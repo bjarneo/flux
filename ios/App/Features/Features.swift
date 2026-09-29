@@ -132,13 +132,28 @@ struct FeatureSettings: View {
     }
 }
 
-/// Views over the whole app, such as Quick Look and the ring.
+/// Views over the whole app, such as Quick Look.
 struct FeatureRoot: ViewModifier {
     func body(content: Content) -> some View {
         content
             .modifier(ShareRoot())
-            .modifier(RingRoot())
-            .modifier(ApproveRoot())
+    }
+}
+
+/// Sheets that show over the whole app, also over its sheets, each from its
+/// own window, see `Overlays`. The later ones are on top.
+@MainActor
+enum FeatureOverlays {
+    static let layers: [AnyView] = [
+        AnyView(OverlayLayer(modifier: ApproveRoot())),
+        AnyView(OverlayLayer(modifier: RingRoot())),
+    ]
+
+    /// True while one of them shows, or the pairing sheet.
+    static func shown(model: AppModel) -> Bool {
+        model.pairSheetDevice != nil
+            || ApprovePresenter.shared.state.isPresented
+            || model.core.plugin(RingPlugin.self)?.model.ringing != nil
     }
 }
 
