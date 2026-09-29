@@ -46,6 +46,32 @@ Received files use `download_dir`.
 The phone can browse the desktop home folder read-only when `share_home` is enabled.
 The tunnel carries SSH traffic without an inbound SSH firewall rule.
 
+A shared link opens in the browser of the desktop only when it is an `http` or `https` URL with a host.
+Every other shared value is text, for example a `file:` URL, a path, or a link with another scheme.
+Shared text goes on the desktop clipboard and in the clipboard history.
+A notification shows the first 300 characters.
+
+Flux syncs clipboard text and shared text of up to 1 MiB in both directions.
+`fluxd` ignores a larger text from a device, and `flux-cli clip` refuses a larger text.
+The clipboard history keeps at most 16 MiB of text and drops the oldest entries first.
+When `fluxd` restarts, the desktop clipboard loses text or an image that came from a device.
+
+`fluxd` makes the name of a received file safe:
+
+- It keeps only the file name and removes control characters and characters that change the text direction.
+- It puts `_` before a name that starts with a dot or a dash, so the file is not hidden.
+- It cuts a name to 200 bytes and keeps the extension.
+- It adds a number, for example `photo (2).jpg`, when the name is taken. It never replaces a file.
+
+A received file shows in the folder with its final name while it arrives, as an empty file.
+`fluxd` writes the data to a hidden `.flux-*.part` file in the same folder and removes both files when the transfer fails.
+Each device sends at most 4 files at the same time.
+`fluxd` refuses or stops a file when less than 1 GiB or 5% of the disk would stay free.
+It stops a transfer when the device sends no data for 1 minute.
+
+The programs that `fluxd` opens, for example a browser, a received file, or a [desktop command](#media-and-desktop-commands), start in their own systemd scope.
+A restart of `fluxd` after an update does not stop them.
+
 ## Clipboard images
 
 A copied image goes to the other device, like copied text.
@@ -64,6 +90,10 @@ The phone sends PNG, JPEG, GIF, and WebP images.
 Flux syncs images of up to 16 MiB.
 A copy that also has plain text syncs as text, for example cells from a spreadsheet.
 
+Each device sends 1 image at a time. A newer image stops the image that is on its way.
+When you turn off `auto_clipboard` or unpair the phone, the desktop stops the image that it sends.
+An image that arrives after an unpair does not go into the history.
+
 The Clipboard page shows the last 10 images.
 Select **Copy** to put an image on the desktop clipboard again.
 `fluxd` keeps these images in `$XDG_RUNTIME_DIR/flux/clipboard`, which is in memory.
@@ -80,6 +110,14 @@ flux-cli notifications clear
 
 Clear all also dismisses the notifications on the phone.
 An ongoing notification, such as a media player, stays.
+
+The desktop shows the text of a phone notification as plain text.
+`fluxd` keeps the first 256 bytes of the app name and the title, the first 4 KiB of the text, and up to 8 actions.
+When the phone connects again, it sends its notifications again.
+After 15 seconds, `fluxd` closes the desktop notifications that the phone no longer has.
+
+A button on a desktop notification works only for a notification that `fluxd` showed with that button.
+`fluxd` takes a click only from the program that owns `org.freedesktop.Notifications` on the session bus.
 
 To send a notification in the other direction:
 
@@ -104,6 +142,8 @@ The desktop then shows the **Messages** page for that phone:
 - Select **New message** to send a text message to a phone number.
 - A new message on the phone appears on the desktop in about 1 second.
 - A reply goes out on the SIM of the conversation. A new message uses the default SMS SIM of the phone.
+- The list keeps the 500 newest conversations and shows the first 1 KiB of each latest message.
+- A message from the desktop has at most 1600 characters, which is about 10 SMS parts.
 
 To send a text message from a script, use the [SMS command](cli.md#share-and-communicate):
 
@@ -150,6 +190,8 @@ The daemon pauses desktop players that are active when the call starts.
 When the call ends, it resumes those players.
 A player that you manually resume during the call keeps its state.
 A missed call produces a notification.
+When the phone disconnects during a call, the call notification closes.
+The paused players then stay paused, and the end of a later call does not resume them.
 
 To keep media active during calls, set:
 
