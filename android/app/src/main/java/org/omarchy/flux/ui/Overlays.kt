@@ -13,9 +13,24 @@ import androidx.compose.runtime.DisposableEffect
  * one, so that the user taps Pair or Approve.
  */
 object Overlays {
-    /** True when a window of another app covered the window, fully or in part, during [ev]. */
-    fun obscured(ev: MotionEvent): Boolean =
-        ev.flags and (MotionEvent.FLAG_WINDOW_IS_OBSCURED or MotionEvent.FLAG_WINDOW_IS_PARTIALLY_OBSCURED) != 0
+    /** True when a window of another app covered the touch point of [ev], or a part of the window before Android 12. */
+    fun obscured(ev: MotionEvent): Boolean = obscured(ev.flags, Build.VERSION.SDK_INT)
+
+    /**
+     * Decides from the [flags] of a touch on Android [sdk]. From Android 12,
+     * [hide] removes the windows of other apps, so only a window over the
+     * touch point counts. A window that the system keeps, such as the handle
+     * of an edge panel, then covers only a part and does not block a tap.
+     * Before Android 12, a window over any part of the window counts too.
+     */
+    internal fun obscured(flags: Int, sdk: Int): Boolean {
+        val covered = if (sdk >= 31) {
+            MotionEvent.FLAG_WINDOW_IS_OBSCURED
+        } else {
+            MotionEvent.FLAG_WINDOW_IS_OBSCURED or MotionEvent.FLAG_WINDOW_IS_PARTIALLY_OBSCURED
+        }
+        return flags and covered != 0
+    }
 
     /** Android 12 and later: hides the windows that other apps draw over [window] while [hide] is true. */
     fun hide(window: Window, hide: Boolean) {
