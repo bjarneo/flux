@@ -50,7 +50,7 @@ final class ShareComposer {
         chosen = SharedComputers.defaultChoice(computers, lastUsed: ShareGroup.lastComputer)
         if items.count == 1, let item = items.first, !item.isFile {
             Task {
-                preview = (try? await item.loadText()).map { String($0.prefix(Self.previewLength)) }
+                preview = (try? await item.loadPreview()).map { String($0.prefix(Self.previewLength)) }
             }
         }
     }

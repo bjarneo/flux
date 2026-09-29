@@ -391,4 +391,28 @@ final class SharedItemTests: XCTestCase {
         XCTAssertEqual(queued.name, "notes.txt", "the computer gets the text file with its name")
         XCTAssertEqual(try Data(contentsOf: try XCTUnwrap(queue.file(of: queued))), Data([1, 2, 3]))
     }
+
+    func testALargeTextStopsBeforeItsDecode() async throws {
+        let big = try XCTUnwrap(SharedItem(text(String(repeating: "x", count: ShareQueue.maxTextBytes + 1))))
+        do {
+            _ = try await big.loadText()
+            XCTFail("a text larger than 1 MB does not load")
+        } catch {
+            XCTAssertEqual(error as? ShareQueueError, .textTooLarge)
+        }
+        let preview = try await big.loadPreview()
+        XCTAssertEqual(preview.utf8.count, SharedItem.previewBytes, "the preview decodes only the start")
+        let fits = try await XCTUnwrap(SharedItem(text(String(repeating: "x", count: ShareQueue.maxTextBytes)))).loadText()
+        XCTAssertEqual(fits.utf8.count, ShareQueue.maxTextBytes)
+    }
+
+    func testTheStartOfATextKeepsWholeCharacters() {
+        let text = Data("aé".utf8)
+        XCTAssertEqual(SharedItem.decodeStart(text, encoding: .utf8, maxBytes: 2), "a", "a cut in a character drops the character")
+        XCTAssertEqual(SharedItem.decodeStart(text, encoding: .utf8, maxBytes: 3), "aé")
+        let wide = Data([0xFF, 0xFE, 0x61, 0x00, 0x62, 0x00, 0x63, 0x00])
+        XCTAssertEqual(SharedItem.decodeStart(wide, encoding: .utf16(bigEndian: true), maxBytes: 7), "ab", "the byte order mark wins")
+        XCTAssertEqual(SharedItem.decode(Data([0x00, 0x61]), encoding: .utf16(bigEndian: true)), "a")
+        XCTAssertEqual(SharedItem.decode(Data([0x61, 0x00]), encoding: .utf16(bigEndian: false)), "a")
+    }
 }

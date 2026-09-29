@@ -122,14 +122,86 @@ struct SharedItem {
         }
     }
 
-    /// The text of a link or a text item.
+    /// The bytes of a text that the preview decodes.
+    static let previewBytes = 4096
+
+    /// The text of a link or a text item. A text larger than
+    /// `ShareQueue.maxTextBytes` throws `textTooLarge` before Flux decodes
+    /// it, so that a large text cannot fill the memory of the extension.
     func loadText() async throws -> String {
         if kind == .link { return try await loadURL().absoluteString }
-        return try await withCheckedThrowingContinuation { (done: CheckedContinuation<String, Error>) in
-            _ = provider.loadObject(ofClass: String.self) { text, error in
-                if let text { done.resume(returning: text) } else { done.resume(throwing: error ?? CocoaError(.fileReadUnknown)) }
+        let (data, encoding) = try await loadTextData()
+        // The UTF-16 form of a text with 1 MB of UTF-8 has up to 2 MB.
+        let limit = encoding == .utf8 ? ShareQueue.maxTextBytes : 2 * ShareQueue.maxTextBytes
+        if data.count > limit { throw ShareQueueError.textTooLarge }
+        guard let text = Self.decode(data, encoding: encoding) else { throw CocoaError(.fileReadInapplicableStringEncoding) }
+        if text.utf8.count > ShareQueue.maxTextBytes { throw ShareQueueError.textTooLarge }
+        return text
+    }
+
+    /// The start of a link or a text item, for the preview. It decodes at
+    /// most `previewBytes` of a text.
+    func loadPreview() async throws -> String {
+        if kind == .link { return try await loadURL().absoluteString }
+        let (data, encoding) = try await loadTextData()
+        return Self.decodeStart(data, encoding: encoding, maxBytes: Self.previewBytes)
+    }
+
+    /// Loads the bytes of a text item, as UTF-8 when the item has UTF-8.
+    private func loadTextData() async throws -> (Data, TextEncoding) {
+        let utf8 = provider.hasItemConformingToTypeIdentifier(UTType.utf8PlainText.identifier)
+        let load = utf8 ? UTType.utf8PlainText : type
+        let encoding = utf8 ? TextEncoding.utf8 : TextEncoding(load)
+        let data = try await withCheckedThrowingContinuation { (done: CheckedContinuation<Data, Error>) in
+            _ = provider.loadDataRepresentation(forTypeIdentifier: load.identifier) { data, error in
+                if let data { done.resume(returning: data) } else { done.resume(throwing: error ?? CocoaError(.fileReadUnknown)) }
             }
         }
+        return (data, encoding)
+    }
+
+    /// The encoding of the bytes of a plain text type.
+    enum TextEncoding: Equatable {
+        case utf8
+        /// UTF-16 in the byte order of the byte order mark, or in the
+        /// given order when the text has no mark.
+        case utf16(bigEndian: Bool)
+
+        /// UTF-8 unless the type says UTF-16.
+        init(_ type: UTType) {
+            if type.conforms(to: .utf16ExternalPlainText) {
+                self = .utf16(bigEndian: true)
+            } else if type.conforms(to: .utf16PlainText) {
+                // The byte order of iPhones and Macs.
+                self = .utf16(bigEndian: false)
+            } else {
+                self = .utf8
+            }
+        }
+    }
+
+    /// Decodes a text. Bytes that are not valid UTF-8 show as the
+    /// replacement character.
+    static func decode(_ data: Data, encoding: TextEncoding) -> String? {
+        switch encoding {
+        case .utf8:
+            return String(decoding: data, as: UTF8.self)
+        case .utf16(let bigEndian):
+            let mark = [UInt8](data.prefix(2))
+            if mark == [0xFF, 0xFE] { return String(data: data.dropFirst(2), encoding: .utf16LittleEndian) }
+            if mark == [0xFE, 0xFF] { return String(data: data.dropFirst(2), encoding: .utf16BigEndian) }
+            return String(data: data, encoding: bigEndian ? .utf16BigEndian : .utf16LittleEndian)
+        }
+    }
+
+    /// Decodes the first `maxBytes` of a text. A character that the cut
+    /// splits does not show.
+    static func decodeStart(_ data: Data, encoding: TextEncoding, maxBytes: Int) -> String {
+        guard data.count > maxBytes else { return decode(data, encoding: encoding) ?? "" }
+        // An even cut keeps the UTF-16 units whole.
+        var text = decode(data.prefix(maxBytes - maxBytes % 2), encoding: encoding) ?? ""
+        if text.last == "\u{FFFD}" { text.removeLast() }
+        return text
     }
 
     private func loadURL() async throws -> URL {
