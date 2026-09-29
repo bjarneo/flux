@@ -123,14 +123,14 @@ Window {
     }],
     ["21-pair-list", function () { view.tab = "overview"; view.pairMode = true }],
     ["22-pair-requested", function () {
-      mock.updateDevice(oneplus, function (d) { d.pairState = "requested"; d.pairKey = "4F21A9C3"; return d })
+      mock.updateDevice(oneplus, function (d) { d.pairState = "requested"; d.pairKey = "4F21A9C3E08B7D52"; return d })
     }],
     ["23-paired", function () {
       mock.updateDevice(oneplus, function (d) { d.pairState = "paired"; d.paired = true; d.pairedAt = "2026-09-25"; d.battery = { charge: 91, charging: false }; return d })
     }],
     ["24-pair-incoming", function () {
       mock.setState(function (s) {
-        s.devices.push({ id: "c0ffee0000000000000000000000beef", name: "work-thinkpad", type: "laptop", ip: "192.168.1.70", paired: false, online: true, pairState: "incoming", pairKey: "9B03E7D1", plugins: [], notifications: [], conversations: [] })
+        s.devices.push({ id: "c0ffee0000000000000000000000beef", name: "work-thinkpad", type: "laptop", ip: "192.168.1.70", paired: false, online: true, pairState: "incoming", pairKey: "9B03E7D16A2FC048", fingerprint: "71C0E5A93B2D8F46", plugins: [], notifications: [], conversations: [] })
       })
       view.selectedId = pixel
     }],
@@ -164,9 +164,9 @@ Window {
         s.devices.forEach(function (d) { if (d.id === oneplus) { d.paired = true; d.pairState = "paired"; d.pairedAt = "2026-09-25"; d.battery = { charge: 91, charging: false } } })
         s.devices.push({ id: "a0000000000000000000000000000001", name: "Pixel 7a", type: "phone", ip: "192.168.1.80", paired: true, online: true, pairState: "paired", pairedAt: "2026-01-02", battery: { charge: 55, charging: false }, plugins: [], notifications: [], conversations: [] })
         s.devices.push({ id: "a0000000000000000000000000000002", name: "Living room TV", type: "tv", ip: "", paired: true, online: false, pairState: "paired", pairedAt: "2025-11-30", battery: null, plugins: [], notifications: [], conversations: [] })
-        s.devices.push({ id: "a0000000000000000000000000000003", name: "Nothing Phone 2", type: "phone", ip: "192.168.1.90", paired: false, online: true, pairState: "none", plugins: [], notifications: [], conversations: [] })
-        s.devices.push({ id: "a0000000000000000000000000000004", name: "Galaxy S25", type: "phone", ip: "192.168.1.91", paired: false, online: true, pairState: "none", plugins: [], notifications: [], conversations: [] })
-        s.devices.push({ id: "c0ffee0000000000000000000000beef", name: "work-thinkpad", type: "laptop", ip: "192.168.1.70", paired: false, online: true, pairState: "incoming", pairKey: "9B03E7D1", plugins: [], notifications: [], conversations: [] })
+        s.devices.push({ id: "a0000000000000000000000000000003", name: "Nothing Phone 2", type: "phone", ip: "192.168.1.90", fingerprint: "0E4A7C21D95B3F68", paired: false, online: true, pairState: "none", plugins: [], notifications: [], conversations: [] })
+        s.devices.push({ id: "a0000000000000000000000000000004", name: "Galaxy S25", type: "phone", ip: "192.168.1.91", fingerprint: "B8F3260D4E1A9C57", paired: false, online: true, pairState: "none", plugins: [], notifications: [], conversations: [] })
+        s.devices.push({ id: "c0ffee0000000000000000000000beef", name: "work-thinkpad", type: "laptop", ip: "192.168.1.70", paired: false, online: true, pairState: "incoming", pairKey: "9B03E7D16A2FC048", fingerprint: "71C0E5A93B2D8F46", plugins: [], notifications: [], conversations: [] })
       })
       view.anchors.fill = undefined
       view.width = 1180
@@ -236,6 +236,43 @@ Window {
       mock.call("desktop.stop", {}, null)
       remote().set("remoteDesktop", false)
       remote().set("remoteInput", false)
+    }],
+    // A device on the network with the name of a paired phone.
+    ["49-pair-twin", function () {
+      mock.setState(function (s) {
+        s.devices.push({ id: "a0000000000000000000000000000005", name: "pixel  8", type: "phone", ip: "192.168.1.66", fingerprint: "E7A10C5F2B98D364", paired: false, online: true, pairState: "none", plugins: [], notifications: [], conversations: [] })
+      })
+      view.pairMode = true
+    }],
+    // 2 pair requests: 1 card, and a line for the other request.
+    ["50-pair-requests", function () {
+      view.pairMode = false
+      mock.setState(function (s) {
+        s.devices = s.devices.filter(function (d) { return d.id !== "a0000000000000000000000000000005" })
+        s.devices.push({ id: "c0ffee0000000000000000000000beef", name: "work-thinkpad", type: "laptop", ip: "192.168.1.70", paired: false, online: true, pairState: "incoming", pairKey: "9B03E7D16A2FC048", fingerprint: "71C0E5A93B2D8F46", plugins: [], notifications: [], conversations: [] })
+        s.devices.push({ id: "c0ffee0000000000000000000000cafe", name: "Pixel\u202E8", type: "phone", ip: "192.168.1.71", paired: false, online: true, pairState: "incoming", pairKey: "2D7E9A04C61B5F83", fingerprint: "94B2F07E3C18A5D6", plugins: [], notifications: [], conversations: [] })
+      })
+    }, null, 1500],
+    // A thread that the phone did not send.
+    ["51-messages-error", function () {
+      mock.setState(function (s) { s.devices = s.devices.filter(function (d) { return d.pairState !== "incoming" }) })
+      mock.failures = { "sms.thread": { code: "timeout", message: "Pixel 8 did not send the conversation" } }
+      view.selectedId = pixel
+      view.tab = "messages"
+    }, function () {
+      var p = pageItem()
+      p.open(p.convos.filter(function (c) { return c.thread === 2 })[0])
+    }],
+    // Another phone with SMS: the page shows its conversations and no
+    // thread of the first phone.
+    ["52-messages-other-phone", function () {
+      mock.failures = {}
+      mock.setState(function (s) {
+        s.devices.push({ id: "a0000000000000000000000000000006", name: "Pixel 7a", type: "phone", ip: "192.168.1.80", fingerprint: "6A0D3E8C91F27B45", paired: true, online: true, pairState: "paired", pairedAt: "2026-01-02", battery: { charge: 55, charging: false }, plugins: ["sms"], notifications: [], conversations: [
+          { thread: 7, name: "Kari", address: "+4790011223", addresses: ["+4790011223"], last: "See you at 6", time: Math.floor(Date.now() / 1000) - 600 }
+        ] })
+      })
+      view.selectedId = "a0000000000000000000000000000006"
     }]
   ]
 

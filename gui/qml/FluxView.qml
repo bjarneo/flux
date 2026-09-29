@@ -54,6 +54,31 @@ Item {
   readonly property var discovered: allDevices.filter(d => !d.paired && d.online && d.pairState !== "incoming")
   readonly property var incoming: allDevices.filter(d => d.pairState === "incoming")
   readonly property var requested: allDevices.find(d => d.pairState === "requested") || null
+  // The fields of the pair requests and of the discovered devices that the
+  // sidebar shows. As for pairedRows, the text changes only when 1 of these
+  // fields changes, so a state event does not build a card or a row again
+  // under the pointer.
+  readonly property string incomingText: JSON.stringify(incoming.map(d => ({
+    id: d.id, name: d.name, ip: d.ip || "", pairKey: d.pairKey || ""
+  })))
+  readonly property var incomingRows: JSON.parse(incomingText)
+  readonly property string discoveredText: JSON.stringify(discovered.map(d => ({
+    id: d.id, name: d.name, type: d.type, ip: d.ip || "", fingerprint: d.fingerprint || "",
+    pairState: d.pairState, twin: twinText(d)
+  })))
+  readonly property var discoveredRows: JSON.parse(discoveredText)
+  // The IDs of the pair requests that already showed, in the order in
+  // which they came. The list empties when no request is open.
+  property var seenRequests: []
+  // The sidebar shows 1 pair request: the oldest one that is still open.
+  // A later request does not replace the card under the pointer.
+  readonly property var pairRequest: {
+    for (var i = 0; i < seenRequests.length; i++) {
+      var r = incomingRows.find(d => d.id === seenRequests[i])
+      if (r) return r
+    }
+    return incomingRows.length > 0 ? incomingRows[0] : null
+  }
   // The fields of the paired devices that the device rows and the rail
   // show. The text changes only when 1 of these fields changes, so a new
   // notification or message does not build the rows again.
@@ -103,12 +128,14 @@ Item {
 
   function toast(text) { toastBox.show(text) }
 
-  // Calls a fluxd method. An error becomes a toast. cb receives the result.
-  function call(method, params, cb) {
+  // Calls a fluxd method. cb receives the result. An error goes to onError
+  // when the caller gives it. Otherwise the error becomes a toast.
+  function call(method, params, cb, onError) {
     if (!backend) return
     backend.call(method, params || {}, function (err, result) {
       if (err) {
-        toast(err.message || err.code || "Error")
+        if (onError) onError(err)
+        else toast(err.message || err.code || "Error")
         return
       }
       if (cb) cb(result)
@@ -157,11 +184,28 @@ Item {
 
   // A new pair request scrolls the sidebar to the top, where the card is.
   // The card shows only in the full sidebar, so a narrow window opens the
-  // drawer.
-  onIncomingChanged: {
-    if (incoming.length === 0) return
+  // drawer. This happens once for each request, so a device that sends its
+  // request again does not open the drawer again or move the sidebar.
+  onIncomingRowsChanged: {
+    var ids = incomingRows.map(d => d.id)
+    if (ids.length === 0) {
+      seenRequests = []
+      return
+    }
+    var fresh = ids.filter(id => seenRequests.indexOf(id) < 0)
+    if (fresh.length === 0) return
+    seenRequests = seenRequests.concat(fresh)
     sideFlick.contentY = 0
     if (!wideLayout) drawerOpen = true
+  }
+
+  // A note for a discovered device with the name of another device, or "".
+  // A device on the network can copy the name of a phone of the user.
+  function twinText(d) {
+    var key = Fmt.nameKey(d.name)
+    var others = allDevices.filter(o => o.id !== d.id && Fmt.nameKey(o.name) === key)
+    if (others.length === 0) return ""
+    return others.some(o => o.paired) ? "Same name as a paired device" : "Same name as another device"
   }
 
   function startPair() {
@@ -371,15 +415,24 @@ Item {
           width: parent.width
           spacing: 6
 
-          Repeater {
-            model: root.incoming
-            delegate: PairCard {
-              required property var modelData
-              width: side.width
-              device: modelData
-              onAccept: root.call("pair.accept", { device: modelData.id })
-              onReject: root.call("pair.reject", { device: modelData.id })
-            }
+          PairCard {
+            id: pairCard
+            visible: !!root.pairRequest
+            width: side.width
+            device: root.pairRequest || ({})
+            motion: [sideFlick.contentY, root.sidebarFull, sidebar.width]
+            onAccept: root.call("pair.accept", { device: pairCard.device.id })
+            onReject: root.call("pair.reject", { device: pairCard.device.id })
+          }
+          Txt {
+            visible: root.incomingRows.length > 1
+            width: parent.width
+            leftPadding: 4
+            rightPadding: 4
+            text: root.incomingRows.length === 2 ? "1 more device asks to pair" : (root.incomingRows.length - 1) + " more devices ask to pair"
+            color: Theme.warn
+            font.pixelSize: 11
+            wrapMode: Text.Wrap
           }
 
           Repeater {
@@ -418,13 +471,15 @@ Item {
               Txt {
                 anchors.verticalCenter: parent.verticalCenter
                 width: Math.min(implicitWidth, pairButton.width - 18 - pairIcon.width - 6)
-                elide: Text.ElideRight
+                // The key has its own line, so all of its groups show.
+                wrapMode: Text.Wrap
                 color: pairLabel.tint
                 font.pixelSize: 12
                 text: {
                   if (root.requested) {
-                    var key = root.requested.pairKey || ""
-                    return key !== "" ? "Confirm " + key + " on " + root.requested.name + "…" : "Waiting for " + root.requested.name + "…"
+                    var key = Fmt.hexGroups(root.requested.pairKey)
+                    var name = Fmt.showControls(root.requested.name)
+                    return key !== "" ? "Confirm on " + name + "\n" + key : "Waiting for " + name + "…"
                   }
                   if (root.justPaired !== "") return root.justPaired + " paired"
                   return "Pair new device"
@@ -443,34 +498,66 @@ Item {
             }
           }
 
-          // Devices on the network that are not paired
+          // Devices on the network that are not paired. Each row shows the
+          // address and the certificate fingerprint of the device, and marks
+          // a name that another device also has.
           Repeater {
-            model: root.pairMode ? root.discovered : []
+            model: root.pairMode ? root.discoveredRows : []
             delegate: DashedRect {
               required property var modelData
               width: side.width
-              height: 42
-              color: candArea.containsMouse ? Theme.accent : Theme.bg3
+              height: Math.max(42, candInfo.implicitHeight + 18)
+              color: candArea.containsMouse ? Theme.accent : (modelData.twin !== "" ? Theme.warn : Theme.bg3)
               Rectangle {
                 x: 9
-                anchors.verticalCenter: parent.verticalCenter
+                y: 9
                 width: 24
                 height: 24
                 color: Theme.bg3
                 Icon { anchors.centerIn: parent; name: Fmt.kindIcon(modelData.type); color: Theme.dim; size: 15 }
               }
-              Txt {
+              Column {
+                id: candInfo
                 x: 43
-                anchors.verticalCenter: parent.verticalCenter
-                width: parent.width - 43 - 60
-                text: modelData.name
-                elide: Text.ElideRight
-                font.weight: Font.DemiBold
+                y: 9
+                width: parent.width - 43 - 56
+                Txt {
+                  id: candName
+                  width: parent.width
+                  text: Fmt.showControls(modelData.name)
+                  elide: Text.ElideRight
+                  font.weight: Font.DemiBold
+                }
+                Txt {
+                  width: parent.width
+                  visible: text !== ""
+                  text: modelData.ip
+                  color: Theme.dim
+                  font.pixelSize: 11
+                  elide: Text.ElideRight
+                }
+                Txt {
+                  width: parent.width
+                  visible: text !== ""
+                  text: Fmt.hexGroups(modelData.fingerprint)
+                  color: Theme.dim
+                  font.pixelSize: 11
+                  elide: Text.ElideRight
+                }
+                Txt {
+                  width: parent.width
+                  visible: text !== ""
+                  topPadding: 2
+                  text: modelData.twin
+                  color: Theme.warn
+                  font.pixelSize: 11
+                  wrapMode: Text.Wrap
+                }
               }
               Txt {
                 anchors.right: parent.right
                 anchors.rightMargin: 10
-                anchors.verticalCenter: parent.verticalCenter
+                y: candInfo.y + (candName.height - height) / 2
                 text: modelData.pairState === "requested" ? "waiting" : "pair"
                 color: Theme.accent
                 font.pixelSize: 11
@@ -590,9 +677,20 @@ Item {
       cursorShape: Qt.PointingHandCursor
       onClicked: rb.clicked()
     }
-    ToolTip.visible: rbArea.containsMouse && tip !== ""
-    ToolTip.delay: 400
-    ToolTip.text: tip
+    // The tip can hold a device name from the phone, so it shows as plain
+    // text. The default tooltip text detects rich text.
+    ToolTip {
+      id: tipBox
+      visible: rbArea.containsMouse && rb.tip !== ""
+      delay: 400
+      text: rb.tip
+      contentItem: Text {
+        text: tipBox.text
+        font: tipBox.font
+        color: tipBox.palette.toolTipText
+        textFormat: Text.PlainText
+      }
+    }
   }
 
   // Main area

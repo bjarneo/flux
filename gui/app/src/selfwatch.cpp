@@ -42,9 +42,13 @@ void SelfWatch::check()
 
 void SelfWatch::restart()
 {
-    emit aboutToRestart();
-    if (QProcess::startDetached(m_path, {}))
-        QCoreApplication::quit();
-    else
+    // The new process waits until this one releases the single-instance
+    // lock. This process keeps its server until the new process runs, so a
+    // failed start leaves the window as it was.
+    if (!QProcess::startDetached(m_path, {QStringLiteral("--replace")})) {
         qWarning("flux-gui: cannot start %s", qPrintable(m_path));
+        return;
+    }
+    emit aboutToRestart();
+    QCoreApplication::quit();
 }

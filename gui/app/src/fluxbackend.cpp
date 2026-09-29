@@ -1,9 +1,10 @@
 #include "fluxbackend.h"
 
-#include <QDir>
 #include <QJSEngine>
 #include <QProcess>
-#include <QStandardPaths>
+
+#include <sys/socket.h>
+#include <unistd.h>
 
 namespace {
 // minRetryDelay and maxRetryDelay limit the wait between connection
@@ -14,6 +15,38 @@ constexpr int maxRetryDelay = 60000;
 // firstAttemptGrace is the time after start at which the window may show
 // "fluxd is not running", also when the first attempt has not finished.
 constexpr int firstAttemptGrace = 800;
+// maxLine is the largest line from fluxd that the backend reads. Normal
+// state events are much smaller. A longer line is dropped, and the
+// connection stays open.
+constexpr qint64 maxLine = 32 * 1024 * 1024;
+
+// peerIsUser reports whether the process at the other end of socket runs
+// as the same user as this process.
+bool peerIsUser(qintptr socket)
+{
+    struct ucred cred {};
+    socklen_t len = sizeof(cred);
+    if (::getsockopt(int(socket), SOL_SOCKET, SO_PEERCRED, &cred, &len) != 0)
+        return false;
+    return cred.uid == ::getuid();
+}
+}
+
+QStringList FluxBackend::chooserPaths(QString text)
+{
+    if (text.endsWith(u'\n'))
+        text.chop(1);
+    QStringList paths;
+    if (text.isEmpty())
+        return paths;
+    for (const QString &line : text.split(u'\n')) {
+        if (line.startsWith(u'/') || paths.isEmpty())
+            paths.append(line);
+        else
+            paths.last() += u'\n' + line;
+    }
+    paths.removeIf([](const QString &path) { return !path.startsWith(u'/'); });
+    return paths;
 }
 
 FluxBackend::FluxBackend(QJSEngine *engine, QObject *parent)
@@ -23,6 +56,13 @@ FluxBackend::FluxBackend(QJSEngine *engine, QObject *parent)
     connect(&m_retry, &QTimer::timeout, this, &FluxBackend::connectNow);
 
     connect(&m_socket, &QLocalSocket::connected, this, [this] {
+        // Only a fluxd of this user gets the requests, which can hold
+        // message text and command lines.
+        if (!peerIsUser(m_socket.socketDescriptor())) {
+            qWarning("flux-gui: %s belongs to another user", qPrintable(socketPath()));
+            m_socket.abort();
+            return;
+        }
         m_retry.stop();
         m_retryDelay = minRetryDelay;
         setAttempted();
@@ -30,6 +70,7 @@ FluxBackend::FluxBackend(QJSEngine *engine, QObject *parent)
         call(QStringLiteral("subscribe"));
     });
     connect(&m_socket, &QLocalSocket::disconnected, this, [this] {
+        m_dropLine = false;
         failPending(QStringLiteral("offline"), QStringLiteral("fluxd is not running"));
         emit connectedChanged();
         scheduleRetry();
@@ -39,10 +80,7 @@ FluxBackend::FluxBackend(QJSEngine *engine, QObject *parent)
         if (m_socket.state() != QLocalSocket::ConnectedState)
             scheduleRetry();
     });
-    connect(&m_socket, &QLocalSocket::readyRead, this, [this] {
-        while (m_socket.canReadLine())
-            handleLine(m_socket.readLine().trimmed());
-    });
+    connect(&m_socket, &QLocalSocket::readyRead, this, &FluxBackend::readLines);
 
     QTimer::singleShot(firstAttemptGrace, this, &FluxBackend::setAttempted);
     connectNow();
@@ -56,15 +94,20 @@ FluxBackend::~FluxBackend()
     m_socket.disconnect(this);
 }
 
+QString FluxBackend::runtimeDir()
+{
+    QString runtime = qEnvironmentVariable("XDG_RUNTIME_DIR");
+    if (runtime.isEmpty())
+        runtime = QStringLiteral("/run/user/%1").arg(::getuid());
+    return runtime + QStringLiteral("/flux");
+}
+
 QString FluxBackend::socketPath()
 {
     const QString override = qEnvironmentVariable("FLUX_SOCKET");
     if (!override.isEmpty())
         return override;
-    QString runtime = qEnvironmentVariable("XDG_RUNTIME_DIR");
-    if (runtime.isEmpty())
-        runtime = QDir::tempPath();
-    return runtime + QStringLiteral("/flux/fluxd.sock");
+    return runtimeDir() + QStringLiteral("/fluxd.sock");
 }
 
 void FluxBackend::connectNow()
@@ -121,6 +164,31 @@ void FluxBackend::call(const QString &method, const QJSValue &params, const QJSV
     const QString line = stringify.call({request}).toString();
     m_socket.write(line.toUtf8() + '\n');
     m_socket.flush();
+}
+
+// readLines reads each complete line. When a line without its end is above
+// maxLine, the backend skips its bytes and drops the rest of the line. So
+// the buffer never holds much more than maxLine.
+void FluxBackend::readLines()
+{
+    while (m_socket.canReadLine()) {
+        const QByteArray line = m_socket.readLine();
+        if (m_dropLine) {
+            m_dropLine = false;
+            continue;
+        }
+        if (line.size() > maxLine) {
+            qWarning("flux-gui: dropped a line from fluxd above %lld bytes", maxLine);
+            continue;
+        }
+        handleLine(line.trimmed());
+    }
+    if (m_socket.bytesAvailable() > maxLine) {
+        if (!m_dropLine)
+            qWarning("flux-gui: dropped a line from fluxd above %lld bytes", maxLine);
+        m_dropLine = true;
+        m_socket.skip(m_socket.bytesAvailable());
+    }
 }
 
 void FluxBackend::handleLine(const QByteArray &line)
@@ -206,12 +274,8 @@ void FluxBackend::pickFiles(const QString &title, const QJSValue &cb)
         QJSValue paths = m_engine->newArray();
         if (status == QProcess::NormalExit && code == 0) {
             quint32 i = 0;
-            const auto lines = QString::fromUtf8(proc->readAllStandardOutput()).split(u'\n');
-            for (const QString &line : lines) {
-                const QString path = line.trimmed();
-                if (!path.isEmpty())
-                    paths.setProperty(i++, path);
-            }
+            for (const QString &path : chooserPaths(QString::fromUtf8(proc->readAllStandardOutput())))
+                paths.setProperty(i++, path);
         } else {
             // Exit code 1 means that the user picked nothing. Other codes
             // mean that the chooser did not run.

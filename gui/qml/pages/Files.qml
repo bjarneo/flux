@@ -17,14 +17,23 @@ Item {
 
   implicitHeight: col.implicitHeight
 
-  function send(paths) {
-    if (!dev || paths.length === 0) return
+  // skipped is the number of dropped items that are not files on this
+  // computer.
+  function send(paths, skipped) {
+    var note = skipped === 1 ? "1 item is not a file on this computer."
+      : (skipped > 1 ? skipped + " items are not files on this computer." : "")
+    if (!dev) return
+    if (paths.length === 0) {
+      if (note !== "") view.toast("Flux sends only files on this computer.")
+      return
+    }
     if (!online) {
       view.toast(view.devName + " is offline")
       return
     }
     view.call("share.files", { device: dev.id, paths: paths }, function () {
-      root.view.toast(paths.length === 1 ? "Sending 1 file to " + root.view.devName : "Sending " + paths.length + " files to " + root.view.devName)
+      var sending = paths.length === 1 ? "Sending 1 file to " + root.view.devName : "Sending " + paths.length + " files to " + root.view.devName
+      root.view.toast(note !== "" ? sending + ". " + note : sending)
     })
   }
 
@@ -124,10 +133,17 @@ Item {
         id: drop
         anchors.fill: parent
         keys: ["text/uri-list"]
+        // Only local file URLs become paths. A URL of the trash or of a
+        // network place has no local path that fluxd can read.
         onDropped: function (event) {
           var paths = []
-          for (var i = 0; i < event.urls.length; i++) paths.push(Fmt.urlToPath(event.urls[i]))
-          root.send(paths)
+          var skipped = 0
+          for (var i = 0; i < event.urls.length; i++) {
+            var path = Fmt.urlToPath(event.urls[i])
+            if (path !== "") paths.push(path)
+            else skipped++
+          }
+          root.send(paths, skipped)
           event.acceptProposedAction()
         }
       }
@@ -175,7 +191,9 @@ Item {
             width: row.compact ? row.inner - 28 - 16 - 16 - row.statusWidth : row.inner - 28 - 16 - row.barWidth - 16 - 16 - 110
             anchors.verticalCenter: parent.verticalCenter
             spacing: row.compact ? 3 : 0
-            Txt { width: parent.width; text: modelData.name || ""; elide: Text.ElideMiddle }
+            // A name from the phone can hide its real extension with bidi
+            // controls, so the row shows them as codes.
+            Txt { width: parent.width; text: Fmt.showControls(modelData.name); elide: Text.ElideMiddle }
             Txt { width: parent.width; text: Fmt.bytes(modelData.size); color: Theme.dim; font.pixelSize: 11 }
             Bar {
               visible: row.compact
@@ -208,7 +226,7 @@ Item {
             anchors.fill: parent
             acceptedButtons: Qt.RightButton
             enabled: modelData.state === "active" || modelData.state === "queued"
-            onClicked: root.view.call("transfer.cancel", { id: modelData.id }, function () { root.view.toast("Canceled " + modelData.name) })
+            onClicked: root.view.call("transfer.cancel", { id: modelData.id }, function () { root.view.toast("Canceled " + Fmt.showControls(modelData.name)) })
           }
         }
       }

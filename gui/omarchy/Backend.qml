@@ -9,11 +9,35 @@ import Quickshell.Io
 Scope {
   id: root
 
+  // The same path as fluxd and flux-cli: $FLUX_SOCKET, or
+  // $XDG_RUNTIME_DIR/flux/fluxd.sock, or /run/user/<uid>/flux/fluxd.sock.
+  // There is no /tmp fallback, because another user can make a folder there
+  // first.
   readonly property string socketPath: {
     var override = Quickshell.env("FLUX_SOCKET") || ""
     if (override !== "") return override
-    return (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/flux/fluxd.sock"
+    var runtime = Quickshell.env("XDG_RUNTIME_DIR") || ""
+    if (runtime === "") runtime = "/run/user/" + uid()
+    return runtime + "/flux/fluxd.sock"
   }
+
+  // The user ID of this process, from /proc/self/status.
+  function uid() {
+    var m = /^Uid:\s+(\d+)/m.exec(procStatus.text())
+    return m ? m[1] : ""
+  }
+
+  FileView {
+    id: procStatus
+    path: "/proc/self/status"
+    blockAllReads: true
+    printErrors: false
+  }
+
+  // A line from fluxd above this number of characters is dropped. Normal
+  // state events are much smaller, and a very large line blocks the shell
+  // while it parses.
+  readonly property int maxLine: 32 * 1024 * 1024
 
   readonly property bool connected: !!sock && sock.connected
   // True after the first connection attempt ends, so the window does not
@@ -82,12 +106,26 @@ Scope {
       command: ["omarchy", "file", "select", "--title", String(title || "Send files"), "--multiple"]
     })
     proc.done = function (code, text) {
-      var paths = code === 0
-        ? String(text || "").split("\n").filter(function (p) { return p.length > 0 })
-        : []
+      var paths = code === 0 ? chooserPaths(String(text || "")) : []
       try { cb(paths) } catch (e) {}
     }
     proc.running = true
+  }
+
+  // Reads the output of omarchy file select: 1 absolute path on each line.
+  // A file name can have a newline, so a line that does not start with "/"
+  // continues the path before it. The lines are not trimmed, because a file
+  // name can start or end with a space.
+  function chooserPaths(text) {
+    if (text.endsWith("\n")) text = text.slice(0, -1)
+    if (text === "") return []
+    var paths = []
+    var lines = text.split("\n")
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].startsWith("/") || paths.length === 0) paths.push(lines[i])
+      else paths[paths.length - 1] += "\n" + lines[i]
+    }
+    return paths.filter(function (p) { return p.startsWith("/") })
   }
 
   // Starts the fluxd user service. cb gets true when systemctl succeeds.
@@ -106,6 +144,10 @@ Scope {
 
   function handle(line) {
     if (!line || line.length === 0) return
+    if (line.length > maxLine) {
+      console.warn("flux: dropped a line of " + line.length + " characters from fluxd")
+      return
+    }
     var msg
     try { msg = JSON.parse(line) } catch (e) { return }
     if (msg.event === "state") {
@@ -129,6 +171,16 @@ Scope {
         cb(null, msg.result || {})
       }
     } catch (e) {}
+  }
+
+  // Runs each waiting callback once with an offline error. fluxd closed
+  // the connection, so no answer comes.
+  function failPending() {
+    var waiting = pending
+    pending = ({})
+    for (var id in waiting) {
+      try { waiting[id]({ code: "offline", message: "fluxd is not running" }, null) } catch (e) {}
+    }
   }
 
   Component {
@@ -160,7 +212,7 @@ Scope {
           root.retryDelay = root.minRetryDelay
           root.call("subscribe", {}, null)
         } else {
-          root.pending = ({})
+          root.failPending()
         }
       }
       onError: root.attempted = true

@@ -13,7 +13,7 @@
   },
   "barWidget": {
     "displayName": "Flux",
-    "description": "The first connected device and its battery. Click to open Flux.",
+    "description": "The Flux mark, in the accent color while a paired device is connected. Click to open Flux.",
     "category": "System",
     "allowMultiple": false,
     "defaultSection": "right"
