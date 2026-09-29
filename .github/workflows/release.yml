@@ -339,7 +339,8 @@ jobs:
 
   # Signs SHA256SUMS with the Ed25519 release key. flux-cli and fluxd check
   # the signature with the public key in internal/release. Without the
-  # secret, the release has no SHA256SUMS.sig.
+  # secret, the release has no SHA256SUMS.sig. After the public key is set,
+  # the job fails without the secret or with a secret of another key.
   sign:
     needs: [version, files]
     runs-on: ubuntu-latest
@@ -364,11 +365,17 @@ jobs:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
           SUMS: ${{ needs.files.outputs.sums }}
         run: |
+          key=$(go run ./scripts/signsums key) || exit 1
           if [[ -z "$RELEASE_SIGNING_KEY" ]]; then
+            if [[ -n "$key" ]]; then
+              echo "::error::RELEASE_SIGNING_KEY is not set, and internal/release has the public key $key. flux-cli and fluxd refuse a release without SHA256SUMS.sig. See docs/releasing.md."
+              exit 1
+            fi
             echo '::warning::RELEASE_SIGNING_KEY is not set, so the release has no SHA256SUMS.sig. See docs/releasing.md.'
             exit 0
           fi
           printf '%s' "$SUMS" | base64 --decode > "$RUNNER_TEMP/SHA256SUMS"
+          # sign fails when the secret does not match the public key.
           go run ./scripts/signsums sign "$RUNNER_TEMP/SHA256SUMS"
           echo "signature=$(cat "$RUNNER_TEMP/SHA256SUMS.sig")" >> "$GITHUB_OUTPUT"
 

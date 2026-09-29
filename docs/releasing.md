@@ -200,7 +200,8 @@ The `sign` job signs `SHA256SUMS` with an Ed25519 key and publishes the signatur
 `flux-cli update` and `fluxd` check the signature with `PublicKey` in [`internal/release/sign.go`](../internal/release/sign.go).
 Then they check the download against `SHA256SUMS`.
 While `PublicKey` is empty, they check only `SHA256SUMS` and log that they do not check the signature.
-Without the `RELEASE_SIGNING_KEY` secret, the `sign` job shows a warning, and the release has no `SHA256SUMS.sig`.
+While `PublicKey` is empty and the `RELEASE_SIGNING_KEY` secret is not set, the `sign` job shows a warning, and the release has no `SHA256SUMS.sig`.
+After you set `PublicKey`, the `sign` job fails when the secret is not set or when its public key is not `PublicKey`.
 
 To set up the key, do these steps in this order:
 
@@ -219,7 +220,15 @@ To set up the key, do these steps in this order:
    gh secret set RELEASE_SIGNING_KEY --env release < "$HOME/.local/share/flux-release/release-signing.key"
    ```
 
-3. Publish a release, and check that it has `SHA256SUMS.sig`.
+3. Publish a release, and check its `SHA256SUMS.sig` with the public key from step 1:
+
+   ```sh
+   dir=$(mktemp -d)
+   gh release download v0.1.0 -D "$dir" -p 'SHA256SUMS*'
+   go run ./scripts/signsums verify "$dir/SHA256SUMS" PUBLIC_KEY
+   ```
+
+   Replace `v0.1.0` with the tag of the release, and `PUBLIC_KEY` with the public key from step 1.
 4. Set `PublicKey` in `internal/release/sign.go` to the public key from step 1.
 5. Release that change.
 
@@ -227,11 +236,13 @@ A `flux-cli` or `fluxd` with a public key refuses a release without a valid `SHA
 So keep the secret after you set `PublicKey`, and keep a backup of the private key.
 Without the key, the installed copies cannot update themselves, and users must install the next release by hand.
 
-To check the signature of a downloaded release, run from the checkout:
+To check the signature of a downloaded release with `PublicKey`, run from the checkout:
 
 ```sh
 go run ./scripts/signsums verify SHA256SUMS
 ```
+
+To check with another public key, give the key as the last argument.
 
 The private key is a GitHub secret.
 So the signature shows that the release workflow of this repository made `SHA256SUMS`, and that nobody changed the file after the workflow.
@@ -349,7 +360,7 @@ The workflows use fixed versions, so an upstream change does not reach a release
   To get the checksum of another version, such as 2.46.0:
 
   ```sh
-  gh api repos/yonaskolb/XcodeGen/releases/tags/2.46.0 --jq '.assets[] | select(.name == "xcodegen.zip") | .digest'
+  gh api repos/yonaskolb/XcodeGen/releases/tags/2.46.0 --jq '.assets[] | select(.name == "xcodegen.zip") | .digest' | sed 's/^sha256://'
   ```
 
 - The Gradle wrapper checks the Gradle download with `distributionSha256Sum` in `android/gradle/wrapper/gradle-wrapper.properties`.
@@ -386,6 +397,9 @@ gh release download v0.1.0 -D "$dir" -p 'SHA256SUMS*' -p '*.pkg.tar.zst' -p '*.a
 go run ./scripts/signsums verify "$dir/SHA256SUMS"
 (cd "$dir" && sha256sum --check --ignore-missing SHA256SUMS)
 ```
+
+While `PublicKey` is empty, `verify` needs the public key as the last argument.
+Without the [release signing key](#release-signing-key), the release has no `SHA256SUMS.sig`, so skip the `verify` command.
 
 The `apk-sign` job compares the Android certificate with the release certificate.
 Test a clean desktop install and an Android update with the same signing key.

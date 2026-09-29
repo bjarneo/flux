@@ -35,12 +35,13 @@ build-gui:
 	cmake -S gui/app -B $(GUI_BUILD) -G Ninja -DCMAKE_BUILD_TYPE=Release -DFLUX_VERSION="$(VERSION)"
 	cmake --build $(GUI_BUILD)
 
+# The release workflow runs scripts/signsums, so CI tests and vets it too.
 test:
-	$(GO) test -race ./cmd/... ./internal/...
+	$(GO) test -race ./cmd/... ./internal/... ./scripts/...
 
 vet:
-	$(GO) vet ./cmd/... ./internal/...
-	@out=$$(gofmt -l cmd internal); if [ -n "$$out" ]; then echo "Run gofmt -w on:"; echo "$$out"; exit 1; fi
+	$(GO) vet ./cmd/... ./internal/... ./scripts/...
+	@out=$$(gofmt -l cmd internal scripts); if [ -n "$$out" ]; then echo "Run gofmt -w on:"; echo "$$out"; exit 1; fi
 
 # install copies what `make build` made. It does not build, so that
 # `sudo make install` works without Go on the PATH of root. On a real
