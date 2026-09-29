@@ -258,15 +258,7 @@ struct ToastBanner: View {
 }
 
 extension DeviceSnapshot {
-    var symbol: String {
-        switch type {
-        case "laptop": return "laptopcomputer"
-        case "desktop": return "desktopcomputer"
-        case "tablet": return "ipad"
-        case "tv": return "tv"
-        default: return "iphone"
-        }
-    }
+    var symbol: String { DeviceSymbol.name(type) }
 
     var statusText: String {
         switch pairState {
