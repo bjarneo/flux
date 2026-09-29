@@ -64,13 +64,18 @@ final class CameraScreenModel {
     let signature: SignatureCapture
     private(set) var message: String?
     @ObservationIgnored private var messageTask: Task<Void, Never>?
+    @ObservationIgnored private let webcam: WebcamPlugin?
 
+    /// `mode` is the first mode, but while the webcam streams the screen
+    /// opens on the webcam.
     init(deviceId: String, app: AppModel, mode: CameraMode) {
+        let webcam = app.core.plugin(WebcamPlugin.self)
+        self.webcam = webcam
         let output = CameraOutput(deviceId: deviceId, app: app)
         let camera = CameraController(defaults: app.core.defaults)
         self.output = output
         self.camera = camera
-        self.mode = mode
+        self.mode = webcam?.model.status.active == true ? .webcam : mode
         text = TextScan(camera: camera, output: output)
         codes = CodeScan(output: output)
         photo = PhotoShots(camera: camera, output: output)
@@ -83,9 +88,14 @@ final class CameraScreenModel {
 
     var deviceName: String { output.name }
 
+    /// True while the webcam streams. It holds the camera, so the other
+    /// modes leave it off.
+    var webcamStreams: Bool { webcam?.model.status.active == true }
+
     /// What the mode needs from the camera now.
     var cameraUse: CameraUse {
-        switch mode {
+        if webcamStreams { return .off }
+        return switch mode {
         case .text: text.isLive ? .scan(.text) : .off
         case .qr: codes.isLive ? .scan(.codes) : .off
         case .photo: .preview

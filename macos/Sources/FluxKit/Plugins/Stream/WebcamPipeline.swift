@@ -32,6 +32,13 @@ final class WebcamPipeline: @unchecked Sendable {
         }, onError: onCameraError)
     }
 
+    #if os(iOS)
+    /// Runs when the camera runs again after an interruption.
+    func onCameraResume(_ body: @escaping @Sendable () -> Void) {
+        camera.onResume = body
+    }
+    #endif
+
     /// Applies the image settings at once. The frame size applies to the
     /// preview at once and to the stream with the next encoder.
     func apply(_ config: WebcamConfig) {

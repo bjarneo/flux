@@ -82,6 +82,9 @@ public final class WebcamPlugin: FluxPlugin, @unchecked Sendable {
             },
             onCameraError: { [weak self] message in self?.ui { $0.cameraError = message } }
         )
+        #if os(iOS)
+        pipeline.onCameraResume { [weak self] in self?.ui { $0.cameraError = nil } }
+        #endif
         pipeline.apply(applied)
         for name in [AVCaptureDevice.wasConnectedNotification, AVCaptureDevice.wasDisconnectedNotification] {
             _ = NotificationCenter.default.addObserver(forName: name, object: nil, queue: nil) { [weak self] _ in

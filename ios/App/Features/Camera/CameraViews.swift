@@ -72,6 +72,16 @@ private struct CameraContent: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay {
+                if model.webcamStreams && model.mode != .webcam {
+                    Label("The webcam uses the camera. Stop it to use the camera here.", systemImage: "web.camera.fill")
+                        .font(.callout)
+                        .multilineTextAlignment(.center)
+                        .padding(14)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .padding(24)
+                }
+            }
             ModeBar(mode: $model.mode)
         }
         .overlay(alignment: .top) {

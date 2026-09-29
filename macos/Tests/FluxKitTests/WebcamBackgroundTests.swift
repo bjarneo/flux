@@ -1,4 +1,5 @@
 #if os(iOS)
+import AVFoundation
 import XCTest
 @testable import FluxKit
 
@@ -41,6 +42,13 @@ final class WebcamBackgroundTests: XCTestCase {
         webcam.stopInBackground()
         settle()
         XCTAssertEqual(webcam.model.status, StreamStatus())
+    }
+
+    func testAnInterruptionTellsWhyTheCameraPaused() {
+        XCTAssertEqual(CameraSource.interruptionText(.videoDeviceInUseByAnotherClient), "The camera paused because another app uses it")
+        XCTAssertEqual(CameraSource.interruptionText(.videoDeviceNotAvailableInBackground), "The camera paused because Flux left the screen")
+        XCTAssertEqual(CameraSource.interruptionText(.videoDeviceNotAvailableDueToSystemPressure), "The camera paused because the iPhone is too hot or busy")
+        XCTAssertEqual(CameraSource.interruptionText(nil), "The camera paused because iOS took it")
     }
 }
 #endif
