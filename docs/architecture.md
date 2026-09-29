@@ -56,6 +56,43 @@ The default Omarchy firewall permits mDNS.
 Flux needs no new inbound desktop firewall rule for these routes.
 Wi-Fi client isolation can still block communication between devices.
 
+A payload server for a device without `flux.tunnel` listens on the local address of the link.
+It accepts connections from the address of the link until 1 of them shows the certificate of the device, or for 20 seconds.
+A received payload fails when the device sends nothing for 60 seconds.
+
+## Pairing and trust
+
+`fluxd` pins the certificate of each paired device in `~/.local/share/flux/devices.json`.
+
+- The verification key is the first 8 bytes of a SHA-256 hash, as 16 uppercase hex digits. The hash covers the larger SubjectPublicKeyInfo, then the smaller one, then the pair timestamp as decimal text. The apps show the key in 4 groups of 4.
+- A pairing is bound to the link and the certificate on which it started. While a pairing is open, or when the device has a trust entry, a new link for the device ID must show that certificate. The provider checks it before the identity exchange, and `onLink` checks it again under the lock.
+- Pair packets count only on the current link of the device. `fluxd` pins the certificate from which it computed the key, and only while the link of the pairing is the current link.
+- A trust entry with a certificate that does not parse counts as not paired, and it refuses every link.
+- An unpair on either side sends `pair: false`, and `fluxd` closes the link. `fluxd` then sends no feature packet to the device.
+- The `fingerprint` of a device in the state is the first 8 bytes of the SHA-256 hash of the SubjectPublicKeyInfo of its certificate, as 16 uppercase hex digits.
+- A panic in a packet handler drops the packet and writes the stack to the journal.
+
+UDP and mDNS never change the address of a paired device.
+`fluxd` dials the reported address after the last address, and a link that passes the pin check sets the new address.
+
+## Limits for devices that are not paired
+
+Any host on the network can send identities and open links.
+`fluxd` keeps these limits, so that such hosts cannot fill the memory or the desktop.
+
+| Resource | Limit |
+| --- | --- |
+| Line of a link | 64 KiB until the pairing, then 16 MiB |
+| Links of devices that are not paired | 8 in total and 2 for each address. A new link closes the oldest link without a pairing. |
+| Link without a pair request | Closed after 2 minutes |
+| Incoming connections before the link | 32 in total and 4 for each address |
+| Outgoing connections at the same time | 16 |
+| Devices from UDP and mDNS | 64 that are not paired. A new device replaces the device with the oldest report. |
+| Pair requests | 1 for each device in 2 seconds, 1 notification for each device, and 4 open requests |
+| Ports from discovery | 1716 to 1764 |
+
+A daemon that runs with `-tcp-port` on another port accepts any port from discovery, because its test peers use other ports too.
+
 ## App versions
 
 The identity packet names the Flux program and its version in `app` and `appVersion`.

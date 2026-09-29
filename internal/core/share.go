@@ -43,11 +43,11 @@ type Transfer struct {
 }
 
 func (d *Daemon) newTransfer(dev *Device, name, dir string, size int64) *Transfer {
+	d.mu.Lock()
 	t := &Transfer{
 		ID: config.NewID(6), Device: dev.ID, DeviceName: dev.Name, Name: name,
 		Size: size, Dir: dir, State: "queued", Time: time.Now().Unix(),
 	}
-	d.mu.Lock()
 	d.transfers = append([]*Transfer{t}, d.transfers...)
 	if len(d.transfers) > maxTransfers {
 		d.transfers = d.transfers[:maxTransfers]
@@ -365,7 +365,9 @@ func (d *Daemon) SendFiles(dev *Device, paths []string) ([]*Transfer, error) {
 	var out []*Transfer
 	for i := range items {
 		items[i].t = d.newTransfer(dev, filepath.Base(items[i].path), "out", items[i].info.Size())
+		d.mu.Lock()
 		items[i].t.Path = items[i].path
+		d.mu.Unlock()
 		out = append(out, items[i].t)
 	}
 	go func() {
