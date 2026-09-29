@@ -82,7 +82,7 @@ func telephonyPacket(body map[string]any) *proto.Packet {
 func TestHandleTelephony(t *testing.T) {
 	m := &fakeMedia{players: []desktop.Player{{Name: "spotify", Playing: true}, {Name: "mpv"}}}
 	d := &Daemon{cfg: &config.Config{PauseMediaOnCall: true}, logger: log.New(io.Discard, "", 0), callPlayers: m}
-	dev := &Device{ID: "p1", Name: "Pixel 8"}
+	dev := &Device{ID: "p1", Name: "Pixel 8", Paired: true}
 
 	d.handleTelephony(dev, telephonyPacket(map[string]any{"event": "ringing", "phoneNumber": "+4712345678"}))
 	d.handleTelephony(dev, telephonyPacket(map[string]any{"event": "talking", "phoneNumber": "+4712345678"}))
@@ -114,7 +114,7 @@ func TestHandleTelephony(t *testing.T) {
 func TestDropCall(t *testing.T) {
 	m := &fakeMedia{players: []desktop.Player{{Name: "spotify", Playing: true}}}
 	d := &Daemon{cfg: &config.Config{PauseMediaOnCall: true}, logger: log.New(io.Discard, "", 0), callPlayers: m}
-	dev := &Device{ID: "p1", Name: "Pixel 8"}
+	dev := &Device{ID: "p1", Name: "Pixel 8", Paired: true}
 	first, second := &lan.Link{}, &lan.Link{}
 	d.callEvent(dev, nil, callBody{Event: "ringing"})
 	d.calls[dev.ID].link = first
@@ -180,5 +180,21 @@ func TestCaller(t *testing.T) {
 		if got := c.b.caller(); got != c.want {
 			t.Errorf("%+v: got %q, want %q", c.b, got, c.want)
 		}
+	}
+}
+
+// TestCallEventNeedsPairedLink checks that a call event that waits on the
+// media worker does nothing after an unpair or after its link changed.
+func TestCallEventNeedsPairedLink(t *testing.T) {
+	m := &fakeMedia{players: []desktop.Player{{Name: "spotify", Playing: true}}}
+	d := &Daemon{cfg: &config.Config{PauseMediaOnCall: true}, logger: log.New(io.Discard, "", 0), callPlayers: m}
+	old := &lan.Link{}
+	dev := &Device{ID: "p1", Name: "Pixel 8", Paired: true}
+	// The phone connected again, so the event of the old link is old.
+	d.callEvent(dev, old, callBody{Event: "ringing"})
+	dev.Paired = false
+	d.callEvent(dev, nil, callBody{Event: "ringing"})
+	if len(m.actions) != 0 || d.calls[dev.ID] != nil {
+		t.Fatalf("actions %v, call state %+v", m.actions, d.calls[dev.ID])
 	}
 }

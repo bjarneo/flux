@@ -147,6 +147,7 @@ func (d *Daemon) handleDnd(dev *Device, p *proto.Packet) {
 	on := *body.On
 	d.mu.Lock()
 	apply := d.dnd != nil && d.cfg.SyncDnd && d.dndGuard.remote(on, time.Now())
+	l := dev.link
 	d.mu.Unlock()
 	if !apply {
 		return
@@ -156,14 +157,15 @@ func (d *Daemon) handleDnd(dev *Device, p *proto.Packet) {
 	// 1 worker applies the states in order, and only the newest waiting
 	// state runs. Fast changes on the phone then end with the last state,
 	// and start 1 process at a time.
-	d.runContent(&d.content.dndQ, 0, func() { d.applyDnd(on) })
+	d.runContent(&d.content.dndQ, 0, func() { d.applyDnd(dev, l, on) })
 }
 
 // applyDnd sets the Do Not Disturb state of this computer to a state that
-// a phone sent.
-func (d *Daemon) applyDnd(on bool) {
+// the phone dev sent on the link l. The state waits on the worker, so it
+// applies only while dev is paired and l is its link.
+func (d *Daemon) applyDnd(dev *Device, l *lan.Link, on bool) {
 	d.mu.Lock()
-	ok := d.dnd != nil && d.cfg.SyncDnd
+	ok := d.dnd != nil && d.cfg.SyncDnd && dev.Paired && dev.link == l
 	d.mu.Unlock()
 	if !ok {
 		return

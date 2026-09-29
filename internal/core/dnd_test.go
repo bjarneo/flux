@@ -153,3 +153,27 @@ func TestHandleDndAppliesNewest(t *testing.T) {
 		t.Fatalf("sets %v", dnd.sets)
 	}
 }
+
+// TestHandleDndAfterUnpair checks that a state that waits on the worker
+// does not apply after the phone is unpaired.
+func TestHandleDndAfterUnpair(t *testing.T) {
+	dnd := &slowDnd{release: make(chan struct{}), started: make(chan struct{})}
+	d := &Daemon{
+		cfg:     &config.Config{SyncDnd: true},
+		devices: map[string]*Device{},
+		dnd:     dnd,
+		logger:  log.New(io.Discard, "", 0),
+	}
+	dev := &Device{ID: "p1", Name: "Pixel 8", Paired: true}
+	d.handleDnd(dev, proto.New(proto.TypeFluxDnd, map[string]any{"on": true}))
+	<-dnd.started
+	d.handleDnd(dev, proto.New(proto.TypeFluxDnd, map[string]any{"on": false}))
+	d.mu.Lock()
+	dev.Paired = false
+	d.mu.Unlock()
+	close(dnd.release)
+	waitIdle(t, d, &d.content.dndQ)
+	if !slices.Equal(dnd.sets, []bool{true}) {
+		t.Fatalf("sets %v", dnd.sets)
+	}
+}

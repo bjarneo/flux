@@ -108,9 +108,14 @@ func (d *Daemon) handleTelephony(dev *Device, p *proto.Packet) {
 
 // callEvent applies 1 call event of the phone dev, which came on the link
 // l. Only the media worker runs it, so it uses the call state without the
-// daemon lock.
+// daemon lock. The event waits on the worker, so it applies only while
+// dev is paired and l is its link.
 func (d *Daemon) callEvent(dev *Device, l *lan.Link, b callBody) {
 	d.mu.Lock()
+	if !dev.Paired || dev.link != l {
+		d.mu.Unlock()
+		return
+	}
 	if d.calls == nil {
 		d.calls = map[string]*callState{}
 	}

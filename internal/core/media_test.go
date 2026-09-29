@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"flux/internal/desktop"
+	"flux/internal/lan"
 )
 
 func TestNowPlayingSendsVolumeOnlyWhenPlayerTakesIt(t *testing.T) {
@@ -40,5 +41,23 @@ func TestNowPlayingSendsOnlyWebArt(t *testing.T) {
 		if got := art(url); got != "" {
 			t.Errorf("%s went out as %v", url, got)
 		}
+	}
+}
+
+// TestPairedLink checks that a media request that waits on the worker
+// runs only while its link is the link of a paired device.
+func TestPairedLink(t *testing.T) {
+	l, other := &lan.Link{}, &lan.Link{}
+	dev := &Device{ID: "p1", Paired: true, link: l}
+	d := &Daemon{devices: map[string]*Device{dev.ID: dev}}
+	if !d.pairedLink(l) {
+		t.Fatal("the link of a paired device does not count")
+	}
+	if d.pairedLink(other) || d.pairedLink(nil) {
+		t.Fatal("a link of no device counts")
+	}
+	dev.Paired = false
+	if d.pairedLink(l) {
+		t.Fatal("the link of an unpaired device counts")
 	}
 }

@@ -46,8 +46,12 @@ func (d *Daemon) handleDesktopMediaRequest(l *lan.Link, p *proto.Packet) {
 	d.runMedia(func() { d.answerMedia(l, b) })
 }
 
-// answerMedia runs 1 media request of a phone.
+// answerMedia runs 1 media request of a phone. A request waits on the
+// worker, so it runs only while l is still the link of a paired device.
 func (d *Daemon) answerMedia(l *lan.Link, b mediaRequest) {
+	if !d.pairedLink(l) {
+		return
+	}
 	if b.RequestPlayerList {
 		d.sendPlayers(l)
 	}
@@ -71,6 +75,21 @@ func (d *Daemon) answerMedia(l *lan.Link, b mediaRequest) {
 	} else if b.RequestNowPlaying || b.RequestVolume {
 		d.sendNowPlaying(l, b.Player)
 	}
+}
+
+// pairedLink reports whether l is the current link of a paired device.
+func (d *Daemon) pairedLink(l *lan.Link) bool {
+	if l == nil {
+		return false
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, dev := range d.devices {
+		if dev.link == l {
+			return dev.Paired
+		}
+	}
+	return false
 }
 
 // sendPlayers sends the player list and the state of each player to the
