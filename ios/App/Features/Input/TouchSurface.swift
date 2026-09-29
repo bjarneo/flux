@@ -27,7 +27,6 @@ final class TouchSurfaceView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         isMultipleTouchEnabled = true
-        isExclusiveTouch = true
         addGestureRecognizer(TouchClaim())
     }
 
