@@ -24,6 +24,12 @@ The payload is optional. `page` is one of `overview`, `clipboard`, `files`,
 `notifications`, `messages`, `browse`, or `commands`.
 To open or close the window, use `omarchy-shell shell toggle flux '{}'`.
 
+The panel loads the Flux view when the window opens and unloads it when the
+window closes. A closed window uses no time for state events, and its pages
+send no requests to the phone. The next open shows the last tab and device.
+Each open also reads `colors.toml` again. When fluxd is down, each open
+connects at once.
+
 ## Install layout
 
 omarchy-shell finds third-party plugins only in

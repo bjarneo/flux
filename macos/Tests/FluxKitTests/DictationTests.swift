@@ -21,6 +21,13 @@ final class DictationTests: XCTestCase {
         XCTAssertEqual(DictationText.insert("Use the", start: 7, end: 7, spoken: "go test"), DictationEdit("Use the go test", 15), "inside a sentence the case stays")
     }
 
+    func testMakesASearchFromADictation() {
+        XCTAssertEqual(DictationText.query(" Workspace. "), "Workspace")
+        XCTAssertEqual(DictationText.query("Open the browser?!"), "Open the browser")
+        XCTAssertEqual(DictationText.query("node.js"), "node.js", "a period inside the words stays")
+        XCTAssertEqual(DictationText.query(" . "), "")
+    }
+
     func testInsertsAtTheCursor() {
         // "Run tests" with the cursor after "Run".
         XCTAssertEqual(DictationText.insert("Run tests", start: 3, end: 3, spoken: "the unit"), DictationEdit("Run the unit tests", 12))

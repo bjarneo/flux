@@ -45,10 +45,15 @@ struct TextModeView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
             } else {
-                TextEditor(text: $scan.text)
-                    .font(.body)
-                    .frame(minHeight: 120, maxHeight: 220)
-                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.secondary.opacity(0.4)))
+                // A dictation adds its words at the end of the text.
+                VoiceBar(language: window.app.dictationLanguage, onText: { spoken in
+                    scan.text = DictationText.insert(scan.text, start: scan.text.utf16.count, end: scan.text.utf16.count, spoken: spoken).text
+                }) {
+                    TextEditor(text: $scan.text)
+                        .font(.body)
+                        .frame(minHeight: 120, maxHeight: 220)
+                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.secondary.opacity(0.4)))
+                }
             }
             HStack {
                 Spacer()

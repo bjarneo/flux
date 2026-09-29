@@ -21,15 +21,31 @@ struct ShareSection: View {
                 }
             } content: {
                 dropZone(share)
-                HStack {
+                // A dictation adds its words at the end of the text.
+                VoiceBar(language: model.dictationLanguage, enabled: device.online, onText: { spoken in
+                    text = DictationText.insert(text, start: text.utf16.count, end: text.utf16.count, spoken: spoken).text
+                }) {
                     TextField("Text or link", text: $text, prompt: Text("Text or link"))
                         .labelsHidden()
-                        .textFieldStyle(.roundedBorder)
+                        .voiceFieldStyle()
                         .onSubmit { sendText(share) }
-                    Button("Send") { sendText(share) }
-                        .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(!device.online)
+                } send: {
+                    let canSend = device.online && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    Button { sendText(share) } label: {
+                        Image(systemName: "paperplane.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(canSend ? Color.white : Color.secondary)
+                            .frame(width: DictationLayout.keySize, height: DictationLayout.keySize)
+                            .background(shape.fill(canSend ? Color.accentColor : Color.primary.opacity(0.06)))
+                            .contentShape(shape)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canSend)
+                    .help("Send the text to \(device.name)")
+                    .accessibilityLabel("Send")
                 }
-                .disabled(!device.online)
                 if !transfers.isEmpty {
                     Divider()
                     ForEach(transfers) { TransferRow(transfer: $0) }

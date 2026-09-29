@@ -83,4 +83,16 @@ final class ShareWireTests: XCTestCase {
         XCTAssertEqual(ShareWire.uniqueURL(in: dir, name: ".env", exists: exists).path, "/d/.env (2)")
         XCTAssertEqual(ShareWire.uniqueURL(in: dir, name: "x.tar.gz", exists: exists).path, "/d/x.tar (2).gz")
     }
+
+    func testProgressThrottleLetsOneReportPerInterval() {
+        var throttle = ProgressThrottle()
+        let step = ProgressThrottle.interval
+        // The first report goes at once.
+        XCTAssertTrue(throttle.due(at: 5))
+        XCTAssertFalse(throttle.due(at: 5 + step - 1))
+        XCTAssertTrue(throttle.due(at: 5 + step))
+        // The interval starts again at the last report.
+        XCTAssertFalse(throttle.due(at: 5 + step + step / 2))
+        XCTAssertTrue(throttle.due(at: 5 + 3 * step))
+    }
 }

@@ -57,24 +57,24 @@ class VideoDecoder(
     }.getOrDefault(false)
 
     /**
-     * Queues 1 frame. It waits while the decoder has no free input buffer.
-     * It returns false after [release].
+     * Queues 1 frame, the first [length] bytes of [data]. It waits while the
+     * decoder has no free input buffer. It returns false after [release].
      */
-    fun feed(data: ByteArray, key: Boolean): Boolean {
+    fun feed(data: ByteArray, length: Int, key: Boolean): Boolean {
         while (running) {
             val index = codec.dequeueInputBuffer(INPUT_WAIT_US)
             if (index < 0) continue
             val buffer = codec.getInputBuffer(index) ?: return false
-            if (buffer.capacity() < data.size) {
-                Log.w(TAG, "dropped a frame of ${data.size} bytes, the input buffer holds ${buffer.capacity()}")
+            if (buffer.capacity() < length) {
+                Log.w(TAG, "dropped a frame of $length bytes, the input buffer holds ${buffer.capacity()}")
                 codec.queueInputBuffer(index, 0, 0, 0, 0)
                 return true
             }
             buffer.clear()
-            buffer.put(data)
+            buffer.put(data, 0, length)
             // The time only orders the frames. Each frame shows when it is decoded.
             val time = frames++ * 33_333
-            codec.queueInputBuffer(index, 0, data.size, time, if (key) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0)
+            codec.queueInputBuffer(index, 0, length, time, if (key) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0)
             return true
         }
         return false

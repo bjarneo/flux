@@ -120,6 +120,9 @@ func (d *Daemon) runWebcam(dev *Device, l *lan.Link, b webcamStart) {
 		return
 	}
 	defer tc.Close()
+	// A stop or a dropped link closes the stream, so that the copy to the
+	// process ends at once.
+	defer context.AfterFunc(ctx, func() { tc.Close() })()
 	if b.FPS <= 0 {
 		b.FPS = 30
 	}
@@ -239,17 +242,23 @@ func (d *Daemon) ConfigureWebcam(config json.RawMessage, reset bool) error {
 // loopbackDevice returns the Flux Camera device and creates it on first
 // use. The device stays until fluxd stops, so video apps keep it in their
 // camera list between sessions.
+// The creation can wait 2 seconds for udev, so it holds loopMu and not d.mu.
 func (d *Daemon) loopbackDevice() (*desktop.Loopback, error) {
+	d.loopMu.Lock()
+	defer d.loopMu.Unlock()
 	d.mu.Lock()
-	defer d.mu.Unlock()
-	if d.loopback != nil {
-		return d.loopback, nil
+	l := d.loopback
+	d.mu.Unlock()
+	if l != nil {
+		return l, nil
 	}
 	l, err := desktop.OpenLoopback(webcamLabel)
 	if err != nil {
 		return nil, err
 	}
+	d.mu.Lock()
 	d.loopback = l
+	d.mu.Unlock()
 	return l, nil
 }
 

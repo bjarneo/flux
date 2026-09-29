@@ -29,8 +29,11 @@ object NotificationSync {
     fun onPosted(sbn: StatusBarNotification, silent: Boolean = false) {
         val core = FluxCore
         if (!core.settings.shareNotifications) return
+        // A computer that connects later asks for all notifications, see sendAll().
+        val computers = core.connectedPaired()
+        if (computers.isEmpty()) return
         val packet = toPacket(sbn, silent) ?: return
-        core.connectedPaired().forEach { it.send(packet) }
+        computers.forEach { it.send(packet) }
     }
 
     fun onRemoved(sbn: StatusBarNotification) {

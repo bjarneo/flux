@@ -71,9 +71,14 @@ struct OmarchyPanel: View {
             }
             .padding(12)
         }
-        // The list comes once. The workspaces come again while the panel shows.
+        // The list comes once.
         .task(id: controller.deviceId) {
             controller.shortcut(DesktopShortcuts.request())
+        }
+        // The workspaces come again while the panel shows. They stop while
+        // the stream pauses, for example while the window is in the Dock.
+        .task(id: controller.paused) {
+            guard !controller.paused else { return }
             while !Task.isCancelled {
                 try? await Task.sleep(for: Self.refresh)
                 if Task.isCancelled { return }
@@ -81,7 +86,7 @@ struct OmarchyPanel: View {
             }
         }
         .sheet(isPresented: $showAll) {
-            AllShortcuts(shortcuts: state?.shortcuts ?? [], model: model) { s in
+            AllShortcuts(shortcuts: state?.shortcuts ?? [], model: model, language: controller.app.dictationLanguage) { s in
                 showAll = false
                 controller.shortcut(DesktopShortcuts.run(s))
             } onDone: {
@@ -256,10 +261,11 @@ private struct LaunchKey: View {
 }
 
 /// All shortcuts of the computer, with a search. A click runs a shortcut,
-/// and the star pins it to the panel.
+/// and the star pins it to the panel. A dictation replaces the search.
 private struct AllShortcuts: View {
     let shortcuts: [Shortcut]
     let model: DesktopModel
+    @Binding var language: String
     let onRun: (Shortcut) -> Void
     let onDone: () -> Void
     @State private var query = ""
@@ -268,8 +274,10 @@ private struct AllShortcuts: View {
         let found = DesktopShortcuts.search(shortcuts, query)
         VStack(alignment: .leading, spacing: 12) {
             Text("All Shortcuts · \(shortcuts.count)").font(.headline)
-            TextField("Search, for example workspace or browser", text: $query)
-                .textFieldStyle(.roundedBorder)
+            VoiceBar(language: $language, onText: { query = DictationText.query($0) }) {
+                TextField("Search, for example workspace or browser", text: $query)
+                    .voiceFieldStyle()
+            }
             List(found) { s in
                 HStack(spacing: 8) {
                     Button { onRun(s) } label: {
@@ -293,7 +301,7 @@ private struct AllShortcuts: View {
                     .help(pinned ? "Unpin \(s.description)" : "Pin \(s.description) to Launch")
                 }
             }
-            .frame(minHeight: 320)
+            .frame(minHeight: 200)
             HStack {
                 Spacer()
                 Button("Done", action: onDone).keyboardShortcut(.defaultAction)

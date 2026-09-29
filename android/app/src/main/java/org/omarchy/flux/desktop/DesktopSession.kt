@@ -178,7 +178,7 @@ object DesktopSession {
                         size = it
                         setSize(this, it.first, it.second)
                     }
-                    f.isConfig -> config = codecConfig(f.data)
+                    f.isConfig -> config = codecConfig(f.data, f.length)
                     else -> {
                         // A new surface needs a new decoder, which starts at a key frame.
                         val s = surface
@@ -197,7 +197,7 @@ object DesktopSession {
                             decoderSurface = s
                         }
                         try {
-                            decoder?.feed(f.data, f.isKey)
+                            decoder?.feed(f.data, f.length, f.isKey)
                         } catch (e: Exception) {
                             // For example, the surface went away. The next key frame starts a new decoder.
                             Log.i(TAG, "decoder failed: ${e.message}")

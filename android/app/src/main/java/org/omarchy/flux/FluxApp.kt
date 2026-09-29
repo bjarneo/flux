@@ -22,7 +22,8 @@ class FluxApp : Application() {
             override fun onStart(owner: LifecycleOwner) {
                 FluxCore.foreground = true
                 getSystemService(ClipboardManager::class.java)?.addPrimaryClipChangedListener(clipListener)
-                FluxCore.publish()
+                // The user can change a permission or the network in the system settings.
+                FluxCore.refresh()
             }
 
             override fun onStop(owner: LifecycleOwner) {

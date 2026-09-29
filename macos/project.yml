@@ -29,8 +29,8 @@ targets:
           - _kdeconnect._udp
         NSCameraUseContinuityCameraDeviceType: true
         NSCameraUsageDescription: Flux streams the camera to your computer and captures photos and scans.
-        NSMicrophoneUsageDescription: Flux streams the microphone to your computer and turns your speech into text for agents and the remote desktop.
-        NSSpeechRecognitionUsageDescription: Flux turns your speech into text for your replies to the coding agents and for typing on the remote desktop of your computers.
+        NSMicrophoneUsageDescription: Flux streams the microphone to your computer and turns your speech into text in the text fields of the app.
+        NSSpeechRecognitionUsageDescription: Flux turns your speech into text in the text fields of the app, for example your replies to the coding agents and the text that you type on your computers.
         NSPhotoLibraryUsageDescription: Flux sends each new photo in your library to your computers when you turn on Send new photos.
         NSDownloadsFolderUsageDescription: Flux saves the files that your computers send to this Mac.
         CFBundleDocumentTypes:

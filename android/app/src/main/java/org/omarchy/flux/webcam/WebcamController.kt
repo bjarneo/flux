@@ -82,8 +82,9 @@ class WebcamController(context: Context) : WebcamSession.Listener {
         }
     }
 
-    /** Opens the camera again, for example when the app comes back to the front. */
-    fun resumeCamera() {
+    /** Opens the camera and turns on the orientation sensor again, for example when the app comes back to the front. */
+    fun resume() {
+        if (orientation.canDetectOrientation()) orientation.enable()
         applied?.let { openCamera(it) }
     }
 
@@ -124,8 +125,11 @@ class WebcamController(context: Context) : WebcamSession.Listener {
         )
     }
 
-    /** Stops the camera, for example when the app goes to the background. */
-    fun stopCamera() = camera.close()
+    /** Stops the camera and the orientation sensor, for example when the app goes to the background. */
+    fun pause() {
+        orientation.disable()
+        camera.close()
+    }
 
     fun attachPreview(texture: SurfaceTexture, width: Int, height: Int) = renderer.setPreview(texture, width, height)
 
@@ -165,6 +169,8 @@ class WebcamController(context: Context) : WebcamSession.Listener {
     fun release() {
         main.removeCallbacks(sendConfig)
         stopLive()
+        // Free an encoder that the stream did not free.
+        onEnded()
         orientation.disable()
         camera.release()
         renderer.release()

@@ -119,6 +119,7 @@ func (l *Link) DialPeer(ctx context.Context, port int) (*tls.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
+	setUserTimeout(conn)
 	tc := tls.Client(conn, clientConfig(l.provider.cfg.Cert))
 	_ = tc.SetDeadline(time.Now().Add(15 * time.Second))
 	if err := tc.HandshakeContext(ctx); err != nil {

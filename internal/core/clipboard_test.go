@@ -7,7 +7,9 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"flux/internal/config"
 )
@@ -158,5 +160,34 @@ func TestRemoveClipImages(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "keep.txt")); err != nil {
 		t.Error("removed a file that is not a clipboard image")
+	}
+}
+
+func TestClipPreview(t *testing.T) {
+	d, clip := clipDaemon(t, true)
+	long := strings.Repeat("é", maxClipPreview)
+	d.addClipLocked(ClipEntry{Text: long, Dir: "out"})
+	d.addClipLocked(ClipEntry{Text: "short", Dir: "out"})
+	view := d.clipPreviewLocked()
+	if view[0].Text != "short" || view[0].Truncated || view[0].Size != 0 {
+		t.Errorf("short entry = %+v", view[0])
+	}
+	if !view[1].Truncated || view[1].Size != len(long) || len(view[1].Text) > maxClipPreview || !utf8.ValidString(view[1].Text) {
+		t.Errorf("long entry: truncated %v, size %d, %d text bytes", view[1].Truncated, view[1].Size, len(view[1].Text))
+	}
+	if d.clipboard[1].Text != long {
+		t.Error("the preview changed the history")
+	}
+	if view[0].ID == "" || view[0].ID == view[1].ID {
+		t.Errorf("entry IDs %q and %q", view[0].ID, view[1].ID)
+	}
+	if err := d.CopyClip(view[1].ID); err != nil {
+		t.Fatal(err)
+	}
+	if clip.text != long {
+		t.Errorf("CopyClip put %d bytes on the clipboard, want %d", len(clip.text), len(long))
+	}
+	if err := d.CopyClip("missing"); err == nil {
+		t.Error("CopyClip of a missing ID returned no error")
 	}
 }

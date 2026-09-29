@@ -86,9 +86,12 @@ fun PhotoMode(d: DeviceUi) {
 
     DisposableEffect(permission.granted, lens) {
         var provider: ProcessCameraProvider? = null
+        // The provider can come after the screen closed. Then it must not bind the camera.
+        var disposed = false
         if (permission.granted) {
             val future = ProcessCameraProvider.getInstance(context)
             future.addListener({
+                if (disposed) return@addListener
                 val p = runCatching { future.get() }.getOrNull() ?: return@addListener
                 provider = p
                 hasFront = runCatching { p.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA) }.getOrDefault(false)
@@ -101,6 +104,7 @@ fun PhotoMode(d: DeviceUi) {
             }, ContextCompat.getMainExecutor(context))
         }
         onDispose {
+            disposed = true
             provider?.unbindAll()
             camera = null
         }

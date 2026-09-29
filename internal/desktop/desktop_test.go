@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/xml"
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -359,5 +361,149 @@ func TestWritableVolume(t *testing.T) {
 		if got := writableVolume(&node); got != c.want {
 			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
 		}
+	}
+}
+
+// TestMediaChanges checks that a burst of signals from 1 player gives 1
+// report after the last signal, and that a player that never stops sends
+// signals still gets a report.
+func TestMediaChanges(t *testing.T) {
+	const ms = time.Millisecond
+	start := time.Now()
+	at := func(d time.Duration) time.Time { return start.Add(d) }
+	var c changes
+	if _, ok := c.next(); ok {
+		t.Fatal("no signal came, but a report is due")
+	}
+
+	c.add("spotify", at(0))
+	c.add("spotify", at(50*ms))
+	c.add("mpv", at(100*ms))
+	c.add("spotify", at(150*ms))
+	if due, ok := c.next(); !ok || !due.Equal(at(100*ms+changeDelay)) {
+		t.Fatalf("next report at %v, want %v", due.Sub(start), 100*ms+changeDelay)
+	}
+	if got := c.take(at(100*ms + changeDelay - ms)); len(got) != 0 {
+		t.Fatalf("reported %q before the delay", got)
+	}
+	if got := c.take(at(100*ms + changeDelay)); !slices.Equal(got, []string{"mpv"}) {
+		t.Fatalf("reported %q, want mpv", got)
+	}
+	if got := c.take(at(150*ms + changeDelay)); !slices.Equal(got, []string{"spotify"}) {
+		t.Fatalf("reported %q, want spotify once", got)
+	}
+	if _, ok := c.next(); ok {
+		t.Fatal("a report is due after all reports")
+	}
+
+	// A signal every 100 ms never leaves a gap of changeDelay.
+	begin := time.Second
+	for d := begin; d < begin+2*changeMaxWait; d += 100 * ms {
+		if due, ok := c.next(); ok && !due.After(at(d)) {
+			if got := c.take(due); !slices.Equal(got, []string{"firefox"}) {
+				t.Fatalf("reported %q, want firefox", got)
+			}
+			if want := at(begin + changeMaxWait); !due.Equal(want) {
+				t.Fatalf("first report at %v, want %v", due.Sub(start), want.Sub(start))
+			}
+			return
+		}
+		c.add("firefox", at(d))
+	}
+	t.Fatal("a player that sends signals all the time got no report")
+}
+
+// TestWatchScriptCapsSize checks that watchScript reads at most $1 bytes
+// of a large copy.
+func TestWatchScriptCapsSize(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "wl-paste"), []byte("#!/bin/sh\necho text/plain\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	cmd := exec.Command("sh", "-c", watchScript, "sh", "11")
+	cmd.Env = append(os.Environ(), "CLIPBOARD_STATE=data")
+	cmd.Stdin = strings.NewReader(strings.Repeat("a", 1<<20))
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(string(out), "\n")
+	if len(lines) != 4 || lines[0] != "data" || strings.TrimSpace(lines[2]) != "text/plain" {
+		t.Fatalf("output %q", out)
+	}
+	raw, err := base64.StdEncoding.DecodeString(lines[1])
+	if err != nil || string(raw) != strings.Repeat("a", 11) {
+		t.Fatalf("content %q, %v, want 11 bytes", raw, err)
+	}
+}
+
+// TestClipboardRecordLimit checks that text up to the limit syncs, and that
+// the 1 byte more that watchScript reads stops a larger copy.
+func TestClipboardRecordLimit(t *testing.T) {
+	fakeWlCopy(t)
+	c := NewClipboard()
+	var got []int
+	onText := func(s string) { got = append(got, len(s)) }
+	onImage := func([]byte, string) { t.Fatal("a text selection reported an image") }
+	sizes := []int{maxClipboardText - 1, maxClipboardText, maxClipboardText + 1}
+	for i, n := range sizes {
+		data := bytes.Repeat([]byte{'a' + byte(i)}, n)
+		c.record("text", record("data", data, "text/plain"), false, onText, onImage)
+	}
+	if want := sizes[:2]; !slices.Equal(got, want) {
+		t.Fatalf("reported sizes %v, want %v", got, want)
+	}
+}
+
+// TestRunCommandBackground checks that RunCommand reports a command that
+// starts a background program, and does not wait for that program.
+func TestRunCommandBackground(t *testing.T) {
+	old := outputWait
+	outputWait = 200 * time.Millisecond
+	defer func() { outputWait = old }()
+	res := make(chan string, 1)
+	err := RunCommand("echo started; sleep 5 &", func(err error, out []byte) {
+		if err != nil {
+			t.Errorf("error %v", err)
+		}
+		res <- string(out)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case out := <-res:
+		if out != "started\n" {
+			t.Errorf("output %q", out)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("RunCommand waits for the background program")
+	}
+}
+
+// TestRunCommandOutput checks that RunCommand reports the exit status and
+// the output as soon as the command ends.
+func TestRunCommandOutput(t *testing.T) {
+	type result struct {
+		err error
+		out string
+	}
+	res := make(chan result, 1)
+	err := RunCommand("echo out; echo err >&2; exit 3", func(err error, out []byte) { res <- result{err, string(out)} })
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case r := <-res:
+		var exit *exec.ExitError
+		if !errors.As(r.err, &exit) || exit.ExitCode() != 3 {
+			t.Errorf("error %v, want exit status 3", r.err)
+		}
+		if r.out != "out\nerr\n" {
+			t.Errorf("output %q", r.out)
+		}
+	case <-time.After(outputWait):
+		t.Fatal("RunCommand did not report the command at its end")
 	}
 }

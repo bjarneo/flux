@@ -21,6 +21,14 @@ Item {
 
   Backend { id: backend }
 
+  // The panel calls this when it opens. The theme switch replaces the file,
+  // which can drop the file watch, so read the file again. A closed
+  // connection to fluxd tries again at once.
+  function panelOpened() {
+    themeFile.reload()
+    backend.retryNow()
+  }
+
   FileView {
     id: themeFile
     path: root.themePath
@@ -37,13 +45,5 @@ Item {
     target: Color
     function onAccentChanged() { themeFile.reload() }
     function onBackgroundChanged() { themeFile.reload() }
-  }
-
-  // The theme switch replaces the file, which can drop the file watch.
-  Timer {
-    interval: 5000
-    repeat: true
-    running: true
-    onTriggered: themeFile.reload()
   }
 }

@@ -34,6 +34,9 @@ private struct WebcamControls: View {
     var body: some View {
         VStack(spacing: 14) {
             preview
+                // The webcam makes preview images only while this view shows them.
+                .onAppear { plugin.setPreviewShown(true) }
+                .onDisappear { plugin.setPreviewShown(false) }
             if access == .authorized, !webcam.cameras.isEmpty {
                 status
                 HStack(spacing: 8) {

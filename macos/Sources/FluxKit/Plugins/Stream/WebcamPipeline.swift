@@ -3,7 +3,7 @@ import Foundation
 
 /// Connects the camera, the renderer, and the encoder for the webcam. All
 /// frame work runs on 1 queue. While no encoder runs, the frames only feed
-/// the preview.
+/// the preview. The preview renders only while a view shows it.
 final class WebcamPipeline: @unchecked Sendable {
     /// Every 5th frame goes to the preview: 6 images per second.
     private static let previewEvery = 5
@@ -19,6 +19,8 @@ final class WebcamPipeline: @unchecked Sendable {
     private var height = 720
     private var encoder: H264Encoder?
     private var sink: VideoSink?
+    /// The number of views that show the preview.
+    private var previewViews = 0
 
     /// Owned by the frame queue.
     private var frameCount = 0
@@ -62,7 +64,10 @@ final class WebcamPipeline: @unchecked Sendable {
 
     /// Starts to encode frames of width x height into sink.
     func startEncoder(width: Int, height: Int, bitrate: Int, sink: VideoSink, onError: @escaping @Sendable (String) -> Void) throws {
-        let encoder = try H264Encoder(width: width, height: height, bitrate: bitrate, output: { [sink] bytes in sink.push(bytes) }, onError: onError)
+        let encoder = try H264Encoder(
+            width: width, height: height, bitrate: bitrate, backlogged: { [sink] in sink.backlogged },
+            output: { [sink] bytes in sink.push(bytes) }, onError: onError
+        )
         let old = lock.withLock { () -> H264Encoder? in
             defer { self.encoder = encoder; self.sink = sink }
             return self.encoder
@@ -83,12 +88,18 @@ final class WebcamPipeline: @unchecked Sendable {
         lock.withLock { encoder }?.requestKeyFrame()
     }
 
+    /// Counts the views that show the preview. A count keeps the preview on
+    /// when a new view appears before the old view disappears.
+    func setPreviewShown(_ shown: Bool) {
+        lock.withLock { previewViews = max(0, previewViews + (shown ? 1 : -1)) }
+    }
+
     private func frame(_ buffer: CVPixelBuffer, rotation: Int) {
-        let (look, width, height, encoder, sink) = lock.withLock { () -> (FrameRenderer.Look, Int, Int, H264Encoder?, VideoSink?) in
-            (self.look, self.width, self.height, self.encoder, self.sink)
+        let (look, width, height, encoder, sink, previewWanted) = lock.withLock { () -> (FrameRenderer.Look, Int, Int, H264Encoder?, VideoSink?, Bool) in
+            (self.look, self.width, self.height, self.encoder, self.sink, self.previewViews > 0)
         }
         frameCount += 1
-        let wantsPreview = frameCount % Self.previewEvery == 0
+        let wantsPreview = previewWanted && frameCount % Self.previewEvery == 0
         let sending = encoder != nil && sink?.backlogged == false
         guard sending || wantsPreview else { return }
         // The encoder keeps its size until the next stream, so the stream

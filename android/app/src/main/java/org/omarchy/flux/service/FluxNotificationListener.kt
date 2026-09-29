@@ -10,11 +10,13 @@ class FluxNotificationListener : NotificationListenerService() {
     override fun onListenerConnected() {
         FluxCore.init(this)
         NotificationSync.listener = this
-        FluxCore.publish()
+        FluxCore.refresh()
     }
 
     override fun onListenerDisconnected() {
         if (NotificationSync.listener === this) NotificationSync.listener = null
+        // The user can take the notification access away.
+        FluxCore.refresh()
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {

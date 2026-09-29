@@ -33,6 +33,8 @@ final class CameraController {
     @ObservationIgnored var onCodes: (([ScannedCode], CGImage?) -> Void)?
 
     @ObservationIgnored private var use = CameraUse.off
+    /// False while the window does not show. The camera is then off.
+    @ObservationIgnored private var visible = true
     @ObservationIgnored private let analyzer = LiveAnalyzer()
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
@@ -71,6 +73,15 @@ final class CameraController {
         apply()
     }
 
+    /// Stops the camera while the window is in the Dock or behind other
+    /// windows, and starts it again for the same use when the window shows.
+    func setVisible(_ visible: Bool) {
+        guard visible != self.visible else { return }
+        self.visible = visible
+        outlines = []
+        apply()
+    }
+
     func requestAccess() async {
         access = await CameraAccess.request()
         apply()
@@ -105,16 +116,24 @@ final class CameraController {
     private func apply() {
         generation += 1
         let gen = generation
-        guard use != .off, access == .authorized else {
+        guard use != .off, visible, access == .authorized else {
             still.setFrameHandler(nil)
             still.stop()
             running = false
             return
         }
-        let analyzer = analyzer
-        still.setFrameHandler { analyzer.handle($0) }
+        // Only Vision reads the frames. Photo and signature use the preview alone.
+        if case .scan = use {
+            let analyzer = analyzer
+            still.setFrameHandler { analyzer.handle($0) }
+        } else {
+            still.setFrameHandler(nil)
+        }
         let id = defaults.string(forKey: Self.cameraKey)
         Task {
+            // A later apply can stop the camera before this task runs. The
+            // camera then stays off.
+            guard gen == generation else { return }
             do {
                 let choice = try await still.start(id)
                 guard gen == generation else { return }

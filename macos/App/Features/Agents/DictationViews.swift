@@ -17,18 +17,21 @@ enum DictationLayout {
 /// `send`. While this Mac listens, 1 panel takes the full width: the
 /// language, the time, the live wave, the words, and the stop key in its
 /// corner. The mic key is the same view in both layouts and moves into the
-/// panel, so a press and hold keeps working while the panel opens.
+/// panel, so a press and hold keeps working while the panel opens. Without
+/// `onLanguage`, the panel shows the language but does not open the picker.
 struct DictationBar<Field: View, Send: View>: View {
     let dictation: Dictation
     let canDictate: Bool
     let onStart: () -> Void
-    let onLanguage: () -> Void
+    let onLanguage: (() -> Void)?
     @ViewBuilder let field: () -> Field
     @ViewBuilder let send: () -> Send
 
     var body: some View {
         let active = dictation.phase != .idle
         let key = DictationLayout.keySize
+        // Without a send key, the mic key rests at the trailing edge.
+        let rest = Send.self == EmptyView.self ? 0 : -(key + DictationLayout.gap)
         ZStack(alignment: .bottomTrailing) {
             if active {
                 ListeningPanel(dictation: dictation, onLanguage: onLanguage)
@@ -44,11 +47,144 @@ struct DictationBar<Field: View, Send: View>: View {
             }
             if canDictate {
                 MicKey(dictation: dictation, onStart: onStart)
-                    .offset(x: active ? -DictationLayout.panelPad : -(key + DictationLayout.gap),
+                    .offset(x: active ? -DictationLayout.panelPad : rest,
                             y: active ? -DictationLayout.panelPad : 0)
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.75), value: active)
+    }
+}
+
+/// A text field with a mic key, for the text fields of the app. The words
+/// of a dictation go to `onText`. Under the bar, a line tells why a
+/// dictation failed. `language` is the dictation language of this Mac.
+/// Without `picker`, the panel does not open the language picker, for the
+/// search of the picker itself. While `enabled` is off, the mic key hides,
+/// unless a dictation runs, so that the user can still stop it.
+struct VoiceBar<Field: View, Send: View>: View {
+    @Binding var language: String
+    var picker = true
+    var enabled = true
+    let onText: @MainActor (String) -> Void
+    @ViewBuilder let field: () -> Field
+    @ViewBuilder let send: () -> Send
+    @State private var holder = VoiceHolder()
+    @State private var canDictate = false
+    @State private var picking = false
+    @State private var voiceError: String?
+
+    var body: some View {
+        let dictation = holder.dictation
+        VStack(alignment: .leading, spacing: 6) {
+            DictationBar(
+                dictation: dictation,
+                canDictate: canDictate && (enabled || dictation.phase != .idle),
+                onStart: dictate,
+                onLanguage: picker ? pickLanguage : nil,
+                field: field,
+                send: send
+            )
+            if let problem = voiceError ?? dictation.error {
+                HStack(spacing: 10) {
+                    Text(problem)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    if picker && problem == dictation.error && dictation.languageError {
+                        Button("Choose a Language") { picking = true }
+                            .buttonStyle(.link)
+                            .font(.caption)
+                    }
+                    if problem == DictationText.speechDenied || problem == DictationText.micDenied {
+                        Button("Open Privacy Settings") { NSWorkspace.shared.open(Self.privacyURL(problem)) }
+                            .buttonStyle(.link)
+                            .font(.caption)
+                    }
+                }
+            }
+        }
+        .task { canDictate = await Task.detached { Dictation.available }.value }
+        // The field is gone, so its words have no place.
+        .onDisappear {
+            holder.starting?.cancel()
+            dictation.cancel()
+        }
+        .sheet(isPresented: $picking) {
+            LanguagePicker(selected: language) { tag in
+                language = tag
+                picking = false
+                dictate()
+            } onCancel: {
+                picking = false
+            }
+        }
+    }
+
+    private func dictate() {
+        voiceError = nil
+        let dictation = holder.dictation
+        let language = language
+        let onText = onText
+        holder.starting?.cancel()
+        holder.starting = Task { @MainActor in
+            let problem = await Dictation.authorize()
+            // The bar closed while macOS asked for the permissions.
+            guard !Task.isCancelled else { return }
+            if let problem {
+                voiceError = problem
+                return
+            }
+            dictation.start(language: language, hints: []) { spoken in onText(spoken) }
+        }
+    }
+
+    /// Keeps the words so far and opens the language picker.
+    private func pickLanguage() {
+        holder.dictation.stopNow()
+        picking = true
+    }
+
+    private static func privacyURL(_ problem: String) -> URL {
+        let pane = problem == DictationText.speechDenied ? "Privacy_SpeechRecognition" : "Privacy_Microphone"
+        return URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)")!
+    }
+}
+
+extension VoiceBar where Send == EmptyView {
+    /// A bar with the field and the mic key only.
+    init(language: Binding<String>, picker: Bool = true, enabled: Bool = true, onText: @escaping @MainActor (String) -> Void,
+         @ViewBuilder field: @escaping () -> Field) {
+        self.init(language: language, picker: picker, enabled: enabled, onText: onText, field: field, send: { EmptyView() })
+    }
+}
+
+/// Holds the dictation of a `VoiceBar`. SwiftUI makes a view again at each
+/// change, so the holder makes the dictation and its audio engine only when
+/// the bar first draws. `starting` waits for the permissions of a new dictation.
+final class VoiceHolder {
+    @MainActor lazy var dictation = Dictation()
+    var starting: Task<Void, Never>?
+}
+
+extension View {
+    /// The look of a text field next to a mic key: the height of the key and
+    /// the frame of the reply field.
+    func voiceFieldStyle() -> some View {
+        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+        return textFieldStyle(.plain)
+            .padding(.horizontal, 8)
+            .frame(minHeight: DictationLayout.keySize)
+            .background(shape.fill(Color(nsColor: .textBackgroundColor)))
+            .overlay(shape.strokeBorder(Color.primary.opacity(0.15)))
+    }
+}
+
+extension AppModel {
+    /// The dictation language of this Mac, for all text fields. An empty tag is Automatic.
+    var dictationLanguage: Binding<String> {
+        let herdr = core.plugin(HerdrPlugin.self)
+        return Binding(get: { herdr?.model.dictationLanguage ?? "" }, set: { herdr?.model.dictationLanguage = $0 })
     }
 }
 
@@ -143,7 +279,7 @@ private struct MicRings: View {
 /// are dim. The stop key lies over the lower right corner.
 private struct ListeningPanel: View {
     let dictation: Dictation
-    let onLanguage: () -> Void
+    let onLanguage: (() -> Void)?
 
     var body: some View {
         let listening = dictation.phase == .listening
@@ -199,30 +335,39 @@ private struct ListeningPanel: View {
 }
 
 /// The language of the dictation, and where the audio goes. A click opens
-/// the language picker.
+/// the language picker. Without `action`, the chip only shows the language.
 private struct LanguageChip: View {
     let tag: String
     let onDevice: Bool
-    let action: () -> Void
+    let action: (() -> Void)?
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: onDevice ? "laptopcomputer" : "cloud")
-                Text(tag.isEmpty ? "language" : tag).font(.caption.monospaced())
+        let about = onDevice
+            ? "This Mac transcribes \(DictationText.languageName(tag))."
+            : "Apple transcribes \(DictationText.languageName(tag)), so the audio goes to Apple."
+        if let action {
+            Button(action: action) { chip }
+                .buttonStyle(.plain)
+                .help(about + " Click to choose another language.")
+        } else {
+            chip.help(about)
+        }
+    }
+
+    private var chip: some View {
+        HStack(spacing: 4) {
+            Image(systemName: onDevice ? "laptopcomputer" : "cloud")
+            Text(tag.isEmpty ? "language" : tag).font(.caption.monospaced())
+            if action != nil {
                 Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
             }
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .foregroundStyle(.secondary)
-            .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.primary.opacity(0.06)))
-            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Color.primary.opacity(0.1)))
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .help(onDevice
-              ? "This Mac transcribes \(DictationText.languageName(tag)). Click to choose another language."
-              : "Apple transcribes \(DictationText.languageName(tag)), so the audio goes to Apple. Click to choose another language.")
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .foregroundStyle(.secondary)
+        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.primary.opacity(0.06)))
+        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Color.primary.opacity(0.1)))
+        .contentShape(Rectangle())
     }
 }
 
@@ -371,8 +516,12 @@ struct LanguagePicker: View {
         let rows = LanguageCatalog.rows(onDevice: languages.onDevice ?? [], supported: languages.supported, preferred: preferred, query: query)
         VStack(alignment: .leading, spacing: 12) {
             Text("Dictation Language").font(.headline)
-            TextField("Search", text: $query)
-                .textFieldStyle(.roundedBorder)
+            // A dictation replaces the search. It uses Automatic, because the chosen language can be the one that fails,
+            // and its panel does not open this picker again.
+            VoiceBar(language: .constant(""), picker: false, onText: { query = DictationText.query($0) }) {
+                TextField("Search", text: $query)
+                    .voiceFieldStyle()
+            }
             List {
                 if query.trimmingCharacters(in: .whitespaces).isEmpty {
                     row(title: "Automatic", subtitle: "Uses the languages of this Mac in order: \(preferred.map(DictationText.languageName).joined(separator: ", "))", tag: "")

@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -33,8 +34,10 @@ var pngMagic = []byte("\x89PNG\r\n\x1a\n")
 
 // watchScript runs once for each selection change. It prints 3 lines: the
 // CLIPBOARD_STATE value, the content as base64, and the MIME types of the
-// selection. The base64 keeps text with newlines in one line.
-const watchScript = `printf '%s\n' "$CLIPBOARD_STATE"; base64 -w0; printf '\n'; wl-paste --list-types | tr '\n' ' '; printf '\n'`
+// selection. The base64 keeps text with newlines in one line. The script
+// reads at most $1 bytes of the content. watchOnce sets $1 to 1 byte more
+// than the limit, so record finds a large copy without a read of all of it.
+const watchScript = `printf '%s\n' "$CLIPBOARD_STATE"; head -c "$1" | base64 -w0; printf '\n'; wl-paste --list-types | tr '\n' ' '; printf '\n'`
 
 // initialWindow is the time after the start of wl-paste in which its first
 // selection is the current content and not a change.
@@ -82,7 +85,8 @@ func (c *Clipboard) Watch(ctx context.Context, onText func(text string), onImage
 // watchOnce runs 1 `wl-paste --watch` process for the type typ, which is
 // "text" or ImageType.
 func (c *Clipboard) watchOnce(ctx context.Context, typ string, onText func(string), onImage func([]byte, string)) {
-	cmd := exec.CommandContext(ctx, "wl-paste", "--type", typ, "--watch", "sh", "-c", watchScript)
+	read := strconv.Itoa(clipboardLimit(typ) + 1)
+	cmd := exec.CommandContext(ctx, "wl-paste", "--type", typ, "--watch", "sh", "-c", watchScript, "sh", read)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		return
@@ -117,15 +121,12 @@ func (c *Clipboard) record(typ string, lines [3]string, initial bool, onText fun
 	if state == "sensitive" || state == "nil" || state == "clear" {
 		return
 	}
-	limit := maxClipboardText
-	if typ == ImageType {
-		limit = MaxClipboardImage
-	}
-	if base64.StdEncoding.DecodedLen(len(encoded)) > limit {
+	limit := clipboardLimit(typ)
+	if len(encoded) > base64.StdEncoding.EncodedLen(limit) {
 		return
 	}
 	raw, err := base64.StdEncoding.DecodeString(encoded)
-	if err != nil || len(raw) == 0 {
+	if err != nil || len(raw) == 0 || len(raw) > limit {
 		return
 	}
 	if typ == ImageType {
@@ -137,6 +138,15 @@ func (c *Clipboard) record(typ string, lines [3]string, initial bool, onText fun
 	if !isImage(types) && isText(raw) && c.observe(contentKey("text", raw), initial) {
 		onText(string(raw))
 	}
+}
+
+// clipboardLimit returns the largest content of the type typ that Flux
+// syncs.
+func clipboardLimit(typ string) int {
+	if typ == ImageType {
+		return MaxClipboardImage
+	}
+	return maxClipboardText
 }
 
 // observe records key as the last content. It reports whether the content

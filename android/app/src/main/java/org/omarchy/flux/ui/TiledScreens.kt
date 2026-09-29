@@ -61,6 +61,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import org.omarchy.flux.core.CaptureKind
@@ -603,16 +606,21 @@ fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
     // The volume that the user drags to, and the time of the last volume sent.
     var volumeDrag by remember { mutableStateOf<Float?>(null) }
     var volumeSentAt by remember { mutableLongStateOf(0L) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(d.id) {
-        while (true) {
-            Plugins.requestPlayers(FluxCore, d.id)
-            delay(10_000)
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                Plugins.requestPlayers(FluxCore, d.id)
+                delay(10_000)
+            }
         }
     }
     LaunchedEffect(p?.playing) {
-        while (p?.playing == true) {
-            now = SystemClock.elapsedRealtime()
-            delay(500)
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (p?.playing == true) {
+                now = SystemClock.elapsedRealtime()
+                delay(500)
+            }
         }
     }
     val position = when {

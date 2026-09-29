@@ -44,6 +44,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
@@ -52,6 +55,9 @@ import org.omarchy.flux.core.Shortcut
 import org.omarchy.flux.core.Shortcuts
 import org.omarchy.flux.core.ShortcutsState
 import org.omarchy.flux.protocol.Packet
+import org.omarchy.flux.voice.DictationText
+import org.omarchy.flux.voice.VoiceField
+import org.omarchy.flux.voice.rememberVoiceTyping
 
 /** The panel reads the workspaces again at this interval, because the computer can change them too. */
 private const val REFRESH_MS = 3_000L
@@ -71,12 +77,15 @@ fun OmarchyPanel(d: DeviceUi, modifier: Modifier = Modifier) {
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         if (!RemoteInput.send(FluxCore, d.id, p)) FluxCore.toast("${d.name} is not reachable")
     }
-    // The list comes once. The workspaces come again while the panel shows.
+    // The list comes once. The workspaces come again while the panel is visible.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(d.id) {
         RemoteInput.send(FluxCore, d.id, Shortcuts.request())
-        while (true) {
-            delay(REFRESH_MS)
-            RemoteInput.send(FluxCore, d.id, Shortcuts.refresh())
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                delay(REFRESH_MS)
+                RemoteInput.send(FluxCore, d.id, Shortcuts.refresh())
+            }
         }
     }
     val state = d.shortcuts
@@ -261,27 +270,30 @@ private fun LaunchKey(s: Shortcut, modifier: Modifier, onClick: () -> Unit) {
 
 /**
  * All shortcuts of the computer, with a search. A tap runs a shortcut. The
- * star pins it to the panel.
+ * star pins it to the panel. A dictation replaces the search.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ShortcutSheet(all: List<Shortcut>, pins: List<String>, onRun: (Shortcut) -> Unit, onPin: (Shortcut) -> Unit, onDismiss: () -> Unit) {
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var query by rememberSaveable { mutableStateOf("") }
+    val voice = rememberVoiceTyping { query = DictationText.query(it) }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = Tn.bg) {
         Column(Modifier.fillMaxWidth().padding(horizontal = TiledGutter), verticalArrangement = Arrangement.spacedBy(TileGap)) {
             TileLabel("All shortcuts · ${all.size}")
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { T("Search, for example workspace or browser", color = Tn.dim) },
-                leadingIcon = { Sym(Ic.search, tint = Tn.sub, size = 20.dp) },
-                singleLine = true,
-                textStyle = TextStyle(color = Tn.text, fontSize = 14.sp),
-                shape = TileShape,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            )
+            VoiceField(voice) { m ->
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    modifier = m,
+                    placeholder = { T("Search, for example workspace or browser", color = Tn.dim) },
+                    leadingIcon = { Sym(Ic.search, tint = Tn.sub, size = 20.dp) },
+                    singleLine = true,
+                    textStyle = TextStyle(color = Tn.text, fontSize = 14.sp),
+                    shape = TileShape,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                )
+            }
             val found = remember(all, query) { Shortcuts.search(all, query) }
             LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 items(found, key = { it.ref }) { s ->

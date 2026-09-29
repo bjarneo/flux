@@ -133,7 +133,8 @@ private let workingRefresh: Duration = .seconds(5)
 
 /// The recent output of 1 agent in terminal colors, with the newest lines
 /// at the bottom, and the reply controls. The view reads the output again
-/// when the status changes, and every 5 seconds while the agent works.
+/// when the status changes, and every 5 seconds while the agent works and
+/// the window shows.
 private struct AgentDetail: View {
     let model: AgentsWindowModel
     let pane: String
@@ -142,6 +143,7 @@ private struct AgentDetail: View {
     private struct Refresh: Equatable {
         var online: Bool
         var status: AgentStatus?
+        var visible: Bool
     }
 
     var body: some View {
@@ -166,8 +168,8 @@ private struct AgentDetail: View {
             }
         }
         .padding(16)
-        .task(id: Refresh(online: model.device?.online == true, status: agent?.status)) {
-            guard model.device?.online == true, agent != nil else { return }
+        .task(id: Refresh(online: model.device?.online == true, status: agent?.status, visible: model.visible)) {
+            guard model.visible, model.device?.online == true, agent != nil else { return }
             model.plugin.read(model.deviceId, pane: pane)
             while agent?.status == .working {
                 try? await Task.sleep(for: workingRefresh)

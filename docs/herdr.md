@@ -64,6 +64,16 @@ When the two parts do not meet, a dim line says that more lines show when the ag
 The phone reads all lines again when the agent stops.
 herdr keeps only the recent part of the terminal for some agents, so the screen can show fewer lines.
 
+The phone fits the output to its narrow screen.
+This matters most for full-screen agents such as opencode, which draw panels across the full terminal:
+
+- A long line wraps, and its wrapped rows start under its text, after the panel bar or the list marker.
+- The phone removes the margin that all lines share, extra empty rows, scroll bars, and the half-block edges of boxes.
+- A panel, for example a message, a tool call, or a diff line in opencode, fills the width of the screen.
+- The phone removes the sidebar that opencode shows in a wide terminal, because its rows share the lines of the conversation. The status line at the bottom still shows the tokens and the cost.
+- A centered drawing, for example the opencode logo, moves to the left when that makes it fit.
+- When the agent colors suit a dark background and the phone uses the light theme, the phone inverts the lightness of these colors, so the text stays readable. It does the same for colors that suit a light background in the dark theme.
+
 ## Notifications
 
 The phone posts a notification when an agent changes to blocked.
@@ -114,7 +124,7 @@ With `herdr_control = true`, the phone can start a coding agent on the computer.
 1. Open **Agents**.
 2. Select the add button in the top bar.
 3. Under **Run**, select the agent, for example `claude` or `codex`.
-4. Under **Folder**, select a folder. To find a folder, type a part of its name. To use another folder, type its path, for example `~/Code/app`. The folder must exist on the computer.
+4. Under **Folder**, select a folder. To find a folder, type or speak a part of its name. To use another folder, type its path, for example `~/Code/app`. The folder must exist on the computer.
 5. When the folder has a herdr workspace, select **New tab in** that workspace or **New workspace**. A folder without a workspace opens in a new workspace.
 6. Select **Start**.
 
@@ -164,6 +174,7 @@ The **Agents** screen then lists each herdr pane that has no agent under **Termi
 Select a terminal to see its output and to type in it:
 
 - Type a command in the field, then select **Run**. The phone types the command and presses Enter.
+- To speak a command, select the mic key next to **Run**. The command goes in at the cursor without the capital and the period of a sentence. Read it, then select **Run**.
 - The key bar sends Esc, Tab, Ctrl-C, Ctrl-D, Up, Down, and Enter.
 - The screen reads the output again every 3 seconds.
 - To close the terminal, select **Close**, then confirm.
@@ -238,6 +249,7 @@ It does not start agents, close them, or open terminals.
 - The page of the computer has an **Agents** card. It lists the first agents and shows the number of blocked agents.
 - **Open Agents…** opens a window with the agent list on the left and the output of the selected agent on the right. The menu bar item has **Agents…** too.
 - The output uses the colors of Tokyo Night in dark mode and Tokyo Night Day in light mode.
+- The Mac does not yet fit the output of full-screen agents such as opencode, as the phone does.
 - Press Command-R to read the output again.
 - Return sends the text. Shift-Return adds a line break.
 - Before the first reply, the Mac asks for Touch ID or the Mac password. The unlock stays valid for 5 minutes while Flux runs.
@@ -397,7 +409,8 @@ The computer sends `state` with the new pane before `created`:
 
 A `read` with `"format":"ansi"` gets an `output` with `"format":"ansi"`.
 Its `text` keeps the SGR sequences of colors and styles.
-`fluxd` removes all other escape sequences and control characters, changes CRLF to LF, and removes the blanks at the end of each line.
+`fluxd` removes all other escape sequences and control characters, changes CRLF to LF, and removes the blanks with the default background at the end of each line.
+Blanks with a background stay, because they draw the panels of full-screen agents such as opencode.
 Without `format`, `text` has no ANSI codes.
 For an agent, `fluxd` also reads the plain history and puts the ANSI screen under it, because herdr gets the history of an agent in the alternate screen only as plain text.
 `text` has at most 1 MB.

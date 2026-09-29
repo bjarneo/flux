@@ -98,10 +98,7 @@ func (d *Daemon) Snapshot() json.RawMessage {
 		}
 		views = append(views, dev.view())
 	}
-	clip := d.clipboard
-	if clip == nil {
-		clip = []ClipEntry{}
-	}
+	clip := d.clipPreviewLocked()
 	transfers := d.transfers
 	if transfers == nil {
 		transfers = []*Transfer{}
@@ -217,6 +214,9 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 	case "approve.cancel":
 		return ok, d.ApproveCancel(p.ID)
 	case "clipboard.copy":
+		if p.ID != "" {
+			return ok, d.CopyClip(p.ID)
+		}
 		if p.Path != "" {
 			return ok, d.CopyClipImage(p.Path)
 		}
@@ -440,6 +440,9 @@ func (d *Daemon) setSetting(key string, value any) error {
 	if key == "remoteInput" || key == "remoteDesktop" {
 		d.inputChanged()
 	}
+	if key == "syncDnd" {
+		d.wakeDnd()
+	}
 	d.markDirty()
 	return nil
 }
@@ -456,6 +459,7 @@ func (d *Daemon) Reload() error {
 	d.commandsChanged()
 	d.herdrChanged()
 	d.inputChanged()
+	d.wakeDnd()
 	return nil
 }
 

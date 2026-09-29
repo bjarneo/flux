@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // Packet types that Flux uses.
@@ -155,8 +156,12 @@ func CleanName(name string) string {
 }
 
 // DeviceType returns "laptop" when the machine has a battery and "desktop"
-// when it does not.
-func DeviceType() string {
+// when it does not. It reads sysfs on the first call only.
+func DeviceType() string { return deviceType() }
+
+var deviceType = sync.OnceValue(readDeviceType)
+
+func readDeviceType() string {
 	if b, err := os.ReadFile("/sys/class/dmi/id/chassis_type"); err == nil {
 		switch strings.TrimSpace(string(b)) {
 		case "8", "9", "10", "11", "14", "30", "31", "32":

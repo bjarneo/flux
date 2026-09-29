@@ -51,6 +51,13 @@ Item {
   readonly property var discovered: allDevices.filter(d => !d.paired && d.online && d.pairState !== "incoming")
   readonly property var incoming: allDevices.filter(d => d.pairState === "incoming")
   readonly property var requested: allDevices.find(d => d.pairState === "requested") || null
+  // The fields of the paired devices that the device rows and the rail
+  // show. The text changes only when 1 of these fields changes, so a new
+  // notification or message does not build the rows again.
+  readonly property string pairedRowsText: JSON.stringify(paired.map(d => ({
+    id: d.id, name: d.name, type: d.type, online: !!d.online, paired: !!d.paired, battery: d.battery || null
+  })))
+  readonly property var pairedRows: JSON.parse(pairedRowsText)
   readonly property var dev: {
     for (var i = 0; i < paired.length; i++)
       if (paired[i].id === selectedId) return paired[i]
@@ -255,61 +262,64 @@ Item {
       color: Theme.bg3
     }
 
-    // The rail: 1 icon for each device and each tab.
-    Flickable {
-      id: railFlick
+    // The rail: 1 icon for each device and each tab. It exists only in the
+    // rail layout. The open drawer hides it.
+    Loader {
       anchors.fill: parent
+      active: !root.wideLayout && !root.narrowLayout
       visible: !root.sidebarFull
-      contentHeight: rail.implicitHeight + 28
-      boundsBehavior: Flickable.StopAtBounds
-      interactive: contentHeight > height
-      clip: true
-      Column {
-        id: rail
-        y: 14
-        width: parent.width
-        spacing: 6
-        RailButton {
-          icon: "menu"
-          tip: "Show the devices and pages"
-          onClicked: root.drawerOpen = true
-        }
-        Item { width: 1; height: 4 }
-        Repeater {
-          model: root.paired
-          delegate: RailButton {
-            required property var modelData
-            icon: Fmt.kindIcon(modelData.type)
-            tip: modelData.name + (modelData.online ? " · connected" : " · offline")
-            selected: !!root.dev && root.dev.id === modelData.id
-            dot: modelData.online ? Theme.ok : "transparent"
-            onClicked: root.selectedId = modelData.id
+      sourceComponent: Flickable {
+        contentHeight: rail.implicitHeight + 28
+        boundsBehavior: Flickable.StopAtBounds
+        interactive: contentHeight > height
+        clip: true
+        Column {
+          id: rail
+          y: 14
+          width: parent.width
+          spacing: 6
+          RailButton {
+            icon: "menu"
+            tip: "Show the devices and pages"
+            onClicked: root.drawerOpen = true
           }
-        }
-        RailButton {
-          icon: root.incoming.length > 0 ? "key" : "plus"
-          tip: root.incoming.length > 0 ? "A device asks to pair" : "Pair new device"
-          dot: root.incoming.length > 0 ? Theme.warn : "transparent"
-          onClicked: {
-            root.drawerOpen = true
-            if (root.incoming.length === 0 && !root.pairMode) root.startPair()
+          Item { width: 1; height: 4 }
+          Repeater {
+            model: root.pairedRows
+            delegate: RailButton {
+              required property var modelData
+              icon: Fmt.kindIcon(modelData.type)
+              tip: modelData.name + (modelData.online ? " · connected" : " · offline")
+              selected: !!root.dev && root.dev.id === modelData.id
+              dot: modelData.online ? Theme.ok : "transparent"
+              onClicked: root.selectedId = modelData.id
+            }
           }
-        }
-        Rectangle {
-          anchors.horizontalCenter: parent.horizontalCenter
-          width: 32
-          height: 1
-          color: Theme.bg3
-          visible: !!root.dev
-        }
-        Repeater {
-          model: root.dev ? root.visibleTabs : []
-          delegate: RailButton {
-            required property var modelData
-            icon: modelData.icon
-            tip: modelData.label
-            selected: root.currentTab && root.currentTab.key === modelData.key
-            onClicked: root.tab = modelData.key
+          RailButton {
+            icon: root.incoming.length > 0 ? "key" : "plus"
+            tip: root.incoming.length > 0 ? "A device asks to pair" : "Pair new device"
+            dot: root.incoming.length > 0 ? Theme.warn : "transparent"
+            onClicked: {
+              root.drawerOpen = true
+              if (root.incoming.length === 0 && !root.pairMode) root.startPair()
+            }
+          }
+          Rectangle {
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: 32
+            height: 1
+            color: Theme.bg3
+            visible: !!root.dev
+          }
+          Repeater {
+            model: root.dev ? root.visibleTabs : []
+            delegate: RailButton {
+              required property var modelData
+              icon: modelData.icon
+              tip: modelData.label
+              selected: root.currentTab && root.currentTab.key === modelData.key
+              onClicked: root.tab = modelData.key
+            }
           }
         }
       }
@@ -371,7 +381,7 @@ Item {
           }
 
           Repeater {
-            model: root.paired
+            model: root.pairedRows
             delegate: DeviceRow {
               required property var modelData
               width: side.width
@@ -714,8 +724,14 @@ Item {
           width: parent.width
           height: item ? (item.fillHeight ? body.fillHeight : item.implicitHeight) : 0
           readonly property string url: root.dev ? "pages/" + root.currentTab.page + ".qml" : "pages/Empty.qml"
-          onUrlChanged: setSource(url, { view: root })
-          Component.onCompleted: setSource(url, { view: root })
+          // A host can set tab when it creates the view. The url then
+          // changes before the view is complete, so load only the last url.
+          property bool complete: false
+          onUrlChanged: if (complete) setSource(url, { view: root })
+          Component.onCompleted: {
+            complete = true
+            setSource(url, { view: root })
+          }
         }
       }
     }

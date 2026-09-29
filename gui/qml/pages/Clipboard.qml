@@ -20,6 +20,9 @@ Item {
     return "phone"
   }
 
+  // The rows follow the entries by ID, so a new entry adds only its row.
+  KeyedModel { id: rows; values: root.entries }
+
   Column {
     id: list
     width: parent.width
@@ -34,9 +37,10 @@ Item {
     }
 
     Repeater {
-      model: root.entries
+      model: rows
       delegate: Card {
-        required property var modelData
+        required property string key
+        readonly property var modelData: rows.byId[key] || ({})
         readonly property bool incoming: modelData.dir !== "out"
         width: list.width
         implicitHeight: Math.max(textCol.implicitHeight, copy.implicitHeight) + 30
@@ -58,10 +62,11 @@ Item {
           anchors.rightMargin: 16
           anchors.verticalCenter: parent.verticalCenter
           spacing: modelData.image ? 6 : 0
+          // The row shows 1 line, so it needs only the start of the text.
           Txt {
             visible: !modelData.image
             width: parent.width
-            text: (modelData.text || "").replace(/\s*\n\s*/g, " ")
+            text: (modelData.text || "").slice(0, 300).replace(/\s*\n\s*/g, " ")
             elide: Text.ElideRight
           }
           Image {
@@ -73,7 +78,6 @@ Item {
             fillMode: Image.PreserveAspectFit
             horizontalAlignment: Image.AlignLeft
             asynchronous: true
-            cache: false
           }
           Txt {
             width: parent.width
@@ -93,8 +97,9 @@ Item {
           padX: 12
           padY: 5
           fontSize: 12
-          onClicked: root.view.call("clipboard.copy", modelData.image ? { path: modelData.image } : { text: modelData.text },
-                                    function () { root.view.toast("Copied to the clipboard") })
+          // fluxd copies the full text or the image of the entry. The row
+          // can have only the start of a long text.
+          onClicked: root.view.call("clipboard.copy", { id: modelData.id }, function () { root.view.toast("Copied to the clipboard") })
         }
       }
     }

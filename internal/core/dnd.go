@@ -74,11 +74,24 @@ func (g *dndGuard) remote(on bool, now time.Time) bool {
 }
 
 // dndLoop reads the desktop state and sends each local change to the
-// phones.
+// phones. It reads only while Do Not Disturb sync is on and a phone that
+// accepts flux.dnd is connected. Otherwise it waits for wakeDnd.
 func (d *Daemon) dndLoop(ctx context.Context) {
 	t := time.NewTicker(dndPoll)
 	defer t.Stop()
 	for {
+		if !d.dndWanted() {
+			// The first read after the pause only sets the start value.
+			d.mu.Lock()
+			d.dndGuard = dndGuard{}
+			d.mu.Unlock()
+			select {
+			case <-ctx.Done():
+				return
+			case <-d.dndWake:
+			}
+			continue
+		}
 		on, ok := d.dnd.Get()
 		if ok {
 			d.mu.Lock()
@@ -94,6 +107,31 @@ func (d *Daemon) dndLoop(ctx context.Context) {
 			return
 		case <-t.C:
 		}
+	}
+}
+
+// dndWanted reports whether Do Not Disturb sync is on and a connected
+// phone accepts flux.dnd.
+func (d *Daemon) dndWanted() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if !d.cfg.SyncDnd {
+		return false
+	}
+	for _, dev := range d.devices {
+		if dev.Paired && dev.link != nil && dev.accepts(proto.TypeFluxDnd) {
+			return true
+		}
+	}
+	return false
+}
+
+// wakeDnd makes the Do Not Disturb loop check again whether it must read
+// the desktop state.
+func (d *Daemon) wakeDnd() {
+	select {
+	case d.dndWake <- struct{}{}:
+	default:
 	}
 }
 

@@ -17,6 +17,9 @@ final class AgentsWindowModel {
     var drafts: [String: String] = [:]
     /// The cursor of each reply field, in UTF-16 units.
     var cursors: [String: NSRange] = [:]
+    /// False while the window is in the Dock or behind other windows. The
+    /// output then waits with its refresh.
+    var visible = true
     let dictation = Dictation()
 
     init(deviceId: String, app: AppModel, plugin: HerdrPlugin, selection: String?) {
@@ -86,6 +89,25 @@ final class AgentsWindows: NSObject, NSWindowDelegate {
               let id = open.first(where: { $0.value.window === window })?.key else { return }
         open[id]?.model.close()
         open[id] = nil
+    }
+
+    func windowDidMiniaturize(_ notification: Notification) {
+        visibilityChanged(notification)
+    }
+
+    func windowDidDeminiaturize(_ notification: Notification) {
+        visibilityChanged(notification)
+    }
+
+    func windowDidChangeOcclusionState(_ notification: Notification) {
+        visibilityChanged(notification)
+    }
+
+    private func visibilityChanged(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              let entry = open.values.first(where: { $0.window === window }) else { return }
+        let visible = !window.isMiniaturized && window.occlusionState.contains(.visible)
+        if entry.model.visible != visible { entry.model.visible = visible }
     }
 }
 

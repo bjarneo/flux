@@ -75,15 +75,26 @@ class DesktopTest {
         assertEquals(1920 to 1200, format.size())
         val config = r.next()!!
         assertTrue(config.isConfig)
-        val (csd0, csd1) = codecConfig(config.data)!!
+        val (csd0, csd1) = codecConfig(config.data, config.length)!!
         assertArrayEquals(sps, csd0)
         assertArrayEquals(pps, csd1)
         val key = r.next()!!
         assertTrue(key.isKey && !key.isConfig)
         val inter = r.next()!!
         assertFalse(inter.isKey)
-        assertArrayEquals(byteArrayOf(0, 0, 0, 1, 0x41, 3), inter.data)
+        // The reader uses 1 array for all frames, so only the frame length counts.
+        assertArrayEquals(byteArrayOf(0, 0, 0, 1, 0x41, 3), inter.data.copyOf(inter.length))
         assertNull(r.next())
+    }
+
+    @Test
+    fun configUsesOnlyTheFrameLength() {
+        val sps = byteArrayOf(0, 0, 0, 1, 0x67, 0x64)
+        val pps = byteArrayOf(0, 0, 0, 1, 0x68, 0xee.toByte())
+        // Bytes of an older frame follow the frame in the array.
+        val (csd0, csd1) = codecConfig(sps + pps + byteArrayOf(0x55, 0x55), sps.size + pps.size)!!
+        assertArrayEquals(sps, csd0)
+        assertArrayEquals(pps, csd1)
     }
 
     @Test(expected = IOException::class)

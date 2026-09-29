@@ -115,12 +115,12 @@ private const val FADE_PART = 0.35f
 
 /**
  * The reply bar with dictation. At rest it shows [field], the mic key, and
- * [send]. While the phone listens, 1 panel takes the full width: the time,
- * the live wave, the words, and the stop key in its corner. The mic key is
- * the same element in both layouts and slides into the panel, so a long
- * press keeps working while the panel opens. [onStart] asks for the
- * microphone and starts the dictation. It returns false when the dictation
- * did not start.
+ * [send] when it is set. While the phone listens, 1 panel takes the full
+ * width: the time, the live wave, the words, and the stop key in its
+ * corner. The mic key is the same element in both layouts and slides into
+ * the panel, so a long press keeps working while the panel opens.
+ * [onStart] asks for the microphone and starts the dictation. It returns
+ * false when the dictation did not start.
  */
 @Composable
 fun DictationBar(
@@ -128,8 +128,8 @@ fun DictationBar(
     canDictate: Boolean,
     onStart: () -> Boolean,
     field: @Composable (Modifier) -> Unit,
-    send: @Composable () -> Unit,
     modifier: Modifier = Modifier,
+    send: (@Composable () -> Unit)? = null,
     onLanguage: (() -> Unit)? = null,
 ) {
     val active = d.phase != Dictation.Phase.Idle
@@ -150,13 +150,14 @@ fun DictationBar(
                     field(Modifier.weight(1f))
                     // The mic key lies over this place.
                     if (canDictate) Spacer(Modifier.size(KeySize))
-                    send()
+                    send?.invoke()
                 }
             }
         }
         if (canDictate) {
             val spring = spring<Dp>(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
-            val x = animateDpAsState(if (active) -PanelPad else -(KeySize + TileGap), spring, label = "micX")
+            val rest = if (send == null) 0.dp else -(KeySize + TileGap)
+            val x = animateDpAsState(if (active) -PanelPad else rest, spring, label = "micX")
             val y = animateDpAsState(if (active) -PanelPad else 0.dp, spring, label = "micY")
             MicKey(
                 d, onStart,

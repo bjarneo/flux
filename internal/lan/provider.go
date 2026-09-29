@@ -51,6 +51,9 @@ type Provider struct {
 	tcp     *net.TCPListener
 	udp     *net.UDPConn
 	tcpPort int
+	// selfID returns the device ID of this computer. The ID does not change
+	// while the daemon runs, so the provider reads it once.
+	selfID func() string
 
 	mu       sync.Mutex
 	attempts map[string]time.Time
@@ -67,7 +70,9 @@ func New(cfg Config) *Provider {
 	if cfg.FirstTCPPort == 0 {
 		cfg.FirstTCPPort = MinTCPPort
 	}
-	return &Provider{cfg: cfg, attempts: map[string]time.Time{}}
+	p := &Provider{cfg: cfg, attempts: map[string]time.Time{}}
+	p.selfID = sync.OnceValue(func() string { return p.cfg.Identity().DeviceID })
+	return p
 }
 
 func (p *Provider) logf(format string, args ...any) { p.cfg.Logf(format, args...) }
@@ -185,17 +190,16 @@ func (p *Provider) AnnounceTo(addr *net.UDPAddr) {
 
 func broadcastAddrs() []net.IP {
 	out := []net.IP{net.IPv4bcast}
-	ifaces, _ := net.Interfaces()
-	for _, ifc := range ifaces {
-		if ifc.Flags&net.FlagUp == 0 || ifc.Flags&net.FlagBroadcast == 0 || ifc.Flags&net.FlagLoopback != 0 {
-			continue
+	all, _ := net.Interfaces()
+	var ifaces []net.Interface
+	for _, ifc := range all {
+		if ifc.Flags&net.FlagUp != 0 && ifc.Flags&net.FlagBroadcast != 0 && ifc.Flags&net.FlagLoopback == 0 {
+			ifaces = append(ifaces, ifc)
 		}
-		addrs, _ := ifc.Addrs()
-		for _, a := range addrs {
-			ipn, ok := a.(*net.IPNet)
-			if !ok || ipn.IP.To4() == nil {
-				continue
-			}
+	}
+	nets := ipv4Nets(ifaces)
+	for _, ifc := range ifaces {
+		for _, ipn := range nets[ifc.Index] {
 			ip, mask := ipn.IP.To4(), ipn.Mask
 			if len(mask) == 16 {
 				mask = mask[12:]
@@ -210,9 +214,24 @@ func broadcastAddrs() []net.IP {
 	return out
 }
 
+// interfaceNets returns the IPv4 networks of ifaces by interface index. It
+// asks the system once for each interface.
+func interfaceNets(ifaces []net.Interface) map[int][]*net.IPNet {
+	out := map[int][]*net.IPNet{}
+	for _, ifc := range ifaces {
+		addrs, _ := ifc.Addrs()
+		for _, a := range addrs {
+			if ipn, ok := a.(*net.IPNet); ok && ipn.IP.To4() != nil {
+				out[ifc.Index] = append(out[ifc.Index], ipn)
+			}
+		}
+	}
+	return out
+}
+
 func (p *Provider) udpLoop(ctx context.Context) {
 	buf := make([]byte, maxIdentitySize)
-	own := p.cfg.Identity().DeviceID
+	own := p.selfID()
 	for {
 		n, from, err := p.udp.ReadFromUDP(buf)
 		if err != nil {
@@ -267,7 +286,7 @@ func (p *Provider) DialAny(ctx context.Context, hosts []string, port int, target
 	if len(hosts) == 0 || port <= 0 || port > 65535 || !proto.ValidDeviceID(target.DeviceID) {
 		return
 	}
-	if target.DeviceID == p.cfg.Identity().DeviceID || p.cfg.HasLink(target.DeviceID) || !p.shouldAttempt(target.DeviceID) {
+	if target.DeviceID == p.selfID() || p.cfg.HasLink(target.DeviceID) || !p.shouldAttempt(target.DeviceID) {
 		return
 	}
 	if target.ProtocolVersion == 0 {
@@ -348,7 +367,7 @@ func (p *Provider) accept(conn net.Conn) {
 		return
 	}
 	var id proto.Identity
-	own := p.cfg.Identity().DeviceID
+	own := p.selfID()
 	if pkt.Decode(&id) != nil || !proto.ValidDeviceID(id.DeviceID) || id.DeviceID == own {
 		conn.Close()
 		return

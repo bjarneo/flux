@@ -85,6 +85,7 @@ A computer that runs `fluxd` still finds the Mac after the search ends, because 
 | Touchpad and keyboard | The trackpad, the mouse, and the keyboard of the Mac control the pointer and the keys of the Omarchy computer. The computer does not control the Mac. The computer needs `remote_input = true`. The Mac asks for Touch ID or its password before the touchpad opens. Control and Option together give the pointer back to the Mac. See [Touchpad and keyboard](remote-input.md#use-a-mac). |
 | Remote desktop | Shows the screen of the Omarchy computer in a window. The mouse over the video, the keys, the Omarchy panel, and dictation control the computer. The computer does not control the Mac. The computer needs `remote_desktop = true`, and `remote_input = true` for control. The Mac asks for Touch ID or its password before the window opens. See [Remote desktop](remote-desktop.md#use-a-mac). |
 | herdr agents | Shows the coding agents that herdr runs on the computer, their output in color, and notifications. Answers them after Touch ID or the password when the computer allows replies, with dictation on the Mac. See [herdr agents](herdr.md#use-a-mac). |
+| Dictation | Each text field has a mic key: the agent replies, the touchpad and the remote desktop, **Text or link** in **Share**, the scanned text, the shortcut search, and the language search. Search fields get the words in place of the search. Other fields get them at the cursor or at the end of the text. All fields use the same language. See [Dictate on a Mac](herdr.md#dictate-on-a-mac). |
 
 The Mac cannot mirror notifications from other apps, report calls, or send SMS, because macOS gives apps no access to them.
 Flux does not advertise those capabilities.
@@ -118,8 +119,8 @@ macOS asks for each permission on first use:
 | Local network | Discovery and links |
 | Notifications | Pairing requests, received files, notifications, approval, herdr agents |
 | Camera | Webcam and camera modes |
-| Microphone | Microphone, dictation for herdr agents and the remote desktop |
-| Speech Recognition | Dictation for herdr agents and the remote desktop |
+| Microphone | Microphone, dictation in the text fields |
+| Speech Recognition | Dictation in the text fields |
 | Screen & System Audio Recording | Screen mirror |
 | Photos | Send new photos |
 | Downloads folder | Received files |

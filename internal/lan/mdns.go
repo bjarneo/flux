@@ -6,6 +6,8 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/godbus/dbus/v5"
 )
@@ -24,6 +26,14 @@ const (
 	lookupNoFlags = uint32(0)
 )
 
+// The wait before the next attempt to connect to the system bus again. It
+// starts at mdnsRetryMin and doubles after each failure, up to
+// mdnsRetryMax.
+const (
+	mdnsRetryMin = time.Second
+	mdnsRetryMax = time.Minute
+)
+
 // MDNSInfo is what the mDNS record announces.
 type MDNSInfo struct {
 	DeviceID string
@@ -31,6 +41,9 @@ type MDNSInfo struct {
 	Type     string
 	Protocol int
 	Port     int
+	// Logf receives a line when the system bus closes and when mDNS runs
+	// again. It can be nil.
+	Logf func(format string, args ...any)
 }
 
 // MDNSPeer is a device that mDNS found.
@@ -45,9 +58,21 @@ type MDNSPeer struct {
 
 // MDNS is a running mDNS publisher and browser.
 type MDNS struct {
+	self  string
+	found func(MDNSPeer)
+
+	mu     sync.Mutex
 	server dbus.BusObject
-	self   string
-	found  func(MDNSPeer)
+}
+
+// avahi is 1 connection to Avahi, with the published service and the
+// browser.
+type avahi struct {
+	conn    *dbus.Conn
+	server  dbus.BusObject
+	group   dbus.BusObject
+	browser dbus.ObjectPath
+	signals chan *dbus.Signal
 }
 
 // Refresh resolves the service of deviceID again, and calls found with its
@@ -58,14 +83,31 @@ func (m *MDNS) Refresh(deviceID string) {
 	if m == nil || deviceID == "" || deviceID == m.self {
 		return
 	}
-	go resolve(m.server, ifaceUnspec, protoInet, deviceID, serviceType, "local", m.found)
+	m.mu.Lock()
+	server := m.server
+	m.mu.Unlock()
+	go resolve(server, ifaceUnspec, protoInet, deviceID, serviceType, "local", m.found)
 }
 
 // StartMDNS publishes this device and browses for other devices, and calls
 // found for each device that it resolves. The default ufw rules of Omarchy
 // let mDNS in, so this path works with a firewall that blocks all other
-// incoming traffic. It returns an error when Avahi is not available.
+// incoming traffic. It returns an error when Avahi is not available. When
+// the system bus closes later, StartMDNS connects again and publishes the
+// device again.
 func StartMDNS(ctx context.Context, info MDNSInfo, found func(MDNSPeer)) (*MDNS, error) {
+	a, err := openAvahi(info)
+	if err != nil {
+		return nil, err
+	}
+	m := &MDNS{self: info.DeviceID, found: found, server: a.server}
+	go m.run(ctx, info, a)
+	return m, nil
+}
+
+// openAvahi connects to the system bus, publishes the service, and starts
+// the browser.
+func openAvahi(info MDNSInfo) (*avahi, error) {
 	conn, err := dbus.ConnectSystemBus()
 	if err != nil {
 		return nil, err
@@ -107,31 +149,83 @@ func StartMDNS(ctx context.Context, info MDNSInfo, found func(MDNSPeer)) (*MDNS,
 		conn.Close()
 		return nil, fmt.Errorf("avahi browse: %w", err)
 	}
+	return &avahi{conn: conn, server: server, group: group, browser: browserPath, signals: signals}, nil
+}
 
-	go func() {
-		defer conn.Close()
-		for {
+// run resolves the devices that the browser of a finds until ctx ends.
+// When the system bus closes, run connects again. It waits before each
+// attempt, and the wait doubles after each failure.
+func (m *MDNS) run(ctx context.Context, info MDNSInfo, a *avahi) {
+	logf := info.Logf
+	if logf == nil {
+		logf = func(string, ...any) {}
+	}
+	for {
+		if watch(ctx, a.conn.Context().Done(), a.signals, func(sig *dbus.Signal) { m.itemNew(a, sig) }) {
+			_ = a.group.Call(avahiGroup+".Free", 0).Err
+			a.conn.Close()
+			return
+		}
+		a.conn.Close()
+		logf("mDNS: the system bus closed, connecting again")
+		for wait := mdnsRetryMin; ; wait = nextRetry(wait) {
 			select {
 			case <-ctx.Done():
-				_ = group.Call(avahiGroup+".Free", 0).Err
 				return
-			case sig := <-signals:
-				if sig == nil || sig.Path != browserPath || len(sig.Body) < 5 {
-					continue
-				}
-				iface, _ := sig.Body[0].(int32)
-				proto, _ := sig.Body[1].(int32)
-				name, _ := sig.Body[2].(string)
-				typ, _ := sig.Body[3].(string)
-				domain, _ := sig.Body[4].(string)
-				if name == info.DeviceID {
-					continue
-				}
-				go resolve(server, iface, proto, name, typ, domain, found)
+			case <-time.After(wait):
+			}
+			var err error
+			if a, err = openAvahi(info); err == nil {
+				break
 			}
 		}
-	}()
-	return &MDNS{server: server, self: info.DeviceID, found: found}, nil
+		m.mu.Lock()
+		m.server = a.server
+		m.mu.Unlock()
+		logf("mDNS: connected to the system bus again")
+	}
+}
+
+// watch passes each signal to item until ctx ends or the bus connection
+// closes. godbus closes signals and closed when the connection closes. It
+// reports whether ctx ended.
+func watch(ctx context.Context, closed <-chan struct{}, signals <-chan *dbus.Signal, item func(*dbus.Signal)) bool {
+	for {
+		select {
+		case <-ctx.Done():
+			return true
+		case <-closed:
+			return false
+		case sig, ok := <-signals:
+			if !ok {
+				return false
+			}
+			if sig != nil {
+				item(sig)
+			}
+		}
+	}
+}
+
+// nextRetry returns the wait after wait: 2 times wait, up to mdnsRetryMax.
+func nextRetry(wait time.Duration) time.Duration {
+	return min(2*wait, mdnsRetryMax)
+}
+
+// itemNew resolves the service of an ItemNew signal from the browser of a.
+func (m *MDNS) itemNew(a *avahi, sig *dbus.Signal) {
+	if sig.Path != a.browser || len(sig.Body) < 5 {
+		return
+	}
+	iface, _ := sig.Body[0].(int32)
+	proto, _ := sig.Body[1].(int32)
+	name, _ := sig.Body[2].(string)
+	typ, _ := sig.Body[3].(string)
+	domain, _ := sig.Body[4].(string)
+	if name == m.self {
+		return
+	}
+	go resolve(a.server, iface, proto, name, typ, domain, m.found)
 }
 
 func resolve(server dbus.BusObject, iface, proto int32, name, typ, domain string, found func(MDNSPeer)) {

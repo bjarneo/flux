@@ -87,6 +87,9 @@ fun LanguageSheet(
         }
     }
     var query by rememberSaveable { mutableStateOf("") }
+    // A dictation replaces the search. It uses the phone languages, because the chosen language can be the
+    // one that fails, and its panel does not open this picker again.
+    val voice = rememberVoiceTyping(automatic = true) { query = DictationText.query(it) }
     val phone = remember { phoneLanguages() }
     val unsupported = models.load == SpeechModels.Load.Unsupported
     val rows = if (unsupported) {
@@ -120,19 +123,21 @@ fun LanguageSheet(
                 }
             }
             item {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { T("Find a language", color = Tn.dim) },
-                    leadingIcon = { Sym(Ic.search, tint = Tn.dim, size = 20.dp) },
-                    trailingIcon = if (query.isEmpty()) null else {
-                        { Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClickLabel = "Clear") { query = "" }, contentAlignment = Alignment.Center) { Sym(Ic.close, "Clear", tint = Tn.dim, size = 18.dp) } }
-                    },
-                    singleLine = true,
-                    textStyle = TextStyle(color = Tn.text, fontSize = 14.sp),
-                    shape = TileShape,
-                )
+                VoiceField(voice, languages = false) { m ->
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        modifier = m,
+                        placeholder = { T("Find a language", color = Tn.dim) },
+                        leadingIcon = { Sym(Ic.search, tint = Tn.dim, size = 20.dp) },
+                        trailingIcon = if (query.isEmpty()) null else {
+                            { Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClickLabel = "Clear") { query = "" }, contentAlignment = Alignment.Center) { Sym(Ic.close, "Clear", tint = Tn.dim, size = 18.dp) } }
+                        },
+                        singleLine = true,
+                        textStyle = TextStyle(color = Tn.text, fontSize = 14.sp),
+                        shape = TileShape,
+                    )
+                }
             }
             if (query.isBlank()) {
                 item {

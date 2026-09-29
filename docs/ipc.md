@@ -52,6 +52,9 @@ Events use `event` and `data` fields:
 
 The example omits the other state fields.
 Events can arrive before the subscription response.
+fluxd sends a `state` event only when the state changed.
+A client that reads slowly gets only the newest `state` event.
+A client that reads nothing for 5 seconds loses its connection.
 
 For shell scripts, use the CLI wrappers:
 
@@ -79,16 +82,19 @@ The approval helper applies additional peer and signature checks beyond this gen
 
 ## Clipboard
 
-Each `clipboard` entry has `text`, or an `image` with the path of a PNG, JPEG, GIF, or WebP file.
+Each `clipboard` entry has an `id`, and `text` or an `image` with the path of a PNG, JPEG, GIF, or WebP file.
 The text of an image entry is empty.
+The state holds only the first 1024 bytes of a longer text.
+Such an entry has `"truncated": true` and the full length in bytes in `size`.
 
-To put an entry on the desktop clipboard again, call `clipboard.copy` with `text`, or with `path` for an image:
+To put an entry on the desktop clipboard again, call `clipboard.copy` with its `id`:
 
 ```json
-{"id":4,"method":"clipboard.copy","params":{"path":"/run/user/1000/flux/clipboard/clip-a1b2c3.png"}}
+{"id":4,"method":"clipboard.copy","params":{"id":"a1b2c3"}}
 ```
 
-The path must be the `image` of an entry in the history.
+The call copies the full text or the image of the entry.
+`clipboard.copy` also accepts `text`, or `path` with the `image` of an entry in the history.
 `clipboard.send` without `text` sends the image on the desktop clipboard, or else its text.
 
 ## Text messages

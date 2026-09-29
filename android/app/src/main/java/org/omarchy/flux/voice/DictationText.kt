@@ -15,24 +15,46 @@ object DictationText {
     /** Characters that follow a word with no space before them. */
     private const val CLOSING = ",.;:!?)]}'\""
 
+    /** Characters at the end of a dictation that a search drops. */
+    private const val QUERY_END = ",.;:!?"
+
     /**
      * Puts [spoken] in [text] in place of the selection from [start] to [end].
      * A space goes between the spoken text and a word that it would touch.
      * At the start of the text or of a sentence, the first letter becomes a
-     * capital. The cursor goes after the spoken text.
+     * capital. With [sentences] off, the case stays, for example for a
+     * command. The cursor goes after the spoken text.
      */
-    fun insert(text: String, start: Int, end: Int, spoken: String): Edit {
+    fun insert(text: String, start: Int, end: Int, spoken: String, sentences: Boolean = true): Edit {
         val s = spoken.trim()
         val a = minOf(start, end).coerceIn(0, text.length)
         val b = maxOf(start, end).coerceIn(a, text.length)
         if (s.isEmpty()) return Edit(text, b)
         val before = text.substring(0, a)
         val after = text.substring(b)
-        val words = if (startsSentence(before)) s.replaceFirstChar { it.uppercaseChar() } else s
+        val words = if (sentences && startsSentence(before)) s.replaceFirstChar { it.uppercaseChar() } else s
         val lead = if (before.isNotEmpty() && !before.last().isWhitespace() && words.first() !in CLOSING) " " else ""
         val trail = if (after.isNotEmpty() && !after.first().isWhitespace() && after.first() !in CLOSING) " " else ""
         val inserted = lead + words + trail
         return Edit(before + inserted + after, before.length + inserted.length)
+    }
+
+    /**
+     * The words of a dictation as a search. The recognizer ends a sentence
+     * with punctuation, which a search does not need.
+     */
+    fun query(spoken: String): String = spoken.trim().trimEnd { it in QUERY_END }.trimEnd()
+
+    /**
+     * The words of a dictation as a command for a terminal. The recognizer
+     * writes a sentence, so the punctuation at the end goes, and a first
+     * word such as "Git" becomes "git". A word such as "README" stays.
+     */
+    fun command(spoken: String): String {
+        val s = query(spoken)
+        val first = s.substringBefore(' ')
+        val capitalized = first.length > 1 && first[0].isUpperCase() && first.drop(1).all { it.isLowerCase() }
+        return if (capitalized) s.replaceFirstChar { it.lowercaseChar() } else s
     }
 
     /** Joins 2 texts with 1 space. */

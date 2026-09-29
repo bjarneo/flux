@@ -139,6 +139,9 @@ func (d *Daemon) runScreen(dev *Device, l *lan.Link, b screenStart) {
 		return
 	}
 	defer tc.Close()
+	// A stop or a dropped link closes the stream, so that the copy to the
+	// process ends at once.
+	defer context.AfterFunc(ctx, func() { tc.Close() })()
 	s := &screenSession{dev: dev, link: l, cancel: cancel, view: ScreenView{
 		From: dev.ID, FromName: dev.Name, Width: b.Width, Height: b.Height, Player: player.Name,
 	}}

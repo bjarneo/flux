@@ -71,6 +71,11 @@ Item {
     return a.length === 1 && samePhone(a[0], e.address)
   }
 
+  // True when 2 objects of 1 conversation show the same name and addresses.
+  function sameConvo(a, b) {
+    return a.name === b.name && a.address === b.address && addresses(a).join("\n") === addresses(b).join("\n")
+  }
+
   // The conversation with only this address, or null.
   function findConvo(address) {
     for (var i = 0; i < convos.length; i++) {
@@ -206,7 +211,11 @@ Item {
       if (c.thread !== selected.thread) continue
       // A new message, or a new state of the last message, loads the thread.
       if (c.time !== selected.time || c.last !== selected.last || !!c.pending !== !!selected.pending || !!c.failed !== !!selected.failed) load(c)
-      else selected = c
+      // Each state event gives a new object for the same conversation. Keep
+      // the old object when nothing that the page shows changed. A new
+      // object makes the thread list build again and scroll to the end
+      // while the outbox has a message, for example 1 that was not sent.
+      else if (!sameConvo(c, selected)) selected = c
       return
     }
   }

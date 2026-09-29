@@ -10,6 +10,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -24,7 +25,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -60,6 +60,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -218,20 +219,24 @@ private fun TerminalTile(t: HerdrTerminal, onClick: () -> Unit) {
 /**
  * The recent output of one herdr agent in terminal colors, with the newest
  * lines at the bottom. The screen reads the output again when the status
- * changes, and every few seconds while the agent works. When the computer
- * allows it, the screen also sends keys and text to the agent.
+ * changes, and every few seconds while the agent works and the screen is
+ * visible. When the computer allows it, the screen also sends keys and text
+ * to the agent.
  */
 @Composable
 fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
     val agent = d.herdr?.agent(pane)
     val status = agent?.status
     val demo = DebugDemo.isDemo(d.id)
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(d.id, pane, d.online, status) {
         if (!d.online || demo) return@LaunchedEffect
-        HerdrSync.read(FluxCore, d.id, pane)
-        while (status == AgentStatus.Working) {
-            delay(WORKING_REFRESH_MS)
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             HerdrSync.read(FluxCore, d.id, pane)
+            while (status == AgentStatus.Working) {
+                delay(WORKING_REFRESH_MS)
+                HerdrSync.read(FluxCore, d.id, pane)
+            }
         }
     }
     DisposableEffect(d.id, pane) { onDispose { HerdrSync.closeOutput(FluxCore, d.id, pane) } }
@@ -327,33 +332,31 @@ internal fun AgentOutput(out: HerdrOutput?, modifier: Modifier) {
                 T("Reading the output", color = Tn.sub)
             }
             out.error != null && out.lines.isEmpty() -> EmptyState(Ic.error, "No output", out.error, Modifier.padding(top = 32.dp))
-            else -> {
-                val colors = Tn
-                val text = remember(out.lines, colors) { termAnnotated(out.lines, colors) }
-                Box(Modifier.fillMaxSize().clip(TileShape).background(TermBg).border(1.dp, Tn.line, TileShape)) {
-                    SelectionContainer {
-                        Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = 12.dp, vertical = 10.dp)) {
-                            if (out.truncated) T("Older lines are cut.", Modifier.padding(bottom = 6.dp), size = 10, color = Tn.dim, family = Mono)
-                            out.error?.let { T(it, Modifier.padding(bottom = 6.dp), size = 11, color = Tn.red) }
-                            if (out.lines.isEmpty()) {
-                                T("No output yet.", size = 11, color = Tn.dim, family = Mono)
-                            } else {
-                                BasicText(text, style = TextStyle(color = Tn.text, fontFamily = Mono, fontSize = 11.5.sp, lineHeight = 16.sp))
-                            }
+            else -> BoxWithConstraints(Modifier.fillMaxSize().clip(TileShape).background(TermBg).border(1.dp, Tn.line, TileShape)) {
+                val width = maxWidth
+                SelectionContainer {
+                    Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(vertical = 10.dp)) {
+                        val pad = Modifier.padding(horizontal = TermPad)
+                        if (out.truncated) T("Older lines are cut.", pad.padding(bottom = 6.dp), size = 10, color = Tn.dim, family = Mono)
+                        out.error?.let { T(it, pad.padding(bottom = 6.dp), size = 11, color = Tn.red) }
+                        if (out.lines.isEmpty()) {
+                            T("No output yet.", pad, size = 11, color = Tn.dim, family = Mono)
+                        } else {
+                            TermLines(out.lines, width)
                         }
                     }
-                    if (!follow && out.lines.isNotEmpty()) {
-                        Box(
-                            Modifier.align(Alignment.BottomEnd).padding(10.dp).size(40.dp).clip(RoundedCornerShape(8.dp))
-                                .background(Tn.tileHi).border(1.dp, Tn.blue, RoundedCornerShape(8.dp))
-                                .clickable(onClickLabel = "Show the newest lines") {
-                                    follow = true
-                                    scope.launch { scroll.animateScrollTo(scroll.maxValue) }
-                                },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Sym(Ic.up, "Show the newest lines", Modifier.rotate(180f), tint = Tn.blue, size = 20.dp)
-                        }
+                }
+                if (!follow && out.lines.isNotEmpty()) {
+                    Box(
+                        Modifier.align(Alignment.BottomEnd).padding(10.dp).size(40.dp).clip(RoundedCornerShape(8.dp))
+                            .background(Tn.tileHi).border(1.dp, Tn.blue, RoundedCornerShape(8.dp))
+                            .clickable(onClickLabel = "Show the newest lines") {
+                                follow = true
+                                scope.launch { scroll.animateScrollTo(scroll.maxValue) }
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Sym(Ic.up, "Show the newest lines", Modifier.rotate(180f), tint = Tn.blue, size = 20.dp)
                     }
                 }
             }

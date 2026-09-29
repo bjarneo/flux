@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -65,6 +66,9 @@ import org.omarchy.flux.core.looksLikePath
 import org.omarchy.flux.core.normalFolder
 import org.omarchy.flux.core.pickRun
 import org.omarchy.flux.core.workspaceFor
+import org.omarchy.flux.voice.DictationText
+import org.omarchy.flux.voice.VoiceField
+import org.omarchy.flux.voice.rememberVoiceTyping
 
 /** How often the terminal screen reads the output again. */
 private const val TERMINAL_REFRESH_MS = 3_000L
@@ -222,7 +226,8 @@ private fun RunTile(choice: String, running: Int, selected: Boolean, enabled: Bo
 /**
  * The folder list: a search field, the folders of the workspaces, and the
  * typed path when the text is a path. A typed path is [selected]. The
- * selected folder shows first when the list does not have it.
+ * selected folder shows first when the list does not have it. A dictation
+ * replaces the search.
  */
 @Composable
 private fun FolderPicker(
@@ -233,19 +238,22 @@ private fun FolderPicker(
     onQuery: (String) -> Unit,
     onSelect: (String) -> Unit,
 ) {
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQuery,
-        modifier = Modifier.fillMaxWidth(),
-        enabled = enabled,
-        placeholder = { T("Search, or type a path such as ~/Code/app", color = Tn.dim, size = 13) },
-        leadingIcon = { Sym(Ic.search, tint = Tn.dim, size = 20.dp) },
-        textStyle = TextStyle(color = Tn.text, fontFamily = Mono, fontSize = 14.sp),
-        shape = TileShape,
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Done),
-        keyboardActions = KeyboardActions(onDone = { if (looksLikePath(query)) onSelect(query) }),
-    )
+    val voice = rememberVoiceTyping { onQuery(DictationText.query(it)) }
+    VoiceField(voice, enabled = enabled) { m ->
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQuery,
+            modifier = m,
+            enabled = enabled,
+            placeholder = { T("Search, or type a path such as ~/Code/app", color = Tn.dim, size = 13) },
+            leadingIcon = { Sym(Ic.search, tint = Tn.dim, size = 20.dp) },
+            textStyle = TextStyle(color = Tn.text, fontFamily = Mono, fontSize = 14.sp),
+            shape = TileShape,
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { if (looksLikePath(query)) onSelect(query) }),
+        )
+    }
     val typed = normalFolder(query)
     if (looksLikePath(query) && folders.none { it.path == typed }) {
         FolderRow(FolderChoice(typed, folderName(typed), null, 0), selected = true, enabled = enabled, typed = true) { onSelect(typed) }
@@ -446,6 +454,11 @@ private fun TerminalControls(d: DeviceUi, pane: String, reply: HerdrReply?) {
         }
     }
     val sending = reply?.sending == true && sentText
+    // Dictation puts a command at the cursor. It waits there for Run, so a command still needs the phone lock.
+    val voice = rememberVoiceTyping { spoken ->
+        val e = DictationText.insert(field.text, field.selection.start, field.selection.end, DictationText.command(spoken), sentences = false)
+        field = TextFieldValue(e.text, TextRange(e.cursor))
+    }
     Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
         Row(Modifier.fillMaxWidth().height(40.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             KeyTile("esc", "Escape", Modifier.weight(1f)) { keys("esc") }
@@ -456,11 +469,26 @@ private fun TerminalControls(d: DeviceUi, pane: String, reply: HerdrReply?) {
             KeyTile("↓", "Down", Modifier.weight(1f)) { keys("down") }
             KeyTile("enter", "Enter", Modifier.weight(1.4f)) { keys("enter") }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        VoiceField(
+            voice,
+            send = {
+                Box(
+                    Modifier.size(56.dp).clip(TileShape).background(if (!sending) Tn.blue else Tn.tile)
+                        .clickable(enabled = !sending, onClickLabel = "Run") { send() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (sending) {
+                        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Tn.magenta)
+                    } else {
+                        Sym(Ic.send, "Run", tint = Tn.onAccent, size = 22.dp)
+                    }
+                }
+            },
+        ) { m ->
             OutlinedTextField(
                 value = field,
                 onValueChange = { field = it },
-                modifier = Modifier.weight(1f),
+                modifier = m,
                 placeholder = { T("Type a command", color = Tn.dim, family = Mono) },
                 textStyle = TextStyle(color = Tn.text, fontFamily = Mono, fontSize = 14.sp),
                 shape = TileShape,
@@ -470,17 +498,6 @@ private fun TerminalControls(d: DeviceUi, pane: String, reply: HerdrReply?) {
                 ),
                 keyboardActions = KeyboardActions(onSend = { send() }),
             )
-            Box(
-                Modifier.size(56.dp).clip(TileShape).background(if (!sending) Tn.blue else Tn.tile)
-                    .clickable(enabled = !sending, onClickLabel = "Run") { send() },
-                contentAlignment = Alignment.Center,
-            ) {
-                if (sending) {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Tn.magenta)
-                } else {
-                    Sym(Ic.send, "Run", tint = Tn.onAccent, size = 22.dp)
-                }
-            }
         }
         val problem = lockError ?: reply?.error
         if (problem != null) T(problem, Modifier.padding(horizontal = 4.dp), size = 11, color = Tn.red)

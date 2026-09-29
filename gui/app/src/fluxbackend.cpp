@@ -6,22 +6,25 @@
 #include <QStandardPaths>
 
 namespace {
-// retryInterval is the time between connection attempts while fluxd is
-// not running.
-constexpr int retryInterval = 2000;
+// minRetryDelay and maxRetryDelay limit the wait between connection
+// attempts while fluxd is not running. The wait doubles after each failed
+// attempt.
+constexpr int minRetryDelay = 2000;
+constexpr int maxRetryDelay = 60000;
 // firstAttemptGrace is the time after start at which the window may show
 // "fluxd is not running", also when the first attempt has not finished.
 constexpr int firstAttemptGrace = 800;
 }
 
 FluxBackend::FluxBackend(QJSEngine *engine, QObject *parent)
-    : QObject(parent), m_engine(engine), m_state(engine->newObject())
+    : QObject(parent), m_engine(engine), m_retryDelay(minRetryDelay), m_state(engine->newObject())
 {
-    m_retry.setInterval(retryInterval);
+    m_retry.setSingleShot(true);
     connect(&m_retry, &QTimer::timeout, this, &FluxBackend::connectNow);
 
     connect(&m_socket, &QLocalSocket::connected, this, [this] {
         m_retry.stop();
+        m_retryDelay = minRetryDelay;
         setAttempted();
         emit connectedChanged();
         call(QStringLiteral("subscribe"));
@@ -29,12 +32,12 @@ FluxBackend::FluxBackend(QJSEngine *engine, QObject *parent)
     connect(&m_socket, &QLocalSocket::disconnected, this, [this] {
         failPending(QStringLiteral("offline"), QStringLiteral("fluxd is not running"));
         emit connectedChanged();
-        m_retry.start();
+        scheduleRetry();
     });
     connect(&m_socket, &QLocalSocket::errorOccurred, this, [this](QLocalSocket::LocalSocketError) {
         setAttempted();
         if (m_socket.state() != QLocalSocket::ConnectedState)
-            m_retry.start();
+            scheduleRetry();
     });
     connect(&m_socket, &QLocalSocket::readyRead, this, [this] {
         while (m_socket.canReadLine())
@@ -69,6 +72,24 @@ void FluxBackend::connectNow()
     if (m_socket.state() != QLocalSocket::UnconnectedState)
         return;
     m_socket.connectToServer(socketPath());
+}
+
+// scheduleRetry starts the wait for the next attempt and doubles the wait
+// for the attempt after it. A lost connection can report 2 signals, so a
+// running wait stays as it is.
+void FluxBackend::scheduleRetry()
+{
+    if (m_retry.isActive())
+        return;
+    m_retry.start(m_retryDelay);
+    m_retryDelay = qMin(m_retryDelay * 2, maxRetryDelay);
+}
+
+void FluxBackend::retryNow()
+{
+    m_retry.stop();
+    m_retryDelay = minRetryDelay;
+    connectNow();
 }
 
 void FluxBackend::setAttempted()
@@ -222,7 +243,7 @@ void FluxBackend::startDaemon(const QJSValue &cb)
         const bool ok = status == QProcess::NormalExit && code == 0;
         const QString message = QString::fromUtf8(proc->readAllStandardError()).trimmed();
         if (ok)
-            connectNow();
+            retryNow();
         if (cb.isCallable())
             invoke(cb, {ok, message});
     });

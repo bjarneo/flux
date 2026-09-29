@@ -117,11 +117,12 @@ class Dictation(private val context: Context) {
 
     /**
      * Starts a dictation. [hints] are words that the recognizer should
-     * expect, such as the project name. [onDone] gets the text at the end,
-     * unless the user cancels. Returns false when the phone has no
-     * recognizer. [error] then tells why.
+     * expect, such as the project name. With [automatic], the phone
+     * languages count and the chosen language does not. [onDone] gets the
+     * text at the end, unless the user cancels. Returns false when the
+     * phone has no recognizer. [error] then tells why.
      */
-    fun start(hints: List<String>, demo: Boolean = false, onDone: (String) -> Unit): Boolean {
+    fun start(hints: List<String>, demo: Boolean = false, automatic: Boolean = false, onDone: (String) -> Unit): Boolean {
         if (phase != Phase.Idle) return false
         error = null
         languageError = false
@@ -143,7 +144,7 @@ class Dictation(private val context: Context) {
         // A language that the user chose is the only language. Otherwise the
         // recognizer tries the phone languages in order. A language that
         // worked before goes first, so a new dictation starts at once.
-        val choice = DictationSettings.language(context)
+        val choice = if (automatic) "" else DictationSettings.language(context)
         chosen = choice.isNotEmpty()
         languages = if (chosen) listOf(choice) else phoneLanguages().ifEmpty { listOf(Locale.getDefault().toLanguageTag()) }
         lang = remembered?.takeIf { it.first == languages }?.let { languages.indexOf(it.second) }?.takeIf { it >= 0 } ?: 0
