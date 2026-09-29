@@ -105,8 +105,15 @@ bool SingleInstance::claim(const QString &page, bool replace)
     waited.start();
     for (;;) {
         if (::flock(m_lock, LOCK_EX | LOCK_NB) == 0) {
+            // A flux-gui from before the lock listens without it, for
+            // example after an update and before its restart. Send the
+            // request to that instance, and do not remove its socket.
+            if (!replace && forward(page)) {
+                close();
+                return false;
+            }
             // Only the holder of the lock listens, so a socket file that is
-            // there is from an instance that stopped.
+            // there now is from an instance that stopped.
             const QString path = socketPath();
             QLocalServer::removeServer(path);
             m_server.setSocketOptions(QLocalServer::UserAccessOption);

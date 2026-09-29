@@ -201,7 +201,9 @@ QT_QPA_PLATFORM=offscreen QML_XHR_ALLOW_FILE_READ=1 \
 `gui.lock` and listens on `gui.sock`. Both files are in
 `$XDG_RUNTIME_DIR/flux`, or in `/run/user/<uid>/flux`. A later `flux-gui`
 sends its page to that socket and exits. Only the holder of the lock listens,
-so 2 `flux-gui` that start at the same time open 1 window. The folder must
+so 2 `flux-gui` that start at the same time open 1 window. A `flux-gui` from
+before the lock listens without it. The holder of the lock first sends its
+page to `gui.sock`, and exits when such an instance answers. The folder must
 belong to the user. `flux-gui` sets its mode to `0700`.
 
 After an update, **Restart** starts the new `flux-gui` first. The old window
