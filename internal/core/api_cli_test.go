@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
 	"strconv"
 	"sync"
 	"testing"
@@ -186,5 +187,34 @@ func TestSnapshotHidesDataOfUnpairedDevice(t *testing.T) {
 	}
 	if v := s.Devices[0]; v.Battery != nil || len(v.Notifications) != 0 || len(v.Conversations) != 0 {
 		t.Fatalf("the state of an unpaired device has phone data: %+v", v)
+	}
+}
+
+// An unpair that cannot change devices.json returns an error, because the
+// device is paired again after a restart.
+func TestUnpairReportsATrustError(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root can write to a read-only folder")
+	}
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	ts, err := config.LoadTrust()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ts.Put(config.TrustedDevice{ID: "phone1", Name: "Pixel 8"}); err != nil {
+		t.Fatal(err)
+	}
+	dir := config.DataDir()
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o700) })
+	d, dev := approveDaemon()
+	d.trust = ts
+	if err := d.Unpair(dev); errCode(err) != "not_saved" {
+		t.Fatalf("got %v", err)
+	}
+	if dev.Paired {
+		t.Fatal("the device stays paired in fluxd")
 	}
 }

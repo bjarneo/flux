@@ -65,7 +65,9 @@ func (d *Daemon) RejectPair(dev *Device) error {
 	return l.Send(proto.New(proto.TypePair, map[string]any{"pair": false}))
 }
 
-// Unpair removes the trust and tells the device.
+// Unpair removes the trust, tells the device, and closes the link. It
+// returns the error of devices.json, because the device is paired again
+// after a restart when the file keeps it.
 func (d *Daemon) Unpair(dev *Device) error {
 	d.mu.Lock()
 	l := dev.link
@@ -76,10 +78,17 @@ func (d *Daemon) Unpair(dev *Device) error {
 		delete(d.devices, dev.ID)
 	}
 	d.mu.Unlock()
-	_ = d.trust.Remove(dev.ID)
+	err := d.trust.Remove(dev.ID)
 	d.markDirty()
 	if l != nil {
-		return l.Send(proto.New(proto.TypePair, map[string]any{"pair": false}))
+		if err := l.Send(proto.New(proto.TypePair, map[string]any{"pair": false})); err != nil {
+			d.logf("%s: send unpair: %v", dev.Name, err)
+		}
+		l.Close()
+	}
+	if err != nil {
+		d.logf("save trust: %v", err)
+		return apiErr("not_saved", "%s is unpaired until fluxd restarts, because devices.json did not change: %v", dev.Name, err)
 	}
 	return nil
 }
@@ -108,7 +117,9 @@ func (d *Daemon) handlePair(dev *Device, p *proto.Packet) {
 		dev.Addresses = nil
 		d.mu.Unlock()
 		if wasPaired {
-			_ = d.trust.Remove(dev.ID)
+			if err := d.trust.Remove(dev.ID); err != nil {
+				d.logf("save trust: %v", err)
+			}
 			d.toast("%s unpaired", dev.Name)
 		} else if state == "requested" {
 			d.toast("%s rejected the pair request", dev.Name)
@@ -128,7 +139,9 @@ func (d *Daemon) handlePair(dev *Device, p *proto.Packet) {
 		dev.Paired, dev.PairedAt = false, ""
 		dev.Addresses = nil
 		d.mu.Unlock()
-		_ = d.trust.Remove(dev.ID)
+		if err := d.trust.Remove(dev.ID); err != nil {
+			d.logf("save trust: %v", err)
+		}
 	}
 	if body.Timestamp == 0 {
 		_ = l.Send(proto.New(proto.TypePair, map[string]any{"pair": false}))
