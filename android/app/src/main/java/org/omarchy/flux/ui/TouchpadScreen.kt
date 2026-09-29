@@ -81,7 +81,11 @@ private const val SENTINEL = "​"
 @Composable
 fun TouchpadScreen(d: DeviceUi, onBack: () -> Unit) {
     var slides by remember { mutableStateOf(false) }
-    val ready = d.online && d.inputSupported && d.remoteInput == true
+    // The touchpad takes input only after the phone lock, see rememberRemoteUnlock.
+    val unlocked = rememberRemoteUnlock(
+        d.online && d.inputSupported && d.remoteInput == true, "Use the touchpad", "use the touchpad", onBack, sample = isDemo(d.id),
+    )
+    val ready = d.online && d.inputSupported && d.remoteInput == true && unlocked
     // The volume keys change slides while the switch is on and the screen shows.
     DisposableEffect(d.id, slides, ready) {
         RemoteInput.volumeKeysDevice = if (slides && ready) d.id else null
@@ -120,6 +124,7 @@ fun TouchpadScreen(d: DeviceUi, onBack: () -> Unit) {
                 "On ${d.name}, set remote_input = true in ~/.config/flux/config.toml, then run systemctl --user reload fluxd.",
                 Modifier.padding(top = 48.dp),
             )
+            !unlocked -> EmptyState(Ic.touchpad, "Unlock to continue", "Confirm with the phone lock to use the touchpad.", Modifier.padding(top = 48.dp))
             else -> Touchpad(d)
         }
     }
