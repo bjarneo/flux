@@ -126,7 +126,7 @@ Flux must still be open on the iPhone. See [limits](#limits-of-ios).
 | Camera modes | Text, QR, Photo, Document, and Signature, like the Android app, from the camera, a picked photo, or a pasted image. |
 | Webcam | Streams the front or back camera to the computer as a virtual webcam in H.264. **Also send the microphone** starts the microphone with it. It stops when Flux leaves the screen. |
 | Microphone | Streams the microphone as 48 kHz mono audio. It keeps streaming in the background and while the iPhone is locked. |
-| Notifications | Shows notifications from `flux-cli notify`. |
+| Notifications | Shows notifications from `flux-cli notify`. Each computer can show 10 notifications at once, then 1 more each second. Received links count toward this limit. |
 | Battery | Reports the battery of the iPhone. The device screen shows the battery of the computer. |
 | Ring | `flux-cli ring` rings the iPhone. |
 | Do Not Disturb | Reports the Focus through a Focus filter. The iPhone does not follow the computer. See [Focus](#focus). |

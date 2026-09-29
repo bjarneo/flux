@@ -48,6 +48,8 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
     #if os(iOS)
     /// The last image that a computer put on the clipboard. Flux does not send it back.
     @MainActor private var lastRemoteImage: Data?
+    /// The image transfers from computers that run, so that an unpair ends them.
+    private let imageStreams = NIOLockedValueBox<[UUID: (deviceId: String, stream: TLSStream)]>([:])
     #endif
 
     static let syncKey = "clipboard.sync"
@@ -153,6 +155,18 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
 
     public func onDisconnected(_ device: Device) {
         onMain { $0.updatePolling() }
+        #if os(iOS)
+        // An unpair ends the image transfers of the computer. A link that
+        // only drops leaves them, because they have their own connections.
+        guard !device.paired else { return }
+        let id = device.id
+        let ended = imageStreams.withLockedValue { all -> [TLSStream] in
+            let mine = all.filter { $0.value.deviceId == id }
+            for key in mine.keys { all[key] = nil }
+            return mine.values.map { $0.stream }
+        }
+        ended.forEach { $0.channel.channel.close(promise: nil) }
+        #endif
     }
 
     // MARK: Receive
@@ -272,11 +286,21 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
         }
         let (id, name, mime) = (device.id, device.name, ClipImage.mime(of: p))
         Task.detached { [self] in
+            let key = UUID()
+            defer { imageStreams.withLockedValue { $0[key] = nil } }
             do {
-                let data = try await ClipImageTransfer.receive(p, token: tunnel, tls: core.tls, cert: cert) { [weak core] packet in
+                let data = try await ClipImageTransfer.receive(p, token: tunnel, tls: core.tls, cert: cert,
+                                                               register: { self.registerImage($0, key: key, deviceId: id) }) { [weak core] packet in
                     core?.send(packet, to: id)
                 }
                 onMain { plugin in
+                    // The transfer can take seconds. The image goes on the
+                    // clipboard only when Flux is still on the screen, sync
+                    // is still on, and the computer is still paired.
+                    guard plugin.isActive, plugin.sync, core.withDevice(id, { $0.paired }) == true else {
+                        FluxLog.plugin.info("dropped the clipboard image from \(name, privacy: .public): Flux left the screen, sync is off, or the computer is not paired")
+                        return
+                    }
                     plugin.lastRemoteImage = ClipboardImage.digest(data)
                     ClipboardImage.write(data, mime: mime)
                     plugin.changeCount = ClipboardText.changeCount
@@ -287,6 +311,17 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
                 FluxLog.plugin.error("receive clipboard image from \(name, privacy: .public) failed: \(String(describing: error), privacy: .public)")
             }
         }
+    }
+
+    /// Keeps an image stream until its transfer ends. It returns false when
+    /// the computer is no longer paired. The core lock comes first, as in
+    /// an unpair.
+    private func registerImage(_ stream: TLSStream, key: UUID, deviceId: String) -> Bool {
+        core?.withDevice(deviceId) { d -> Bool in
+            guard d.paired else { return false }
+            imageStreams.withLockedValue { $0[key] = (deviceId, stream) }
+            return true
+        } ?? false
     }
 
     /// Sends a copied image to each connected computer that takes images,

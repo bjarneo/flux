@@ -19,15 +19,10 @@ public final class NotificationsPlugin: FluxPlugin, @unchecked Sendable {
     /// a click opens Flux.
     private static let category = "computer-notification"
 
-    /// Limits the notifications of each computer, so that a computer cannot
-    /// bury the other notifications of this device.
-    private let limit = NIOLockedValueBox(NotificationLimit())
-
     public func handle(_ packet: Packet, from device: Device) {
         guard let n = ComputerNotification(packet, deviceId: device.id, computer: device.name) else { return }
         let id = "computer-\(n.key)"
-        let now = ProcessInfo.processInfo.systemUptime
-        guard limit.withLockedValue({ $0.allow(device.id, now: now) }) else {
+        guard NotificationLimit.allowsNow(device.id) else {
             FluxLog.plugin.info("notification \(id, privacy: .public) dropped: too many from this computer")
             return
         }
@@ -42,6 +37,18 @@ public final class NotificationsPlugin: FluxPlugin, @unchecked Sendable {
 struct NotificationLimit {
     static let burst = 10.0
     static let perSecond = 1.0
+
+    /// The limit of all notifications that a computer causes, such as
+    /// flux.notification packets and received links, so that a computer
+    /// cannot bury the other notifications of this device.
+    private static let shared = NIOLockedValueBox(NotificationLimit())
+
+    /// Takes a token of the computer from the shared limit now. It returns
+    /// false when the notification must not show.
+    static func allowsNow(_ deviceId: String) -> Bool {
+        let now = ProcessInfo.processInfo.systemUptime
+        return shared.withLockedValue { $0.allow(deviceId, now: now) }
+    }
 
     private var buckets: [String: (tokens: Double, at: TimeInterval)] = [:]
 

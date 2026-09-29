@@ -80,6 +80,14 @@ final class ComputerNotificationTests: XCTestCase {
         for _ in 0..<burst { XCTAssertTrue(limit.allow("pc1", now: 1000)) }
         XCTAssertFalse(limit.allow("pc1", now: 1000), "a long pause gives the burst again, not more")
     }
+
+    /// Notifications and received links of a computer take tokens from 1 shared limit.
+    func testSharedLimitPerComputer() {
+        let pc = UUID().uuidString
+        for i in 0..<Int(NotificationLimit.burst) { XCTAssertTrue(NotificationLimit.allowsNow(pc), "\(i)") }
+        XCTAssertFalse(NotificationLimit.allowsNow(pc), "the burst is used up")
+        XCTAssertTrue(NotificationLimit.allowsNow(UUID().uuidString), "another computer has its own limit")
+    }
 }
 
 final class BatteryStateTests: XCTestCase {

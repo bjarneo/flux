@@ -124,9 +124,10 @@ public struct CodeSheet: Equatable, Sendable {
 
 /// Classifies scanned codes and builds what the computer gets, like Flux for Android.
 public enum Codes {
-    /// Returns the kind of content in the code.
+    /// Returns the kind of content in the code. Only an http or https link
+    /// is a link. A bookmark with another scheme, such as ftp or file, is text.
     public static func kind(_ code: ScannedCode) -> CodeKind {
-        if code.url != nil || ShareWire.isURL(code.raw.trimmingCharacters(in: .whitespacesAndNewlines)) { return .url }
+        if webLink(code) != nil { return .url }
         if code.wifi != nil || code.raw.lowercased().hasPrefix("wifi:") { return .wifi }
         let lower = code.raw.lowercased()
         if code.contact != nil || lower.hasPrefix("begin:vcard") || lower.hasPrefix("mecard:") { return .contact }
@@ -135,6 +136,12 @@ public enum Codes {
     }
 
     private static let productFormats: Set<CodeFormat> = [.ean13, .ean8, .upcA, .upcE]
+
+    /// The http or https link of the code, from its bookmark or its raw value, or nil.
+    private static func webLink(_ code: ScannedCode) -> String? {
+        let candidates = [code.url, code.raw].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+        return candidates.first { ShareWire.isURL($0) }
+    }
 
     /// Builds the result sheet. A link opens or copies on the computer.
     /// Anything else saves or copies on the computer. `pc` is the computer name.
@@ -153,7 +160,7 @@ public enum Codes {
     public static func text(_ code: ScannedCode, kind: CodeKind? = nil) -> String {
         switch kind ?? self.kind(code) {
         case .url:
-            return (code.url ?? code.raw).trimmingCharacters(in: .whitespacesAndNewlines)
+            return webLink(code) ?? code.raw.trimmingCharacters(in: .whitespacesAndNewlines)
         case .wifi:
             guard let w = code.wifi else { return code.raw }
             var lines = ["Wi-Fi network: \(w.ssid)"]

@@ -137,11 +137,17 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
             core.plugin(ClipboardPlugin.self)?.putFromComputer(text)
             core.toast("Text from \(from) is on the clipboard")
         case .url(let web):
+            core.toast("Link from \(from)")
+            // The links share the notification limit of the computer, so
+            // that a computer cannot bury the other notifications.
+            guard NotificationLimit.allowsNow(device.id) else {
+                FluxLog.plugin.info("link notification dropped: too many from \(from, privacy: .public)")
+                return
+            }
             // The link opens only after a click on the notification, like
             // in the Android app.
             Notifier.shared.post(id: "share-\(UUID().uuidString)", category: Self.linkCategory,
                                  title: "Link from \(from)", body: web.absoluteString, userInfo: ["url": web.absoluteString])
-            core.toast("Link from \(from)")
         case .file(let name, let lastModified):
             guard let token = packet.payloadTunnel, let cert = device.certificate else { return }
             guard packet.payloadSize > 0 else {
