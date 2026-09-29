@@ -2,6 +2,7 @@ package core
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -247,13 +248,15 @@ func (e writeError) Error() string { return "write to the phone: " + e.err.Error
 func (e writeError) Unwrap() error { return e.err }
 
 // pumpDesktop reads the FLV stream of the recorder and writes its frames to
-// the phone. The first frame is the video size. It calls live once, before
-// the first frame. It returns io.EOF when the recorder ends the stream, and
-// a writeError when the phone closes it.
+// the phone. The first frame is the video size. Before a key frame whose SPS
+// and PPS differ from the last config frame, it writes them as a config
+// frame. It calls live once, before the first frame. It returns io.EOF when
+// the recorder ends the stream, and a writeError when the phone closes it.
 func pumpDesktop(r io.Reader, w io.Writer, width, height int, live func()) error {
 	fr := newFLVReader(r)
 	fw := &frameWriter{w: w}
 	first := true
+	var config []byte
 	for {
 		f, err := fr.next()
 		if err != nil {
@@ -267,8 +270,58 @@ func pumpDesktop(r io.Reader, w io.Writer, width, height int, live func()) error
 				return writeError{err}
 			}
 		}
+		switch {
+		case f.flags&frameConfig != 0:
+			config = append(config[:0], f.data...)
+		case f.flags&frameKey != 0:
+			// With VAAPI the SPS and the PPS in a key frame can differ from
+			// the sequence header. A Mac decodes with the config frame
+			// alone, so it gets the ones of the key frame first.
+			if sets := parameterSets(f.data); sets != nil && !bytes.Equal(sets, config) {
+				config = sets
+				if err := fw.write(frameConfig, config); err != nil {
+					return writeError{err}
+				}
+			}
+		}
 		if err := fw.write(f.flags, f.data); err != nil {
 			return writeError{err}
 		}
 	}
+}
+
+// parameterSets returns the SPS and PPS units of an Annex-B frame with their
+// start codes, or nil when the frame has no SPS or no PPS. It copies the
+// units, because the frame is valid only until the next read.
+func parameterSets(b []byte) []byte {
+	var out []byte
+	var sps, pps bool
+	for len(b) > 0 {
+		i := bytes.Index(b, startCode)
+		if i < 0 {
+			break
+		}
+		b = b[i+len(startCode):]
+		end := bytes.Index(b, startCode)
+		if end < 0 {
+			end = len(b)
+		}
+		if len(b) > 0 {
+			switch b[0] & 0x1f {
+			case 7:
+				sps = true
+			case 8:
+				pps = true
+			default:
+				b = b[end:]
+				continue
+			}
+			out = append(append(out, startCode...), b[:end]...)
+		}
+		b = b[end:]
+	}
+	if !sps || !pps {
+		return nil
+	}
+	return out
 }

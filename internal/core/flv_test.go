@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"slices"
 	"testing"
 )
 
@@ -86,6 +87,42 @@ type failWriter struct{}
 
 func (failWriter) Write([]byte) (int, error) { return 0, errors.New("closed") }
 
+// nals returns NAL units with 4-byte lengths, as in an FLV video tag.
+func nals(units ...[]byte) []byte {
+	var b []byte
+	for _, u := range units {
+		b = binary.BigEndian.AppendUint32(b, uint32(len(u)))
+		b = append(b, u...)
+	}
+	return b
+}
+
+// written splits the output of pumpDesktop into its frames.
+func written(t *testing.T, b []byte) []videoFrame {
+	t.Helper()
+	var frames []videoFrame
+	for len(b) > 0 {
+		if len(b) < 5 {
+			t.Fatalf("a frame header of %d bytes", len(b))
+		}
+		size := int(binary.BigEndian.Uint32(b))
+		if len(b) < 5+size {
+			t.Fatalf("a frame of %d bytes with %d bytes left", size, len(b)-5)
+		}
+		frames = append(frames, videoFrame{b[4], b[5 : 5+size]})
+		b = b[5+size:]
+	}
+	return frames
+}
+
+func flagsOf(frames []videoFrame) []byte {
+	var flags []byte
+	for _, f := range frames {
+		flags = append(flags, f.flags)
+	}
+	return flags
+}
+
 func TestPumpDesktop(t *testing.T) {
 	var out bytes.Buffer
 	lives := 0
@@ -94,26 +131,87 @@ func TestPumpDesktop(t *testing.T) {
 		t.Fatalf("err %v, live called %d times", err, lives)
 	}
 	// The format, then the config, the key frame, and the inter frame.
-	var flags []byte
-	b := out.Bytes()
-	for len(b) > 0 {
-		size := binary.BigEndian.Uint32(b)
-		flags = append(flags, b[4])
-		if flags[0] == frameFormat && len(flags) == 1 {
-			if w, h := binary.BigEndian.Uint16(b[5:]), binary.BigEndian.Uint16(b[7:]); size != 4 || w != 1920 || h != 1200 {
-				t.Fatalf("format of %d bytes: %dx%d", size, w, h)
-			}
-		}
-		b = b[5+size:]
-	}
-	if !bytes.Equal(flags, []byte{frameFormat, frameConfig, frameKey, 0}) {
+	frames := written(t, out.Bytes())
+	if flags := flagsOf(frames); !bytes.Equal(flags, []byte{frameFormat, frameConfig, frameKey, 0}) {
 		t.Fatalf("flags %v", flags)
+	}
+	format := frames[0].data
+	if w, h := binary.BigEndian.Uint16(format), binary.BigEndian.Uint16(format[2:]); len(format) != 4 || w != 1920 || h != 1200 {
+		t.Fatalf("format of %d bytes: %dx%d", len(format), w, h)
 	}
 
 	err = pumpDesktop(bytes.NewReader(flvStream()), failWriter{}, 1920, 1200, func() {})
 	var we writeError
 	if !errors.As(err, &we) {
 		t.Fatalf("a closed phone gave %v", err)
+	}
+}
+
+// With VAAPI the key frames carry an SPS and a PPS that differ from the
+// sequence header. They go out as a config frame before the first such key
+// frame.
+func TestPumpDesktopInlineSets(t *testing.T) {
+	header := []byte{0, 0, 0, 1, 0x67, 0xaa, 0xbb, 0, 0, 0, 1, 0x68, 0xcc}
+	inline := []byte{0, 0, 0, 1, 0x67, 0xaa, 0xdd, 0, 0, 0, 1, 0x68, 0xee}
+	cases := []struct {
+		name     string
+		sps, pps []byte
+		flags    []byte
+	}{
+		{"other sets", []byte{0x67, 0xaa, 0xdd}, []byte{0x68, 0xee}, []byte{frameFormat, frameConfig, frameConfig, frameKey, 0, frameKey}},
+		{"same sets", []byte{0x67, 0xaa, 0xbb}, []byte{0x68, 0xcc}, []byte{frameFormat, frameConfig, frameKey, 0, frameKey}},
+	}
+	for _, c := range cases {
+		b := []byte("FLV\x01\x01\x00\x00\x00\x09\x00\x00\x00\x00")
+		b = append(b, flvTag(9, []byte{
+			0x17, 0, 0, 0, 0,
+			1, 0x64, 0, 0x32, 0xff,
+			0xe1, 0, 3, 0x67, 0xaa, 0xbb,
+			1, 0, 2, 0x68, 0xcc,
+		})...)
+		key := nals(c.sps, c.pps, []byte{0x06, 0x01}, []byte{0x65, 0x88})
+		b = append(b, flvTag(9, append([]byte{0x17, 1, 0, 0, 0}, key...))...)
+		b = append(b, flvTag(9, append([]byte{0x27, 1, 0, 0, 0}, nals([]byte{0x41, 0x9a})...))...)
+		b = append(b, flvTag(9, append([]byte{0x17, 1, 0, 0, 0}, key...))...)
+
+		var out bytes.Buffer
+		if err := pumpDesktop(bytes.NewReader(b), &out, 1920, 1200, func() {}); !errors.Is(err, io.EOF) {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		frames := written(t, out.Bytes())
+		if flags := flagsOf(frames); !bytes.Equal(flags, c.flags) {
+			t.Fatalf("%s: flags %v, want %v", c.name, flags, c.flags)
+		}
+		if !bytes.Equal(frames[1].data, header) {
+			t.Errorf("%s: first config % x", c.name, frames[1].data)
+		}
+		if c.flags[2] == frameConfig && !bytes.Equal(frames[2].data, inline) {
+			t.Errorf("%s: second config % x, want % x", c.name, frames[2].data, inline)
+		}
+	}
+}
+
+func TestParameterSets(t *testing.T) {
+	sps := []byte{0, 0, 0, 1, 0x67, 0xaa, 0xbb}
+	pps := []byte{0, 0, 0, 1, 0x68, 0xcc}
+	sei := []byte{0, 0, 0, 1, 0x06, 0x01}
+	idr := []byte{0, 0, 0, 1, 0x65, 0x88}
+	frame := slices.Concat(sps, pps, sei, idr)
+	want := slices.Concat(sps, pps)
+	got := parameterSets(frame)
+	if !bytes.Equal(got, want) {
+		t.Fatalf("got % x, want % x", got, want)
+	}
+	// The result is a copy: the next read reuses the frame.
+	clear(frame)
+	if !bytes.Equal(got, want) {
+		t.Fatalf("after a change of the frame: % x", got)
+	}
+	if got := parameterSets(slices.Concat(sps, idr)); got != nil {
+		t.Errorf("only an SPS: % x", got)
+	}
+	if got := parameterSets(slices.Concat(sei, idr)); got != nil {
+		t.Errorf("no sets: % x", got)
 	}
 }
 

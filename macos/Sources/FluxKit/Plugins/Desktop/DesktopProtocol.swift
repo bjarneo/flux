@@ -139,8 +139,8 @@ public enum DesktopH264 {
         return out
     }
 
-    /// The first SPS and the first PPS of a config frame, without start
-    /// codes. It returns nil when one of them is missing.
+    /// The first SPS and the first PPS of a config frame or a key frame,
+    /// without start codes. It returns nil when one of them is missing.
     public static func parameterSets(_ data: [UInt8]) -> (sps: [UInt8], pps: [UInt8])? {
         var sps: [UInt8]?
         var pps: [UInt8]?

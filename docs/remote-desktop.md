@@ -240,6 +240,8 @@ Each frame on the stream has this form:
 | Data | Length bytes | H.264 NAL units with 4-byte start codes, or 2 big-endian 16-bit numbers for the width and the height |
 
 The first frame is the video size.
+A config frame can come again before a key frame, when the key frame has another SPS and PPS.
+The receiver then uses the newest one.
 Each frame comes whole, so the phone can decode it when its last byte arrives.
 
 The touches are `kdeconnect.mousepad.request` packets with the Flux fields `x` and `y`.

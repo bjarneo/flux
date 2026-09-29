@@ -9,7 +9,7 @@ public final class DesktopVideo: @unchecked Sendable {
     private let lock = NSLock()
     private var renderer: AVSampleBufferVideoRenderer?
     private var format: CMVideoFormatDescription?
-    private var parameterSets: [[UInt8]] = []
+    private(set) var parameterSets: [[UInt8]] = []
     /// True until a key frame starts the picture on the renderer.
     private var needKey = true
 
@@ -50,8 +50,11 @@ public final class DesktopVideo: @unchecked Sendable {
     }
 
     /// Shows 1 frame in Annex-B form. The frames before the first key frame
-    /// do not show, because a decoder cannot start with them.
+    /// do not show, because a decoder cannot start with them. A key frame
+    /// with its own SPS and PPS sets the format first, because VAAPI puts
+    /// other sets in its key frames than in the config frame.
     func show(_ annexB: [UInt8], key: Bool) {
+        if key, let sets = DesktopH264.parameterSets(annexB) { configure(sps: sets.sps, pps: sets.pps) }
         lock.lock()
         defer { lock.unlock() }
         guard let renderer, let format else { return }

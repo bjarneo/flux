@@ -107,6 +107,41 @@ final class DesktopTests: XCTestCase {
         XCTAssertEqual(DesktopH264.avcc([]), [])
     }
 
+    private func hex(_ s: String) -> [UInt8] {
+        var out: [UInt8] = []
+        var i = s.startIndex
+        while i < s.endIndex {
+            let j = s.index(i, offsetBy: 2)
+            out.append(UInt8(s[i..<j], radix: 16)!)
+            i = j
+        }
+        return out
+    }
+
+    /// With VAAPI the key frames carry an SPS and a PPS that differ from the
+    /// config frame. These are the sets of the stream in issue 62.
+    func testAKeyFrameSetsItsOwnFormat() {
+        let headerSPS = hex("67640c32ac2b4014005ad350101014000003000400000300f23c2010a8")
+        let headerPPS = hex("68ee0462c0")
+        let keySPS = hex("67640c32ac2b4014005ad350101014000003000400000300f23c2211a8")
+        let keyPPS = hex("68ee3830")
+        let start: [UInt8] = [0, 0, 0, 1]
+        let frame = start + keySPS + start + keyPPS + start + [0x65, 0x88, 0x84]
+
+        let video = DesktopVideo()
+        XCTAssertTrue(video.configure(sps: headerSPS, pps: headerPPS))
+        video.show(frame, key: false)
+        XCTAssertEqual(video.parameterSets, [headerSPS, headerPPS])
+        video.show(frame, key: true)
+        XCTAssertEqual(video.parameterSets, [keySPS, keyPPS])
+
+        // A set that VideoToolbox refuses keeps the format.
+        let bad: [UInt8] = [0x67, 0x00]
+        XCTAssertNil(DesktopVideo.format(sps: bad, pps: keyPPS))
+        video.show(start + bad + start + keyPPS + start + [0x65, 0x88], key: true)
+        XCTAssertEqual(video.parameterSets, [keySPS, keyPPS])
+    }
+
     func testTheVideoFitsTheView() throws {
         // A 16:10 video in a wide view: bars at the left and the right.
         let g = DesktopGeometry(view: CGSize(width: 2000, height: 1000), video: CGSize(width: 1920, height: 1200))
