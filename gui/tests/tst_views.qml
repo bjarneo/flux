@@ -90,14 +90,14 @@ Item {
     }
 
     function test_showControls() {
-      compare(Fmt.showControls("invoice‮fdp.exe"), "invoice[U+202E]fdp.exe")
-      compare(Fmt.showControls("a⁦b⁩c‏d\nE"), "a[U+2066]b[U+2069]c[U+200F]d[U+000A]E")
+      compare(Fmt.showControls("invoice\u202Efdp.exe"), "invoice[U+202E]fdp.exe")
+      compare(Fmt.showControls("a\u2066b\u2069c\u200Fd\nE"), "a[U+2066]b[U+2069]c[U+200F]d[U+000A]E")
       compare(Fmt.showControls("photo 2026.jpg"), "photo 2026.jpg")
     }
 
     function test_nameKey() {
       compare(Fmt.nameKey(" Pixel  8 "), "pixel 8")
-      compare(Fmt.nameKey("Pixel‮ 8​"), "pixel 8")
+      compare(Fmt.nameKey("Pixel\u202E 8\u200B"), "pixel 8")
     }
   }
 
@@ -277,6 +277,54 @@ Item {
       compare(row.fingerprint, "E7A10C5F2B98D364")
       var oneplus = view.discoveredRows.find(function (d) { return d.name === "OnePlus 12" })
       compare(oneplus.twin, "")
+    }
+  }
+
+  TestCase {
+    name: "PhoneText"
+    when: mock.ready
+
+    function init() {
+      mock.state = mock.fixTimes(mock.fixture.state)
+      mock.requests = []
+    }
+
+    // The tooltip of a rail button, found by its text.
+    function findTip(obj, text) {
+      if (!obj) return null
+      if (obj.delay === 400 && obj.text === text && obj.contentItem !== undefined) return obj
+      var kids = obj.data || []
+      for (var i = 0; i < kids.length; i++) {
+        var r = findTip(kids[i], text)
+        if (r) return r
+      }
+      return null
+    }
+
+    function test_railTooltipIsPlainText() {
+      mock.updateDevice(top.pixel, function (d) { d.name = "<b>Pixel</b>"; return d })
+      var view = createTemporaryObject(viewComponent, top)
+      view.width = 800
+      var tip = null
+      tryVerify(function () { tip = findTip(view, "<b>Pixel</b> · connected"); return !!tip })
+      compare(tip.contentItem.textFormat, Text.PlainText)
+    }
+
+    function test_notificationWithPrototypeId() {
+      mock.updateDevice(top.pixel, function (d) {
+        d.notifications = [{ id: "hasOwnProperty", app: "Constructor", title: "Hello", text: "", time: 1, dismissable: true, actions: [] }]
+        return d
+      })
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "notifications"
+      tryVerify(function () { return !!page(view) && !!findBy(page(view), "text", "Hello") })
+      var close = findBy(page(view), "text", "×")
+      verify(!!close)
+      close.children[0].clicked(null)
+      var sent = requestsOf("notification.dismiss")
+      compare(sent.length, 1)
+      compare(sent[0].params.id, "hasOwnProperty")
     }
   }
 }
