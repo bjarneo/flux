@@ -99,7 +99,7 @@ Disable the Gradle configuration cache for builds that use release secrets:
 
 | File | Trigger and result |
 | --- | --- |
-| `.github/workflows/build.yml` | Main branch, pull request, manual run, or reusable call. Builds the Arch package, the Android APKs, and the macOS app, and tests the iOS app. |
+| `.github/workflows/build.yml` | Main branch, pull request, manual run, or reusable call. Builds the Arch package, the Android APKs, and the macOS app, and tests the iOS app. Pull requests skip the macOS and iOS jobs. |
 | `.github/workflows/release.yml` | Stable version tag or manual rebuild of an existing tag. Publishes the package, signed APK, AUR recipe, certificate details, and checksums. |
 | `.github/workflows/aur.yml` | Reusable call after a successful release. Pushes the tested recipe to AUR. |
 

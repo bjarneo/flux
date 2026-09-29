@@ -37,7 +37,8 @@ The target runs `scripts/install-macos.sh`.
 It quits a running Flux, replaces `/Applications/Flux.app`, and opens the new app.
 Add `--no-open` when you run the script directly to skip the last step.
 
-The `macos` job in `.github/workflows/build.yml` runs `swift test` and builds a universal Release app for each push to `master` and each pull request.
+The `macos` job in `.github/workflows/build.yml` runs `swift test` and builds a universal Release app for each push to `master` and each release.
+Pull requests skip it, because macOS runners use GitHub minutes at a high rate.
 Each release attaches the same build as `flux-macos-VERSION.zip`.
 For a build of a branch, download the `macos-app` artifact from the run to get `flux-macos.zip`.
 The app is signed ad hoc and not notarized, so Gatekeeper blocks the first start.
