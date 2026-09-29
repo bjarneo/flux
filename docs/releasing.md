@@ -10,7 +10,7 @@ An optional final job pushes the tested recipe to AUR.
 
 | Workflow | Trigger | Result |
 | --- | --- | --- |
-| `build.yml` | Push to `master`, pull request, manual run, or reusable call | Arch package, Go tests, Android tests, lint, debug APK, and unsigned release build |
+| `build.yml` | Push to `master`, pull request, manual run, or reusable call | Arch package, Go tests, Android tests, lint, debug APK, unsigned release build, FluxKit tests, the macOS app, and the iOS app with its simulator tests |
 | `release.yml` | Push a `v*` tag or manually select an existing tag | Validated stable tag, tested desktop package, signed APK, and GitHub release |
 | `aur.yml` | Reusable call after release publication | AUR commit with `PKGBUILD`, `.SRCINFO`, and the install hook |
 

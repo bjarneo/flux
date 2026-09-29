@@ -1,11 +1,11 @@
 ---
 name: omarchy-flux
-description: Use, install, diagnose, develop, and release Omarchy Flux. Use this skill for the flux-cli command, fluxd, Flux for Android, Flux for macOS, phone and Mac pairing, connections through Tailscale, file or clipboard transfers, phone notifications, webcam or microphone streams, screen mirror, fingerprint approval, herdr agents on the phone, the Flux Qt app, the Flux Omarchy plugin, AUR packages, and Flux APK workflows. Scope this skill to Flux tasks, not general Android or Omarchy configuration.
+description: Use, install, diagnose, develop, and release Omarchy Flux. Use this skill for the flux-cli command, fluxd, Flux for Android, Flux for iOS, Flux for macOS, phone, iPhone, and Mac pairing, connections through Tailscale, file or clipboard transfers, phone notifications, webcam or microphone streams, screen mirror, fingerprint approval, herdr agents on the phone, the Flux Qt app, the Flux Omarchy plugin, AUR packages, and Flux APK workflows. Scope this skill to Flux tasks, not general Android or Omarchy configuration.
 ---
 
 # Omarchy Flux
 
-Flux connects an Omarchy desktop to Flux for Android or Flux for macOS on the same local network.
+Flux connects an Omarchy desktop to Flux for Android, Flux for iOS, or Flux for macOS on the same local network.
 A paired device can also connect through Tailscale with an extra address.
 The desktop includes the `flux-cli` command, `fluxd`, a Qt app, and an Omarchy shell plugin.
 `flux` is a short name for `flux-cli` when no other program uses it.
@@ -154,6 +154,7 @@ make build
 | Omarchy shell host | `gui/omarchy/` |
 | Android app | `android/app/src/main/java/org/omarchy/flux/` |
 | macOS app | `macos/Sources/FluxKit/`, `macos/App/` |
+| iOS app | `ios/App/`, `ios/ShareExtension/`, and the shared `macos/Sources/FluxKit/` |
 | Fingerprint approval | `internal/approve/`, `cmd/flux-approve/`, Android `core/Approve*` |
 | herdr agents | `internal/herdr/`, `internal/core/herdr.go`, Android `core/Herdr.kt` |
 | Package and system install | `dist/`, `Makefile` |
@@ -173,8 +174,8 @@ cd android
 ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease --no-daemon
 ```
 
-On a Mac with Xcode and XcodeGen, run `make test-macos macos` from the repository root.
-Use `docs/macos.md` for the macOS app.
+On a Mac with Xcode and XcodeGen, run `make test-macos macos` and `make ios test-ios` from the repository root.
+Use `docs/macos.md` for the macOS app and `docs/ios.md` for the iOS app.
 
 Use `docs/development.md` for isolated daemon tests and UI snapshots.
 Do not run a second development daemon against the user's active socket or trust store.

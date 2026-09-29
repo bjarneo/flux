@@ -3,7 +3,7 @@
 [Documentation index](README.md)
 
 This page describes Flux for Android.
-For the Mac app, see [Flux for macOS](macos.md#features).
+For the Mac app, see [Flux for macOS](macos.md#features). For the iPhone, see [Flux for iOS](ios.md#features).
 
 ## Pair a phone
 
@@ -215,7 +215,7 @@ See [herdr agents](herdr.md) for the replies, new agents, terminals, dictation, 
 
 ## Touchpad and keyboard
 
-The phone or the Mac can be a touchpad and a keyboard for the computer.
+The phone, the iPhone, or the Mac can be a touchpad and a keyboard for the computer.
 To allow it, set:
 
 ```toml
@@ -228,7 +228,7 @@ See [Touchpad and keyboard](remote-input.md) for the gestures, the keys, and the
 
 ## Remote desktop
 
-The phone or the Mac can show the screen of the computer and control it.
+The phone, the iPhone, or the Mac can show the screen of the computer and control it.
 To allow it, set:
 
 ```toml

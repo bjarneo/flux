@@ -106,6 +106,17 @@ make test-macos macos
 The tests cover packets, certificates, the verification key, and the wire formats and logic of each feature.
 See [Flux for macOS](macos.md#test-against-a-computer-on-the-same-mac) to test the app against a local `fluxd`.
 
+## iOS checks
+
+```sh
+make ios test-ios
+```
+
+The build must show no warnings in `ios/`.
+`make test-ios` runs the app tests and the FluxKit tests in an iPhone simulator.
+A change in FluxKit needs both `make test-macos` and `make test-ios`, because the two platforms compile different code.
+See [Flux for iOS](ios.md#local-tests) for the simulator and the device checks.
+
 ## Package and workflow checks
 
 ```sh
@@ -134,6 +145,7 @@ The [release guide](releasing.md) covers the archive-based AUR recipe.
 | Shared QML or host | `make build-gui snapshot` and both host contracts |
 | Android | JVM tests, lint, debug build, and release build |
 | macOS | `make test-macos macos`, then a run against `fluxd` |
+| iOS | `make ios test-ios`, then a run in the simulator against `fluxd` |
 | Protocol | Go, Kotlin, and Swift tests, plus the two-daemon end-to-end test |
 | Approval | Read `docs/approve.md`, then run Go and Android approval tests |
 | Package or workflow | Shell syntax, `actionlint`, package build, and release-generator tests |

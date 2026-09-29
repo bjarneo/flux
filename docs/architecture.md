@@ -5,11 +5,11 @@
 `fluxd` owns device state and network operations.
 The CLI and both desktop hosts communicate with it through a local Unix socket.
 The native Android app owns the phone services and its side of the connection.
-The native macOS app takes the same role on a Mac.
+The native iOS and macOS apps take the same role on an iPhone and a Mac.
 
 ```text
 flux-cli ─────────────┐
-Qt app ──────────────┼── Unix socket ── fluxd ── TLS and tunnels ── Android or macOS
+Qt app ──────────────┼── Unix socket ── fluxd ── TLS and tunnels ── Android, iOS, or macOS
 Omarchy shell plugin ┘
 ```
 
@@ -32,12 +32,14 @@ Omarchy shell plugin ┘
 | Shell host | `gui/omarchy/` | Omarchy service, bar widget, panel, and backend adapter |
 | Android | `android/` | Kotlin app, phone services, Compose screens, and protocol peer |
 | macOS | `macos/` | Swift package `FluxKit` with the protocol peer and plugins, and the SwiftUI app |
+| iOS | `ios/` | SwiftUI app and share extension on the shared `FluxKit` |
 | Distribution | `dist/` | Arch recipe, service, udev rule, install scripts, and desktop files |
 
 ## Network direction
 
 Flux uses KDE Connect protocol version 8 with Flux extensions.
-Flux for Android and Flux for macOS are the supported device apps.
+Flux for Android, Flux for iOS, and Flux for macOS are the supported device apps.
+The routes are the same for each of them.
 
 | Operation | Route |
 | --- | --- |

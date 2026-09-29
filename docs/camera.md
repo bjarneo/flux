@@ -7,9 +7,10 @@
 The Android Camera screen includes text, QR, photo, document, signature, and webcam modes.
 Text recognition and barcode recognition use models bundled in the app.
 Document capture uses the Google Play services document scanner.
+The iPhone has the same modes with Apple's Vision and VisionKit. See [Flux for iOS](ios.md#features).
 
 To add words to scanned text, select the mic key next to the text field and speak.
-The words go in at the cursor on the phone and at the end of the text on the Mac.
+The words go in at the cursor on the Android phone and at the end of the text on the iPhone and the Mac.
 
 Scanned text and documents use the desktop `scan_dir`.
 Photos use `photo_dir`.
@@ -38,6 +39,8 @@ wl-paste --list-types
 ```
 
 ## Phone as webcam
+
+An iPhone streams as a webcam too, and stops when Flux leaves its screen, because iOS gives the camera only to the app on the screen.
 
 Install the optional packages and your kernel's matching headers.
 For the standard Arch `linux` kernel:
@@ -99,6 +102,8 @@ To include audio with the webcam, enable **Also send the microphone** in the pho
 The virtual source exists only while the phone streams.
 
 ## Screen mirror
+
+The iPhone does not mirror its screen. See [Flux for iOS](ios.md#screen-mirror).
 
 Install `mpv` or use `ffplay` from FFmpeg:
 

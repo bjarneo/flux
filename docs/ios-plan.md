@@ -162,7 +162,7 @@ Why iOS does not mirror the screen:
 
 ## Phase 10: Documentation and integration
 
-- [ ] [Flux for iOS](ios.md): build, install with Xcode, pairing, features, limits, permissions, and layout.
-- [ ] Index, [architecture](architecture.md), and [development](development.md) updated.
+- [x] [Flux for iOS](ios.md): build, install with Xcode, pairing, features, limits, permissions, and layout.
+- [x] Index, [architecture](architecture.md), and [development](development.md) updated.
 - [ ] A CI job builds the iOS app and runs the FluxKit tests in the simulator.
 - [ ] The Mac app builds with no new warnings, and `make test-macos` passes.

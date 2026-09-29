@@ -4,6 +4,7 @@
 
 Flux for Android and Flux for macOS can move the pointer, click, scroll, and type on the Omarchy computer.
 The phone or the Mac controls the computer. The computer does not control the phone or the Mac.
+The phone is an Android phone or an iPhone with [Flux for iOS](ios.md). The iPhone uses the same gestures and keys. Its volume keys do not change slides, because iOS gives apps no public way to take them.
 Remote input is off by default, because the phone or the Mac can then type in any window, such as a terminal or the lock screen.
 
 ## Turn on remote input

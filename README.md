@@ -1,16 +1,16 @@
 # Flux
 
-Connect your Omarchy desktop to an Android phone or a Mac over your local network, or through Tailscale when you are away.
+Connect your Omarchy desktop to an Android phone, an iPhone, or a Mac over your local network, or through Tailscale when you are away.
 Share files, clipboard text, and clipboard images, read phone notifications, control media, and use your phone as a camera or microphone.
 
-Flux includes a CLI, a background daemon, a native Qt window, an Omarchy shell plugin, a native Android app, and a native macOS app.
+Flux includes a CLI, a background daemon, a native Qt window, an Omarchy shell plugin, a native Android app, a native iOS app, and a native macOS app.
 The desktop opens the network connections, so the default Omarchy firewall needs no new inbound rule.
 
 
 https://github.com/user-attachments/assets/4b8445fe-6734-4100-b200-92f57e1b353a
 
 
-**[Install locally](docs/install.md)** · **[Set up Android](docs/android.md)** · **[Set up macOS](docs/macos.md)** · **[Read the docs](docs/README.md)** · **[Use with agents](docs/agents.md)**
+**[Install locally](docs/install.md)** · **[Set up Android](docs/android.md)** · **[Set up iOS](docs/ios.md)** · **[Set up macOS](docs/macos.md)** · **[Read the docs](docs/README.md)** · **[Use with agents](docs/agents.md)**
 
 ## What you can do
 
@@ -29,6 +29,10 @@ https://github.com/user-attachments/assets/4b8445fe-6734-4100-b200-92f57e1b353a
 
 Flux for Android requires Android 10 or later.
 Flux for Android is the supported phone app.
+
+Flux for iOS requires iOS 17 or later.
+It connects an iPhone in the place of the Android phone and offers the features that iOS allows.
+Install it with Xcode. See [Flux for iOS](docs/ios.md) for the feature list and the limits of iOS.
 
 Flux for macOS requires macOS 14 or later.
 It connects a Mac in the place of a phone and offers the features that macOS allows.
@@ -74,6 +78,7 @@ You can also start the pair request from a terminal:
 flux-cli pair "Pixel 8"
 ```
 
+To connect an iPhone, install the app with Xcode and follow [Pair an iPhone](docs/ios.md#pair-an-iphone).
 To connect a Mac, build the app and follow [Pair a Mac](docs/macos.md#pair-a-mac).
 
 ## Use it from your terminal
@@ -113,7 +118,13 @@ make test-macos macos
 make install-macos
 ```
 
-GitHub Actions does not build the macOS app.
+To build the iOS app and run its tests in a simulator:
+
+```sh
+make ios test-ios
+```
+
+GitHub Actions also tests FluxKit, builds the macOS and iOS apps, and runs the iOS tests in a simulator.
 
 See [development](docs/development.md) for local checks and [releases](docs/releasing.md) for keys, secrets, tags, and artifacts.
 
@@ -121,6 +132,7 @@ See [development](docs/development.md) for local checks and [releases](docs/rele
 
 - [Install and update](docs/install.md)
 - [Android build and setup](docs/android.md)
+- [iOS build and setup](docs/ios.md)
 - [macOS build and setup](docs/macos.md)
 - [CLI reference](docs/cli.md)
 - [Configuration and data paths](docs/configuration.md)

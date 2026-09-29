@@ -4,6 +4,7 @@
 
 Flux for Android and Flux for macOS can show the screen of the Omarchy computer and control it.
 The phone or the Mac controls the computer. The computer does not control the phone or the Mac.
+The phone is an Android phone or an iPhone with [Flux for iOS](ios.md). The iPhone uses the same touches as the Android phone.
 The remote desktop is off by default, because the phone or the Mac can then see each window, such as a password manager.
 
 ## Turn on the remote desktop
