@@ -48,7 +48,7 @@ private struct CaptureSettings: View {
         } header: {
             Text("Send by themselves")
         } footer: {
-            Text("When Flux opens, the screenshots and photos that are new in the Photos library go to your connected computers once. iOS does not run Flux in the background.")
+            Text("When Flux opens, the new screenshots and photos that are on this iPhone go to your connected computers once. Photos that only iCloud has, for example from your other devices or a Shared Library, stay home. iOS does not run Flux in the background.")
         }
         .onAppear { capture.refreshPhotoAccess() }
     }

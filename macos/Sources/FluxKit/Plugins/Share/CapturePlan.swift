@@ -129,25 +129,41 @@ struct LibraryAsset: Sendable, Equatable {
     var image: Bool
     var screenshot: Bool
     var created: Date?
+    /// True for an asset of the library of the user. A shared album and an
+    /// iTunes sync are other sources, and their assets stay home.
+    var userLibrary = true
 }
+
+/// How much older than the switch an image on iOS may be, in microseconds:
+/// 1 day. A photo from AirDrop, Messages, or an import keeps the date that
+/// it was taken. An older image is history that iCloud Photos synced.
+let libraryMargin: Int64 = 24 * 60 * 60 * 1_000_000
 
 /// The kind of an asset that the photo library got after the first switch
 /// turned on, or nil when it does not go out. `from` is `CaptureState.from`.
 ///
-/// On macOS screenshots come from the screenshot folder, so an asset is a
-/// photo: an image that is not a screenshot and was taken after the photo
-/// switch turned on. On iOS screenshots are the images with the screenshot
-/// subtype, and photos are the other images. Each image that the library
-/// got goes out, whatever its creation date, so that a photo from AirDrop,
-/// Messages, or an import goes out too. `planCapture` then sends only the
-/// assets that arrived after the switch of their kind turned on.
+/// Only assets of the library of the user go out. On macOS screenshots come
+/// from the screenshot folder, so an asset is a photo: an image that is not
+/// a screenshot and was taken after the photo switch turned on. On iOS
+/// screenshots are the images with the screenshot subtype, and photos are
+/// the other images. An image goes out when it was created at most 1 day
+/// before its switch turned on, so that a photo from AirDrop, Messages, or
+/// an import goes out too. `planCapture` then sends only the assets that
+/// arrived after the switch of their kind turned on.
+///
+/// PhotoKit does not tell which device took an asset or who added it to an
+/// iCloud Shared Library. So on iOS the export also needs the original on
+/// this iPhone, see `CaptureWatchPlugin.export`: an image from another
+/// device or from another person is only in iCloud until the user opens it.
 func libraryKind(_ asset: LibraryAsset?, from: [CaptureKind: Int64]) -> CaptureKind? {
-    guard let asset, asset.image else { return nil }
+    guard let asset, asset.image, asset.userLibrary, let created = asset.created else { return nil }
+    let micros = JSONValue.checkedInt64(created.timeIntervalSince1970 * 1_000_000) ?? 0
     #if os(macOS)
-    guard !asset.screenshot, let created = asset.created, let start = from[.photo],
-          Int64(created.timeIntervalSince1970 * 1_000_000) > start else { return nil }
+    guard !asset.screenshot, let start = from[.photo], micros > start else { return nil }
     return .photo
     #else
-    return asset.screenshot ? .screenshot : .photo
+    let kind: CaptureKind = asset.screenshot ? .screenshot : .photo
+    guard let start = from[kind], micros > start - libraryMargin else { return nil }
+    return kind
     #endif
 }

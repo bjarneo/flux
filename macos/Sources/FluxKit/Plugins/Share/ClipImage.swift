@@ -92,10 +92,11 @@ enum ClipboardImage {
         }
     }
 
-    /// Puts an image on the pasteboard in its own format.
+    /// Puts an image from a computer on the pasteboard in its own format.
+    /// It stays on this iPhone, like the text.
     @MainActor
     static func write(_ data: Data, mime: String) {
-        UIPasteboard.general.setData(data, forPasteboardType: ClipImage.pasteboardType(mime))
+        UIPasteboard.general.setItems([[ClipImage.pasteboardType(mime): data]], options: [.localOnly: true])
     }
 
     /// Identifies an image, so that an image from a computer does not go back.
