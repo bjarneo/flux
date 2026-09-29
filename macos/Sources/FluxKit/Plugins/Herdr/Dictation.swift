@@ -93,7 +93,8 @@ public final class Dictation {
     private static let retryDelay: Duration = .milliseconds(250)
     private static let maxRetries = 3
 
-    @ObservationIgnored private let engine = AVAudioEngine()
+    /// Made at the first start, so that a view can hold a dictation cheaply.
+    @ObservationIgnored private lazy var engine = AVAudioEngine()
     @ObservationIgnored private let feed = AudioFeed()
     @ObservationIgnored private var recognizer: SFSpeechRecognizer?
     @ObservationIgnored private var request: SFSpeechAudioBufferRecognitionRequest?
