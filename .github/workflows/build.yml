@@ -11,8 +11,8 @@ on:
         description: Stable release tag to package from its source archive
         type: string
         default: ''
-      apple:
-        description: Also test the Mac and iOS apps, which releases do not ship
+      ios:
+        description: Also test the iOS app, which releases do not ship
         type: boolean
         default: true
 
@@ -110,33 +110,48 @@ jobs:
           name: android-reports
           path: android/app/build/reports/
 
-  # The Mac app and FluxKit. The iOS app uses iOS 26 APIs behind
-  # availability checks, so both jobs need the Xcode 26 of macos-26.
-  # Releases ship neither app, so release.yml turns these jobs off.
   macos:
-    if: inputs.apple != false
+    # The pinned Swift packages need Swift 6.2, which comes with Xcode 26.
     runs-on: macos-26
-    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: macos
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
           persist-credentials: false
-      # Xcode 26 by path, so that a new default Xcode on the runner does
-      # not change the build.
-      - name: Select Xcode 26
-        run: |
-          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1 || true)
-          if [[ -z "$xcode" ]]; then echo "This runner has no Xcode 26" >&2; exit 1; fi
-          sudo xcode-select -s "$xcode"
-          xcodebuild -version
       - name: Install XcodeGen
         run: brew install xcodegen
-      - name: Test FluxKit and build the Mac app
-        run: make test-macos macos
+      - name: Show the toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+      - name: Test FluxKit
+        run: swift test
+      # The generic destination builds a universal app for Apple silicon and Intel.
+      - name: Build the app
+        run: |
+          xcodegen generate --quiet
+          xcodebuild -project Flux.xcodeproj -scheme Flux -configuration Release \
+            -derivedDataPath build -destination 'generic/platform=macOS' -quiet build
+      # ditto keeps the executable bits and symbolic links that upload-artifact drops.
+      - name: Verify and package the app
+        run: |
+          app=build/Build/Products/Release/Flux.app
+          codesign --verify --deep --strict "$app"
+          lipo -info "$app/Contents/MacOS/Flux"
+          ditto -c -k --keepParent "$app" flux-macos.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-app
+          path: macos/flux-macos.zip
+          if-no-files-found: error
+          retention-days: 14
 
+  # The iOS app. Releases do not ship it, so release.yml turns this job off.
   ios:
-    if: inputs.apple != false
+    if: inputs.ios != false
     runs-on: macos-26
     timeout-minutes: 45
     steps:

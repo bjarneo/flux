@@ -45,7 +45,7 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       tag: ${{ needs.version.outputs.tag }}
-      apple: false
+      ios: false
 
   apk:
     needs: version

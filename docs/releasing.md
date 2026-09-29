@@ -10,7 +10,7 @@ An optional final job pushes the tested recipe to AUR.
 
 | Workflow | Trigger | Result |
 | --- | --- | --- |
-| `build.yml` | Push to `master`, pull request, manual run, or reusable call | Arch package, Go tests, Android tests, lint, debug APK, unsigned release build, FluxKit tests, the macOS app, and the iOS app with its simulator tests |
+| `build.yml` | Push to `master`, pull request, manual run, or reusable call | Arch package, Go tests, Android tests, lint, debug APK, unsigned release build, FluxKit tests, ad hoc signed macOS app, and the iOS app with its simulator tests |
 | `release.yml` | Push a `v*` tag or manually select an existing tag | Validated stable tag, tested desktop package, signed APK, and GitHub release |
 | `aur.yml` | Reusable call after release publication | AUR commit with `PKGBUILD`, `.SRCINFO`, and the install hook |
 
@@ -181,8 +181,9 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-The release workflow checks out the exact tag for both builds.
-It waits for desktop and Android checks before publication.
+The release workflow checks out the exact tag for all builds.
+It waits for the desktop, Android, and macOS checks before publication.
+The release does not publish the macOS app. It skips the iOS tests, because it does not ship the iOS app.
 The release starts as a draft until all assets upload.
 
 The workflow writes the release notes in the cliamp format:
