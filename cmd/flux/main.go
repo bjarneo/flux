@@ -16,6 +16,7 @@ import (
 
 	"flux/internal/config"
 	"flux/internal/ipc"
+	"flux/internal/proto"
 )
 
 var version = "dev"
@@ -97,11 +98,11 @@ func main() {
 	case "pair":
 		err = pair(need(args, "DEVICE"))
 	case "accept":
-		err = call("pair.accept", map[string]any{"device": need(args, "DEVICE")})
+		err = accept(need(args, "DEVICE"))
 	case "reject":
 		err = call("pair.reject", map[string]any{"device": need(args, "DEVICE")})
 	case "unpair":
-		err = call("pair.unpair", map[string]any{"device": need(args, "DEVICE")})
+		err = unpair(need(args, "DEVICE"))
 	case "addresses":
 		err = addresses(device, args)
 	case "ring":
@@ -204,7 +205,12 @@ func need(args []string, name string) string {
 }
 
 func fail(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, format+"\n", args...)
+	// An error can have more than 1 line. safe cleans each line.
+	lines := strings.Split(fmt.Sprintf(format, args...), "\n")
+	for i := range lines {
+		lines[i] = safe(lines[i])
+	}
+	fmt.Fprintln(os.Stderr, strings.Join(lines, "\n"))
 	os.Exit(1)
 }
 
@@ -218,13 +224,20 @@ func dial() (*ipc.Client, error) {
 
 func call(method string, params any) error { return callInto(method, params, nil) }
 
+// callInto runs a method of fluxd and decodes the result into result. It
+// replaces the control characters in the strings of the result and of an
+// error, so that the callers can print them.
 func callInto(method string, params, result any) error {
 	c, err := dial()
 	if err != nil {
 		return err
 	}
 	defer c.Close()
-	return c.Call(method, params, result)
+	if err := c.Call(method, params, result); err != nil {
+		return cleanErr(err)
+	}
+	cleanAll(result)
+	return nil
 }
 
 // State mirrors the parts of the fluxd state that the CLI prints.
@@ -277,13 +290,14 @@ func status(asJSON bool) error {
 		return err
 	}
 	if asJSON {
-		fmt.Println(string(raw))
+		fmt.Println(string(safeJSON(raw)))
 		return nil
 	}
 	var s State
 	if err := json.Unmarshal(raw, &s); err != nil {
 		return err
 	}
+	cleanAll(&s)
 	fmt.Printf("%s (%s) · TCP %d\n", s.Self.Name, s.Self.Type, s.Self.TCPPort)
 	if len(s.Devices) == 0 {
 		fmt.Println("No devices. Open Flux on the phone, on the same network.")
@@ -296,7 +310,7 @@ func status(asJSON bool) error {
 		}
 		pair := d.PairState
 		if d.PairKey != "" {
-			pair += " " + d.PairKey
+			pair += " " + proto.FormatKey(d.PairKey)
 		}
 		bat := "—"
 		if d.Battery != nil {
@@ -313,6 +327,19 @@ func status(asJSON bool) error {
 	return nil
 }
 
+// pairResult is the answer of fluxd to pair.request, pair.accept, and
+// pair.unpair: the device that the method acted on, the verification key
+// of the pairing, and the fingerprint of the certificate of the device.
+type pairResult struct {
+	Device      string `json:"device"`
+	Name        string `json:"name"`
+	Key         string `json:"key"`
+	Fingerprint string `json:"fingerprint"`
+}
+
+// pair asks a device to pair and waits for the answer. It follows the
+// device ID that fluxd resolved, so another device with the same name
+// cannot change the result.
 func pair(device string) error {
 	c, err := dial()
 	if err != nil {
@@ -320,12 +347,15 @@ func pair(device string) error {
 	}
 	defer c.Close()
 	if err := c.Call("subscribe", nil, nil); err != nil {
-		return err
+		return cleanErr(err)
 	}
-	if err := c.Call("pair.request", map[string]any{"device": device}, nil); err != nil {
-		return err
+	var res pairResult
+	if err := c.Call("pair.request", map[string]any{"device": device}, &res); err != nil {
+		return cleanErr(err)
 	}
-	shown := false
+	cleanAll(&res)
+	fmt.Printf("Confirm %s on %s (%s)…\n", proto.FormatKey(res.Key), res.Name, res.Device)
+	requested := false
 	for ev := range c.Events() {
 		if ev.Event != "state" {
 			continue
@@ -334,23 +364,50 @@ func pair(device string) error {
 		if json.Unmarshal(ev.Data, &s) != nil {
 			continue
 		}
+		cleanAll(&s)
+		found := false
 		for _, d := range s.Devices {
-			if d.ID != device && !strings.EqualFold(d.Name, device) {
+			if d.ID != res.Device {
 				continue
 			}
+			found = true
 			switch {
 			case d.Paired:
-				fmt.Printf("✓ %s paired\n", d.Name)
+				fmt.Printf("✓ %s (%s) paired with the key %s\n", d.Name, d.ID, proto.FormatKey(res.Key))
 				return nil
-			case d.PairState == "requested" && !shown:
-				fmt.Printf("Confirm %s on %s…\n", d.PairKey, d.Name)
-				shown = true
-			case d.PairState == "none" && shown:
+			case d.PairState == "requested":
+				requested = true
+			case requested:
 				return fmt.Errorf("%s did not pair", d.Name)
 			}
 		}
+		// A device that is not paired leaves the state when its link ends.
+		if requested && !found {
+			return fmt.Errorf("%s did not pair", res.Name)
+		}
 	}
 	return errors.New("fluxd closed the connection")
+}
+
+// accept accepts the pair request of a device and prints the device and
+// the key that it accepted.
+func accept(device string) error {
+	var res pairResult
+	if err := callInto("pair.accept", map[string]any{"device": device}, &res); err != nil {
+		return err
+	}
+	fmt.Printf("✓ %s (%s) paired with the key %s\n", res.Name, res.Device, proto.FormatKey(res.Key))
+	return nil
+}
+
+// unpair removes a paired device and prints the device that it removed.
+func unpair(device string) error {
+	var res pairResult
+	if err := callInto("pair.unpair", map[string]any{"device": device}, &res); err != nil {
+		return err
+	}
+	fmt.Printf("Unpaired %s (%s), certificate %s\n", res.Name, res.Device, proto.FormatKey(res.Fingerprint))
+	return nil
 }
 
 // addresses lists, adds, or removes the extra addresses of a paired
@@ -595,11 +652,11 @@ func watch() error {
 	}
 	defer c.Close()
 	if err := c.Call("subscribe", nil, nil); err != nil {
-		return err
+		return cleanErr(err)
 	}
 	for ev := range c.Events() {
 		b, _ := json.Marshal(ev)
-		fmt.Println(string(b))
+		fmt.Println(string(safeJSON(b)))
 	}
 	return nil
 }

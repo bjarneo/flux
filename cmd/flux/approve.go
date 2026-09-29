@@ -186,7 +186,7 @@ func approveStatus() error {
 	case err != nil:
 		return fmt.Errorf("the key file is not safe, so flux-approve does not use it: %v", err)
 	}
-	fmt.Printf("%s can approve for %s.\n", k.DeviceName, name)
+	fmt.Printf("%s can approve for %s.\n", safe(k.DeviceName), name)
 	fmt.Printf("Key code: %s\n", approve.Fingerprint(k.DER))
 	if k.Enrolled != "" {
 		fmt.Printf("Enrolled: %s\n", k.Enrolled)
@@ -232,7 +232,7 @@ func enrollKey(device string) (*approve.Key, error) {
 		KeyPath:  approve.KeyPath(u.Username),
 		KeyOwner: 0,
 		Waiting: func(phone string) {
-			fmt.Printf("Confirm on %s. Flux for Android asks for your fingerprint.\n", phone)
+			fmt.Printf("Confirm on %s. Flux for Android asks for your fingerprint.\n", safe(phone))
 		},
 		Confirm: confirmCode,
 	})
@@ -242,7 +242,7 @@ func enrollKey(device string) (*approve.Key, error) {
 		}
 		return nil, err
 	}
-	fmt.Printf("Enrolled. %s can now approve for %s.\n", k.DeviceName, u.Username)
+	fmt.Printf("Enrolled. %s can now approve for %s.\n", safe(k.DeviceName), u.Username)
 	return k, nil
 }
 
