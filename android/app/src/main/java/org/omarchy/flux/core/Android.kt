@@ -21,6 +21,7 @@ import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import org.omarchy.flux.R
+import org.omarchy.flux.protocol.groupKey
 import org.omarchy.flux.ui.MainActivity
 import java.io.OutputStream
 
@@ -166,7 +167,7 @@ object Android {
         val n = NotificationCompat.Builder(context, CHANNEL_EVENTS)
             .setSmallIcon(R.drawable.ic_stat_flux)
             .setContentTitle("Pair with $name?")
-            .setContentText("Open Flux and check the code $key")
+            .setContentText("Open Flux and compare the key ${groupKey(key)}")
             .setContentIntent(openApp(context))
             .setAutoCancel(true)
             .setTimeoutAfter(INCOMING_TIMEOUT_SECONDS * 1000)

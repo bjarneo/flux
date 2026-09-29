@@ -55,9 +55,11 @@ def spki(der_cert):
 
 
 def verification_key(a, b, ts):
+    """Returns the 16-digit key in 4 groups of 4, as the phone shows it."""
     if a < b:
         a, b = b, a
-    return hashlib.sha256(a + b + str(ts).encode()).hexdigest()[:8].upper()
+    key = hashlib.sha256(a + b + str(ts).encode()).hexdigest()[:16].upper()
+    return " ".join(key[i:i + 4] for i in range(0, 16, 4))
 
 
 def flv_frames(stream, width, height):

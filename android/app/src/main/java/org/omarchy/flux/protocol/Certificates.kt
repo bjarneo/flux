@@ -32,15 +32,23 @@ class LocalCertificate(val privateKey: PrivateKey, val certificate: X509Certific
         /**
          * Loads the certificate from the directory. The first call generates a
          * new RSA 2048 key and a certificate with CN set to a new device ID.
+         * When the files do not load, the function keeps them with the
+         * ending .broken, makes a new identity, and calls [onReplaced]. The
+         * computers then see a new device and must pair again. When only 1
+         * file exists, the first start stopped before it wrote both, so no
+         * computer knows the identity and the function makes a new one.
          */
-        fun loadOrCreate(dir: File): LocalCertificate {
+        fun loadOrCreate(dir: File, onReplaced: (Throwable) -> Unit = {}): LocalCertificate {
             val keyFile = File(dir, KEY_FILE)
             val certFile = File(dir, CERT_FILE)
             if (keyFile.exists() && certFile.exists()) {
-                runCatching {
+                val loaded = runCatching {
                     val key = KeyFactory.getInstance("RSA").generatePrivate(PKCS8EncodedKeySpec(keyFile.readBytes()))
-                    return LocalCertificate(key, parseCertificate(certFile.readBytes()))
+                    LocalCertificate(key, parseCertificate(certFile.readBytes())).also { it.deviceId }
                 }
+                loaded.getOrNull()?.let { return it }
+                for (f in listOf(keyFile, certFile)) if (f.exists()) f.renameTo(File(dir, "${f.name}.broken"))
+                onReplaced(loaded.exceptionOrNull() ?: IllegalStateException("the identity did not load"))
             }
             val created = generate(UUID.randomUUID().toString().replace("-", ""))
             dir.mkdirs()
@@ -82,10 +90,14 @@ fun commonName(cert: X509Certificate): String? {
 fun subjectPublicKeyInfo(cert: X509Certificate): ByteArray =
     org.bouncycastle.asn1.x509.Certificate.getInstance(cert.encoded).subjectPublicKeyInfo.encoded
 
+/** The number of hex digits in a verification key. */
+const val VERIFICATION_KEY_DIGITS = 16
+
 /**
- * Returns the 8-character key that both devices show while they pair. It
- * hashes the 2 public keys, larger first, then the pairing timestamp in
- * seconds as decimal text.
+ * Returns the 16-digit key that both devices show while they pair: the
+ * first 8 bytes of a SHA-256 in uppercase hex. The hash covers the 2
+ * public keys, larger first, then the pairing timestamp in seconds as
+ * decimal text. The key has no spaces. [groupKey] adds them for the screen.
  */
 fun verificationKey(own: X509Certificate, peer: X509Certificate, timestamp: Long): String =
     verificationKey(subjectPublicKeyInfo(own), subjectPublicKeyInfo(peer), timestamp)
@@ -100,8 +112,11 @@ fun verificationKey(ownKey: ByteArray, peerKey: ByteArray, timestamp: Long): Str
     md.update(a)
     md.update(b)
     if (timestamp > 0) md.update(timestamp.toString().toByteArray())
-    return md.digest().joinToString("") { "%02x".format(it) }.substring(0, 8).uppercase()
+    return md.digest().joinToString("") { "%02x".format(it) }.substring(0, VERIFICATION_KEY_DIGITS).uppercase()
 }
+
+/** Shows a key in groups of 4 digits with a space between the groups, for example "5EE6 825F 974E D59A". */
+fun groupKey(key: String): String = key.chunked(4).joinToString(" ")
 
 /** Compares bytes as unsigned values, the same way Go bytes.Compare does. */
 fun compareBytes(a: ByteArray, b: ByteArray): Int {
