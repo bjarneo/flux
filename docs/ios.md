@@ -84,9 +84,20 @@ To use the share extension with your own team, build the app from Xcode as descr
 1. Connect the iPhone and the computer to the same local network.
 2. Open Flux on the iPhone and allow access to the local network.
 3. Select the computer under **Available**, then send the pair request.
-4. Accept the request on the computer when it shows the same 8-character key.
+4. Accept the request on the computer when it shows the same 16-character key, such as `5EE6 825F 974E D59A`.
+
+Compare all 16 characters.
+Earlier versions of Flux show only 8 characters, so update Flux on all devices before you pair.
 
 You can also start from the computer with `flux-cli pair` and accept on the iPhone.
+While Flux is on the screen, a sheet shows the request.
+A swipe down on the sheet rejects it.
+While Flux is in the background, a notification shows the request and the key.
+**Accept** in the notification needs an unlocked iPhone and opens Flux.
+**Reject** also works on the lock screen.
+After a reject, Flux ends new requests from the same computer or address for 2 minutes.
+To pair in that time, start the pairing on the iPhone.
+Flux asks for permission to show notifications when you pair the first computer.
 The iPhone appears on the computer as `phone`, with the name from **Settings > This iPhone**.
 iOS gives apps only the generic name "iPhone", so set a name there.
 Flux keeps its identity key and certificate out of iCloud and computer backups, so pair again after you restore a backup.
@@ -116,15 +127,15 @@ Flux must still be open on the iPhone. See [limits](#limits-of-ios).
 
 | Feature | iPhone behavior |
 | --- | --- |
-| Files, text, and links | Send from the Files picker, the photo picker, the Share field, or the share sheet of any app. Received files go to the Flux folder in the Files app and open with Quick Look. Links open in the browser of the computer, and text goes on its clipboard. |
-| Share sheet | **Flux** in the share sheet of other apps queues files, photos, text, and links for a computer. Flux sends them when it opens and connects. See [limits](#limits-of-ios). |
+| Files, text, and links | Send from the Files picker, the photo picker, the Share field, or the share sheet of any app. Links open in the browser of the computer, and text goes on its clipboard. Text has a limit of 1 MB. Received files go to the Flux folder in the Files app. A received file or link shows in a notification, and it opens only after a tap on the notification or on the transfer. |
+| Share sheet | **Flux** in the share sheet of other apps queues files, photos, text, and links for a computer. A text file, such as a `.txt` or `.md` file, goes as a file with its name. **Cancel** stops the share. Flux sends the items when it opens and connects. See [limits](#limits-of-ios). |
 | Clipboard | Text and images both ways while **Sync clipboard** is on and Flux is on the screen. The **Clipboard** quick action sends it at once. |
 | Screenshots and photos | **Send new screenshots** and **Send new photos** send new items from the Photos library when Flux opens. |
 | Media | Controls the players of the computer. The computer does not control the players on the iPhone. |
 | Commands | Lists and runs the commands configured on the computer. |
 | Browse | Opens the shared folders of the computer read-only through SSH inside a `flux.tunnel`, and saves files to the Files app. |
-| Camera modes | Text, QR, Photo, Document, and Signature, like the Android app, from the camera, a picked photo, or a pasted image. |
-| Webcam | Streams the front or back camera to the computer as a virtual webcam in H.264. **Also send the microphone** starts the microphone with it. It stops when Flux leaves the screen. |
+| Camera modes | Text, QR, Photo, Document, and Signature, like the Android app, from the camera, a picked photo, or a pasted image. A document has at most 30 pages. |
+| Webcam | Streams the front or back camera to the computer as a virtual webcam in H.264. **Also send the microphone** starts the microphone with it. It stops when Flux leaves the screen. The screen of the iPhone stays on while the webcam or the remote desktop streams and while the touchpad shows. |
 | Microphone | Streams the microphone as 48 kHz mono audio. It keeps streaming in the background and while the iPhone is locked. |
 | Notifications | Shows notifications from `flux-cli notify`. |
 | Battery | Reports the battery of the iPhone. The device screen shows the battery of the computer. |
@@ -135,7 +146,7 @@ Flux must still be open on the iPhone. See [limits](#limits-of-ios).
 | Remote desktop | Shows the screen of the computer, with touches, keys, the Omarchy panel, dictation, and a monitor picker. The computer needs `remote_desktop = true`, and `remote_input = true` for control. See [Remote desktop](remote-desktop.md). |
 | herdr agents | Shows the agents that herdr runs, their output in color fitted to the phone screen, and notifications for needs input and finished. Answers them, starts agents, and runs terminals when the computer allows it. See [herdr agents](herdr.md). |
 | Dictation | Each text field has a mic key: the agent replies, the touchpad, the remote desktop, **Text or link** in **Share**, the scanned text, the shortcut search, the folder search and the task of a new agent, and the terminal command. Searches get the words in place of the search. Other fields get them at the end of the text. The iPhone dictates in its own languages. |
-| Face ID lock | Replies, new agents, terminals, the touchpad, and the remote desktop ask for Face ID, Touch ID, or the passcode. It stays valid for 5 minutes. |
+| Face ID lock | Replies, new agents, terminals, the touchpad, and the remote desktop ask for Face ID, Touch ID, or the passcode. The unlock stays valid for 5 minutes, and it ends when the iPhone locks. An open touchpad or remote desktop asks again when Flux returns after the unlock ended. |
 
 Flux for iOS does not advertise notifications of other apps, SMS, calls, or the screen mirror.
 
@@ -147,8 +158,8 @@ Flux for iOS does not advertise notifications of other apps, SMS, calls, or the 
 | Other apps' notifications, text messages, and calls | iOS gives apps no access to them. Flux does not advertise `notification.request`, `sms.*`, or `telephony`. |
 | Clipboard | iOS asks before each read of text that another app copied. Flux reads the clipboard only while it is on the screen, and when a computer connects only after the clipboard changed. |
 | Screenshots and photos | They go to the computer when Flux opens, not in the background. |
-| Share sheet | The share extension runs apart from the app and cannot open Flux or hold a link. It queues the items in the App Group. Flux sends them when it opens and connects, and keeps failed items with the reason on the **Share** screen. The queue holds up to 200 items and 1 GB, and an item that failed 5 times or waited 7 days goes, with a notification. Folders do not go. |
-| Focus | Flux cannot read or set the Focus. It reports the Focus through the Focus filter and ignores Do Not Disturb from the computer. |
+| Share sheet | The share extension runs apart from the app and cannot open Flux or hold a link. It queues the items in the App Group. Flux sends them when it opens and connects, and keeps failed items with the reason on the **Share** screen. The queue holds up to 200 items and 1 GB, and an item that failed 5 times or waited 7 days goes, with a notification. The extension checks the size of each file before the copy. Send a file larger than 1 GB from the **Share** screen of Flux. A text or link has a limit of 1 MB. Folders do not go. |
+| Focus | Flux cannot read or set the Focus. It reports the Focus through the Focus filter and ignores Do Not Disturb from the computer. A change while Flux has no link goes to each paired computer when it connects. |
 | Camera | iOS gives the camera only to the app on the screen, so the webcam stops when Flux leaves it. |
 | Volume keys | iOS gives apps no public way to take the volume keys, so they do not change slides. |
 | Screen mirror | iOS does not mirror the screen to a computer. See below. |
@@ -170,15 +181,20 @@ To silence the computers with a Focus:
 2. Turn on **Silence computers with Focus** in Flux.
 
 A Focus without the Flux filter is not reported.
+iOS runs the filter also while Flux is in the background or not open, when Flux has no link.
+Flux keeps such a change and sends it to each paired computer when it connects.
+Only a change goes out.
+A computer that connects gets no state that it already has.
 
 ## Permissions
 
-iOS asks for each permission on first use:
+iOS asks for each permission on first use.
+Flux asks for notifications when you pair the first computer, not at the first start.
 
 | Permission | Used by |
 | --- | --- |
 | Local Network | Discovery and links |
-| Notifications | Pairing requests, received files, notifications, approval, herdr agents, sent share sheet items |
+| Notifications | Pairing requests, received files and links, notifications, approval, herdr agents, sent share sheet items |
 | Camera | Camera modes and the webcam |
 | Microphone | The microphone stream and dictation |
 | Speech Recognition | Dictation in the text fields |
@@ -196,7 +212,7 @@ They declare these required-reason APIs:
 | --- | --- | --- | --- |
 | Flux | User defaults | `CA92.1` | The settings of the app and of FluxKit, which only the app reads |
 | Flux | File timestamp | `C617.1` | The creation date of the share queue folders in the App Group, and the attributes of the files that Flux sends and receives in its container |
-| Flux | System boot time | `35F9.1` | The time between events in the app: touches, the Face ID unlock, media positions, dictation, and agent tasks |
+| Flux | System boot time | `35F9.1` | The time between events in the app: touches, media positions, dictation, and agent tasks |
 | FluxShare | User defaults | `1C8F.1` | The last computer of the share extension, in the App Group |
 
 When code starts to use another required-reason API, add its category and reason to the manifest of each target that runs the code.

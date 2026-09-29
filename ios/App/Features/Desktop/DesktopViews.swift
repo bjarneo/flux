@@ -124,13 +124,11 @@ private struct DesktopContent: View {
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .background: controller.pause()
-            case .active: controller.resume()
+            // After the unlock ended, the stream starts again after the new check, see `UnlockGate`.
+            case .active: if ReplyLock.isUnlocked { controller.resume() }
             default: break
             }
         }
-        // The screen stays on while the stream shows.
-        .onChange(of: controller.live, initial: true) { _, live in UIApplication.shared.isIdleTimerDisabled = live }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
     }
 
     private func video(hint: Bool, wide: Bool) -> some View {

@@ -31,6 +31,42 @@ final class AppLogicTests: XCTestCase {
         XCTAssertFalse(window.isUnlocked(at: 1300), "the unlock ends after 5 minutes")
         window.unlock(at: 2000)
         XCTAssertTrue(window.isUnlocked(at: 2200), "a new unlock starts a new window")
+        window.lock()
+        XCTAssertFalse(window.isUnlocked(at: 2200), "a lock of the iPhone ends the unlock at once")
+    }
+
+    func testTheUnlockClockKeepsCounting() {
+        let a = ElapsedTime.now
+        let b = ElapsedTime.now
+        XCTAssertGreaterThanOrEqual(a, 0)
+        XCTAssertGreaterThanOrEqual(b, a, "the clock never goes back")
+    }
+
+    func testPairKeyGroups() {
+        XCTAssertEqual(KeyView.grouped("5EE6825F974ED59A"), "5EE6 825F 974E D59A", "4 groups of 4, as on every device")
+        XCTAssertEqual(KeyView.grouped("5BB22DB1"), "5BB2 2DB1", "a key of an earlier app still groups")
+        XCTAssertEqual(KeyView.grouped(""), "")
+    }
+
+    func testThePairNotificationNeedsAnUnlockToAccept() throws {
+        let actions = AppModel.pairActions()
+        let accept = try XCTUnwrap(actions.first { $0.identifier == "accept" })
+        XCTAssertTrue(accept.options.contains(.authenticationRequired), "a locked iPhone cannot accept a pairing")
+        XCTAssertTrue(accept.options.contains(.foreground), "Accept opens Flux, which shows the key")
+        let reject = try XCTUnwrap(actions.first { $0.identifier == "reject" })
+        XCTAssertEqual(reject.options, [.destructive], "a locked iPhone can reject")
+    }
+
+    func testARejectedComputerWaits() {
+        var cooldown = PairCooldown()
+        XCTAssertFalse(cooldown.blocks(id: "a", ip: "10.0.0.2", at: 0))
+        cooldown.reject(id: "a", ip: "10.0.0.2", at: 100)
+        XCTAssertTrue(cooldown.blocks(id: "a", ip: "10.0.0.9", at: 150), "the same computer waits")
+        XCTAssertTrue(cooldown.blocks(id: "b", ip: "10.0.0.2", at: 150), "a new device ID from the same address waits")
+        XCTAssertFalse(cooldown.blocks(id: "b", ip: "10.0.0.3", at: 150), "other computers can ask")
+        XCTAssertFalse(cooldown.blocks(id: "a", ip: "10.0.0.2", at: 220), "the wait ends")
+        cooldown.reject(id: "c", ip: "", at: 300)
+        XCTAssertFalse(cooldown.blocks(id: "d", ip: "", at: 310), "an unknown address matches nothing")
     }
 
     func testAppearanceStyles() {

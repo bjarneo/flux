@@ -80,7 +80,7 @@ struct ShareView: View {
         switch composer.phase {
         case .choosing, .queueing:
             ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") { composer.finish?(false) }
+                Button("Cancel") { composer.cancel() }
             }
             ToolbarItem(placement: .confirmationAction) {
                 if composer.phase == .queueing {

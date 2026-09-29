@@ -73,9 +73,6 @@ private struct WebcamControls: View {
             WebcamSettingsSheet(plugin: plugin, webcam: webcam, streaming: active)
                 .presentationDetents([.medium, .large])
         }
-        // The screen stays on while the iPhone streams.
-        .onChange(of: active, initial: true) { _, on in UIApplication.shared.isIdleTimerDisabled = on }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             access = CameraAccess.current
         }

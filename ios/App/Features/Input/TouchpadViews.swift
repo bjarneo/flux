@@ -197,13 +197,14 @@ private struct TouchpadContent: View {
         .padding(.horizontal, 16)
         .padding(.bottom, 10)
         .padding(.top, 6)
+        // The screen stays on while the touchpad shows, see `FeatureHooks.keepsScreenOn`.
         .onAppear {
             if controller == nil { controller = TouchpadController(deviceId: deviceId, app: model, input: input) }
-            UIApplication.shared.isIdleTimerDisabled = true
+            model.touchpadOpen = true
         }
         .onDisappear {
             controller?.close()
-            UIApplication.shared.isIdleTimerDisabled = false
+            model.touchpadOpen = false
         }
         // A finger that holds the left button or drags may never lift.
         .onChange(of: scenePhase) { _, phase in

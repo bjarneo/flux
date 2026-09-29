@@ -21,6 +21,15 @@ final class NotificationAccess {
         }
     }
 
+    /// Asks iOS once and opens no settings. Flux calls it at the first
+    /// pairing, so that the question comes with a reason, and not at launch.
+    func ask() {
+        Task {
+            _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+            refresh()
+        }
+    }
+
     /// Asks iOS the first time, and opens the notification settings of Flux after that.
     func turnOn(model: AppModel) {
         guard status == .notDetermined else {

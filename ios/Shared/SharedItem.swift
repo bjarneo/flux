@@ -30,7 +30,8 @@ struct SharedItem {
         } else if let t = first(.url) {
             (kind, type) = (.link, t)
         } else if let t = first(.plainText) {
-            (kind, type) = (.text, t)
+            // A text file from Files or Mail goes as a file with its name.
+            (kind, type) = (Self.isFileName(provider.suggestedName) ? .file : .text, t)
         } else if let t = first(.data) {
             (kind, type) = (.file, t)
         } else {
@@ -40,13 +41,29 @@ struct SharedItem {
 
     var isFile: Bool { kind == .photo || kind == .video || kind == .file }
 
+    /// True for a text with a file name, such as "notes.txt". A page title
+    /// such as "index.html" looks the same.
+    var isTextFile: Bool { kind == .file && type.conforms(to: .plainText) }
+
+    /// True when a suggested name ends with the extension of a type that
+    /// the system knows, such as "notes.txt". Selected text and a page title
+    /// have no name, or a name such as "Swift 5.9 released", whose last part
+    /// is no known extension.
+    static func isFileName(_ name: String?) -> Bool {
+        guard let name else { return false }
+        let ext = (name as NSString).pathExtension
+        guard !ext.isEmpty, ext.count <= 16, let type = UTType(filenameExtension: ext) else { return false }
+        return type.isDeclared
+    }
+
     /// The items that go out, like the share screen of Flux for Android:
     /// files when the share has any, else links, else text. Safari, for
-    /// example, adds the page title as text next to the link.
+    /// example, adds the page title as text next to the link. A title with
+    /// a file name is no file, so a text file does not win over a link.
     static func sendable(_ items: [SharedItem]) -> [SharedItem] {
-        let files = items.filter(\.isFile)
-        if !files.isEmpty { return files }
         let links = items.filter { $0.kind == .link }
+        let files = items.filter { $0.isFile && !($0.isTextFile && !links.isEmpty) }
+        if !files.isEmpty { return files }
         if !links.isEmpty { return links }
         return items.filter { $0.kind == .text }
     }

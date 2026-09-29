@@ -17,7 +17,9 @@ import Observation
 ///
 /// iOS gives apps no way to set the Focus, so the iPhone only reports its
 /// Focus through the same filter. The state that a computer sends shows in
-/// the model and changes nothing on the iPhone.
+/// the model and changes nothing on the iPhone. iOS runs the filter also
+/// while Flux has no link, so a change waits in a `FocusBacklog` for each
+/// computer that was not connected.
 public final class DndPlugin: FluxPlugin, @unchecked Sendable {
     private weak var core: FluxCore?
     public let model: DndModel
@@ -32,6 +34,9 @@ public final class DndPlugin: FluxPlugin, @unchecked Sendable {
     #if os(macOS)
     static let shortcutOnKey = "dnd.shortcutOn"
     static let shortcutOffKey = "dnd.shortcutOff"
+    #else
+    /// Set once in `attach`, before the network starts.
+    private var backlog: FocusBacklog?
     #endif
 
     @MainActor
@@ -42,22 +47,34 @@ public final class DndPlugin: FluxPlugin, @unchecked Sendable {
         let defaults = core.defaults
         let model = model
         DispatchQueue.main.async { model.load(defaults) }
+        #if os(iOS)
+        backlog = FocusBacklog(defaults: defaults)
+        #endif
     }
 
     /// Sets the Focus state at launch, so that the start is not a change.
+    /// On iOS, a state that differs from the last one that Flux saw is a
+    /// change that came while Flux did not run.
     public func start(focusOn on: Bool) {
         _ = dndGuard.local(on, now: Self.now())
         let model = model
         Task { @MainActor in model.focusOn = on }
+        #if os(iOS)
+        report(on)
+        #endif
     }
 
     /// Handles a Focus change on this Mac, reported by the Flux Focus filter.
     public func focusChanged(_ on: Bool) {
         let model = model
         Task { @MainActor in model.focusOn = on }
+        #if os(iOS)
+        report(on)
+        #else
         guard let core, dndGuard.local(on, now: Self.now()), sync(core) else { return }
         FluxLog.plugin.info("Do Not Disturb is \(on ? "on" : "off", privacy: .public) on \(FluxPlatform.current.deviceNoun, privacy: .public)")
         send(on, except: nil)
+        #endif
     }
 
     #if os(macOS)
@@ -97,6 +114,24 @@ public final class DndPlugin: FluxPlugin, @unchecked Sendable {
         let id = device.id
         let model = model
         Task { @MainActor in model.computers[id] = nil }
+    }
+
+    /// Sends a Focus change that came while this computer was not
+    /// connected. The core lock is held, so it sends on the device.
+    public func onConnected(_ device: Device) {
+        guard let core, let backlog, sync(core), device.accepts(PacketType.fluxDnd),
+              let on = backlog.take(for: device.id) else { return }
+        _ = device.send(Packet(PacketType.fluxDnd, ["on": on]))
+    }
+
+    /// Takes a Focus state from the filter. A change goes to the connected
+    /// computers now and waits in the backlog for the others.
+    private func report(_ on: Bool) {
+        guard let core, let backlog, backlog.report(on, keep: sync(core)) else { return }
+        FluxLog.plugin.info("Do Not Disturb is \(on ? "on" : "off", privacy: .public) on \(FluxPlatform.current.deviceNoun, privacy: .public)")
+        let packet = Packet(PacketType.fluxDnd, ["on": on])
+        let reached = core.connectedPaired().filter { $0.accepts(PacketType.fluxDnd) && core.send(packet, to: $0.id) }
+        backlog.reached(reached.map(\.id), on: on)
     }
     #endif
 

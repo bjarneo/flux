@@ -369,7 +369,7 @@ struct ImageSources: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            PhotosPicker(selection: $items, maxSelectionCount: multiple ? nil : 1, matching: .images) {
+            PhotosPicker(selection: $items, maxSelectionCount: multiple ? DocumentPages.maxPages : 1, matching: .images) {
                 Label("Photos", systemImage: "photo.on.rectangle")
                     .labelStyle(.iconOnly)
                     .font(.system(size: 19, weight: .semibold))

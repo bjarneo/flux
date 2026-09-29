@@ -32,11 +32,16 @@ struct QueuedShare: Codable, Equatable, Identifiable, Sendable {
 enum ShareQueueError: LocalizedError, Equatable {
     case folder(String)
     case full
+    /// 1 file is larger than the whole queue can hold.
+    case tooLarge(String)
+    case textTooLarge
 
     var errorDescription: String? {
         switch self {
         case .folder(let name): "\(name) is a folder. Share the files inside it."
         case .full: "The share queue is full. Open Flux to send what waits, or remove items there."
+        case .tooLarge(let name): "\(name) is larger than 1 GB, the limit of the share queue. Send it from the Share screen in Flux."
+        case .textTooLarge: "The text is larger than 1 MB. Save it in a file and share the file."
         }
     }
 }
@@ -62,6 +67,8 @@ enum ShareStep: Equatable, Sendable {
 /// `expired`.
 struct ShareQueue: Sendable {
     let root: URL
+    /// The most bytes of files in the queue, `maxBytes` except in tests.
+    var byteLimit = ShareQueue.maxBytes
 
     var folder: URL { root.appendingPathComponent("Queue", isDirectory: true) }
     var shares: URL { root.appendingPathComponent("Shares", isDirectory: true) }
@@ -69,6 +76,8 @@ struct ShareQueue: Sendable {
     static let entryName = "entry.json"
     static let maxItems = 200
     static let maxBytes: Int64 = 1 << 30
+    /// The largest text or link. The computer gets it in 1 packet.
+    static let maxTextBytes = 1 << 20
     static let maxTries = 5
     static let maxAge: TimeInterval = 7 * 24 * 3600
 
@@ -108,9 +117,9 @@ struct ShareQueue: Sendable {
     }
 
     /// Throws `full` when the queue cannot take `count` more items, or
-    /// holds more than `maxBytes` of files.
+    /// holds more than `byteLimit` of files.
     func checkRoom(adding count: Int) throws {
-        if entries().count + count > Self.maxItems || bytes() > Self.maxBytes { throw ShareQueueError.full }
+        if entries().count + count > Self.maxItems || bytes() > byteLimit { throw ShareQueueError.full }
     }
 
     /// The size of the files in the queue.
@@ -131,7 +140,8 @@ struct ShareQueue: Sendable {
 
     /// Copies a file into the queue. `name` is the name that the computer
     /// gets, the file's own name by default.
-    /// A folder does not go.
+    /// A folder does not go. The size check comes before the copy, so that
+    /// a file that does not fit is never copied.
     @discardableResult
     func add(file source: URL, computerId: String, created: Date, order: Int, name: String? = nil, share: String? = nil) throws -> QueuedShare {
         let clean = Self.safeName(name ?? source.lastPathComponent)
@@ -139,6 +149,9 @@ struct ShareQueue: Sendable {
         if FileManager.default.fileExists(atPath: source.path, isDirectory: &isDir), isDir.boolValue {
             throw ShareQueueError.folder(clean)
         }
+        let size = Int64((try? source.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
+        if size > byteLimit { throw ShareQueueError.tooLarge(clean) }
+        if bytes() + size > byteLimit { throw ShareQueueError.full }
         let id = UUID().uuidString
         let dir = try newFolder(id)
         do {
@@ -152,9 +165,10 @@ struct ShareQueue: Sendable {
         }
     }
 
-    /// Adds a text or a link.
+    /// Adds a text or a link of at most `maxTextBytes`.
     @discardableResult
     func add(text: String, kind: QueuedShare.Kind, computerId: String, created: Date, order: Int, share: String? = nil) throws -> QueuedShare {
+        if text.utf8.count > Self.maxTextBytes { throw ShareQueueError.textTooLarge }
         let id = UUID().uuidString
         let dir = try newFolder(id)
         let item = QueuedShare(id: id, computerId: computerId, kind: kind, name: nil, text: text, created: created, order: order, share: share)
