@@ -143,6 +143,7 @@ func (n *node) launch(t *testing.T, bin string, tcpPort int) {
 		"XDG_CONFIG_HOME=" + filepath.Join(n.dir, "config"),
 		"XDG_DATA_HOME=" + filepath.Join(n.dir, "data"),
 		"XDG_CACHE_HOME=" + filepath.Join(n.dir, "cache"),
+		"XDG_RUNTIME_DIR=" + filepath.Join(n.dir, "run"),
 		"FLUX_SOCKET=" + sock,
 	}, n.env...)
 	n.cmd.Env = os.Environ()

@@ -77,6 +77,12 @@ func TestNewBinary(t *testing.T) {
 			if s := n.versions(t); s.Self.Version != "v1.0.0" || s.Self.PendingVersion != "" {
 				t.Fatalf("before the update: version %q, pending %q", s.Self.Version, s.Self.PendingVersion)
 			}
+			// A fluxd of systemd tells post-install.sh that it restarts
+			// by itself.
+			marker := filepath.Join(n.dir, "run", "flux", "self-restart")
+			if _, err := os.Stat(marker); (err == nil) != service {
+				t.Fatalf("the self-restart marker: %v", err)
+			}
 			replace(t, newBin, bin)
 
 			if !service {
@@ -102,6 +108,9 @@ func TestNewBinary(t *testing.T) {
 				var exit *exec.ExitError
 				if !errors.As(err, &exit) || exit.ExitCode() != 75 {
 					t.Fatalf("fluxd ended with %v, want exit code 75\n%s", err, n.log)
+				}
+				if _, err := os.Stat(marker); !os.IsNotExist(err) {
+					t.Fatalf("the marker stays after the exit: %v", err)
 				}
 			case <-time.After(10 * time.Second):
 				t.Fatalf("fluxd did not stop after the update\n%s", n.log)

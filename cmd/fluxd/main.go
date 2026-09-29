@@ -63,6 +63,8 @@ func main() {
 	if !*headless {
 		go refreshPlugin(logger)
 	}
+	unmark := markSelfRestart(logger)
+	defer unmark()
 	upgraded := make(chan string, 1)
 	go func() {
 		if v := watchBinary(ctx, d, logger); v != "" {
@@ -110,6 +112,7 @@ func main() {
 	select {
 	case v := <-upgraded:
 		logger.Printf("fluxd %s stopped, so that systemd starts fluxd %s", version, v)
+		unmark()
 		os.Exit(exitUpgrade)
 	default:
 	}

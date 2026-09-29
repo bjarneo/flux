@@ -5,9 +5,11 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"time"
 
+	"flux/internal/config"
 	"flux/internal/core"
 	"flux/internal/plugin"
 	"flux/internal/upgrade"
@@ -26,6 +28,24 @@ func underSystemd() bool {
 	}
 	pid := os.Getenv("SYSTEMD_EXEC_PID")
 	return pid == "" || pid == strconv.Itoa(os.Getpid())
+}
+
+// markSelfRestart writes the marker that tells post-install.sh that this
+// fluxd restarts by itself after an update. The script then leaves it to
+// fluxd, so that the restart waits for the end of a transfer. The function
+// returns a function that removes the marker.
+func markSelfRestart(logger *log.Logger) func() {
+	if !underSystemd() {
+		return func() {}
+	}
+	path := filepath.Join(config.RuntimeDir(), "self-restart")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err == nil {
+		err = os.WriteFile(path, []byte(strconv.Itoa(os.Getpid())+"\n"), 0o644)
+		if err != nil {
+			logger.Printf("self-restart marker: %v", err)
+		}
+	}
+	return func() { _ = os.Remove(path) }
 }
 
 // watchBinary returns the version of a new fluxd binary after it replaced

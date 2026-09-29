@@ -174,7 +174,7 @@ rm ~/.local/bin/flux
 | Step | Effect |
 | --- | --- |
 | Package install or `sudo make install` | Installs the service, udev rule, desktop files, binaries, helper, plugin assets, and the [short name](#the-command-name) `flux`. |
-| `dist/post-install.sh` | Reloads udev and enables the user service globally. Loads the optional webcam module when no existing configuration controls it. |
+| `dist/post-install.sh` | Reloads udev and enables the user service globally. Loads the optional webcam module when no existing configuration controls it. Restarts a running `fluxd` of an earlier version, which does not restart by itself. |
 | `flux-cli setup` | Enables and starts the user service. Copies and enables the shell plugin when the shell is available. |
 | `flux-cli setup --dry-run` | Prints the user setup actions without applying them. |
 | Each start of `fluxd` | Updates the files of an added plugin to the plugin of the same install. |
@@ -220,13 +220,14 @@ flux-cli 0.7.0
 fluxd 0.7.0
 ```
 
-If the output says `fluxd runs an earlier version`, restart the service once:
+Versions of `fluxd` before this feature do not restart by themselves.
+The pacman package and `sudo make install` restart such a `fluxd` at once.
+After a user-only install, the output can say `fluxd runs an earlier version`.
+Then restart the service once:
 
 ```sh
 systemctl --user restart fluxd
 ```
-
-Versions of `fluxd` before this feature do not restart by themselves.
 
 ### Update an AUR install
 
