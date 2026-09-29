@@ -180,6 +180,22 @@ final class SharedComputersTests: XCTestCase {
     }
 }
 
+final class QueuedSharesTests: XCTestCase {
+    func testSentText() {
+        func item(_ kind: QueuedShare.Kind) -> QueuedShare {
+            QueuedShare(id: UUID().uuidString, computerId: "a", kind: kind, name: nil, text: nil, created: Date(), order: 0)
+        }
+        XCTAssertEqual(QueuedShares.sentText([item(.file)]), "1 file that you shared went out.")
+        XCTAssertEqual(QueuedShares.sentText([item(.file), item(.file), item(.link)]), "2 files and 1 link that you shared went out.")
+    }
+
+    func testTileSubtitle() {
+        XCTAssertEqual(ShareTile.subtitle(running: 0, waiting: 0), "Files, photos, text, and links")
+        XCTAssertEqual(ShareTile.subtitle(running: 0, waiting: 2), "2 waiting to send")
+        XCTAssertEqual(ShareTile.subtitle(running: 1, waiting: 2), "1 transferring", "a running transfer shows first")
+    }
+}
+
 final class SharedItemTests: XCTestCase {
     private func text(_ s: String) -> NSItemProvider { NSItemProvider(object: s as NSString) }
     private func link(_ s: String) -> NSItemProvider { NSItemProvider(object: URL(string: s)! as NSURL) }

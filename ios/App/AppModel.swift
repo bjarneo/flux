@@ -74,6 +74,7 @@ final class AppModel {
         state = s
         for d in s.devices where d.pairState != .incoming { Notifier.shared.remove(id: "pair-\(d.id)") }
         if let id = pairingSheet, !s.devices.contains(where: { $0.id == id }) { pairingSheet = nil }
+        FeatureHooks.stateChanged(s, model: self)
         // A new pairing opens the computer's screen.
         if let id = Self.newlyPaired(old: old.devices.map { ($0.id, $0.paired) }, new: s.devices.map { ($0.id, $0.paired) }).first {
             pairingSheet = nil

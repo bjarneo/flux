@@ -1,0 +1,156 @@
+import FluxKit
+import Foundation
+import Observation
+import os
+
+/// The items that the share extension queued. Flux sends them when their
+/// computer is connected: when it opens, when a computer connects, and when
+/// the extension queues items while Flux still runs. It removes each item
+/// once the computer received it and keeps the others for the next try.
+@MainActor
+@Observable
+final class QueuedShares {
+    static let shared = QueuedShares()
+
+    private(set) var items: [QueuedShare] = []
+
+    @ObservationIgnored private var queue: ShareQueue?
+    @ObservationIgnored private var root: URL?
+    @ObservationIgnored private weak var model: AppModel?
+    @ObservationIgnored private var computers: [SharedComputer] = []
+    @ObservationIgnored private var current: [SharedComputers.Current]?
+    @ObservationIgnored private var draining = false
+    @ObservationIgnored private var drainAgain = false
+
+    static let notificationCategory = "share.queue"
+    /// An item folder without its entry after this many seconds is a copy
+    /// that the extension did not finish.
+    static let abandonedAfter: TimeInterval = 3600
+
+    private init() {}
+
+    func items(for deviceId: String) -> [QueuedShare] { items.filter { $0.computerId == deviceId } }
+
+    func start(model: AppModel) {
+        self.model = model
+        guard let root = ShareGroup.root else {
+            FluxLog.plugin.error("no App Group \(ShareGroup.identifier ?? "", privacy: .public), so shared items cannot queue")
+            return
+        }
+        self.root = root
+        queue = ShareQueue(root: root)
+        computers = SharedComputers.read(root: root)
+        CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), nil, { _, _, _, _, _ in
+            DispatchQueue.main.async { MainActor.assumeIsolated { QueuedShares.shared.drain() } }
+        }, ShareGroup.queuedNotification as CFString, nil, .deliverImmediately)
+        stateChanged(model.state)
+    }
+
+    /// Reads the queue again.
+    func refresh() {
+        guard let queue else { return }
+        queue.removeAbandoned(now: Date(), olderThan: Self.abandonedAfter)
+        items = queue.items()
+    }
+
+    func remove(_ id: String) {
+        queue?.remove(id)
+        refresh()
+    }
+
+    /// Writes the computer list for the extension, drops the items of
+    /// computers that are no longer paired, and sends to computers that
+    /// connected.
+    func stateChanged(_ state: CoreState) {
+        guard let root, let queue else { return }
+        let paired = state.devices.filter(\.paired)
+        let now = paired.map { SharedComputers.Current(id: $0.id, name: $0.name, type: $0.type, online: $0.online) }
+        guard now != current else { return }
+        let before = Set(current?.filter(\.online).map(\.id) ?? [])
+        current = now
+        computers = SharedComputers.next(previous: computers, current: now, now: Date())
+        do {
+            try SharedComputers.write(computers, root: root)
+        } catch {
+            FluxLog.plugin.error("cannot write the computers for the share extension: \(String(describing: error), privacy: .public)")
+        }
+        queue.removeItems(notFor: Set(paired.map(\.id)))
+        refresh()
+        if now.contains(where: { $0.online && !before.contains($0.id) }) { drain() }
+    }
+
+    /// Sends the queued items of the connected computers, in order. A call
+    /// while a drain runs makes it read the queue again when it ends.
+    func drain() {
+        guard queue != nil, model != nil else { return }
+        if draining {
+            drainAgain = true
+            return
+        }
+        draining = true
+        Task {
+            repeat {
+                drainAgain = false
+                await drainOnce()
+            } while drainAgain
+            draining = false
+        }
+    }
+
+    private func drainOnce() async {
+        refresh()
+        guard let queue, let model, let share = model.core.plugin(SharePlugin.self) else { return }
+        let connected = Set(model.state.devices.filter { $0.paired && $0.online && $0.accepts(PacketType.share) }.map(\.id))
+        let byId = Dictionary(items.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        var sent: [String: [QueuedShare]] = [:]
+        for step in ShareQueue.plan(items, connected: connected) {
+            switch step {
+            case .files(let computer, let ids):
+                let files = ids.compactMap { id in byId[id].flatMap { item in queue.file(of: item).map { ($0, item) } } }
+                let byFile = Dictionary(files.map { ($0.0, $0.1) }, uniquingKeysWith: { a, _ in a })
+                let done = OSAllocatedUnfairLock(initialState: [QueuedShare]())
+                do {
+                    try await share.sendAndWait(files: files.map(\.0), to: computer) { url, error in
+                        guard let item = byFile[url] else { return }
+                        if let error {
+                            try? queue.markFailed(item.id, message: error.localizedDescription)
+                        } else {
+                            queue.remove(item.id)
+                            done.withLock { $0.append(item) }
+                        }
+                    }
+                } catch {
+                    for (_, item) in files { try? queue.markFailed(item.id, message: error.localizedDescription) }
+                }
+                sent[computer, default: []] += done.withLock { $0 }
+            case .text(let computer, let id):
+                guard let item = byId[id], let text = item.text else { continue }
+                if share.send(text: text, to: computer) {
+                    queue.remove(id)
+                    sent[computer, default: []].append(item)
+                } else {
+                    try? queue.markFailed(id, message: "Not connected")
+                }
+            }
+            refresh()
+        }
+        for (computer, items) in sent where !items.isEmpty {
+            let name = model.device(computer)?.name ?? "your computer"
+            Notifier.shared.post(id: "share-queue-\(computer)", category: Self.notificationCategory,
+                                 title: "Sent to \(name)", body: Self.sentText(items))
+        }
+    }
+
+    /// For example "2 files and 1 link that you shared went out."
+    nonisolated static func sentText(_ items: [QueuedShare]) -> String {
+        var s = ShareSummary()
+        for item in items {
+            switch item.kind {
+            case .file: s.files += 1
+            case .link: s.links += 1
+            case .text: s.texts += 1
+            }
+        }
+        return "\(ShareSummary.text(s)) that you shared went out."
+    }
+}

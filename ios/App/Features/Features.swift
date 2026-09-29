@@ -154,12 +154,19 @@ enum FeatureHooks {
         ApproveFeature.didLaunch(model: model)
     }
 
+    /// Runs after each change of the core state.
+    static func stateChanged(_ state: CoreState, model: AppModel) {
+        QueuedShares.shared.stateChanged(state)
+    }
+
     /// Runs when the app comes on the screen or leaves it.
     static func sceneChanged(active: Bool, model: AppModel) {
         model.core.plugin(ClipboardPlugin.self)?.setActive(active)
         if active { NotificationAccess.shared.refresh() }
         // A computer that connects also gets the new images, through the plugin.
         if active { model.core.plugin(CaptureWatchPlugin.self)?.catchUp() }
+        // Items from the share extension go to the computers that are connected.
+        if active { QueuedShares.shared.drain() }
         // iOS turns off the camera of an app that leaves the screen.
         if !active { model.core.plugin(WebcamPlugin.self)?.stopInBackground() }
     }

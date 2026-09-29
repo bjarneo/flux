@@ -23,6 +23,7 @@ final class ShareFeature {
     static func didLaunch(model: AppModel) {
         Outbox.clear()
         guard let share = model.core.plugin(SharePlugin.self) else { return }
+        QueuedShares.shared.start(model: model)
         share.openFile = { url in ShareFeature.shared.preview = url }
         share.openLink = { url in
             guard UIApplication.shared.applicationState == .active else { return }
@@ -175,11 +176,18 @@ struct ShareTile: View {
     var body: some View {
         if let share = model.core.plugin(SharePlugin.self), device.accepts(PacketType.share) {
             let running = share.model.transfers.filter { $0.deviceId == device.id && $0.state == .running }
+            let waiting = QueuedShares.shared.items(for: device.id).count
             FeatureTile("Share", systemImage: "square.and.arrow.up", tint: .blue,
-                        subtitle: running.isEmpty ? "Files, photos, text, and links" : "\(running.count) transferring") {
+                        subtitle: Self.subtitle(running: running.count, waiting: waiting)) {
                 ShareScreen(deviceId: device.id)
             }
         }
+    }
+
+    static func subtitle(running: Int, waiting: Int) -> String {
+        if running > 0 { return "\(running) transferring" }
+        if waiting > 0 { return "\(waiting) waiting to send" }
+        return "Files, photos, text, and links"
     }
 }
 
@@ -218,6 +226,7 @@ struct ShareScreen: View {
                 } footer: {
                     Text("A link opens in the browser of \(device.name). Text goes on its clipboard.")
                 }
+                QueuedSection(deviceId: device.id, deviceName: device.name)
                 Section {
                     if transfers.isEmpty {
                         Text("No transfers yet")
@@ -262,6 +271,78 @@ struct ShareScreen: View {
         share.send(text: text, to: device.id)
         text = ""
         editing = false
+    }
+}
+
+/// The items from the share sheet that wait for the computer, each with
+/// Remove.
+private struct QueuedSection: View {
+    let deviceId: String
+    let deviceName: String
+
+    var body: some View {
+        let items = QueuedShares.shared.items(for: deviceId)
+        if !items.isEmpty {
+            Section {
+                ForEach(items) { item in
+                    QueuedRow(item: item) { QueuedShares.shared.remove(item.id) }
+                        .swipeActions {
+                            Button("Remove", role: .destructive) { QueuedShares.shared.remove(item.id) }
+                        }
+                }
+            } header: {
+                Text("Waiting to send")
+            } footer: {
+                Text("What you share with Flux from other apps goes to \(deviceName) when it is connected.")
+            }
+            .onAppear { QueuedShares.shared.refresh() }
+        }
+    }
+}
+
+/// 1 queued item: its name or text, and why the last try failed.
+private struct QueuedRow: View {
+    let item: QueuedShare
+    let remove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol)
+                .font(.title2)
+                .foregroundStyle(.secondary)
+                .frame(width: 28)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.name ?? item.text ?? "")
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+                if let failure = item.failure {
+                    Text("Not sent: \(failure)")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .lineLimit(2)
+                } else {
+                    Text("Waiting")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 0)
+            Button(action: remove) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Remove")
+        }
+    }
+
+    private var symbol: String {
+        switch item.kind {
+        case .file: "doc"
+        case .link: "link"
+        case .text: "text.alignleft"
+        }
     }
 }
 
