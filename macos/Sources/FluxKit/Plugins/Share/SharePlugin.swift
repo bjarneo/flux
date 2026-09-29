@@ -35,12 +35,13 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
         let folder = downloadFolder
         ui { $0.downloadFolder = folder }
         #if os(macOS)
-        let fileActions = [
-            UNNotificationAction(identifier: "open", title: "Open"),
-            UNNotificationAction(identifier: "reveal", title: "Show in Finder"),
-        ]
+        let open = UNNotificationAction(identifier: "open", title: "Open")
+        let fileActions = [open, UNNotificationAction(identifier: "reveal", title: "Show in Finder")]
         #else
-        let fileActions = [UNNotificationAction(identifier: "open", title: "Open")]
+        // Without .foreground, iOS runs the action in the background, where
+        // Flux cannot show a file or open a link.
+        let open = UNNotificationAction(identifier: "open", title: "Open", options: [.foreground])
+        let fileActions = [open]
         #endif
         Notifier.shared.register(category: Self.fileCategory, actions: fileActions) { [weak self] action, info, _ in
             guard let path = info["path"] as? String else { return }
@@ -57,7 +58,7 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
                 }
             }
         }
-        Notifier.shared.register(category: Self.linkCategory, actions: [UNNotificationAction(identifier: "open", title: "Open")]) { [weak self] _, info, _ in
+        Notifier.shared.register(category: Self.linkCategory, actions: [open]) { [weak self] _, info, _ in
             guard let link = info["url"] as? String, let url = URL(string: link) else { return }
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.openReceivedLink(url) } }
         }
@@ -124,15 +125,15 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
             core.plugin(ClipboardPlugin.self)?.putFromComputer(text)
             core.toast("Text from \(from) is on the clipboard")
         case .url(let link):
+            #if os(macOS)
             let web = URL(string: link).flatMap { ["http", "https"].contains($0.scheme?.lowercased() ?? "") ? $0 : nil }
             if let web {
                 DispatchQueue.main.async { MainActor.assumeIsolated { self.openReceivedLink(web) } }
             }
-            #if os(macOS)
             let notify = web == nil
             #else
-            // iOS opens links only from the screen, so the link also stays
-            // in a notification.
+            // iOS opens a link only after a tap on its notification, like
+            // the Android app.
             let notify = true
             #endif
             if notify {
@@ -195,7 +196,10 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
                                  body: "From \(job.from), saved in \(Self.placeName(folder))",
                                  userInfo: ["path": saved.path])
             core.toast("Saved \(saved.lastPathComponent) in \(Self.placeName(folder))")
+            // iOS opens a file only after a tap on its notification or its transfer.
+            #if os(macOS)
             if job.open { DispatchQueue.main.async { MainActor.assumeIsolated { self.openReceivedFile(saved) } } }
+            #endif
         } catch {
             try? part.handle.close()
             try? FileManager.default.removeItem(at: part.url)
@@ -310,10 +314,19 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
         core?.send(ShareWire.scan(text), to: deviceId) ?? false
     }
 
+    /// The largest text or link that `send(text:to:)` sends. The computer
+    /// reads 1 packet as 1 line and closes the link after a line over its
+    /// limit.
+    public static let maxText = 1 << 20
+
     /// Sends text, or a link when the text is 1 URL. It returns false when
     /// the text did not go out.
     @discardableResult
     public func send(text: String, to deviceId: String) -> Bool {
+        guard text.utf8.count <= Self.maxText else {
+            core?.toast("The text is larger than 1 MB. Send it as a file")
+            return false
+        }
         guard let core, let peer = peer(deviceId) else {
             core?.toast("Not connected. Try again in a moment")
             return false

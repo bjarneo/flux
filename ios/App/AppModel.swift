@@ -19,6 +19,28 @@ struct Toast: Equatable {
     let message: String
 }
 
+/// The computers and addresses whose pairing request the user rejected.
+/// Their next requests end at once for `seconds`, so that a device on the
+/// network cannot keep the pairing sheet over the app.
+struct PairCooldown {
+    var seconds: TimeInterval = 120
+    /// The time of each reject, in `ElapsedTime`, by device ID and by address.
+    private var rejected: [String: TimeInterval] = [:]
+
+    mutating func reject(id: String, ip: String, at now: TimeInterval) {
+        rejected = rejected.filter { now - $0.value < seconds }
+        for key in Self.keys(id: id, ip: ip) { rejected[key] = now }
+    }
+
+    func blocks(id: String, ip: String, at now: TimeInterval) -> Bool {
+        Self.keys(id: id, ip: ip).contains { key in rejected[key].map { now - $0 < seconds } ?? false }
+    }
+
+    private static func keys(id: String, ip: String) -> [String] {
+        ip.isEmpty ? ["id " + id] : ["id " + id, "ip " + ip]
+    }
+}
+
 /// The UI state of the app. It mirrors the core and holds the navigation.
 @MainActor
 @Observable
@@ -34,8 +56,13 @@ final class AppModel {
     var pairingSheet: String?
     /// False while the app is off the screen.
     private(set) var isActive = false
+    /// True while the touchpad shows. The screen of the iPhone stays on then.
+    var touchpadOpen = false
     private var toastTask: Task<Void, Never>?
     private var backgroundTask = UIBackgroundTaskIdentifier.invalid
+    /// The pairing sheet that shows now, see `pairSheetClosed`.
+    @ObservationIgnored var shownPairSheet: String?
+    private var cooldown = PairCooldown()
 
     init(core: FluxCore, demo: Bool = false) {
         self.core = core
@@ -44,25 +71,38 @@ final class AppModel {
         core.onChange = { [weak self] s in MainActor.assumeIsolated { self?.apply(s) } }
         core.onToast = { [weak self] m in MainActor.assumeIsolated { self?.show(m) } }
         core.onPairRequest = { [weak self] d in MainActor.assumeIsolated { self?.pairRequested(d) } }
-        Notifier.shared.register(category: Self.pairCategory, actions: [
-            UNNotificationAction(identifier: "accept", title: "Accept"),
-            UNNotificationAction(identifier: "reject", title: "Reject", options: [.destructive]),
-        ]) { [weak self] action, info, _ in
+        Notifier.shared.register(category: Self.pairCategory, actions: Self.pairActions()) { [weak self] action, info, _ in
             guard let id = info["device"] as? String else { return }
+            let key = info["key"] as? String
             DispatchQueue.main.async {
                 guard let self else { return }
                 switch action {
-                case "accept": self.core.acceptPair(id)
-                case "reject": self.core.cancelPair(id)
+                case "accept":
+                    // Accept only the request whose key the notification showed.
+                    guard let d = self.device(id), d.pairState == .incoming, d.pairKey == key else { return }
+                    self.core.acceptPair(id)
+                case "reject":
+                    if let d = self.device(id), d.pairState == .incoming { self.rejectPair(d) }
                 // A tap opens Flux, which shows the request.
                 default: break
                 }
             }
         }
         watchBackgroundWork()
+        watchScreenAwake()
     }
 
     static let pairCategory = "pair"
+
+    /// The actions of a pairing notification. Accept needs an unlocked
+    /// iPhone and opens Flux, so that a person with a locked iPhone cannot
+    /// pair it. Reject works from the lock screen.
+    nonisolated static func pairActions() -> [UNNotificationAction] {
+        [
+            UNNotificationAction(identifier: "accept", title: "Accept", options: [.authenticationRequired, .foreground]),
+            UNNotificationAction(identifier: "reject", title: "Reject", options: [.destructive]),
+        ]
+    }
 
     var paired: [DeviceSnapshot] { state.devices.filter(\.paired) }
     var available: [DeviceSnapshot] { state.devices.filter { !$0.paired } }
@@ -71,7 +111,25 @@ final class AppModel {
 
     /// The computer of the pairing sheet: one that asks to pair comes first.
     var pairSheetDevice: String? {
-        state.devices.first { $0.pairState == .incoming }?.id ?? pairingSheet
+        let now = ElapsedTime.now
+        return state.devices.first { $0.pairState == .incoming && !cooldown.blocks(id: $0.id, ip: $0.ip, at: now) }?.id ?? pairingSheet
+    }
+
+    /// Rejects a pairing request. Requests from the same computer or address
+    /// then end at once for a while, see `PairCooldown`.
+    func rejectPair(_ d: DeviceSnapshot) {
+        cooldown.reject(id: d.id, ip: d.ip, at: ElapsedTime.now)
+        core.cancelPair(d.id)
+    }
+
+    /// The pairing sheet closed. A swipe on a request from a computer rejects
+    /// it. A change of the sheet to another computer is no swipe, so only the
+    /// sheet that still shows counts.
+    func pairSheetClosed() {
+        if let id = shownPairSheet, id == pairSheetDevice, let d = device(id), d.pairState == .incoming {
+            rejectPair(d)
+        }
+        pairingSheet = nil
     }
 
     private func apply(_ s: CoreState) {
@@ -85,10 +143,12 @@ final class AppModel {
         for d in s.devices where d.pairState != .incoming { Notifier.shared.remove(id: "pair-\(d.id)") }
         if let id = pairingSheet, !s.devices.contains(where: { $0.id == id }) { pairingSheet = nil }
         FeatureHooks.stateChanged(s, model: self)
-        // A new pairing opens the computer's screen.
+        // A new pairing opens the computer's screen. Flux asks for
+        // notifications here, so that the question comes with a reason.
         if let id = Self.newlyPaired(old: old.devices.map { ($0.id, $0.paired) }, new: s.devices.map { ($0.id, $0.paired) }).first {
             pairingSheet = nil
             path = [.device(id)]
+            NotificationAccess.shared.ask()
         }
     }
 
@@ -114,11 +174,17 @@ final class AppModel {
     }
 
     /// The sheet shows the request while Flux is on the screen. Otherwise a
-    /// notification with Accept and Reject shows it.
+    /// notification with Accept and Reject shows it. A request from a
+    /// computer or address that the user just rejected ends at once.
     private func pairRequested(_ d: DeviceSnapshot) {
+        if cooldown.blocks(id: d.id, ip: d.ip, at: ElapsedTime.now) {
+            core.cancelPair(d.id)
+            return
+        }
         guard !isActive else { return }
         Notifier.shared.post(id: "pair-\(d.id)", category: Self.pairCategory, title: "Pair with \(d.name)?",
-                             body: "Check that \(d.name) shows the key \(d.pairKey).", userInfo: ["device": d.id])
+                             body: "Check that \(d.name) shows the key \(KeyView.grouped(d.pairKey)).",
+                             userInfo: ["device": d.id, "key": d.pairKey])
     }
 
     // MARK: Lifecycle
@@ -186,5 +252,19 @@ final class AppModel {
         guard backgroundTask != .invalid else { return }
         UIApplication.shared.endBackgroundTask(backgroundTask)
         backgroundTask = .invalid
+    }
+
+    /// Keeps the screen of the iPhone on while a feature needs it, see
+    /// `FeatureHooks.keepsScreenOn`. This is the only place that sets the
+    /// idle timer, so that 1 screen cannot undo another.
+    private func watchScreenAwake() {
+        let on = withObservationTracking {
+            FeatureHooks.keepsScreenOn(model: self)
+        } onChange: { [weak self] in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.watchScreenAwake() }
+            }
+        }
+        if UIApplication.shared.isIdleTimerDisabled != on { UIApplication.shared.isIdleTimerDisabled = on }
     }
 }

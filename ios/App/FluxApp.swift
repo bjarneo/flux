@@ -1,6 +1,7 @@
 import FluxKit
 import SwiftUI
 import UIKit
+import UserNotifications
 
 @main
 struct FluxApp: App {
@@ -25,8 +26,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 
     override init() {
         // The notification delegate must exist before launch ends, so that
-        // a tap on a notification that launched Flux arrives.
-        Notifier.shared.start()
+        // a tap on a notification that launched Flux arrives. Flux asks for
+        // the permission at the first pairing, see `NotificationAccess.ask`.
+        UNUserNotificationCenter.current().delegate = Notifier.shared
         do {
             let core = try FluxCore(plugins: PluginRegistry.make())
             launch = .ready(AppModel(core: core, demo: DemoMode.isOn))
@@ -37,6 +39,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     }
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        ReplyLock.watch()
         // The network starts when the scene becomes active. The demo starts
         // no feature, see `DemoMode`.
         if case .ready(let model) = launch, !model.demo {

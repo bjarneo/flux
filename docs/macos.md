@@ -22,7 +22,7 @@ make test-macos
 open macos/build/Build/Products/Debug/Flux.app
 ```
 
-`make macos` generates `macos/Flux.xcodeproj` from `macos/project.yml` and signs the app ad hoc.
+`make macos` generates `macos/Flux.xcodeproj` from `macos/project.yml` and signs the app ad hoc with the hardened runtime.
 The app version is the last release tag, such as `0.7.0`. The app sends it to `fluxd`, and the Flux window on the computer shows it.
 The generated project and `macos/build` stay out of Git.
 To work in Xcode, run `xcodegen generate` in `macos/` and open `Flux.xcodeproj`.
@@ -48,6 +48,18 @@ To open it, remove the quarantine attribute:
 xattr -dr com.apple.quarantine Flux.app
 ```
 
+The app runs with the hardened runtime.
+macOS then loads no library that another program injects, so no other program can use the camera, microphone, and Photos access of Flux.
+`macos/project.yml` gives the entitlements for the camera, the microphone, and the Photos library, and XcodeGen writes them to `macos/App/Flux.entitlements`.
+When a feature starts to use another protected resource, add its entitlement there, or macOS refuses the access without a prompt.
+To check a build, run:
+
+```sh
+codesign -dv Flux.app 2>&1 | grep flags
+```
+
+The output shows `flags=0x10002(adhoc,runtime)`.
+
 Flux keeps running in the menu bar after the window closes.
 Quit it from the menu bar item.
 
@@ -61,9 +73,16 @@ To change the icons, edit and run `swift macos/tools/render-icon.swift`.
 1. Connect the Mac and the computer to the same local network.
 2. Open Flux on the Mac and allow access to the local network.
 3. Select the computer in the sidebar, then **Pair…**, then **Send request**.
-4. Accept the request on the computer when it shows the same 8-character key.
+4. Accept the request on the computer when it shows the same 16-character key, such as `5EE6 825F 974E D59A`.
+
+Compare all 16 characters.
+Earlier versions of Flux show only 8 characters, so update Flux on all devices before you pair.
 
 You can also start from the computer with `flux-cli pair` and accept on the Mac.
+A request from the computer does not change the page that the window shows.
+The sidebar marks the computer, and a notification shows the key.
+Select the computer, compare the key, and select **Accept**.
+Return does not accept a request.
 The Mac announces itself with UDP broadcasts on port 1716 and as `_flux._udp` through Bonjour, like the phone.
 It appears on the computer as `laptop` when it has a battery and `desktop` otherwise.
 
@@ -101,6 +120,15 @@ A computer that runs `fluxd` still finds the Mac after the search ends, because 
 
 The Mac cannot mirror notifications from other apps, report calls, or send SMS, because macOS gives apps no access to them.
 Flux does not advertise those capabilities.
+
+## Touch ID lock
+
+The touchpad, the remote desktop, and the agent replies ask for Touch ID or the Mac password.
+The unlock stays valid for 5 minutes.
+It ends earlier when the Mac sleeps, its screens sleep, the screen locks, or another user takes the session.
+
+The remote desktop stops while the Mac sleeps or is locked and while its window is in the Dock.
+It does not start again in that time, also not when the link to the computer comes back.
 
 ## Focus
 

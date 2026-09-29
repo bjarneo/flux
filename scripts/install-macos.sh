@@ -35,6 +35,11 @@ fi
 rm -rf "$app"
 ditto build/Build/Products/Release/Flux.app "$app"
 codesign --verify --deep --strict "$app"
+# The hardened runtime keeps injected libraries out of the app.
+if ! codesign -dv "$app" 2>&1 | grep 'flags=.*runtime' >/dev/null; then
+	echo "$app has no hardened runtime" >&2
+	exit 1
+fi
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$app"
 echo "Installed $app $(defaults read "$app/Contents/Info.plist" CFBundleShortVersionString)"
 

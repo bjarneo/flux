@@ -182,6 +182,8 @@ enum FeatureHooks {
         if active { model.core.plugin(CaptureWatchPlugin.self)?.catchUp() }
         // Items from the share extension go to the computers that are connected.
         if active { QueuedShares.shared.drain() }
+        // A link from a notification that opened Flux.
+        if active { ShareFeature.shared.openPendingLink() }
         // iOS turns off the camera of an app that leaves the screen.
         if !active { model.core.plugin(WebcamPlugin.self)?.stopInBackground() }
     }
@@ -198,5 +200,14 @@ enum FeatureHooks {
     /// background mode.
     static func runsInBackground(model: AppModel) -> Bool {
         model.core.plugin(MicPlugin.self)?.model.status.active == true
+    }
+
+    /// True while the screen of the iPhone must stay on: the webcam or the
+    /// remote desktop streams, also from another screen of Flux, or the
+    /// touchpad shows. A stream stops when the iPhone locks by itself.
+    static func keepsScreenOn(model: AppModel) -> Bool {
+        model.core.plugin(WebcamPlugin.self)?.model.status.active == true
+            || model.core.plugin(DesktopPlugin.self)?.model.status.active == true
+            || model.touchpadOpen
     }
 }

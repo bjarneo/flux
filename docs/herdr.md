@@ -266,7 +266,7 @@ It does not start agents, close them, or open terminals.
 - The Mac does not yet fit the output of full-screen agents such as opencode, as the phone does.
 - Press Command-R to read the output again.
 - Return sends the text. Shift-Return adds a line break.
-- Before the first reply, the Mac asks for Touch ID or the Mac password. The unlock stays valid for 5 minutes while Flux runs.
+- Before the first reply, the Mac asks for Touch ID or the Mac password. The unlock stays valid for 5 minutes, until the Mac sleeps or locks.
 - The **Agent needs input** and **Agent finished** switches are in **Settings > Features**. They apply to all computers. A click on a notification opens the agent in the agents window.
 
 ### Dictate on a Mac

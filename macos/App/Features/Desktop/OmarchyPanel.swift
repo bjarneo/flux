@@ -61,7 +61,7 @@ struct OmarchyPanel: View {
                 }
                 let pinned = DesktopShortcuts.pinned(state?.shortcuts ?? [], pins: model.pins)
                 if state?.loaded == true && pinned.isEmpty {
-                    Text("Pin shortcuts with the star in All DesktopShortcuts.").font(.caption).foregroundStyle(.secondary)
+                    Text("Pin shortcuts with the star in All Shortcuts.").font(.caption).foregroundStyle(.secondary)
                 }
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)], spacing: 6) {
                     ForEach(pinned) { s in

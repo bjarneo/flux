@@ -119,17 +119,20 @@ final class CameraScreenModel {
             photo.send(picked: first)
             return
         }
+        // Document mode decodes 1 image at a time. The other modes use only the first.
+        if mode == .document {
+            document.add(images)
+            return
+        }
         let mode = mode
         Task {
             do {
-                let decoded = try await offMain { try images.map { try CameraImages.decode($0) } }
-                guard let image = decoded.first else { return }
+                let image = try await offMain { try CameraImages.decode(first) }
                 switch mode {
                 case .text: text.read(image)
                 case .qr: codes.read(image)
-                case .document: document.add(decoded)
                 case .signature: signature.cut(image, crop: nil)
-                case .photo, .webcam: break
+                case .photo, .document, .webcam: break
                 }
             } catch {
                 show("Cannot open the image")

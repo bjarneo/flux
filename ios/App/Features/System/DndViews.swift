@@ -40,6 +40,7 @@ private struct DndSettingsSection: View {
             Text("""
             In Settings > Focus, open a Focus, add the Flux filter under Focus Filters, and turn on \
             "Do Not Disturb on computers". While that Focus is on, your computers turn on Do Not Disturb. \
+            A change while Flux is closed goes to each computer when Flux connects to it. \
             iOS does not let apps set the Focus, so this iPhone does not follow the computers.
             """)
         }

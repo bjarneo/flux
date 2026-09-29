@@ -26,10 +26,14 @@ final class AppModel {
             UNNotificationAction(identifier: "reject", title: "Reject", options: [.destructive]),
         ]) { [weak self] action, info, _ in
             guard let id = info["device"] as? String else { return }
+            let key = info["key"] as? String
             DispatchQueue.main.async {
                 guard let self else { return }
                 switch action {
-                case "accept": self.core.acceptPair(id)
+                case "accept":
+                    // Accept only the request whose key the notification showed.
+                    guard let d = self.state.devices.first(where: { $0.id == id }), d.pairState == .incoming, d.pairKey == key else { return }
+                    self.core.acceptPair(id)
                 case "reject": self.core.cancelPair(id)
                 default:
                     self.selection = id
@@ -62,11 +66,14 @@ final class AppModel {
         }
     }
 
+    /// A request from a computer does not take the window, so that a key
+    /// press meant for the open page cannot accept it. The sidebar marks the
+    /// computer, and a notification shows the request. A click on the
+    /// notification selects the computer.
     private func pairRequested(_ d: DeviceSnapshot) {
-        selection = d.id
-        if !NSApp.isActive {
-            Notifier.shared.post(id: "pair-\(d.id)", category: Self.pairCategory, title: "Pair with \(d.name)?",
-                                 body: "Check that \(d.name) shows the key \(d.pairKey).", userInfo: ["device": d.id])
-        }
+        if NSApp.isActive { show("\(d.name) wants to pair") }
+        Notifier.shared.post(id: "pair-\(d.id)", category: Self.pairCategory, title: "Pair with \(d.name)?",
+                             body: "Check that \(d.name) shows the key \(KeyView.grouped(d.pairKey)).",
+                             userInfo: ["device": d.id, "key": d.pairKey])
     }
 }

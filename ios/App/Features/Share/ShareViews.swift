@@ -15,20 +15,34 @@ final class ShareFeature {
 
     /// The file that Quick Look shows, or nil.
     var preview: URL?
+    /// A link that the user opened from its notification while Flux was
+    /// not active yet. It opens when Flux becomes active.
+    @ObservationIgnored private var pendingLink: URL?
 
     private init() {}
 
-    /// Opens received files with Quick Look, and links while Flux is on the
-    /// screen. A link that arrives off the screen stays in its notification.
+    /// Opens a received file with Quick Look and a received link in the
+    /// browser. On iOS, the plugin calls these only after a tap on the
+    /// notification of the file or the link, like the Android app.
     static func didLaunch(model: AppModel) {
         Outbox.clear()
         guard let share = model.core.plugin(SharePlugin.self) else { return }
         QueuedShares.shared.start(model: model)
         share.openFile = { url in ShareFeature.shared.preview = url }
         share.openLink = { url in
-            guard UIApplication.shared.applicationState == .active else { return }
+            guard UIApplication.shared.applicationState == .active else {
+                ShareFeature.shared.pendingLink = url
+                return
+            }
             UIApplication.shared.open(url)
         }
+    }
+
+    /// Opens the link that waited for Flux to become active.
+    func openPendingLink() {
+        guard let url = pendingLink else { return }
+        pendingLink = nil
+        UIApplication.shared.open(url)
     }
 
     /// Copies the picked files into the outbox and sends them. The picker
@@ -113,17 +127,26 @@ enum Outbox {
         return dir
     }
 
-    /// Copies files that the file picker gave, off the main thread.
+    /// Copies files that the file picker gave, off the main thread. Each
+    /// file gets its own folder, so that 2 files with the same name from
+    /// different folders both go. A failure removes the copies so far.
     static func copy(_ urls: [URL]) async throws -> [URL] {
         try await Task.detached {
-            let dir = try newFolder()
-            return try urls.map { url in
-                let access = url.startAccessingSecurityScopedResource()
-                defer { if access { url.stopAccessingSecurityScopedResource() } }
-                let target = dir.appendingPathComponent(url.lastPathComponent)
-                try FileManager.default.copyItem(at: url, to: target)
-                return target
+            var copies: [URL] = []
+            do {
+                for url in urls {
+                    let access = url.startAccessingSecurityScopedResource()
+                    defer { if access { url.stopAccessingSecurityScopedResource() } }
+                    let target = try newFolder().appendingPathComponent(url.lastPathComponent)
+                    // Listed before the copy, so that a failure also removes its folder.
+                    copies.append(target)
+                    try FileManager.default.copyItem(at: url, to: target)
+                }
+            } catch {
+                remove(copies)
+                throw error
             }
+            return copies
         }.value
     }
 }
@@ -305,6 +328,10 @@ struct ShareScreen: View {
 
     private func sendText(_ share: SharePlugin, to device: DeviceSnapshot) {
         guard !trimmed.isEmpty else { return }
+        guard text.utf8.count <= ShareQueue.maxTextBytes else {
+            model.show("The text is larger than 1 MB. Send it as a file")
+            return
+        }
         share.send(text: text, to: device.id)
         text = ""
         editing = false

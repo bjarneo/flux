@@ -71,7 +71,7 @@ The integrator merged each branch into `macos-client`, resolved the composition 
 
 - Branch `macos-client`, local only, not pushed.
 - 249 `FluxKitTests` pass. The app builds with no errors. `LanBackend.swift` has 2 deprecation warnings for `removeHandler(context:promise:)` from newer swift-nio.
-- The app is signed ad hoc, not sandboxed, and has no hardened runtime. It targets macOS 14 and later.
+- The app is signed ad hoc and not sandboxed, and it has the hardened runtime. It targets macOS 14 and later.
 - Dependencies: swift-nio 2.103, swift-nio-ssl 2.37, swift-certificates 1.21, swift-crypto 3.15, swift-asn1, and Citadel 0.12.0 for SSH and SFTP. Citadel requires swift-crypto below 4.
 
 ### Capabilities the Mac announces

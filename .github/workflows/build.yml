@@ -149,6 +149,8 @@ jobs:
         run: |
           app=build/Build/Products/Release/Flux.app
           codesign --verify --deep --strict "$app"
+          # The hardened runtime keeps injected libraries out of the app.
+          codesign -dv "$app" 2>&1 | grep 'flags=.*runtime'
           lipo -info "$app/Contents/MacOS/Flux"
           ditto -c -k --keepParent "$app" flux-macos.zip
       - uses: actions/upload-artifact@v4

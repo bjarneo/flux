@@ -59,7 +59,7 @@ private struct PairOverlay: View {
             .ignoresSafeArea()
             .sheet(item: Binding(
                 get: { model.pairSheetDevice.map(PairSheetItem.init) },
-                set: { if $0 == nil { model.pairingSheet = nil } }
+                set: { if $0 == nil { model.pairSheetClosed() } }
             )) { item in
                 PairSheet(deviceId: item.id)
             }
