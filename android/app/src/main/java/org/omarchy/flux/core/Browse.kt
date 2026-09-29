@@ -8,7 +8,7 @@ import net.schmizz.sshj.sftp.FileMode
 import net.schmizz.sshj.sftp.SFTPClient
 import net.schmizz.sshj.transport.verification.PromiscuousVerifier
 import org.bouncycastle.jce.provider.BouncyCastleProvider
-import org.omarchy.flux.net.LoopbackBridge
+import org.omarchy.flux.net.ConnectedSocketFactory
 import org.omarchy.flux.net.Tunnel
 import org.omarchy.flux.protocol.Packet
 import org.omarchy.flux.protocol.SftpOffer
@@ -26,7 +26,6 @@ private const val TAG = "FluxBrowse"
 object Browse {
     private var ssh: SSHClient? = null
     private var sftp: SFTPClient? = null
-    private var bridge: LoopbackBridge? = null
 
     /**
      * Changes with each [start] and [close]. A connect that ends after a
@@ -61,32 +60,34 @@ object Browse {
         }
         val cert = d.certificate
         val tls = FluxCore.tls
+        val host = d.link?.address?.hostAddress ?: d.identity.deviceName
         val gen = generation
         core.io.execute {
             // The session until the browser keeps it. The finally block ends
             // a session that the browser did not keep, also on the computer.
             var client: SSHClient? = null
-            var b: LoopbackBridge? = null
+            var tunnel: java.net.Socket? = null
             try {
                 ensureBouncyCastle()
                 val c = SSHClient(DefaultConfig()).also { client = it }
+                // The pinned TLS tunnel checks the computer, so the SSH host key needs no check.
                 c.addHostKeyVerifier(PromiscuousVerifier())
                 c.connectTimeout = 8_000
                 // The computer connects to this phone, and the TLS stream
-                // carries the SSH session. sshj opens its own socket, so a
-                // loopback bridge feeds it.
+                // carries the SSH session. sshj takes the connected tunnel
+                // as its socket, so no other app can take the session.
                 if (cert == null || tls == null) error("the link is not ready")
-                val tunnel = Tunnel.accept(tls, cert, offer.tunnel, announce = { d.send(it) })
-                val loop = LoopbackBridge(tunnel).also { b = it }
+                val t = Tunnel.accept(tls, cert, offer.tunnel, announce = { d.send(it) }).also { tunnel = it }
                 if (generation != gen) return@execute
-                c.connect(loop.host, loop.port)
+                c.socketFactory = ConnectedSocketFactory(t)
+                c.connect(host, 22)
                 if (generation != gen) return@execute
                 c.authPassword(offer.user, offer.password)
                 if (generation != gen) return@execute
                 val s = c.newSFTPClient()
-                if (!keep(gen, c, s, b)) return@execute
+                if (!keep(gen, c, s)) return@execute
                 client = null
-                b = null
+                tunnel = null
                 core.setBrowse(state.copy(loading = false, roots = offer.roots))
                 list(core, offer.roots.first().second)
             } catch (e: Exception) {
@@ -96,18 +97,17 @@ object Browse {
                 }
             } finally {
                 client?.let { runCatching { it.disconnect() } }
-                b?.close()
+                tunnel?.let { runCatching { it.close() } }
             }
         }
     }
 
     /** Keeps a new session, unless a close or a new start came after [gen]. */
     @Synchronized
-    private fun keep(gen: Int, client: SSHClient, s: SFTPClient, b: LoopbackBridge?): Boolean {
+    private fun keep(gen: Int, client: SSHClient, s: SFTPClient): Boolean {
         if (generation != gen) return false
         ssh = client
         sftp = s
-        bridge = b
         return true
     }
 
@@ -159,14 +159,12 @@ object Browse {
         generation++
         val s = sftp
         val c = ssh
-        val b = bridge
         sftp = null
         ssh = null
-        bridge = null
         FluxCore.io.execute {
             runCatching { s?.close() }
+            // The disconnect closes the socket, which is the tunnel.
             runCatching { c?.disconnect() }
-            b?.close()
         }
     }
 

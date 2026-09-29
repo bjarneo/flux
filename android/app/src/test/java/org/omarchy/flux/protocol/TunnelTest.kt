@@ -3,14 +3,14 @@ package org.omarchy.flux.protocol
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.omarchy.flux.net.LoopbackBridge
+import org.omarchy.flux.net.ConnectedSocketFactory
 import org.omarchy.flux.net.PAYLOAD_PORTS
 import org.omarchy.flux.net.Tls
 import org.omarchy.flux.net.Tunnel
+import org.omarchy.flux.net.WrongPeerException
 import java.io.ByteArrayOutputStream
 import java.net.InetAddress
 import java.net.Socket
@@ -125,10 +125,78 @@ class TunnelTest {
         val answers = ArrayBlockingQueue<Packet>(1)
         val t = computer(stranger, answers) { it.outputStream.write(1) }
         val result = runCatching {
-            Tunnel.accept(Tls(phone), pc.certificate, "tok", announce = { answers.put(it) }, timeoutMs = 5000)
+            Tunnel.accept(Tls(phone), pc.certificate, "tok", announce = { answers.put(it) }, timeoutMs = 1500)
         }
         t.join(5000)
-        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull() is WrongPeerException)
+    }
+
+    @Test
+    fun strangerFirstDoesNotStopTransfer() {
+        // A stranger connects before the computer. Its connection closes,
+        // and the computer still gets the tunnel.
+        val stranger = LocalCertificate.generate("00000000000000000000000000000000")
+        val ports = ArrayBlockingQueue<Packet>(2)
+        val answers = ArrayBlockingQueue<Packet>(1)
+        val decoy = thread {
+            val ready = ports.poll(5, TimeUnit.SECONDS) ?: return@thread
+            runCatching { Tls(stranger).wrap(Socket(InetAddress.getLoopbackAddress(), ready.int("port")!!), server = false).close() }
+            answers.put(ready)
+        }
+        val data = ByteArray(1000) { it.toByte() }
+        val pcThread = computer(pc, answers) { ssl ->
+            ssl.outputStream.write(data)
+            ssl.outputStream.flush()
+        }
+        val out = ByteArrayOutputStream()
+        Tunnel.receive(Tls(phone), pc.certificate, "tok", data.size.toLong(), out, announce = { ports.put(it) })
+        decoy.join(5000)
+        pcThread.join(5000)
+        assertArrayEquals(data, out.toByteArray())
+    }
+
+    @Test
+    fun refusesOtherAddress() {
+        // Only the address of the link can connect, so the computer at
+        // 127.0.0.1 is refused before the handshake when the link is elsewhere.
+        val answers = ArrayBlockingQueue<Packet>(1)
+        val t = computer(pc, answers) { it.outputStream.write(1) }
+        val result = runCatching {
+            Tunnel.accept(Tls(phone), pc.certificate, "tok", announce = { answers.put(it) }, timeoutMs = 1500, peer = InetAddress.getByName("192.0.2.1"))
+        }
+        t.join(5000)
+        assertTrue(result.exceptionOrNull() is WrongPeerException)
+    }
+
+    @Test
+    fun sshUsesTunnelSocket() {
+        // sshj takes the connected socket and opens no connection of its
+        // own, so no other app can take the session.
+        val server = java.net.ServerSocket(0, 1, InetAddress.getLoopbackAddress())
+        val got = ArrayBlockingQueue<String>(1)
+        val peer = thread {
+            server.accept().use { s ->
+                s.soTimeout = 5000
+                s.getOutputStream().write("SSH-2.0-test\r\n".toByteArray())
+                s.getOutputStream().flush()
+                val line = StringBuilder()
+                while (true) {
+                    val b = s.getInputStream().read()
+                    if (b < 0 || b == '\n'.code) break
+                    line.append(b.toChar())
+                }
+                got.put(line.toString())
+            }
+        }
+        val socket = Socket(InetAddress.getLoopbackAddress(), server.localPort)
+        val client = net.schmizz.sshj.SSHClient(net.schmizz.sshj.DefaultConfig())
+        client.addHostKeyVerifier(net.schmizz.sshj.transport.verification.PromiscuousVerifier())
+        client.socketFactory = ConnectedSocketFactory(socket)
+        runCatching { client.connect("computer", 22) }
+        runCatching { client.disconnect() }
+        peer.join(5000)
+        server.close()
+        assertTrue(got.poll(5, TimeUnit.SECONDS)!!.startsWith("SSH-2.0-"))
     }
 
     @Test
@@ -138,37 +206,5 @@ class TunnelTest {
         assertTrue(result.isFailure)
         val port = announced!!.int("port")!!
         assertTrue(port in PAYLOAD_PORTS)
-    }
-
-    @Test
-    fun bridgeCarriesBothDirections() {
-        val answers = ArrayBlockingQueue<Packet>(1)
-        // The computer echoes every byte back, like an SSH peer that answers.
-        val pcThread = computer(pc, answers) { ssl ->
-            val buf = ByteArray(1024)
-            while (true) {
-                val n = ssl.inputStream.read(buf)
-                if (n < 0) break
-                ssl.outputStream.write(buf, 0, n)
-                ssl.outputStream.flush()
-            }
-        }
-        val tunnel = Tunnel.accept(Tls(phone), pc.certificate, "ssh", announce = { answers.put(it) })
-        val bridge = LoopbackBridge(tunnel)
-        Socket(bridge.host, bridge.port).use { local ->
-            local.getOutputStream().write("SSH-2.0-test\r\n".toByteArray())
-            local.getOutputStream().flush()
-            val got = ByteArray(14)
-            var read = 0
-            while (read < got.size) {
-                val n = local.getInputStream().read(got, read, got.size - read)
-                if (n < 0) break
-                read += n
-            }
-            assertEquals("SSH-2.0-test\r\n", String(got))
-        }
-        bridge.close()
-        pcThread.join(5000)
-        assertNotNull(tunnel)
     }
 }

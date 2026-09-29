@@ -88,6 +88,35 @@ The offer needs the [release check](configuration.md#release-check) and a phone 
 Earlier versions of the app do not report it, so update them once with an APK from the release.
 A debug build gets no offer, because a release APK has another signing key and cannot replace it.
 
+## Pairing and connections
+
+The pairing key has 16 characters in 4 groups, for example `5EE6 825F 974E D59A`.
+Compare all 16 characters on the phone and on the computer before you accept.
+Earlier versions of Flux show only 8 characters, so update Flux on all devices before you pair.
+
+Open Flux on the phone before you pair.
+The phone takes a connection from a new computer only while the app is on screen or while it scans.
+A paired computer connects at any time, also through Tailscale.
+
+Flux for Android applies these limits to the network:
+
+- A computer that is not paired can send lines of at most 64 KiB. While Flux is not on screen, its connection closes after 2 minutes without data.
+- The phone keeps at most 8 connections of computers that are not paired. A new computer closes the oldest one.
+- The handshake of a new connection must finish in 10 seconds.
+- A pairing stays on the connection and the certificate on which it started. While a pairing is open, and after pairing, the phone refuses a connection with another certificate for the same device ID.
+- A file, stream, or tunnel port takes only the paired computer from the address of its link. Other connections close, and the port waits for the computer.
+- The phone sends its identity to a stored address only when the address is on a network of the phone or on Tailscale.
+- The phone finds a computer that sleeps or loses power in 90 seconds or less. While data waits for the computer, it finds it in 30 seconds.
+- The Wi-Fi multicast lock is on only while the phone scans, before the first pairing, and while a paired computer is away.
+
+When you unpair a computer on either side, the phone stops the screen mirror, the webcam, the microphone, the remote desktop, and Browse PC for that computer.
+It also closes its approval request and removes its notifications.
+When you start the screen mirror to a second computer, the mirror to the first computer stops.
+
+The phone accepts clipboard text of at most 256 KiB from a computer. Larger text shows a message, and the clipboard does not change.
+The automatic clipboard sync skips a clip that its app marks as sensitive, for example a password.
+A computer shows at most 10 notifications on the phone, and you can always remove them.
+
 ## Build and install
 
 Use JDK 21, Android SDK platform 36, and Build Tools 36.0.0.
@@ -145,7 +174,7 @@ To run the JVM tests for packets, identity, certificates, and the verification k
 The release task also checks the R8-optimized build.
 Without signing variables, it produces `app/build/outputs/apk/release/app-release-unsigned.apk`.
 
-To test the app against a desktop peer without a firewall rule, run the test peer. It connects through `adb forward`, pairs, and sends sample battery, theme, command, and media packets:
+To test the app against a desktop peer without a firewall rule, run the test peer. It connects through `adb forward`, pairs, and sends sample battery, theme, command, and media packets. Open Flux on the phone first, because the phone takes a new computer only while the app is on screen:
 
 ```bash
 python3 tools/test_peer.py

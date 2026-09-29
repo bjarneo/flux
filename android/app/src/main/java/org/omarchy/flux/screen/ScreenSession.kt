@@ -44,6 +44,15 @@ object ScreenSession {
         if (s != null) s(notify, status) else _status.value = status
     }
 
+    /**
+     * Stops the mirror when it goes to [deviceId], for example after an
+     * unpair. The socket closes, so the window on the computer closes too.
+     */
+    fun stopFor(deviceId: String, message: String) {
+        val s = _status.value
+        if (s.deviceId == deviceId && s.active) stop(notify = false, Status(Phase.Error, message, deviceId))
+    }
+
     /** Handles flux.screen from the computer. The core lock is held, so the work moves to [FluxCore.io]. */
     fun onPacket(core: FluxCore, d: Device, p: Packet) {
         val reply = ScreenReply.parse(p) ?: return
