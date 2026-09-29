@@ -68,7 +68,8 @@ When `fluxd` restarts, the desktop clipboard loses text or an image that came fr
 A received file shows in the folder with its final name while it arrives, as an empty file.
 `fluxd` writes the data to a hidden `.flux-*.part` file in the same folder and removes both files when the transfer fails.
 Each device sends at most 4 files at the same time.
-`fluxd` refuses or stops a file when less than 1 GiB or 5% of the disk would stay free.
+`fluxd` refuses or stops a file when less than 1 GiB would stay free on the disk.
+On a disk that is smaller than 20 GiB, the limit is 5% of the disk.
 It stops a transfer when the device sends no data for 1 minute.
 
 The programs that `fluxd` opens, for example a browser, a received file, or a [desktop command](#media-and-desktop-commands), start in their own systemd scope.

@@ -393,19 +393,19 @@ func TestSaveFileUsesUmask(t *testing.T) {
 
 func TestSaveFileNeedsSpace(t *testing.T) {
 	old := freeSpace
-	freeSpace = func(string) (uint64, uint64, error) { return 2 << 30, 100 << 30, nil }
+	freeSpace = func(string) (uint64, uint64, error) { return 512 << 20, 100 << 30, nil }
 	defer func() { freeSpace = old }()
 	d := testDaemon()
 	dev := &Device{ID: "p1", Name: "Pixel 8", Paired: true}
 	dir := t.TempDir()
-	// 5% of 100 GiB is the margin, so 2 GiB free is too little.
+	// 1 GiB is the margin, so 512 MiB free is too little.
 	if err := d.saveFile(context.Background(), dev, d.newTransfer(dev, "a.txt", "", "in", 5), dir, payload("hello", nil)); err == nil {
 		t.Error("a nearly full disk took the file")
 	}
 	if names, _ := os.ReadDir(dir); len(names) != 0 {
 		t.Errorf("folder has %d files", len(names))
 	}
-	if spaceMargin(1<<30) != 1<<30 || spaceMargin(100<<30) != 5<<30 {
+	if spaceMargin(100<<30) != 1<<30 || spaceMargin(10<<30) != 512<<20 {
 		t.Error("margin")
 	}
 }

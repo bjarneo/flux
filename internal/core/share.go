@@ -510,8 +510,9 @@ var freeSpace = func(dir string) (free, total uint64, err error) {
 }
 
 // spaceMargin returns the free space that an incoming transfer leaves on
-// a file system of total bytes: 5% of it, and at least 1 GiB.
-func spaceMargin(total uint64) uint64 { return max(1<<30, total/20) }
+// a file system of total bytes: 1 GiB, or 5% of a file system that is
+// smaller than 20 GiB.
+func spaceMargin(total uint64) uint64 { return min(1<<30, total/20) }
 
 // checkSpace returns an error when dir has no room for size more bytes and
 // the margin. A file system that reports no size, such as some FUSE file
