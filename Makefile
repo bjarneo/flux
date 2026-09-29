@@ -157,11 +157,12 @@ ios:
 	cd ios && xcodegen generate --quiet && \
 		xcodebuild -project Flux.xcodeproj -scheme Flux -configuration Debug -derivedDataPath build -destination 'generic/platform=iOS Simulator' build
 
-# The app and FluxKit tests in an iPhone simulator: the booted one, else the
-# first available one. IOS_SIMULATOR=<id> picks another.
+# The app and FluxKit tests in an iPhone simulator with iOS 17 or later: the
+# booted one, else one of the newest runtime. IOS_SIMULATOR=<id> picks another.
 test-ios:
 	cd ios && xcodegen generate --quiet && \
-		xcodebuild test -project Flux.xcodeproj -scheme Flux -derivedDataPath build -destination "id=$$(../scripts/ios-simulator.sh)"
+		simulator=$$(../scripts/ios-simulator.sh) && \
+		xcodebuild test -project Flux.xcodeproj -scheme Flux -derivedDataPath build -destination "id=$$simulator"
 
 clean:
 	rm -rf bin $(GUI_BUILD) snapshots macos/build ios/build
