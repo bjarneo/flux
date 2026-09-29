@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import org.omarchy.flux.protocol.bool
+import org.omarchy.flux.protocol.long
 import org.omarchy.flux.protocol.str
 
 /**
@@ -110,8 +111,12 @@ data class HerdrReply(
     val error: String? = null,
 )
 
-/** The answer of the computer to a reply: `{"kind":"sent"}`. [error] is null on success. */
-data class HerdrSent(val pane: String, val action: String, val error: String?)
+/**
+ * The answer of the computer to a reply: `{"kind":"sent"}`. [error] is null
+ * on success. [request] is the number of the reply, or null from a fluxd
+ * that does not send it back.
+ */
+data class HerdrSent(val pane: String, val action: String, val error: String?, val request: Long? = null)
 
 /**
  * The last new agent, new terminal, or close from this phone. [action] is
@@ -128,8 +133,13 @@ data class HerdrAction(
     val error: String? = null,
 )
 
-/** The answer of the computer to a create or a close: `{"kind":"created"}` or `{"kind":"closed"}`. */
-data class HerdrDone(val action: String, val pane: String?, val error: String?)
+/**
+ * The answer of the computer to a create or a close: `{"kind":"created"}` or
+ * `{"kind":"closed"}`. [what] is "agent" or "terminal" for a create.
+ * [request] is the number of the action, or null from a fluxd that does not
+ * send it back.
+ */
+data class HerdrDone(val action: String, val pane: String?, val error: String?, val what: String = "", val request: Long? = null)
 
 /** Sorts by status in the order of [AgentStatus]. The sort is stable, so herdr order stays inside a group. */
 fun sortAgents(agents: List<HerdrAgent>): List<HerdrAgent> = agents.sortedBy { it.status.ordinal }
@@ -175,18 +185,41 @@ fun parseHerdrState(body: JsonObject): HerdrState? {
     )
 }
 
-/** Parses the body of an output packet. It returns null for a body that is not an output. */
+/** The longest output text that the phone reads, in characters. fluxd sends at most 1 MiB. */
+const val HERDR_MAX_TEXT = 1 shl 20
+
+/**
+ * The most output lines that the phone keeps: the lines of a read and the
+ * rows of the screen that fluxd puts under them.
+ */
+const val HERDR_MAX_LINES = 2 * HERDR_READ_LINES
+
+/**
+ * Parses the body of an output packet. It returns null for a body that is
+ * not an output. It keeps the end of a text that is longer than
+ * [HERDR_MAX_TEXT] or has more than [HERDR_MAX_LINES] lines.
+ */
 fun parseHerdrOutput(body: JsonObject): HerdrOutput? {
     if (body.str("kind") != "output") return null
     val pane = body.str("pane")?.takeIf { it.isNotEmpty() } ?: return null
     val error = body.str("error")?.takeIf { it.isNotEmpty() }
+    var text = if (error == null) body.str("text").orEmpty() else ""
+    var cut = false
+    if (text.length > HERDR_MAX_TEXT) {
+        // Start after a line break, so that the first line is whole.
+        val tail = text.substring(text.length - HERDR_MAX_TEXT)
+        val nl = tail.indexOf('\n')
+        text = if (nl >= 0 && nl < tail.length - 1) tail.substring(nl + 1) else tail
+        cut = true
+    }
+    if (!cut && text.count { it == '\n' } >= HERDR_MAX_LINES) cut = true
     // An older fluxd sends plain text. It has no escape sequences, so the
     // same parser reads it.
     return HerdrOutput(
         pane = pane,
         loading = false,
-        lines = if (error == null) termLines(body.str("text").orEmpty()) else emptyList(),
-        truncated = body.bool("truncated") ?: false,
+        lines = if (error == null) tidyLines(parseAnsi(text, HERDR_MAX_LINES)) else emptyList(),
+        truncated = (body.bool("truncated") ?: false) || cut,
         error = error,
     )
 }
@@ -198,14 +231,17 @@ fun parseHerdrDone(body: JsonObject): HerdrDone? {
         "closed" -> "close"
         else -> return null
     }
-    return HerdrDone(action, body.str("pane")?.takeIf { it.isNotEmpty() }, body.str("error")?.takeIf { it.isNotEmpty() })
+    return HerdrDone(
+        action, body.str("pane")?.takeIf { it.isNotEmpty() }, body.str("error")?.takeIf { it.isNotEmpty() },
+        body.str("what").orEmpty(), body.long("request"),
+    )
 }
 
 /** Parses the body of a sent packet. It returns null for a body that is not a sent answer. */
 fun parseHerdrSent(body: JsonObject): HerdrSent? {
     if (body.str("kind") != "sent") return null
     val pane = body.str("pane")?.takeIf { it.isNotEmpty() } ?: return null
-    return HerdrSent(pane, body.str("action").orEmpty(), body.str("error")?.takeIf { it.isNotEmpty() })
+    return HerdrSent(pane, body.str("action").orEmpty(), body.str("error")?.takeIf { it.isNotEmpty() }, body.long("request"))
 }
 
 /** The key names that fluxd accepts in a keys packet. */
