@@ -96,7 +96,8 @@ func TestOffline(t *testing.T) {
 }
 
 // TestOfficial checks that a release from GitHub keeps only the files that
-// GitHub serves from the release of the tag in the Flux repository.
+// GitHub serves from the release of the tag in the Flux repository, and
+// that it records the names of the other files.
 func TestOfficial(t *testing.T) {
 	r := Release{Tag: "v0.7.0", Assets: []Asset{
 		{Name: "flux-android-0.7.0.apk", URL: "https://github.com/bjarneo/flux/releases/download/v0.7.0/flux-android-0.7.0.apk"},
@@ -105,9 +106,13 @@ func TestOfficial(t *testing.T) {
 		{Name: "omarchy-flux-0.7.0-1-x86_64.pkg.tar.zst", URL: "https://github.com/bjarneo/flux/releases/download/v0.6.0/omarchy-flux-0.7.0-1-x86_64.pkg.tar.zst"},
 		{Name: "flux-macos-0.7.0.zip", URL: "https://github.com/bjarneo/flux/releases/download/v0.7.0/other.zip"},
 	}}
-	got := official(r)
+	got, dropped := official(r)
 	if len(got) != 1 || got[0].Name != "flux-android-0.7.0.apk" {
 		t.Fatalf("official files %+v", got)
+	}
+	want := []string{"SHA256SUMS", "SHA256SUMS.sig", "omarchy-flux-0.7.0-1-x86_64.pkg.tar.zst", "flux-macos-0.7.0.zip"}
+	if strings.Join(dropped, " ") != strings.Join(want, " ") {
+		t.Errorf("dropped files %q, want %q", dropped, want)
 	}
 }
 

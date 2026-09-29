@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"flux/internal/config"
+	"flux/internal/release"
 )
 
 func releaseDaemon(t *testing.T, url string) *Daemon {
@@ -161,7 +162,7 @@ func TestInstallUpdateNoTerminal(t *testing.T) {
 // TestAppUpdate checks which devices get the offer of a new Android app.
 func TestAppUpdate(t *testing.T) {
 	d := releaseDaemon(t, "http://example.com/latest")
-	d.release = releaseInfo{Version: "0.7.0", APK: "https://example.com/apk", Sums: "https://example.com/sums"}
+	d.release = releaseInfo{Version: "0.7.0", APK: "https://example.com/apk", Sums: "https://example.com/sums", Sig: "https://example.com/sig"}
 	cases := []struct {
 		app, version, want string
 	}{
@@ -204,6 +205,14 @@ func TestAppUpdate(t *testing.T) {
 		t.Errorf("an offer %q without an APK in the release", got)
 	}
 	d.release.APK = "https://example.com/apk"
+	// Without SHA256SUMS.sig, only a fluxd without a release key makes an
+	// offer. A fluxd with a key cannot pass the check of the send.
+	d.release.Sig = ""
+	got := d.appUpdateLocked(&Device{App: "android", AppVersion: "0.6.0", Paired: true})
+	if want := !release.Signed(); (got != "") != want {
+		t.Errorf("without SHA256SUMS.sig: offer %q, and the release key is set: %v", got, release.Signed())
+	}
+	d.release.Sig = "https://example.com/sig"
 	d.cfg.CheckUpdates = false
 	if got := d.appUpdateLocked(&Device{App: "android", AppVersion: "0.6.0", Paired: true}); got != "" {
 		t.Errorf("an offer %q with the release check off", got)

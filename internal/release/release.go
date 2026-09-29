@@ -67,6 +67,13 @@ type Release struct {
 	Tag    string  `json:"tag_name"`
 	Page   string  `json:"html_url"`
 	Assets []Asset `json:"assets"`
+
+	// Dropped has the names of the files that Latest removed from Assets,
+	// because GitHub gives them at an address outside the release of the
+	// tag in the Flux repository. A caller that does not find a file
+	// uses Dropped to tell a removed file from a file that the release
+	// does not have.
+	Dropped []string `json:"-"`
 }
 
 // Version returns the tag without the v.
@@ -109,22 +116,24 @@ func Latest(ctx context.Context, url, version string) (Release, error) {
 		return Release{}, fmt.Errorf("%s: the tag %q is not a version", url, r.Tag)
 	}
 	if url == DefaultURL {
-		r.Assets = official(r)
+		r.Assets, r.Dropped = official(r)
 	}
 	return r, nil
 }
 
 // official returns the files of r that GitHub serves over https from the
-// release of the tag in the Flux repository. Flux downloads no other file
-// from a release that DefaultURL gives.
-func official(r Release) []Asset {
-	var out []Asset
+// release of the tag in the Flux repository, and the names of the other
+// files. Flux downloads no other file from a release that DefaultURL
+// gives.
+func official(r Release) (kept []Asset, dropped []string) {
 	for _, a := range r.Assets {
 		if a.URL == downloadURL+r.Tag+"/"+a.Name {
-			out = append(out, a)
+			kept = append(kept, a)
+		} else {
+			dropped = append(dropped, a.Name)
 		}
 	}
-	return out
+	return kept, dropped
 }
 
 // Newer reports whether version a is newer than version b. A version

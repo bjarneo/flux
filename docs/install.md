@@ -260,6 +260,8 @@ A `flux-cli` without a public release key skips the signature check in step 1 an
 When `SHA256SUMS` or the signature is missing or does not match, `flux-cli update` stops and installs nothing.
 An upload of the release can be incomplete for a short time, so try again later.
 When the release has no package for your architecture, `flux-cli update` runs `yay -S omarchy-flux`.
+`flux-cli update` uses only the files at `https://github.com/bjarneo/flux/releases/download/TAG/`.
+When GitHub gives a file of the release at another address, `flux-cli update` stops and does not run `yay`.
 For a source install, it prints the commands for your checkout.
 
 When a newer release exists, the window shows **Flux 0.7.0 is available**.

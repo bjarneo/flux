@@ -178,6 +178,9 @@ func (d *Daemon) checkRelease(ctx context.Context) error {
 	if err := saveRelease(info); err != nil {
 		d.logf("release check: %v", err)
 	}
+	if len(r.Dropped) > 0 {
+		d.logf("release check: GitHub gives %s of Flux %s at an address outside the Flux repository, so fluxd does not use these files", strings.Join(r.Dropped, ", "), info.Version)
+	}
 	if info.Version != known && release.Newer(info.Version, d.opts.Version) {
 		d.logf("Flux %s is available. This computer runs %s. To update, run: flux-cli update", info.Version, d.opts.Version)
 	}
@@ -204,10 +207,12 @@ func apkName(version string) string { return "flux-android-" + version + ".apk" 
 // appUpdateLocked returns the version of the Android app in the latest
 // release when it is newer than the app on dev, else "". An earlier app
 // sends no version, and a debug build is "android-debug", so neither gets
-// an offer. A device that is not paired gets no offer.
+// an offer. A device that is not paired gets no offer. When this fluxd has
+// a release key, a release without SHA256SUMS.sig gets no offer, because
+// the send cannot pass the check.
 func (d *Daemon) appUpdateLocked(dev *Device) string {
 	r := d.release
-	if !d.cfg.CheckUpdates || d.opts.ReleaseURL == "" || r.APK == "" || r.Sums == "" || dev.App != "android" || !dev.Paired {
+	if !d.cfg.CheckUpdates || d.opts.ReleaseURL == "" || r.APK == "" || r.Sums == "" || (release.Signed() && r.Sig == "") || dev.App != "android" || !dev.Paired {
 		return ""
 	}
 	if !release.Newer(r.Version, dev.AppVersion) {
