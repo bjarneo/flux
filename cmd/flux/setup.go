@@ -89,15 +89,20 @@ func userUnit() string {
 }
 
 // serviceUnit returns the user unit that runs fluxd. systemd splits
-// ExecStart at spaces and replaces % specifiers and $ variables, so the
-// path is in quotes, with each special character escaped.
+// ExecStart at spaces and replaces % specifiers, so the path is in quotes,
+// with each % doubled. systemd does not replace $ in the path of the
+// program. It refuses a path with a quote, a backslash, or a control
+// character, so serviceUnit refuses it too.
 func serviceUnit(fluxd string) (string, error) {
 	for _, r := range fluxd {
-		if r < 0x20 || r == 0x7f {
+		switch {
+		case r < 0x20 || r == 0x7f:
 			return "", fmt.Errorf("the path %q has a control character, so systemd cannot run it", fluxd)
+		case r == '"' || r == '\'' || r == '\\':
+			return "", fmt.Errorf("the path %q has a quote or a backslash, so systemd cannot run it. Move fluxd to a path without these characters", fluxd)
 		}
 	}
-	quoted := strings.NewReplacer(`\`, `\\`, `"`, `\"`, "%", "%%", "$", "$$").Replace(fluxd)
+	quoted := strings.ReplaceAll(fluxd, "%", "%%")
 	return "[Unit]\nDescription=" + unitDescription + "\nPartOf=graphical-session.target\nAfter=graphical-session.target\n\n" +
 		"[Service]\nType=exec\nExecStart=\"" + quoted + "\"\nExecReload=/bin/kill -HUP $MAINPID\nRestart=on-failure\nRestartSec=2\n" +
 		"# fluxd exits with 75 after an update replaced its binary.\nSuccessExitStatus=75\nRestartForceExitStatus=75\n\n" +
@@ -130,7 +135,7 @@ func setupWrote(unit string) bool {
 		return false
 	}
 	if inner, ok := strings.CutPrefix(exe, `"`); ok {
-		path := strings.NewReplacer(`\\`, `\`, `\"`, `"`, "%%", "%", "$$", "$").Replace(strings.TrimSuffix(inner, `"`))
+		path := strings.ReplaceAll(strings.TrimSuffix(inner, `"`), "%%", "%")
 		want, err := serviceUnit(path)
 		return err == nil && want == unit
 	}
@@ -257,17 +262,28 @@ func setupService(dry bool, run func(string, string, ...string) error) error {
 	return nil
 }
 
-// waitForFluxd waits until fluxd answers on its socket. systemctl start
-// returns before fluxd reads config.toml, so a fluxd that stops at once
-// looks like a success to it.
+// waitForFluxd waits until fluxd answers a request on its socket.
+// systemctl start returns before fluxd reads config.toml, so a fluxd that
+// stops at once looks like a success to it. fluxd makes the socket before
+// it starts the network, and it answers only after the network runs. So a
+// connection alone does not show that the start worked, but an answer does.
 func waitForFluxd(timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for {
 		if c, err := dial(); err == nil {
+			answer := make(chan error, 1)
+			go func() { answer <- c.Call("state", nil, nil) }()
+			select {
+			case err = <-answer:
+			case <-time.After(time.Until(deadline)):
+				err = errors.New("fluxd did not answer")
+			}
 			c.Close()
-			return nil
+			if err == nil {
+				return nil
+			}
 		}
-		if time.Now().After(deadline) || exec.Command("systemctl", "--user", "is-failed", "--quiet", "fluxd.service").Run() == nil {
+		if !time.Now().Before(deadline) || exec.Command("systemctl", "--user", "is-failed", "--quiet", "fluxd.service").Run() == nil {
 			break
 		}
 		time.Sleep(200 * time.Millisecond)

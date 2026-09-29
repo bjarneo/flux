@@ -55,8 +55,10 @@ Window pages: `overview`, `clipboard`, `files`, `notifications`, `messages`, and
 flux-cli setup && echo "Flux is ready"
 ```
 
-`flux-cli setup` and `flux-cli on` wait until `fluxd` answers on its socket.
+`flux-cli setup` and `flux-cli on` wait until `fluxd` answers a request on its socket.
+`fluxd` answers only after it starts the network, so a connection alone does not count.
 If `fluxd` stops at start, for example because `config.toml` has an error, the command prints the cause and returns 1.
+In a checkout, `flux-cli setup` refuses a `fluxd` path with a quote or a backslash, because systemd cannot run it.
 To see the log of the service, run `journalctl --user -u fluxd -e`.
 
 After you install the package, `flux-cli setup` removes the `~/.config/systemd/user/fluxd.service` unit that an earlier `flux-cli setup` of a checkout or of `make install-user` wrote.

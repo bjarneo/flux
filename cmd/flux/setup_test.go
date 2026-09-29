@@ -1,20 +1,27 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"flux/internal/ipc"
 )
 
-// systemd splits ExecStart at spaces and replaces % and $, so the unit
-// quotes the path of a checkout such as ~/My Code/flux.
+// systemd splits ExecStart at spaces and replaces % specifiers, so the
+// unit quotes the path of a checkout such as ~/My Code/flux. systemd does
+// not replace $ in the path of the program, and it refuses quotes and
+// backslashes there.
 func TestServiceUnitQuotesThePath(t *testing.T) {
-	unit, err := serviceUnit(`/home/u/My Code/100% "a"\b/$HOME/fluxd`)
+	unit, err := serviceUnit(`/home/u/My Code/100% a/$HOME/fluxd`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(unit, "\nExecStart=\"/home/u/My Code/100%% \\\"a\\\"\\\\b/$$HOME/fluxd\"\n") {
+	if !strings.Contains(unit, "\nExecStart=\"/home/u/My Code/100%% a/$HOME/fluxd\"\n") {
 		t.Fatalf("unit:\n%s", unit)
 	}
 	if !strings.Contains(unit, "\nType=exec\n") {
@@ -23,8 +30,10 @@ func TestServiceUnitQuotesThePath(t *testing.T) {
 	if !setupWrote(unit) {
 		t.Fatal("setup does not know its own unit")
 	}
-	if _, err := serviceUnit("/home/u/flux\n/fluxd"); err == nil {
-		t.Fatal("a path with a newline must fail")
+	for _, path := range []string{"/home/u/flux\n/fluxd", `/home/u/"a"/fluxd`, "/home/u/it's/fluxd", `/home/u/a\b/fluxd`} {
+		if _, err := serviceUnit(path); err == nil {
+			t.Errorf("the path %q must fail", path)
+		}
 	}
 }
 
@@ -117,5 +126,38 @@ func TestExecPath(t *testing.T) {
 	}
 	if got := execPath(""); got != "" {
 		t.Errorf("empty: %q", got)
+	}
+}
+
+// stateHandler answers each call, as fluxd does after it started the
+// network.
+type stateHandler struct{}
+
+func (stateHandler) Call(context.Context, string, json.RawMessage) (any, error) {
+	return map[string]any{}, nil
+}
+
+func (stateHandler) Subscribe(func(string, any)) func() { return func() {} }
+
+// fluxd makes its socket before it starts the network. A socket that takes
+// the connection but does not answer is not a fluxd that runs.
+func TestWaitForFluxdNeedsAnAnswer(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	path := filepath.Join(t.TempDir(), "fluxd.sock")
+	t.Setenv("FLUX_SOCKET", path)
+	ln, err := ipc.Listen(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	if err := waitForFluxd(500 * time.Millisecond); err == nil {
+		t.Fatal("a socket with no answer must not count as a started fluxd")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go ipc.Serve(ctx, ln, stateHandler{})
+	if err := waitForFluxd(5 * time.Second); err != nil {
+		t.Fatalf("a fluxd that answers: %v", err)
 	}
 }
