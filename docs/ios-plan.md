@@ -127,9 +127,14 @@ It shares FluxKit with [Flux for macOS](macos.md) and offers the Android feature
 
 ## Phase 8: Share extension
 
-- [ ] A share extension for files, images, text, and links, with an App Group for the queue.
-- [ ] The app sends queued items when it connects to the chosen computer.
-- [ ] Checked: an item shared from Photos arrives at `fluxd` after Flux opens.
+- [x] A share extension for files, images, text, and links, with an App Group for the queue.
+  The App Group id is the `FLUX_APP_GROUP` build setting in `ios/project.yml`, `group.org.omarchy.flux` by default.
+  The simulator needs no team. A device build needs the developer's team and a group id that the team owns, set in that 1 place.
+- [x] The app sends queued items when it connects to the chosen computer.
+  It removes each item after the computer received it, keeps failed items with the reason, lists them on the Share screen with Remove, and posts a notification when queued items went out.
+- [x] Checked: an item shared from Photos arrives at `fluxd` after Flux opens.
+  A photo from Photos arrived with the sha256 of the queued copy, a link from Safari opened on the computer, and queued text landed on its clipboard, all after Flux opened.
+  Safari's Share for selected text shows no share sheet in this simulator, so the text went into the queue as the extension writes it; unit tests cover how the extension reads text.
 
 ## Phase 9: Screen mirror
 
