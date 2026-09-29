@@ -216,6 +216,22 @@ Item {
       retry.clicked()
       tryCompare(p, "loaded", true)
       compare(p.loadError, "")
+
+      // Thread 2 opens again before thread 3 answers, and its load fails.
+      mock.failures = { "sms.thread": { code: "timeout", message: "slow phone" } }
+      var two = p.selected
+      p.open(p.convos.filter(function (c) { return c.thread === 3 })[0])
+      p.open(two)
+      compare(p.messages.length, 0)
+      verify(p.loading)
+      verify(!p.loaded)
+      tryCompare(p, "loading", false)
+      compare(p.selected.thread, 2)
+      compare(p.loadError, "slow phone")
+      verify(!p.loaded)
+      retry = findBy(p, "text", "Retry")
+      verify(!!retry && retry.visible)
+      mock.failures = {}
     }
   }
 

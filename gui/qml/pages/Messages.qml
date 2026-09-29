@@ -101,8 +101,12 @@ Item {
     var devId = dev.id
     var key = devId + ":" + c.thread
     // Another thread shows no messages until its answer comes, so its name
-    // never shows over the messages of the earlier thread.
-    if (loadedFor !== key) messages = []
+    // never shows over the messages of the earlier thread. loadedFor resets
+    // too, so a thread that opens again shows its load and its error.
+    if (loadedFor !== key) {
+      messages = []
+      loadedFor = ""
+    }
     selected = c
     selectedDev = devId
     loading = loadedFor !== key
