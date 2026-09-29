@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -25,11 +26,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.Ringer
 import org.omarchy.flux.core.Share
@@ -55,23 +61,30 @@ class RingActivity : ComponentActivity() {
 
 /**
  * The share sheet target. It sends files, text, or a link to a paired
- * computer and stays open until the transfer starts, because Android grants
- * read access to shared files only while this activity lives.
+ * computer and stays open until the transfer ends, because Android grants
+ * read access to shared files only while this activity lives. It reads
+ * only the files that another app shares, see [Share.acceptShared].
  */
 class ShareActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         FluxCore.init(this)
         FluxService.start(this)
-        val uris = sharedUris(intent)
-        val text = intent.getStringExtra(Intent.EXTRA_TEXT)
-        if (uris.isEmpty() && text.isNullOrEmpty()) {
+        val all = streams(intent)
+        val uris = all.filter { accepted(intent, it) }
+        // EXTRA_TEXT is a CharSequence, and an app can share styled text.
+        val text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()?.takeIf { it.isNotBlank() }
+        if (uris.size < all.size) Toast.makeText(this, "Flux cannot send ${all.size - uris.size} of the shared files", Toast.LENGTH_SHORT).show()
+        if (uris.isEmpty() && text == null) {
             finish()
             return
         }
         setContent {
             val state by FluxCore.state.collectAsStateWithLifecycle()
             val targets = if (state.enabled) state.devices.filter { it.paired } else emptyList()
+            // The names of the files, so that the user sees what goes to the computer.
+            var names by remember { mutableStateOf(emptyList<String>()) }
+            LaunchedEffect(Unit) { names = withContext(Dispatchers.IO) { uris.map(::displayName) } }
             TiledTheme {
                 val scheme = MaterialTheme.colorScheme
                 Box(Modifier.fillMaxSize().clickable { finish() }, contentAlignment = Alignment.Center) {
@@ -89,6 +102,12 @@ class ShareActivity : ComponentActivity() {
                                 Sym(Ic.send, tint = scheme.primary)
                                 Text("Send with Flux", style = MaterialTheme.typography.headlineSmall)
                             }
+                            Text(
+                                summary(uris.size, names, text),
+                                Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 3,
+                            )
                             Text(
                                 when {
                                     !state.enabled -> "Flux is off. Turn it on in the Flux app to send."
@@ -135,8 +154,12 @@ class ShareActivity : ComponentActivity() {
             Toast.makeText(this, "Sending to $name", Toast.LENGTH_SHORT).show()
             moveTaskToBack(true)
             // The activity stays alive until the transfer ends, so that the
-            // read grant for the shared files stays valid.
-            Share.sendFiles(FluxCore, id, uris) { runOnUiThread { finish() } }
+            // read grant for the shared files stays valid. The text that
+            // comes with the files, such as a caption, goes after them.
+            Share.sendFiles(FluxCore, id, uris) {
+                if (text != null) Share.sendText(FluxCore, id, text)
+                runOnUiThread { finish() }
+            }
         } else if (text != null) {
             Share.sendText(FluxCore, id, text)
             Toast.makeText(this, "Sent to $name", Toast.LENGTH_SHORT).show()
@@ -144,8 +167,33 @@ class ShareActivity : ComponentActivity() {
         }
     }
 
+    /** The first line of the dialog: the files or the text that go to the computer. */
+    private fun summary(count: Int, names: List<String>, text: String?): String {
+        if (count == 0) return "Text: " + text.orEmpty().take(120)
+        val shown = names.take(3).joinToString(", ") + if (names.size > 3) ", and ${names.size - 3} more" else ""
+        val files = if (count == 1) "1 file" else "$count files"
+        return if (shown.isEmpty()) files else "$files: $shown"
+    }
+
+    private fun displayName(uri: Uri): String = runCatching {
+        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(0) else null
+        }
+    }.getOrNull() ?: uri.lastPathSegment ?: "file"
+
+    /**
+     * Reports whether Flux reads [uri]. A file that the sharing app granted
+     * comes in the clip data of the intent, with the read grant.
+     */
+    private fun accepted(i: Intent, uri: Uri): Boolean {
+        val clip = i.clipData
+        val inClip = clip != null && (0 until clip.itemCount).any { clip.getItemAt(it).uri == uri }
+        val granted = inClip && i.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0
+        return Share.acceptShared(uri.scheme, uri.authority, packageName, granted)
+    }
+
     @Suppress("DEPRECATION")
-    private fun sharedUris(i: Intent): List<Uri> = when (i.action) {
+    private fun streams(i: Intent): List<Uri> = when (i.action) {
         Intent.ACTION_SEND -> listOfNotNull(
             if (Build.VERSION.SDK_INT >= 33) i.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java) else i.getParcelableExtra(Intent.EXTRA_STREAM),
         )

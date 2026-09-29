@@ -1,5 +1,6 @@
 package org.omarchy.flux.camera
 
+import org.omarchy.flux.core.WebUrl
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -64,11 +65,12 @@ data class CodeAction(val verb: String, val body: ShareBody)
 data class CodeSheet(val title: String, val value: String, val kind: CodeKind, val actions: List<CodeAction>)
 
 object Codes {
-    private val urlScheme = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://\\S+$")
-
-    /** Returns the kind of content in the code. */
+    /**
+     * Returns the kind of content in the code. Only a web link is a link,
+     * see [WebUrl]. A code with another scheme, such as a file: URL, is text.
+     */
     fun kind(code: ScannedCode): CodeKind = when {
-        code.url != null || urlScheme.matches(code.raw.trim()) -> CodeKind.Url
+        WebUrl.of(code.url ?: code.raw) != null -> CodeKind.Url
         code.wifi != null || code.raw.startsWith("WIFI:", ignoreCase = true) -> CodeKind.Wifi
         code.contact != null || code.raw.startsWith("BEGIN:VCARD", ignoreCase = true) || code.raw.startsWith("MECARD:", ignoreCase = true) -> CodeKind.Contact
         code.product || code.format in productFormats -> CodeKind.Product
@@ -78,7 +80,7 @@ object Codes {
     private val productFormats = setOf(CodeFormat.Ean13, CodeFormat.Ean8, CodeFormat.UpcA, CodeFormat.UpcE)
 
     /**
-     * Builds the result sheet. A link opens or copies on the computer.
+     * Builds the result sheet. A web link opens or copies on the computer.
      * Anything else saves or copies on the computer. [pc] is the computer name.
      */
     fun sheet(code: ScannedCode, pc: String): CodeSheet {
@@ -102,7 +104,7 @@ object Codes {
      * readable lines. Other codes keep their raw value.
      */
     fun text(code: ScannedCode, kind: CodeKind = kind(code)): String = when (kind) {
-        CodeKind.Url -> (code.url ?: code.raw).trim()
+        CodeKind.Url -> WebUrl.of(code.url ?: code.raw) ?: code.raw
         CodeKind.Wifi -> code.wifi?.let { w ->
             listOfNotNull(
                 "Wi-Fi network: ${w.ssid}",

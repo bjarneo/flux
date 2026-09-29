@@ -33,8 +33,10 @@ object Approvals {
     fun onPacket(core: FluxCore, d: Device, p: Packet) {
         when (p.string("kind")) {
             "cancel" -> {
+                // Only the computer of the open request can cancel it.
                 val id = p.string("id")
-                if (id != null && _current.value?.id == id) main.post { clear(core.app, id) }
+                val open = _current.value
+                if (id != null && open?.id == id && open.computerId == d.id) main.post { clear(core.app, id) }
             }
             "request", "enroll" -> receive(core, d, p)
         }
@@ -43,13 +45,22 @@ object Approvals {
     private fun receive(core: FluxCore, d: Device, p: Packet) {
         val id = p.string("id") ?: return
         val r = ApproveMessage.parse(p, d.id, d.identity.deviceName)
+        val admit = r?.let { ApproveMessage.admit(_current.value, it) }
+        // A repeated packet changes nothing, so the user approves the request that the screen showed.
+        if (admit == ApproveMessage.Admit.Repeat) return
+        if (r != null && admit == ApproveMessage.Admit.Conflict) {
+            Log.i(TAG, "closed request $id: ${d.identity.deviceName} changed its fields")
+            d.send(ApproveMessage.failed(id, "The request changed while the phone showed it"))
+            main.post { clear(core.app, id) }
+            return
+        }
         val problem = when {
             r == null -> "The request is not valid"
             !ApproveMessage.fresh(r, System.currentTimeMillis() / 1000) ->
                 "The clocks of the phone and the computer differ by more than 10 minutes"
             r.kind == ApproveRequest.Kind.Approve && !ApproveKeys.has(d.id) ->
                 "This phone has no key for the computer. Run: sudo flux-cli approve enroll"
-            _current.value != null && _current.value?.id != r.id -> "Another request is open on the phone"
+            admit == ApproveMessage.Admit.Busy -> "Another request is open on the phone"
             else -> null
         }
         if (problem != null || r == null) {

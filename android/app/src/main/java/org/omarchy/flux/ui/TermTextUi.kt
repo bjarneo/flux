@@ -8,6 +8,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
@@ -213,7 +214,8 @@ fun TermLines(lines: List<TermLine>, width: Dp) {
     val invert = remember(lines, colors) { termTone(lines)?.let { (it == TermTone.Dark) != colors.dark } ?: false }
     val pad = with(density) { TermPad.toPx() }
     Column {
-        for (line in shown) {
+        // A row keeps its key when the output moves, so that only new lines build their rows and their layout again.
+        for (line in shown) key(line) {
             val row = remember(line, colors, invert) { termRow(line, colors, invert) }
             val hang = row.hang.takeIf { it <= cols / 2 } ?: 0
             // The layout gives the place of each block element. Only the drawing reads it.

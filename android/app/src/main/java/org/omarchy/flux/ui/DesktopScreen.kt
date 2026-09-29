@@ -103,7 +103,12 @@ private enum class Panel { Omarchy, Keys }
 @Composable
 fun DesktopScreen(d: DeviceUi, onBack: () -> Unit) {
     val status by DesktopSession.status.collectAsState()
-    val ready = d.online && d.desktopSupported && d.remoteDesktop == true
+    // The screen shows and takes input only after the phone lock, see rememberRemoteUnlock.
+    val unlocked = rememberRemoteUnlock(
+        d.online && d.desktopSupported && d.remoteDesktop == true,
+        "Show the computer screen", "show the computer screen", onBack, sample = isDemo(d.id),
+    )
+    val ready = d.online && d.desktopSupported && d.remoteDesktop == true && unlocked
     val control = d.remoteInput == true
     var panel by rememberSaveable { mutableStateOf<Panel?>(null) }
     // The monitor that the user selected. A restart of the stream keeps it.
@@ -168,6 +173,7 @@ fun DesktopScreen(d: DeviceUi, onBack: () -> Unit) {
                 "On ${d.name}, set remote_desktop = true in ~/.config/flux/config.toml, then run systemctl --user reload fluxd.",
                 gutter.padding(top = 48.dp),
             )
+            !unlocked -> EmptyState(Ic.desktop, "Unlock to continue", "Confirm with the phone lock to show ${d.name}.", gutter.padding(top = 48.dp))
             else -> {
                 // The video keeps its place in both layouts, so a rotation does not restart the stream.
                 Row(Modifier.weight(1f).fillMaxWidth()) {
@@ -255,7 +261,8 @@ private fun ColumnScope.RemoteDesktop(d: DeviceUi, monitor: String?, hint: Boole
     DisposableEffect(d.id, lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_START -> DesktopSession.start(FluxCore, d.id, selected)
+                // After the unlock ends, the page asks for the phone lock again before the stream starts.
+                Lifecycle.Event.ON_START -> if (ReplyLock.valid() || isDemo(d.id)) DesktopSession.start(FluxCore, d.id, selected)
                 Lifecycle.Event.ON_STOP -> DesktopSession.stop()
                 else -> Unit
             }

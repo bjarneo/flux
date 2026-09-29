@@ -83,6 +83,10 @@ fun PhotoMode(d: DeviceUi) {
             .build()
     }
     LaunchedEffect(flash) { capture.flashMode = flash }
+    // A photo that did not go out stays in the cache only while the screen shows its retry.
+    DisposableEffect(Unit) {
+        onDispose { (status as? PhotoStatus.Failed)?.file?.delete() }
+    }
 
     DisposableEffect(permission.granted, lens) {
         var provider: ProcessCameraProvider? = null

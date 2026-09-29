@@ -56,15 +56,15 @@ object Plugins {
             }
             Types.NOTIFICATION_REQUEST -> {
                 if (p.bool("request") == true) NotificationSync.sendAll(d)
-                p.string("cancel")?.let { NotificationSync.dismiss(it) }
+                p.string("cancel")?.let { NotificationSync.dismiss(d.id, it) }
             }
             Types.NOTIFICATION_REPLY -> {
                 val id = p.string("requestReplyId") ?: return
-                NotificationSync.reply(id, p.string("message") ?: "")
+                NotificationSync.reply(d.id, id, p.string("message") ?: "")
             }
             Types.NOTIFICATION_ACTION -> {
                 val key = p.string("key") ?: return
-                NotificationSync.action(key, p.string("action") ?: return)
+                NotificationSync.action(d.id, key, p.string("action") ?: return)
             }
             Types.FIND_MY_PHONE -> Ringer.start(core.app, d.identity.deviceName)
             Types.RUN_COMMAND -> {

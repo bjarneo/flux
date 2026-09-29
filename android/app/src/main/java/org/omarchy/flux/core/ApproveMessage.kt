@@ -112,6 +112,34 @@ object ApproveMessage {
         return r
     }
 
+    /** What the phone does with a new request. */
+    enum class Admit {
+        /** No request is open, so the phone shows the new one. */
+        Show,
+
+        /** The packet repeats the open request, so nothing changes. */
+        Repeat,
+
+        /** The packet has the ID of the open request but other fields. */
+        Conflict,
+
+        /** Another request is open, so the phone refuses the new one. */
+        Busy,
+    }
+
+    /**
+     * Decides what the phone does with [next] while [open] shows. A request
+     * never changes on screen, because the user approves what the screen
+     * showed. A conflict closes the open request, and the computer asks for
+     * the password.
+     */
+    fun admit(open: ApproveRequest?, next: ApproveRequest): Admit = when {
+        open == null -> Admit.Show
+        open == next -> Admit.Repeat
+        open.id == next.id && open.computerId == next.computerId -> Admit.Conflict
+        else -> Admit.Busy
+    }
+
     /** Reports whether the time of [r] is within 10 minutes of the phone clock. */
     fun fresh(r: ApproveRequest, nowSeconds: Long): Boolean = kotlin.math.abs(nowSeconds - r.time) <= MAX_SKEW_SECONDS
 

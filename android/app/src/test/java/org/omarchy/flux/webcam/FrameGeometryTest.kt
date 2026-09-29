@@ -88,6 +88,69 @@ class FrameGeometryTest {
         assertEquals(270, FrameGeometry.snap(-80))
     }
 
+    // The SurfaceTexture transform as Android builds it (GLConsumer): a
+    // vertical flip, then the crop, then the buffer transform. The buffer
+    // transform multiplies FLIP_H, FLIP_V, and ROT_90 in this order.
+    private fun times(a: FloatArray, b: FloatArray) = FloatArray(16) { i ->
+        val col = i / 4
+        val row = i % 4
+        (0 until 4).sumOf { k -> (a[k * 4 + row] * b[col * 4 + k]).toDouble() }.toFloat()
+    }
+
+    private val flipH = floatArrayOf(-1f, 0f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 0f, 1f, 0f, 1f, 0f, 0f, 1f)
+    private val flipV = floatArrayOf(1f, 0f, 0f, 0f, 0f, -1f, 0f, 0f, 0f, 0f, 1f, 0f, 0f, 1f, 0f, 1f)
+    private val rot90 = floatArrayOf(0f, 1f, 0f, 0f, -1f, 0f, 0f, 0f, 0f, 0f, 1f, 0f, 1f, 0f, 0f, 1f)
+    private val identity = floatArrayOf(1f, 0f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 0f, 1f)
+
+    private fun surfaceTransform(h: Boolean, v: Boolean, r90: Boolean, shrink: Float = 0f): FloatArray {
+        var x = identity
+        if (h) x = times(x, flipH)
+        if (v) x = times(x, flipV)
+        if (r90) x = times(x, rot90)
+        // A crop that makes each side smaller by the same amount, as the filter of GLConsumer does.
+        val s = 1f - 2 * shrink
+        val crop = floatArrayOf(s, 0f, 0f, 0f, 0f, s, 0f, 0f, 0f, 0f, 1f, 0f, shrink, shrink, 0f, 1f)
+        return times(flipV, times(crop, x))
+    }
+
+    private fun assertMatrix(expected: FloatArray, actual: FloatArray) {
+        for (i in 0 until 16) assertEquals("element $i", expected[i], actual[i], 1e-5f)
+    }
+
+    @Test
+    fun theMirrorOfTheFrontCameraBeforeAndroid13GoesAway() {
+        // A front camera with sensor orientation 270. Android 13 and later
+        // with MIRROR_MODE_NONE use ROT_270 (FLIP_H, FLIP_V, and ROT_90).
+        // Before Android 13, the camera adds FLIP_H, so FLIP_V and ROT_90 stay.
+        for (shrink in listOf(0f, 0.5f / 1080)) {
+            val real = surfaceTransform(h = true, v = true, r90 = true, shrink = shrink)
+            val mirrored = surfaceTransform(h = false, v = true, r90 = true, shrink = shrink)
+            assertFalse(FrameGeometry.mirrors(real))
+            assertTrue(FrameGeometry.mirrors(mirrored))
+            FrameGeometry.unmirror(mirrored)
+            assertMatrix(real, mirrored)
+            assertTrue("the axes still swap, so the rotation rule does not change", FrameGeometry.swapsAxes(mirrored))
+        }
+        // Sensor orientation 90: ROT_90 without the mirror, FLIP_H and ROT_90 with it.
+        val real = surfaceTransform(h = false, v = false, r90 = true)
+        val mirrored = surfaceTransform(h = true, v = false, r90 = true)
+        FrameGeometry.unmirror(mirrored)
+        assertMatrix(real, mirrored)
+    }
+
+    @Test
+    fun aTransformWithoutAMirrorStaysTheSame() {
+        for (t in listOf(
+            surfaceTransform(h = false, v = false, r90 = true), // back camera, sensor 90
+            surfaceTransform(h = true, v = true, r90 = false), // sensor 180
+            surfaceTransform(h = false, v = false, r90 = false), // sensor 0
+        )) {
+            val copy = t.copyOf()
+            FrameGeometry.unmirror(copy)
+            assertMatrix(t, copy)
+        }
+    }
+
     @Test
     fun detectsAxisSwap() {
         val flipOnly = floatArrayOf(1f, 0f, 0f, 0f, 0f, -1f, 0f, 0f, 0f, 0f, 1f, 0f, 0f, 1f, 0f, 1f)

@@ -127,4 +127,16 @@ class ApproveMessageTest {
         val back = Packet.parse(a.serialize())!!
         assertEquals(a.string("signature"), back.string("signature"))
     }
+
+    @Test
+    fun anOpenRequestNeverChanges() {
+        assertEquals(ApproveMessage.Admit.Show, ApproveMessage.admit(null, request))
+        assertEquals("a repeated packet changes nothing", ApproveMessage.Admit.Repeat, ApproveMessage.admit(request, request.copy()))
+        // A request with the same ID and another terminal must not replace what the user reads.
+        assertEquals(ApproveMessage.Admit.Conflict, ApproveMessage.admit(request, request.copy(tty = "/dev/pts/9")))
+        assertEquals(ApproveMessage.Admit.Conflict, ApproveMessage.admit(request, request.copy(nonce = "f".repeat(64))))
+        // Another computer that uses the same ID waits like any other request.
+        assertEquals(ApproveMessage.Admit.Busy, ApproveMessage.admit(request, request.copy(computerId = "pc2")))
+        assertEquals(ApproveMessage.Admit.Busy, ApproveMessage.admit(request, request.copy(id = "req2")))
+    }
 }

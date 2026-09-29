@@ -15,7 +15,8 @@ class FluxNotificationListener : NotificationListenerService() {
 
     override fun onListenerDisconnected() {
         if (NotificationSync.listener === this) NotificationSync.listener = null
-        // The user can take the notification access away.
+        // The reply targets stop working when the user takes the notification access away.
+        NotificationSync.clear()
         FluxCore.refresh()
     }
 

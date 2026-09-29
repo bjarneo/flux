@@ -53,6 +53,30 @@ object FrameGeometry {
     fun swapsAxes(transform: FloatArray): Boolean = abs(transform[0]) < 0.5f && abs(transform[5]) < 0.5f
 
     /**
+     * Reports whether a SurfaceTexture transform mirrors the camera image.
+     * Before Android 13, the camera framework mirrors the front camera, and
+     * an app cannot turn this off. A transform without a mirror has a
+     * negative determinant, because SurfaceTexture adds a vertical flip.
+     */
+    fun mirrors(transform: FloatArray): Boolean = transform[0] * transform[5] - transform[1] * transform[4] > 0f
+
+    /**
+     * Removes the mirror of the camera framework from [transform], in place.
+     * The camera adds its mirror as a horizontal flip of the buffer, so a
+     * second flip of the buffer x axis gives the image as the camera sees
+     * it. [uprightRotation] and the mirror setting then work as on Android
+     * 13 and later.
+     */
+    fun unmirror(transform: FloatArray) {
+        if (!mirrors(transform)) return
+        // x -> 1 - x after the transform: the first row changes its sign, and its offset becomes 1 - offset.
+        transform[0] = -transform[0]
+        transform[4] = -transform[4]
+        transform[8] = -transform[8]
+        transform[12] = 1f - transform[12]
+    }
+
+    /**
      * Returns the clockwise rotation that makes the camera image upright,
      * from the device orientation in degrees (0 in the natural orientation,
      * 90 when the left side of the device is at the top).

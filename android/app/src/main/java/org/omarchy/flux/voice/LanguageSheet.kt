@@ -1,5 +1,7 @@
 package org.omarchy.flux.voice
 
+import android.os.Build
+import android.speech.SpeechRecognizer
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -36,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -92,6 +95,11 @@ fun LanguageSheet(
     val voice = rememberVoiceTyping(automatic = true) { query = DictationText.query(it) }
     val phone = remember { phoneLanguages() }
     val unsupported = models.load == SpeechModels.Load.Unsupported
+    // Dictation uses the recognizer on the phone when it has one, see Dictation. The other recognizer can use a network service.
+    val context = LocalContext.current
+    val local = remember {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+    }
     val rows = if (unsupported) {
         // Without a list from the recognizer, the phone languages are the choices.
         LanguageCatalog.rows(phone, emptyList(), emptyList(), phone, query)
@@ -119,7 +127,14 @@ fun LanguageSheet(
             item {
                 Column(Modifier.padding(start = 4.dp, top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     TileLabel("dictation language")
-                    T("Choose the language that you speak. The phone transcribes it on the device.", size = 13, color = Tn.sub)
+                    T(
+                        if (local) {
+                            "Choose the language that you speak. The phone transcribes it on the device."
+                        } else {
+                            "Choose the language that you speak. The speech recognizer app of the phone can send the audio to its service."
+                        },
+                        size = 13, color = Tn.sub,
+                    )
                 }
             }
             item {
@@ -186,7 +201,7 @@ fun LanguageSheet(
             if (models.load == SpeechModels.Load.Ready && rows.isEmpty() && query.isNotBlank()) {
                 item { T("No language matches \"${query.trim()}\".", Modifier.padding(4.dp), size = 13, color = Tn.dim) }
             }
-            if (!unsupported) {
+            if (!unsupported && local) {
                 item {
                     T(
                         "Android downloads each model from Google once. Dictation then runs on this phone, and the audio stays on the phone.",
