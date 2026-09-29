@@ -17,13 +17,15 @@ import (
 
 // Limits of the payload sockets. payloadWait is how long a payload server
 // waits for the device. payloadHandshakes is the number of connections
-// that it checks at the same time. payloadIdle is how long a received
-// payload can stop before the transfer fails.
+// that it checks at the same time.
 const (
 	payloadWait       = 20 * time.Second
 	payloadHandshakes = 4
-	payloadIdle       = 60 * time.Second
 )
+
+// payloadIdle is how long a received payload can stop before the transfer
+// fails. Tests make it shorter.
+var payloadIdle = 60 * time.Second
 
 // SendWithPayload sends a packet with a payload. It opens a payload server
 // on a port from 1739 to 1764 on the local address of the link, announces

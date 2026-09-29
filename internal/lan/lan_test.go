@@ -404,6 +404,47 @@ func TestPayloadAfterStranger(t *testing.T) {
 	}
 }
 
+// TestPayloadIdle checks that a received payload fails when the device
+// shows its certificate and then sends nothing.
+func TestPayloadIdle(t *testing.T) {
+	old := payloadIdle
+	payloadIdle = 100 * time.Millisecond
+	t.Cleanup(func() { payloadIdle = old })
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	desk := newPeer(t, ctx, "desk")
+	phone := newPeer(t, ctx, "phone")
+	desk.prov.AnnounceTo(phone.udpAddr())
+	onDesk := waitLink(t, desk.links)
+	waitLink(t, phone.links)
+	ln, port, err := listenPayload(ctx, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		tc := tls.Server(c, serverConfig(phone.cert))
+		defer tc.Close()
+		if tc.Handshake() == nil {
+			<-ctx.Done()
+		}
+	}()
+	p := proto.New(proto.TypeShare, nil)
+	p.PayloadSize, p.PayloadTransferInfo = 18, &proto.TransferInfo{Port: port}
+	rc, err := onDesk.FetchPayload(ctx, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rc.Close()
+	if _, err := io.ReadAll(rc); err == nil || !strings.Contains(err.Error(), "sent nothing") {
+		t.Fatalf("read of a silent payload: %v", err)
+	}
+}
+
 // TestPeerCertificateChecks checks that FetchPayload and DialPeer refuse a
 // listener with another certificate, and that FetchPayload refuses a port
 // outside the payload ports.
