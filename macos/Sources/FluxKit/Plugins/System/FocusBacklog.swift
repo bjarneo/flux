@@ -2,12 +2,14 @@ import Foundation
 
 /// The Focus change that paired computers did not get yet. iOS runs the
 /// Flux Focus filter also while Flux has no link, for example in the
-/// background or before Flux runs. A change then waits here until each
-/// computer connects. The state lives in the defaults, because iOS can end
-/// Flux before a computer connects.
+/// background or before Flux runs. A change then waits here for each
+/// computer that was paired at the change, until that computer connects.
+/// The state lives in the defaults, because iOS can end Flux before a
+/// computer connects.
 ///
 /// Only a change counts: the first Focus state that Flux sees sets the
-/// start value, and a state that equals the last one does nothing.
+/// start value, and a state that equals the last one does nothing. A
+/// computer that pairs after the change does not get it.
 final class FocusBacklog: @unchecked Sendable {
     private let defaults: UserDefaults
     private let lock = NSLock()
@@ -16,17 +18,18 @@ final class FocusBacklog: @unchecked Sendable {
     static let focusKey = "dnd.focus"
     /// The Focus state that computers still need.
     static let unsentKey = "dnd.unsent"
-    /// The IDs of the computers that got `unsentKey`.
-    static let reachedKey = "dnd.reached"
+    /// The IDs of the computers that still need `unsentKey`.
+    static let waitingKey = "dnd.waiting"
 
     init(defaults: UserDefaults) {
         self.defaults = defaults
     }
 
     /// Takes a Focus state. It returns true for a change, which then waits
-    /// for each computer. `keep` false records the state but keeps no
-    /// change, for example while the sync is off.
-    func report(_ on: Bool, keep: Bool = true) -> Bool {
+    /// for each computer in `paired`, the computers that are paired now.
+    /// `keep` false records the state but keeps no change, for example
+    /// while the sync is off.
+    func report(_ on: Bool, paired: [String], keep: Bool = true) -> Bool {
         lock.withLock {
             let last = defaults.object(forKey: Self.focusKey) as? Bool
             defaults.set(on, forKey: Self.focusKey)
@@ -35,8 +38,7 @@ final class FocusBacklog: @unchecked Sendable {
                 clearLocked()
                 return false
             }
-            defaults.set(on, forKey: Self.unsentKey)
-            defaults.set([String](), forKey: Self.reachedKey)
+            save(on, waiting: paired)
             return true
         }
     }
@@ -45,8 +47,7 @@ final class FocusBacklog: @unchecked Sendable {
     func reached(_ ids: [String], on: Bool) {
         lock.withLock {
             guard defaults.object(forKey: Self.unsentKey) as? Bool == on else { return }
-            let reached = defaults.stringArray(forKey: Self.reachedKey) ?? []
-            defaults.set(reached + ids.filter { !reached.contains($0) }, forKey: Self.reachedKey)
+            save(on, waiting: waitingIDs().filter { !ids.contains($0) })
         }
     }
 
@@ -55,10 +56,19 @@ final class FocusBacklog: @unchecked Sendable {
     func take(for id: String) -> Bool? {
         lock.withLock {
             guard let on = defaults.object(forKey: Self.unsentKey) as? Bool else { return nil }
-            let reached = defaults.stringArray(forKey: Self.reachedKey) ?? []
-            guard !reached.contains(id) else { return nil }
-            defaults.set(reached + [id], forKey: Self.reachedKey)
+            let waiting = waitingIDs()
+            guard waiting.contains(id) else { return nil }
+            save(on, waiting: waiting.filter { $0 != id })
             return on
+        }
+    }
+
+    /// Stops the wait of a computer that was unpaired, so that it gets no
+    /// old change when it pairs again.
+    func forget(_ id: String) {
+        lock.withLock {
+            guard let on = defaults.object(forKey: Self.unsentKey) as? Bool else { return }
+            save(on, waiting: waitingIDs().filter { $0 != id })
         }
     }
 
@@ -67,8 +77,23 @@ final class FocusBacklog: @unchecked Sendable {
         lock.withLock { clearLocked() }
     }
 
+    private func waitingIDs() -> [String] {
+        defaults.stringArray(forKey: Self.waitingKey) ?? []
+    }
+
+    /// Stores the change and the computers that wait for it. It forgets the
+    /// change when no computer waits.
+    private func save(_ on: Bool, waiting: [String]) {
+        guard !waiting.isEmpty else {
+            clearLocked()
+            return
+        }
+        defaults.set(on, forKey: Self.unsentKey)
+        defaults.set(waiting, forKey: Self.waitingKey)
+    }
+
     private func clearLocked() {
         defaults.removeObject(forKey: Self.unsentKey)
-        defaults.removeObject(forKey: Self.reachedKey)
+        defaults.removeObject(forKey: Self.waitingKey)
     }
 }

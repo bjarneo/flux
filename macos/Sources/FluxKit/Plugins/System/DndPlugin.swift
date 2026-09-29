@@ -110,8 +110,11 @@ public final class DndPlugin: FluxPlugin, @unchecked Sendable {
         Task { @MainActor in model.computers[id] = on }
     }
 
+    /// Called when the link closes and after an unpair. An unpaired
+    /// computer stops its wait for a Focus change.
     public func onDisconnected(_ device: Device) {
         let id = device.id
+        if !device.paired { backlog?.forget(id) }
         let model = model
         Task { @MainActor in model.computers[id] = nil }
     }
@@ -125,9 +128,11 @@ public final class DndPlugin: FluxPlugin, @unchecked Sendable {
     }
 
     /// Takes a Focus state from the filter. A change goes to the connected
-    /// computers now and waits in the backlog for the others.
+    /// computers now and waits in the backlog for the other computers that
+    /// are paired now.
     private func report(_ on: Bool) {
-        guard let core, let backlog, backlog.report(on, keep: sync(core)) else { return }
+        guard let core, let backlog,
+              backlog.report(on, paired: core.trust.all().map(\.id), keep: sync(core)) else { return }
         FluxLog.plugin.info("Do Not Disturb is \(on ? "on" : "off", privacy: .public) on \(FluxPlatform.current.deviceNoun, privacy: .public)")
         let packet = Packet(PacketType.fluxDnd, ["on": on])
         let reached = core.connectedPaired().filter { $0.accepts(PacketType.fluxDnd) && core.send(packet, to: $0.id) }
