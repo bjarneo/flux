@@ -9,25 +9,30 @@ import UIKit
 enum ElapsedTime {
     private static let start = ContinuousClock.now
 
-    static var now: TimeInterval { (ContinuousClock.now - start) / Duration.seconds(1) }
+    /// Reads the start before the clock. The first read sets the start, so
+    /// the value is never below 0.
+    static var now: TimeInterval {
+        let origin = start
+        return (ContinuousClock.now - origin) / Duration.seconds(1)
+    }
 }
 
 /// The time during which an unlock stays valid.
 struct UnlockWindow {
     let validFor: TimeInterval
-    /// The end of the unlock, in `ElapsedTime`.
-    private(set) var until: TimeInterval = 0
+    /// The end of the unlock, in `ElapsedTime`. Nil while no unlock is valid.
+    private(set) var until: TimeInterval?
 
     init(validFor: TimeInterval) {
         self.validFor = validFor
     }
 
-    func isUnlocked(at now: TimeInterval) -> Bool { now < until }
+    func isUnlocked(at now: TimeInterval) -> Bool { until.map { now < $0 } ?? false }
 
     mutating func unlock(at now: TimeInterval) { until = now + validFor }
 
     /// Ends the unlock at once.
-    mutating func lock() { until = 0 }
+    mutating func lock() { until = nil }
 }
 
 /// Asks for Face ID, Touch ID, or the passcode before input goes to a
@@ -60,6 +65,8 @@ enum ReplyLock {
     /// at launch.
     static func watch() {
         guard observer == nil else { return }
+        // Starts the clock at launch.
+        _ = ElapsedTime.now
         observer = NotificationCenter.default.addObserver(
             forName: UIApplication.protectedDataWillBecomeUnavailableNotification, object: nil, queue: .main
         ) { _ in

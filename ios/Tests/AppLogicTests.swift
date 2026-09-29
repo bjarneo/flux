@@ -25,6 +25,7 @@ final class AppLogicTests: XCTestCase {
     func testUnlockLastsFiveMinutes() {
         var window = UnlockWindow(validFor: 300)
         XCTAssertFalse(window.isUnlocked(at: 1000), "locked at start")
+        XCTAssertFalse(window.isUnlocked(at: -1), "locked at start, also before the start of the clock")
         window.unlock(at: 1000)
         XCTAssertTrue(window.isUnlocked(at: 1000))
         XCTAssertTrue(window.isUnlocked(at: 1299))
@@ -33,6 +34,7 @@ final class AppLogicTests: XCTestCase {
         XCTAssertTrue(window.isUnlocked(at: 2200), "a new unlock starts a new window")
         window.lock()
         XCTAssertFalse(window.isUnlocked(at: 2200), "a lock of the iPhone ends the unlock at once")
+        XCTAssertFalse(window.isUnlocked(at: -1), "a lock ends the unlock at every time")
     }
 
     func testTheUnlockClockKeepsCounting() {
