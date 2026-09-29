@@ -24,5 +24,16 @@ fi
 # Start fluxd in every graphical session.
 systemctl --global enable fluxd.service 2>/dev/null || true
 
+# After an upgrade, restart fluxd in every session where it runs. A pacman
+# upgrade replaces /usr/bin/fluxd, but a running daemon keeps the old binary
+# and the new config settings are silently ignored.
+for runtime in /run/user/*; do
+	[ -S "$runtime/bus" ] || continue
+	uid="${runtime##*/}"
+	pgrep -u "$uid" -x fluxd >/dev/null 2>&1 || continue
+	runuser -u "$(id -un "$uid")" -- env XDG_RUNTIME_DIR="$runtime" \
+		systemctl --user try-restart fluxd.service || true
+done
+
 echo "Flux is installed. As your user, run: flux-cli setup"
 echo "The short name flux works after the next login, when no other flux command exists."
