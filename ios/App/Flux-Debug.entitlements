@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Free-tier debug: only entitlements that need no Apple approval.
+         Full set (multicast, App Groups, aps-environment, time-sensitive)
+         lives in Flux.entitlements and needs a paid team (D5).
+         NOTE 2026-09-27: time-sensitive removed — free teams cannot sign
+         it ("Personal development teams do not support the Time Sensitive
+         Notifications capability"). Pairing/approval notifications degrade
+         to regular interruption on free-tier debug builds; the category +
+         Approve/Deny actions still work. -->
+    <!-- Permanent Keychain items (identity + approve keys) fail with -34018
+         without an access group (simulator run caught it for tests; the app
+         needs the same on device). Own group works on the free tier. -->
+    <key>keychain-access-groups</key>
+    <array>
+        <string>$(AppIdentifierPrefix)org.omarchy.flux</string>
+    </array>
+</dict>
+</plist>

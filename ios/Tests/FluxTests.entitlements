@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Unit-test bundles are their own process: permanent Keychain items
+         (identity + approve keys) fail with -34018
+         (errSecMissingEntitlement) without an access group — first caught
+         by the Xcode simulator run, D7. Same group as the app target. -->
+    <key>keychain-access-groups</key>
+    <array>
+        <string>$(AppIdentifierPrefix)org.omarchy.flux</string>
+    </array>
+</dict>
+</plist>

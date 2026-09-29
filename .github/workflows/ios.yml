@@ -1,0 +1,49 @@
+name: iOS
+
+on:
+  push:
+    branches: [master]
+    paths: ['ios/**', '.github/workflows/ios.yml', 'Makefile']
+  pull_request:
+    paths: ['ios/**', '.github/workflows/ios.yml', 'Makefile']
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag:
+        description: Stable release tag to build from
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
+          persist-credentials: false
+      - uses: swift-actions/setup-swift@v2
+      - name: Build
+        run: make ios
+      - name: Release build
+        # Release-only errors (the assembleRelease analog). SwiftLint is
+        # advisory-only until a config lands: defaults fail on pre-existing
+        # style, so it must not gate CI.
+        run: cd ios && swift build -c release
+      - name: Test
+        run: make ios-test
+      - name: Check test_peer syntax
+        run: python3 -m py_compile ios/tools/test_peer.py
+      - name: Check Info.plist keys
+        # Regression guard (D7, 2026-09-27): the device bundle once lost
+        # every usage description (source file rewritten with only 4 keys;
+        # no Local Network prompt is possible without
+        # NSLocalNetworkUsageDescription). Fail fast here.
+        run: |
+          plutil -lint ios/App/Info.plist
+          for k in NSLocalNetworkUsageDescription NSBonjourServices NSFaceIDUsageDescription NSCameraUsageDescription NSMicrophoneUsageDescription NSPhotoLibraryUsageDescription NSFocusStatusUsageDescription CFBundleExecutable CFBundleIdentifier CFBundleVersion; do
+            grep -q "$k" ios/App/Info.plist || { echo "missing $k"; exit 1; }
+          done

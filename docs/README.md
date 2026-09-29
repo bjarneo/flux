@@ -18,6 +18,7 @@ A paired device can also connect through [Tailscale](tailscale.md) away from tha
 | [Android](android.md) | Requirements, `adb`, APK installation, local builds, SDK setup, tests, and screenshots |
 | [Android setup and Play Protect](android-setup.md) | Play Protect blocks, installs with `adb`, restricted settings, the service, the network, and permissions |
 | [macOS](macos.md) | Mac app build, pairing, features, permissions, and local tests |
+| [iOS](../ios/README.md) | iPhone app build, pairing, features, permissions, and local tests |
 | [CLI](cli.md) | Commands, device selection, JSON state, and notifications from scripts |
 | [Everyday use](features.md) | Pair, share, clipboard images, SMS, media, calls, Do Not Disturb, automatic photo transfers, and dictation in text fields |
 | [Tailscale](tailscale.md) | Extra addresses, links away from the local network, other VPNs, and connection checks |
@@ -43,6 +44,7 @@ A paired device can also connect through [Tailscale](tailscale.md) away from tha
 | [Approval security design](approve.md) | Trust anchors, signatures, enrollment, and failure behavior |
 | [macOS client plan](macos-plan.md) | Decisions, phases, and checklists for the Mac app |
 | [macOS client status](macos-status.md) | Build plan, current state, and what was verified against `fluxd` |
+| [iOS client plan](ios-plan.md) | Decisions, phases, and checklists for the iPhone app |
 | [Marketing videos](../marketing/README.md) | Video source, phone captures, music timing, render, and mux |
 
 Return to the [project README](../README.md).

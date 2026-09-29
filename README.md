@@ -3,7 +3,7 @@
 Connect your Omarchy desktop to an Android phone or a Mac over your local network, or through Tailscale when you are away.
 Share files, clipboard text, and clipboard images, read phone notifications, control media, and use your phone as a camera or microphone.
 
-Flux includes a CLI, a background daemon, a native Qt window, an Omarchy shell plugin, a native Android app, and a native macOS app.
+Flux includes a CLI, a background daemon, a native Qt window, an Omarchy shell plugin, a native Android app, a native macOS app, and a native iOS app.
 The desktop opens the network connections, so the default Omarchy firewall needs no new inbound rule.
 
 
@@ -33,6 +33,10 @@ Flux for Android is the supported phone app.
 Flux for macOS requires macOS 14 or later.
 It connects a Mac in the place of a phone and offers the features that macOS allows.
 See [Flux for macOS](docs/macos.md) for the feature list.
+
+Flux for iOS requires iOS 17 or later.
+It speaks the same protocol to the same `fluxd`, with feature parity to Android where iOS allows it.
+See [Flux for iOS](ios/README.md) and the [iOS client plan](docs/ios-plan.md).
 
 ## Clone and install
 
@@ -113,6 +117,12 @@ make test-macos macos
 make install-macos
 ```
 
+On a Mac with Xcode 16+, build and test the iOS package:
+
+```sh
+make ios ios-test
+```
+
 GitHub Actions does not build the macOS app.
 
 See [development](docs/development.md) for local checks and [releases](docs/releasing.md) for keys, secrets, tags, and artifacts.
@@ -122,6 +132,7 @@ See [development](docs/development.md) for local checks and [releases](docs/rele
 - [Install and update](docs/install.md)
 - [Android build and setup](docs/android.md)
 - [macOS build and setup](docs/macos.md)
+- [iOS build and setup](ios/README.md)
 - [CLI reference](docs/cli.md)
 - [Configuration and data paths](docs/configuration.md)
 - [Everyday use](docs/features.md)

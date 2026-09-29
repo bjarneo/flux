@@ -17,7 +17,7 @@ define copy-plugin
 		while read -r f; do install -Dm644 "$$f" "$(1)/Flux/$$f"; done
 endef
 
-.PHONY: build build-go build-gui test vet install install-user install-plugin uninstall uninstall-user uninstall-plugin dev open snapshot android macos test-macos install-macos clean
+.PHONY: build build-go build-gui test vet install install-user install-plugin uninstall uninstall-user uninstall-plugin dev open snapshot android ios ios-test macos test-macos install-macos clean
 
 build: build-go build-gui
 
@@ -140,6 +140,12 @@ snapshot: build-gui
 android:
 	cd android && ./gradlew :app:assembleDebug
 
+ios:
+	cd ios && swift build
+
+ios-test:
+	cd ios && swift test
+
 # The macOS app in macos/build. It needs Xcode and XcodeGen.
 macos:
 	cd macos && xcodegen generate --quiet && \
@@ -153,4 +159,4 @@ install-macos:
 	scripts/install-macos.sh
 
 clean:
-	rm -rf bin $(GUI_BUILD) snapshots macos/build
+	rm -rf bin $(GUI_BUILD) snapshots macos/build ios/.build

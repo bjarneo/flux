@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Requested in M0; fallback is mDNS-only via NWBrowser if delayed. -->
+    <key>com.apple.developer.networking.multicast</key>
+    <true/>
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.org.omarchy.flux</string>
+    </array>
+    <key>aps-environment</key>
+    <string>development</string>
+    <key>com.apple.developer.usernotifications.time-sensitive</key>
+    <true/>
+</dict>
+</plist>

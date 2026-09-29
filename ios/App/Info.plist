@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Bundle fundamentals (required: with GENERATE_INFOPLIST_FILE=NO
+         nothing injects them; device installd rejects the bundle without
+         CFBundleExecutable — D7 2026-09-27). $(...) expands at build time. -->
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleName</key>
+    <string>$(PRODUCT_NAME)</string>
+    <key>CFBundleDisplayName</key>
+    <string>Flux</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleVersion</key>
+    <string>$(CURRENT_PROJECT_VERSION)</string>
+    <key>CFBundleShortVersionString</key>
+    <string>$(MARKETING_VERSION)</string>
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+    <key>MinimumOSVersion</key>
+    <string>$(IPHONEOS_DEPLOYMENT_TARGET)</string>
+    <key>UIDeviceFamily</key>
+    <array>
+        <integer>1</integer>
+        <integer>2</integer>
+    </array>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_kdeconnect._udp</string>
+    </array>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Flux discovers your computer on the local network to pair, share files, and approve sudo.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Flux scans text, QR codes, photos, and documents to send to your computer, and streams video as a webcam.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Flux streams microphone audio to your computer as a virtual source.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Flux sends photos and screenshots you choose to your computer.</string>
+    <key>NSPhotoLibraryAddUsageOnlyDescription</key>
+    <string>Flux saves files shared from your computer to the photo library when you ask.</string>
+    <key>NSFocusStatusUsageDescription</key>
+    <string>Flux shares your Focus status with your computer when you enable it.</string>
+    <!-- M6 approve keys gate signing on per-use biometrics (LAContext +
+         biometryCurrentSet). Without this key, Face ID evaluation fails and
+         sudo-approval enrollment is dead on device. -->
+    <key>NSFaceIDUsageDescription</key>
+    <string>Flux uses Face ID to approve sudo requests from your computer. Your biometric never leaves this phone.</string>
+    <key>UIBackgroundModes</key>
+    <array>
+        <!-- v1 foreground-only: no audio/voip/fetch/processing modes. The LAN
+             link suspends ~30 s after backgrounding by design (honest
+             "Background suspended" UX, plan §3.2). Adding `audio` (streams
+             keep the link alive while active) is a TestFlight gate: needs a
+             review justification + device run first. Never claim VoIP. -->
+    </array>
+    <key>FLUX_DEMO</key>
+    <string>Launch with -FLUX_DEMO 1 for sample computers (App Review + screenshots).</string>
+</dict>
+</plist>

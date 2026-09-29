@@ -1,0 +1,3103 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0030A950FBDE6F0B38FF55C9 /* VideoEncodingSpikeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46B26B2AC0DA6E48B6314F5F /* VideoEncodingSpikeTests.swift */; };
+		00C57F68D1C1C2EB22B113AD /* FluxCamera.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 927874CDC1BB18981F820F0D /* FluxCamera.framework */; };
+		02DD765725296ED4556103DB /* FluxCamera.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 927874CDC1BB18981F820F0D /* FluxCamera.framework */; };
+		087C7C35DD58CD9BC84B2934 /* Payload.swift in Sources */ = {isa = PBXBuildFile; fileRef = C36B005947DFF105507476CF /* Payload.swift */; };
+		099176F501832B0BF1AF6D2B /* StreamPacketsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D26901203AE8815B568B72AD /* StreamPacketsTests.swift */; };
+		0A7691A5C0AAB8F33FCD3A28 /* FluxApprove.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5CA384C33E0CDE5D507D8B0C /* FluxApprove.framework */; };
+		0D79176D82439F8423121DB2 /* RingState.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBBDCF526BBB3E33F7D66252 /* RingState.swift */; };
+		0FFB2FA2FE3ABE72916E10EE /* ApproveKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08FF5951812868A1E47FFFCF /* ApproveKeys.swift */; };
+		12EE51257E056DA77B5B2873 /* FluxStream.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 961BC2DDF008D09810FE0998 /* FluxStream.framework */; };
+		1378F9BC07E230B30886A957 /* FluxProto.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */; };
+		14D7472B709094340B911F81 /* FluxProto.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */; };
+		153B62A93CF2F181FA3674D2 /* Packet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17F55A7EA16AB84845A91CF6 /* Packet.swift */; };
+		1543DF39CF7A6B2BD5E662AE /* FluxCoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85ADB99FCA03EA9B00BB839C /* FluxCoreTests.swift */; };
+		158DC40CDC7C934A38F5ECFC /* StreamSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3981AA288D90977731C9AC9 /* StreamSessions.swift */; };
+		15C88B4BBF88D0DA839995C2 /* PluginRouterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD87D9A7F131898263680DBB /* PluginRouterTests.swift */; };
+		161084A093BCA5E0CAE145D9 /* TrustStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 778F40B795EAFC134747DC72 /* TrustStoreTests.swift */; };
+		191AAED7B3F4ECA639DDB319 /* DownloadsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B78A669ECB21C6DBD826D5A /* DownloadsViews.swift */; };
+		1977F9D041D892CFC78D936A /* StreamSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D199490F7D5F7BE997C7F1C8 /* StreamSessionTests.swift */; };
+		1ADEE87DDE66BD11D331EAE8 /* Transfers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1181D06D18B5C8085AAA56B1 /* Transfers.swift */; };
+		1C12A9512BC3EF1DB74EF1F4 /* MicProducer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5FEF34E3FA045D5C1D6B7C6 /* MicProducer.swift */; };
+		1F5CD71A099BCA1B8FB86FD0 /* BrowseTypesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90E38D8D63CC5512E81BB089 /* BrowseTypesTests.swift */; };
+		206D3E10EC557523E532EF01 /* ApprovePacketsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90F9CDD0F0EE8D3D67E446D4 /* ApprovePacketsTests.swift */; };
+		20CF7F2E9176C761D4ACC25D /* FluxProto.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		23D7BD361FBD2F7E7DB215EF /* FluxStream.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 961BC2DDF008D09810FE0998 /* FluxStream.framework */; };
+		24F8AF1CE6179FA467B8D5DA /* AnnexB.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59DCE41963711B0DD5C84306 /* AnnexB.swift */; };
+		257FF3444EEEEEA35D02774B /* Device.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDA2A9A641B7C970D058B9CB /* Device.swift */; };
+		26EFFFBF50A7D8E045004C6E /* IdentityKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F6A6A1D4D4F079D6471F696 /* IdentityKeys.swift */; };
+		26F46486A5D2F1FA3AC35DCB /* FluxCamera.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 927874CDC1BB18981F820F0D /* FluxCamera.framework */; };
+		2833A4DD162F4D488D60E329 /* FluxProto.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */; };
+		29DBCAF754BCCC2CC39D743B /* FluxApprove.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 5CA384C33E0CDE5D507D8B0C /* FluxApprove.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		2A8933B04AB291D68FA96B38 /* FluxLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52F63B3D18677BD46B166A78 /* FluxLink.swift */; };
+		2ADC0B775B0B4265AE8D8C97 /* FluxNet.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5CDDB4002AD372D5F75B3CF0 /* FluxNet.framework */; };
+		2B3D9AA50B079E295E4D5DCD /* WebcamProducer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6D0A3306B1C2D96EE8CFE33 /* WebcamProducer.swift */; };
+		2C9AFB298E6B1373C0C01CA3 /* FluxCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = AD02F7C8528DA9623C6CDEC9 /* FluxCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		2E69A5430A94C1E6BF83ABCA /* StreamFraming.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB03E25D41E8715F9445EDE /* StreamFraming.swift */; };
+		2F07CDA9521E7EE52F9692D7 /* FluxProto.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */; };
+		3108A56C14012EF7F891DED4 /* JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48D25B4E366AFEE62B477DC6 /* JSONValue.swift */; };
+		312CA93AE6BB6644992529DC /* FluxProto.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */; };
+		328DBEF694D7A29DCBCB1A28 /* SystemBridges.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24631BB4A7FCB04C2721A8D1 /* SystemBridges.swift */; };
+		33F97AC33DFDDC192D243E81 /* PairApprovalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1714E253AF80491886DFAE /* PairApprovalTests.swift */; };
+		3448678D23FBE246491E4109 /* FluxCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AD02F7C8528DA9623C6CDEC9 /* FluxCore.framework */; };
+		3498D6C6829BD00ECDE945EA /* LinkServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23AB47DD1456B149D168295D /* LinkServiceTests.swift */; };
+		34B084F892D1218D58FBD4FE /* StreamEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFD1B915518C51FE590395A8 /* StreamEngine.swift */; };
+		34DDB33B07732268D72BF4A8 /* ApproveNotificationsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E70A8DF21AAD36C00F760D30 /* ApproveNotificationsTests.swift */; };
+		350AE7439A338DC5248F138D /* FluxCamera.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 927874CDC1BB18981F820F0D /* FluxCamera.framework */; };
+		37398B677AE05565C6A1D4AA /* Codes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97D2BB3E732CE561679A021D /* Codes.swift */; };
+		378972FE09BD1FD086F32150 /* FluxFeatures.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A8EEDF8568A1ED4A66A7961F /* FluxFeatures.framework */; };
+		382FB1893A98124635F65A29 /* CameraMicViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4C8FB3B6E919983DA543E1D /* CameraMicViews.swift */; };
+		38E9B0863B3F4DB46BB9E1BD /* ApproveViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 299F4080DDA5804556E04FB7 /* ApproveViews.swift */; };
+		3A9512C49FB5C028956EA5E8 /* Transfers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99EB2B332BE66D2623A03258 /* Transfers.swift */; };
+		3B0EE30D35EC73D041F4224A /* PairingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B9703715382B04B8C3C854D /* PairingViews.swift */; };
+		3B633E6C18250AE753129495 /* ApprovePackets.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0D44E7A8AB6FD0F7EC9AD6 /* ApprovePackets.swift */; };
+		3B68DDC5EE496A76ADC8640B /* RemoteScreensStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4BC9A5D3E0592214AEB2C88 /* RemoteScreensStateTests.swift */; };
+		3CDEFD9495B5AEB6558A7440 /* ApproveFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 570AB3C55143BB078CCC8266 /* ApproveFlowTests.swift */; };
+		4091C1EFE7C81994CA0C45BA /* FluxCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AD02F7C8528DA9623C6CDEC9 /* FluxCore.framework */; };
+		40E314D3E52027A4B5A468A8 /* StreamFramingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82DDF3E9CDE241C4EB77B104 /* StreamFramingTests.swift */; };
+		4327CE6439A1DE4997507B80 /* ConnectionBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B28F003116888B22C01F686 /* ConnectionBanner.swift */; };
+		445B230F343ECBD002A54FBE /* StreamRouterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F312FDEBB7E0FE084EF8AC29 /* StreamRouterTests.swift */; };
+		446B4DCDE5120379775BA684 /* LinkPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AB7C7632076487FBB43F49B /* LinkPolicy.swift */; };
+		44F03747533E0592B9215B18 /* DownloadsStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5C78FAD022E5C33FF638B35 /* DownloadsStoreTests.swift */; };
+		4AD0D3D78B0C02A6190989FA /* FluxFeatures.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A8EEDF8568A1ED4A66A7961F /* FluxFeatures.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		4B13EEF6582CE55C69829CD9 /* WebcamConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0257FA7F82C9319A3E95B9B /* WebcamConfigTests.swift */; };
+		50915CBDED3BE2587EDE4414 /* WebcamConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 796DD7A6C01CBFB40603A6A8 /* WebcamConfig.swift */; };
+		512E621699E599A4ED8D006E /* FluxProto.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */; };
+		51CB31999421753C2C9E8A3F /* PacketTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20E8D20CA808AECEE8D78FE /* PacketTypes.swift */; };
+		520C4821C9CD82BD08D69765 /* FluxApprove.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 5CA384C33E0CDE5D507D8B0C /* FluxApprove.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		52292A56321862940E69ABB6 /* Calls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7299B0A2C3229E17A30ADD89 /* Calls.swift */; };
+		52B0A6BA5DB0A8C9488D1E36 /* Lan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 516E821B686EF655ECC11937 /* Lan.swift */; };
+		532F8E0E2395FEA1BF6FF226 /* LinkSocketTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF5E48804257153778220B21 /* LinkSocketTests.swift */; };
+		53BBAEBC83271DC343F5FAF0 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E9E7130430EC6D43E0C5B61 /* ContentView.swift */; };
+		555C3FCC13D7740E4C2B0BF8 /* FluxProto.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		5599D607E9811B6196D647F3 /* CaptureAssets.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2BD4F54041A2ACF75A872D5 /* CaptureAssets.swift */; };
+		55E68C599590F1BEC86E4D34 /* TrustStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C409389F41D73FADB6C5CF1 /* TrustStore.swift */; };
+		5AE22F3F581FE5B2BEF7DC8E /* ApproveRouterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F016C223A87C674D8B5FC7AE /* ApproveRouterTests.swift */; };
+		5BCFEE96B8634C1E8B6101B4 /* FluxProto.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		5BE073EFC85D275C80611467 /* CaptureSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75FB8C09847D9B9EEB256BF1 /* CaptureSessions.swift */; };
+		5DEBD6D4FAA9953E01A248BB /* ApproveNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 486EB1886C28CED8F25F5512 /* ApproveNotifications.swift */; };
+		5E08E92BC9EDBBAC25CB4335 /* FluxCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = AD02F7C8528DA9623C6CDEC9 /* FluxCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		5EAD8F6CB6A459625C632F0F /* Plugins.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A80B0370E593C427D2E876 /* Plugins.swift */; };
+		62063C2F9DCA351A23CAC2BE /* BrowseSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D8F68EC5D59D6B3C6994232 /* BrowseSessionTests.swift */; };
+		639C924EF1DF5FE314D65FA1 /* FluxProto.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		699EE82B5487ED3F5A218EA3 /* FluxProto.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */; };
+		69CBB0F51087C4F072BE686D /* FluxProto.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */; };
+		69CCD0C51F023512A29A0FA1 /* AnnexBTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C47483526FCC309C6C43D5A2 /* AnnexBTests.swift */; };
+		6AAACE0567676D7F197469BF /* StreamFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5791415BA9A13F613E662736 /* StreamFixtures.swift */; };
+		6D613B8C5DEDA75CE5DC89A2 /* StreamLiveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A76333933151E6713E319F70 /* StreamLiveTests.swift */; };
+		6E725E458D9F9577FA5605A3 /* FluxUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3F866145636B2F4642ED2CE6 /* FluxUI.framework */; };
+		70EADEC6B96D067A2AFE710D /* FluxUI.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3F866145636B2F4642ED2CE6 /* FluxUI.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		732309A2042C401B7D02038A /* TransferTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D21DF73D45BE511FEBF5A8BC /* TransferTests.swift */; };
+		7655671B93E63AD614D01466 /* LinkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BE29B3816BB4EC550D3C509 /* LinkService.swift */; };
+		777357BA9A2AF19E040A5531 /* MediaRouterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5312B7EFC56D049C548646F1 /* MediaRouterTests.swift */; };
+		7806E2A5FC74F3C037053285 /* PacketCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA19FC9B25C4DB04D691EEAC /* PacketCodec.swift */; };
+		784625B7E1CAC13F91897E4A /* FluxApproveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D89B2201C52A3382BDF44902 /* FluxApproveTests.swift */; };
+		78E1313384BB8D08D89B04C8 /* FluxUI.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3F866145636B2F4642ED2CE6 /* FluxUI.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		78E4E2607484DECB5BEA0E91 /* FluxApprove.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5CA384C33E0CDE5D507D8B0C /* FluxApprove.framework */; };
+		79677BA6DA8BCD2B302D156B /* PairingSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4871EB66A8C0FD3D7035C8F /* PairingSessionTests.swift */; };
+		7A634D92AACC54A87759CBFD /* MediaCommandsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3A820FE7B60CD985B494313 /* MediaCommandsViews.swift */; };
+		7A99D0F4CA5DFB47EBF10CF9 /* FluxApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1442627F37A344C9E7D84E /* FluxApp.swift */; };
+		7B53E2F33C7894A5C4B0C03A /* FluxUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3F866145636B2F4642ED2CE6 /* FluxUI.framework */; };
+		7B87B8E9714F916C12589D8C /* BrowseBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5269623A292A66481F5D954D /* BrowseBridgeTests.swift */; };
+		7BC5E9E7401F201F28B07BA6 /* FluxApprove.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5CA384C33E0CDE5D507D8B0C /* FluxApprove.framework */; };
+		81F2E3527390E079A61F63C1 /* FluxCamera.swift in Sources */ = {isa = PBXBuildFile; fileRef = 376C215ECB5562D66A1AF44A /* FluxCamera.swift */; };
+		82B84DED7FACF68F3B9A5E4C /* FluxFeatures.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A8EEDF8568A1ED4A66A7961F /* FluxFeatures.framework */; };
+		847D9A3A823C71E2FBF9A843 /* FluxProto.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		8593C1C4CCC6159B40AEFD37 /* FrameGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76D4375278DD2CC08A4FE8E2 /* FrameGeometry.swift */; };
+		85D33EF51FDE8A786C07F68F /* TestKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = B18D2F099C46D5A589E66213 /* TestKeychain.swift */; };
+		86147A832D706AD093FCB9BD /* Pairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91CBAFEEC6B03D38EA6C4C96 /* Pairing.swift */; };
+		86A274C23ADFBE6A9C614A00 /* LocalIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3B826E0A74C00C10DA31ACD /* LocalIdentity.swift */; };
+		8A935674B4E621B429A2F14E /* FluxCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AD02F7C8528DA9623C6CDEC9 /* FluxCore.framework */; };
+		8C547AFB7D26EDDFE95C546E /* FluxStream.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 961BC2DDF008D09810FE0998 /* FluxStream.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		8D07284A0C9525BDBB0D72DE /* ApproveFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3461B0BA606E27131981863 /* ApproveFlow.swift */; };
+		8D53F0B81FB50F0720D42A18 /* FluxProto.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		8D7861DE9B4E933FA16AB699 /* FluxCameraTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B64B03CC923E7F270F5F196 /* FluxCameraTests.swift */; };
+		8ECB2E224845170239872F7E /* FluxProto.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */; };
+		90DDB22E6389DA157E9A85FF /* TrustValidation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0ECBAC2218B5A8415067342 /* TrustValidation.swift */; };
+		9241FA4326631258531C1008 /* FluxApprove.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5CA384C33E0CDE5D507D8B0C /* FluxApprove.framework */; };
+		93E61AF0532D1D8C249CD4D2 /* Pairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8EF7E11C955D9CE66AE17C5 /* Pairing.swift */; };
+		953D59E705227A0EEF15AF3B /* FluxCamera.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 927874CDC1BB18981F820F0D /* FluxCamera.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		962871E2FCDF11D7E5ECCA16 /* WebcamProducerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E6F8873FE67AD79349FEFF0 /* WebcamProducerTests.swift */; };
+		99028C137CE40ED931B0E1A6 /* FluxApprove.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5CA384C33E0CDE5D507D8B0C /* FluxApprove.framework */; };
+		9F7CDDE8428652A9EBD4C588 /* CapturePlanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6586415D6A25993343FD0286 /* CapturePlanTests.swift */; };
+		9FB85B634F934D3AEC83D5F3 /* ApproveMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 573B346AF7D309842E19DB1B /* ApproveMessage.swift */; };
+		A275D22B664292413F85A6A2 /* FluxCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AD02F7C8528DA9623C6CDEC9 /* FluxCore.framework */; };
+		A336A1A6C53E483BDCE38684 /* Identity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40105C6F75A46E0C74E48907 /* Identity.swift */; };
+		A51C529A3BC72B86E170A2A8 /* TLSIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65AEACB5FB94D9A14A1249F3 /* TLSIdentity.swift */; };
+		A5B4DF776212018A7D153B3D /* FluxFeatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 392D2C15AFDE5DA91A5DB243 /* FluxFeatures.swift */; };
+		A5B68016422CFEE3640FCCF4 /* IdentityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EA9C991DE886AAB9C6D5F3E /* IdentityTests.swift */; };
+		A60F47B5DB22D81EF55B0EBF /* SystemBridgesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65143D5B10C2079390090010 /* SystemBridgesTests.swift */; };
+		A68A6F7A3B962086AA9BCF88 /* FluxStream.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 961BC2DDF008D09810FE0998 /* FluxStream.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		AA29440ED70D254E7AE18C29 /* FluxProto.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */; };
+		AAEED105C1B8F063189BC91D /* FluxApprove.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5CA384C33E0CDE5D507D8B0C /* FluxApprove.framework */; };
+		AAFB51F8E5D47226253452E1 /* Certificates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A318D39B519FC61FBE85529 /* Certificates.swift */; };
+		AB018248F7B74C84DAFABAFC /* FluxCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = AD02F7C8528DA9623C6CDEC9 /* FluxCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		ABE917A5E25F45573D9B52A1 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13066971A5A1EFA347F737AC /* Keychain.swift */; };
+		AC56FA293C11D52646EE87BF /* Messaging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 326F9B23DD2E85C674876074 /* Messaging.swift */; };
+		AD0AD0EE61ED48DF4C99927B /* TrustedDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = C44EEA8D4A7B48CD4114F80A /* TrustedDevice.swift */; };
+		AD42CDAB71843A24A3EE0783 /* TextAssemblyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5136248DBF2755ADF7998FEB /* TextAssemblyTests.swift */; };
+		ADF4FA8D78FB5E63C0BB278E /* FluxProto.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */; };
+		AE82CB873D43DE7F7CADC46B /* FluxApprove.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 5CA384C33E0CDE5D507D8B0C /* FluxApprove.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		AF42677801C5296C902C8015 /* FluxCamera.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 927874CDC1BB18981F820F0D /* FluxCamera.framework */; };
+		AF9A2BDA97E3AD82D17A8A67 /* UploadLiveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0049B7E47CA54E77696094F6 /* UploadLiveTests.swift */; };
+		B0296A143E3429EB73FAF748 /* CapturePlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = F89A27318AC904D9E9CF0B3F /* CapturePlan.swift */; };
+		B1006F13EDB9D1A365A814D5 /* RemoteScreensState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA172548DA72178C17E3A45B /* RemoteScreensState.swift */; };
+		B1191635E8C8039A6AE43D02 /* FluxNetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC9B19A0709419DBD6480A5A /* FluxNetTests.swift */; };
+		B176FF4B1F141275099E322D /* TextAssembly.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30825E640FE9790B11A18712 /* TextAssembly.swift */; };
+		B278A6D43888C4F212B1421C /* CodesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF6AB54AF4589BB8C108C417 /* CodesTests.swift */; };
+		B2997A4E3F2133436455BF44 /* AudioCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49DF3F52FCE8C93375180341 /* AudioCapture.swift */; };
+		B34C662578EDC0958BCA882F /* FluxApprove.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 5CA384C33E0CDE5D507D8B0C /* FluxApprove.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		B548FF5AD783ED23264A8C5E /* FluxCamera.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 927874CDC1BB18981F820F0D /* FluxCamera.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		B67F7A3DD85498A2670AF20D /* FluxNet.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 5CDDB4002AD372D5F75B3CF0 /* FluxNet.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		B6F99F7E486547BE2C4CAA02 /* CaptureAssetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 186B68C658BFF58875481826 /* CaptureAssetTests.swift */; };
+		BBC7FBFBC034739B8E7DA21C /* MessagingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 834F8C8CA5D08543A36661FC /* MessagingTests.swift */; };
+		BE08830570BD4C0487D2FA21 /* BrowseSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E3E618B2526D46528FA407 /* BrowseSession.swift */; };
+		BE5E15F4ECC26ED0F58ABD5B /* BrowseViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A3A7D9C55F8AFBD7060FEC /* BrowseViews.swift */; };
+		C0318D3AD48882C0FE360E5C /* FrameGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 589C36C5F21ED1B51818F4FE /* FrameGeometryTests.swift */; };
+		C0372DEE6A9C4472743D4CD9 /* FluxProto.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */; };
+		C18DEF81351EBD2E69666876 /* LinkPresenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 193F8637EEBE1353E7F1B3C9 /* LinkPresenceTests.swift */; };
+		C18F66AC26BE476F5710D4E1 /* FluxProto.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		C1DB26CB37264603763C3DD9 /* PairApproval.swift in Sources */ = {isa = PBXBuildFile; fileRef = E044D7E5E4175904028E8027 /* PairApproval.swift */; };
+		C2CF1C0DEC48BB86276E5AF8 /* FluxProto.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		C5AC9FCA4D4252A54BC2CD2A /* Browse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DD1353315B17EF870F29E06 /* Browse.swift */; };
+		C5C3D2B7ACE2F7DD556DA4BA /* MediaCallsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AED210D366121B745661CF7B /* MediaCallsTests.swift */; };
+		C5F9F70FB09D3C5A062AC44E /* RingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23B0E16F1A93CFA3B3BDF721 /* RingView.swift */; };
+		C62E3AAADD80B3DD2FAC5DD9 /* FluxProtoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C5AA0144034341B18CB10D8 /* FluxProtoTests.swift */; };
+		C8B4742D8E7198ECD4ECEED5 /* VideoEncoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD5C1DD2239507D24D6015B1 /* VideoEncoding.swift */; };
+		C9136CE5D0B0BD41B572BAC9 /* FluxCamera.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 927874CDC1BB18981F820F0D /* FluxCamera.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		CA6B9CBC8966545AAED8DA46 /* Citadel in Frameworks */ = {isa = PBXBuildFile; productRef = 9BFBE7ED1EE93B457BD5A27C /* Citadel */; };
+		CCD523DF82D79BF2D1B3FF18 /* FluxNet.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5CDDB4002AD372D5F75B3CF0 /* FluxNet.framework */; };
+		CF87E2C077DEE4E56408F935 /* PayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E71C326FCBA2833E993527F1 /* PayloadTests.swift */; };
+		D00EAA0AB594A87E24B783E1 /* ApprovalsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B73D279981977C26AF92D563 /* ApprovalsTests.swift */; };
+		D413B5F0835BE7850AEB1EE4 /* Media.swift in Sources */ = {isa = PBXBuildFile; fileRef = A79BC7A182FC7B99879F1818 /* Media.swift */; };
+		D57DC3E6BB6E969084CE0D67 /* FluxNet.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 5CDDB4002AD372D5F75B3CF0 /* FluxNet.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		D616C30D8854CD111BDA4383 /* FluxProto.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */; };
+		D899AA51D4D75F726D71919D /* FluxProto.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */; };
+		D918FCFC31BF2F6D196B5614 /* NIO in Frameworks */ = {isa = PBXBuildFile; productRef = A790973235246CB43B64360B /* NIO */; };
+		DA1C5AB24C3024B404A20AAF /* FluxFeatures.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A8EEDF8568A1ED4A66A7961F /* FluxFeatures.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		DBD62F0A5B3732E885DE50E8 /* Sockets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E5D6CF193DC2536D813C3C5 /* Sockets.swift */; };
+		DEF88A837A4908A4D1BC929B /* FluxCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AD02F7C8528DA9623C6CDEC9 /* FluxCore.framework */; };
+		E1DFCA8AA6632995924F3A8A /* ScreenProducer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F35C226AC9DA23AB631A2401 /* ScreenProducer.swift */; };
+		E2CC22A270B4CDDDCFBFDF11 /* FluxProto.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */; };
+		E4738EF1F336505ECB39933B /* FluxNet.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5CDDB4002AD372D5F75B3CF0 /* FluxNet.framework */; };
+		E5149C756A7D2CD8522D667E /* LinkRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A576A0F7745D886895680B8 /* LinkRunner.swift */; };
+		E5E77BB27EC214D29FFFE06A /* ScreenProducerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45CAC59F7E3390879554B916 /* ScreenProducerTests.swift */; };
+		E607808890AD2BD3DD6AB04A /* Streams.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03BF43EBD445709347B4CA79 /* Streams.swift */; };
+		E64FE69530E35DB9B1800C8B /* FluxProto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9939229E5EEA1819FB245C4F /* FluxProto.swift */; };
+		E91BBB89F8682277C6A19643 /* CapturePipelines.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45E440B36EEF50A78E814468 /* CapturePipelines.swift */; };
+		EE2BC195CBD1E973D7ED6321 /* FluxStream.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 961BC2DDF008D09810FE0998 /* FluxStream.framework */; };
+		EFCE21049BC75008AC9E1233 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 01557CE12780CEE87F95EC8E /* PrivacyInfo.xcprivacy */; };
+		F23B7A365408CAE8B38388B2 /* FluxStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABC88CDAA25397DA3BE21B57 /* FluxStream.swift */; };
+		F353542AC54F97C64BE8F9DC /* ApproveKeysTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DC164E20A5039103AC22587 /* ApproveKeysTests.swift */; };
+		FBC9B649C02934A8878E4770 /* SecureTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0124E5E72E4EBEAD93FA318E /* SecureTransport.swift */; };
+		FBCAC7124736A5A30129B3A5 /* SelfSignedCertificate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D12EA99B4828CA246894C66F /* SelfSignedCertificate.swift */; };
+		FC6523D1C8BC31C80CD68C86 /* Approvals.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D924ADF2ACCC587C47F5AB /* Approvals.swift */; };
+		FD568A70CD8CC3B42BC147FD /* MicProducerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7718F3F5A9B914DD9416434B /* MicProducerTests.swift */; };
+		FD6EE7F7732A680623BE7F6A /* CertIssuanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB1197CB6CEE1CD2A606CA55 /* CertIssuanceTests.swift */; };
+		FF046958345FE58B7D93D27F /* FluxApprove.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5CA384C33E0CDE5D507D8B0C /* FluxApprove.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		024FDA5BA42310820AF70E57 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 10DFDDF3B1C630A338086619;
+			remoteInfo = FluxStream;
+		};
+		07903CFC14443E574295C042 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D829C7F142AAB837470A7413;
+			remoteInfo = FluxProto;
+		};
+		13F8B0D7C49C49C87B9CA9F1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D829C7F142AAB837470A7413;
+			remoteInfo = FluxProto;
+		};
+		140EF89978B2A1389D2DD9AA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3ADE6CBEEC35996BBBEE99F5;
+			remoteInfo = FluxCore;
+		};
+		1935F7E646AF018C9FCECA1A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B4E42D9E826386DF91C0AB13;
+			remoteInfo = FluxFeatures;
+		};
+		193878A4A9D43E4582664120 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F9A1EAAAE82C17ADDB81F771;
+			remoteInfo = FluxApprove;
+		};
+		1A2DEE14324D7B87F77DC407 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F9A1EAAAE82C17ADDB81F771;
+			remoteInfo = FluxApprove;
+		};
+		1B873FB4679DFDB52FF9FAA5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F9A1EAAAE82C17ADDB81F771;
+			remoteInfo = FluxApprove;
+		};
+		279BE5CFB57801921B0A16B4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D829C7F142AAB837470A7413;
+			remoteInfo = FluxProto;
+		};
+		281DDAFD55B806A4247461D4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B4E42D9E826386DF91C0AB13;
+			remoteInfo = FluxFeatures;
+		};
+		3A3849D1B407A717BB707120 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D829C7F142AAB837470A7413;
+			remoteInfo = FluxProto;
+		};
+		3C82875B1649B2B9714AC54C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3ADE6CBEEC35996BBBEE99F5;
+			remoteInfo = FluxCore;
+		};
+		3DEDA69A65702399B9DC0D5C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D829C7F142AAB837470A7413;
+			remoteInfo = FluxProto;
+		};
+		3E5F7D08E61683159C43B427 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F9A1EAAAE82C17ADDB81F771;
+			remoteInfo = FluxApprove;
+		};
+		43C2E22C5FD26794E101F3BA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F9A1EAAAE82C17ADDB81F771;
+			remoteInfo = FluxApprove;
+		};
+		4F0F7FF39364F3BDCD599D36 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 79DE1A61505ECD8002426310;
+			remoteInfo = FluxNet;
+		};
+		56EDC5630B023E80A604E353 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D829C7F142AAB837470A7413;
+			remoteInfo = FluxProto;
+		};
+		5A10A69DE831420421FF6219 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 79DE1A61505ECD8002426310;
+			remoteInfo = FluxNet;
+		};
+		5A907A3D7AF890A59EC1385C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D829C7F142AAB837470A7413;
+			remoteInfo = FluxProto;
+		};
+		5BEC47C79B97E4A0A8314291 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7893BF4476B6C0BF048F5AF6;
+			remoteInfo = FluxCamera;
+		};
+		60E1DC8D3F597A031E06C9AD /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D829C7F142AAB837470A7413;
+			remoteInfo = FluxProto;
+		};
+		662A28E105EDF6688D83F14A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 10DFDDF3B1C630A338086619;
+			remoteInfo = FluxStream;
+		};
+		6B06439CA10A6822EB1F2FC7 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D829C7F142AAB837470A7413;
+			remoteInfo = FluxProto;
+		};
+		6DADD5FC4FF2447F09E35DAE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7893BF4476B6C0BF048F5AF6;
+			remoteInfo = FluxCamera;
+		};
+		6E4D4FB6DA9892015C6F935B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 10DFDDF3B1C630A338086619;
+			remoteInfo = FluxStream;
+		};
+		6E930322EABCD6D3EEE0F382 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7893BF4476B6C0BF048F5AF6;
+			remoteInfo = FluxCamera;
+		};
+		754EB6366C914A1D225A928F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D829C7F142AAB837470A7413;
+			remoteInfo = FluxProto;
+		};
+		839FC88C5FB2EE97D09D00FF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D829C7F142AAB837470A7413;
+			remoteInfo = FluxProto;
+		};
+		8A7E7D48F57934284122FE52 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7893BF4476B6C0BF048F5AF6;
+			remoteInfo = FluxCamera;
+		};
+		9BC149947990610FFC12523D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D829C7F142AAB837470A7413;
+			remoteInfo = FluxProto;
+		};
+		9C165E2D4ADCA20B1EE19051 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7893BF4476B6C0BF048F5AF6;
+			remoteInfo = FluxCamera;
+		};
+		A260A87BD0D7457D02BA1C0E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D829C7F142AAB837470A7413;
+			remoteInfo = FluxProto;
+		};
+		A358FB88D282CBED422B215D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F9A1EAAAE82C17ADDB81F771;
+			remoteInfo = FluxApprove;
+		};
+		A8D5B358144E5D146749E8A8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D829C7F142AAB837470A7413;
+			remoteInfo = FluxProto;
+		};
+		C5777F3327E19FFDEBF90A95 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3ADE6CBEEC35996BBBEE99F5;
+			remoteInfo = FluxCore;
+		};
+		CAA89EFB7BB54B15A68D5CC0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 78716F26C650124DA24B805C;
+			remoteInfo = FluxUI;
+		};
+		D685846A45637710D5EB3668 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D829C7F142AAB837470A7413;
+			remoteInfo = FluxProto;
+		};
+		D81EBBCFA9DCDEAC627EA720 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F9A1EAAAE82C17ADDB81F771;
+			remoteInfo = FluxApprove;
+		};
+		DF5606DC67DBE262A8F108CB /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 79DE1A61505ECD8002426310;
+			remoteInfo = FluxNet;
+		};
+		E94ABCAA6FF33524F17CDACE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3ADE6CBEEC35996BBBEE99F5;
+			remoteInfo = FluxCore;
+		};
+		E9825C1488890496E74FAAE9 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 78716F26C650124DA24B805C;
+			remoteInfo = FluxUI;
+		};
+		FF68D8D39AD41D77FD776BFE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 85D77F3E14B8B0F60BF02713 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3ADE6CBEEC35996BBBEE99F5;
+			remoteInfo = FluxCore;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		2D455419573F129FC4114411 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				520C4821C9CD82BD08D69765 /* FluxApprove.framework in Embed Frameworks */,
+				8D53F0B81FB50F0720D42A18 /* FluxProto.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		56D38B4A12A8999575627387 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				5E08E92BC9EDBBAC25CB4335 /* FluxCore.framework in Embed Frameworks */,
+				C18F66AC26BE476F5710D4E1 /* FluxProto.framework in Embed Frameworks */,
+				AE82CB873D43DE7F7CADC46B /* FluxApprove.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		612C54DCAB72CF41F3467257 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				C9136CE5D0B0BD41B572BAC9 /* FluxCamera.framework in Embed Frameworks */,
+				639C924EF1DF5FE314D65FA1 /* FluxProto.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6CDC31EFB736742EDBB8938C /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				B67F7A3DD85498A2670AF20D /* FluxNet.framework in Embed Frameworks */,
+				847D9A3A823C71E2FBF9A843 /* FluxProto.framework in Embed Frameworks */,
+				AB018248F7B74C84DAFABAFC /* FluxCore.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		853B24B8A18770102C9E4A94 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				8C547AFB7D26EDDFE95C546E /* FluxStream.framework in Embed Frameworks */,
+				555C3FCC13D7740E4C2B0BF8 /* FluxProto.framework in Embed Frameworks */,
+				B548FF5AD783ED23264A8C5E /* FluxCamera.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		91F65C20F0DC8B880F60FB20 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				DA1C5AB24C3024B404A20AAF /* FluxFeatures.framework in Embed Frameworks */,
+				C2CF1C0DEC48BB86276E5AF8 /* FluxProto.framework in Embed Frameworks */,
+				29DBCAF754BCCC2CC39D743B /* FluxApprove.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		993B9700B86760BA7DF9FED4 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				5BCFEE96B8634C1E8B6101B4 /* FluxProto.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BC33A60F16419417B0A68989 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				78E1313384BB8D08D89B04C8 /* FluxUI.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F12559FC4D7AEAED6B16273E /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				20CF7F2E9176C761D4ACC25D /* FluxProto.framework in Embed Frameworks */,
+				D57DC3E6BB6E969084CE0D67 /* FluxNet.framework in Embed Frameworks */,
+				2C9AFB298E6B1373C0C01CA3 /* FluxCore.framework in Embed Frameworks */,
+				4AD0D3D78B0C02A6190989FA /* FluxFeatures.framework in Embed Frameworks */,
+				B34C662578EDC0958BCA882F /* FluxApprove.framework in Embed Frameworks */,
+				953D59E705227A0EEF15AF3B /* FluxCamera.framework in Embed Frameworks */,
+				A68A6F7A3B962086AA9BCF88 /* FluxStream.framework in Embed Frameworks */,
+				70EADEC6B96D067A2AFE710D /* FluxUI.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		0049B7E47CA54E77696094F6 /* UploadLiveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadLiveTests.swift; sourceTree = "<group>"; };
+		0124E5E72E4EBEAD93FA318E /* SecureTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureTransport.swift; sourceTree = "<group>"; };
+		01557CE12780CEE87F95EC8E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		022B82773761C64299931013 /* FluxNetTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = FluxNetTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		03BF43EBD445709347B4CA79 /* Streams.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Streams.swift; sourceTree = "<group>"; };
+		08FF5951812868A1E47FFFCF /* ApproveKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveKeys.swift; sourceTree = "<group>"; };
+		0AB7C7632076487FBB43F49B /* LinkPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkPolicy.swift; sourceTree = "<group>"; };
+		0D1714E253AF80491886DFAE /* PairApprovalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairApprovalTests.swift; sourceTree = "<group>"; };
+		0F6A6A1D4D4F079D6471F696 /* IdentityKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentityKeys.swift; sourceTree = "<group>"; };
+		1181D06D18B5C8085AAA56B1 /* Transfers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transfers.swift; sourceTree = "<group>"; };
+		13066971A5A1EFA347F737AC /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
+		17F55A7EA16AB84845A91CF6 /* Packet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Packet.swift; sourceTree = "<group>"; };
+		186B68C658BFF58875481826 /* CaptureAssetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureAssetTests.swift; sourceTree = "<group>"; };
+		193F8637EEBE1353E7F1B3C9 /* LinkPresenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkPresenceTests.swift; sourceTree = "<group>"; };
+		1EA9C991DE886AAB9C6D5F3E /* IdentityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentityTests.swift; sourceTree = "<group>"; };
+		23AB47DD1456B149D168295D /* LinkServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkServiceTests.swift; sourceTree = "<group>"; };
+		23B0E16F1A93CFA3B3BDF721 /* RingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RingView.swift; sourceTree = "<group>"; };
+		24631BB4A7FCB04C2721A8D1 /* SystemBridges.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemBridges.swift; sourceTree = "<group>"; };
+		276927F79774825BB7855B1B /* FluxFeaturesTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = FluxFeaturesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		299F4080DDA5804556E04FB7 /* ApproveViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveViews.swift; sourceTree = "<group>"; };
+		2BE29B3816BB4EC550D3C509 /* LinkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkService.swift; sourceTree = "<group>"; };
+		2C1442627F37A344C9E7D84E /* FluxApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluxApp.swift; sourceTree = "<group>"; };
+		30825E640FE9790B11A18712 /* TextAssembly.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextAssembly.swift; sourceTree = "<group>"; };
+		326F9B23DD2E85C674876074 /* Messaging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Messaging.swift; sourceTree = "<group>"; };
+		376C215ECB5562D66A1AF44A /* FluxCamera.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluxCamera.swift; sourceTree = "<group>"; };
+		392D2C15AFDE5DA91A5DB243 /* FluxFeatures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluxFeatures.swift; sourceTree = "<group>"; };
+		3A318D39B519FC61FBE85529 /* Certificates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Certificates.swift; sourceTree = "<group>"; };
+		3B9703715382B04B8C3C854D /* PairingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingViews.swift; sourceTree = "<group>"; };
+		3D8F68EC5D59D6B3C6994232 /* BrowseSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseSessionTests.swift; sourceTree = "<group>"; };
+		3E9E7130430EC6D43E0C5B61 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		3F866145636B2F4642ED2CE6 /* FluxUI.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FluxUI.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		40105C6F75A46E0C74E48907 /* Identity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Identity.swift; sourceTree = "<group>"; };
+		44A3A7D9C55F8AFBD7060FEC /* BrowseViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseViews.swift; sourceTree = "<group>"; };
+		45CAC59F7E3390879554B916 /* ScreenProducerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenProducerTests.swift; sourceTree = "<group>"; };
+		45E440B36EEF50A78E814468 /* CapturePipelines.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapturePipelines.swift; sourceTree = "<group>"; };
+		46B26B2AC0DA6E48B6314F5F /* VideoEncodingSpikeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoEncodingSpikeTests.swift; sourceTree = "<group>"; };
+		486EB1886C28CED8F25F5512 /* ApproveNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveNotifications.swift; sourceTree = "<group>"; };
+		48D25B4E366AFEE62B477DC6 /* JSONValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONValue.swift; sourceTree = "<group>"; };
+		49DF3F52FCE8C93375180341 /* AudioCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCapture.swift; sourceTree = "<group>"; };
+		4B64B03CC923E7F270F5F196 /* FluxCameraTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluxCameraTests.swift; sourceTree = "<group>"; };
+		4C5AA0144034341B18CB10D8 /* FluxProtoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluxProtoTests.swift; sourceTree = "<group>"; };
+		5136248DBF2755ADF7998FEB /* TextAssemblyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextAssemblyTests.swift; sourceTree = "<group>"; };
+		516E821B686EF655ECC11937 /* Lan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Lan.swift; sourceTree = "<group>"; };
+		5269623A292A66481F5D954D /* BrowseBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseBridgeTests.swift; sourceTree = "<group>"; };
+		52F63B3D18677BD46B166A78 /* FluxLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluxLink.swift; sourceTree = "<group>"; };
+		5312B7EFC56D049C548646F1 /* MediaRouterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaRouterTests.swift; sourceTree = "<group>"; };
+		570AB3C55143BB078CCC8266 /* ApproveFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveFlowTests.swift; sourceTree = "<group>"; };
+		573B346AF7D309842E19DB1B /* ApproveMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveMessage.swift; sourceTree = "<group>"; };
+		5791415BA9A13F613E662736 /* StreamFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamFixtures.swift; sourceTree = "<group>"; };
+		589C36C5F21ED1B51818F4FE /* FrameGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameGeometryTests.swift; sourceTree = "<group>"; };
+		59DCE41963711B0DD5C84306 /* AnnexB.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnexB.swift; sourceTree = "<group>"; };
+		5B28F003116888B22C01F686 /* ConnectionBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionBanner.swift; sourceTree = "<group>"; };
+		5B78A669ECB21C6DBD826D5A /* DownloadsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadsViews.swift; sourceTree = "<group>"; };
+		5CA384C33E0CDE5D507D8B0C /* FluxApprove.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FluxApprove.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		5CDDB4002AD372D5F75B3CF0 /* FluxNet.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FluxNet.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		5DC164E20A5039103AC22587 /* ApproveKeysTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveKeysTests.swift; sourceTree = "<group>"; };
+		5DD1353315B17EF870F29E06 /* Browse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Browse.swift; sourceTree = "<group>"; };
+		65143D5B10C2079390090010 /* SystemBridgesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemBridgesTests.swift; sourceTree = "<group>"; };
+		6586415D6A25993343FD0286 /* CapturePlanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapturePlanTests.swift; sourceTree = "<group>"; };
+		65AEACB5FB94D9A14A1249F3 /* TLSIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TLSIdentity.swift; sourceTree = "<group>"; };
+		68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FluxProto.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		6A576A0F7745D886895680B8 /* LinkRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkRunner.swift; sourceTree = "<group>"; };
+		6B8AE5CECAD930F1BCF29E14 /* FluxUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = FluxUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		6CE04E65D2D84ED25F1E35B5 /* FluxStreamTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = FluxStreamTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		6E5D6CF193DC2536D813C3C5 /* Sockets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sockets.swift; sourceTree = "<group>"; };
+		7299B0A2C3229E17A30ADD89 /* Calls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Calls.swift; sourceTree = "<group>"; };
+		75FB8C09847D9B9EEB256BF1 /* CaptureSessions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureSessions.swift; sourceTree = "<group>"; };
+		76D4375278DD2CC08A4FE8E2 /* FrameGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameGeometry.swift; sourceTree = "<group>"; };
+		7718F3F5A9B914DD9416434B /* MicProducerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicProducerTests.swift; sourceTree = "<group>"; };
+		778F40B795EAFC134747DC72 /* TrustStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrustStoreTests.swift; sourceTree = "<group>"; };
+		796DD7A6C01CBFB40603A6A8 /* WebcamConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebcamConfig.swift; sourceTree = "<group>"; };
+		7E6F8873FE67AD79349FEFF0 /* WebcamProducerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebcamProducerTests.swift; sourceTree = "<group>"; };
+		802924EC2839E93C8BBD29A1 /* FluxCameraTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = FluxCameraTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		813BD63FABCBA06EDA58E3DC /* FluxApproveTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = FluxApproveTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		82DDF3E9CDE241C4EB77B104 /* StreamFramingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamFramingTests.swift; sourceTree = "<group>"; };
+		834F8C8CA5D08543A36661FC /* MessagingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagingTests.swift; sourceTree = "<group>"; };
+		85ADB99FCA03EA9B00BB839C /* FluxCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluxCoreTests.swift; sourceTree = "<group>"; };
+		90E38D8D63CC5512E81BB089 /* BrowseTypesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseTypesTests.swift; sourceTree = "<group>"; };
+		90F9CDD0F0EE8D3D67E446D4 /* ApprovePacketsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovePacketsTests.swift; sourceTree = "<group>"; };
+		91CBAFEEC6B03D38EA6C4C96 /* Pairing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pairing.swift; sourceTree = "<group>"; };
+		927874CDC1BB18981F820F0D /* FluxCamera.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FluxCamera.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		961BC2DDF008D09810FE0998 /* FluxStream.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FluxStream.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		97D2BB3E732CE561679A021D /* Codes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Codes.swift; sourceTree = "<group>"; };
+		9939229E5EEA1819FB245C4F /* FluxProto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluxProto.swift; sourceTree = "<group>"; };
+		99EB2B332BE66D2623A03258 /* Transfers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transfers.swift; sourceTree = "<group>"; };
+		9C409389F41D73FADB6C5CF1 /* TrustStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrustStore.swift; sourceTree = "<group>"; };
+		A011127E6519BEA58267C6A1 /* FluxProtoTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = FluxProtoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A0ECBAC2218B5A8415067342 /* TrustValidation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrustValidation.swift; sourceTree = "<group>"; };
+		A1D924ADF2ACCC587C47F5AB /* Approvals.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Approvals.swift; sourceTree = "<group>"; };
+		A2BD4F54041A2ACF75A872D5 /* CaptureAssets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureAssets.swift; sourceTree = "<group>"; };
+		A5C78FAD022E5C33FF638B35 /* DownloadsStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadsStoreTests.swift; sourceTree = "<group>"; };
+		A76333933151E6713E319F70 /* StreamLiveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamLiveTests.swift; sourceTree = "<group>"; };
+		A79BC7A182FC7B99879F1818 /* Media.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Media.swift; sourceTree = "<group>"; };
+		A8EEDF8568A1ED4A66A7961F /* FluxFeatures.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FluxFeatures.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		A9A63E0997168E7E98123F37 /* Flux.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Flux.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		ABC88CDAA25397DA3BE21B57 /* FluxStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluxStream.swift; sourceTree = "<group>"; };
+		AD02F7C8528DA9623C6CDEC9 /* FluxCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FluxCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		AED210D366121B745661CF7B /* MediaCallsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaCallsTests.swift; sourceTree = "<group>"; };
+		B18D2F099C46D5A589E66213 /* TestKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestKeychain.swift; sourceTree = "<group>"; };
+		B20E8D20CA808AECEE8D78FE /* PacketTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PacketTypes.swift; sourceTree = "<group>"; };
+		B4BC9A5D3E0592214AEB2C88 /* RemoteScreensStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteScreensStateTests.swift; sourceTree = "<group>"; };
+		B73D279981977C26AF92D563 /* ApprovalsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalsTests.swift; sourceTree = "<group>"; };
+		BBB03E25D41E8715F9445EDE /* StreamFraming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamFraming.swift; sourceTree = "<group>"; };
+		BC9B19A0709419DBD6480A5A /* FluxNetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluxNetTests.swift; sourceTree = "<group>"; };
+		BFD1B915518C51FE590395A8 /* StreamEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamEngine.swift; sourceTree = "<group>"; };
+		C1A80B0370E593C427D2E876 /* Plugins.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plugins.swift; sourceTree = "<group>"; };
+		C3461B0BA606E27131981863 /* ApproveFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveFlow.swift; sourceTree = "<group>"; };
+		C36B005947DFF105507476CF /* Payload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Payload.swift; sourceTree = "<group>"; };
+		C3981AA288D90977731C9AC9 /* StreamSessions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamSessions.swift; sourceTree = "<group>"; };
+		C44EEA8D4A7B48CD4114F80A /* TrustedDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrustedDevice.swift; sourceTree = "<group>"; };
+		C47483526FCC309C6C43D5A2 /* AnnexBTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnexBTests.swift; sourceTree = "<group>"; };
+		C4C8FB3B6E919983DA543E1D /* CameraMicViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraMicViews.swift; sourceTree = "<group>"; };
+		C7E3E618B2526D46528FA407 /* BrowseSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseSession.swift; sourceTree = "<group>"; };
+		C9C2F012BAE60CC9C9FE0A83 /* FluxCoreTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = FluxCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		CA172548DA72178C17E3A45B /* RemoteScreensState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteScreensState.swift; sourceTree = "<group>"; };
+		CB1197CB6CEE1CD2A606CA55 /* CertIssuanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CertIssuanceTests.swift; sourceTree = "<group>"; };
+		CF6AB54AF4589BB8C108C417 /* CodesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodesTests.swift; sourceTree = "<group>"; };
+		D12EA99B4828CA246894C66F /* SelfSignedCertificate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelfSignedCertificate.swift; sourceTree = "<group>"; };
+		D199490F7D5F7BE997C7F1C8 /* StreamSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamSessionTests.swift; sourceTree = "<group>"; };
+		D21DF73D45BE511FEBF5A8BC /* TransferTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferTests.swift; sourceTree = "<group>"; };
+		D26901203AE8815B568B72AD /* StreamPacketsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamPacketsTests.swift; sourceTree = "<group>"; };
+		D89B2201C52A3382BDF44902 /* FluxApproveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluxApproveTests.swift; sourceTree = "<group>"; };
+		D8EF7E11C955D9CE66AE17C5 /* Pairing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pairing.swift; sourceTree = "<group>"; };
+		DBBDCF526BBB3E33F7D66252 /* RingState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RingState.swift; sourceTree = "<group>"; };
+		DD0D44E7A8AB6FD0F7EC9AD6 /* ApprovePackets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovePackets.swift; sourceTree = "<group>"; };
+		DD87D9A7F131898263680DBB /* PluginRouterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginRouterTests.swift; sourceTree = "<group>"; };
+		E0257FA7F82C9319A3E95B9B /* WebcamConfigTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebcamConfigTests.swift; sourceTree = "<group>"; };
+		E044D7E5E4175904028E8027 /* PairApproval.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairApproval.swift; sourceTree = "<group>"; };
+		E3A820FE7B60CD985B494313 /* MediaCommandsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaCommandsViews.swift; sourceTree = "<group>"; };
+		E3B826E0A74C00C10DA31ACD /* LocalIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalIdentity.swift; sourceTree = "<group>"; };
+		E5FEF34E3FA045D5C1D6B7C6 /* MicProducer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicProducer.swift; sourceTree = "<group>"; };
+		E70A8DF21AAD36C00F760D30 /* ApproveNotificationsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveNotificationsTests.swift; sourceTree = "<group>"; };
+		E71C326FCBA2833E993527F1 /* PayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PayloadTests.swift; sourceTree = "<group>"; };
+		EA19FC9B25C4DB04D691EEAC /* PacketCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PacketCodec.swift; sourceTree = "<group>"; };
+		F016C223A87C674D8B5FC7AE /* ApproveRouterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveRouterTests.swift; sourceTree = "<group>"; };
+		F312FDEBB7E0FE084EF8AC29 /* StreamRouterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamRouterTests.swift; sourceTree = "<group>"; };
+		F35C226AC9DA23AB631A2401 /* ScreenProducer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenProducer.swift; sourceTree = "<group>"; };
+		F4871EB66A8C0FD3D7035C8F /* PairingSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingSessionTests.swift; sourceTree = "<group>"; };
+		F6D0A3306B1C2D96EE8CFE33 /* WebcamProducer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebcamProducer.swift; sourceTree = "<group>"; };
+		F89A27318AC904D9E9CF0B3F /* CapturePlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapturePlan.swift; sourceTree = "<group>"; };
+		FD5C1DD2239507D24D6015B1 /* VideoEncoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoEncoding.swift; sourceTree = "<group>"; };
+		FDA2A9A641B7C970D058B9CB /* Device.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Device.swift; sourceTree = "<group>"; };
+		FF5E48804257153778220B21 /* LinkSocketTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkSocketTests.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		076FD9E8AF678CF1A72D07EF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7B53E2F33C7894A5C4B0C03A /* FluxUI.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		09FE067FEC775C5F9712592B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8ECB2E224845170239872F7E /* FluxProto.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0C1AF8017C4CFDB9A85C183D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2F07CDA9521E7EE52F9692D7 /* FluxProto.framework in Frameworks */,
+				A275D22B664292413F85A6A2 /* FluxCore.framework in Frameworks */,
+				0A7691A5C0AAB8F33FCD3A28 /* FluxApprove.framework in Frameworks */,
+				00C57F68D1C1C2EB22B113AD /* FluxCamera.framework in Frameworks */,
+				12EE51257E056DA77B5B2873 /* FluxStream.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		18438452E6A5FB6446E42591 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E2CC22A270B4CDDDCFBFDF11 /* FluxProto.framework in Frameworks */,
+				E4738EF1F336505ECB39933B /* FluxNet.framework in Frameworks */,
+				8A935674B4E621B429A2F14E /* FluxCore.framework in Frameworks */,
+				378972FE09BD1FD086F32150 /* FluxFeatures.framework in Frameworks */,
+				AAEED105C1B8F063189BC91D /* FluxApprove.framework in Frameworks */,
+				26F46486A5D2F1FA3AC35DCB /* FluxCamera.framework in Frameworks */,
+				23D7BD361FBD2F7E7DB215EF /* FluxStream.framework in Frameworks */,
+				6E725E458D9F9577FA5605A3 /* FluxUI.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		200D1D1CF1A58ED3C3FCEEDA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D899AA51D4D75F726D71919D /* FluxProto.framework in Frameworks */,
+				2ADC0B775B0B4265AE8D8C97 /* FluxNet.framework in Frameworks */,
+				78E4E2607484DECB5BEA0E91 /* FluxApprove.framework in Frameworks */,
+				CA6B9CBC8966545AAED8DA46 /* Citadel in Frameworks */,
+				D918FCFC31BF2F6D196B5614 /* NIO in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		47C47F9E6F97370C6EE4AEA8 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D616C30D8854CD111BDA4383 /* FluxProto.framework in Frameworks */,
+				AF42677801C5296C902C8015 /* FluxCamera.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7D22ABA193006765923C4044 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FF046958345FE58B7D93D27F /* FluxApprove.framework in Frameworks */,
+				512E621699E599A4ED8D006E /* FluxProto.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		967602E4E2132A9F46FBB15A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EE2BC195CBD1E973D7ED6321 /* FluxStream.framework in Frameworks */,
+				14D7472B709094340B911F81 /* FluxProto.framework in Frameworks */,
+				350AE7439A338DC5248F138D /* FluxCamera.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA5BA1AFC89965CEE720BEAC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA29440ED70D254E7AE18C29 /* FluxProto.framework in Frameworks */,
+				4091C1EFE7C81994CA0C45BA /* FluxCore.framework in Frameworks */,
+				7BC5E9E7401F201F28B07BA6 /* FluxApprove.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AAFB6BA348784B06BECAD584 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				ADF4FA8D78FB5E63C0BB278E /* FluxProto.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AC6BD668056F9A4E8CDD1244 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CCD523DF82D79BF2D1B3FF18 /* FluxNet.framework in Frameworks */,
+				2833A4DD162F4D488D60E329 /* FluxProto.framework in Frameworks */,
+				3448678D23FBE246491E4109 /* FluxCore.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BAEDA04E80E8D61C86266E03 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				02DD765725296ED4556103DB /* FluxCamera.framework in Frameworks */,
+				1378F9BC07E230B30886A957 /* FluxProto.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C58F26505E1B4419B8BF6B21 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DEF88A837A4908A4D1BC929B /* FluxCore.framework in Frameworks */,
+				312CA93AE6BB6644992529DC /* FluxProto.framework in Frameworks */,
+				99028C137CE40ED931B0E1A6 /* FluxApprove.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CB630B0D25A2CD1081CF6496 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C0372DEE6A9C4472743D4CD9 /* FluxProto.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E3229589FAF271BA51721B5E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				82B84DED7FACF68F3B9A5E4C /* FluxFeatures.framework in Frameworks */,
+				69CBB0F51087C4F072BE686D /* FluxProto.framework in Frameworks */,
+				9241FA4326631258531C1008 /* FluxApprove.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F21630BA27562FA75E520948 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				699EE82B5487ED3F5A218EA3 /* FluxProto.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		08B72B6F385D076E9AB65420 /* FluxApprove */ = {
+			isa = PBXGroup;
+			children = (
+				A1D924ADF2ACCC587C47F5AB /* Approvals.swift */,
+				08FF5951812868A1E47FFFCF /* ApproveKeys.swift */,
+				573B346AF7D309842E19DB1B /* ApproveMessage.swift */,
+				DD0D44E7A8AB6FD0F7EC9AD6 /* ApprovePackets.swift */,
+			);
+			name = FluxApprove;
+			path = Sources/FluxApprove;
+			sourceTree = "<group>";
+		};
+		1742CE3E5B88E8D6CD0F5E60 /* FluxUI */ = {
+			isa = PBXGroup;
+			children = (
+				299F4080DDA5804556E04FB7 /* ApproveViews.swift */,
+				44A3A7D9C55F8AFBD7060FEC /* BrowseViews.swift */,
+				C4C8FB3B6E919983DA543E1D /* CameraMicViews.swift */,
+				5B28F003116888B22C01F686 /* ConnectionBanner.swift */,
+				3E9E7130430EC6D43E0C5B61 /* ContentView.swift */,
+				5B78A669ECB21C6DBD826D5A /* DownloadsViews.swift */,
+				E3A820FE7B60CD985B494313 /* MediaCommandsViews.swift */,
+				3B9703715382B04B8C3C854D /* PairingViews.swift */,
+				CA172548DA72178C17E3A45B /* RemoteScreensState.swift */,
+				23B0E16F1A93CFA3B3BDF721 /* RingView.swift */,
+			);
+			name = FluxUI;
+			path = Sources/FluxUI;
+			sourceTree = "<group>";
+		};
+		1BE9542085B69691108561C4 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				2C1442627F37A344C9E7D84E /* FluxApp.swift */,
+				01557CE12780CEE87F95EC8E /* PrivacyInfo.xcprivacy */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		4A85EEBA380FCC2CF839B201 /* FluxProto */ = {
+			isa = PBXGroup;
+			children = (
+				5DD1353315B17EF870F29E06 /* Browse.swift */,
+				7299B0A2C3229E17A30ADD89 /* Calls.swift */,
+				3A318D39B519FC61FBE85529 /* Certificates.swift */,
+				9939229E5EEA1819FB245C4F /* FluxProto.swift */,
+				40105C6F75A46E0C74E48907 /* Identity.swift */,
+				48D25B4E366AFEE62B477DC6 /* JSONValue.swift */,
+				A79BC7A182FC7B99879F1818 /* Media.swift */,
+				326F9B23DD2E85C674876074 /* Messaging.swift */,
+				17F55A7EA16AB84845A91CF6 /* Packet.swift */,
+				B20E8D20CA808AECEE8D78FE /* PacketTypes.swift */,
+				D8EF7E11C955D9CE66AE17C5 /* Pairing.swift */,
+				03BF43EBD445709347B4CA79 /* Streams.swift */,
+				99EB2B332BE66D2623A03258 /* Transfers.swift */,
+			);
+			name = FluxProto;
+			path = Sources/FluxProto;
+			sourceTree = "<group>";
+		};
+		55361281A1C8DE16D8AB9BD6 /* FluxCoreTests */ = {
+			isa = PBXGroup;
+			children = (
+				570AB3C55143BB078CCC8266 /* ApproveFlowTests.swift */,
+				F016C223A87C674D8B5FC7AE /* ApproveRouterTests.swift */,
+				3D8F68EC5D59D6B3C6994232 /* BrowseSessionTests.swift */,
+				CB1197CB6CEE1CD2A606CA55 /* CertIssuanceTests.swift */,
+				85ADB99FCA03EA9B00BB839C /* FluxCoreTests.swift */,
+				1EA9C991DE886AAB9C6D5F3E /* IdentityTests.swift */,
+				23AB47DD1456B149D168295D /* LinkServiceTests.swift */,
+				5312B7EFC56D049C548646F1 /* MediaRouterTests.swift */,
+				0D1714E253AF80491886DFAE /* PairApprovalTests.swift */,
+				F4871EB66A8C0FD3D7035C8F /* PairingSessionTests.swift */,
+				DD87D9A7F131898263680DBB /* PluginRouterTests.swift */,
+				F312FDEBB7E0FE084EF8AC29 /* StreamRouterTests.swift */,
+				D21DF73D45BE511FEBF5A8BC /* TransferTests.swift */,
+				778F40B795EAFC134747DC72 /* TrustStoreTests.swift */,
+			);
+			name = FluxCoreTests;
+			path = Tests/FluxCoreTests;
+			sourceTree = "<group>";
+		};
+		6E1AE02E25384F03578A2144 /* FluxCamera */ = {
+			isa = PBXGroup;
+			children = (
+				59DCE41963711B0DD5C84306 /* AnnexB.swift */,
+				A2BD4F54041A2ACF75A872D5 /* CaptureAssets.swift */,
+				45E440B36EEF50A78E814468 /* CapturePipelines.swift */,
+				F89A27318AC904D9E9CF0B3F /* CapturePlan.swift */,
+				75FB8C09847D9B9EEB256BF1 /* CaptureSessions.swift */,
+				97D2BB3E732CE561679A021D /* Codes.swift */,
+				376C215ECB5562D66A1AF44A /* FluxCamera.swift */,
+				76D4375278DD2CC08A4FE8E2 /* FrameGeometry.swift */,
+				30825E640FE9790B11A18712 /* TextAssembly.swift */,
+				796DD7A6C01CBFB40603A6A8 /* WebcamConfig.swift */,
+			);
+			name = FluxCamera;
+			path = Sources/FluxCamera;
+			sourceTree = "<group>";
+		};
+		7FE88F92E15CDFA5376D515B /* FluxUITests */ = {
+			isa = PBXGroup;
+			children = (
+				A5C78FAD022E5C33FF638B35 /* DownloadsStoreTests.swift */,
+				193F8637EEBE1353E7F1B3C9 /* LinkPresenceTests.swift */,
+				B4BC9A5D3E0592214AEB2C88 /* RemoteScreensStateTests.swift */,
+			);
+			name = FluxUITests;
+			path = Tests/FluxUITests;
+			sourceTree = "<group>";
+		};
+		8D9F126D18C799F5BA02C1F4 /* FluxNetTests */ = {
+			isa = PBXGroup;
+			children = (
+				5269623A292A66481F5D954D /* BrowseBridgeTests.swift */,
+				BC9B19A0709419DBD6480A5A /* FluxNetTests.swift */,
+				FF5E48804257153778220B21 /* LinkSocketTests.swift */,
+				E71C326FCBA2833E993527F1 /* PayloadTests.swift */,
+				A76333933151E6713E319F70 /* StreamLiveTests.swift */,
+				B18D2F099C46D5A589E66213 /* TestKeychain.swift */,
+				0049B7E47CA54E77696094F6 /* UploadLiveTests.swift */,
+			);
+			name = FluxNetTests;
+			path = Tests/FluxNetTests;
+			sourceTree = "<group>";
+		};
+		8DAB2CBA55142E78505AF04D /* FluxApproveTests */ = {
+			isa = PBXGroup;
+			children = (
+				B73D279981977C26AF92D563 /* ApprovalsTests.swift */,
+				5DC164E20A5039103AC22587 /* ApproveKeysTests.swift */,
+				90F9CDD0F0EE8D3D67E446D4 /* ApprovePacketsTests.swift */,
+				D89B2201C52A3382BDF44902 /* FluxApproveTests.swift */,
+			);
+			name = FluxApproveTests;
+			path = Tests/FluxApproveTests;
+			sourceTree = "<group>";
+		};
+		97E892B98FC5EE3AC7D4CC2A /* FluxNet */ = {
+			isa = PBXGroup;
+			children = (
+				52F63B3D18677BD46B166A78 /* FluxLink.swift */,
+				516E821B686EF655ECC11937 /* Lan.swift */,
+				0AB7C7632076487FBB43F49B /* LinkPolicy.swift */,
+				EA19FC9B25C4DB04D691EEAC /* PacketCodec.swift */,
+				C36B005947DFF105507476CF /* Payload.swift */,
+				0124E5E72E4EBEAD93FA318E /* SecureTransport.swift */,
+				6E5D6CF193DC2536D813C3C5 /* Sockets.swift */,
+				65AEACB5FB94D9A14A1249F3 /* TLSIdentity.swift */,
+				A0ECBAC2218B5A8415067342 /* TrustValidation.swift */,
+			);
+			name = FluxNet;
+			path = Sources/FluxNet;
+			sourceTree = "<group>";
+		};
+		98229E8B9C67B31B38D148DF /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A9A63E0997168E7E98123F37 /* Flux.app */,
+				5CA384C33E0CDE5D507D8B0C /* FluxApprove.framework */,
+				813BD63FABCBA06EDA58E3DC /* FluxApproveTests.xctest */,
+				927874CDC1BB18981F820F0D /* FluxCamera.framework */,
+				802924EC2839E93C8BBD29A1 /* FluxCameraTests.xctest */,
+				AD02F7C8528DA9623C6CDEC9 /* FluxCore.framework */,
+				C9C2F012BAE60CC9C9FE0A83 /* FluxCoreTests.xctest */,
+				A8EEDF8568A1ED4A66A7961F /* FluxFeatures.framework */,
+				276927F79774825BB7855B1B /* FluxFeaturesTests.xctest */,
+				5CDDB4002AD372D5F75B3CF0 /* FluxNet.framework */,
+				022B82773761C64299931013 /* FluxNetTests.xctest */,
+				68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */,
+				A011127E6519BEA58267C6A1 /* FluxProtoTests.xctest */,
+				961BC2DDF008D09810FE0998 /* FluxStream.framework */,
+				6CE04E65D2D84ED25F1E35B5 /* FluxStreamTests.xctest */,
+				3F866145636B2F4642ED2CE6 /* FluxUI.framework */,
+				6B8AE5CECAD930F1BCF29E14 /* FluxUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		BEBA922DBD5F253F25220634 /* FluxCore */ = {
+			isa = PBXGroup;
+			children = (
+				C3461B0BA606E27131981863 /* ApproveFlow.swift */,
+				C7E3E618B2526D46528FA407 /* BrowseSession.swift */,
+				FDA2A9A641B7C970D058B9CB /* Device.swift */,
+				0F6A6A1D4D4F079D6471F696 /* IdentityKeys.swift */,
+				13066971A5A1EFA347F737AC /* Keychain.swift */,
+				6A576A0F7745D886895680B8 /* LinkRunner.swift */,
+				2BE29B3816BB4EC550D3C509 /* LinkService.swift */,
+				E3B826E0A74C00C10DA31ACD /* LocalIdentity.swift */,
+				E044D7E5E4175904028E8027 /* PairApproval.swift */,
+				91CBAFEEC6B03D38EA6C4C96 /* Pairing.swift */,
+				C1A80B0370E593C427D2E876 /* Plugins.swift */,
+				DBBDCF526BBB3E33F7D66252 /* RingState.swift */,
+				D12EA99B4828CA246894C66F /* SelfSignedCertificate.swift */,
+				BFD1B915518C51FE590395A8 /* StreamEngine.swift */,
+				1181D06D18B5C8085AAA56B1 /* Transfers.swift */,
+				C44EEA8D4A7B48CD4114F80A /* TrustedDevice.swift */,
+				9C409389F41D73FADB6C5CF1 /* TrustStore.swift */,
+			);
+			name = FluxCore;
+			path = Sources/FluxCore;
+			sourceTree = "<group>";
+		};
+		D00EE50E4E0E9C5A57A0A0C0 /* FluxCameraTests */ = {
+			isa = PBXGroup;
+			children = (
+				C47483526FCC309C6C43D5A2 /* AnnexBTests.swift */,
+				186B68C658BFF58875481826 /* CaptureAssetTests.swift */,
+				6586415D6A25993343FD0286 /* CapturePlanTests.swift */,
+				CF6AB54AF4589BB8C108C417 /* CodesTests.swift */,
+				4B64B03CC923E7F270F5F196 /* FluxCameraTests.swift */,
+				589C36C5F21ED1B51818F4FE /* FrameGeometryTests.swift */,
+				5136248DBF2755ADF7998FEB /* TextAssemblyTests.swift */,
+				E0257FA7F82C9319A3E95B9B /* WebcamConfigTests.swift */,
+			);
+			name = FluxCameraTests;
+			path = Tests/FluxCameraTests;
+			sourceTree = "<group>";
+		};
+		D507295B1BF3936BCFF937D5 /* FluxFeatures */ = {
+			isa = PBXGroup;
+			children = (
+				486EB1886C28CED8F25F5512 /* ApproveNotifications.swift */,
+				392D2C15AFDE5DA91A5DB243 /* FluxFeatures.swift */,
+				24631BB4A7FCB04C2721A8D1 /* SystemBridges.swift */,
+			);
+			name = FluxFeatures;
+			path = Sources/FluxFeatures;
+			sourceTree = "<group>";
+		};
+		D738A9BE4F57082B48DD3436 = {
+			isa = PBXGroup;
+			children = (
+				1BE9542085B69691108561C4 /* App */,
+				08B72B6F385D076E9AB65420 /* FluxApprove */,
+				8DAB2CBA55142E78505AF04D /* FluxApproveTests */,
+				6E1AE02E25384F03578A2144 /* FluxCamera */,
+				D00EE50E4E0E9C5A57A0A0C0 /* FluxCameraTests */,
+				BEBA922DBD5F253F25220634 /* FluxCore */,
+				55361281A1C8DE16D8AB9BD6 /* FluxCoreTests */,
+				D507295B1BF3936BCFF937D5 /* FluxFeatures */,
+				FDD2068B9633B78C2FFBC180 /* FluxFeaturesTests */,
+				97E892B98FC5EE3AC7D4CC2A /* FluxNet */,
+				8D9F126D18C799F5BA02C1F4 /* FluxNetTests */,
+				4A85EEBA380FCC2CF839B201 /* FluxProto */,
+				F75C527CA50FB7A12D18BB83 /* FluxProtoTests */,
+				FF71540BECBE1052E2AC6BBA /* FluxStream */,
+				E888CD12419212C11537F824 /* FluxStreamTests */,
+				1742CE3E5B88E8D6CD0F5E60 /* FluxUI */,
+				7FE88F92E15CDFA5376D515B /* FluxUITests */,
+				98229E8B9C67B31B38D148DF /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		E888CD12419212C11537F824 /* FluxStreamTests */ = {
+			isa = PBXGroup;
+			children = (
+				7718F3F5A9B914DD9416434B /* MicProducerTests.swift */,
+				45CAC59F7E3390879554B916 /* ScreenProducerTests.swift */,
+				82DDF3E9CDE241C4EB77B104 /* StreamFramingTests.swift */,
+				D199490F7D5F7BE997C7F1C8 /* StreamSessionTests.swift */,
+				46B26B2AC0DA6E48B6314F5F /* VideoEncodingSpikeTests.swift */,
+				7E6F8873FE67AD79349FEFF0 /* WebcamProducerTests.swift */,
+			);
+			name = FluxStreamTests;
+			path = Tests/FluxStreamTests;
+			sourceTree = "<group>";
+		};
+		F75C527CA50FB7A12D18BB83 /* FluxProtoTests */ = {
+			isa = PBXGroup;
+			children = (
+				90E38D8D63CC5512E81BB089 /* BrowseTypesTests.swift */,
+				4C5AA0144034341B18CB10D8 /* FluxProtoTests.swift */,
+				AED210D366121B745661CF7B /* MediaCallsTests.swift */,
+				834F8C8CA5D08543A36661FC /* MessagingTests.swift */,
+				D26901203AE8815B568B72AD /* StreamPacketsTests.swift */,
+			);
+			name = FluxProtoTests;
+			path = Tests/FluxProtoTests;
+			sourceTree = "<group>";
+		};
+		FDD2068B9633B78C2FFBC180 /* FluxFeaturesTests */ = {
+			isa = PBXGroup;
+			children = (
+				E70A8DF21AAD36C00F760D30 /* ApproveNotificationsTests.swift */,
+				65143D5B10C2079390090010 /* SystemBridgesTests.swift */,
+			);
+			name = FluxFeaturesTests;
+			path = Tests/FluxFeaturesTests;
+			sourceTree = "<group>";
+		};
+		FF71540BECBE1052E2AC6BBA /* FluxStream */ = {
+			isa = PBXGroup;
+			children = (
+				49DF3F52FCE8C93375180341 /* AudioCapture.swift */,
+				ABC88CDAA25397DA3BE21B57 /* FluxStream.swift */,
+				E5FEF34E3FA045D5C1D6B7C6 /* MicProducer.swift */,
+				F35C226AC9DA23AB631A2401 /* ScreenProducer.swift */,
+				5791415BA9A13F613E662736 /* StreamFixtures.swift */,
+				BBB03E25D41E8715F9445EDE /* StreamFraming.swift */,
+				C3981AA288D90977731C9AC9 /* StreamSessions.swift */,
+				FD5C1DD2239507D24D6015B1 /* VideoEncoding.swift */,
+				F6D0A3306B1C2D96EE8CFE33 /* WebcamProducer.swift */,
+			);
+			name = FluxStream;
+			path = Sources/FluxStream;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		10DFDDF3B1C630A338086619 /* FluxStream */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3988243ED716A3B932E5395A /* Build configuration list for PBXNativeTarget "FluxStream" */;
+			buildPhases = (
+				8F71C4FA02BD2B3A1CB941FA /* Sources */,
+				47C47F9E6F97370C6EE4AEA8 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				F0D7278E4A4EFB37B94B02CF /* PBXTargetDependency */,
+				54E7DE6385A713643C75EFD5 /* PBXTargetDependency */,
+			);
+			name = FluxStream;
+			packageProductDependencies = (
+			);
+			productName = FluxStream;
+			productReference = 961BC2DDF008D09810FE0998 /* FluxStream.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		1FCA7B29EFA2E0803E6FDF1C /* FluxCoreTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9C86607EFAAA5B1CE4C5D1A3 /* Build configuration list for PBXNativeTarget "FluxCoreTests" */;
+			buildPhases = (
+				A0108ABAA8A32425CB4D5652 /* Sources */,
+				C58F26505E1B4419B8BF6B21 /* Frameworks */,
+				56D38B4A12A8999575627387 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				570353574F60647601A83568 /* PBXTargetDependency */,
+				25D61D50537F6D7E741BA673 /* PBXTargetDependency */,
+				8C47F73DD22D61656B642AC0 /* PBXTargetDependency */,
+			);
+			name = FluxCoreTests;
+			packageProductDependencies = (
+			);
+			productName = FluxCoreTests;
+			productReference = C9C2F012BAE60CC9C9FE0A83 /* FluxCoreTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		2A38596C6B3D6EF6E3DA3B69 /* FluxCameraTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CF63744E2450C019FAD7C90D /* Build configuration list for PBXNativeTarget "FluxCameraTests" */;
+			buildPhases = (
+				7CE5A454D3B93263B314606E /* Sources */,
+				BAEDA04E80E8D61C86266E03 /* Frameworks */,
+				612C54DCAB72CF41F3467257 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				1DFFA4B23E18EC8DAC441519 /* PBXTargetDependency */,
+				77045A738F873CF9F17361A2 /* PBXTargetDependency */,
+			);
+			name = FluxCameraTests;
+			packageProductDependencies = (
+			);
+			productName = FluxCameraTests;
+			productReference = 802924EC2839E93C8BBD29A1 /* FluxCameraTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		2F9EB4767184A9ECFF656052 /* FluxFeaturesTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 839675F0215C22B534751583 /* Build configuration list for PBXNativeTarget "FluxFeaturesTests" */;
+			buildPhases = (
+				69A236B86E9D2AD5830A2910 /* Sources */,
+				E3229589FAF271BA51721B5E /* Frameworks */,
+				91F65C20F0DC8B880F60FB20 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				9829E34ED69FA18446742701 /* PBXTargetDependency */,
+				7E3F42A629ECF2B69EB020C6 /* PBXTargetDependency */,
+				970496DF9FDC56E40E73ECE7 /* PBXTargetDependency */,
+			);
+			name = FluxFeaturesTests;
+			packageProductDependencies = (
+			);
+			productName = FluxFeaturesTests;
+			productReference = 276927F79774825BB7855B1B /* FluxFeaturesTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		3ADE6CBEEC35996BBBEE99F5 /* FluxCore */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 956C60EF6EC19C13B552EEF8 /* Build configuration list for PBXNativeTarget "FluxCore" */;
+			buildPhases = (
+				2A303FC488CECF8A6D09C35A /* Sources */,
+				200D1D1CF1A58ED3C3FCEEDA /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				6872BAFDFEBFDFEB41454FC0 /* PBXTargetDependency */,
+				C6AB5E216E8D84B5AD45C33C /* PBXTargetDependency */,
+				1128395C84BDA495CF9462A8 /* PBXTargetDependency */,
+			);
+			name = FluxCore;
+			packageProductDependencies = (
+				9BFBE7ED1EE93B457BD5A27C /* Citadel */,
+				A790973235246CB43B64360B /* NIO */,
+			);
+			productName = FluxCore;
+			productReference = AD02F7C8528DA9623C6CDEC9 /* FluxCore.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		4C120666FA1BE646F8E1AB97 /* FluxProtoTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BC6EC1E6A1EC426D4157C5DF /* Build configuration list for PBXNativeTarget "FluxProtoTests" */;
+			buildPhases = (
+				828194C24DDEFA58FEFC64DE /* Sources */,
+				AAFB6BA348784B06BECAD584 /* Frameworks */,
+				993B9700B86760BA7DF9FED4 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				17C89387C70E6343A02878BC /* PBXTargetDependency */,
+			);
+			name = FluxProtoTests;
+			packageProductDependencies = (
+			);
+			productName = FluxProtoTests;
+			productReference = A011127E6519BEA58267C6A1 /* FluxProtoTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		78716F26C650124DA24B805C /* FluxUI */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F09F06A334FEF6607A5C4B0B /* Build configuration list for PBXNativeTarget "FluxUI" */;
+			buildPhases = (
+				FE6561F9B557DB82D4FAE9F2 /* Sources */,
+				0C1AF8017C4CFDB9A85C183D /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A762B1164AFC38B7FE11477F /* PBXTargetDependency */,
+				8341A50D64EB02A0764E9AD7 /* PBXTargetDependency */,
+				2AFDC8EF1D16352CED4A8998 /* PBXTargetDependency */,
+				8E11D2556F94E02CB796ECB5 /* PBXTargetDependency */,
+				1013B01A476D2DB3F31A6258 /* PBXTargetDependency */,
+			);
+			name = FluxUI;
+			packageProductDependencies = (
+			);
+			productName = FluxUI;
+			productReference = 3F866145636B2F4642ED2CE6 /* FluxUI.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		7893BF4476B6C0BF048F5AF6 /* FluxCamera */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1068D24FB47F34DF5C855301 /* Build configuration list for PBXNativeTarget "FluxCamera" */;
+			buildPhases = (
+				353AE21877E8D34E220F139C /* Sources */,
+				CB630B0D25A2CD1081CF6496 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				3792CBAD7085D5D33297C30A /* PBXTargetDependency */,
+			);
+			name = FluxCamera;
+			packageProductDependencies = (
+			);
+			productName = FluxCamera;
+			productReference = 927874CDC1BB18981F820F0D /* FluxCamera.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		79DE1A61505ECD8002426310 /* FluxNet */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 096EB4A7E5F2111CEFDDA9C4 /* Build configuration list for PBXNativeTarget "FluxNet" */;
+			buildPhases = (
+				ADD38F5A911FB74F195C34A2 /* Sources */,
+				09FE067FEC775C5F9712592B /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5EA3F185025E6C124FA1D358 /* PBXTargetDependency */,
+			);
+			name = FluxNet;
+			packageProductDependencies = (
+			);
+			productName = FluxNet;
+			productReference = 5CDDB4002AD372D5F75B3CF0 /* FluxNet.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		90C2ECCA2874C4CEAF6EA47E /* FluxStreamTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B595FD5A9958BDAA9B93DE93 /* Build configuration list for PBXNativeTarget "FluxStreamTests" */;
+			buildPhases = (
+				EE940C83B50FF352E8898B08 /* Sources */,
+				967602E4E2132A9F46FBB15A /* Frameworks */,
+				853B24B8A18770102C9E4A94 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				694BBE70BA7FFDEDD783B268 /* PBXTargetDependency */,
+				1DEA91ED5B8C726DB88E11D9 /* PBXTargetDependency */,
+				871169303293D11CDC792AF2 /* PBXTargetDependency */,
+			);
+			name = FluxStreamTests;
+			packageProductDependencies = (
+			);
+			productName = FluxStreamTests;
+			productReference = 6CE04E65D2D84ED25F1E35B5 /* FluxStreamTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		A3FBC98844F4093FFF9262DB /* FluxNetTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E3E27AF3875D40A135A5F18C /* Build configuration list for PBXNativeTarget "FluxNetTests" */;
+			buildPhases = (
+				CF3071643E47F6A82626CBF1 /* Sources */,
+				AC6BD668056F9A4E8CDD1244 /* Frameworks */,
+				6CDC31EFB736742EDBB8938C /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				6F2DA9A8E3786C93C8E9C883 /* PBXTargetDependency */,
+				75E34D61668C9EF7C9E9B42E /* PBXTargetDependency */,
+				FA2215D245301874D2CDA428 /* PBXTargetDependency */,
+			);
+			name = FluxNetTests;
+			packageProductDependencies = (
+			);
+			productName = FluxNetTests;
+			productReference = 022B82773761C64299931013 /* FluxNetTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		B4E42D9E826386DF91C0AB13 /* FluxFeatures */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7BE02BCEF22A14B2DB622A3E /* Build configuration list for PBXNativeTarget "FluxFeatures" */;
+			buildPhases = (
+				0D3041C4836898319DDA4B9A /* Sources */,
+				AA5BA1AFC89965CEE720BEAC /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				853EB2D357395B17414CF880 /* PBXTargetDependency */,
+				F0B230671BEA6C6154243C74 /* PBXTargetDependency */,
+				A73AA9650738A5706561C4A3 /* PBXTargetDependency */,
+			);
+			name = FluxFeatures;
+			packageProductDependencies = (
+			);
+			productName = FluxFeatures;
+			productReference = A8EEDF8568A1ED4A66A7961F /* FluxFeatures.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		BDAD9D0F6B97AD910BF5CF89 /* FluxApproveTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4584AA2FCAAB9C8AB698AD81 /* Build configuration list for PBXNativeTarget "FluxApproveTests" */;
+			buildPhases = (
+				309AD327096F150987DD0540 /* Sources */,
+				7D22ABA193006765923C4044 /* Frameworks */,
+				2D455419573F129FC4114411 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				DE205CBF27D8E8764F465F0C /* PBXTargetDependency */,
+				E355E2A0DD44FC6B59186E30 /* PBXTargetDependency */,
+			);
+			name = FluxApproveTests;
+			packageProductDependencies = (
+			);
+			productName = FluxApproveTests;
+			productReference = 813BD63FABCBA06EDA58E3DC /* FluxApproveTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		BDCE4BBF57E92D65919D76D1 /* Flux */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 14038FBA6EE772384DA86999 /* Build configuration list for PBXNativeTarget "Flux" */;
+			buildPhases = (
+				6857053ADE8AD7C3A4F1673A /* Sources */,
+				F6ABDEF05635A049EF29CBE2 /* Resources */,
+				18438452E6A5FB6446E42591 /* Frameworks */,
+				F12559FC4D7AEAED6B16273E /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				2C6B027AE391884F083AA07E /* PBXTargetDependency */,
+				4576CED2FE02E7D7EDE5D23C /* PBXTargetDependency */,
+				8AC79ECA8C91FF02FE36E340 /* PBXTargetDependency */,
+				571E34D646B0EBA90E91D1F5 /* PBXTargetDependency */,
+				AFD96061162EFB9E33A4E0D6 /* PBXTargetDependency */,
+				DAD68C5E01038E8013118C74 /* PBXTargetDependency */,
+				C67AD27116F5030A97F78EC7 /* PBXTargetDependency */,
+				C9DAAD9FAD295E0E98CD30D5 /* PBXTargetDependency */,
+			);
+			name = Flux;
+			packageProductDependencies = (
+			);
+			productName = Flux;
+			productReference = A9A63E0997168E7E98123F37 /* Flux.app */;
+			productType = "com.apple.product-type.application";
+		};
+		BE0FDE85C403D18F4827167E /* FluxUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0568134C23ED4F3544B27109 /* Build configuration list for PBXNativeTarget "FluxUITests" */;
+			buildPhases = (
+				407566C80D9EB0D5949A6136 /* Sources */,
+				076FD9E8AF678CF1A72D07EF /* Frameworks */,
+				BC33A60F16419417B0A68989 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				6A150AD7DC7C0F823A5044BE /* PBXTargetDependency */,
+			);
+			name = FluxUITests;
+			packageProductDependencies = (
+			);
+			productName = FluxUITests;
+			productReference = 6B8AE5CECAD930F1BCF29E14 /* FluxUITests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		D829C7F142AAB837470A7413 /* FluxProto */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 68EF233F0F6B297131CB181F /* Build configuration list for PBXNativeTarget "FluxProto" */;
+			buildPhases = (
+				9C6207C1FBC818EAFA60E284 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = FluxProto;
+			packageProductDependencies = (
+			);
+			productName = FluxProto;
+			productReference = 68B7CDC0256F9DEA8BA7367C /* FluxProto.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		F9A1EAAAE82C17ADDB81F771 /* FluxApprove */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1C4F6C895A0E06F8F8F3945A /* Build configuration list for PBXNativeTarget "FluxApprove" */;
+			buildPhases = (
+				69017823704A4BBBC7BED30C /* Sources */,
+				F21630BA27562FA75E520948 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D4C31BFB86B03110E9AE2A0A /* PBXTargetDependency */,
+			);
+			name = FluxApprove;
+			packageProductDependencies = (
+			);
+			productName = FluxApprove;
+			productReference = 5CA384C33E0CDE5D507D8B0C /* FluxApprove.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		85D77F3E14B8B0F60BF02713 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					BDCE4BBF57E92D65919D76D1 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 42E3E344BB0B79CF694534A7 /* Build configuration list for PBXProject "Flux" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = D738A9BE4F57082B48DD3436;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				BD426304FD84CA3D0B4B24DD /* XCRemoteSwiftPackageReference "Citadel" */,
+				E1F3AE9B782E1AFB10691E26 /* XCRemoteSwiftPackageReference "swift-nio" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 98229E8B9C67B31B38D148DF /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D829C7F142AAB837470A7413 /* FluxProto */,
+				79DE1A61505ECD8002426310 /* FluxNet */,
+				F9A1EAAAE82C17ADDB81F771 /* FluxApprove */,
+				3ADE6CBEEC35996BBBEE99F5 /* FluxCore */,
+				B4E42D9E826386DF91C0AB13 /* FluxFeatures */,
+				7893BF4476B6C0BF048F5AF6 /* FluxCamera */,
+				10DFDDF3B1C630A338086619 /* FluxStream */,
+				78716F26C650124DA24B805C /* FluxUI */,
+				BDCE4BBF57E92D65919D76D1 /* Flux */,
+				4C120666FA1BE646F8E1AB97 /* FluxProtoTests */,
+				A3FBC98844F4093FFF9262DB /* FluxNetTests */,
+				1FCA7B29EFA2E0803E6FDF1C /* FluxCoreTests */,
+				2F9EB4767184A9ECFF656052 /* FluxFeaturesTests */,
+				BDAD9D0F6B97AD910BF5CF89 /* FluxApproveTests */,
+				2A38596C6B3D6EF6E3DA3B69 /* FluxCameraTests */,
+				90C2ECCA2874C4CEAF6EA47E /* FluxStreamTests */,
+				BE0FDE85C403D18F4827167E /* FluxUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		F6ABDEF05635A049EF29CBE2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EFCE21049BC75008AC9E1233 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		0D3041C4836898319DDA4B9A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5DEBD6D4FAA9953E01A248BB /* ApproveNotifications.swift in Sources */,
+				A5B4DF776212018A7D153B3D /* FluxFeatures.swift in Sources */,
+				328DBEF694D7A29DCBCB1A28 /* SystemBridges.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2A303FC488CECF8A6D09C35A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8D07284A0C9525BDBB0D72DE /* ApproveFlow.swift in Sources */,
+				BE08830570BD4C0487D2FA21 /* BrowseSession.swift in Sources */,
+				257FF3444EEEEEA35D02774B /* Device.swift in Sources */,
+				26EFFFBF50A7D8E045004C6E /* IdentityKeys.swift in Sources */,
+				ABE917A5E25F45573D9B52A1 /* Keychain.swift in Sources */,
+				E5149C756A7D2CD8522D667E /* LinkRunner.swift in Sources */,
+				7655671B93E63AD614D01466 /* LinkService.swift in Sources */,
+				86A274C23ADFBE6A9C614A00 /* LocalIdentity.swift in Sources */,
+				C1DB26CB37264603763C3DD9 /* PairApproval.swift in Sources */,
+				86147A832D706AD093FCB9BD /* Pairing.swift in Sources */,
+				5EAD8F6CB6A459625C632F0F /* Plugins.swift in Sources */,
+				0D79176D82439F8423121DB2 /* RingState.swift in Sources */,
+				FBCAC7124736A5A30129B3A5 /* SelfSignedCertificate.swift in Sources */,
+				34B084F892D1218D58FBD4FE /* StreamEngine.swift in Sources */,
+				1ADEE87DDE66BD11D331EAE8 /* Transfers.swift in Sources */,
+				55E68C599590F1BEC86E4D34 /* TrustStore.swift in Sources */,
+				AD0AD0EE61ED48DF4C99927B /* TrustedDevice.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		309AD327096F150987DD0540 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D00EAA0AB594A87E24B783E1 /* ApprovalsTests.swift in Sources */,
+				F353542AC54F97C64BE8F9DC /* ApproveKeysTests.swift in Sources */,
+				206D3E10EC557523E532EF01 /* ApprovePacketsTests.swift in Sources */,
+				784625B7E1CAC13F91897E4A /* FluxApproveTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		353AE21877E8D34E220F139C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				24F8AF1CE6179FA467B8D5DA /* AnnexB.swift in Sources */,
+				5599D607E9811B6196D647F3 /* CaptureAssets.swift in Sources */,
+				E91BBB89F8682277C6A19643 /* CapturePipelines.swift in Sources */,
+				B0296A143E3429EB73FAF748 /* CapturePlan.swift in Sources */,
+				5BE073EFC85D275C80611467 /* CaptureSessions.swift in Sources */,
+				37398B677AE05565C6A1D4AA /* Codes.swift in Sources */,
+				81F2E3527390E079A61F63C1 /* FluxCamera.swift in Sources */,
+				8593C1C4CCC6159B40AEFD37 /* FrameGeometry.swift in Sources */,
+				B176FF4B1F141275099E322D /* TextAssembly.swift in Sources */,
+				50915CBDED3BE2587EDE4414 /* WebcamConfig.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		407566C80D9EB0D5949A6136 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				44F03747533E0592B9215B18 /* DownloadsStoreTests.swift in Sources */,
+				C18DEF81351EBD2E69666876 /* LinkPresenceTests.swift in Sources */,
+				3B68DDC5EE496A76ADC8640B /* RemoteScreensStateTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6857053ADE8AD7C3A4F1673A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7A99D0F4CA5DFB47EBF10CF9 /* FluxApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		69017823704A4BBBC7BED30C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FC6523D1C8BC31C80CD68C86 /* Approvals.swift in Sources */,
+				0FFB2FA2FE3ABE72916E10EE /* ApproveKeys.swift in Sources */,
+				9FB85B634F934D3AEC83D5F3 /* ApproveMessage.swift in Sources */,
+				3B633E6C18250AE753129495 /* ApprovePackets.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		69A236B86E9D2AD5830A2910 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				34DDB33B07732268D72BF4A8 /* ApproveNotificationsTests.swift in Sources */,
+				A60F47B5DB22D81EF55B0EBF /* SystemBridgesTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7CE5A454D3B93263B314606E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				69CCD0C51F023512A29A0FA1 /* AnnexBTests.swift in Sources */,
+				B6F99F7E486547BE2C4CAA02 /* CaptureAssetTests.swift in Sources */,
+				9F7CDDE8428652A9EBD4C588 /* CapturePlanTests.swift in Sources */,
+				B278A6D43888C4F212B1421C /* CodesTests.swift in Sources */,
+				8D7861DE9B4E933FA16AB699 /* FluxCameraTests.swift in Sources */,
+				C0318D3AD48882C0FE360E5C /* FrameGeometryTests.swift in Sources */,
+				AD42CDAB71843A24A3EE0783 /* TextAssemblyTests.swift in Sources */,
+				4B13EEF6582CE55C69829CD9 /* WebcamConfigTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		828194C24DDEFA58FEFC64DE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1F5CD71A099BCA1B8FB86FD0 /* BrowseTypesTests.swift in Sources */,
+				C62E3AAADD80B3DD2FAC5DD9 /* FluxProtoTests.swift in Sources */,
+				C5C3D2B7ACE2F7DD556DA4BA /* MediaCallsTests.swift in Sources */,
+				BBC7FBFBC034739B8E7DA21C /* MessagingTests.swift in Sources */,
+				099176F501832B0BF1AF6D2B /* StreamPacketsTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8F71C4FA02BD2B3A1CB941FA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B2997A4E3F2133436455BF44 /* AudioCapture.swift in Sources */,
+				F23B7A365408CAE8B38388B2 /* FluxStream.swift in Sources */,
+				1C12A9512BC3EF1DB74EF1F4 /* MicProducer.swift in Sources */,
+				E1DFCA8AA6632995924F3A8A /* ScreenProducer.swift in Sources */,
+				6AAACE0567676D7F197469BF /* StreamFixtures.swift in Sources */,
+				2E69A5430A94C1E6BF83ABCA /* StreamFraming.swift in Sources */,
+				158DC40CDC7C934A38F5ECFC /* StreamSessions.swift in Sources */,
+				C8B4742D8E7198ECD4ECEED5 /* VideoEncoding.swift in Sources */,
+				2B3D9AA50B079E295E4D5DCD /* WebcamProducer.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9C6207C1FBC818EAFA60E284 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C5AC9FCA4D4252A54BC2CD2A /* Browse.swift in Sources */,
+				52292A56321862940E69ABB6 /* Calls.swift in Sources */,
+				AAFB51F8E5D47226253452E1 /* Certificates.swift in Sources */,
+				E64FE69530E35DB9B1800C8B /* FluxProto.swift in Sources */,
+				A336A1A6C53E483BDCE38684 /* Identity.swift in Sources */,
+				3108A56C14012EF7F891DED4 /* JSONValue.swift in Sources */,
+				D413B5F0835BE7850AEB1EE4 /* Media.swift in Sources */,
+				AC56FA293C11D52646EE87BF /* Messaging.swift in Sources */,
+				153B62A93CF2F181FA3674D2 /* Packet.swift in Sources */,
+				51CB31999421753C2C9E8A3F /* PacketTypes.swift in Sources */,
+				93E61AF0532D1D8C249CD4D2 /* Pairing.swift in Sources */,
+				E607808890AD2BD3DD6AB04A /* Streams.swift in Sources */,
+				3A9512C49FB5C028956EA5E8 /* Transfers.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A0108ABAA8A32425CB4D5652 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3CDEFD9495B5AEB6558A7440 /* ApproveFlowTests.swift in Sources */,
+				5AE22F3F581FE5B2BEF7DC8E /* ApproveRouterTests.swift in Sources */,
+				62063C2F9DCA351A23CAC2BE /* BrowseSessionTests.swift in Sources */,
+				FD6EE7F7732A680623BE7F6A /* CertIssuanceTests.swift in Sources */,
+				1543DF39CF7A6B2BD5E662AE /* FluxCoreTests.swift in Sources */,
+				A5B68016422CFEE3640FCCF4 /* IdentityTests.swift in Sources */,
+				3498D6C6829BD00ECDE945EA /* LinkServiceTests.swift in Sources */,
+				777357BA9A2AF19E040A5531 /* MediaRouterTests.swift in Sources */,
+				33F97AC33DFDDC192D243E81 /* PairApprovalTests.swift in Sources */,
+				79677BA6DA8BCD2B302D156B /* PairingSessionTests.swift in Sources */,
+				15C88B4BBF88D0DA839995C2 /* PluginRouterTests.swift in Sources */,
+				445B230F343ECBD002A54FBE /* StreamRouterTests.swift in Sources */,
+				732309A2042C401B7D02038A /* TransferTests.swift in Sources */,
+				161084A093BCA5E0CAE145D9 /* TrustStoreTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		ADD38F5A911FB74F195C34A2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2A8933B04AB291D68FA96B38 /* FluxLink.swift in Sources */,
+				52B0A6BA5DB0A8C9488D1E36 /* Lan.swift in Sources */,
+				446B4DCDE5120379775BA684 /* LinkPolicy.swift in Sources */,
+				7806E2A5FC74F3C037053285 /* PacketCodec.swift in Sources */,
+				087C7C35DD58CD9BC84B2934 /* Payload.swift in Sources */,
+				FBC9B649C02934A8878E4770 /* SecureTransport.swift in Sources */,
+				DBD62F0A5B3732E885DE50E8 /* Sockets.swift in Sources */,
+				A51C529A3BC72B86E170A2A8 /* TLSIdentity.swift in Sources */,
+				90DDB22E6389DA157E9A85FF /* TrustValidation.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CF3071643E47F6A82626CBF1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7B87B8E9714F916C12589D8C /* BrowseBridgeTests.swift in Sources */,
+				B1191635E8C8039A6AE43D02 /* FluxNetTests.swift in Sources */,
+				532F8E0E2395FEA1BF6FF226 /* LinkSocketTests.swift in Sources */,
+				CF87E2C077DEE4E56408F935 /* PayloadTests.swift in Sources */,
+				6D613B8C5DEDA75CE5DC89A2 /* StreamLiveTests.swift in Sources */,
+				85D33EF51FDE8A786C07F68F /* TestKeychain.swift in Sources */,
+				AF9A2BDA97E3AD82D17A8A67 /* UploadLiveTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EE940C83B50FF352E8898B08 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FD568A70CD8CC3B42BC147FD /* MicProducerTests.swift in Sources */,
+				E5E77BB27EC214D29FFFE06A /* ScreenProducerTests.swift in Sources */,
+				40E314D3E52027A4B5A468A8 /* StreamFramingTests.swift in Sources */,
+				1977F9D041D892CFC78D936A /* StreamSessionTests.swift in Sources */,
+				0030A950FBDE6F0B38FF55C9 /* VideoEncodingSpikeTests.swift in Sources */,
+				962871E2FCDF11D7E5ECCA16 /* WebcamProducerTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FE6561F9B557DB82D4FAE9F2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				38E9B0863B3F4DB46BB9E1BD /* ApproveViews.swift in Sources */,
+				BE5E15F4ECC26ED0F58ABD5B /* BrowseViews.swift in Sources */,
+				382FB1893A98124635F65A29 /* CameraMicViews.swift in Sources */,
+				4327CE6439A1DE4997507B80 /* ConnectionBanner.swift in Sources */,
+				53BBAEBC83271DC343F5FAF0 /* ContentView.swift in Sources */,
+				191AAED7B3F4ECA639DDB319 /* DownloadsViews.swift in Sources */,
+				7A634D92AACC54A87759CBFD /* MediaCommandsViews.swift in Sources */,
+				3B0EE30D35EC73D041F4224A /* PairingViews.swift in Sources */,
+				B1006F13EDB9D1A365A814D5 /* RemoteScreensState.swift in Sources */,
+				C5F9F70FB09D3C5A062AC44E /* RingView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		1013B01A476D2DB3F31A6258 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 10DFDDF3B1C630A338086619 /* FluxStream */;
+			targetProxy = 662A28E105EDF6688D83F14A /* PBXContainerItemProxy */;
+		};
+		1128395C84BDA495CF9462A8 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F9A1EAAAE82C17ADDB81F771 /* FluxApprove */;
+			targetProxy = 43C2E22C5FD26794E101F3BA /* PBXContainerItemProxy */;
+		};
+		17C89387C70E6343A02878BC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D829C7F142AAB837470A7413 /* FluxProto */;
+			targetProxy = 60E1DC8D3F597A031E06C9AD /* PBXContainerItemProxy */;
+		};
+		1DEA91ED5B8C726DB88E11D9 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D829C7F142AAB837470A7413 /* FluxProto */;
+			targetProxy = 279BE5CFB57801921B0A16B4 /* PBXContainerItemProxy */;
+		};
+		1DFFA4B23E18EC8DAC441519 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7893BF4476B6C0BF048F5AF6 /* FluxCamera */;
+			targetProxy = 8A7E7D48F57934284122FE52 /* PBXContainerItemProxy */;
+		};
+		25D61D50537F6D7E741BA673 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D829C7F142AAB837470A7413 /* FluxProto */;
+			targetProxy = 5A907A3D7AF890A59EC1385C /* PBXContainerItemProxy */;
+		};
+		2AFDC8EF1D16352CED4A8998 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F9A1EAAAE82C17ADDB81F771 /* FluxApprove */;
+			targetProxy = 3E5F7D08E61683159C43B427 /* PBXContainerItemProxy */;
+		};
+		2C6B027AE391884F083AA07E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D829C7F142AAB837470A7413 /* FluxProto */;
+			targetProxy = 56EDC5630B023E80A604E353 /* PBXContainerItemProxy */;
+		};
+		3792CBAD7085D5D33297C30A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D829C7F142AAB837470A7413 /* FluxProto */;
+			targetProxy = 3A3849D1B407A717BB707120 /* PBXContainerItemProxy */;
+		};
+		4576CED2FE02E7D7EDE5D23C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 79DE1A61505ECD8002426310 /* FluxNet */;
+			targetProxy = DF5606DC67DBE262A8F108CB /* PBXContainerItemProxy */;
+		};
+		54E7DE6385A713643C75EFD5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7893BF4476B6C0BF048F5AF6 /* FluxCamera */;
+			targetProxy = 5BEC47C79B97E4A0A8314291 /* PBXContainerItemProxy */;
+		};
+		570353574F60647601A83568 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3ADE6CBEEC35996BBBEE99F5 /* FluxCore */;
+			targetProxy = FF68D8D39AD41D77FD776BFE /* PBXContainerItemProxy */;
+		};
+		571E34D646B0EBA90E91D1F5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B4E42D9E826386DF91C0AB13 /* FluxFeatures */;
+			targetProxy = 1935F7E646AF018C9FCECA1A /* PBXContainerItemProxy */;
+		};
+		5EA3F185025E6C124FA1D358 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D829C7F142AAB837470A7413 /* FluxProto */;
+			targetProxy = A260A87BD0D7457D02BA1C0E /* PBXContainerItemProxy */;
+		};
+		6872BAFDFEBFDFEB41454FC0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D829C7F142AAB837470A7413 /* FluxProto */;
+			targetProxy = A8D5B358144E5D146749E8A8 /* PBXContainerItemProxy */;
+		};
+		694BBE70BA7FFDEDD783B268 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 10DFDDF3B1C630A338086619 /* FluxStream */;
+			targetProxy = 6E4D4FB6DA9892015C6F935B /* PBXContainerItemProxy */;
+		};
+		6A150AD7DC7C0F823A5044BE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 78716F26C650124DA24B805C /* FluxUI */;
+			targetProxy = E9825C1488890496E74FAAE9 /* PBXContainerItemProxy */;
+		};
+		6F2DA9A8E3786C93C8E9C883 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 79DE1A61505ECD8002426310 /* FluxNet */;
+			targetProxy = 4F0F7FF39364F3BDCD599D36 /* PBXContainerItemProxy */;
+		};
+		75E34D61668C9EF7C9E9B42E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D829C7F142AAB837470A7413 /* FluxProto */;
+			targetProxy = 839FC88C5FB2EE97D09D00FF /* PBXContainerItemProxy */;
+		};
+		77045A738F873CF9F17361A2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D829C7F142AAB837470A7413 /* FluxProto */;
+			targetProxy = 07903CFC14443E574295C042 /* PBXContainerItemProxy */;
+		};
+		7E3F42A629ECF2B69EB020C6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D829C7F142AAB837470A7413 /* FluxProto */;
+			targetProxy = 3DEDA69A65702399B9DC0D5C /* PBXContainerItemProxy */;
+		};
+		8341A50D64EB02A0764E9AD7 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3ADE6CBEEC35996BBBEE99F5 /* FluxCore */;
+			targetProxy = 3C82875B1649B2B9714AC54C /* PBXContainerItemProxy */;
+		};
+		853EB2D357395B17414CF880 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D829C7F142AAB837470A7413 /* FluxProto */;
+			targetProxy = D685846A45637710D5EB3668 /* PBXContainerItemProxy */;
+		};
+		871169303293D11CDC792AF2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7893BF4476B6C0BF048F5AF6 /* FluxCamera */;
+			targetProxy = 6E930322EABCD6D3EEE0F382 /* PBXContainerItemProxy */;
+		};
+		8AC79ECA8C91FF02FE36E340 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3ADE6CBEEC35996BBBEE99F5 /* FluxCore */;
+			targetProxy = C5777F3327E19FFDEBF90A95 /* PBXContainerItemProxy */;
+		};
+		8C47F73DD22D61656B642AC0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F9A1EAAAE82C17ADDB81F771 /* FluxApprove */;
+			targetProxy = 1B873FB4679DFDB52FF9FAA5 /* PBXContainerItemProxy */;
+		};
+		8E11D2556F94E02CB796ECB5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7893BF4476B6C0BF048F5AF6 /* FluxCamera */;
+			targetProxy = 6DADD5FC4FF2447F09E35DAE /* PBXContainerItemProxy */;
+		};
+		970496DF9FDC56E40E73ECE7 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F9A1EAAAE82C17ADDB81F771 /* FluxApprove */;
+			targetProxy = 193878A4A9D43E4582664120 /* PBXContainerItemProxy */;
+		};
+		9829E34ED69FA18446742701 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B4E42D9E826386DF91C0AB13 /* FluxFeatures */;
+			targetProxy = 281DDAFD55B806A4247461D4 /* PBXContainerItemProxy */;
+		};
+		A73AA9650738A5706561C4A3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F9A1EAAAE82C17ADDB81F771 /* FluxApprove */;
+			targetProxy = 1A2DEE14324D7B87F77DC407 /* PBXContainerItemProxy */;
+		};
+		A762B1164AFC38B7FE11477F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D829C7F142AAB837470A7413 /* FluxProto */;
+			targetProxy = 6B06439CA10A6822EB1F2FC7 /* PBXContainerItemProxy */;
+		};
+		AFD96061162EFB9E33A4E0D6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F9A1EAAAE82C17ADDB81F771 /* FluxApprove */;
+			targetProxy = A358FB88D282CBED422B215D /* PBXContainerItemProxy */;
+		};
+		C67AD27116F5030A97F78EC7 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 10DFDDF3B1C630A338086619 /* FluxStream */;
+			targetProxy = 024FDA5BA42310820AF70E57 /* PBXContainerItemProxy */;
+		};
+		C6AB5E216E8D84B5AD45C33C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 79DE1A61505ECD8002426310 /* FluxNet */;
+			targetProxy = 5A10A69DE831420421FF6219 /* PBXContainerItemProxy */;
+		};
+		C9DAAD9FAD295E0E98CD30D5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 78716F26C650124DA24B805C /* FluxUI */;
+			targetProxy = CAA89EFB7BB54B15A68D5CC0 /* PBXContainerItemProxy */;
+		};
+		D4C31BFB86B03110E9AE2A0A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D829C7F142AAB837470A7413 /* FluxProto */;
+			targetProxy = 13F8B0D7C49C49C87B9CA9F1 /* PBXContainerItemProxy */;
+		};
+		DAD68C5E01038E8013118C74 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7893BF4476B6C0BF048F5AF6 /* FluxCamera */;
+			targetProxy = 9C165E2D4ADCA20B1EE19051 /* PBXContainerItemProxy */;
+		};
+		DE205CBF27D8E8764F465F0C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F9A1EAAAE82C17ADDB81F771 /* FluxApprove */;
+			targetProxy = D81EBBCFA9DCDEAC627EA720 /* PBXContainerItemProxy */;
+		};
+		E355E2A0DD44FC6B59186E30 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D829C7F142AAB837470A7413 /* FluxProto */;
+			targetProxy = 9BC149947990610FFC12523D /* PBXContainerItemProxy */;
+		};
+		F0B230671BEA6C6154243C74 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3ADE6CBEEC35996BBBEE99F5 /* FluxCore */;
+			targetProxy = 140EF89978B2A1389D2DD9AA /* PBXContainerItemProxy */;
+		};
+		F0D7278E4A4EFB37B94B02CF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D829C7F142AAB837470A7413 /* FluxProto */;
+			targetProxy = 754EB6366C914A1D225A928F /* PBXContainerItemProxy */;
+		};
+		FA2215D245301874D2CDA428 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3ADE6CBEEC35996BBBEE99F5 /* FluxCore */;
+			targetProxy = E94ABCAA6FF33524F17CDACE /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		087518AA618F4143A7C92231 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_ENTITLEMENTS = Tests/FluxTests.entitlements;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxStreamTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		0C6ADAA2FF3050FCA439E903 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxFeatures;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		12F189E0F5A3752B3C749BCB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxFeatures;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		1A6E1F1E829E7A710076C541 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_ENTITLEMENTS = Tests/FluxTests.entitlements;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxNetTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		2909C02F6A3A2927ED921C51 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxCamera;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		2FD5793167B39FC710872835 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxStream;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		368481D6BE1394520DD7D0C0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				CODE_SIGN_ENTITLEMENTS = "App/Flux-Debug.entitlements";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6K5BF8H346;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = App/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		430D3CDABCAC5F2C1EDBD35B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxUI;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		43D25589E34EB17820499383 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxProto;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		453CCAE118C0F72FCBECA38E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_ENTITLEMENTS = Tests/FluxTests.entitlements;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxCoreTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		4DD5BC5FFE7A4E9964FDC44B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxUI;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		52D14A8256F26AFF070B2CEC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_ENTITLEMENTS = Tests/FluxTests.entitlements;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxFeaturesTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		6275AEA1BEC2BC6E9D50E3F2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_ENTITLEMENTS = Tests/FluxTests.entitlements;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxProtoTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		68F458BEFC6530CEF5856EF3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		75A817F223834D9FE212621C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxStream;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		7DE238CF2741DC452C3CF4EA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxNet;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		809750585BEC0065448C666B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_ENTITLEMENTS = Tests/FluxTests.entitlements;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxCoreTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		879F0CDFCDF192236AECEC3A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_ENTITLEMENTS = Tests/FluxTests.entitlements;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxStreamTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		8D8E1774DCCC864D9F1B7D50 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxCore;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		914DF4B4CB73B04911D8842A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxCamera;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		973FB6CB9BBC97347B5214B5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_ENTITLEMENTS = Tests/FluxTests.entitlements;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxApproveTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		9B91F6C4005E1BB56A50F831 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_ENTITLEMENTS = Tests/FluxTests.entitlements;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxProtoTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		A3DC4AF967CE79E73865E01B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxApprove;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		B285A5F07299EBD60D30597E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_ENTITLEMENTS = Tests/FluxTests.entitlements;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxCameraTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B90BC73B07DB081947A26D00 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxProto;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		B96BFA2E608A0043A7DA28C1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_ENTITLEMENTS = Tests/FluxTests.entitlements;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxApproveTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		BA4FAE4B8E4B3CA4C85EC351 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxCore;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		D06AAC37FC355F618FBB9F73 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_ENTITLEMENTS = Tests/FluxTests.entitlements;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxUITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		DE4E462B78220C0F36AEA250 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		E0C540918C86088525F4106F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				CODE_SIGN_ENTITLEMENTS = "App/Flux-Debug.entitlements";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6K5BF8H346;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = App/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		E2EA5836F9AE36239D8E218D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_ENTITLEMENTS = Tests/FluxTests.entitlements;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxFeaturesTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		E84F18C947DD3ECA5D614817 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxNet;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		E8A474594C0DABE2925125C9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_ENTITLEMENTS = Tests/FluxTests.entitlements;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxCameraTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		ED3A4C1B6993C542670ED657 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_ENTITLEMENTS = Tests/FluxTests.entitlements;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxNetTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		EFD088ACCB6D0527DD2D0D87 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxApprove;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		F954B83633167FCE7440A647 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_ENTITLEMENTS = Tests/FluxTests.entitlements;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.omarchy.flux.FluxUITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0568134C23ED4F3544B27109 /* Build configuration list for PBXNativeTarget "FluxUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D06AAC37FC355F618FBB9F73 /* Debug */,
+				F954B83633167FCE7440A647 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		096EB4A7E5F2111CEFDDA9C4 /* Build configuration list for PBXNativeTarget "FluxNet" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7DE238CF2741DC452C3CF4EA /* Debug */,
+				E84F18C947DD3ECA5D614817 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		1068D24FB47F34DF5C855301 /* Build configuration list for PBXNativeTarget "FluxCamera" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				914DF4B4CB73B04911D8842A /* Debug */,
+				2909C02F6A3A2927ED921C51 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		14038FBA6EE772384DA86999 /* Build configuration list for PBXNativeTarget "Flux" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				368481D6BE1394520DD7D0C0 /* Debug */,
+				E0C540918C86088525F4106F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		1C4F6C895A0E06F8F8F3945A /* Build configuration list for PBXNativeTarget "FluxApprove" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EFD088ACCB6D0527DD2D0D87 /* Debug */,
+				A3DC4AF967CE79E73865E01B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		3988243ED716A3B932E5395A /* Build configuration list for PBXNativeTarget "FluxStream" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				75A817F223834D9FE212621C /* Debug */,
+				2FD5793167B39FC710872835 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		42E3E344BB0B79CF694534A7 /* Build configuration list for PBXProject "Flux" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DE4E462B78220C0F36AEA250 /* Debug */,
+				68F458BEFC6530CEF5856EF3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		4584AA2FCAAB9C8AB698AD81 /* Build configuration list for PBXNativeTarget "FluxApproveTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B96BFA2E608A0043A7DA28C1 /* Debug */,
+				973FB6CB9BBC97347B5214B5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		68EF233F0F6B297131CB181F /* Build configuration list for PBXNativeTarget "FluxProto" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				43D25589E34EB17820499383 /* Debug */,
+				B90BC73B07DB081947A26D00 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		7BE02BCEF22A14B2DB622A3E /* Build configuration list for PBXNativeTarget "FluxFeatures" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				12F189E0F5A3752B3C749BCB /* Debug */,
+				0C6ADAA2FF3050FCA439E903 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		839675F0215C22B534751583 /* Build configuration list for PBXNativeTarget "FluxFeaturesTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E2EA5836F9AE36239D8E218D /* Debug */,
+				52D14A8256F26AFF070B2CEC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		956C60EF6EC19C13B552EEF8 /* Build configuration list for PBXNativeTarget "FluxCore" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BA4FAE4B8E4B3CA4C85EC351 /* Debug */,
+				8D8E1774DCCC864D9F1B7D50 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		9C86607EFAAA5B1CE4C5D1A3 /* Build configuration list for PBXNativeTarget "FluxCoreTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				453CCAE118C0F72FCBECA38E /* Debug */,
+				809750585BEC0065448C666B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		B595FD5A9958BDAA9B93DE93 /* Build configuration list for PBXNativeTarget "FluxStreamTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				087518AA618F4143A7C92231 /* Debug */,
+				879F0CDFCDF192236AECEC3A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		BC6EC1E6A1EC426D4157C5DF /* Build configuration list for PBXNativeTarget "FluxProtoTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6275AEA1BEC2BC6E9D50E3F2 /* Debug */,
+				9B91F6C4005E1BB56A50F831 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		CF63744E2450C019FAD7C90D /* Build configuration list for PBXNativeTarget "FluxCameraTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B285A5F07299EBD60D30597E /* Debug */,
+				E8A474594C0DABE2925125C9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E3E27AF3875D40A135A5F18C /* Build configuration list for PBXNativeTarget "FluxNetTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A6E1F1E829E7A710076C541 /* Debug */,
+				ED3A4C1B6993C542670ED657 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F09F06A334FEF6607A5C4B0B /* Build configuration list for PBXNativeTarget "FluxUI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4DD5BC5FFE7A4E9964FDC44B /* Debug */,
+				430D3CDABCAC5F2C1EDBD35B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		BD426304FD84CA3D0B4B24DD /* XCRemoteSwiftPackageReference "Citadel" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/orlandos-nl/Citadel.git";
+			requirement = {
+				kind = exactVersion;
+				version = 0.9.2;
+			};
+		};
+		E1F3AE9B782E1AFB10691E26 /* XCRemoteSwiftPackageReference "swift-nio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-nio.git";
+			requirement = {
+				kind = exactVersion;
+				version = 2.103.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		9BFBE7ED1EE93B457BD5A27C /* Citadel */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BD426304FD84CA3D0B4B24DD /* XCRemoteSwiftPackageReference "Citadel" */;
+			productName = Citadel;
+		};
+		A790973235246CB43B64360B /* NIO */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E1F3AE9B782E1AFB10691E26 /* XCRemoteSwiftPackageReference "swift-nio" */;
+			productName = NIO;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 85D77F3E14B8B0F60BF02713 /* Project object */;
+}
