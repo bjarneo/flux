@@ -67,6 +67,7 @@ A received payload fails when the device sends nothing for 60 seconds.
 - The verification key is the first 8 bytes of a SHA-256 hash, as 16 uppercase hex digits. The hash covers the larger SubjectPublicKeyInfo, then the smaller one, then the pair timestamp as decimal text. The apps show the key in 4 groups of 4.
 - A pairing is bound to the link and the certificate on which it started. While a pairing is open, or when the device has a trust entry, a new link for the device ID must show that certificate. The provider checks it before the identity exchange, and `onLink` checks it again under the lock.
 - Pair packets count only on the current link of the device. `fluxd` pins the certificate from which it computed the key, and only while the link of the pairing is the current link.
+- When the user accepts a request of the device, `fluxd` pins the certificate before it sends `pair: true`. The link then reads long lines from the first packet after the answer, and only 1 accept counts for each request. When the answer cannot go out, `fluxd` removes the pin again.
 - A trust entry with a certificate that does not parse counts as not paired, and it refuses every link.
 - An unpair on either side sends `pair: false`, and `fluxd` closes the link. `fluxd` then sends no feature packet to the device.
 - The `fingerprint` of a device in the state is the first 8 bytes of the SHA-256 hash of the SubjectPublicKeyInfo of its certificate, as 16 uppercase hex digits.

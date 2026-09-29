@@ -368,6 +368,137 @@ func TestPairAcceptIgnoresSecondLink(t *testing.T) {
 	}
 }
 
+// TestAcceptReadsLongLines checks that the link reads the long lines of a
+// paired device from the first packet after the answer. Flux for Android
+// sends its clipboard when it reads pair true, and the clipboard can be
+// longer than the line limit of a device that is not paired.
+func TestAcceptReadsLongLines(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d, _, _, dev, onDesk, onPhone, fromDesk := phonePair(t, ctx)
+	if err := onPhone.Send(proto.New(proto.TypePair, map[string]any{"pair": true, "timestamp": time.Now().Unix()})); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the incoming request", func() bool { return field(d, func() string { return dev.pairState }) == "incoming" })
+
+	accepted := make(chan error, 1)
+	go func() { accepted <- d.AcceptPair(dev) }()
+	if body := nextPair(t, fromDesk); body["pair"] != true {
+		t.Fatalf("answer %v", body)
+	}
+	long := strings.Repeat("x", 100<<10)
+	if err := onPhone.Send(proto.New(proto.TypeClipboardConnect, map[string]any{"content": long})); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-accepted; err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the long clipboard", func() bool {
+		return field(d, func() bool {
+			return slices.ContainsFunc(d.clipboard, func(e ClipEntry) bool { return e.Text == long })
+		})
+	})
+	if field(d, func() *lan.Link { return dev.link }) != onDesk {
+		t.Fatal("the long line closed the link")
+	}
+}
+
+// TestAcceptOnce checks that 2 accepts at the same time answer the device
+// once, that the device stays paired, and that the result shows the key of
+// the request.
+func TestAcceptOnce(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d, _, phoneCert, dev, onDesk, onPhone, fromDesk := phonePair(t, ctx)
+	ts := time.Now().Unix()
+	if err := onPhone.Send(proto.New(proto.TypePair, map[string]any{"pair": true, "timestamp": ts})); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the incoming request", func() bool { return field(d, func() string { return dev.pairState }) == "incoming" })
+
+	type result struct {
+		res any
+		err error
+	}
+	results := make(chan result, 2)
+	for range 2 {
+		go func() {
+			res, err := d.pairCall("pair.accept", dev)
+			results <- result{res, err}
+		}()
+	}
+	var ok []any
+	for range 2 {
+		r := <-results
+		switch {
+		case r.err == nil:
+			ok = append(ok, r.res)
+		case apiCode(r.err) != "no_request":
+			t.Fatalf("second accept: %v", r.err)
+		}
+	}
+	if len(ok) != 1 {
+		t.Fatalf("%d accepts of 1 request", len(ok))
+	}
+	want := proto.VerificationKey(d.cert.Leaf, phoneCert.Leaf, ts)
+	if key := ok[0].(map[string]any)["key"]; key != want {
+		t.Fatalf("key %v, want %s", key, want)
+	}
+
+	// The phone gets 1 answer and no unpair. A ping marks the end.
+	_ = onDesk.Send(proto.New(proto.TypePing, nil))
+	answers := 0
+	for done := false; !done; {
+		select {
+		case p := <-fromDesk:
+			switch p.Type {
+			case proto.TypePing:
+				done = true
+			case proto.TypePair:
+				if p.Fields()["pair"] != true {
+					t.Fatalf("the phone got %s", p.Body)
+				}
+				answers++
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("no marker packet")
+		}
+	}
+	if answers != 1 {
+		t.Fatalf("the phone got %d answers", answers)
+	}
+	if !field(d, func() bool { return dev.Paired }) || pinned(t, d, dev.ID) == nil {
+		t.Fatal("the device is not paired after the accept")
+	}
+}
+
+// TestAcceptSendFails checks that fluxd removes the pin again when the
+// answer to a pair request cannot go out.
+func TestAcceptSendFails(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d, _ := pairDaemon(t, ctx)
+	cert, _, err := proto.LoadOrCreateCert(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// No receive loop reads the stray link, so it stays the link of the
+	// device after it closed.
+	l := strayLink(t, ctx, d, cert)
+	dev := newDevice(l.DeviceID())
+	d.mu.Lock()
+	d.devices[dev.ID] = dev
+	dev.link, dev.pairLink, dev.pairCert, dev.pairState = l, l, l.Cert, "incoming"
+	d.mu.Unlock()
+	l.Close()
+	if err := d.AcceptPair(dev); err == nil {
+		t.Fatal("AcceptPair succeeded without the answer")
+	}
+	if field(d, func() bool { return dev.Paired }) || pinned(t, d, dev.ID) != nil {
+		t.Fatal("the pin stays after the answer failed")
+	}
+}
+
 // TestPairingEndsWithItsLink checks that a new link of the device ends an
 // open pairing, and that Accept then pins nothing.
 func TestPairingEndsWithItsLink(t *testing.T) {

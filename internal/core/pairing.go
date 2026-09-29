@@ -59,28 +59,45 @@ func (d *Daemon) RequestPair(dev *Device) (string, error) {
 	return key, l.Send(proto.New(proto.TypePair, map[string]any{"pair": true, "timestamp": ts}))
 }
 
-// AcceptPair accepts a pair request from a device. It pins the certificate
-// of the request, and only while the link of the request is the current
-// link of the device.
+// AcceptPair accepts a pair request from a device.
 func (d *Daemon) AcceptPair(dev *Device) error {
+	_, err := d.acceptPair(dev)
+	return err
+}
+
+// acceptPair accepts a pair request from a device and returns the key of
+// the request. It pins the certificate of the request under d.mu before it
+// sends the answer, so only 1 call can accept a request. The link then
+// reads the long lines of a paired device from the first packet after the
+// answer. The pin needs the link of the request as the current link.
+func (d *Daemon) acceptPair(dev *Device) (string, error) {
 	d.mu.Lock()
 	l := dev.link
-	if dev.pairState != "incoming" || l == nil || dev.pairLink != l {
+	if dev.pairState != "incoming" || l == nil || !dev.pairOnLocked(l) {
 		name := dev.Name
 		d.mu.Unlock()
-		return apiErr("no_request", "%s has no open pair request", name)
+		return "", apiErr("no_request", "%s has no open pair request", name)
 	}
+	key, cert := dev.pairKey, dev.pairCert
+	err := d.pinLocked(dev, l)
+	name := dev.Name
 	d.mu.Unlock()
+	if err != nil {
+		d.logf("save trust: %v", err)
+	}
 	if err := l.Send(proto.New(proto.TypePair, map[string]any{"pair": true})); err != nil {
-		return err
+		// The device did not get the answer, so the pin goes away again.
+		d.mu.Lock()
+		if dev.Paired && dev.Cert.Equal(cert) {
+			d.dropTrustLocked(dev)
+		}
+		d.mu.Unlock()
+		d.markDirty()
+		d.logf("%s: send the pair answer: %v", name, err)
+		return "", err
 	}
-	if err := d.pairingDone(dev, l); err != nil {
-		// The link changed after the answer, so the device must not count
-		// on the pairing.
-		_ = l.Send(proto.New(proto.TypePair, map[string]any{"pair": false}))
-		return err
-	}
-	return nil
+	d.pairedLink(dev, l, name)
+	return key, nil
 }
 
 // RejectPair rejects a pair request, or cancels an outgoing request. A
@@ -266,13 +283,12 @@ func (d *Daemon) incomingLocked(dev *Device) int {
 	return n
 }
 
-// pairingDone pins the certificate of the pairing and marks the device as
-// paired. It refuses when the link l is no longer the link of the pairing
-// or the current link of the device.
+// pairingDone pins the certificate of the pairing that the desktop asked
+// for, after the device answered on the link l. It refuses when l is no
+// longer the link of the pairing or the current link of the device.
 func (d *Daemon) pairingDone(dev *Device, l *lan.Link) error {
 	d.mu.Lock()
-	cert := dev.pairCert
-	if dev.link != l || dev.pairLink != l || cert == nil || l.Cert == nil || !bytes.Equal(cert.Raw, l.Cert.Raw) {
+	if !dev.pairOnLocked(l) {
 		dev.clearPairingLocked()
 		name := dev.Name
 		d.mu.Unlock()
@@ -280,25 +296,48 @@ func (d *Daemon) pairingDone(dev *Device, l *lan.Link) error {
 		d.logf("%s: the link changed during the pairing, so fluxd pinned nothing", name)
 		return apiErr("no_request", "The connection of %s changed during the pairing. Pair again", name)
 	}
-	dev.clearPairingLocked()
-	dev.Paired, dev.badTrust = true, false
-	dev.Cert = cert
-	dev.PairedAt = time.Now().Format("2006-01-02")
-	t := config.TrustedDevice{
-		ID: dev.ID, Name: dev.Name, Type: dev.Type, LastIP: dev.IP, LastPort: dev.Port, PairedAt: dev.PairedAt,
-		CertPEM: proto.CertPEM(cert),
-	}
-	err := d.trust.Put(t)
-	l.SetPaired(true)
+	err := d.pinLocked(dev, l)
 	name := dev.Name
 	d.mu.Unlock()
 	if err != nil {
 		d.logf("save trust: %v", err)
 	}
+	d.pairedLink(dev, l, name)
+	return nil
+}
+
+// pairOnLocked reports whether l is the link of the open pairing, the
+// current link of the device, and the link that shows the certificate of
+// the pairing. The caller holds d.mu.
+func (dev *Device) pairOnLocked(l *lan.Link) bool {
+	cert := dev.pairCert
+	return dev.link == l && dev.pairLink == l && cert != nil && l.Cert != nil && bytes.Equal(cert.Raw, l.Cert.Raw)
+}
+
+// pinLocked pins the certificate of the pairing and marks the device as
+// paired. The link reads long lines before the trust changes. The caller
+// holds d.mu and checked pairOnLocked(l). The error comes from the trust
+// store on disk. The device is paired in memory also when it fails.
+func (d *Daemon) pinLocked(dev *Device, l *lan.Link) error {
+	cert := dev.pairCert
+	dev.clearPairingLocked()
+	l.SetPaired(true)
+	dev.Paired, dev.badTrust = true, false
+	dev.Cert = cert
+	dev.PairedAt = time.Now().Format("2006-01-02")
+	return d.trust.Put(config.TrustedDevice{
+		ID: dev.ID, Name: dev.Name, Type: dev.Type, LastIP: dev.IP, LastPort: dev.Port, PairedAt: dev.PairedAt,
+		CertPEM: proto.CertPEM(cert),
+	})
+}
+
+// pairedLink tells the user about a new pairing and sends the packets
+// that a paired device expects on the link l. The caller does not hold
+// d.mu.
+func (d *Daemon) pairedLink(dev *Device, l *lan.Link, name string) {
 	d.toast("✓ %s paired", name)
 	d.markDirty()
 	go d.onPairedLink(dev, l)
-	return nil
 }
 
 // pairCall runs a pairing method of the API. The result names the device
@@ -314,7 +353,9 @@ func (d *Daemon) pairCall(method string, dev *Device) (any, error) {
 	case "pair.request":
 		key, err = d.RequestPair(dev)
 	case "pair.accept":
-		err = d.AcceptPair(dev)
+		// The key comes from the request that this call accepted, and not
+		// from a request that replaced it after the read above.
+		key, err = d.acceptPair(dev)
 	case "pair.reject":
 		err = d.RejectPair(dev)
 	case "pair.unpair":
