@@ -3,8 +3,10 @@ import AVFoundation
 import FluxKit
 import SwiftUI
 
-/// Plays the ring: a loud looping tone on the playback audio session, which
-/// sounds with the silent switch on, and a vibration with each loop.
+/// Plays the ring: a loud looping tone, which sounds with the silent switch
+/// on, and a vibration with each loop. It shares the audio session with the
+/// microphone stream and dictation, so a ring plays through a recording
+/// and does not end it.
 @MainActor
 final class Ringer {
     static let shared = Ringer()
@@ -18,15 +20,18 @@ final class Ringer {
     func start() -> String? {
         guard player == nil else { return nil }
         do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default)
-            try session.setActive(true)
+            try AudioSession.activate(.ring)
+        } catch {
+            return error.localizedDescription
+        }
+        do {
             let p = try AVAudioPlayer(data: RingTone.wav(), fileTypeHint: AVFileType.wav.rawValue)
             p.numberOfLoops = -1
             p.volume = 1
             p.play()
             player = p
         } catch {
+            AudioSession.deactivate(.ring)
             return error.localizedDescription
         }
         AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
@@ -42,7 +47,7 @@ final class Ringer {
         guard let p = player else { return }
         p.stop()
         player = nil
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        AudioSession.deactivate(.ring)
     }
 }
 

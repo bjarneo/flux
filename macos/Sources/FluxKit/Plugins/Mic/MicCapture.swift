@@ -178,6 +178,8 @@ final class MicCapture: @unchecked Sendable {
     private var stopped = false
     private var running = false
     private var observers: [NSObjectProtocol] = []
+    /// True while this capture holds the audio session.
+    private var holdsSession = false
     /// Owned by the audio thread of the tap.
     private var converter: AVAudioConverter?
 
@@ -189,8 +191,9 @@ final class MicCapture: @unchecked Sendable {
     }
 
     /// The inputs are the routes of the audio session, because the iPhone
-    /// records from the route that the session picks.
-    static func inputs() -> [MicInput] {
+    /// records from the route that the session picks. Nil keeps the list,
+    /// see `AudioSession.inputs`.
+    static func inputs() -> [MicInput]? {
         AudioSession.inputs()
     }
 
@@ -206,12 +209,13 @@ final class MicCapture: @unchecked Sendable {
 
     private func startOnControl(route: String) throws {
         guard !stopped else { throw CancellationError() }
-        try AudioSession.activate(forRecording: false)
+        try AudioSession.activate(.mic)
+        holdsSession = true
         AudioSession.prefer(route)
         do {
             try run()
         } catch {
-            AudioSession.deactivate()
+            releaseSession()
             throw error
         }
         let center = NotificationCenter.default
@@ -279,8 +283,15 @@ final class MicCapture: @unchecked Sendable {
                 engine.inputNode.removeTap(onBus: 0)
                 running = false
             }
-            AudioSession.deactivate()
+            releaseSession()
         }
+    }
+
+    /// Ends the use of the audio session, once. Runs on control.
+    private func releaseSession() {
+        guard holdsSession else { return }
+        holdsSession = false
+        AudioSession.deactivate(.mic)
     }
 }
 #endif

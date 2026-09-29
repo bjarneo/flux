@@ -279,7 +279,11 @@ public final class MicPlugin: FluxPlugin, @unchecked Sendable {
     /// device that went away moves to the system default input.
     @MainActor
     private func inputsChanged() {
+        #if os(iOS)
+        if let inputs = MicCapture.inputs() { model.inputs = inputs }
+        #else
         model.inputs = MicCapture.inputs()
+        #endif
         switchCapture()
     }
 

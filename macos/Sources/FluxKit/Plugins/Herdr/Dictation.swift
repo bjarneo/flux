@@ -248,7 +248,7 @@ public final class Dictation {
         #if os(iOS)
         // iOS gives the engine an input only while a recording session is active.
         do {
-            try AudioSession.activate(forRecording: true)
+            try AudioSession.activate(.dictation)
         } catch {
             FluxLog.plugin.error("dictation: the audio session did not start: \(String(describing: error), privacy: .public)")
             return false
@@ -258,7 +258,7 @@ public final class Dictation {
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else {
             #if os(iOS)
-            AudioSession.deactivate()
+            AudioSession.deactivate(.dictation)
             #endif
             return false
         }
@@ -277,7 +277,7 @@ public final class Dictation {
             FluxLog.plugin.error("dictation: the microphone did not start: \(String(describing: error), privacy: .public)")
             input.removeTap(onBus: 0)
             #if os(iOS)
-            AudioSession.deactivate()
+            AudioSession.deactivate(.dictation)
             #endif
             return false
         }
@@ -291,7 +291,7 @@ public final class Dictation {
         engine.stop()
         engine.inputNode.removeTap(onBus: 0)
         #if os(iOS)
-        AudioSession.deactivate()
+        AudioSession.deactivate(.dictation)
         #endif
     }
 
