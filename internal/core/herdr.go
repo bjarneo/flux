@@ -62,6 +62,9 @@ const herdrGap = "\x1b[2m··· More lines show here when the agent stops ···
 // errHerdrOff ends a herdr session when the user turns the feature off.
 var errHerdrOff = errors.New("herdr sync is off")
 
+// errHerdrDisabled is the answer to a phone while herdr is off.
+const errHerdrDisabled = "herdr sync is off on this computer"
+
 // HerdrAgent is one herdr agent as the phone sees it.
 type HerdrAgent struct {
 	Pane      string `json:"pane"`
@@ -98,23 +101,34 @@ type herdrLive struct {
 }
 
 // herdrJobs keeps the herdr work that runs for the phones. d.mu guards
-// it. reads has a key for each read that runs. Its value is true when
-// another read of the same pane came on the same link during the read.
-// creating has the ID of each device that starts an agent or opens a
-// terminal. kinds is the result of the last lookup of the agent kinds, at
-// kindsAt. kindsBusy is true while a lookup runs.
+// it. reads has a key for each read that runs. creating has the ID of
+// each device that starts an agent or opens a terminal. kinds is the
+// result of the last lookup of the agent kinds, at kindsAt. kindsBusy is
+// true while a lookup runs.
 type herdrJobs struct {
-	reads     map[herdrReadKey]bool
+	reads     map[herdrReadKey]herdrRead
 	creating  map[string]bool
 	kinds     []string
 	kindsAt   time.Time
 	kindsBusy bool
 }
 
-// herdrReadKey selects the reads of one pane on one link.
+// herdrReadKey selects the reads of one pane on one link with the same
+// line count and format. Only such reads can share an answer.
 type herdrReadKey struct {
-	link *lan.Link
-	pane string
+	link  *lan.Link
+	pane  string
+	lines int
+	ansi  bool
+}
+
+// herdrRead is the state of a read that runs. waiting is true when
+// another read with the same key came during the read. stale is true when
+// a reply went to the pane during the herdr calls, so the answer can be
+// older than the reply.
+type herdrRead struct {
+	waiting bool
+	stale   bool
 }
 
 // agentHistory is the last plain history of an agent. asked is the line
@@ -384,8 +398,8 @@ func herdrAgents(snap herdr.Snapshot) []HerdrAgent {
 			status = herdr.StatusUnknown
 		}
 		out = append(out, HerdrAgent{
-			Pane: a.PaneID, Agent: a.Agent, Status: status, Title: a.Title,
-			Project: projectName(cwd), Workspace: workspaces[a.WorkspaceID].Label,
+			Pane: a.PaneID, Agent: a.Agent, Status: status, Title: cleanLabel(a.Title),
+			Project: cleanLabel(projectName(cwd)), Workspace: cleanLabel(workspaces[a.WorkspaceID].Label),
 		})
 	}
 	return out
@@ -416,7 +430,8 @@ func herdrTerminals(snap herdr.Snapshot) []HerdrTerminal {
 			continue
 		}
 		out = append(out, HerdrTerminal{
-			Pane: p.ID, Title: p.Title, Project: projectName(paneCwd(p)), Workspace: workspaces[p.WorkspaceID].Label,
+			Pane: p.ID, Title: cleanLabel(p.Title), Project: cleanLabel(projectName(paneCwd(p))),
+			Workspace: cleanLabel(workspaces[p.WorkspaceID].Label),
 		})
 	}
 	return out
@@ -438,7 +453,7 @@ func herdrWorkspaces(snap herdr.Snapshot) []HerdrWorkspace {
 				break
 			}
 		}
-		out = append(out, HerdrWorkspace{ID: w.ID, Label: w.Label, Cwd: homeRelative(cwd, home)})
+		out = append(out, HerdrWorkspace{ID: w.ID, Label: cleanLabel(w.Label), Cwd: homeRelative(cwd, home)})
 	}
 	return out
 }
@@ -547,14 +562,22 @@ func (d *Daemon) forgetHerdrHistory(pane string) {
 	delete(d.herdrHistory, pane)
 }
 
-// staleHerdrHistory makes the history of the agent in the pane old, so
-// the next read gets it from herdr again.
-func (d *Daemon) staleHerdrHistory(pane string) {
+// staleHerdrOutput makes the output of the pane old after a reply. The
+// next read of the history of the agent gets it from herdr again. A read
+// of the pane that runs can have output from before the reply, so the
+// reads that wait for it get a new read.
+func (d *Daemon) staleHerdrOutput(pane string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if h, ok := d.herdrHistory[pane]; ok {
 		h.at = time.Time{}
 		d.herdrHistory[pane] = h
+	}
+	for key, r := range d.herdrJobs.reads {
+		if key.pane == pane {
+			r.stale = true
+			d.herdrJobs.reads[key] = r
+		}
 	}
 }
 
@@ -615,74 +638,113 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 		_ = l.Send(state)
 	case "read":
 		d.readHerdrOnce(dev, l, body.Pane, body.Lines, body.Format == "ansi", func(p *proto.Packet) { _ = l.Send(p) })
-	case "keys":
+	case "keys", "prompt", "input":
 		go func() {
-			defer d.herdrRecover("keys")
-			_ = l.Send(d.herdrKeys(dev, body.Pane, body.Keys))
-		}()
-	case "prompt":
-		go func() {
-			defer d.herdrRecover("prompt")
-			_ = l.Send(d.herdrPrompt(dev, body.Pane, body.Text, body.Answer))
-		}()
-	case "input":
-		go func() {
-			defer d.herdrRecover("input")
-			_ = l.Send(d.herdrInput(dev, body.Pane, body.Text, body.Keys))
+			failed := map[string]any{"kind": "sent", "pane": body.Pane, "action": body.Kind, "error": "fluxd could not send the reply"}
+			defer d.herdrRecover(body.Kind, d.herdrFailed(dev, l, failed))
+			var reply *proto.Packet
+			switch body.Kind {
+			case "keys":
+				reply = d.herdrKeys(dev, body.Pane, body.Keys)
+			case "prompt":
+				reply = d.herdrPrompt(dev, body.Pane, body.Text, body.Answer)
+			default:
+				reply = d.herdrInput(dev, body.Pane, body.Text, body.Keys)
+			}
+			d.herdrSend(dev, l, reply)
 		}()
 	case "create":
 		go func() {
-			defer d.herdrRecover("create")
+			failed := map[string]any{"kind": "created", "what": body.What, "error": "fluxd could not open the pane"}
+			defer d.herdrRecover("create", d.herdrFailed(dev, l, failed))
 			reply := d.herdrCreate(dev, body.What, body.Agent, body.Cwd, body.Workspace)
 			// The phone opens the new pane at once, so it must know the
 			// pane before the answer.
 			d.mu.Lock()
 			state := herdrStatePacket(d.herdrViewLocked())
 			d.mu.Unlock()
-			_ = l.Send(state)
-			_ = l.Send(reply)
+			d.herdrSend(dev, l, state, reply)
 		}()
 	case "close":
 		go func() {
-			defer d.herdrRecover("close")
-			_ = l.Send(d.herdrClose(dev, body.Pane))
+			failed := map[string]any{"kind": "closed", "pane": body.Pane, "error": "fluxd could not close the pane"}
+			defer d.herdrRecover("close", d.herdrFailed(dev, l, failed))
+			d.herdrSend(dev, l, d.herdrClose(dev, body.Pane))
 		}()
 	default:
 		d.logf("%s: unknown flux.herdr kind %q", dev.Name, body.Kind)
 	}
 }
 
+// herdrPaired reports whether the device is paired now. A herdr call can
+// take seconds, and an answer must not go out after an unpair.
+func (d *Daemon) herdrPaired(dev *Device) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return dev.Paired
+}
+
+// herdrSend sends the packets on the link l while the device is paired.
+func (d *Daemon) herdrSend(dev *Device, l *lan.Link, packets ...*proto.Packet) {
+	for _, p := range packets {
+		if !d.herdrPaired(dev) {
+			return
+		}
+		_ = l.Send(p)
+	}
+}
+
+// herdrFailed returns a function that sends a flux.herdr packet with the
+// body to the device. herdrRecover calls it after a panic.
+func (d *Daemon) herdrFailed(dev *Device, l *lan.Link, body map[string]any) func() {
+	return func() { d.herdrSend(dev, l, proto.New(proto.TypeFluxHerdr, body)) }
+}
+
 // herdrRecover logs a panic in the answer to a flux.herdr packet and ends
-// that answer, so one bad reply from herdr does not stop fluxd. Call it
-// with defer at the start of the goroutine.
-func (d *Daemon) herdrRecover(what string) {
+// that answer, so one bad reply from herdr does not stop fluxd. Then it
+// calls fail, which sends an error to the phone. Without it, the phone
+// waits for the answer until its own time limit. Call herdrRecover with
+// defer at the start of the goroutine.
+func (d *Daemon) herdrRecover(what string, fail func()) {
 	if r := recover(); r != nil {
 		d.logf("herdr: the %s failed: %v\n%s", what, r, debug.Stack())
+		fail()
 	}
 }
 
 // readHerdrOnce answers a read of the pane that came on the link l. One
-// read of a pane runs at a time for each link, from the herdr calls until
-// the answer is sent. A read that comes during the herdr calls gets the
-// answer of that read, so a flood of reads does not make more herdr calls
-// and large packets. fluxd reads once more when the agent status changed
-// during the herdr calls, or when a read came during the send. That read
-// can be newer than the answer. send sends the answer.
+// read of a pane with the same line count and format runs at a time for
+// each link, from the herdr calls until the answer is sent. A read that
+// comes during the herdr calls gets the answer of that read, so a flood of
+// reads does not make more herdr calls and large packets. fluxd reads once
+// more when the agent status changed during the herdr calls, when a reply
+// went to the pane during them, or when a read came during the send. That
+// read can be newer than the answer. The answer does not go out after an
+// unpair. send sends the answer.
 func (d *Daemon) readHerdrOnce(dev *Device, l *lan.Link, pane string, lines int, ansi bool, send func(*proto.Packet)) {
-	key := herdrReadKey{link: l, pane: pane}
+	key := herdrReadKey{link: l, pane: pane, lines: herdrLines(lines), ansi: ansi}
 	d.mu.Lock()
-	if _, running := d.herdrJobs.reads[key]; running {
-		d.herdrJobs.reads[key] = true
+	if r, running := d.herdrJobs.reads[key]; running {
+		r.waiting = true
+		d.herdrJobs.reads[key] = r
 		d.mu.Unlock()
 		return
 	}
 	if d.herdrJobs.reads == nil {
-		d.herdrJobs.reads = map[herdrReadKey]bool{}
+		d.herdrJobs.reads = map[herdrReadKey]herdrRead{}
 	}
-	d.herdrJobs.reads[key] = false
+	d.herdrJobs.reads[key] = herdrRead{}
 	d.mu.Unlock()
 	go func() {
-		defer d.herdrRecover("read")
+		failed := map[string]any{"kind": "output", "pane": pane, "error": "fluxd could not read the pane"}
+		if ansi {
+			failed["format"] = "ansi"
+		}
+		defer d.herdrRecover("read", func() {
+			if d.herdrPaired(dev) {
+				send(proto.New(proto.TypeFluxHerdr, failed))
+			}
+		})
 		finished := false
 		defer func() {
 			// After a panic, the next read of the pane must run.
@@ -698,13 +760,17 @@ func (d *Daemon) readHerdrOnce(dev *Device, l *lan.Link, pane string, lines int,
 			d.mu.Unlock()
 			p := d.readHerdr(pane, lines, ansi)
 			d.mu.Lock()
-			again := d.herdrJobs.reads[key] && d.herdrStatusLocked(pane) != status
-			d.herdrJobs.reads[key] = false
+			r := d.herdrJobs.reads[key]
+			again := r.waiting && (r.stale || d.herdrStatusLocked(pane) != status)
+			d.herdrJobs.reads[key] = herdrRead{}
+			paired := dev.Paired
 			d.mu.Unlock()
-			send(p)
+			if paired {
+				send(p)
+			}
 			d.mu.Lock()
-			if (again || d.herdrJobs.reads[key]) && dev.Paired {
-				d.herdrJobs.reads[key] = false
+			if paired && dev.Paired && (again || d.herdrJobs.reads[key].waiting) {
+				d.herdrJobs.reads[key] = herdrRead{}
 			} else {
 				delete(d.herdrJobs.reads, key)
 				finished = true
@@ -717,8 +783,9 @@ func (d *Daemon) readHerdrOnce(dev *Device, l *lan.Link, pane string, lines int,
 // readHerdr returns an output packet with the recent output of an agent.
 // It reads only a pane that holds an agent in the last state, or a
 // terminal when herdr_terminals is on, so a phone cannot read other
-// terminals. With ansi, the text keeps its colors and styles as SGR
-// sequences.
+// terminals. It checks the settings again after the read, so the text
+// does not go out when the user turned the feature off during the read.
+// With ansi, the text keeps its colors and styles as SGR sequences.
 func (d *Daemon) readHerdr(pane string, lines int, ansi bool) *proto.Packet {
 	reply := map[string]any{"kind": "output", "pane": pane}
 	if ansi {
@@ -731,7 +798,7 @@ func (d *Daemon) readHerdr(pane string, lines int, ansi bool) *proto.Packet {
 	d.mu.Unlock()
 	switch {
 	case !enabled:
-		reply["error"] = "herdr sync is off on this computer"
+		reply["error"] = errHerdrDisabled
 	case !agent && !terminal:
 		reply["error"] = fmt.Sprintf("No agent runs in %s", pane)
 	default:
@@ -745,12 +812,20 @@ func (d *Daemon) readHerdr(pane string, lines int, ansi bool) *proto.Packet {
 			text, truncated, err = d.readTerminal(ctx, pane, herdrLines(lines), ansi)
 		}
 		cancel()
-		if err != nil {
+		d.mu.Lock()
+		enabled, terminals := d.cfg.Herdr, d.herdrTerminalsLocked()
+		d.mu.Unlock()
+		switch {
+		case !enabled:
+			reply["error"] = errHerdrDisabled
+		case !agent && !terminals:
+			reply["error"] = errHerdrTerminalsOff
+		case err != nil:
 			reply["error"] = herdrError(pane, err)
-			break
+		default:
+			text, cut := tailText(text, herdrMaxText)
+			reply["text"], reply["truncated"] = text, truncated || cut
 		}
-		text, cut := tailText(text, herdrMaxText)
-		reply["text"], reply["truncated"] = text, truncated || cut
 	}
 	return proto.New(proto.TypeFluxHerdr, reply)
 }
@@ -963,6 +1038,20 @@ func trimLineEnds(text string) string {
 // each line.
 func cleanPlain(text string) string {
 	return trimLineEnds(strings.Map(textRune, text))
+}
+
+// cleanLabel prepares a title or a name for a phone. A program sets the
+// title of its pane, and an agent can make its title from the
+// conversation. cleanLabel removes and marks characters as textRune does,
+// and it changes line breaks and tabs to spaces, because a label has one
+// line.
+func cleanLabel(label string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\t' {
+			return ' '
+		}
+		return textRune(r)
+	}, label)
 }
 
 // textRune returns the character that a phone gets for a character of

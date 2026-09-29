@@ -41,6 +41,10 @@ func (d *Daemon) herdrKindsNow(ctx context.Context) []string {
 			kinds := d.herdrAvailableKinds(ctx)
 			d.mu.Lock()
 			j.kinds, j.kindsAt, j.kindsBusy = kinds, time.Now(), false
+			if !d.herdrControlLocked() {
+				// The user turned herdr_control off during the lookup.
+				j.kinds, j.kindsAt = nil, time.Time{}
+			}
 			d.mu.Unlock()
 			d.wakeHerdr()
 		}()

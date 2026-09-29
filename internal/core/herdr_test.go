@@ -26,20 +26,23 @@ func TestHerdrAgents(t *testing.T) {
 	snap := herdr.Snapshot{
 		Workspaces: []herdr.Workspace{
 			{ID: "wB", Label: "flux", Number: 1},
-			{ID: "wA", Label: "cliamp", Number: 2},
+			{ID: "wA", Label: "cli\u202eamp", Number: 2},
 		},
 		Agents: []herdr.Agent{
-			{PaneID: "wA:p1", WorkspaceID: "wA", Agent: "claude", Status: "idle", Cwd: "/home/u/Code/cliamp"},
+			{PaneID: "wA:p1", WorkspaceID: "wA", Agent: "claude", Status: "idle", Cwd: "/home/u/Code/cli\u2066amp"},
 			{PaneID: "wZ:p1", WorkspaceID: "wZ", Agent: "codex", Status: "", Cwd: "/"},
 			{PaneID: "", WorkspaceID: "wB", Agent: "claude", Status: "working"},
 			{PaneID: "wB:p2", WorkspaceID: "wB", Agent: "claude", Status: "blocked",
-				Cwd: "/home/u/Code/flux", ForegroundCwd: "/home/u/Code/flux/android", Title: "Agents screen"},
+				Cwd: "/home/u/Code/flux", ForegroundCwd: "/home/u/Code/flux/android", Title: "Agents\u202e\u009b screen\n"},
 		},
 	}
+	// A title, a project, and a label get the same filter as the output,
+	// so a bidirectional control character cannot change the order of a
+	// row on the phone.
 	got := herdrAgents(snap)
 	want := []HerdrAgent{
-		{Pane: "wB:p2", Agent: "claude", Status: "blocked", Title: "Agents screen", Project: "android", Workspace: "flux"},
-		{Pane: "wA:p1", Agent: "claude", Status: "idle", Project: "cliamp", Workspace: "cliamp"},
+		{Pane: "wB:p2", Agent: "claude", Status: "blocked", Title: "Agents\ufffd screen ", Project: "android", Workspace: "flux"},
+		{Pane: "wA:p1", Agent: "claude", Status: "idle", Project: "cli\ufffdamp", Workspace: "cli\ufffdamp"},
 		{Pane: "wZ:p1", Agent: "codex", Status: "unknown", Project: "/"},
 	}
 	if len(got) != len(want) {
@@ -632,17 +635,20 @@ func TestReadHerdrOnce(t *testing.T) {
 	}
 
 	// 3 reads on one link make 1 herdr call and get 1 answer. A read on
-	// another link runs on its own.
+	// another link runs on its own. A read with another line count or
+	// format needs another answer, so it runs on its own too.
 	link := &lan.Link{}
 	hold := f.holdReads()
 	for range 3 {
 		d.readHerdrOnce(dev, link, "w1:p1", 1, false, send)
 	}
 	d.readHerdrOnce(dev, &lan.Link{}, "w1:p1", 1, false, send)
-	waitFor(t, "2 reads", func() bool { return f.heldReads() == 2 })
+	d.readHerdrOnce(dev, link, "w1:p1", 2, false, send)
+	d.readHerdrOnce(dev, link, "w1:p1", 1, true, send)
+	waitFor(t, "4 reads", func() bool { return f.heldReads() == 4 })
 	close(hold)
-	answers(2)
-	if calls := f.takeCalls(); len(calls) != 2 {
+	answers(4)
+	if calls := f.takeCalls(); len(calls) != 4 {
 		t.Errorf("read calls %v", calls)
 	}
 
@@ -689,6 +695,155 @@ func TestReadHerdrOnce(t *testing.T) {
 	}
 }
 
+// readCalls returns the number of agent.read calls in calls.
+func readCalls(calls []string) int {
+	n := 0
+	for _, c := range calls {
+		if strings.HasPrefix(c, "agent.read ") {
+			n++
+		}
+	}
+	return n
+}
+
+func TestReadHerdrOnceChecks(t *testing.T) {
+	f := newFakeHerdr(t)
+	d := herdrDaemon(context.Background(), f.path)
+	d.cfg.HerdrControl = true
+	dev := &Device{ID: "phone1", Name: "Pixel 8", Paired: true}
+	d.herdrAgents = []HerdrAgent{{Pane: "w1:p1", Agent: "claude", Status: "working"}}
+	f.read = `"result":{"type":"pane_read","read":{"pane_id":"w1:p1","text":"step 1","truncated":false}}`
+	sent := make(chan *proto.Packet, 8)
+	send := func(p *proto.Packet) { sent <- p }
+	link := &lan.Link{}
+	answer := func() map[string]any {
+		t.Helper()
+		select {
+		case p := <-sent:
+			return outputBody(t, p)
+		case <-time.After(3 * time.Second):
+			t.Fatal("a read got no answer")
+		}
+		return nil
+	}
+	noAnswer := func() {
+		t.Helper()
+		select {
+		case p := <-sent:
+			t.Fatalf("an extra answer: %v", p)
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	idle := func() bool {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		return len(d.herdrJobs.reads) == 0
+	}
+
+	// A reply during a read makes its answer old, also when the status
+	// does not change, as in a terminal. So the read that came during it
+	// gets a new read.
+	hold := f.holdReads()
+	d.readHerdrOnce(dev, link, "w1:p1", 1, false, send)
+	waitFor(t, "the read", func() bool { return f.heldReads() == 1 })
+	if body := sentBody(t, d.herdrKeys(dev, "w1:p1", []string{"esc"})); body["error"] != nil {
+		t.Fatalf("keys: %v", body)
+	}
+	d.readHerdrOnce(dev, link, "w1:p1", 1, false, send)
+	close(hold)
+	answer()
+	answer()
+	noAnswer()
+	if n := readCalls(f.takeCalls()); n != 2 {
+		t.Errorf("%d read calls after a reply, want 2", n)
+	}
+
+	// A reply without a read that waits makes no new read.
+	hold = f.holdReads()
+	d.readHerdrOnce(dev, link, "w1:p1", 1, false, send)
+	waitFor(t, "the read", func() bool { return f.heldReads() == 1 })
+	sentBody(t, d.herdrKeys(dev, "w1:p1", []string{"esc"}))
+	close(hold)
+	answer()
+	noAnswer()
+	if n := readCalls(f.takeCalls()); n != 1 {
+		t.Errorf("%d read calls after a reply with no read that waits, want 1", n)
+	}
+
+	// An unpair during the read stops the answer and the reads that wait.
+	hold = f.holdReads()
+	d.readHerdrOnce(dev, link, "w1:p1", 1, false, send)
+	waitFor(t, "the read", func() bool { return f.heldReads() == 1 })
+	d.readHerdrOnce(dev, link, "w1:p1", 1, false, send)
+	d.mu.Lock()
+	dev.Paired = false
+	d.mu.Unlock()
+	close(hold)
+	waitFor(t, "the end of the read", idle)
+	noAnswer()
+	if n := readCalls(f.takeCalls()); n != 1 {
+		t.Errorf("%d read calls after an unpair, want 1", n)
+	}
+
+	// When the user turns herdr off during the read, the text does not go
+	// out.
+	d.mu.Lock()
+	dev.Paired = true
+	d.mu.Unlock()
+	hold = f.holdReads()
+	d.readHerdrOnce(dev, link, "w1:p1", 1, false, send)
+	waitFor(t, "the read", func() bool { return f.heldReads() == 1 })
+	d.mu.Lock()
+	d.cfg.Herdr = false
+	d.mu.Unlock()
+	close(hold)
+	if body := answer(); body["error"] != errHerdrDisabled || body["text"] != nil {
+		t.Errorf("herdr off during the read: %v", body)
+	}
+	waitFor(t, "the end of the read", idle)
+
+	// A panic during the answer sends an error, so the phone does not
+	// wait. The next read of the pane runs.
+	d.mu.Lock()
+	d.cfg.Herdr = true
+	d.mu.Unlock()
+	panicked := false
+	d.readHerdrOnce(dev, link, "w1:p1", 1, true, func(p *proto.Packet) {
+		if !panicked {
+			panicked = true
+			panic("bad answer")
+		}
+		sent <- p
+	})
+	if body := answer(); body["error"] != "fluxd could not read the pane" || body["format"] != "ansi" || body["pane"] != "w1:p1" {
+		t.Errorf("answer after a panic: %v", body)
+	}
+	waitFor(t, "the end of the read", idle)
+	d.readHerdrOnce(dev, link, "w1:p1", 1, true, send)
+	if body := answer(); body["text"] != "step 1" {
+		t.Errorf("read after a panic: %v", body)
+	}
+}
+
+func TestHerdrRecover(t *testing.T) {
+	d := herdrDaemon(context.Background(), "")
+	failed := false
+	func() {
+		defer d.herdrRecover("keys", func() { failed = true })
+		panic("bad reply")
+	}()
+	if !failed {
+		t.Error("a panic must send an error")
+	}
+	failed = false
+	func() {
+		defer d.herdrRecover("keys", func() { failed = true })
+	}()
+	if failed {
+		t.Error("an answer without a panic must not send an error")
+	}
+}
+
 func TestSpliceScreen(t *testing.T) {
 	gap := herdrGap
 	cases := []struct {
@@ -723,25 +878,25 @@ func TestHerdrTerminalsAndWorkspaces(t *testing.T) {
 	snap := herdr.Snapshot{
 		Workspaces: []herdr.Workspace{
 			{ID: "wB", Label: "flux", Number: 2, ActiveTab: "wB:t2"},
-			{ID: "wA", Label: "web", Number: 1, ActiveTab: "wA:t1"},
+			{ID: "wA", Label: "web\u200f", Number: 1, ActiveTab: "wA:t1"},
 		},
 		Panes: []herdr.Pane{
 			{ID: "wB:p1", WorkspaceID: "wB", TabID: "wB:t1", Cwd: "/src/flux"},
-			{ID: "wB:p2", WorkspaceID: "wB", TabID: "wB:t2", Cwd: "/src/flux", ForegroundCwd: "/src/flux/android", Title: "gradle"},
+			{ID: "wB:p2", WorkspaceID: "wB", TabID: "wB:t2", Cwd: "/src/flux", ForegroundCwd: "/src/flux/android", Title: "gradle\u2067"},
 			{ID: "wA:p1", WorkspaceID: "wA", TabID: "wA:t1", Cwd: "/src/web", Title: "u@host:~/src/web"},
 		},
 		Agents: []herdr.Agent{{PaneID: "wB:p1", WorkspaceID: "wB", Agent: "claude"}},
 	}
 	terms := herdrTerminals(snap)
 	want := []HerdrTerminal{
-		{Pane: "wA:p1", Title: "u@host:~/src/web", Project: "web", Workspace: "web"},
-		{Pane: "wB:p2", Title: "gradle", Project: "android", Workspace: "flux"},
+		{Pane: "wA:p1", Title: "u@host:~/src/web", Project: "web", Workspace: "web\ufffd"},
+		{Pane: "wB:p2", Title: "gradle\ufffd", Project: "android", Workspace: "flux"},
 	}
 	if !slices.Equal(terms, want) {
 		t.Errorf("terminals %+v", terms)
 	}
 	places := herdrWorkspaces(snap)
-	wantPlaces := []HerdrWorkspace{{ID: "wA", Label: "web", Cwd: "/src/web"}, {ID: "wB", Label: "flux", Cwd: "/src/flux/android"}}
+	wantPlaces := []HerdrWorkspace{{ID: "wA", Label: "web\ufffd", Cwd: "/src/web"}, {ID: "wB", Label: "flux", Cwd: "/src/flux/android"}}
 	if !slices.Equal(places, wantPlaces) {
 		t.Errorf("workspaces %+v", places)
 	}

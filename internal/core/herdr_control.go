@@ -183,7 +183,8 @@ func (d *Daemon) herdrInput(dev *Device, pane, text string, keys []string) *prot
 // share. A reply to a terminal needs herdr_terminals and a pane without
 // an agent. Another reply needs a pane with an agent. send returns a
 // herdrRefusal, a herdr error, or a connection error. A reply makes the
-// history of the agent old, because the agent then writes new lines.
+// output of the pane old, because the agent or the shell then writes new
+// lines.
 func (d *Daemon) herdrReply(dev *Device, pane, action string, terminal bool, send func(ctx context.Context) error) *proto.Packet {
 	reply := map[string]any{"kind": "sent", "pane": pane, "action": action}
 	d.mu.Lock()
@@ -197,7 +198,7 @@ func (d *Daemon) herdrReply(dev *Device, pane, action string, terminal bool, sen
 	case !paired:
 		reply["error"] = errHerdrNotPaired
 	case !enabled:
-		reply["error"] = "herdr sync is off on this computer"
+		reply["error"] = errHerdrDisabled
 	case !control:
 		reply["error"] = errHerdrControlOff
 	case terminal && !terminals:
@@ -217,7 +218,7 @@ func (d *Daemon) herdrReply(dev *Device, pane, action string, terminal bool, sen
 			reply["error"] = herdrReplyError(pane, err)
 			break
 		}
-		d.staleHerdrHistory(pane)
+		d.staleHerdrOutput(pane)
 	}
 	return proto.New(proto.TypeFluxHerdr, reply)
 }
@@ -263,7 +264,7 @@ func (d *Daemon) herdrCreate(dev *Device, what, kind, cwd, workspace string) *pr
 	case !paired:
 		err = herdrRefusal(errHerdrNotPaired)
 	case !enabled:
-		err = herdrRefusal("herdr sync is off on this computer")
+		err = herdrRefusal(errHerdrDisabled)
 	case !control:
 		err = herdrRefusal(errHerdrControlOff)
 	case what == "terminal" && !terminals:
@@ -405,7 +406,7 @@ func (d *Daemon) herdrClose(dev *Device, pane string) *proto.Packet {
 	case !paired:
 		reply["error"] = errHerdrNotPaired
 	case !enabled:
-		reply["error"] = "herdr sync is off on this computer"
+		reply["error"] = errHerdrDisabled
 	case !control:
 		reply["error"] = errHerdrControlOff
 	case !agent && !terminal:

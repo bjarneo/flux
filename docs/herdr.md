@@ -381,9 +381,15 @@ When the phone opens the agent list, `fluxd` tries at once.
 
 `fluxd` limits the work that one device can start:
 
-- One read of each pane runs at a time for each device. A read that comes during the herdr calls of that read gets the same answer. A read that comes while `fluxd` sends the answer gets a new read after it.
+- One read of each pane with the same line count and format runs at a time for each device. A read that comes during the herdr calls of that read gets the same answer. A read that comes while `fluxd` sends the answer gets a new read after it.
+- When the agent status changes or a reply goes to the pane during the herdr calls, the answer can be old. The reads that came during the herdr calls then get a new read.
 - `fluxd` keeps the plain history of an idle agent for 3 seconds, so a new read in that time does not make herdr scroll the agent again. A new status of the agent, a reply to it, and a new agent in the pane end this time.
 - One start of an agent or a terminal runs at a time for each device.
+
+A read, a reply, and a start can take seconds.
+When you unpair the device during that time, `fluxd` does not send the answer.
+When you set `herdr = false` during a read, the answer has an error and no text.
+When you set `herdr_terminals = false` during the read of a terminal, the answer has an error and no text.
 
 ### Wire format
 
@@ -405,6 +411,8 @@ The `kind` field selects the message.
 | `input` | Phone | `pane` of a terminal, `text`, and 0 to 8 `keys`. The computer answers with `sent`. |
 | `create` | Phone | `what` is `agent` or `terminal`, then `agent`, `cwd`, and `workspace`. The computer answers with `created`. |
 | `close` | Phone | `pane`. The computer answers with `closed`. |
+
+When `fluxd` cannot finish an answer because of an internal error, it sends the answer with an `error`, for example `fluxd could not read the pane`.
 
 The computer sends `state` when the phone connects, after each change, and as the answer to `request`.
 Each agent has `pane`, `agent`, `status`, `title`, `project`, and `workspace`:
@@ -450,6 +458,10 @@ It changes each bidirectional control character to U+FFFD: U+061C, U+200E, U+200
 It also changes the line and paragraph separators U+2028 and U+2029.
 The apps show text with the Unicode bidirectional algorithm, and a terminal does not.
 So such a character can show a command in a different order on the phone than on the computer.
+
+The `title`, `project`, and `workspace` of the agents and the terminals, and the `label` of the workspaces, get the same changes.
+A program sets the title of its pane, and an agent can make its title from the conversation.
+In these fields, `fluxd` also changes line breaks and tabs to spaces.
 
 A reply and its answer look like this:
 
