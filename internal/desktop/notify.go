@@ -134,15 +134,20 @@ func (n *Notifier) handle(sig *dbus.Signal) {
 			return
 		}
 		name, _ := sig.Body[0].(string)
+		old, _ := sig.Body[1].(string)
 		owner, _ := sig.Body[2].(string)
 		if name != notifyDest {
 			return
 		}
 		n.mu.Lock()
 		n.owner = owner
-		// A new server does not know the notifications of the old one.
-		clear(n.shown)
-		n.order = nil
+		// A new server does not know the notifications of the old one. When
+		// no server ran before, the first Show can start one with D-Bus
+		// activation, and the IDs that Show records are from the new server.
+		if old != "" {
+			clear(n.shown)
+			n.order = nil
+		}
 		n.mu.Unlock()
 	case notifyIface + ".ActionInvoked":
 		if sig.Path != notifyPath || len(sig.Body) < 2 {

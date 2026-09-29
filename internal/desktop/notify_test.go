@@ -77,6 +77,31 @@ func TestNotifierActionFilter(t *testing.T) {
 	}
 }
 
+// TestNotifierKeepsActionsOfActivatedServer checks that a server that the
+// first Show starts keeps the actions of that notification. The signal
+// that names the new owner can come after Show records the ID.
+func TestNotifierKeepsActionsOfActivatedServer(t *testing.T) {
+	n := &Notifier{}
+	var got []string
+	n.OnAction(func(_ uint32, key string) { got = append(got, key) })
+	n.mu.Lock()
+	n.rememberLocked(1, []string{"open:x"})
+	n.mu.Unlock()
+	n.handle(&dbus.Signal{Sender: busDest, Name: busDest + ".NameOwnerChanged", Body: []any{notifyDest, "", ":1.30"}})
+	n.handle(actionSignal(":1.30", 1, "open:x"))
+	if len(got) != 1 {
+		t.Fatalf("the first notification of a new server lost its actions: %q", got)
+	}
+
+	// A server that stops takes its notifications with it.
+	n.handle(&dbus.Signal{Sender: busDest, Name: busDest + ".NameOwnerChanged", Body: []any{notifyDest, ":1.30", ""}})
+	n.handle(&dbus.Signal{Sender: busDest, Name: busDest + ".NameOwnerChanged", Body: []any{notifyDest, "", ":1.31"}})
+	n.handle(actionSignal(":1.31", 1, "open:x"))
+	if len(got) != 1 {
+		t.Fatalf("an action of a stopped server ran: %q", got)
+	}
+}
+
 func TestNotifierRemembersALimitedNumber(t *testing.T) {
 	n := &Notifier{}
 	n.mu.Lock()
