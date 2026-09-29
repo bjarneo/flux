@@ -19,9 +19,7 @@ object Share {
     fun receive(core: FluxCore, d: Device, p: Packet) {
         val from = d.identity.deviceName
         p.string("text")?.let { text ->
-            Plugins.lastRemoteClip = text
-            android.os.Handler(android.os.Looper.getMainLooper()).post { Android.setClipboard(core.app, text) }
-            core.toast("Text from $from is on the clipboard")
+            if (Plugins.putRemoteText(core, from, text)) core.toast("Text from $from is on the clipboard")
             return
         }
         p.string("url")?.let { url ->
