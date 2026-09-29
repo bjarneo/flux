@@ -140,7 +140,7 @@ The Enter key next to the mic key sends Enter.
 On the Mac, open the computer in Flux.
 In the **Remote Desktop** card, select **Open Remote Desktop…**.
 The menu bar item also has **Remote Desktop…**.
-The Mac asks for Touch ID or its password first. The unlock stays valid for 5 minutes while Flux runs.
+The Mac asks for Touch ID or its password first. The unlock stays valid for 5 minutes, until the Mac sleeps or locks.
 
 The card shows **Off** and the steps to turn it on when the remote desktop is off on the computer.
 Without remote input, the window shows **View only**, and the mouse and the keys do nothing on the computer.
@@ -153,7 +153,8 @@ When the computer has more than 1 monitor, select the monitor in the bar over th
 The Mac shows 1 remote desktop at a time.
 The stream stops when you close the window.
 It stops while the window is in the Dock and while the Mac sleeps or is locked, and it starts again when you come back.
-It also stops when the link drops. Select **Start Again** to start it again.
+It also stops when the link drops, and it starts again when the link comes back while the window shows and the Mac is unlocked.
+To start it by hand, select **Start Again**.
 
 ### The mouse on a Mac
 

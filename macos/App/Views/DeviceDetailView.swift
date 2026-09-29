@@ -107,12 +107,13 @@ struct PairingView: View {
             case .incoming:
                 Text("\(device.name) wants to pair").font(.title2)
                 KeyView(key: device.pairKey)
-                Text("Accept only when \(device.name) shows the same key.")
+                Text("Accept only when \(device.name) shows the same key. Compare all 16 characters.")
                     .foregroundStyle(.secondary)
+                // Accept is not the default button, so that Return cannot
+                // accept a request that came while the user typed.
                 HStack {
                     Button("Reject", role: .cancel) { model.core.cancelPair(device.id) }
                     Button("Accept") { model.core.acceptPair(device.id) }
-                        .keyboardShortcut(.defaultAction)
                 }
             case .requested:
                 Text("Confirm on \(device.name)").font(.title2)
@@ -167,16 +168,27 @@ struct PairRequestSheet: View {
     }
 }
 
+/// The key that both sides show while they pair, in groups of 4 digits.
 struct KeyView: View {
     let key: String
 
     var body: some View {
-        Text(key.isEmpty ? "--------" : key)
-            .font(.system(size: 34, weight: .semibold, design: .monospaced))
-            .kerning(4)
+        Text(key.isEmpty ? "---- ---- ---- ----" : Self.grouped(key))
+            .font(.system(size: 26, weight: .semibold, design: .monospaced))
+            .kerning(2)
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
             .textSelection(.enabled)
             .padding(.horizontal, 20)
             .padding(.vertical, 10)
             .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    /// The key in groups of 4 digits, for example "5EE6 825F 974E D59A".
+    nonisolated static func grouped(_ key: String) -> String {
+        stride(from: 0, to: key.count, by: 4).map { start in
+            String(key.dropFirst(start).prefix(4))
+        }
+        .joined(separator: " ")
     }
 }

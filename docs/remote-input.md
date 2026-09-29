@@ -92,7 +92,7 @@ The trackpad, the mouse, and the keyboard of the Mac can control the pointer and
 2. In the **Touchpad and Keyboard** card, select **Open Touchpad…**.
    The menu bar item also has **Touchpad and Keyboard…**.
 3. Confirm with Touch ID or the password of the Mac.
-   The unlock stays valid for 5 minutes while Flux runs.
+   The unlock stays valid for 5 minutes, until the Mac sleeps or locks.
 
 The card shows **Off** and the steps above when `remote_input` is off on the computer.
 

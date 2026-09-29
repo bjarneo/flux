@@ -144,16 +144,7 @@ struct ReplyControls: View {
         voiceError = nil
         lockError = nil
         let hints = unique([agent.agent, agent.project, agent.workspace].filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty })
-        let pane = agent.pane
-        let language = plugin.model.dictationLanguage
-        let model = model
-        Task { @MainActor in
-            if let problem = await Dictation.authorize() {
-                voiceError = problem
-                return
-            }
-            model.dictation.start(language: language, hints: hints) { spoken in model.insert(spoken, pane: pane) }
-        }
+        model.dictate(pane: agent.pane, language: plugin.model.dictationLanguage, hints: hints) { voiceError = $0 }
     }
 
     private func unique(_ list: [String]) -> [String] {

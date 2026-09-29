@@ -106,9 +106,16 @@ struct DeviceRow: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Circle()
-                .fill(device.online ? Color.green : Color.secondary.opacity(0.4))
-                .frame(width: 8, height: 8)
+            // A request from the computer waits here, so that it does not take the window.
+            if device.pairState == .incoming {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .foregroundStyle(.orange)
+                    .help("\(device.name) wants to pair")
+            } else {
+                Circle()
+                    .fill(device.online ? Color.green : Color.secondary.opacity(0.4))
+                    .frame(width: 8, height: 8)
+            }
         }
     }
 }

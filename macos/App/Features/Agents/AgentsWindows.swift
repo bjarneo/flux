@@ -21,6 +21,8 @@ final class AgentsWindowModel {
     /// output then waits with its refresh.
     var visible = true
     let dictation = Dictation()
+    /// Waits for the permissions of a new dictation. `close` cancels it.
+    @ObservationIgnored private var starting: Task<Void, Never>?
 
     init(deviceId: String, app: AppModel, plugin: HerdrPlugin, selection: String?) {
         self.deviceId = deviceId
@@ -41,7 +43,25 @@ final class AgentsWindowModel {
         cursors[pane] = NSRange(location: edit.cursor, length: 0)
     }
 
+    /// Starts a dictation into the draft of `pane` after macOS allowed the
+    /// microphone and the speech recognition. `onProblem` gets the message
+    /// when a permission is missing.
+    func dictate(pane: String, language: String, hints: [String], onProblem: @escaping @MainActor (String) -> Void) {
+        starting?.cancel()
+        starting = Task { @MainActor [weak self] in
+            let problem = await Dictation.authorize()
+            // The window closed while macOS asked for the permissions.
+            guard !Task.isCancelled, let self else { return }
+            if let problem {
+                onProblem(problem)
+                return
+            }
+            self.dictation.start(language: language, hints: hints) { [weak self] spoken in self?.insert(spoken, pane: pane) }
+        }
+    }
+
     func close() {
+        starting?.cancel()
         dictation.cancel()
         if let selection { plugin.closeOutput(deviceId, pane: selection) }
     }
