@@ -37,7 +37,13 @@ let package = Package(
         ),
         .testTarget(
             name: "FluxKitTests",
-            dependencies: ["FluxKit"],
+            // The network tests connect to the payload listener as a computer.
+            dependencies: [
+                "FluxKit",
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOPosix", package: "swift-nio"),
+                .product(name: "NIOSSL", package: "swift-nio-ssl"),
+            ],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
     ]

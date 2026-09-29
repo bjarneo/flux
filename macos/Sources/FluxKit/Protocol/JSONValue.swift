@@ -28,8 +28,13 @@ public enum JSONValue: Sendable, Equatable, Hashable {
             } else if CFNumberIsFloatType(n) {
                 let d = n.doubleValue
                 self = .double(d)
+            } else if let i = Self.exactInt64(n) {
+                self = .int(i)
             } else {
-                self = .int(n.int64Value)
+                // An integer outside the Int64 range, for example
+                // 99999999999999999999. int64Value would cut it, so it
+                // stays a Double, which int64 refuses.
+                self = .double(n.doubleValue)
             }
         case let s as String:
             self = .string(s)
@@ -94,13 +99,30 @@ public enum JSONValue: Sendable, Equatable, Hashable {
         }
     }
 
+    /// The value as an Int64, with the fraction cut off. It returns nil for
+    /// a value outside the Int64 range, so that a peer cannot stop the app
+    /// with a large number.
     public var int64: Int64? {
         switch self {
         case .int(let i): return i
-        case .double(let d): return d.isFinite ? Int64(d) : nil
-        case .string(let s): return Int64(s) ?? Double(s).flatMap { $0.isFinite ? Int64($0) : nil }
+        case .double(let d): return Self.checkedInt64(d)
+        case .string(let s): return Int64(s) ?? Double(s).flatMap(Self.checkedInt64)
         default: return nil
         }
+    }
+
+    /// Converts a Double to an Int64 without a trap: nil for NaN, an
+    /// infinity, or a value outside the Int64 range.
+    static func checkedInt64(_ d: Double) -> Int64? {
+        guard d.isFinite else { return nil }
+        return Int64(exactly: d.rounded(.towardZero))
+    }
+
+    /// The integer of an NSNumber, or nil when the Int64 cannot hold it.
+    /// JSONSerialization gives an NSDecimalNumber for a very large integer.
+    private static func exactInt64(_ n: NSNumber) -> Int64? {
+        let i = n.int64Value
+        return NSNumber(value: i) == n ? i : nil
     }
 
     public var int: Int? { int64.flatMap { Int(exactly: $0) } }

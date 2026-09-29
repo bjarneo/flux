@@ -1,5 +1,6 @@
 import FluxKit
 import SwiftUI
+import UIKit
 
 /// The paired and available Omarchy computers.
 struct ComputersView: View {
@@ -16,6 +17,17 @@ struct ComputersView: View {
                 } actions: {
                     Button("Turn on") { model.core.enabled = true }
                         .buttonStyle(.borderedProminent)
+                }
+            } else if model.state.localNetworkDenied && !model.state.devices.contains(where: \.online) {
+                ContentUnavailableView {
+                    Label("Local Network is off", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text("Flux needs Local Network access to find and reach computers. Turn on Local Network for Flux in Settings.")
+                } actions: {
+                    Button("Open Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
             } else if model.state.devices.isEmpty {
                 ContentUnavailableView {

@@ -40,6 +40,22 @@ final class PlatformIdentityTests: XCTestCase {
         }
     }
 
+    /// A UDP identity names the port, and a LAN host can fake its source
+    /// address. This device dials only the ports of fluxd.
+    func testUDPDialsOnlyFluxPorts() {
+        let config = LanConfig()
+        XCTAssertTrue(LanBackend.dialAllowed(ip: "192.168.1.20", port: 1716, config: config))
+        XCTAssertTrue(LanBackend.dialAllowed(ip: "192.168.1.20", port: 1764, config: config))
+        for port in [0, 22, 443, 1715, 1765, 65535, 70000, -1, Int.max] {
+            XCTAssertFalse(LanBackend.dialAllowed(ip: "192.168.1.20", port: port, config: config), "\(port)")
+        }
+        var loopback = LanConfig()
+        loopback.loopbackOnly = true
+        XCTAssertTrue(LanBackend.dialAllowed(ip: "127.0.0.1", port: 41716, config: loopback), "a test fluxd uses any port")
+        XCTAssertFalse(LanBackend.dialAllowed(ip: "192.168.1.20", port: 1716, config: loopback))
+        XCTAssertFalse(LanBackend.dialAllowed(ip: "127.0.0.1", port: 70000, config: loopback))
+    }
+
     #if os(iOS)
     private func makeCore() throws -> FluxCore {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)

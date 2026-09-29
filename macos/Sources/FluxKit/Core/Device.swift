@@ -17,14 +17,22 @@ public enum PairState: String, Sendable {
 public final class Device: @unchecked Sendable {
     unowned let core: FluxCore
     public internal(set) var identity: Identity
-    public internal(set) var link: Link?
+    public internal(set) var link: Link? {
+        didSet { link?.setPaired(paired) }
+    }
     public internal(set) var certificate: [UInt8]?
     public internal(set) var lastIp = ""
 
-    public internal(set) var pairState = PairState.none
+    public internal(set) var pairState = PairState.none {
+        didSet { link?.setPaired(paired) }
+    }
     var pairTimestamp: Int64 = 0
     public internal(set) var pairKey = ""
     private var pairTimer: DispatchWorkItem?
+
+    /// The certificate that `pairKey` comes from. A pairing pins only this
+    /// certificate, the one behind the key that the user compared.
+    var pairCertificate: [UInt8]?
 
     init(core: FluxCore, identity: Identity) {
         self.core = core
@@ -79,7 +87,7 @@ public final class Device: @unchecked Sendable {
         guard online, !paired else { return }
         pairTimestamp = timestamp
         pairState = .requested
-        pairKey = computeKey()
+        computeKey()
         send(Packet(PacketType.pair, ["pair": true, "timestamp": pairTimestamp]))
         armTimer(outgoingPairTimeout)
     }
@@ -87,8 +95,15 @@ public final class Device: @unchecked Sendable {
     /// The user accepted an incoming request.
     func acceptPair() {
         guard pairState == .incoming else { return }
-        send(Packet(PacketType.pair, ["pair": true]))
+        // pairingDone refuses a changed certificate and answers pair false.
+        if keyCertificateHolds { send(Packet(PacketType.pair, ["pair": true])) }
         pairingDone()
+    }
+
+    /// True when the link still shows the certificate behind the key.
+    private var keyCertificateHolds: Bool {
+        guard let cert = pairCertificate else { return false }
+        return certificate == cert && link?.peerCertificate == cert
     }
 
     /// The user canceled a request or rejected an incoming request.
@@ -131,34 +146,57 @@ public final class Device: @unchecked Sendable {
             break
         case .paired:
             // The peer lost the pairing, for example after a reinstall.
-            // Forget the old trust and show the request again.
+            // Forget the old trust, end the sessions of the pairing, and
+            // show the request again.
             core.trust.remove(id)
             pairState = .none
+            core.didUnpair(self)
             incoming(p)
         case .none:
             incoming(p)
         }
     }
 
+    /// Reports whether a pairing timestamp is within the allowed clock
+    /// difference. `now` is small, so the bounds cannot overflow, and any
+    /// timestamp from a peer is safe.
+    static func timestampFresh(_ ts: Int64, now: Int64) -> Bool {
+        ts >= now - maxTimestampDifference && ts <= now + maxTimestampDifference
+    }
+
     private func incoming(_ p: Packet) {
         let now = Int64(Date().timeIntervalSince1970)
-        guard let ts = p.long("timestamp"), abs(now - ts) <= maxTimestampDifference else {
+        guard let ts = p.long("timestamp"), Self.timestampFresh(ts, now: now) else {
             send(Packet(PacketType.pair, ["pair": false]))
             core.toast(p.long("timestamp") == nil ? "Pairing refused: \(name) sent no timestamp" : "Pairing refused: the clock of \(name) is wrong")
             return
         }
+        // 1 request at a time, so that other devices cannot bury it.
+        guard !core.hasIncomingPair(except: id) else {
+            FluxLog.core.info("refused a pairing request from \(self.name, privacy: .public): another request is open")
+            send(Packet(PacketType.pair, ["pair": false]))
+            return
+        }
         pairTimestamp = ts
-        pairKey = computeKey()
+        computeKey()
         pairState = .incoming
         armTimer(incomingPairTimeout)
         core.notifyPairRequest(self)
     }
 
+    /// Pins the certificate behind the key. A link that changed its
+    /// certificate after the key was shown ends the pairing instead.
     private func pairingDone() {
         pairTimer?.cancel()
-        guard let cert = certificate else { return }
+        guard keyCertificateHolds, let cert = pairCertificate else {
+            FluxLog.core.error("pairing with \(self.name, privacy: .public) refused: the certificate changed after the key was shown")
+            send(Packet(PacketType.pair, ["pair": false]))
+            core.toast("Pairing with \(name) failed. Try again")
+            resetPair()
+            return
+        }
         pairState = .paired
-        core.trust.put(TrustedDevice(
+        let saved = core.trust.put(TrustedDevice(
             id: id,
             name: identity.deviceName,
             type: identity.deviceType,
@@ -166,7 +204,7 @@ public final class Device: @unchecked Sendable {
             lastIp: link?.address ?? "",
             isFlux: identity.isFlux
         ))
-        core.toast("Paired with \(name)")
+        core.toast(saved ? "Paired with \(name)" : "Paired with \(name), but Flux cannot save the pairing. Pair again after Flux restarts")
         core.onPaired(self)
     }
 
@@ -174,6 +212,7 @@ public final class Device: @unchecked Sendable {
         pairTimer?.cancel()
         pairState = .none
         pairKey = ""
+        pairCertificate = nil
     }
 
     private func armTimer(_ seconds: TimeInterval) {
@@ -192,9 +231,14 @@ public final class Device: @unchecked Sendable {
         DispatchQueue.global().asyncAfter(deadline: .now() + seconds, execute: item)
     }
 
-    private func computeKey() -> String {
-        guard let peer = certificate else { return "" }
-        return verificationKey(ownCertificate: core.local.certificateDER, peerCertificate: peer, timestamp: pairTimestamp)
+    /// Sets the key for the current certificate and remembers that certificate.
+    private func computeKey() {
+        pairCertificate = certificate
+        guard let peer = certificate else {
+            pairKey = ""
+            return
+        }
+        pairKey = verificationKey(ownCertificate: core.local.certificateDER, peerCertificate: peer, timestamp: pairTimestamp)
     }
 }
 

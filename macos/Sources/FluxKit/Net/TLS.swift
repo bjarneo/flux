@@ -1,3 +1,4 @@
+import NIOConcurrencyHelpers
 import NIOCore
 import NIOSSL
 import NIOTLS
@@ -49,16 +50,36 @@ public final class FluxTLS: Sendable {
     }
 }
 
+/// The longest line that a link reads. The core raises it after pairing,
+/// from another thread than the one of the decoder.
+final class LineLimit: Sendable {
+    private let box: NIOLockedValueBox<Int>
+
+    init(_ value: Int) { box = NIOLockedValueBox(value) }
+
+    var value: Int { box.withLockedValue { $0 } }
+
+    func set(_ value: Int) { box.withLockedValue { $0 = value } }
+}
+
 /// Splits the byte stream into lines without the newline.
 final class LineDecoder: ByteToMessageDecoder {
     typealias InboundOut = ByteBuffer
-    let max: Int
+    let limit: LineLimit
+    /// The readable bytes that hold no newline. The next read searches only
+    /// the bytes after them, so a long line costs no repeated scans.
+    private var scanned = 0
 
-    init(max: Int) { self.max = max }
+    init(max: Int) { limit = LineLimit(max) }
+
+    init(limit: LineLimit) { self.limit = limit }
 
     func decode(context: ChannelHandlerContext, buffer: inout ByteBuffer) throws -> DecodingState {
+        let max = limit.value
         let view = buffer.readableBytesView
-        if let newline = view.firstIndex(of: 0x0A) {
+        let from = view.index(view.startIndex, offsetBy: min(scanned, view.count))
+        if let newline = view[from...].firstIndex(of: 0x0A) {
+            scanned = 0
             let length = view.distance(from: view.startIndex, to: newline)
             if length > max { throw FluxError("packet too large") }
             let line = buffer.readSlice(length: length)!
@@ -66,6 +87,7 @@ final class LineDecoder: ByteToMessageDecoder {
             context.fireChannelRead(wrapInboundOut(line))
             return .continue
         }
+        scanned = view.count
         if buffer.readableBytes > max { throw FluxError("packet too large") }
         return .needMoreData
     }
@@ -73,31 +95,6 @@ final class LineDecoder: ByteToMessageDecoder {
     func decodeLast(context: ChannelHandlerContext, buffer: inout ByteBuffer, seenEOF: Bool) throws -> DecodingState {
         while try decode(context: context, buffer: &buffer) == .continue {}
         return .needMoreData
-    }
-}
-
-/// Fulfills a promise when the TLS handshake completes.
-final class HandshakeWaiter: ChannelInboundHandler, RemovableChannelHandler {
-    typealias InboundIn = NIOAny
-    let promise: EventLoopPromise<Void>
-
-    init(promise: EventLoopPromise<Void>) { self.promise = promise }
-
-    func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
-        if let tlsEvent = event as? TLSUserEvent, case .handshakeCompleted = tlsEvent {
-            promise.succeed(())
-        }
-        context.fireUserInboundEventTriggered(event)
-    }
-
-    func channelInactive(context: ChannelHandlerContext) {
-        promise.fail(FluxError("connection closed during the TLS handshake"))
-        context.fireChannelInactive()
-    }
-
-    func errorCaught(context: ChannelHandlerContext, error: Error) {
-        promise.fail(error)
-        context.fireErrorCaught(error)
     }
 }
 
