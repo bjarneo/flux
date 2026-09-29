@@ -6,6 +6,7 @@ package plugin
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -95,12 +96,26 @@ func walk(root string, skip func(rel string) bool, add func(rel, path string)) e
 	})
 }
 
-// Sync makes dest hold the files and nothing else. It writes only the
-// files that differ, and it removes the files of an earlier version. The
+// ErrLinked means that the plugin folder is or holds a symlink, for
+// example a Flux folder that links to a checkout. Sync then changes
+// nothing, so it never writes through the link into the checkout.
+var ErrLinked = errors.New("is a symlink, so Flux does not change the plugin")
+
+// manifestName is the file in the plugin folder that lists the files that
+// the last Sync wrote. `omarchy plugin validate` accepts it.
+const manifestName = ".flux-files"
+
+// Sync makes dest hold the files. It writes only the files that differ,
+// and it removes the files that an earlier Sync wrote and that the new
+// version does not have. It keeps the files that the user added. The
 // folder stays in place, so omarchy-shell reloads the plugin and keeps it
-// enabled. Sync reports whether it changed a file.
+// enabled. Sync reports whether it changed a file. It changes nothing when
+// dest is or holds a symlink.
 func Sync(files map[string]string, dest string) (bool, error) {
 	if err := os.MkdirAll(dest, 0o755); err != nil {
+		return false, err
+	}
+	if err := checkLinks(dest); err != nil {
 		return false, err
 	}
 	rels := make([]string, 0, len(files))
@@ -124,54 +139,89 @@ func Sync(files map[string]string, dest string) (bool, error) {
 		changed = true
 	}
 
-	var stale, dirs []string
-	err := filepath.WalkDir(dest, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
+	var dirs []string
+	for _, rel := range readManifest(dest) {
+		if _, ok := files[rel]; ok {
+			continue
 		}
-		rel, _ := filepath.Rel(dest, path)
-		switch {
-		case rel == ".":
-		case d.IsDir():
-			dirs = append(dirs, path)
-		default:
-			if _, ok := files[rel]; !ok {
-				stale = append(stale, path)
-			}
+		path := filepath.Join(dest, rel)
+		if st, err := os.Lstat(path); err != nil || !st.Mode().IsRegular() {
+			continue
 		}
-		return nil
-	})
-	if err != nil {
-		return changed, err
-	}
-	for _, path := range stale {
 		if err := os.Remove(path); err != nil {
 			return changed, err
 		}
 		changed = true
+		for dir := filepath.Dir(path); dir != dest && strings.HasPrefix(dir, dest); dir = filepath.Dir(dir) {
+			dirs = append(dirs, dir)
+		}
 	}
 	// Remove the folders that are empty now, the deepest first.
 	sort.Slice(dirs, func(i, j int) bool { return len(dirs[i]) > len(dirs[j]) })
 	for _, dir := range dirs {
 		_ = os.Remove(dir)
 	}
+	manifest := []byte(strings.Join(rels, "\n") + "\n")
+	if old, err := os.ReadFile(filepath.Join(dest, manifestName)); err != nil || !bytes.Equal(old, manifest) {
+		if err := writeFile(filepath.Join(dest, manifestName), manifest); err != nil {
+			return changed, err
+		}
+	}
 	return changed, nil
 }
 
+// checkLinks returns ErrLinked when dest or an entry in it is a symlink.
+func checkLinks(dest string) error {
+	return filepath.WalkDir(dest, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.Type()&fs.ModeSymlink != 0 {
+			return fmt.Errorf("%s %w", path, ErrLinked)
+		}
+		return nil
+	})
+}
+
+// readManifest returns the files that the last Sync wrote into dest.
+func readManifest(dest string) []string {
+	b, err := os.ReadFile(filepath.Join(dest, manifestName))
+	if err != nil {
+		return nil
+	}
+	var rels []string
+	for _, rel := range strings.Split(string(b), "\n") {
+		if rel != "" && rel != manifestName && filepath.IsLocal(rel) {
+			rels = append(rels, filepath.Clean(rel))
+		}
+	}
+	return rels
+}
+
 // writeFile replaces path in 1 step, so that omarchy-shell never reads a
-// part of a file.
+// part of a file. The temporary file has a random name, so that fluxd and
+// `flux-cli setup` can write at the same time.
 func writeFile(path string, data []byte) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	tmp := filepath.Join(dir, "."+filepath.Base(path)+".tmp")
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*.tmp")
+	if err != nil {
 		return err
 	}
-	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
+	name := tmp.Name()
+	defer os.Remove(name)
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
 		return err
 	}
-	return nil
+	if err := tmp.Chmod(0o644); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(name, path)
 }

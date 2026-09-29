@@ -74,9 +74,12 @@ omarchy plugin enable flux --section right
 
 `fluxd` keeps an added plugin at the version of its own install.
 At each start, it compares `~/.config/omarchy/plugins/flux` with `PREFIX/share/flux/omarchy-plugin` beside its binary.
-It writes only the changed files, removes the files of the earlier version, and runs `omarchy-shell shell rescanPlugins`.
+It writes only the changed files, removes the files that its earlier copy wrote and that the new version does not have, and runs `omarchy-shell shell rescanPlugins`.
+The list of the copied files is in `.flux-files` in the plugin folder.
+It keeps the files that you added.
 It does not add a plugin that you removed.
-It does not change a symlink to a checkout.
+It does not change a symlink to a checkout, or a plugin folder that holds a symlink, such as a `Flux` link to a checkout.
+The journal of `fluxd` then says that it did not update the plugin.
 
 ## Offscreen test
 
