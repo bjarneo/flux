@@ -105,3 +105,38 @@ jobs:
         with:
           name: android-reports
           path: android/app/build/reports/
+
+  # The Mac app and FluxKit. The iOS app uses iOS 26 APIs behind
+  # availability checks, so both jobs need the Xcode 26 of macos-26.
+  macos:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
+          persist-credentials: false
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Test FluxKit and build the Mac app
+        run: make test-macos macos
+
+  ios:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
+          persist-credentials: false
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      # test-ios runs the app tests and the FluxKit tests in the first
+      # available iPhone simulator.
+      - name: Build the iOS app and run the tests in the simulator
+        run: make ios test-ios
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-results
+          path: ios/build/Logs/Test/
+          retention-days: 14
