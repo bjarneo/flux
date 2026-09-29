@@ -416,7 +416,7 @@ func (d *Daemon) claimDesktop(dev *Device, l streamLink) *desktopSession {
 // drops, the recorder stops, or the user stops it on this computer.
 func (d *Daemon) runDesktop(s *desktopSession, b desktopStart) {
 	dev, l, ctx := s.dev, s.link, s.ctx
-	defer close(s.done)
+	defer endTurn(s.done, s.prev)
 	defer d.dropDesktop(s)
 	defer s.cancel()
 	// A stop, the switch, or a later start ends the setup without an error.

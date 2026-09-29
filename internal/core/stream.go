@@ -84,10 +84,11 @@ func (d *Daemon) watchSession(ctx context.Context, cancel context.CancelFunc, de
 }
 
 // sessionTurn makes the sessions of 1 kind run 1 after the other. A new
-// session waits until the goroutine of the session before it ends, so 2
-// recorders, players, or ffmpeg processes never run at the same time. A
-// flood of starts then also starts no process for a session that a later
-// start ended.
+// session waits until the goroutine of the session before it ends. That
+// goroutine first waits for its own session before, so 2 recorders,
+// players, or ffmpeg processes never run at the same time, also when 3
+// starts overlap. A flood of starts then also starts no process for a
+// session that a later start ended.
 type sessionTurn struct {
 	// last closes when the goroutine of the last session ends.
 	last chan struct{}
@@ -112,6 +113,16 @@ func waitTurn(ctx context.Context, prev <-chan struct{}) bool {
 		}
 	}
 	return ctx.Err() == nil
+}
+
+// endTurn closes done when the goroutine of a session ends. It first waits
+// until the goroutine of the session before ends, also when this session
+// ended in waitTurn. A later session then waits for all older goroutines.
+func endTurn(done chan struct{}, prev <-chan struct{}) {
+	if prev != nil {
+		<-prev
+	}
+	close(done)
 }
 
 // maxPeerText is the number of characters of a text from a device that

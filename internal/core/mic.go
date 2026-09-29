@@ -164,7 +164,7 @@ func (d *Daemon) failMic(s *micSession, dev *Device, l streamLink, err error) {
 // or the user stops it on this computer.
 func (d *Daemon) runMic(s *micSession, b micStart) {
 	dev, l, ctx := s.dev, s.link, s.ctx
-	defer close(s.done)
+	defer endTurn(s.done, s.prev)
 	defer d.dropMic(s)
 	defer s.cancel()
 	fail := func(err error) {

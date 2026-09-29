@@ -258,7 +258,7 @@ func (d *Daemon) failWebcam(s *webcamSession, dev *Device, l streamLink, err err
 // or the user stops it on this computer.
 func (d *Daemon) runWebcam(s *webcamSession, b webcamStart) {
 	dev, l, ctx := s.dev, s.link, s.ctx
-	defer close(s.done)
+	defer endTurn(s.done, s.prev)
 	defer d.dropWebcam(s)
 	defer s.cancel()
 	fail := func(err error) {

@@ -309,6 +309,33 @@ func TestDesktopStartWaitsForTheOldRecorder(t *testing.T) {
 	}
 }
 
+// 3 starts overlap. The second start ends at once, and the third start
+// still waits until the recorder of the first session stopped.
+func TestDesktopOverlappingStartsWaitForTheOldRecorder(t *testing.T) {
+	mark := fakeRecorder(t)
+	d, dev := sessionDaemon(t, &config.Config{RemoteDesktop: true})
+	l := newFakeStreamLink()
+	close(l.release)
+	d.handleDesktop(dev, l, desktopPacket(1740))
+	waitFor(t, "the first recorder", func() bool { return recorded(mark) })
+	d.handleDesktop(dev, l, desktopPacket(1741))
+	d.handleDesktop(dev, l, desktopPacket(1742))
+	waitFor(t, "the third recorder", func() bool {
+		_, records := recorderRuns(t, mark)
+		return records == 2
+	})
+	runs := recorderLog(t, mark)
+	end := slices.Index(runs, "end")
+	first := slices.IndexFunc(runs, func(s string) bool { return s != "--list-monitors" })
+	if end < 0 || slices.Contains(runs[first+1:end], "--list-monitors") {
+		t.Fatalf("the third start ran before the first recorder stopped: %q", runs)
+	}
+	if err := d.StopDesktop(); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the session ends", func() bool { return d.currentDesktop() == nil })
+}
+
 // A flood of starts from a phone runs 1 recorder, and the starts that a
 // later start ended run no process.
 func TestDesktopStartFloodRunsOneRecorder(t *testing.T) {

@@ -177,7 +177,7 @@ func (d *Daemon) failScreen(s *screenSession, dev *Device, l streamLink, err err
 // the user closes the window, or the user stops it on this computer.
 func (d *Daemon) runScreen(s *screenSession, b screenStart) {
 	dev, l, ctx := s.dev, s.link, s.ctx
-	defer close(s.done)
+	defer endTurn(s.done, s.prev)
 	defer d.dropScreen(s)
 	defer s.cancel()
 	fail := func(err error) {
