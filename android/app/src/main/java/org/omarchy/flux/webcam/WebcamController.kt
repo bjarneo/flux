@@ -37,6 +37,11 @@ class WebcamController(context: Context) : WebcamSession.Listener {
         WebcamSession.sendConfig(FluxCore)
     }
 
+    // Each camera open that the GL thread runs later has a number. A pause
+    // or a release takes a new number, so a late open does nothing.
+    private val cameraLock = Any()
+    private var cameraWanted = 0
+
     private val _cameraError = MutableStateFlow<String?>(null)
     /** A problem with the camera itself, or null. */
     val cameraError: StateFlow<String?> = _cameraError
@@ -110,9 +115,13 @@ class WebcamController(context: Context) : WebcamSession.Listener {
         camera.setControls(controlsFor(WebcamSettings.config.value))
         renderer.front = c.facing == "front"
         renderer.sensorOrientation = c.sensorOrientation
+        val want = synchronized(cameraLock) { ++cameraWanted }
         renderer.start(c.size) { texture ->
             val surface = cameraSurface ?: Surface(texture).also { cameraSurface = it }
-            camera.open(c, surface) { message -> _cameraError.value = message }
+            synchronized(cameraLock) {
+                // The app went to the background, or the screen closed, before GL was ready.
+                if (want == cameraWanted) camera.open(c, surface) { message -> _cameraError.value = message }
+            }
         }
     }
 
@@ -128,7 +137,10 @@ class WebcamController(context: Context) : WebcamSession.Listener {
     /** Stops the camera and the orientation sensor, for example when the app goes to the background. */
     fun pause() {
         orientation.disable()
-        camera.close()
+        synchronized(cameraLock) {
+            cameraWanted++
+            camera.close()
+        }
     }
 
     fun attachPreview(texture: SurfaceTexture, width: Int, height: Int) = renderer.setPreview(texture, width, height)
@@ -172,7 +184,10 @@ class WebcamController(context: Context) : WebcamSession.Listener {
         // Free an encoder that the stream did not free.
         onEnded()
         orientation.disable()
-        camera.release()
+        synchronized(cameraLock) {
+            cameraWanted++
+            camera.release()
+        }
         renderer.release()
         cameraSurface?.release()
         cameraSurface = null
