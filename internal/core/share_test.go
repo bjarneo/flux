@@ -144,6 +144,24 @@ func TestHandleShareURL(t *testing.T) {
 	}
 }
 
+// TestShareTextURL checks that only a web URL goes to a device as a URL.
+func TestShareTextURL(t *testing.T) {
+	d := testDaemon()
+	dev := &Device{ID: "p1", Name: "Pixel 8", Paired: true}
+	var e *Error
+	for _, v := range []string{"file:///etc/passwd", "/etc/passwd", "ssh://host", "intent://x", "https://"} {
+		if err := d.ShareText(dev, "url", v); !errors.As(err, &e) || e.Code != "bad_params" {
+			t.Errorf("%q: %v", v, err)
+		}
+	}
+	// A web URL and any text pass the check and need the link.
+	for key, v := range map[string]string{"url": "https://omarchy.org", "text": "file:///etc/passwd"} {
+		if err := d.ShareText(dev, key, v); !errors.As(err, &e) || e.Code != "offline" {
+			t.Errorf("%s %q: %v", key, v, err)
+		}
+	}
+}
+
 // TestSharedTextLimit checks that a shared text above the limit changes
 // neither the clipboard nor the history.
 func TestSharedTextLimit(t *testing.T) {

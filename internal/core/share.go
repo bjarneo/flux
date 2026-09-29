@@ -764,11 +764,20 @@ func (d *Daemon) sendFile(l *lan.Link, t *Transfer, path string, info os.FileInf
 	return l.SendWithPayload(ctx, p, f, info.Size(), d.progress(t))
 }
 
-// ShareText sends text or a URL to a device. A text above
-// desktop.MaxClipboardText returns an error, because the device drops it.
+// ShareText sends text or a URL to a device. The key is "text" or "url". A
+// text above desktop.MaxClipboardText returns an error, because the device
+// drops it. A URL must be an http or https URL with a host, because the
+// device opens only such a URL.
 func (d *Daemon) ShareText(dev *Device, key, value string) error {
 	if err := textLimit(value); err != nil {
 		return err
+	}
+	if key == "url" {
+		u, ok := webURL(value)
+		if !ok {
+			return apiErr("bad_params", "Give an http or https URL with a host")
+		}
+		value = u
 	}
 	return d.send(dev, proto.New(proto.TypeShare, map[string]any{key: value}))
 }

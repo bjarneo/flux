@@ -50,9 +50,11 @@ A shared link opens in the browser of the desktop only when it is an `http` or `
 Every other shared value is text, for example a `file:` URL, a path, or a link with another scheme.
 Shared text goes on the desktop clipboard and in the clipboard history.
 A notification shows the first 300 characters.
+`flux-cli url` sends only an `http` or `https` URL with a host and refuses other values.
 
 Flux syncs clipboard text and shared text of up to 1 MiB in both directions.
-`fluxd` ignores a larger text from a device, and `flux-cli clip` refuses a larger text.
+`fluxd` ignores a larger text from a device and shows a message in the desktop window.
+`flux-cli clip` refuses a larger text.
 The clipboard history keeps at most 16 MiB of text and drops the oldest entries first.
 When `fluxd` restarts, the desktop clipboard loses text or an image that came from a device.
 

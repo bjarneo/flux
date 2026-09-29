@@ -311,6 +311,7 @@ func (d *Daemon) handleClipboard(dev *Device, p *proto.Packet) {
 	}
 	if len(body.Content) > desktop.MaxClipboardText {
 		d.logf("%s: ignored a clipboard text of %d bytes", dev.Name, len(body.Content))
+		d.toast("%s copied a text that is larger than %d MiB. Flux did not sync it", dev.Name, desktop.MaxClipboardText>>20)
 		return
 	}
 	d.mu.Lock()
