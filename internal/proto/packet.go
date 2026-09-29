@@ -17,6 +17,10 @@ const ProtocolVersion = 8
 // the link. SMS threads with many messages are the largest packets.
 const MaxPacketSize = 16 << 20
 
+// maxTypeSize is the longest packet type that Flux reads. The longest type
+// of the protocol has less than 40 characters.
+const maxTypeSize = 128
+
 // Packet is one Flux network packet.
 type Packet struct {
 	ID                  PacketID        `json:"id"`
@@ -86,6 +90,9 @@ func Unmarshal(line []byte) (*Packet, error) {
 	}
 	if p.Type == "" {
 		return nil, fmt.Errorf("packet has no type")
+	}
+	if len(p.Type) > maxTypeSize {
+		return nil, fmt.Errorf("packet type has %d bytes, more than %d", len(p.Type), maxTypeSize)
 	}
 	if len(p.Body) == 0 || string(p.Body) == "null" {
 		p.Body = []byte("{}")
