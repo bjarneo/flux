@@ -89,9 +89,19 @@ object ClipImage {
     /**
      * Sends the image at [uri] to each device in [devices]. [onDone] runs
      * on an IO thread with the number of devices that got the image, or -1
-     * when the image is larger than [MAX_BYTES].
+     * when the image is larger than [MAX_BYTES]. Only a content address of
+     * another app goes out, because a file address opens a path with the
+     * rights of Flux. Of the addresses of Flux, only [lastRemote] goes out,
+     * so that the user can send an image from 1 computer to another. The
+     * automatic sync does not send [lastRemote] back.
      */
     fun send(core: FluxCore, devices: List<Device>, uri: Uri, mime: String, onDone: (Int) -> Unit = {}) {
+        // The clipboard gives the app that reads it a read grant for a content address.
+        if (uri != lastRemote && !Share.acceptShared(uri.scheme, uri.authority, core.app.packageName, granted = true)) {
+            Log.i(TAG, "ignored a clipboard image at ${uri.scheme}:")
+            core.io.execute { onDone(0) }
+            return
+        }
         core.io.execute {
             val read = runCatching { read(core.app, uri) }
             val data = read.getOrElse {
