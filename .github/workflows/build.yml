@@ -107,7 +107,8 @@ jobs:
           path: android/app/build/reports/
 
   macos:
-    runs-on: macos-15
+    # The pinned Swift packages need Swift 6.2, which comes with Xcode 26.
+    runs-on: macos-26
     defaults:
       run:
         working-directory: macos
@@ -118,6 +119,10 @@ jobs:
           persist-credentials: false
       - name: Install XcodeGen
         run: brew install xcodegen
+      - name: Show the toolchain
+        run: |
+          xcodebuild -version
+          swift --version
       - name: Test FluxKit
         run: swift test
       # The generic destination builds a universal app for Apple silicon and Intel.
