@@ -62,7 +62,10 @@ install:
 	@# after the user adds it to a PAM file.
 	install -Dm755 bin/flux-approve $(DESTDIR)$(PREFIX)/lib/flux/flux-approve
 	$(call copy-plugin,$(DESTDIR)$(PREFIX)/share/flux/omarchy-plugin)
-	install -Dm644 dist/fluxd.service $(DESTDIR)$(PREFIX)/lib/systemd/user/fluxd.service
+	@# The service runs the fluxd of this PREFIX.
+	install -dm755 $(DESTDIR)$(PREFIX)/lib/systemd/user
+	sed 's|@BINDIR@|$(PREFIX)/bin|' dist/fluxd.service >$(DESTDIR)$(PREFIX)/lib/systemd/user/fluxd.service
+	chmod 644 $(DESTDIR)$(PREFIX)/lib/systemd/user/fluxd.service
 	install -Dm644 dist/61-flux-v4l2loopback.rules $(DESTDIR)$(PREFIX)/lib/udev/rules.d/61-flux-v4l2loopback.rules
 	@# Earlier versions installed these 2 files for the phone touchpad.
 	rm -f $(DESTDIR)$(PREFIX)/lib/udev/rules.d/60-flux-uinput.rules $(DESTDIR)$(PREFIX)/lib/modules-load.d/flux-uinput.conf
