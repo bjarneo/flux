@@ -80,10 +80,16 @@ final class TouchpadController {
         send(RemoteInput.text(text))
     }
 
-    /// Ends a drag when the screen closes.
-    func close() {
+    /// Lifts the fingers and the left button, for example when iOS covers
+    /// the screen and the touches may never end.
+    func release() {
         cancel()
         left(false)
+    }
+
+    /// Ends a drag when the screen closes.
+    func close() {
+        release()
         keys.mods = .init()
     }
 
@@ -162,6 +168,7 @@ struct TouchpadScreen: View {
 
 private struct TouchpadContent: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
     let deviceId: String
     let input: RemoteInputPlugin
     @State private var controller: TouchpadController?
@@ -195,6 +202,13 @@ private struct TouchpadContent: View {
         .onDisappear {
             controller?.close()
             UIApplication.shared.isIdleTimerDisabled = false
+        }
+        // A finger that holds the left button or drags may never lift.
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { controller?.release() }
+        }
+        .onChange(of: FeatureOverlays.shown(model: model)) { _, shown in
+            if shown { controller?.release() }
         }
     }
 }
@@ -241,7 +255,8 @@ private struct Pad: View {
 }
 
 /// The left button: it stays down while the finger is on it, for a drag
-/// with the other hand.
+/// with the other hand. A UIKit view takes the finger, because iOS ends
+/// its touches also when it takes them, where a SwiftUI drag never ends.
 private struct HoldKey: View {
     let controller: TouchpadController
 
@@ -253,14 +268,50 @@ private struct HoldKey: View {
             .frame(maxWidth: .infinity, minHeight: 52)
             .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(down ? Color.green.opacity(0.15) : Color(.secondarySystemGroupedBackground)))
             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(down ? Color.green : Color(.separator).opacity(0.5)))
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in controller.left(true) }
-                    .onEnded { _ in controller.left(false) }
-            )
+            .overlay(HoldArea { controller.left($0) })
             .accessibilityLabel("Left button")
             .accessibilityHint("Stays down while you hold it")
             .accessibilityAddTraits(.isButton)
+    }
+}
+
+/// Reports whether a finger is on the view: true when the first finger
+/// touches, false when the last one lifts or iOS takes the touches.
+private struct HoldArea: UIViewRepresentable {
+    let onDown: (Bool) -> Void
+
+    func makeUIView(context: Context) -> HoldView {
+        let view = HoldView()
+        view.backgroundColor = .clear
+        view.onDown = onDown
+        return view
+    }
+
+    func updateUIView(_ view: HoldView, context: Context) { view.onDown = onDown }
+
+    final class HoldView: UIView {
+        var onDown: ((Bool) -> Void)?
+        private var fingers = 0
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            isMultipleTouchEnabled = true
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+        override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+            if fingers == 0 { onDown?(true) }
+            fingers += touches.count
+        }
+
+        override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) { lift(touches.count) }
+
+        override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) { lift(touches.count) }
+
+        private func lift(_ count: Int) {
+            fingers = max(0, fingers - count)
+            if fingers == 0 { onDown?(false) }
+        }
     }
 }
