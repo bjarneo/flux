@@ -56,9 +56,22 @@ func main() {
 			}
 		}
 	}
+	// The runtime folder holds the socket, the clipboard images, and the
+	// self-restart marker. Another user must not own it or open it. A
+	// headless fluxd keeps its clipboard images in a folder of its own.
+	if !*headless {
+		if err := ipc.PrivateDir(config.RuntimeDir()); err != nil {
+			logger.Fatalf("fluxd: the runtime folder: %v. Log in with a session that has /run/user/%d, or set XDG_RUNTIME_DIR", err, os.Getuid())
+		}
+	}
 	opts := core.Options{Headless: *headless, UDPPort: *udpPort, FirstTCPPort: *tcpPort, Version: version}
 	opts.ReleaseURL, opts.ReleaseDelay = releaseCheck(*headless)
 	d, err := core.New(ctx, logger, opts)
+	if err != nil {
+		logger.Fatalf("fluxd: %v", err)
+	}
+	// A second fluxd stops here, before it starts the network.
+	ln, err := ipc.Listen(config.SocketPath())
 	if err != nil {
 		logger.Fatalf("fluxd: %v", err)
 	}
@@ -88,8 +101,18 @@ func main() {
 	}()
 
 	errs := make(chan error, 2)
-	go func() { errs <- ipc.Serve(ctx, config.SocketPath(), d) }()
 	go func() { errs <- d.Run() }()
+	go func() {
+		// Requests use the network, so fluxd answers them after Run
+		// started it. Until then, the clients wait in the socket backlog.
+		select {
+		case <-d.Ready():
+			errs <- ipc.Serve(ctx, ln, d)
+		case <-ctx.Done():
+			ln.Close()
+			errs <- nil
+		}
+	}()
 	running := 2
 	var failure error
 	select {

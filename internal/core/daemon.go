@@ -116,6 +116,10 @@ type Daemon struct {
 	dirty  chan struct{}
 	ctx    context.Context
 	logger *log.Logger
+
+	// ready closes when Run has started the network. fluxd serves the
+	// socket only after that, because requests use the network.
+	ready chan struct{}
 }
 
 // Options change how the daemon runs. The zero value is the normal mode.
@@ -210,6 +214,7 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 		dndWake:     make(chan struct{}, 1),
 		releaseWake: make(chan struct{}, 1),
 	}
+	d.ready = make(chan struct{})
 	if exe, err := os.Executable(); err == nil {
 		d.binDir = filepath.Dir(exe)
 	}
@@ -228,6 +233,9 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 }
 
 func (d *Daemon) logf(format string, args ...any) { d.logger.Printf(format, args...) }
+
+// Ready returns a channel that closes when Run has started the network.
+func (d *Daemon) Ready() <-chan struct{} { return d.ready }
 
 // SetPendingVersion records the version of a new fluxd binary on disk.
 func (d *Daemon) SetPendingVersion(v string) {
@@ -317,6 +325,7 @@ func (d *Daemon) Run() error {
 	if err := d.lan.Start(ctx); err != nil {
 		return err
 	}
+	close(d.ready)
 	d.logf("fluxd %s listening on TCP %d as %q", d.selfID, d.lan.TCPPort(), d.Name())
 	go d.releaseLoop(ctx)
 	if d.opts.Headless {
@@ -813,13 +822,17 @@ func (d *Daemon) notify(n desktop.Notification) uint32 {
 }
 
 // send sends a packet to a device and returns an API error when the device
-// is offline.
+// is offline. Only a pair packet goes to a device that is not paired, so a
+// button of an old desktop notification does not reach an unpaired device.
 func (d *Daemon) send(dev *Device, p *proto.Packet) error {
 	d.mu.Lock()
-	l := dev.link
+	l, paired := dev.link, dev.Paired
 	d.mu.Unlock()
 	if l == nil {
 		return offline(dev)
+	}
+	if !paired && p.Type != proto.TypePair {
+		return apiErr("not_paired", "%s is not paired", dev.Name)
 	}
 	return l.Send(p)
 }

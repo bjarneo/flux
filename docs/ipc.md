@@ -3,9 +3,20 @@
 [Documentation index](README.md)
 
 The CLI and desktop hosts use JSON lines over a Unix socket.
-The default socket is `$XDG_RUNTIME_DIR/flux/fluxd.sock`.
-`FLUX_SOCKET` overrides the path.
-The daemon creates the socket with mode `0600`.
+`fluxd`, `flux-cli`, and both desktop hosts find the socket with the same rule:
+
+1. `$FLUX_SOCKET`, when it is set.
+2. Else `$XDG_RUNTIME_DIR/flux/fluxd.sock`.
+3. Else `/run/user/<uid>/flux/fluxd.sock`.
+
+Flux does not use the system temporary folder for the socket.
+The daemon makes the folder of the socket with mode `0700` and the socket with mode `0600`.
+It refuses a folder that is a symbolic link, that another user owns, or that other users can write to.
+When others can read the `flux` runtime folder, the daemon changes its mode to `0700`.
+It does not change the mode of a folder that `FLUX_SOCKET` names.
+`flux-cli` checks that the folder and the socket belong to the user, and with `SO_PEERCRED` that `fluxd` runs as the user.
+
+A second `fluxd` finds the socket of the first `fluxd`, and it stops before it starts the network.
 
 ## Requests and responses
 
@@ -30,6 +41,16 @@ A response uses the same ID and contains either `result` or `error`:
 
 Responses can arrive out of order.
 Match responses by ID.
+A method that `fluxd` does not know returns the `unknown_method` error, also when no device is connected.
+
+A client can close its write side after its requests, for example with `socat` or `nc -N`.
+`fluxd` then sends the remaining responses and closes the connection:
+
+```sh
+printf '{"id":1,"method":"state"}\n' | socat - UNIX-CONNECT:"$XDG_RUNTIME_DIR/flux/fluxd.sock"
+```
+
+When a client closes the connection completely, `fluxd` stops the calls of that connection that still wait.
 The Go types live in `internal/ipc/ipc.go`.
 Method names and parameter handling live in `internal/core/api.go`.
 
@@ -117,6 +138,9 @@ To turn the release check off or on over IPC, send:
 
 Read the handler before you add a client call.
 The approval helper applies additional peer and signature checks beyond this general socket protocol.
+An `approve.request` or `approve.enroll` belongs to the connection that started it.
+When that connection closes, `fluxd` ends the request and closes it on the phone.
+So a stopped `sudo` does not keep the phone busy until the timeout.
 
 ## Clipboard
 

@@ -58,6 +58,11 @@ command = "omarchy-system-lock"
 | `commands` | Desktop commands available to the phone. A new configuration has no commands. |
 
 The destination paths expand `~`.
+
+A command without `id` gets an ID from its name and its command.
+The ID stays the same after each reload and restart, so `flux-cli run ID` keeps working.
+A change of the name or the command gives a new ID.
+To keep an ID, write it in the `id` field.
 Use the [CLI](cli.md#desktop-commands) or the Phone commands page to add commands without editing TOML.
 
 ## Data paths
@@ -75,7 +80,7 @@ Use the [CLI](cli.md#desktop-commands) or the Phone commands page to add command
 | `~/Pictures/flux/signatures/` | Signatures from the camera by default |
 | `~/.cache/flux/release.json` | The last answer of the [release check](#release-check) |
 | `~/.cache/flux/update/` | The package that `flux-cli update` downloads, until pacman installs it |
-| `$XDG_RUNTIME_DIR/flux/fluxd.sock` | Local IPC socket |
+| `$XDG_RUNTIME_DIR/flux/fluxd.sock` | Local IPC socket. Without `XDG_RUNTIME_DIR`, `/run/user/<uid>/flux/fluxd.sock` |
 | `/etc/flux/approve/<user>.pub` | Root-owned phone approval public key |
 | `/etc/flux/approve/pam-backup/` | Original PAM files from approval setup |
 
@@ -87,7 +92,7 @@ Its replacement changes the desktop identity and requires new pairing.
 
 | Variable | Use |
 | --- | --- |
-| `FLUX_SOCKET` | Override the local IPC socket path. |
+| `FLUX_SOCKET` | Override the local IPC socket path. The folder of the socket must be a private folder of the user. The approval helper does not read this variable. |
 | `FLUX_GUI` | Select `app` or `plugin` for `flux-cli open`. |
 | `FLUX_QML_DIR` | Load shared views from disk in the Qt host during development. |
 | `FLUX_THEME_FILE` | Select a theme file for the snapshot harness. |
@@ -98,7 +103,13 @@ Its replacement changes the desktop identity and requires new pairing.
 | `FLUX_RELEASE_DELAY` | Change the wait before the first release check, such as `0s`. Tests use it. |
 | `FLUX_BINARY_POLL` | Change the interval of the check for a new `fluxd` binary, such as `100ms`. Tests use it. |
 
-Without `XDG_RUNTIME_DIR`, the daemon uses `flux-<uid>` inside the system temporary directory.
+Without `XDG_RUNTIME_DIR`, `fluxd`, `flux-cli`, and the desktop hosts use `/run/user/<uid>/flux`.
+Flux does not use the system temporary folder for the socket or the clipboard images.
+`fluxd` makes the `flux` folder with mode `0700`.
+It does not start when another user owns the folder, when other users can write to it, or when it is a symbolic link.
+To fix the folder, remove it, or run `chmod 700` on it.
+A shell without a login session, for example after `su`, can have no `/run/user/<uid>`.
+In that shell, set `XDG_RUNTIME_DIR` to a folder of the user with mode `0700`.
 See [development](development.md) for an isolated test environment.
 
 ## Release check
