@@ -124,7 +124,7 @@ public final class WebcamPlugin: FluxPlugin, @unchecked Sendable {
             session = Session(deviceId: deviceId)
             return attempt
         }
-        let name = core.device(deviceId)?.name ?? "the computer"
+        let name = core.withDevice(deviceId) { $0.name } ?? "the computer"
         setStatus(StreamStatus(.connecting, "Waiting for \(name)…", deviceId: deviceId))
         ui { $0.cameraError = nil }
         Task { await self.run(core: core, deviceId: deviceId, name: name, id: id) }
@@ -239,9 +239,11 @@ public final class WebcamPlugin: FluxPlugin, @unchecked Sendable {
 
     private func run(core: FluxCore, deviceId: String, name: String, id: Int) async {
         do {
-            guard let d = core.device(deviceId) else { throw FluxError("\(name) is not known") }
-            guard d.accepts(PacketType.fluxWebcam) else { throw FluxError(Self.updateText(computer: name)) }
-            guard let certificate = d.certificate else { throw FluxError("\(name) is not connected") }
+            // The core lock guards the fields of the device.
+            let peer = core.withDevice(deviceId) { (accepts: $0.accepts(PacketType.fluxWebcam), certificate: $0.certificate) }
+            guard let peer else { throw FluxError("\(name) is not known") }
+            guard peer.accepts else { throw FluxError(Self.updateText(computer: name)) }
+            guard let certificate = peer.certificate else { throw FluxError("\(name) is not connected") }
             try await CameraSource.authorize()
             try await openCamera(id: id)
             let config = settings.config

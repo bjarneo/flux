@@ -219,8 +219,28 @@ final class HerdrTests: XCTestCase {
         XCTAssertEqual(read.body, ["kind": .string("read"), "pane": .string("w5:p1"), "lines": .int(1000), "format": .string("ansi")])
         XCTAssertEqual(HerdrWire.keys(pane: "w5:p1", ["2"]).body, ["kind": .string("keys"), "pane": .string("w5:p1"), "keys": .array([.string("2")])])
         XCTAssertEqual(HerdrWire.prompt(pane: "w5:p1", "go on").body, ["kind": .string("prompt"), "pane": .string("w5:p1"), "text": .string("go on")])
+        // fluxd types into the dialog of an agent that waits for a choice
+        // only with "answer".
+        XCTAssertEqual(HerdrWire.prompt(pane: "w5:p1", "3", answer: true).body,
+                       ["kind": .string("prompt"), "pane": .string("w5:p1"), "text": .string("3"), "answer": .bool(true)])
         XCTAssertEqual(HerdrWire.request().body, ["kind": .string("request")])
         XCTAssertTrue(PacketType.fluxHerdr == "flux.herdr")
+    }
+
+    func testOutputKeepsTheEndOfALongText() {
+        XCTAssertEqual(HerdrWire.tail("short", max: 10).0, "short")
+        XCTAssertFalse(HerdrWire.tail("short", max: 10).1)
+        let (end, cut) = HerdrWire.tail("line 1\nline 2\nline 3", max: 10)
+        XCTAssertTrue(cut)
+        XCTAssertEqual(end, "line 3", "the end starts at a line")
+        let (chars, _) = HerdrWire.tail(String(repeating: "é", count: 20), max: 9)
+        XCTAssertEqual(chars, "éééé", "the end starts at a whole character")
+
+        let text = String(repeating: "x", count: HerdrWire.maxText + 10)
+        let body: [String: JSONValue] = ["kind": .string("output"), "pane": .string("w5:p1"), "text": .string(text)]
+        let o = HerdrWire.output(body)
+        XCTAssertEqual(o?.truncated, true)
+        XCTAssertLessThanOrEqual(o?.text.utf8.count ?? .max, HerdrWire.maxText)
     }
 
     // MARK: Tracker

@@ -1,5 +1,6 @@
 import FluxKit
 import SwiftUI
+import UIKit
 
 /// The media players of a computer. The iPhone controls them, and the
 /// computer does not control the iPhone.
@@ -111,20 +112,23 @@ private struct NowPlayingControls: View {
     }
 }
 
+/// The art loads through AlbumArtLoader, which limits the scheme and the size.
 private struct AlbumArt: View {
     let url: URL?
+    @State private var image: UIImage?
 
     var body: some View {
         Group {
-            if let url {
-                AsyncImage(url: url) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    placeholder
-                }
+            if let image {
+                Image(uiImage: image).resizable().scaledToFill()
             } else {
                 placeholder
             }
+        }
+        .task(id: url) {
+            image = nil
+            guard let url, let data = await AlbumArtLoader.load(url) else { return }
+            image = UIImage(data: data)
         }
         .frame(width: 260, height: 260)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
