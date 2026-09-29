@@ -18,16 +18,14 @@ struct ComputersView: View {
                     Button("Turn on") { model.core.enabled = true }
                         .buttonStyle(.borderedProminent)
                 }
-            } else if model.state.localNetworkDenied && !model.state.devices.contains(where: \.online) {
+            } else if model.state.localNetworkDenied && model.state.devices.isEmpty {
                 ContentUnavailableView {
                     Label("Local Network is off", systemImage: "wifi.exclamationmark")
                 } description: {
-                    Text("Flux needs Local Network access to find and reach computers. Turn on Local Network for Flux in Settings.")
+                    Text(Self.localNetworkText)
                 } actions: {
-                    Button("Open Settings") {
-                        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
-                    }
-                    .buttonStyle(.borderedProminent)
+                    Button("Open Settings", action: openSettings)
+                        .buttonStyle(.borderedProminent)
                 }
             } else if model.state.devices.isEmpty {
                 ContentUnavailableView {
@@ -72,8 +70,25 @@ struct ComputersView: View {
         }
     }
 
+    private static let localNetworkText = "Flux needs Local Network access to find and reach computers. Turn on Local Network for Flux in Settings."
+
+    private func openSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+    }
+
     private var list: some View {
         List {
+            // The paired computers stay in reach, for example to unpair one.
+            if model.state.localNetworkDenied && !model.state.devices.contains(where: \.online) {
+                Section {
+                    Label("Local Network is off", systemImage: "wifi.exclamationmark")
+                        .font(.body.weight(.medium))
+                    Text(Self.localNetworkText)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Button("Open Settings", action: openSettings)
+                }
+            }
             if !model.paired.isEmpty {
                 Section("Paired") {
                     ForEach(model.paired) { device in

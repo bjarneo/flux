@@ -22,6 +22,9 @@ public final class Bonjour: @unchecked Sendable {
     private var resolving: [DNSServiceRef] = []
     /// The service names that the current browse resolved, each once.
     private var resolved: Set<String> = []
+    /// True after the current browse reported that the local network is
+    /// not allowed, until it finds a service.
+    private var browseDenied = false
     private let selfId: String
     private let found: @Sendable (String) -> Void
     private let denied: @Sendable (Bool) -> Void
@@ -70,10 +73,15 @@ public final class Bonjour: @unchecked Sendable {
         }
     }
 
-    /// Browses for desktops.
+    /// Browses for desktops. While a browse runs, it reports its denied
+    /// state again, so that the owner can clear the state before each call.
     public func browse() {
         queue.async { [self] in
-            guard browser == nil else { return }
+            guard browser == nil else {
+                if browseDenied { denied(true) }
+                return
+            }
+            browseDenied = false
             var ref: DNSServiceRef?
             let context = Unmanaged.passUnretained(self).toOpaque()
             let err = DNSServiceBrowse(&ref, 0, 0, Self.serviceType, nil, { _, flags, iface, err, name, type, domain, ctx in
@@ -81,11 +89,13 @@ public final class Bonjour: @unchecked Sendable {
                 let me = Unmanaged<Bonjour>.fromOpaque(ctx).takeUnretainedValue()
                 // iOS and macOS report a denied Local Network permission here.
                 if err == kDNSServiceErr_PolicyDenied {
+                    me.browseDenied = true
                     me.denied(true)
                     return
                 }
                 guard err == kDNSServiceErr_NoError, flags & kDNSServiceFlagsAdd != 0,
                       let name, let type, let domain else { return }
+                me.browseDenied = false
                 me.denied(false)
                 me.resolve(name: String(cString: name), type: String(cString: type), domain: String(cString: domain), iface: iface)
             }, context)
@@ -106,6 +116,7 @@ public final class Bonjour: @unchecked Sendable {
             if let b = browser { DNSServiceRefDeallocate(b) }
             resolving.forEach { DNSServiceRefDeallocate($0) }
             browser = nil
+            browseDenied = false
             resolving = []
             resolved = []
         }
@@ -123,6 +134,7 @@ public final class Bonjour: @unchecked Sendable {
         resolving.forEach { DNSServiceRefDeallocate($0) }
         registration = nil
         browser = nil
+        browseDenied = false
         resolving = []
         resolved = []
     }

@@ -98,7 +98,7 @@ It sends no UDP broadcasts, because iOS needs a special entitlement for them.
 
 | Problem | Check |
 | --- | --- |
-| The computer does not see the iPhone | Flux is open on the iPhone. **Settings > Privacy & Security > Local Network** allows Flux. |
+| The computer does not see the iPhone | Flux is open on the iPhone. **Settings > Privacy & Security > Local Network** allows Flux. While it does not, **Computers** shows **Local Network is off**. After you allow it, return to Flux, and Flux searches again. |
 | The computer sees the iPhone but cannot connect | The network allows connections between devices. Wi-Fi client isolation blocks them. |
 | The link drops away from the computer | Add an extra address. See below. |
 

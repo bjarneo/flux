@@ -74,7 +74,8 @@ It ignores phones, tablets, and other Macs, and it removes old pairings with the
 Flux searches the network for 10 seconds when it starts.
 It does not search all the time.
 If the sidebar shows **No computer found**, select **Search again**.
-A computer that runs `fluxd` still finds the Mac after the search ends, because the Mac keeps its Bonjour service and its UDP port open.
+After the search ends, the Mac still connects to a paired computer when that computer announces itself.
+A computer that is not paired finds the Mac through Bonjour, and `fluxd` then connects to the Mac.
 
 ## Features
 

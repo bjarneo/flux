@@ -114,9 +114,40 @@ final class PayloadServerTests: XCTestCase {
     }
 }
 
-/// Connections before their link must not outlive a stop.
+/// Connects to the link port of a core as the computer `peer`, like fluxd:
+/// the identity goes out in plain text, this side is the TLS server, and the
+/// identity goes out again inside TLS. NIOSSL holds the second identity until
+/// the handshake ends. The test closes the channel after 10 seconds at the
+/// latest.
+private func connectLink(_ port: Int, as peer: LocalCertificate) async throws -> Channel {
+    let tls = try FluxTLS(local: peer)
+    let identity = Identity(deviceId: peer.deviceId, deviceName: "desk", deviceType: "desktop",
+                            protocolVersion: 8, incoming: [PacketType.fluxTunnel], outgoing: []).packet().serialize()
+    let ch = try await ClientBootstrap(group: MultiThreadedEventLoopGroup.singleton)
+        .channelInitializer { channel in
+            channel.eventLoop.makeCompletedFuture {
+                try channel.pipeline.syncOperations.addHandler(tls.serverHandler())
+            }
+        }
+        .connect(host: "127.0.0.1", port: port)
+        .flatMapThrowing { ch -> Channel in
+            // The plain identity goes out below the TLS handler.
+            let ctx = try ch.pipeline.syncOperations.context(handlerType: NIOSSLServerHandler.self)
+            ctx.writeAndFlush(NIOAny(ByteBuffer(bytes: identity)), promise: nil)
+            return ch
+        }
+        .get()
+    ch.eventLoop.scheduleTask(in: .seconds(10)) { ch.close(promise: nil) }
+    try? await ch.writeAndFlush(ByteBuffer(bytes: identity))
+    return ch
+}
+
+/// Connections before their link must not outlive a stop, and a link must
+/// keep the certificate of its device.
 final class LinkHandshakeTests: XCTestCase {
-    func testDataAfterAStopDoesNotStopTheApp() async throws {
+    private static let desk = "9f1c0e5b7a2d4c3e8b6a1f0d2c4e6a8b"
+
+    private func makeCore() throws -> FluxCore {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let suite = "org.omarchy.flux.test." + UUID().uuidString
         var config = LanConfig()
@@ -129,20 +160,77 @@ final class LinkHandshakeTests: XCTestCase {
             try? FileManager.default.removeItem(at: dir)
             UserDefaults().removePersistentDomain(forName: suite)
         }
+        return core
+    }
+
+    /// Starts the network of the core and returns its link port.
+    private func startNetwork(_ core: FluxCore) async throws -> Int {
         core.start()
+        try await waitUntil("the core listens") { core.state.tcpPort > 0 }
+        return core.state.tcpPort
+    }
+
+    /// Waits up to 5 seconds for the condition. The test fails when it stays false.
+    private func waitUntil(_ what: String, _ condition: () -> Bool) async throws {
         let deadline = ContinuousClock.now + .seconds(5)
-        while core.state.tcpPort == 0, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(20)) }
-        let port = core.state.tcpPort
+        while !condition() {
+            guard ContinuousClock.now < deadline else {
+                XCTFail("timed out: \(what)")
+                return
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
+    /// Waits until the channel closes. The test fails when it stays open for 9 seconds.
+    private func assertCloses(_ ch: Channel, _ message: String) async throws {
+        let start = ContinuousClock.now
+        try await ch.closeFuture.get()
+        XCTAssertLessThan(ContinuousClock.now - start, .seconds(9), message)
+    }
+
+    func testDataAfterAStopDoesNotStopTheApp() async throws {
+        let core = try makeCore()
+        let port = try await startNetwork(core)
         XCTAssertGreaterThan(port, 0)
 
         let ch = try await dial(port, as: nil)
         try await Task.sleep(for: .milliseconds(100))
         core.stop()
-        let identity = Identity(deviceId: "9f1c0e5b7a2d4c3e8b6a1f0d2c4e6a8b", deviceName: "desk", deviceType: "desktop",
+        let identity = Identity(deviceId: Self.desk, deviceName: "desk", deviceType: "desktop",
                                 protocolVersion: 8, incoming: [PacketType.fluxTunnel], outgoing: []).packet().serialize()
         try? await ch.writeAndFlush(ByteBuffer(bytes: identity))
-        let start = ContinuousClock.now
-        try await ch.closeFuture.get()
-        XCTAssertLessThan(ContinuousClock.now - start, .seconds(9), "the stop closes the connection before its link")
+        try await assertCloses(ch, "the stop closes the connection before its link")
+    }
+
+    /// A pairing is bound to the link and the certificate on which it
+    /// started. Another certificate for the same device ID is refused while
+    /// the pairing is open and after it, and the pairing pins the first one.
+    func testAPairingPinsTheCertificateOfItsLink() async throws {
+        let core = try makeCore()
+        let port = try await startNetwork(core)
+        let first = try LocalCertificate.generate(deviceId: Self.desk)
+        let other = try LocalCertificate.generate(deviceId: Self.desk)
+        let pairState = { core.state.devices.first { $0.id == Self.desk }?.pairState }
+
+        let link = try await connectLink(port, as: first)
+        let request = Packet(PacketType.pair, ["pair": true, "timestamp": Int64(Date().timeIntervalSince1970)]).serialize()
+        try await link.writeAndFlush(ByteBuffer(bytes: request))
+        try await waitUntil("the request arrives") { pairState() == .incoming }
+
+        let during = try await connectLink(port, as: other)
+        try await assertCloses(during, "the core refuses another certificate while the pairing is open")
+        XCTAssertEqual(pairState(), .incoming, "the refused link leaves the pairing open")
+        XCTAssertNil(core.trust.get(Self.desk))
+
+        core.acceptPair(Self.desk)
+        XCTAssertEqual(pairState(), .paired)
+        XCTAssertEqual(core.trust.get(Self.desk)?.certificateDER, first.certificateDER, "the pin is the certificate behind the key")
+
+        let after = try await connectLink(port, as: other)
+        try await assertCloses(after, "the core refuses another certificate after the pairing")
+        XCTAssertTrue(link.isActive, "the paired link stays open")
+        XCTAssertEqual(core.state.devices.first { $0.id == Self.desk }?.online, true)
+        try? await link.close()
     }
 }

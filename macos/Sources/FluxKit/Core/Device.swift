@@ -102,8 +102,14 @@ public final class Device: @unchecked Sendable {
 
     /// True when the link still shows the certificate behind the key.
     private var keyCertificateHolds: Bool {
+        Self.keyHolds(pairCertificate: pairCertificate, certificate: certificate, linkCertificate: link?.peerCertificate)
+    }
+
+    /// Reports whether the device and its link still show the certificate
+    /// behind the key, `pairCertificate`. Without a key or a link it is false.
+    static func keyHolds(pairCertificate: [UInt8]?, certificate: [UInt8]?, linkCertificate: [UInt8]?) -> Bool {
         guard let cert = pairCertificate else { return false }
-        return certificate == cert && link?.peerCertificate == cert
+        return certificate == cert && linkCertificate == cert
     }
 
     /// The user canceled a request or rejected an incoming request.

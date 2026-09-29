@@ -316,13 +316,17 @@ public final class FluxCore: @unchecked Sendable {
 
     /// Looks for computers for 10 seconds: Bonjour browses, and the identity
     /// goes out at once and again after 3 and 6 seconds. Flux does not search
-    /// all the time. A computer that runs fluxd still finds this Mac after a
-    /// search ends, because the Mac keeps its Bonjour service and answers
-    /// identities that it receives.
+    /// all the time. After a search ends, a paired computer still gets a dial
+    /// from this device when its UDP identity arrives. A computer that is
+    /// not paired finds this device through its Bonjour service and connects.
+    ///
+    /// A search clears the Local Network warning. The browse sets it again
+    /// when the access is still off, for example after a visit to Settings.
     public func search() {
         let (b, bj, count) = lock.withLock { () -> (LanBackend?, Bonjour?, Int) in
             searchCount += 1
             searching = backend != nil
+            if backend != nil { localNetworkDenied = false }
             return (backend, bonjour, searchCount)
         }
         guard let b else { return }
@@ -366,6 +370,8 @@ public final class FluxCore: @unchecked Sendable {
                 link.close()
                 return
             }
+            // A link came through, so the local network works.
+            localNetworkDenied = false
             let id = link.identity.deviceId
             if let refusal = refusal(of: link) {
                 FluxLog.core.error("closed the link from \(link.identity.deviceName, privacy: .public): \(refusal, privacy: .public)")
@@ -454,25 +460,48 @@ public final class FluxCore: @unchecked Sendable {
     /// check and this call.
     private func refusal(of link: Link) -> String? {
         let id = link.identity.deviceId
-        if let t = trust.get(id), t.certificateDER != link.peerCertificate {
+        let d = devices[id]
+        var live: [UInt8]?
+        if let old = d?.link, old.isOpen, old !== link { live = old.peerCertificate }
+        // An entry whose certificate does not read matches no certificate.
+        return Self.linkRefusal(new: link.peerCertificate, pinned: trust.get(id).map { $0.certificateDER ?? [] },
+                                pairState: d?.pairState ?? PairState.none, pairCertificate: d?.pairCertificate, live: live)
+    }
+
+    /// The reason to refuse a new link that shows the certificate `new`, or
+    /// nil. `pinned` is the certificate of the trust entry, `pairState` and
+    /// `pairCertificate` are the pairing of the device, and `live` is the
+    /// certificate of its other open link. nil means that there is none.
+    static func linkRefusal(new: [UInt8], pinned: [UInt8]?, pairState: PairState, pairCertificate: [UInt8]?, live: [UInt8]?) -> String? {
+        if let pinned, pinned != new {
             return "the certificate differs from the paired one"
         }
-        guard let d = devices[id] else { return nil }
-        if let old = d.link, old.isOpen, old !== link, old.peerCertificate != link.peerCertificate {
+        if let live, live != new {
             return "a live link has another certificate"
         }
-        if d.pairState == .requested || d.pairState == .incoming, d.certificate != link.peerCertificate {
+        // A pairing is bound to the certificate behind its key.
+        if pairState == .requested || pairState == .incoming, pairCertificate != new {
             return "a pairing with another certificate is open"
         }
         return nil
     }
 
-    /// Closes the oldest link of a device that is not paired and has no
-    /// open pairing, when the list holds too many of them. The lock is held.
+    /// Drops the oldest device that is not paired and has a link, when the
+    /// list holds too many of them. A device without an open pairing goes
+    /// first. The device leaves the list at once, because its link can take
+    /// seconds to close. The lock is held.
     private func evictUnpairedLink() {
         let unpaired = order.compactMap { devices[$0] }.filter { !$0.paired && $0.link != nil }
-        guard unpaired.count >= Self.maxUnpairedLinks else { return }
-        (unpaired.first { $0.pairState == .none } ?? unpaired.first)?.link?.close()
+        guard unpaired.count >= Self.maxUnpairedLinks,
+              let d = unpaired.first(where: { $0.pairState == .none }) ?? unpaired.first else { return }
+        FluxLog.core.info("closed the link from \(d.name, privacy: .public): too many devices that are not paired")
+        d.cancelPair()
+        let link = d.link
+        // Without its link, the device ignores the packets and the close of the old link.
+        d.link = nil
+        devices.removeValue(forKey: d.id)
+        order.removeAll { $0 == d.id }
+        link?.close()
     }
 
     private func detach(_ d: Device, _ link: Link) {
@@ -482,7 +511,7 @@ public final class FluxCore: @unchecked Sendable {
             if d.pairState == .requested || d.pairState == .incoming { d.pairState = .none }
             if d.paired {
                 for p in plugins { p.onDisconnected(d) }
-            } else {
+            } else if devices[d.id] === d {
                 devices.removeValue(forKey: d.id)
                 order.removeAll { $0 == d.id }
             }
