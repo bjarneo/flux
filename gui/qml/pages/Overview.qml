@@ -3,8 +3,8 @@ import QtQuick.Layouts
 import ".."
 import "../components"
 
-// Battery and device facts, quick actions, the latest notifications, and
-// the streams from the device.
+// Battery and device facts, quick actions, the latest notifications, the
+// remote access settings of this computer, and the streams from the device.
 Item {
   id: root
   property var view
@@ -17,6 +17,8 @@ Item {
   // The phone microphone and the phone screen mirror. Null when not used.
   readonly property var mic: view && view.backend && view.backend.state ? (view.backend.state.mic || null) : null
   readonly property var screen: view && view.backend && view.backend.state ? (view.backend.state.screen || null) : null
+  // The remote desktop of this computer on a device. Null when not used.
+  readonly property var desktop: view && view.backend && view.backend.state ? (view.backend.state.desktop || null) : null
 
   implicitHeight: grid.implicitHeight
 
@@ -191,6 +193,17 @@ Item {
           }
         }
       }
+    }
+
+    // The remote desktop and remote input settings of this computer.
+    RemoteCard {
+      objectName: "remoteCard"
+      view: root.view
+      settings: root.view && root.view.backend ? (root.view.backend.settings || ({})) : ({})
+      desktop: root.desktop
+      Layout.fillWidth: true
+      Layout.fillHeight: true
+      Layout.preferredWidth: 320
     }
 
     // Phone camera, with its settings. The card spans the grid while the

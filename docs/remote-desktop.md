@@ -9,24 +9,20 @@ The remote desktop is off by default, because the phone or the Mac can then see 
 
 ## Turn on the remote desktop
 
-1. Add these lines to `~/.config/flux/config.toml`:
-
-   ```toml
-   remote_desktop = true
-   remote_input = true
-   ```
-
-   `remote_desktop` lets the phone or the Mac show the screen.
-   `remote_input` lets the touches, the mouse, and the keys control the computer.
-   Without `remote_input`, the phone or the Mac shows the screen as view only.
-
-2. Reload the daemon:
+1. Turn on **Remote desktop** and **Remote input** in the **Remote access** card of the Flux window.
+   The card is on the **Overview** page.
+   Or run these commands:
 
    ```sh
-   systemctl --user reload fluxd
+   flux-cli desktop on
+   flux-cli input on
    ```
 
-3. Check that `gpu-screen-recorder` is installed:
+   The remote desktop lets the phone or the Mac show the screen.
+   Remote input lets the touches, the mouse, and the keys control the computer.
+   Without remote input, the phone or the Mac shows the screen as view only.
+
+2. Check that `gpu-screen-recorder` is installed:
 
    ```sh
    flux-cli doctor
@@ -38,6 +34,9 @@ On another system, install it with `sudo pacman -S gpu-screen-recorder`.
 `gpu-screen-recorder` supports AMD, Intel, and NVIDIA drivers.
 On another GPU, for example an older NVIDIA card on `nouveau`, install `wf-recorder` with `sudo pacman -S wf-recorder`.
 `fluxd` then captures the monitor through Hyprland and encodes it on the CPU.
+
+`fluxd` saves the settings as `remote_desktop` and `remote_input` in `~/.config/flux/config.toml`.
+After a manual edit of that file, run `systemctl --user reload fluxd`.
 
 A script can also call the IPC method `settings.set` with the key `remoteDesktop`:
 
@@ -143,8 +142,8 @@ In the **Remote Desktop** card, select **Open Remote Desktop…**.
 The menu bar item also has **Remote Desktop…**.
 The Mac asks for Touch ID or its password first. The unlock stays valid for 5 minutes while Flux runs.
 
-The card shows **Off** and the steps to turn it on when `remote_desktop` is off on the computer.
-Without `remote_input`, the window shows **View only**, and the mouse and the keys do nothing on the computer.
+The card shows **Off** and the steps to turn it on when the remote desktop is off on the computer.
+Without remote input, the window shows **View only**, and the mouse and the keys do nothing on the computer.
 
 The window shows the monitor with the focus.
 The video keeps the shape of the monitor, with bars at the sides or at the top and the bottom.
@@ -202,15 +201,21 @@ The Mac saves the pinned shortcuts.
 
 When the stream starts, the computer shows a notification with a **Stop** button.
 
-To see the state or to stop the stream, run:
+The **Remote access** card of the Flux window shows the device and the monitor, with a **Stop** button.
+To see the state or to stop the stream from a terminal, run:
 
 ```sh
 flux-cli desktop
 flux-cli desktop stop
 ```
 
-To turn off the remote desktop, set `remote_desktop = false` and reload `fluxd`.
-The reload stops a stream that runs.
+To turn off the remote desktop, turn off **Remote desktop** in the Flux window, or run:
+
+```sh
+flux-cli desktop off
+```
+
+This also stops a stream that runs.
 
 ## How it works
 
@@ -285,17 +290,17 @@ A binding to a key code, such as `SUPER + code:10` for workspace 1, does not mat
 
 | Problem | Next step |
 | --- | --- |
-| The phone or the Mac says that the remote desktop is off | Set `remote_desktop = true` and reload `fluxd`. |
+| The phone or the Mac says that the remote desktop is off | Run `flux-cli desktop on`, or turn on **Remote desktop** in the Flux window. |
 | The phone or the Mac says that `gpu-screen-recorder` finds no monitor | The displays are off. `fluxd` turns them on with `hyprctl`, so check that `hyprctl monitors` answers. |
 | The video stops at the lock screen | The lock screen turned the displays off. Tap or click the video. |
 | The phone or the Mac says to update Flux on the computer | Install a `fluxd` that lists `flux.desktop`. |
-| The phone shows the screen, but a tap does nothing | Set `remote_input = true` and reload `fluxd`. |
-| The Mac shows **View only** | Set `remote_input = true` and reload `fluxd`. |
+| The phone shows the screen, but a tap does nothing | Run `flux-cli input on`, or turn on **Remote input** in the Flux window. |
+| The Mac shows **View only** | Run `flux-cli input on`, or turn on **Remote input** in the Flux window. |
 | The Mac shows no **Remote Desktop** card | Connect the Mac to the computer. The card shows only for a `fluxd` that lists `flux.desktop`. |
 | A Command shortcut goes to the Mac | Move the pointer over the video, then press the shortcut again. |
 | The screen capture stops | Run `journalctl --user -u fluxd --no-pager \| grep "remote desktop"` for the error of `gpu-screen-recorder`. |
 | The Mac or the phone says `list the monitors: exit status 22` | `gpu-screen-recorder` does not support the GPU. Install `wf-recorder`, then start the remote desktop again. |
 | `gpu-screen-recorder` cannot capture the monitor | Run `getcap /usr/bin/gsr-kms-server`. The result must show `cap_sys_admin`. Install the package again to restore it. |
 | The pointer goes to the wrong place | The compositor must name its monitors with `wl_output` version 4. Hyprland does. |
-| The Omarchy panel shows an error | Set `remote_input = true` and reload `fluxd`. The panel also needs `hyprctl` and a Hyprland with a Lua configuration. |
+| The Omarchy panel shows an error | Run `flux-cli input on`. The panel also needs `hyprctl` and a Hyprland with a Lua configuration. |
 | A shortcut is gone | Hyprland read its configuration again, so the references changed. Close the panel and open it again. |

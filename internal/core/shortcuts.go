@@ -195,7 +195,7 @@ func (d *Daemon) handleShortcuts(dev *Device, l *lan.Link, p *proto.Packet) {
 	on := d.cfg.RemoteInput && d.input != nil
 	d.mu.Unlock()
 	if !on {
-		_ = l.Send(proto.New(proto.TypeFluxShortcuts, map[string]any{"error": "Remote input is off. Set remote_input = true in ~/.config/flux/config.toml, then run: systemctl --user reload fluxd"}))
+		_ = l.Send(proto.New(proto.TypeFluxShortcuts, map[string]any{"error": "Remote input is off. Turn it on in the Flux window, or run: flux-cli input on"}))
 		return
 	}
 	// hyprctl can wait, so the link goes on reading.

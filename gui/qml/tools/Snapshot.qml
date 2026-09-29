@@ -221,6 +221,21 @@ Window {
           }
         }
       })
+    }],
+    // The remote access card with both settings on, then a phone that
+    // shows this screen, then Stop.
+    ["46-remote-on", function () {
+      mock.state = mock.fixTimes(mock.fixture.state)
+      remote().set("remoteDesktop", true)
+      remote().set("remoteInput", true)
+    }],
+    ["47-remote-live", function () {
+      mock.setState(function (s) { s.desktop = { active: true, to: pixel, toName: "Pixel 8", monitor: "DP-1", width: 2560, height: 1440 } })
+    }],
+    ["48-remote-off", function () {
+      mock.call("desktop.stop", {}, null)
+      remote().set("remoteDesktop", false)
+      remote().set("remoteInput", false)
     }]
   ]
 
@@ -256,6 +271,7 @@ Window {
   }
 
   function camera() { return findBy(pageItem(), "objectName", "cameraCard") }
+  function remote() { return findBy(pageItem(), "objectName", "remoteCard") }
 
   // Scrolls the content area to the end, where the camera settings are.
   function scrollToEnd() {

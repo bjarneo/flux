@@ -182,3 +182,32 @@ func TestHandleMousepadOff(t *testing.T) {
 		t.Fatal("queued input without a backend")
 	}
 }
+
+// The Flux window and flux-cli turn the remote settings on and off with
+// settings.set.
+func TestSetRemoteSettings(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	d, _ := inputDaemon(t, false)
+	d.desktopErr = "the remote desktop is off on arch"
+	for _, key := range []string{"remoteDesktop", "remoteInput"} {
+		if err := d.setSetting(key, true); err != nil {
+			t.Fatalf("%s: %v", key, err)
+		}
+	}
+	if !d.cfg.RemoteDesktop || !d.cfg.RemoteInput {
+		t.Fatalf("settings: %+v", d.cfg)
+	}
+	if d.desktopErr != "" {
+		t.Fatalf("the old error stays: %q", d.desktopErr)
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.RemoteDesktop || !cfg.RemoteInput {
+		t.Fatalf("config.toml does not keep the settings: %+v", cfg)
+	}
+	if err := d.setSetting("remoteDesktop", "on"); err == nil {
+		t.Fatal("a text value must fail")
+	}
+}

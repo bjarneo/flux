@@ -9,19 +9,15 @@ Remote input is off by default, because the phone or the Mac can then type in an
 
 ## Turn on remote input
 
-1. Add this line to `~/.config/flux/config.toml`:
-
-   ```toml
-   remote_input = true
-   ```
-
-2. Reload the daemon:
+1. Turn on **Remote input** in the **Remote access** card of the Flux window.
+   The card is on the **Overview** page.
+   Or run this command:
 
    ```sh
-   systemctl --user reload fluxd
+   flux-cli input on
    ```
 
-3. Check that `wtype` is installed:
+2. Check that `wtype` is installed:
 
    ```sh
    flux-cli doctor
@@ -29,6 +25,10 @@ Remote input is off by default, because the phone or the Mac can then type in an
 
 Omarchy installs `wtype`.
 On another system, install it with `sudo pacman -S wtype`.
+
+`fluxd` saves the setting as `remote_input` in `~/.config/flux/config.toml`.
+After a manual edit of that file, run `systemctl --user reload fluxd`.
+To turn off remote input, turn off **Remote input** in the Flux window, or run `flux-cli input off`.
 
 A script can also call the IPC method `settings.set` with the key `remoteInput`:
 
@@ -186,7 +186,7 @@ A packet holds 1 action:
 
 | Problem | Next step |
 | --- | --- |
-| The phone or the Mac says that remote input is off | Set `remote_input = true` and reload `fluxd`. |
+| The phone or the Mac says that remote input is off | Run `flux-cli input on`, or turn on **Remote input** in the Flux window. |
 | The phone or the Mac says to update Flux on the computer | Install a `fluxd` that lists `flux.mousepad.request`. |
 | The Mac shows no **Touchpad and Keyboard** card | Connect the Mac to the computer. The card shows only for a `fluxd` that lists `flux.mousepad.request`. |
 | The Mac cursor does not come back | Press Control and Option together, then release them. Or press Command-Tab. |

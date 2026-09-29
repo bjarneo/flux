@@ -272,6 +272,8 @@ func (d *Daemon) sendInputState(l *lan.Link) {
 
 // inputChanged sends the remote input state to each connected phone that
 // accepts flux.input. It stops the remote desktop when its setting is off.
+// It also clears the error of the last remote desktop start, because that
+// error can say that the setting is off.
 func (d *Daemon) inputChanged() {
 	d.mu.Lock()
 	var links []*lan.Link
@@ -282,6 +284,7 @@ func (d *Daemon) inputChanged() {
 		}
 	}
 	desktop := d.cfg.RemoteDesktop
+	d.desktopErr = ""
 	d.mu.Unlock()
 	for _, l := range links {
 		d.sendInputState(l)

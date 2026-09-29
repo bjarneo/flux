@@ -216,27 +216,25 @@ See [herdr agents](herdr.md) for the replies, new agents, terminals, dictation, 
 ## Touchpad and keyboard
 
 The phone, the iPhone, or the Mac can be a touchpad and a keyboard for the computer.
-To allow it, set:
+To allow it, turn on **Remote input** in the **Remote access** card of the Flux window, or run:
 
-```toml
-remote_input = true
+```sh
+flux-cli input on
 ```
 
-Reload with `systemctl --user reload fluxd`.
 Then select **Touchpad and keyboard** on the phone's device page, or **Open Touchpad…** on the computer's page in Flux for macOS.
 See [Touchpad and keyboard](remote-input.md) for the gestures, the keys, and the slides.
 
 ## Remote desktop
 
 The phone, the iPhone, or the Mac can show the screen of the computer and control it.
-To allow it, set:
+To allow it, turn on **Remote desktop** and **Remote input** in the **Remote access** card of the Flux window, or run:
 
-```toml
-remote_desktop = true
-remote_input = true
+```sh
+flux-cli desktop on
+flux-cli input on
 ```
 
-Reload with `systemctl --user reload fluxd`.
 Then select **Remote desktop** on the phone's device page. The phone turns to landscape.
 In Flux for macOS, select **Open Remote Desktop…** on the computer's page.
 See [Remote desktop](remote-desktop.md) for the gestures, the monitors, and the stream.

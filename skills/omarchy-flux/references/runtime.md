@@ -185,6 +185,7 @@ Do not turn on `herdr_terminals` unless the user asks for terminals on the phone
 The phone moves the pointer and types on the desktop only with `remote_input = true`.
 The phone can then type in any window, such as a terminal.
 Do not turn on `remote_input` unless the user asks for it.
+`flux-cli input on` and `flux-cli input off` change the setting without a reload.
 Read `docs/remote-input.md` for the gestures, `wtype`, and the wire format.
 
 ## Remote desktop
@@ -192,14 +193,20 @@ Read `docs/remote-input.md` for the gestures, `wtype`, and the wire format.
 The phone shows the desktop screen only with `remote_desktop = true`.
 The phone can then see each window. Its touches also need `remote_input = true`.
 Do not turn on `remote_desktop` unless the user asks for it.
+`flux-cli desktop on` and `flux-cli desktop off` change the setting without a reload.
+The **Remote access** card on the **Overview** page of the Flux window has the same 2 switches.
 The stream needs `gpu-screen-recorder`.
 Read `docs/remote-desktop.md` for the gestures, the monitors, the lock screen, the Omarchy panel, and the stream format.
 The stream shows the lock screen. `fluxd` turns the displays on when they are off.
 The Omarchy panel runs Hyprland key bindings and workspace actions for the phone with `flux.shortcuts`. It needs `remote_input = true`.
 
 ```sh
+flux-cli desktop on
+flux-cli input on
 flux-cli desktop
 flux-cli desktop stop
+flux-cli desktop off
+flux-cli input off
 ```
 
 ## Fingerprint approval

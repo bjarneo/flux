@@ -43,16 +43,88 @@ func channelsName(n int) string {
 	return "mono"
 }
 
-// remoteDesktop shows whether a phone shows this screen, or stops it.
-func remoteDesktop(args []string) error {
-	if first(args) == "stop" {
-		return call("desktop.stop", nil)
+// remoteSettings holds the settings that give a paired device access to
+// this computer.
+type remoteSettings struct {
+	RemoteDesktop bool `json:"remoteDesktop"`
+	RemoteInput   bool `json:"remoteInput"`
+}
+
+// setRemote turns a remote setting on or off. fluxd saves the change in
+// config.toml. setRemote returns the settings after the change.
+func setRemote(key string, on bool) (remoteSettings, error) {
+	var s struct {
+		Settings remoteSettings `json:"settings"`
+	}
+	if err := call("settings.set", map[string]any{"key": key, "value": on}); err != nil {
+		return s.Settings, err
+	}
+	err := callInto("state", nil, &s)
+	return s.Settings, err
+}
+
+// remoteInput turns remote input on or off, or shows its state.
+func remoteInput(args []string) error {
+	switch first(args) {
+	case "on":
+		if _, err := setRemote("remoteInput", true); err != nil {
+			return err
+		}
+		fmt.Println("Remote input is on. A paired phone or Mac can move the pointer and type on this computer.")
+		return nil
+	case "off":
+		if _, err := setRemote("remoteInput", false); err != nil {
+			return err
+		}
+		fmt.Println("Remote input is off.")
+		return nil
+	case "":
+	default:
+		return fmt.Errorf("unknown argument %q. Usage: flux-cli input [on|off]", first(args))
 	}
 	var s struct {
-		Settings struct {
-			RemoteDesktop bool `json:"remoteDesktop"`
-		} `json:"settings"`
-		Desktop *struct {
+		Settings remoteSettings `json:"settings"`
+	}
+	if err := callInto("state", nil, &s); err != nil {
+		return err
+	}
+	if s.Settings.RemoteInput {
+		fmt.Println("Remote input is on. Turn it off with: flux-cli input off")
+	} else {
+		fmt.Println("Remote input is off. Turn it on with: flux-cli input on")
+	}
+	return nil
+}
+
+// remoteDesktop turns the remote desktop on or off, shows whether a phone
+// shows this screen, or stops it.
+func remoteDesktop(args []string) error {
+	switch first(args) {
+	case "stop":
+		return call("desktop.stop", nil)
+	case "on":
+		s, err := setRemote("remoteDesktop", true)
+		if err != nil {
+			return err
+		}
+		fmt.Println("The remote desktop is on. A paired phone or Mac can show this screen.")
+		if !s.RemoteInput {
+			fmt.Println("To also control this computer from it, run: flux-cli input on")
+		}
+		return nil
+	case "off":
+		if _, err := setRemote("remoteDesktop", false); err != nil {
+			return err
+		}
+		fmt.Println("The remote desktop is off.")
+		return nil
+	case "":
+	default:
+		return fmt.Errorf("unknown argument %q. Usage: flux-cli desktop [on|off|stop]", first(args))
+	}
+	var s struct {
+		Settings remoteSettings `json:"settings"`
+		Desktop  *struct {
 			Active  bool   `json:"active"`
 			ToName  string `json:"toName"`
 			Monitor string `json:"monitor"`
@@ -73,7 +145,7 @@ func remoteDesktop(args []string) error {
 	case v != nil:
 		fmt.Printf("%s is starting the remote desktop of %s\n", v.ToName, v.Monitor)
 	case !s.Settings.RemoteDesktop:
-		fmt.Println("The remote desktop is off. To turn it on, set remote_desktop = true in ~/.config/flux/config.toml, then run: systemctl --user reload fluxd")
+		fmt.Println("The remote desktop is off. Turn it on with: flux-cli desktop on")
 	default:
 		fmt.Println("No phone shows this screen. Start it in Flux for Android: Remote desktop.")
 	}

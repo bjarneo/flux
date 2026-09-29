@@ -58,6 +58,9 @@ Commands:
   mic [stop]             Show the phone microphone state, or stop the phone microphone
   screen [stop]          Show the phone screen mirror state, or stop the mirror
   desktop [stop]         Show whether a phone shows this screen, or stop it
+  desktop on|off         Let a paired phone or Mac show this screen, or stop that
+  input [on|off]         Show whether a paired phone or Mac can move the pointer
+                         and type on this computer, or turn that on or off
   approve [status]       Show whether a phone can approve sudo with a fingerprint
   approve setup [SVC…]   Enroll the phone and turn approval on for sudo, or for
                          polkit-1 and hyprlock. Run it with sudo.
@@ -136,6 +139,8 @@ func main() {
 		err = screen(args)
 	case "desktop":
 		err = remoteDesktop(args)
+	case "input":
+		err = remoteInput(args)
 	case "approve":
 		err = approveCmd(args, device)
 	case "watch":

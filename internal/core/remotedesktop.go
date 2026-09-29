@@ -373,7 +373,7 @@ func (d *Daemon) runDesktop(dev *Device, l *lan.Link, b desktopStart) {
 		fail(errors.New("the remote desktop is off in headless mode"))
 		return
 	case !on:
-		fail(fmt.Errorf("the remote desktop is off on %s. Set remote_desktop = true in ~/.config/flux/config.toml, then run: systemctl --user reload fluxd", self))
+		fail(fmt.Errorf("the remote desktop is off on %s. Turn it on in the Flux window, or run: flux-cli desktop on", self))
 		return
 	}
 	rec, err := pickRecorder(d.ctx, exec.LookPath)

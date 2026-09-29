@@ -176,6 +176,25 @@ Start camera, microphone, and screen capture on the phone.
 See [remote desktop](remote-desktop.md).
 See [camera and streams](camera.md) for settings and [fingerprint approval](approvals.md) for root setup commands.
 
+## Remote access
+
+To let a paired phone or Mac show and control this computer, run:
+
+```sh
+flux-cli desktop on
+flux-cli input on
+```
+
+`flux-cli desktop on` lets the device show the screen.
+`flux-cli input on` lets the device move the pointer and type.
+To take the access back, run `flux-cli desktop off` and `flux-cli input off`.
+`flux-cli desktop off` also stops a stream that runs.
+`flux-cli input` without an argument shows whether remote input is on.
+
+`fluxd` saves the change in `config.toml` at once.
+The **Remote access** card on the **Overview** page of the Flux window has the same 2 switches.
+See [remote desktop](remote-desktop.md) and [touchpad and keyboard](remote-input.md).
+
 ## Watch state changes
 
 ```sh
