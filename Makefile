@@ -151,11 +151,19 @@ snapshot: build-gui
 android:
 	cd android && FLUX_VERSION=$(APP_VERSION) ./gradlew :app:assembleDebug
 
+# PIN_SWIFT_PACKAGES copies macos/Package.resolved into the Xcode project
+# that xcodegen made in the current folder. With XCODEBUILD_PINNED, xcodebuild
+# then builds the package versions that swift test tests. A pin that does
+# not fit macos/Package.swift stops the build.
+PIN_SWIFT_PACKAGES = mkdir -p Flux.xcodeproj/project.xcworkspace/xcshareddata/swiftpm && \
+	cp "$(CURDIR)/macos/Package.resolved" Flux.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+XCODEBUILD_PINNED = -onlyUsePackageVersionsFromResolvedFile
+
 # The macOS app in macos/build. It needs Xcode and XcodeGen.
 macos:
-	cd macos && xcodegen generate --quiet && \
+	cd macos && xcodegen generate --quiet && $(PIN_SWIFT_PACKAGES) && \
 		xcodebuild -project Flux.xcodeproj -scheme Flux -configuration Debug -derivedDataPath build -destination 'platform=macOS' \
-			MARKETING_VERSION=$(APP_VERSION) build
+			$(XCODEBUILD_PINNED) MARKETING_VERSION=$(APP_VERSION) build
 
 test-macos:
 	cd macos && swift test
@@ -166,24 +174,24 @@ install-macos:
 
 # The iOS app for the simulator in ios/build. It needs Xcode and XcodeGen.
 ios:
-	cd ios && xcodegen generate --quiet && \
+	cd ios && xcodegen generate --quiet && $(PIN_SWIFT_PACKAGES) && \
 		xcodebuild -project Flux.xcodeproj -scheme Flux -configuration Debug -derivedDataPath build -destination 'generic/platform=iOS Simulator' \
-			MARKETING_VERSION=$(APP_VERSION) build
+			$(XCODEBUILD_PINNED) MARKETING_VERSION=$(APP_VERSION) build
 
 # The iOS app for iPhones in Release, without signing, in ios/build. It shows
 # the errors that only the optimized build has, as the App Store build would.
 ios-release:
-	cd ios && xcodegen generate --quiet && \
+	cd ios && xcodegen generate --quiet && $(PIN_SWIFT_PACKAGES) && \
 		xcodebuild -project Flux.xcodeproj -scheme Flux -configuration Release -derivedDataPath build -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO \
-			MARKETING_VERSION=$(APP_VERSION) build
+			$(XCODEBUILD_PINNED) MARKETING_VERSION=$(APP_VERSION) build
 
 # The app and FluxKit tests in an iPhone simulator with iOS 17 or later: the
 # booted one, else one of the newest runtime. IOS_SIMULATOR=<id> picks another.
 test-ios:
-	cd ios && xcodegen generate --quiet && \
+	cd ios && xcodegen generate --quiet && $(PIN_SWIFT_PACKAGES) && \
 		simulator=$$(../scripts/ios-simulator.sh) && \
 		xcodebuild test -project Flux.xcodeproj -scheme Flux -derivedDataPath build -destination "id=$$simulator" \
-			MARKETING_VERSION=$(APP_VERSION)
+			$(XCODEBUILD_PINNED) MARKETING_VERSION=$(APP_VERSION)
 
 clean:
 	rm -rf bin $(GUI_BUILD) snapshots macos/build ios/build
