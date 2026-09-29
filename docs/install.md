@@ -63,6 +63,7 @@ This method gives pacman ownership of all desktop files.
 `makepkg -s` installs missing package dependencies.
 Select a Nerd Font provider if pacman asks for one.
 The package builds the CLI, daemon, approval helper, Qt app, and shell plugin assets.
+It also installs the native messaging host and the extension files, which the [browser extension](browser.md) uses.
 
 The package recipe supports `x86_64` and `aarch64` source builds.
 GitHub Actions currently produces an `x86_64` binary package.

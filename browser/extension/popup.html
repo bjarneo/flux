@@ -1,0 +1,85 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Flux</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --line: color-mix(in srgb, currentColor 15%, transparent);
+      }
+      body {
+        width: 21rem;
+        margin: 0;
+        padding: 0.75rem;
+        font: 13px/1.45 system-ui, sans-serif;
+      }
+      header {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+      }
+      h1 {
+        font-size: 1rem;
+        margin: 0;
+      }
+      #state {
+        margin-left: auto;
+        opacity: 0.6;
+      }
+      .page {
+        margin: 0 0 0.6rem;
+        opacity: 0.75;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      li {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.35rem 0;
+        border-top: 1px solid var(--line);
+      }
+      .who {
+        min-width: 0;
+        flex: 1;
+      }
+      .who span {
+        display: block;
+        opacity: 0.6;
+      }
+      button {
+        font: inherit;
+        padding: 0.2rem 0.5rem;
+      }
+      .note {
+        margin: 0.6rem 0 0;
+        opacity: 0.85;
+      }
+      .note.bad {
+        color: #c0392b;
+      }
+      footer {
+        margin-top: 0.6rem;
+        opacity: 0.55;
+      }
+    </style>
+  </head>
+  <body>
+    <header><h1>Flux</h1><span id="state"></span></header>
+    <p class="page" id="page"></p>
+    <ul id="phones"></ul>
+    <p class="note" id="note"></p>
+    <footer id="footer"></footer>
+
+    <script src="host.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

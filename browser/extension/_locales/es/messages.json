@@ -1,0 +1,74 @@
+{
+  "extName": {
+    "message": "Flux"
+  },
+  "extDescription": {
+    "message": "Envía un enlace o una página a tu móvil con Flux."
+  },
+  "actionTitle": {
+    "message": "Enviar al móvil con Flux"
+  },
+  "menuSendLink": {
+    "message": "Enviar este enlace al móvil con Flux"
+  },
+  "menuSendPage": {
+    "message": "Enviar esta página al móvil con Flux"
+  },
+  "onlyWebLinks": {
+    "message": "Flux solo envía enlaces web"
+  },
+  "sending": {
+    "message": "Enviando al móvil…"
+  },
+  "sentTo": {
+    "message": "Enviado a $1."
+  },
+  "didNotAnswer": {
+    "message": "Flux no respondió. Ejecuta: flux-cli browser install"
+  },
+  "notJSON": {
+    "message": "Flux respondió con algo que no es JSON"
+  },
+  "noPhonePaired": {
+    "message": "No hay ningún móvil emparejado. Emparéjalo en Flux primero."
+  },
+  "moreThanOnePhone": {
+    "message": "Hay más de un móvil conectado. Elige antes uno en el icono de Flux."
+  },
+  "hostNotInstalled": {
+    "message": "El host de Flux no está instalado. Ejecuta: flux-cli browser install"
+  },
+  "popupConnected": {
+    "message": "$1/$2 conectados"
+  },
+  "popupNoPhone": {
+    "message": "No hay ningún móvil emparejado. Abre Flux en el móvil, en la misma red."
+  },
+  "popupNoWeb": {
+    "message": "Flux solo envía páginas web."
+  },
+  "popupHint": {
+    "message": "Haz clic derecho en un enlace o una página para enviarlo al móvil."
+  },
+  "popupNoPage": {
+    "message": "Sin página"
+  },
+  "popupNoAddress": {
+    "message": "Esta página no tiene dirección web"
+  },
+  "popupPickPhone": {
+    "message": "Usar este móvil para el menú y el atajo"
+  },
+  "popupOnline": {
+    "message": "conectado"
+  },
+  "popupOffline": {
+    "message": "sin conexión"
+  },
+  "popupSendPage": {
+    "message": "Enviar página"
+  },
+  "popupSending": {
+    "message": "Enviando a $1…"
+  }
+}

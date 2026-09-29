@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "__MSG_extName__",
+  "version": "0.5.0",
+  "default_locale": "en",
+  "description": "__MSG_extDescription__",
+  "//": "Firefox and Zen read the background as a list of scripts rather than a service worker. The add-on ID is fixed here on purpose: it is what `flux-cli browser install` writes into allowed_extensions of the host manifest, and the UUID a profile hands the add-on belongs to the profile, not to the host manifest.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "flux@omarchy.org"
+    }
+  },
+  "permissions": [
+    "activeTab",
+    "contextMenus",
+    "nativeMessaging",
+    "storage"
+  ],
+  "background": {
+    "scripts": [
+      "host.js",
+      "background.js"
+    ]
+  },
+  "action": {
+    "default_title": "__MSG_actionTitle__",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/symbolic16.png",
+      "48": "icons/symbolic48.png"
+    }
+  },
+  "icons": {
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

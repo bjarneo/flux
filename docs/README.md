@@ -9,6 +9,7 @@ A paired device can also connect through [Tailscale](tailscale.md) away from tha
 2. [Install the Android app](android.md) or [build the Mac app](macos.md#build-and-run).
 3. [Pair your phone](features.md#pair-a-phone) or [pair your Mac](macos.md#pair-a-mac).
 4. [Use the CLI](cli.md) or open the window with `flux-cli open`.
+5. [Add the browser extension](browser.md) to send a link to the phone from the browser.
 
 ## Use Flux
 
@@ -19,6 +20,7 @@ A paired device can also connect through [Tailscale](tailscale.md) away from tha
 | [Android setup and Play Protect](android-setup.md) | Play Protect blocks, installs with `adb`, restricted settings, the service, the network, and permissions |
 | [macOS](macos.md) | Mac app build, pairing, features, permissions, and local tests |
 | [CLI](cli.md) | Commands, device selection, JSON state, and notifications from scripts |
+| [Browser extension](browser.md) | Sending from the browser, the languages, and the native host |
 | [Everyday use](features.md) | Pair, share, clipboard images, SMS, media, calls, Do Not Disturb, automatic photo transfers, and dictation in text fields |
 | [Tailscale](tailscale.md) | Extra addresses, links away from the local network, other VPNs, and connection checks |
 | [Camera and streams](camera.md) | Scans, photos, webcam settings, microphone, and screen mirror |

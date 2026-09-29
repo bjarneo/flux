@@ -132,6 +132,9 @@ The root install performs system setup.
 Run `flux-cli setup` as the desktop user.
 Use `docs/install.md` for dependencies, the pacman package, and the user-only install.
 
+`flux-cli setup` also writes the native messaging manifests for the browser extension.
+The extension itself is loaded by hand, once per browser, and `docs/browser.md` says where.
+
 For a preview without installation:
 
 ```sh
@@ -156,6 +159,7 @@ make build
 | macOS app | `macos/Sources/FluxKit/`, `macos/App/` |
 | Fingerprint approval | `internal/approve/`, `cmd/flux-approve/`, Android `core/Approve*` |
 | herdr agents | `internal/herdr/`, `internal/core/herdr.go`, Android `core/Herdr.kt` |
+| Browser extension | `browser/extension/`, `cmd/flux-native/`, `internal/nativemsg/` |
 | Package and system install | `dist/`, `Makefile` |
 
 Keep network state in `fluxd`.
