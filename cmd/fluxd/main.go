@@ -56,7 +56,9 @@ func main() {
 			}
 		}
 	}
-	d, err := core.New(ctx, logger, core.Options{Headless: *headless, UDPPort: *udpPort, FirstTCPPort: *tcpPort, Version: version})
+	opts := core.Options{Headless: *headless, UDPPort: *udpPort, FirstTCPPort: *tcpPort, Version: version}
+	opts.ReleaseURL, opts.ReleaseDelay = releaseCheck(*headless)
+	d, err := core.New(ctx, logger, opts)
 	if err != nil {
 		logger.Fatalf("fluxd: %v", err)
 	}

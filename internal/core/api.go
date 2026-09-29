@@ -114,6 +114,7 @@ func (d *Daemon) Snapshot() json.RawMessage {
 			"pendingVersion": d.pendingVersion,
 		},
 		"devices":   views,
+		"update":    d.updateViewLocked(),
 		"clipboard": clip,
 		"transfers": transfers,
 		"commands":  commands,
@@ -129,6 +130,7 @@ func (d *Daemon) Snapshot() json.RawMessage {
 			"herdrTerminals":   d.cfg.HerdrTerminals,
 			"remoteInput":      d.cfg.RemoteInput,
 			"remoteDesktop":    d.cfg.RemoteDesktop,
+			"checkUpdates":     d.cfg.CheckUpdates,
 		},
 		"webcam":  d.webcamViewLocked(),
 		"mic":     d.micViewLocked(),
@@ -239,6 +241,8 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		return ok, d.runLocal(c)
 	case "settings.set":
 		return ok, d.setSetting(p.Key, p.Value)
+	case "update.install":
+		return ok, d.installUpdate()
 	}
 
 	dev, err := d.pick(p.Device)
@@ -419,6 +423,8 @@ func (d *Daemon) setSetting(key string, value any) error {
 		d.cfg.RemoteInput = b
 	case key == "remoteDesktop" && isBool:
 		d.cfg.RemoteDesktop = b
+	case key == "checkUpdates" && isBool:
+		d.cfg.CheckUpdates = b
 	case key == "name" && isString:
 		d.cfg.Name = strings.TrimSpace(s)
 	case key == "downloadDir" && isString:
@@ -444,6 +450,9 @@ func (d *Daemon) setSetting(key string, value any) error {
 	if key == "syncDnd" {
 		d.wakeDnd()
 	}
+	if key == "checkUpdates" {
+		d.wakeRelease()
+	}
 	d.markDirty()
 	return nil
 }
@@ -461,6 +470,7 @@ func (d *Daemon) Reload() error {
 	d.herdrChanged()
 	d.inputChanged()
 	d.wakeDnd()
+	d.wakeRelease()
 	return nil
 }
 

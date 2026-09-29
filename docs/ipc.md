@@ -47,6 +47,18 @@ The snapshot includes `self`, `devices`, `clipboard`, `transfers`, `commands`, `
 | `version` | The build version of the running fluxd. An earlier fluxd has no `version`. |
 | `pendingVersion` | The version of a new fluxd binary on disk, or an empty string. `fluxd.service` restarts into it when no transfer or stream runs. |
 
+`update` is the result of the [release check](configuration.md#release-check):
+
+| Field | Value |
+| --- | --- |
+| `enabled` | `false` when `check_updates` is off. The other fields are then empty. |
+| `latest` | The version of the latest release, such as `0.7.0`, or an empty string before the first answer. |
+| `available` | `true` when `latest` is newer than the running fluxd. |
+| `url` | The GitHub page of the latest release. |
+| `apk` | The download address of the Android app in the latest release. |
+| `checkedAt` | The Unix time of the last answer, or `0`. |
+| `error` | The error of the last check, such as a missing network, or an empty string. |
+
 To receive events, send:
 
 ```json
@@ -85,6 +97,14 @@ flux-cli watch
 | Text messages | `sms.refresh`, `sms.thread`, `sms.send` |
 | Streams | `webcam.config`, `webcam.stop`, `mic.stop`, `screen.stop`, `desktop.stop` |
 | Approval | `approve.request`, `approve.wait`, `approve.enroll` |
+| Settings and updates | `settings.set`, `update.install` |
+
+`update.install` opens a terminal that runs `flux-cli update`.
+To turn the release check off or on over IPC, send:
+
+```json
+{"id":4,"method":"settings.set","params":{"key":"checkUpdates","value":false}}
+```
 
 Read the handler before you add a client call.
 The approval helper applies additional peer and signature checks beyond this general socket protocol.

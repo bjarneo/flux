@@ -2,20 +2,22 @@ import QtQuick
 import ".."
 
 // A message at the bottom right that stays until its cause goes away.
-// action is the text of the button, or "" for no button.
+// action and secondary are the texts of the 2 buttons, or "" for no
+// button.
 Rectangle {
   id: root
   property string title: ""
   property string message: ""
   property string action: ""
+  property string secondary: ""
   signal activated()
+  signal secondaryActivated()
 
   width: Math.min(360, (parent ? parent.width : 392) - 32)
   implicitHeight: col.implicitHeight + 28
   color: Theme.bg2
   border.width: 2
   border.color: Theme.warn
-  z: 9
 
   Column {
     id: col
@@ -31,11 +33,21 @@ Rectangle {
       font.pixelSize: 12
       wrapMode: Text.Wrap
     }
-    AccentButton {
-      visible: root.action !== ""
-      text: root.action
-      fontSize: 12
-      onClicked: root.activated()
+    Row {
+      spacing: 8
+      visible: root.action !== "" || root.secondary !== ""
+      AccentButton {
+        visible: root.action !== ""
+        text: root.action
+        fontSize: 12
+        onClicked: root.activated()
+      }
+      OutlineButton {
+        visible: root.secondary !== ""
+        text: root.secondary
+        fontSize: 12
+        onClicked: root.secondaryActivated()
+      }
     }
   }
 }

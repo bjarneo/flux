@@ -12,6 +12,7 @@ import (
 	"flux/internal/config"
 	"flux/internal/core"
 	"flux/internal/plugin"
+	"flux/internal/release"
 	"flux/internal/upgrade"
 )
 
@@ -90,6 +91,22 @@ func watchBinary(ctx context.Context, d *core.Daemon, logger *log.Logger) string
 		},
 	}
 	return w.Run(ctx)
+}
+
+// releaseCheck returns the address and the first wait of the release
+// check. The first check waits 30 seconds, so that it does not slow the
+// login. A headless fluxd checks only when FLUX_RELEASES_URL is set, so
+// that tests do not ask GitHub. FLUX_RELEASE_DELAY changes the wait for
+// tests.
+func releaseCheck(headless bool) (string, time.Duration) {
+	delay := 30 * time.Second
+	if v, err := time.ParseDuration(os.Getenv("FLUX_RELEASE_DELAY")); err == nil && v >= 0 {
+		delay = v
+	}
+	if headless && os.Getenv("FLUX_RELEASES_URL") == "" {
+		return "", delay
+	}
+	return release.URL(), delay
 }
 
 // refreshPlugin updates the omarchy-shell plugin of the user to the plugin

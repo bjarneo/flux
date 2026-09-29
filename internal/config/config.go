@@ -57,6 +57,10 @@ type Config struct {
 	// RemoteDesktop lets the phone show the screen of this computer. It is
 	// off by default. The touches on the screen also need RemoteInput.
 	RemoteDesktop bool `toml:"remote_desktop"`
+	// CheckUpdates lets fluxd ask GitHub once a day for the latest
+	// release. It is on by default. Without a network, the check fails
+	// and Flux works as before.
+	CheckUpdates bool `toml:"check_updates"`
 	// GUI selects the window: "plugin" for the omarchy-shell plugin, "app"
 	// for flux-gui, or empty for the plugin when it is enabled.
 	GUI string `toml:"gui,omitempty"`
@@ -82,6 +86,9 @@ func IsOff() bool {
 
 // DataDir returns ~/.local/share/flux, or $XDG_DATA_HOME/flux.
 func DataDir() string { return filepath.Join(xdg("XDG_DATA_HOME", ".local/share"), "flux") }
+
+// CacheDir returns ~/.cache/flux, or $XDG_CACHE_HOME/flux.
+func CacheDir() string { return filepath.Join(xdg("XDG_CACHE_HOME", ".cache"), "flux") }
 
 // RuntimeDir returns $XDG_RUNTIME_DIR/flux.
 func RuntimeDir() string {
@@ -116,7 +123,7 @@ var mu sync.Mutex
 func Load() (*Config, error) {
 	mu.Lock()
 	defer mu.Unlock()
-	c := &Config{AutoClipboard: true, Notifications: true, ShareHome: true, PauseMediaOnCall: true, SyncDnd: true, Herdr: true}
+	c := &Config{AutoClipboard: true, Notifications: true, ShareHome: true, PauseMediaOnCall: true, SyncDnd: true, Herdr: true, CheckUpdates: true}
 	data, err := os.ReadFile(Path())
 	if errors.Is(err, os.ErrNotExist) {
 		c.Commands = []Command{}

@@ -70,6 +70,7 @@ Commands:
   off                    Stop fluxd, and do not start it at login
   on                     Start fluxd, and start it at each login
   doctor                 Check the setup and print the fixes
+  update [--check]       Install the latest release, or only check for it
   version                Print the versions of flux-cli and the running fluxd
 
 Without --device, flux-cli uses the only connected paired device.
@@ -146,6 +147,8 @@ func main() {
 		err = setup(args)
 	case "doctor":
 		doctor()
+	case "update":
+		err = update(args)
 	case "version", "--version":
 		printVersion()
 	case "help", "-h", "--help":
@@ -228,6 +231,13 @@ type State struct {
 		Version        string `json:"version"`
 		PendingVersion string `json:"pendingVersion"`
 	} `json:"self"`
+	Update struct {
+		Enabled   bool   `json:"enabled"`
+		Latest    string `json:"latest"`
+		Available bool   `json:"available"`
+		CheckedAt int64  `json:"checkedAt"`
+		Error     string `json:"error"`
+	} `json:"update"`
 	Devices []struct {
 		ID        string `json:"id"`
 		Name      string `json:"name"`

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"flux/internal/config"
 	"flux/internal/desktop"
 	"flux/internal/lan"
 	"flux/internal/proto"
@@ -334,10 +335,4 @@ func unb64(s string) string {
 	return string(b)
 }
 
-func cacheDir() string {
-	if d := os.Getenv("XDG_CACHE_HOME"); d != "" {
-		return filepath.Join(d, "flux")
-	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".cache", "flux")
-}
+func cacheDir() string { return config.CacheDir() }

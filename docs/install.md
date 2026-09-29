@@ -207,6 +207,26 @@ Flux then moves the running parts to the new version:
 Only `fluxd.service` restarts by itself.
 A `fluxd` that you started by hand logs the new version and keeps running.
 
+### Update with flux-cli
+
+To install the latest release, run:
+
+```sh
+flux-cli update
+```
+
+For a pacman package, `flux-cli update` downloads the release package, checks its SHA-256 checksum, and runs `sudo pacman -U`.
+When the release has no package for your architecture, it runs `yay -S omarchy-flux`.
+For a source install, it prints the commands for your checkout.
+
+When a newer release exists, the window shows **Flux 0.7.0 is available**.
+**Update** opens a terminal that runs `flux-cli update`.
+**Later** hides the notice until the window opens again.
+The daily [release check](configuration.md#release-check) finds the release.
+To turn the check off, set `check_updates = false`.
+
+### Check the versions
+
 To check the versions after an update, run:
 
 ```sh

@@ -33,6 +33,8 @@ flux-cli setup --dry-run
 flux-cli setup
 flux-cli setup --no-plugin
 flux-cli doctor
+flux-cli update --check
+flux-cli update
 flux-cli status
 flux-cli status --json
 flux-cli off
@@ -44,6 +46,13 @@ Window pages: `overview`, `clipboard`, `files`, `notifications`, `messages`, `br
 
 `flux-cli version` prints the version of `flux-cli` and of the running `fluxd`.
 After an update, it also prints the new `fluxd` version that waits for its restart.
+When the [release check](configuration.md#release-check) found a newer release, it prints that release.
+
+`flux-cli update --check` asks GitHub for the latest release and prints it.
+`flux-cli update` also installs it.
+For a pacman package, it downloads the release package, checks it against `SHA256SUMS`, and runs `sudo pacman -U`.
+For a source install, it prints the commands for the checkout.
+Without a network, it prints the error and returns 1.
 See [update](install.md#update).
 
 `flux-cli open` starts `fluxd.service` when no `fluxd` answers.

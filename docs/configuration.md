@@ -26,6 +26,7 @@ herdr_control = false
 herdr_terminals = false
 remote_input = false
 remote_desktop = false
+check_updates = true
 gui = ""
 approve_timeout = 20
 
@@ -51,6 +52,7 @@ command = "omarchy-system-lock"
 | `herdr_terminals` | Let the phone open herdr terminals, read them, and type commands in them. Needs `herdr_control`. Defaults to `false`. See [Use terminals](herdr.md#use-terminals). |
 | `remote_input` | Let the phone or the Mac move the pointer and type on this computer. Defaults to `false`. See [Touchpad and keyboard](remote-input.md). |
 | `remote_desktop` | Let the phone or the Mac show the screen of this computer. Defaults to `false`. The touches and the mouse on the screen also need `remote_input`. See [Remote desktop](remote-desktop.md). |
+| `check_updates` | Ask GitHub once a day for the latest release. Defaults to `true`. See [release check](#release-check). |
 | `gui` | Use `app`, `plugin`, or an empty value for automatic host selection. |
 | `approve_timeout` | Wait 5 to 120 seconds for approval. Zero or an omitted value uses 20 seconds. |
 | `commands` | Desktop commands available to the phone. A new configuration has no commands. |
@@ -72,6 +74,8 @@ Use the [CLI](cli.md#desktop-commands) or the Phone commands page to add command
 | `~/Pictures/flux/screenshots/` | Automatically received screenshots by default |
 | `~/Pictures/flux/signatures/` | Signatures from the camera by default |
 | `~/.cache/flux/` | Notification icons and album art |
+| `~/.cache/flux/release.json` | The last answer of the [release check](#release-check) |
+| `~/.cache/flux/update/` | The package that `flux-cli update` downloads, until pacman installs it |
 | `$XDG_RUNTIME_DIR/flux/fluxd.sock` | Local IPC socket |
 | `/etc/flux/approve/<user>.pub` | Root-owned phone approval public key |
 | `/etc/flux/approve/pam-backup/` | Original PAM files from approval setup |
@@ -91,9 +95,39 @@ Its replacement changes the desktop identity and requires new pairing.
 | `FLUX_SNAPSHOT` | Select the output directory for the QML snapshot harness. |
 | `FLUX_SNAPSHOT_ONLY` | Filter snapshot names by text. |
 | `HERDR_SOCKET_PATH` | Select the herdr session that `fluxd` follows. See [herdr agents](herdr.md#use-another-herdr-session). |
+| `FLUX_RELEASES_URL` | Replace the GitHub API address of the release check. Tests use it. |
+| `FLUX_RELEASE_DELAY` | Change the wait before the first release check, such as `0s`. Tests use it. |
+| `FLUX_BINARY_POLL` | Change the interval of the check for a new `fluxd` binary, such as `100ms`. Tests use it. |
 
 Without `XDG_RUNTIME_DIR`, the daemon uses `flux-<uid>` inside the system temporary directory.
 See [development](development.md) for an isolated test environment.
+
+## Release check
+
+`fluxd` asks GitHub once a day for the latest Flux release.
+When a newer release exists, the window shows **Flux 0.7.0 is available**, and `flux-cli version` prints it.
+The update itself starts only when you select **Update** or run `flux-cli update`.
+
+The check sends 1 HTTPS `GET` request to `api.github.com`.
+The request has the Flux version in its `User-Agent` header and no other data.
+GitHub sees the IP address of the computer.
+
+The check needs no network to work correctly:
+
+- The first check runs 30 seconds after `fluxd` starts, so it does not slow the login.
+- Without a network, the check fails at once, and `fluxd` works as before.
+- `fluxd` tries again after 1 hour, or at the next network change.
+- `fluxd` keeps the last answer in `~/.cache/flux/release.json`. A known update stays visible without a network.
+- `flux-cli doctor` shows the error of the last failed check.
+
+To turn the check off, set `check_updates = false` in `~/.config/flux/config.toml`, then reload the service:
+
+```sh
+systemctl --user reload fluxd
+```
+
+When the check is off, `fluxd` sends no request, and the window shows no update notice.
+`flux-cli update` still asks GitHub when you run it.
 
 ## Turn Flux off or on
 

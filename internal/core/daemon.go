@@ -87,6 +87,15 @@ type Daemon struct {
 	// pendingVersion is the version of a new fluxd binary on disk. fluxd
 	// restarts into it when no transfer or stream runs.
 	pendingVersion string
+	// binDir is the folder of the fluxd binary at the start.
+	binDir string
+	// release is the last answer of the release check. releaseErr is the
+	// error of the last check, or "". releaseTried is the time of the last
+	// check. releaseWake starts a check when one is due.
+	release      releaseInfo
+	releaseErr   string
+	releaseTried time.Time
+	releaseWake  chan struct{}
 
 	// herdrPath is the API socket of herdr. herdrRunning, herdrAgents,
 	// herdrTerms, herdrPlaces, and herdrKinds are the last state that the
@@ -119,6 +128,11 @@ type Options struct {
 	FirstTCPPort int
 	// Version is the build version of fluxd.
 	Version string
+	// ReleaseURL is the GitHub API address of the latest release. Empty
+	// turns the release check off. ReleaseDelay is the wait before the
+	// first check after the start.
+	ReleaseURL   string
+	ReleaseDelay time.Duration
 }
 
 type clipboard interface {
@@ -191,9 +205,13 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 		ctx:     ctx,
 		logger:  logger,
 
-		herdrPath: herdr.SocketPath(),
-		herdrWake: make(chan struct{}, 1),
-		dndWake:   make(chan struct{}, 1),
+		herdrPath:   herdr.SocketPath(),
+		herdrWake:   make(chan struct{}, 1),
+		dndWake:     make(chan struct{}, 1),
+		releaseWake: make(chan struct{}, 1),
+	}
+	if exe, err := os.Executable(); err == nil {
+		d.binDir = filepath.Dir(exe)
 	}
 	if opts.Headless {
 		d.clip = &memClipboard{}
@@ -298,6 +316,7 @@ func (d *Daemon) Run() error {
 		return err
 	}
 	d.logf("fluxd %s listening on TCP %d as %q", d.selfID, d.lan.TCPPort(), d.Name())
+	go d.releaseLoop(ctx)
 	if d.opts.Headless {
 		go d.publishLoop(ctx)
 		go d.discoveryLoop(ctx)
@@ -413,6 +432,7 @@ func (d *Daemon) discoveryLoop(ctx context.Context) {
 			d.logf("network changed, broadcasting")
 			d.resetDials()
 			d.announce()
+			d.wakeRelease()
 			continue
 		}
 		if n%3 == 0 {

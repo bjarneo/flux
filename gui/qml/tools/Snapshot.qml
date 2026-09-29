@@ -201,7 +201,15 @@ Window {
       setField("Text message via Pixel 8", "Running 10 minutes late")
     }],
     // An update replaced flux-gui while its window is open.
-    ["43-app-updated", function () { view.tab = "overview"; view.appReplaced = true }]
+    ["43-app-updated", function () { view.tab = "overview"; view.appReplaced = true }],
+    // A new release, while this computer has an earlier version.
+    ["44-update-available", function () {
+      view.appReplaced = false
+      mock.setState(function (s) {
+        s.self.version = "0.6.0"
+        s.update = { enabled: true, latest: "0.7.0", available: true, url: "https://github.com/bjarneo/flux/releases/tag/v0.7.0", apk: "", checkedAt: 0, error: "" }
+      })
+    }]
   ]
 
   function pageItem() {

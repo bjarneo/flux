@@ -132,12 +132,17 @@ The root install performs system setup.
 Run `flux-cli setup` as the desktop user.
 Use `docs/install.md` for dependencies, the pacman package, and the user-only install.
 
+To install the latest release, run `flux-cli update`.
+It asks for the sudo password, so run it in a terminal that the user sees.
 After an update, `fluxd.service` restarts into the new binary when no transfer or stream runs.
 Confirm the running version:
 
 ```sh
 flux-cli version
 ```
+
+`fluxd` checks GitHub once a day for a new release.
+`check_updates = false` in `config.toml` turns the check off.
 
 Use `docs/install.md` for the update command of each install method.
 

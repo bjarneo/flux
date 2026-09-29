@@ -66,6 +66,19 @@ journalctl --user -u fluxd -n 50 --no-pager
 The line `the new ... does not run` means that the new binary failed its version check.
 Install the update again.
 
+## The release check fails
+
+Flux works without the internet.
+Only the daily [release check](configuration.md#release-check) needs a connection to `api.github.com`.
+`flux-cli doctor` shows the error of the last failed check.
+`fluxd` tries again after 1 hour or at the next network change.
+
+To turn the check off, set `check_updates = false` in `~/.config/flux/config.toml`, then run:
+
+```sh
+systemctl --user reload fluxd
+```
+
 ## The phone does not appear
 
 1. Open Flux for Android or Flux for macOS.

@@ -782,15 +782,35 @@ Item {
     }
   }
 
-  NoticeBar {
+  // The update notices. Later hides a release until the window opens
+  // again.
+  readonly property var update: (backend && backend.state && backend.state.update) || ({})
+  property string laterVersion: ""
+  Column {
     anchors.bottom: parent.bottom
     anchors.right: parent.right
     anchors.margins: 16
-    visible: root.appReplaced
-    title: "Flux was updated"
-    message: "This window runs the earlier version. Restart it to use the new version."
-    action: "Restart"
-    onActivated: root.restartApp()
+    width: Math.min(360, root.width - 32)
+    spacing: 10
+    z: 9
+    NoticeBar {
+      width: parent.width
+      visible: root.daemonUp && !!root.update.available && root.update.latest !== root.laterVersion && !root.appReplaced
+      title: "Flux " + (root.update.latest || "") + " is available"
+      message: "This computer has Flux " + ((root.backend && root.backend.selfDevice && root.backend.selfDevice.version) || "") + ". Update opens a terminal that runs flux-cli update."
+      action: "Update"
+      secondary: "Later"
+      onActivated: root.call("update.install", {})
+      onSecondaryActivated: root.laterVersion = root.update.latest
+    }
+    NoticeBar {
+      width: parent.width
+      visible: root.appReplaced
+      title: "Flux was updated"
+      message: "This window runs the earlier version. Restart it to use the new version."
+      action: "Restart"
+      onActivated: root.restartApp()
+    }
   }
 
   Toast {

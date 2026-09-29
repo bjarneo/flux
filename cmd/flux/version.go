@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"strings"
+
+	"flux/internal/config"
 )
 
 // printVersion prints the version of flux-cli, then the version of the
@@ -22,6 +24,9 @@ func printVersion() {
 	if p := s.Self.PendingVersion; p != "" {
 		fmt.Printf("fluxd %s is installed. fluxd.service restarts into it when no transfer or stream runs\n", p)
 	}
+	if u := s.Update; u.Available {
+		fmt.Printf("Flux %s is available. To update, run: flux-cli update\n", u.Latest)
+	}
 }
 
 // checkVersion compares the running fluxd with the installed fluxd and
@@ -37,6 +42,19 @@ func checkVersion(s State, check func(ok bool, pass, fix string)) {
 		check(true, fmt.Sprintf("fluxd %s runs, the same version as flux-cli", running), "")
 	default:
 		fmt.Printf("- fluxd %s runs, and flux-cli is %s. They come from different installs. To see the fluxd path, run: systemctl --user cat fluxd\n", running, version)
+	}
+
+	u := s.Update
+	switch {
+	case !u.Enabled:
+		fmt.Println("- The release check is off. To turn it on, set check_updates = true in", config.Path())
+	case u.Available:
+		fmt.Printf("- Flux %s is available. To update, run: flux-cli update\n", u.Latest)
+	case u.Error != "":
+		fmt.Println("- The last release check failed:", u.Error)
+		fmt.Println("  Flux works without the internet. fluxd tries again in 1 hour or after a network change")
+	case u.CheckedAt > 0:
+		check(true, fmt.Sprintf("Flux %s is the latest release", u.Latest), "")
 	}
 }
 
