@@ -150,8 +150,10 @@ jobs:
           retention-days: 14
 
   # The iOS app. Releases do not ship it, so release.yml turns this job off.
+  # A push or a pull request has no inputs, and GitHub compares null and
+  # false as equal, so the check compares the JSON text.
   ios:
-    if: inputs.ios != false
+    if: toJSON(inputs.ios) != 'false'
     runs-on: macos-26
     timeout-minutes: 45
     steps:
