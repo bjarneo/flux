@@ -5,8 +5,8 @@ import XCTest
 @testable import Flux
 
 /// Renders the output of an opencode screen in both appearances: panels
-/// with their fill, the panel bars, a wrapped line, and the logo. With
-/// TEST_RUNNER_FLUX_SCREENS set, the test saves each screen as a PNG in that folder.
+/// with their fill, the panel bars, a wrapped line, and the logo. Each must
+/// draw a screen, see `ScreenRender`, and the dark one must be darker.
 @MainActor
 final class TermRowsRenderTests: XCTestCase {
     private let esc = "\u{1B}"
@@ -47,29 +47,15 @@ final class TermRowsRenderTests: XCTestCase {
         return rows.joined(separator: "\n")
     }
 
-    private func render(_ scheme: ColorScheme, name: String) throws {
+    private func render(_ scheme: ColorScheme, name: String) throws -> Double {
         let output = HerdrOutput(pane: "w1:p2", loading: false, lines: TermText.lines(screen, platform: .phone))
-        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
-        let window = UIWindow(windowScene: scene)
-        window.frame = CGRect(x: 0, y: 0, width: 402, height: 874)
         let view = PaneOutput(output: output).padding(16).background(Color(.systemGroupedBackground))
-        window.rootViewController = UIHostingController(rootView: view.environment(\.colorScheme, scheme))
-        window.overrideUserInterfaceStyle = scheme == .dark ? .dark : .light
-        window.makeKeyAndVisible()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.8))
-        let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
-            window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
-        }
-        window.isHidden = true
-        let png = try XCTUnwrap(image.pngData())
-        XCTAssertGreaterThan(png.count, 10_000, "\(name) drew something")
-        if let dir = ProcessInfo.processInfo.environment["FLUX_SCREENS"], !dir.isEmpty {
-            try png.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name).png"))
-        }
+        return try ScreenRender.render(view, name: name, scheme: scheme, wait: 0.8)
     }
 
     func testRendersAnOpencodeScreen() throws {
-        try render(.dark, name: "p10-opencode-dark")
-        try render(.light, name: "p10-opencode-light")
+        let dark = try render(.dark, name: "p10-opencode-dark")
+        let light = try render(.light, name: "p10-opencode-light")
+        XCTAssertLessThan(dark, light, "the dark screen is darker")
     }
 }

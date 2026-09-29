@@ -7,8 +7,7 @@ import XCTest
 
 /// Renders the approval sheet for a request that FluxKit parses from the
 /// packet that fluxd sends, and the screen of a device without a Secure
-/// Enclave. With TEST_RUNNER_FLUX_SCREENS set,
-/// the test saves each screen as a PNG in that folder.
+/// Enclave, and checks that each draws a screen, see `ScreenRender`.
 @MainActor
 final class ApprovePromptRenderTests: XCTestCase {
     /// The packet of internal/core/approve.go ApproveRequest.
@@ -23,21 +22,7 @@ final class ApprovePromptRenderTests: XCTestCase {
     }
 
     private func render(_ view: some View, name: String) throws {
-        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
-        let window = UIWindow(windowScene: scene)
-        window.frame = CGRect(x: 0, y: 0, width: 402, height: 874)
-        window.rootViewController = UIHostingController(rootView: view.environment(\.colorScheme, .light))
-        window.makeKeyAndVisible()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.5))
-        let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
-            window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
-        }
-        window.isHidden = true
-        let png = try XCTUnwrap(image.pngData())
-        XCTAssertGreaterThan(png.count, 10_000, "\(name) drew something")
-        if let dir = ProcessInfo.processInfo.environment["FLUX_SCREENS"], !dir.isEmpty {
-            try png.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name).png"))
-        }
+        try ScreenRender.render(view, name: name)
     }
 
     private func prompt(_ r: ApproveRequest, _ phase: ApprovePhase, texts: ApproveTexts = .current) -> some View {
