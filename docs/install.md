@@ -82,16 +82,51 @@ See [release setup](releasing.md) for the first publication.
 
 ## Install a release package
 
-Download the `.pkg.tar.zst` package and `SHA256SUMS` from the same GitHub release.
-From the download directory, verify and install them:
+Download the `.pkg.tar.zst` package, `SHA256SUMS`, and `SHA256SUMS.sig` from the same GitHub release.
+[Check the release](#check-a-release), then install the package from the download directory:
 
 ```sh
-sha256sum --check --ignore-missing SHA256SUMS
 sudo pacman -U ./omarchy-flux-0.1.0-1-x86_64.pkg.tar.zst
 flux-cli setup
 ```
 
 Replace the example filename with the downloaded version.
+
+## Check a release
+
+The checksum in `SHA256SUMS` finds a damaged download.
+It does not show who made the release, because the same release gives the file and its checksum.
+The signature in `SHA256SUMS.sig` shows that the Flux release workflow made `SHA256SUMS`.
+
+To check the signature, you need the public release key: the value of `PublicKey` in [`internal/release/sign.go`](../internal/release/sign.go).
+While that value is empty, the releases have no key to check.
+From the download directory, replace `KEY` with the public key and run:
+
+```sh
+printf -- '-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA%s\n-----END PUBLIC KEY-----\n' KEY > flux-release.pem
+base64 -d SHA256SUMS.sig > SHA256SUMS.sig.bin
+openssl pkeyutl -verify -pubin -inkey flux-release.pem -rawin -in SHA256SUMS -sigfile SHA256SUMS.sig.bin
+```
+
+OpenSSL prints `Signature Verified Successfully`.
+Then check the downloads against `SHA256SUMS`:
+
+```sh
+sha256sum --check --ignore-missing SHA256SUMS
+```
+
+Android installs an update only with the certificate of the installed app.
+For a first install of `flux-android-VERSION.apk`, compare its certificate with the Flux release certificate:
+
+```sh
+apksigner verify --print-certs flux-android-0.1.0.apk
+```
+
+The line `Signer #1 certificate SHA-256 digest` must show:
+
+```text
+a9af3fb3886f2c7cf4e2c9d93824aed23314d4e4fb36a364373064aa11700884
+```
 
 ## Build and install directly
 
@@ -174,7 +209,7 @@ rm ~/.local/bin/flux
 | Step | Effect |
 | --- | --- |
 | Package install or `sudo make install` | Installs the service, udev rule, desktop files, binaries, helper, plugin assets, and the [short name](#the-command-name) `flux`. |
-| `dist/post-install.sh` | Reloads udev and enables the user service globally. Loads the optional webcam module when no existing configuration controls it. Restarts a running `fluxd` of an earlier version, which does not restart by itself. |
+| `dist/post-install.sh` | Reloads udev. Loads the optional webcam module when no existing configuration controls it. Restarts a running `fluxd` of an earlier version, which does not restart by itself. It does not enable the user service for the accounts on the computer. |
 | `flux-cli setup` | Enables and starts the user service. Copies and enables the shell plugin when the shell is available. |
 | `flux-cli setup --dry-run` | Prints the user setup actions without applying them. |
 | Each start of `fluxd` | Updates the files of an added plugin to the plugin of the same install. |
@@ -215,8 +250,16 @@ To install the latest release, run:
 flux-cli update
 ```
 
-For a pacman package, `flux-cli update` downloads the release package, checks its SHA-256 checksum, and runs `sudo pacman -U`.
-When the release has no package for your architecture, it runs `yay -S omarchy-flux`.
+For a pacman package, `flux-cli update` does these steps:
+
+1. It downloads `SHA256SUMS` and checks `SHA256SUMS.sig` with the public release key.
+2. It downloads the release package into `~/.cache/flux/update`, which only your user can read, and checks it against `SHA256SUMS`.
+3. `sudo` copies the package into a new folder that only root can read, checks the copy again, and runs `pacman -U` on the copy.
+
+A `flux-cli` without a public release key skips the signature check in step 1 and says so.
+When `SHA256SUMS` or the signature is missing or does not match, `flux-cli update` stops and installs nothing.
+An upload of the release can be incomplete for a short time, so try again later.
+When the release has no package for your architecture, `flux-cli update` runs `yay -S omarchy-flux`.
 For a source install, it prints the commands for your checkout.
 
 When a newer release exists, the window shows **Flux 0.7.0 is available**.
@@ -257,11 +300,10 @@ yay -S omarchy-flux
 
 ### Update a release package
 
-Download the new `.pkg.tar.zst` package and `SHA256SUMS` from the same GitHub release.
-From the download directory, run:
+Download the new `.pkg.tar.zst` package, `SHA256SUMS`, and `SHA256SUMS.sig` from the same GitHub release.
+[Check the release](#check-a-release), then install the package from the download directory:
 
 ```sh
-sha256sum --check --ignore-missing SHA256SUMS
 sudo pacman -U ./omarchy-flux-0.7.0-1-x86_64.pkg.tar.zst
 ```
 

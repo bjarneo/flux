@@ -116,6 +116,11 @@ type Daemon struct {
 	dirty  chan struct{}
 	ctx    context.Context
 	logger *log.Logger
+
+	// appSending is the name of the phone that gets the Android app from
+	// sendAppUpdate, or "". Only 1 app update runs at a time, and Busy
+	// counts it.
+	appSending string
 }
 
 // Options change how the daemon runs. The zero value is the normal mode.
@@ -257,6 +262,8 @@ func (d *Daemon) Busy() string {
 		what = "the screen mirror"
 	case d.desktop != nil:
 		what = "the remote desktop"
+	case d.appSending != "":
+		what = "the app update for " + d.appSending
 	}
 	d.mu.Unlock()
 	if what == "" && d.approvals.pending() > 0 {
