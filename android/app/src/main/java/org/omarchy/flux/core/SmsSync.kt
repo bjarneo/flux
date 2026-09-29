@@ -157,7 +157,7 @@ object SmsSync {
     private fun answer(context: Context, d: Device, list: List<TextMessage>, threadId: Long?) {
         // The newest messages go in last, so that they stay when the watch is full.
         list.sortedBy { it.date }.forEach(changes::watch)
-        d.send(SmsPackets.messages(list, names(context, list), threadId))
+        SmsPackets.messagePackets(list, names(context, list), threadId).forEach { d.send(it) }
     }
 
     // ------------------------------------------------------------------ send
@@ -232,8 +232,8 @@ object SmsSync {
         out.forEach(changes::watch)
         val targets = core.connectedPaired().filter { Types.SMS_MESSAGES in it.identity.incoming }
         if (targets.isEmpty()) return
-        val packet = SmsPackets.messages(out, names(app, out))
-        targets.forEach { it.send(packet) }
+        val packets = SmsPackets.messagePackets(out, names(app, out))
+        targets.forEach { d -> packets.forEach { d.send(it) } }
         Log.i(TAG, "sent ${out.size} changed messages to ${targets.size} computers")
     }
 

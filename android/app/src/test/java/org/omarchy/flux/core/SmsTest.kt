@@ -197,4 +197,36 @@ class SmsTest {
         assertEquals("[Contact]", SmsPackets.attachmentLabel("text/x-vcard"))
         assertEquals("[Attachment]", SmsPackets.attachmentLabel("application/pdf"))
     }
+
+    @Test
+    fun aLongTextIsCut() {
+        assertEquals("short", SmsPackets.clip("short"))
+        val long = "a".repeat(SmsPackets.MAX_BODY + 10)
+        assertEquals(SmsPackets.MAX_BODY + SmsPackets.CUT_MARK.length, SmsPackets.clip(long).length)
+        assertTrue(SmsPackets.clip(long).endsWith(SmsPackets.CUT_MARK))
+        // A cut does not split a character that takes 2 UTF-16 units.
+        val emoji = "a".repeat(SmsPackets.MAX_BODY - 1) + "\uD83D\uDE00"
+        assertEquals("a".repeat(SmsPackets.MAX_BODY - 1) + SmsPackets.CUT_MARK, SmsPackets.clip(emoji))
+    }
+
+    @Test
+    fun largeAnswersSplitBelowTheBudget() {
+        val list = (1L..10L).map { msg(it, date = 100 - it).copy(body = "x".repeat(1000)) }
+        val budget = 3500
+        val packets = SmsPackets.messagePackets(list, budget = budget)
+        assertTrue(packets.size > 1)
+        assertTrue(packets.all { it.serialize().length < budget + 200 })
+        val ids = packets.flatMap { p -> p.array("messages")!!.map { (it as JsonObject).long("_id") } }
+        assertEquals("a list with no thread keeps every message", list.map { it.id }, ids)
+
+        val thread = SmsPackets.messagePackets(list, threadId = 1, budget = budget)
+        assertEquals("the computer takes 1 answer to a thread request", 1, thread.size)
+        val kept = thread.single().array("messages")!!.map { (it as JsonObject).long("_id") }
+        assertEquals("the answer keeps the newest messages", list.take(kept.size).map { it.id }, kept)
+        assertEquals(1L, thread.single().long("threadID"))
+
+        val empty = SmsPackets.messagePackets(emptyList(), threadId = 5)
+        assertEquals(1, empty.size)
+        assertEquals(0, empty.single().array("messages")!!.size)
+    }
 }

@@ -31,8 +31,10 @@ private const val TAG = "FluxCalls"
  * from PhoneStateListener before that. The number needs READ_CALL_LOG. On
  * Android 12 and later, it comes from the PHONE_STATE broadcast, which can
  * arrive after the state. Then the phone sends ringing again with the
- * number, and the computer replaces its notification. The contact name
- * needs READ_CONTACTS.
+ * number, and the computer replaces its notification. The receiver listens
+ * also without READ_CALL_LOG, because Android checks the permission for
+ * each broadcast, and the user can allow the call log later. The contact
+ * name needs READ_CONTACTS.
  */
 class CallMonitor(private val context: Context) {
     private val tm = context.getSystemService(TelephonyManager::class.java)
@@ -52,16 +54,15 @@ class CallMonitor(private val context: Context) {
                 }
                 tm.registerTelephonyCallback(context.mainExecutor, cb)
                 listener = cb
-                if (granted(Manifest.permission.READ_CALL_LOG)) {
-                    val r = object : BroadcastReceiver() {
-                        override fun onReceive(c: Context, i: Intent) {
-                            @Suppress("DEPRECATION")
-                            i.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER)?.let(::onNumber)
-                        }
+                val r = object : BroadcastReceiver() {
+                    override fun onReceive(c: Context, i: Intent) {
+                        // Without READ_CALL_LOG, the broadcast has no number.
+                        @Suppress("DEPRECATION")
+                        i.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER)?.let(::onNumber)
                     }
-                    ContextCompat.registerReceiver(context, r, IntentFilter(TelephonyManager.ACTION_PHONE_STATE_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
-                    receiver = r
                 }
+                ContextCompat.registerReceiver(context, r, IntentFilter(TelephonyManager.ACTION_PHONE_STATE_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
+                receiver = r
             } else {
                 @Suppress("DEPRECATION")
                 val l = object : PhoneStateListener() {
