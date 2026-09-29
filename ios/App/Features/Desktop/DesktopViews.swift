@@ -48,10 +48,15 @@ struct DesktopScreen: View {
                 } else if !input.model.isDesktopOn(d.id) {
                     unavailable("Remote desktop is off", "display",
                                 "On \(d.name), set `remote_desktop = true` in `~/.config/flux/config.toml`, then run `systemctl --user reload fluxd`.")
-                } else if let controller {
-                    DesktopContent(controller: controller)
                 } else {
-                    Color.black.onAppear { controller = DesktopController(device: d, app: model, plugin: plugin, input: input) }
+                    // Remote desktop can turn on while the screen is open, after the tile.
+                    UnlockGate(reason: "Show the screen of \(d.name).") {
+                        if let controller {
+                            DesktopContent(controller: controller)
+                        } else {
+                            Color.black.onAppear { controller = DesktopController(device: d, app: model, plugin: plugin, input: input) }
+                        }
+                    }
                 }
             }
         }

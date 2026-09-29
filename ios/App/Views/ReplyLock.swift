@@ -1,6 +1,7 @@
 import FluxKit
 import Foundation
 import LocalAuthentication
+import SwiftUI
 
 /// The time during which an unlock stays valid.
 struct UnlockWindow {
@@ -77,5 +78,37 @@ enum ReplyLock {
             self.action = action
             self.onError = onError
         }
+    }
+}
+
+/// Shows its content only after the check of `ReplyLock`. A tile checks
+/// before it opens a screen whose controls are on, but the controls can
+/// turn on while the screen is open, and then this checks in the screen.
+struct UnlockGate<Content: View>: View {
+    /// The reason under the prompt, a short sentence.
+    let reason: String
+    @ViewBuilder let content: () -> Content
+    @State private var unlocked = ReplyLock.isUnlocked
+    @State private var error: String?
+
+    var body: some View {
+        if unlocked {
+            content()
+        } else {
+            ContentUnavailableView {
+                Label("Locked", systemImage: "lock")
+            } description: {
+                Text(error ?? reason)
+            } actions: {
+                Button("Unlock") { unlock() }
+                    .buttonStyle(.borderedProminent)
+            }
+            .onAppear { unlock() }
+        }
+    }
+
+    private func unlock() {
+        error = nil
+        ReplyLock.run(reason: reason) { unlocked = true } onError: { error = $0 }
     }
 }

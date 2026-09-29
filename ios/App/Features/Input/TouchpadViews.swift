@@ -156,7 +156,9 @@ struct TouchpadScreen: View {
                     ContentUnavailableView("Remote input is off", systemImage: "hand.point.up.left",
                                            description: Text("On \(device.name), set `remote_input = true` in `~/.config/flux/config.toml`, then run `systemctl --user reload fluxd`."))
                 } else {
-                    TouchpadContent(deviceId: device.id, input: input)
+                    UnlockGate(reason: "Use the touchpad of \(device.name).") {
+                        TouchpadContent(deviceId: device.id, input: input)
+                    }
                 }
             }
         }
