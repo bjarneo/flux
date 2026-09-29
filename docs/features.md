@@ -193,6 +193,7 @@ Flux sends each completed image to every connected computer once.
 Images from before the option was enabled stay on the phone.
 An image that no computer received waits for a computer to connect.
 The desktop notification includes an Open action.
+With `auto_clipboard` on, the desktop also puts each received screenshot on the clipboard as an image.
 
 See [camera and streams](camera.md) for direct capture and live media.
 
