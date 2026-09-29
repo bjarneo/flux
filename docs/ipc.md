@@ -92,6 +92,7 @@ flux-cli watch
 | Pairing | `pair.request`, `pair.accept`, `pair.reject`, `pair.unpair` |
 | Addresses | `addresses.add`, `addresses.remove` |
 | Sharing | `clipboard.send`, `share.files`, `share.url` |
+| Transfers | `transfer.cancel`, `transfer.open`, `transfer.copy` |
 | Commands | `commands.add`, `commands.remove`, `commands.run` |
 | Notifications | `notification.dismiss`, `notification.dismissAll`, `notification.reply` |
 | Text messages | `sms.refresh`, `sms.thread`, `sms.send` |

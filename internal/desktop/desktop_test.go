@@ -138,6 +138,25 @@ func TestClipboardRecordText(t *testing.T) {
 	}
 }
 
+func TestClipboardSetImageText(t *testing.T) {
+	fakeWlCopy(t)
+	c := NewClipboard()
+	var got []string
+	onText := func(s string) { got = append(got, s) }
+	onImage := func([]byte, string) { t.Fatal("a file URI reported an image") }
+	// wl-copy offers a file URI also as plain text, so the text watcher
+	// reads it. The copy must not go to the phone.
+	uri := "file:///home/me/a%20b.pdf\r\n"
+	types := "text/uri-list text/plain text/plain;charset=utf-8 TEXT STRING UTF8_STRING"
+	if err := c.SetImage([]byte(uri), "text/uri-list"); err != nil {
+		t.Fatal(err)
+	}
+	c.record("text", record("data", []byte(uri), types), false, onText, onImage)
+	if len(got) != 0 {
+		t.Fatalf("reported %q", got)
+	}
+}
+
 func TestClipboardRecordImage(t *testing.T) {
 	fakeWlCopy(t)
 	c := NewClipboard()

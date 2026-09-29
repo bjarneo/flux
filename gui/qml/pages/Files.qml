@@ -155,9 +155,12 @@ Item {
           // A narrow row puts the bar under the name, so the name keeps room.
           readonly property real inner: width - 38
           readonly property bool compact: inner < 460
-          readonly property real statusWidth: compact ? 90 : 110
-          readonly property real barWidth: compact ? 0 : Math.max(80, Math.min(260, inner - 28 - 110 - 48 - 120))
+          readonly property real statusWidth: finished ? 50 : compact ? 90 : 110
+          readonly property real barWidth: compact ? 0 : Math.max(80, Math.min(260, inner - 28 - statusWidth - 48 - 120 - actionsWidth))
           readonly property real progress: modelData.size > 0 ? (modelData.done || 0) / modelData.size : (modelData.state === "done" ? 1 : 0)
+          // A finished file gets open and copy buttons before the status.
+          readonly property bool finished: modelData.state === "done" && !!modelData.path
+          readonly property real actionsWidth: finished ? actions.width + 12 : 0
           width: col.width
           implicitHeight: nameCol.implicitHeight + 26
 
@@ -172,7 +175,7 @@ Item {
           Column {
             id: nameCol
             x: 19 + 28 + 16
-            width: row.compact ? row.inner - 28 - 16 - 16 - row.statusWidth : row.inner - 28 - 16 - row.barWidth - 16 - 16 - 110
+            width: row.compact ? row.inner - 28 - 16 - 16 - row.statusWidth - row.actionsWidth : row.inner - 28 - 16 - row.barWidth - 16 - 16 - row.statusWidth - row.actionsWidth
             anchors.verticalCenter: parent.verticalCenter
             spacing: row.compact ? 3 : 0
             Txt { width: parent.width; text: modelData.name || ""; elide: Text.ElideMiddle }
@@ -192,9 +195,30 @@ Item {
             height: 5
             value: row.progress
           }
-          Txt {
+          Row {
+            id: actions
+            visible: row.finished
             anchors.right: parent.right
             anchors.rightMargin: 19
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 6
+            OutlineButton {
+              icon: "open"
+              padX: 8
+              padY: 5
+              onClicked: root.view.call("transfer.open", { id: row.modelData.id }, function () { root.view.toast("Opening " + row.modelData.name) })
+            }
+            OutlineButton {
+              icon: "copy"
+              padX: 8
+              padY: 5
+              onClicked: root.view.call("transfer.copy", { id: row.modelData.id }, function () { root.view.toast("Copied " + row.modelData.name) })
+            }
+          }
+          Txt {
+            id: status
+            anchors.right: parent.right
+            anchors.rightMargin: 19 + row.actionsWidth
             anchors.verticalCenter: parent.verticalCenter
             width: row.statusWidth
             horizontalAlignment: Text.AlignRight

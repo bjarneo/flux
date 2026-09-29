@@ -231,6 +231,10 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		return ok, d.clip.Set(p.Text)
 	case "transfer.cancel":
 		return ok, d.CancelTransfer(p.ID)
+	case "transfer.open":
+		return ok, d.OpenTransfer(p.ID)
+	case "transfer.copy":
+		return ok, d.CopyTransfer(p.ID)
 	case "commands.add":
 		return d.addCommand(p.Name, p.Command)
 	case "commands.remove":
