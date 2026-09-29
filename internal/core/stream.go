@@ -148,6 +148,11 @@ type sessionState struct {
 	// inputWake makes inputLoop check the held buttons at once.
 	inputWake chan struct{}
 
+	// browse holds the Browse PC sessions by their number, and browseGen is
+	// the number of the last session.
+	browse    map[uint64]*browseSession
+	browseGen uint64
+
 	// shortcuts holds an entry for each device ID with a flux.shortcuts
 	// request in flight. The entry holds the next request, or nil.
 	shortcuts map[string]*shortcutJob

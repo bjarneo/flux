@@ -118,7 +118,7 @@ type Daemon struct {
 	logger *log.Logger
 
 	// sessions is the state of the remote sessions: the input queue, the
-	// streams, and the shortcut requests.
+	// streams, Browse PC, and the shortcut requests.
 	sessions sessionState
 }
 
@@ -261,6 +261,8 @@ func (d *Daemon) Busy() string {
 		what = "the screen mirror"
 	case d.desktop != nil:
 		what = "the remote desktop"
+	case len(d.sessions.browse) > 0:
+		what = "Browse PC"
 	}
 	d.mu.Unlock()
 	if what == "" && d.approvals.pending() > 0 {

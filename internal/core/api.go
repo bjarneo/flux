@@ -438,6 +438,9 @@ func (d *Daemon) setSetting(key string, value any) error {
 	if key == "remoteInput" || key == "remoteDesktop" {
 		d.inputChanged()
 	}
+	if key == "shareHome" {
+		d.shareHomeChanged()
+	}
 	if key == "syncDnd" {
 		d.wakeDnd()
 	}
@@ -460,6 +463,7 @@ func (d *Daemon) Reload() error {
 	d.commandsChanged()
 	d.herdrChanged()
 	d.inputChanged()
+	d.shareHomeChanged()
 	d.wakeDnd()
 	d.wakeRelease()
 	return nil
@@ -479,6 +483,8 @@ func (d *Daemon) unsavedSetting(key string, before *config.Config, err error) er
 		field, old = &d.cfg.RemoteInput, before.RemoteInput
 	case "remoteDesktop":
 		field, old = &d.cfg.RemoteDesktop, before.RemoteDesktop
+	case "shareHome":
+		field, old = &d.cfg.ShareHome, before.ShareHome
 	}
 	if field == nil {
 		d.mu.Unlock()
@@ -489,7 +495,11 @@ func (d *Daemon) unsavedSetting(key string, before *config.Config, err error) er
 		*field = old
 	}
 	d.mu.Unlock()
-	d.inputChanged()
+	if key == "shareHome" {
+		d.shareHomeChanged()
+	} else {
+		d.inputChanged()
+	}
 	d.markDirty()
 	if on {
 		return fmt.Errorf("%s did not change, because config.toml could not keep the change: %w", key, err)

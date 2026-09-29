@@ -44,7 +44,7 @@ command = "omarchy-system-lock"
 | `photo_dir` | Destination for camera photos. Defaults to `flux` inside the XDG Pictures directory. Screenshots and signatures use its `screenshots` and `signatures` folders. |
 | `auto_clipboard` | Sync clipboard text and images in both directions. Defaults to `true`. |
 | `notifications` | Show phone notifications on the desktop. Defaults to `true`. |
-| `share_home` | Let the phone browse the desktop home folder read-only. Defaults to `true`. |
+| `share_home` | Let a paired phone read the home folder, `download_dir`, and the Documents, Pictures, Music, and Videos folders. Names that start with a dot, such as `~/.ssh`, and the Flux folders stay hidden. Defaults to `true`. Turning it off ends each session at once. See [Browse PC](features.md#browse-pc). |
 | `pause_media_on_call` | Pause desktop media during calls. Defaults to `true`. |
 | `sync_dnd` | Sync Do Not Disturb. Defaults to `true`. |
 | `herdr` | Show the [herdr agents](herdr.md) of this computer on the phone. Defaults to `true`. |
@@ -59,7 +59,7 @@ command = "omarchy-system-lock"
 
 The destination paths expand `~`.
 When `fluxd` cannot save `config.toml`, `settings.set` returns an error.
-Then `remote_input` and `remote_desktop` do not turn on.
+Then `remote_input`, `remote_desktop`, and `share_home` do not turn on.
 When 1 of them turns off, it is off at once, until `fluxd` restarts.
 Use the [CLI](cli.md#desktop-commands) or the Phone commands page to add commands without editing TOML.
 
