@@ -24,6 +24,9 @@ func power(on bool) error {
 		if err := systemctl("enable", "--now", "fluxd.service"); err != nil {
 			return err
 		}
+		if err := waitForFluxd(10 * time.Second); err != nil {
+			return err
+		}
 		fmt.Println("fluxd is on, and it starts at each login")
 		return nil
 	}

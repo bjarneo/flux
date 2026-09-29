@@ -124,6 +124,13 @@ install-user:
 	-update-desktop-database -q $(USER_PREFIX)/share/applications 2>/dev/null
 
 uninstall-user:
+	@# Remove the fluxd unit that `flux-cli setup` wrote for this install. It
+	@# would hide the unit of a package that the user installs later.
+	@unit="$${XDG_CONFIG_HOME:-$$HOME/.config}/systemd/user/fluxd.service"; \
+	if grep -qsx 'ExecStart="\{0,1\}$(USER_PREFIX)/bin/fluxd"\{0,1\}' "$$unit"; then \
+		systemctl --user disable fluxd.service 2>/dev/null; rm -f "$$unit"; \
+		systemctl --user daemon-reload 2>/dev/null; echo "Removed $$unit"; \
+	fi; true
 	rm -f $(USER_PREFIX)/bin/fluxd $(USER_PREFIX)/bin/flux-cli $(USER_PREFIX)/bin/flux-gui
 	@# Remove the flux link only when it points to flux-cli.
 	@link=$(USER_PREFIX)/bin/flux; if [ "$$(readlink "$$link")" = flux-cli ]; then rm -f "$$link"; fi

@@ -7,12 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"flux/internal/config"
 	"flux/internal/ipc"
@@ -47,7 +49,8 @@ Commands:
                          Ongoing notifications, such as a media player, stay
   notify TITLE [BODY]    Show a notification on the phone
   notify --run -- CMD…   Run CMD, then show on the phone how it ended. Exits with
-                         the exit code of CMD
+                         the exit code of CMD. The phone gets only the program
+                         name, unless you add --show-command
   commands               List the commands that the phone can run
   commands add NAME CMD  Add a command, for example: commands add "Lock" omarchy-system-lock
   commands remove ID     Remove a command
@@ -77,7 +80,8 @@ Commands:
   update --phone         Send the latest Flux for Android to the phone
   version                Print the versions of flux-cli and the running fluxd
 
-Without --device, flux-cli uses the only connected paired device.
+Without --device, flux-cli uses the only connected paired device. Put
+--device NAME before the command or right after it.
 `
 
 func main() {
@@ -168,10 +172,13 @@ func main() {
 	}
 }
 
-// splitDevice removes --device NAME, -d NAME, and --device=NAME from args.
-// It stops at --, so that the arguments of a command after -- stay as
-// they are.
+// splitDevice removes --device NAME, -d NAME, and --device=NAME from the
+// flags before the command and from the flags right after the command.
+// It stops at the first other argument after the command and at --, so
+// that free text, such as the command of `commands add` or the body of a
+// text message, stays as it is.
 func splitDevice(in []string) (out []string, device string) {
+	command := false
 	for i := 0; i < len(in); i++ {
 		a := in[i]
 		switch {
@@ -182,8 +189,14 @@ func splitDevice(in []string) (out []string, device string) {
 			i++
 		case strings.HasPrefix(a, "--device="):
 			device = strings.TrimPrefix(a, "--device=")
-		default:
+		case !command:
 			out = append(out, a)
+			command = true
+		case strings.HasPrefix(a, "-"):
+			// A flag of the command, such as --json or --run.
+			out = append(out, a)
+		default:
+			return append(out, in[i:]...), device
 		}
 	}
 	return out, device
@@ -209,11 +222,18 @@ func fail(format string, args ...any) {
 }
 
 func dial() (*ipc.Client, error) {
-	c, err := ipc.Dial(config.SocketPath())
-	if err != nil {
-		return nil, errors.New("fluxd is not running. Start it with: systemctl --user enable --now fluxd")
+	path := config.SocketPath()
+	c, err := ipc.Dial(path)
+	switch {
+	case err == nil:
+		return c, nil
+	case config.IsOff():
+		return nil, errors.New("fluxd is off. To turn it on, run: flux-cli on")
+	case errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ECONNREFUSED):
+		return nil, errors.New("fluxd does not run. To start it, run: flux-cli on. To find the cause, run: flux-cli doctor")
+	default:
+		return nil, fmt.Errorf("cannot connect to fluxd on %s: %w", path, err)
 	}
-	return c, nil
 }
 
 func call(method string, params any) error { return callInto(method, params, nil) }
@@ -475,7 +495,7 @@ func commands(args []string) error {
 		var res struct {
 			ID string `json:"id"`
 		}
-		if err := callInto("commands.add", map[string]any{"name": args[1], "command": strings.Join(args[2:], " ")}, &res); err != nil {
+		if err := callInto("commands.add", map[string]any{"name": args[1], "command": commandLine(args[2:])}, &res); err != nil {
 			return err
 		}
 		fmt.Printf("Added %s with ID %s\n", args[1], res.ID)
@@ -498,6 +518,30 @@ func commands(args []string) error {
 		fmt.Printf("%-10s %-18s $ %s\n", c.ID, c.Name, c.Command)
 	}
 	return nil
+}
+
+// commandLine returns the shell command of `commands add`. 1 argument is
+// the full command, for example "rsync -a src dst". More arguments are
+// the words of the command, and each word keeps its spaces and special
+// characters.
+func commandLine(words []string) string {
+	if len(words) == 1 {
+		return words[0]
+	}
+	quoted := make([]string, len(words))
+	for i, w := range words {
+		quoted[i] = shellQuote(w)
+	}
+	return strings.Join(quoted, " ")
+}
+
+// shellQuote quotes a word for sh when it has characters that sh reads in
+// a special way.
+func shellQuote(w string) string {
+	if w != "" && strings.Trim(w, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_@%+=:,./-") == "" {
+		return w
+	}
+	return "'" + strings.ReplaceAll(w, "'", `'\''`) + "'"
 }
 
 func webcam(args []string) error {
@@ -601,5 +645,6 @@ func watch() error {
 		b, _ := json.Marshal(ev)
 		fmt.Println(string(b))
 	}
-	return nil
+	// Ctrl+C ends the process, so the loop ends only when fluxd stops.
+	return errors.New("fluxd closed the connection")
 }

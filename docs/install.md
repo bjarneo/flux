@@ -131,8 +131,10 @@ flux-cli doctor
 The binaries go into `~/.local/bin`.
 The plugin files go into `~/.local/share/flux/omarchy-plugin`.
 The desktop entry and icons go into `~/.local/share`.
-If no system service exists, `flux-cli setup` creates a user service for the daemon beside the installed CLI.
-An existing system package takes precedence for the service path.
+If no system service exists, `flux-cli setup` writes `~/.config/systemd/user/fluxd.service` for the daemon beside the installed CLI.
+systemd uses this user unit before the unit of a package.
+After you install the package, run `flux-cli setup` again. It removes the user unit that it wrote.
+`flux-cli doctor` reports a user unit that hides the unit of the package.
 `flux-cli setup` adds the plugin to omarchy-shell.
 To skip the plugin, run `flux-cli setup --no-plugin`.
 
@@ -317,6 +319,9 @@ systemctl --user disable --now fluxd
 make uninstall-user
 make uninstall-plugin
 ```
+
+`make uninstall-user` also removes the `~/.config/systemd/user/fluxd.service` unit that `flux-cli setup` wrote for this install.
+Without that step, the old unit hides the unit of a package that you install later.
 
 The source removal targets leave user configuration and pairing identity in place.
 See [configuration paths](configuration.md#data-paths) before you remove user data.
