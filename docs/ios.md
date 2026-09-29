@@ -119,7 +119,7 @@ Flux must still be open on the iPhone. See [limits](#limits-of-ios).
 | Files, text, and links | Send from the Files picker, the photo picker, the Share field, or the share sheet of any app. Received files go to the Flux folder in the Files app and open with Quick Look. Links open in the browser of the computer, and text goes on its clipboard. |
 | Share sheet | **Flux** in the share sheet of other apps queues files, photos, text, and links for a computer. Flux sends them when it opens and connects. See [limits](#limits-of-ios). |
 | Clipboard | Text and images both ways while **Sync clipboard** is on and Flux is on the screen. The **Clipboard** quick action sends it at once. |
-| Screenshots and photos | **Send new screenshots** and **Send new photos** send new items from the Photos library when Flux opens. |
+| Screenshots and photos | **Send new screenshots** and **Send new photos** send new items from the Photos library when Flux opens. An item goes only when its original is on this iPhone and it was taken at most 1 day before its switch turned on. Photos that only iCloud has, for example from your other devices or from a Shared Library, stay home. PhotoKit does not tell which device took a photo, so with **Download and Keep Originals** in iCloud Photos, new photos from those sources can go too. |
 | Media | Controls the players of the computer. The computer does not control the players on the iPhone. |
 | Commands | Lists and runs the commands configured on the computer. |
 | Browse | Opens the shared folders of the computer read-only through SSH inside a `flux.tunnel`, and saves files to the Files app. |
@@ -145,7 +145,7 @@ Flux for iOS does not advertise notifications of other apps, SMS, calls, or the 
 | --- | --- |
 | iOS suspends Flux soon after it leaves the screen | The link closes, and Flux connects again when it opens. Approvals, agent alerts, notifications, and clipboard changes reach the iPhone only while Flux runs. The microphone stream keeps running in the background. |
 | Other apps' notifications, text messages, and calls | iOS gives apps no access to them. Flux does not advertise `notification.request`, `sms.*`, or `telephony`. |
-| Clipboard | iOS asks before each read of text that another app copied. Flux reads the clipboard only while it is on the screen, and when a computer connects only after the clipboard changed. |
+| Clipboard | iOS asks before each read of text that another app copied. Flux reads the clipboard only while it is on the screen, and when a computer connects only after the clipboard changed. Text and images from a computer stay on the iPhone and do not go to Universal Clipboard. |
 | Screenshots and photos | They go to the computer when Flux opens, not in the background. |
 | Share sheet | The share extension runs apart from the app and cannot open Flux or hold a link. It queues the items in the App Group. Flux sends them when it opens and connects, and keeps failed items with the reason on the **Share** screen. The queue holds up to 200 items and 1 GB, and an item that failed 5 times or waited 7 days goes, with a notification. Folders do not go. |
 | Focus | Flux cannot read or set the Focus. It reports the Focus through the Focus filter and ignores Do Not Disturb from the computer. |
