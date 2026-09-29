@@ -216,11 +216,14 @@ struct ShareScreen: View {
                 }
                 .disabled(!device.online)
                 Section {
-                    TextField("Text or link", text: $text, axis: .vertical)
-                        .lineLimit(1...6)
-                        .focused($editing)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+                    VoiceField(keyHeight: 36, onText: { text = DictationText.append(text, $0) }) {
+                        TextField("Text or link", text: $text, axis: .vertical)
+                            .lineLimit(1...6)
+                            .focused($editing)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+                    }
                     Button(ShareWire.isURL(trimmed) ? "Send Link" : "Send Text", systemImage: "paperplane.fill") { sendText(share, to: device) }
                         .disabled(trimmed.isEmpty || !device.online)
                 } footer: {

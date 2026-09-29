@@ -254,48 +254,63 @@ private struct LaunchKey: View {
 }
 
 /// All shortcuts of the computer, with a search. A tap runs a shortcut,
-/// and the star pins it to the panel.
+/// and the star pins it to the panel. A dictation replaces the search.
 private struct AllShortcuts: View {
     let shortcuts: [Shortcut]
     let model: DesktopModel
     let onRun: (Shortcut) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
+    @State private var voice = VoiceTyping()
 
     var body: some View {
         NavigationStack {
-            List(DesktopShortcuts.search(shortcuts, query)) { s in
-                HStack(spacing: 8) {
-                    Button { onRun(s) } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(s.description).fontWeight(.semibold).foregroundStyle(.primary)
-                            if !s.keys.isEmpty {
-                                Text(DesktopShortcuts.keysLabel(s.keys)).font(.caption.monospaced()).foregroundStyle(.secondary)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Run \(s.description)")
-                    let pinned = model.pins.contains(s.description)
-                    Button { model.togglePin(s) } label: {
-                        Image(systemName: pinned ? "star.fill" : "star")
-                            .foregroundStyle(pinned ? Color.yellow : Color.secondary)
-                            .frame(width: 36, height: 36)
-                    }
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel(pinned ? "Unpin \(s.description)" : "Pin \(s.description) to Launch")
+            List {
+                if voice.active || voice.error != nil || voice.dictation.error != nil {
+                    Section { VoiceStatus(voice: voice) }
                 }
+                ForEach(DesktopShortcuts.search(shortcuts, query)) { s in row(s) }
             }
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search, for example workspace or browser")
             .navigationTitle("All Shortcuts · \(shortcuts.count)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                if voice.available {
+                    ToolbarItem(placement: .topBarLeading) {
+                        VoiceKey(voice: voice, height: 36) { query = DictationText.query($0) }
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
             }
+        }
+        .task { await voice.load() }
+        .onDisappear { voice.cancel() }
+    }
+
+    private func row(_ s: Shortcut) -> some View {
+        HStack(spacing: 8) {
+            Button { onRun(s) } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(s.description).fontWeight(.semibold).foregroundStyle(.primary)
+                    if !s.keys.isEmpty {
+                        Text(DesktopShortcuts.keysLabel(s.keys)).font(.caption.monospaced()).foregroundStyle(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Run \(s.description)")
+            let pinned = model.pins.contains(s.description)
+            Button { model.togglePin(s) } label: {
+                Image(systemName: pinned ? "star.fill" : "star")
+                    .foregroundStyle(pinned ? Color.yellow : Color.secondary)
+                    .frame(width: 36, height: 36)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel(pinned ? "Unpin \(s.description)" : "Pin \(s.description) to Launch")
         }
     }
 }

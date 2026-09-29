@@ -28,6 +28,19 @@ final class DictationTests: XCTestCase {
         XCTAssertEqual(DictationText.query(" . "), "")
     }
 
+    func testMakesACommandFromADictation() {
+        XCTAssertEqual(DictationText.command("Git status."), "git status")
+        XCTAssertEqual(DictationText.command("README first"), "README first", "a word in capitals stays")
+        XCTAssertEqual(DictationText.command("I"), "I", "I stays")
+        XCTAssertEqual(DictationText.command("ls -la"), "ls -la")
+    }
+
+    func testKeepsTheCaseOfACommand() {
+        XCTAssertEqual(DictationText.insert("", start: 0, end: 0, spoken: "git status", sentences: false), DictationEdit("git status", 10))
+        XCTAssertEqual(DictationText.insert("cd ~/Code &&", start: 12, end: 12, spoken: "git status", sentences: false),
+                       DictationEdit("cd ~/Code && git status", 23))
+    }
+
     func testInsertsAtTheCursor() {
         // "Run tests" with the cursor after "Run".
         XCTAssertEqual(DictationText.insert("Run tests", start: 3, end: 3, spoken: "the unit"), DictationEdit("Run the unit tests", 12))

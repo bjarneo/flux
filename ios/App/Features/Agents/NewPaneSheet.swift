@@ -111,12 +111,14 @@ struct NewPaneSheet: View {
                 }
                 if run != nil && run != NewPane.shellChoice {
                     SheetLabel("Task").padding(.top, 8)
-                    TextField("Optional. Sent when the agent is ready.", text: $task, axis: .vertical)
-                        .lineLimit(2...6)
-                        .padding(12)
-                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
-                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color(.separator).opacity(0.5)))
-                        .disabled(busy)
+                    VoiceField(enabled: !busy, onText: { task = DictationText.append(task, $0) }) {
+                        TextField("Optional. Sent when the agent is ready.", text: $task, axis: .vertical)
+                            .lineLimit(2...6)
+                            .padding(12)
+                            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
+                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color(.separator).opacity(0.5)))
+                            .disabled(busy)
+                    }
                     if task.utf8.count > HerdrWire.maxPrompt {
                         Text("The task is too long. The limit is 16 KB.").font(.caption).foregroundStyle(.red)
                     }
@@ -136,8 +138,16 @@ struct NewPaneSheet: View {
 
     // MARK: Folder
 
+    /// The folder search and the folders. A dictation replaces the search.
     @ViewBuilder
     private func folderPicker(_ folders: [FolderChoice], selected: String, busy: Bool) -> some View {
+        VoiceField(enabled: !busy, onText: { query = DictationText.query($0) }) {
+            folderSearch(busy: busy)
+        }
+        folderList(folders, selected: selected, busy: busy)
+    }
+
+    private func folderSearch(busy: Bool) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
             TextField("Search, or type a path such as ~/Code/app", text: $query)
@@ -158,6 +168,10 @@ struct NewPaneSheet: View {
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color(.separator).opacity(0.5)))
         .disabled(busy)
+    }
+
+    @ViewBuilder
+    private func folderList(_ folders: [FolderChoice], selected: String, busy: Bool) -> some View {
         let typedPath = NewPane.normalFolder(query)
         let typed = NewPane.looksLikePath(query)
         if typed && !folders.contains(where: { $0.path == typedPath }) {

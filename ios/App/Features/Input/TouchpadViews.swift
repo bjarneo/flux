@@ -37,12 +37,15 @@ final class TouchpadController {
     @ObservationIgnored private let send: (Packet) -> Void
     @ObservationIgnored private var gesture = TouchpadGesture()
     @ObservationIgnored private let hold = Deadline()
+    @ObservationIgnored private var spoken = SpokenSpacing()
 
     init(deviceId: String, app: AppModel, input: RemoteInputPlugin) {
         self.deviceId = deviceId
         self.app = app
         send = RemoteInputSender.make(deviceId: deviceId, app: app, input: input)
         keys = RemoteKeys(workspaceKeys: app.device(deviceId).map(DesktopPlugin.shortcutsSupported) ?? false, send: send)
+        // Keys can move the cursor of the computer, so the next dictation starts with no space.
+        keys.willSend = { [weak self] in self?.spoken.moved() }
     }
 
     var name: String { app.device(deviceId)?.name ?? "The computer" }
@@ -61,10 +64,21 @@ final class TouchpadController {
     func left(_ down: Bool) {
         guard leftHeld != down else { return }
         leftHeld = down
+        spoken.moved()
         send(RemoteInput.hold(down))
     }
 
-    func rightClick() { send(RemoteInput.click(.right)) }
+    func rightClick() {
+        spoken.moved()
+        send(RemoteInput.click(.right))
+    }
+
+    /// Types the words of a dictation on the computer. A dictation right
+    /// after another starts with a space.
+    func typeSpoken(_ words: String) {
+        guard let text = spoken.text(words) else { return }
+        send(RemoteInput.text(text))
+    }
 
     /// Ends a drag when the screen closes.
     func close() {
@@ -85,14 +99,36 @@ final class TouchpadController {
             switch a {
             case .move(let dx, let dy): send(RemoteInput.move(dx: dx, dy: dy))
             case .scroll(let dx, let dy): send(RemoteInput.scroll(dx: dx, dy: dy))
-            case .click(let c): send(RemoteInput.click(c))
+            case .click(let c):
+                // A click can move the cursor of the computer.
+                spoken.moved()
+                send(RemoteInput.click(c))
             case .hold(let down):
                 if down { HoldFeedback.play() }
+                spoken.moved()
                 send(RemoteInput.hold(down))
             }
         }
     }
 
+}
+
+/// The text that a dictation types on a computer. A dictation right after
+/// another starts with a space. After a key or a click, the cursor of the
+/// computer can be elsewhere, so the next dictation starts with no space.
+struct SpokenSpacing {
+    private var afterVoice = false
+
+    /// The text to type for the words, or nil for no words.
+    mutating func text(_ spoken: String) -> String? {
+        let words = spoken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !words.isEmpty else { return nil }
+        defer { afterVoice = true }
+        return afterVoice ? " " + words : words
+    }
+
+    /// Notes a key or a click.
+    mutating func moved() { afterVoice = false }
 }
 
 /// The touchpad and the keyboard for a computer. The computer runs the
@@ -139,11 +175,14 @@ private struct TouchpadContent: View {
                     PadKey(label: "right", name: "Right button", height: 52) { controller.rightClick() }
                 }
                 KeyRows(keys: controller.keys)
-                TypeField(keys: controller.keys, placeholder: "Type on \(model.device(deviceId)?.name ?? "the computer")")
-                    .frame(height: 44)
-                    .padding(.horizontal, 12)
-                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color(.separator).opacity(0.5)))
+                // A dictation types its words on the computer.
+                VoiceField(onText: { controller.typeSpoken($0) }) {
+                    TypeField(keys: controller.keys, placeholder: "Type on \(model.device(deviceId)?.name ?? "the computer")")
+                        .frame(height: 44)
+                        .padding(.horizontal, 12)
+                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
+                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color(.separator).opacity(0.5)))
+                }
             }
         }
         .padding(.horizontal, 16)

@@ -23,9 +23,10 @@ public enum DictationText {
     /// Puts `spoken` in `text` in place of the selection from `start` to
     /// `end`, in UTF-16 units. A space goes between the spoken text and a
     /// word that it would touch. At the start of the text or of a sentence,
-    /// the first letter becomes a capital. The cursor goes after the spoken
+    /// the first letter becomes a capital. With `sentences` off, the case
+    /// stays, for example for a command. The cursor goes after the spoken
     /// text.
-    public static func insert(_ text: String, start: Int, end: Int, spoken: String) -> DictationEdit {
+    public static func insert(_ text: String, start: Int, end: Int, spoken: String, sentences: Bool = true) -> DictationEdit {
         let s = spoken.trimmingCharacters(in: .whitespacesAndNewlines)
         let units = Array(text.utf16)
         let a = min(max(min(start, end), 0), units.count)
@@ -33,7 +34,7 @@ public enum DictationText {
         if s.isEmpty { return DictationEdit(text, b) }
         let before = String(decoding: units[..<a], as: UTF16.self)
         let after = String(decoding: units[b...], as: UTF16.self)
-        let words = startsSentence(before) ? s.prefix(1).uppercased() + s.dropFirst() : s
+        let words = sentences && startsSentence(before) ? s.prefix(1).uppercased() + s.dropFirst() : s
         let lead = !before.isEmpty && !(before.last?.isWhitespace ?? true) && !closing.contains(words.first ?? " ") ? " " : ""
         let trail = !after.isEmpty && !(after.first?.isWhitespace ?? true) && !closing.contains(after.first ?? " ") ? " " : ""
         let inserted = lead + words + trail
@@ -46,6 +47,16 @@ public enum DictationText {
         var s = Substring(spoken.trimmingCharacters(in: .whitespacesAndNewlines))
         while let last = s.last, queryEnd.contains(last) { s = s.dropLast() }
         return s.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// The words of a dictation as a command for a terminal. The recognizer
+    /// writes a sentence, so the punctuation at the end goes, and a first
+    /// word such as "Git" becomes "git". A word such as "README" stays.
+    public static func command(_ spoken: String) -> String {
+        let s = query(spoken)
+        let first = s.prefix { $0 != " " }
+        let capitalized = first.count > 1 && first.first?.isUppercase == true && first.dropFirst().allSatisfy(\.isLowercase)
+        return capitalized ? s.prefix(1).lowercased() + s.dropFirst() : s
     }
 
     /// Joins 2 texts with 1 space.

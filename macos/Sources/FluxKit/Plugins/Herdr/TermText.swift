@@ -47,11 +47,17 @@ public struct TermSpan: Sendable, Hashable {
     }
 }
 
-/// One line of terminal text.
+/// One line of terminal text. `fill` is the background of the blank cells
+/// after the text, for example the background of a panel. A nil fill is the
+/// default background. Only the phone layout sets it.
 public struct TermLine: Sendable, Hashable {
     public var spans: [TermSpan]
+    public var fill: TermColor?
 
-    public init(_ spans: [TermSpan]) { self.spans = spans }
+    public init(_ spans: [TermSpan], fill: TermColor? = nil) {
+        self.spans = spans
+        self.fill = fill
+    }
 
     public var text: String { spans.map(\.text).joined() }
 }
@@ -254,14 +260,20 @@ public enum TermText {
 
     /// The longest rule line that the output view shows. The Android app
     /// uses the same width, so both show the same output.
-    private static let ruleWidth = 32
+    static let ruleWidth = 32
 
-    private static let ruleChars: Set<Character> = ["─", "━", "═", "-", "_", "="]
+    static let ruleChars: Set<Character> = ["─", "━", "═", "-", "_", "="]
 
-    /// Makes terminal lines fit the output view. It removes the blanks at
-    /// the end of each line and the empty lines at the end. It also shortens
-    /// lines of box rules, because they fill the width of the terminal.
-    public static func tidy(_ lines: [TermLine]) -> [TermLine] {
+    /// Makes terminal lines fit the output view of the platform. The iPhone
+    /// uses the phone layout of the Android app, see `tidyForPhone`.
+    public static func tidy(_ lines: [TermLine], platform: FluxPlatform = .current) -> [TermLine] {
+        platform == .phone ? tidyForPhone(lines) : tidyForWindow(lines)
+    }
+
+    /// Makes terminal lines fit the output view of the Mac. It removes the
+    /// blanks at the end of each line and the empty lines at the end. It also
+    /// shortens lines of box rules, because they fill the width of the terminal.
+    static func tidyForWindow(_ lines: [TermLine]) -> [TermLine] {
         var out = lines.map { line -> TermLine in
             let trimmed = trimEnd(line)
             let text = trimmed.text
@@ -286,7 +298,7 @@ public enum TermText {
         return TermLine(spans)
     }
 
-    private static func take(_ line: TermLine, _ n: Int) -> TermLine {
+    static func take(_ line: TermLine, _ n: Int) -> TermLine {
         var out: [TermSpan] = []
         var left = n
         for s in line.spans {
@@ -295,11 +307,13 @@ public enum TermText {
             out.append(TermSpan(t, s.style))
             left -= t.count
         }
-        return TermLine(out)
+        return TermLine(out, fill: line.fill)
     }
 
-    /// Parses and tidies the output text of an agent.
-    public static func lines(_ text: String) -> [TermLine] { tidy(parse(text)) }
+    /// Parses and tidies the output text of an agent for the platform.
+    public static func lines(_ text: String, platform: FluxPlatform = .current) -> [TermLine] {
+        tidy(parse(text), platform: platform)
+    }
 }
 
 /// A numbered choice of a question or an approval dialog. `key` is the

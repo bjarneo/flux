@@ -32,28 +32,28 @@ private struct TerminalText: View {
     let output: HerdrOutput
     @State private var follow = true
     @State private var viewport: CGFloat = 0
+    @State private var width: CGFloat = 0
 
     var body: some View {
-        let text = TermColors.attributed(output.lines)
         let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 6) {
                     if output.truncated {
                         Text("Older lines are cut.").font(.caption2.monospaced()).foregroundStyle(TermColors.dim)
+                            .padding(.horizontal, termPad)
                     }
                     if let error = output.error {
                         Text(error).font(.caption).foregroundStyle(TermColors.red)
+                            .padding(.horizontal, termPad)
                     }
                     if output.lines.isEmpty {
                         Text("No output yet.").font(TermColors.font).foregroundStyle(TermColors.dim)
-                    } else {
-                        Text(text)
-                            .font(TermColors.font)
-                            .foregroundStyle(TermColors.text)
-                            .lineSpacing(2)
+                            .padding(.horizontal, termPad)
+                    } else if width > 0 {
+                        // The rows draw their own side padding, so the fill of a panel reaches both edges.
+                        TermLinesView(lines: output.lines, width: width)
                             .textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
                     // The end of the output. Its place in the viewport tells
                     // whether the newest lines show.
@@ -65,12 +65,21 @@ private struct TerminalText: View {
                         })
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 12)
                 .padding(.vertical, 10)
             }
             .coordinateSpace(name: "output")
             .defaultScrollAnchor(.bottom)
-            .background(GeometryReader { g in Color.clear.onAppear { viewport = g.size.height }.onChange(of: g.size.height) { _, h in viewport = h } })
+            .background(GeometryReader { g in
+                Color.clear
+                    .onAppear {
+                        viewport = g.size.height
+                        width = g.size.width
+                    }
+                    .onChange(of: g.size) { _, size in
+                        viewport = size.height
+                        width = size.width
+                    }
+            })
             .onPreferenceChange(EndOffset.self) { end in
                 guard viewport > 0 else { return }
                 follow = end <= viewport + followSlack

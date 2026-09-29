@@ -45,10 +45,12 @@ struct TextModeView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
             } else {
-                TextEditor(text: $scan.text)
-                    .font(.body)
-                    .frame(minHeight: 120, maxHeight: 220)
-                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.secondary.opacity(0.4)))
+                VoiceField(onText: { scan.text = DictationText.append(scan.text, $0) }) {
+                    TextEditor(text: $scan.text)
+                        .font(.body)
+                        .frame(minHeight: 120, maxHeight: 220)
+                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.secondary.opacity(0.4)))
+                }
             }
             HStack {
                 Spacer()

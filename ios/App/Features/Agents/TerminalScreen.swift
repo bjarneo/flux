@@ -118,17 +118,20 @@ private struct TerminalControls: View {
                 PaneKey(label: "↓", name: "Down") { keys("down") }
                 PaneKey(label: "enter", name: "Enter") { keys("enter") }
             }
-            HStack(spacing: 6) {
-                TextField("Type a command", text: $text)
-                    .font(.body.monospaced())
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .submitLabel(.send)
-                    .onSubmit(run)
-                    .padding(.horizontal, 12)
-                    .frame(height: 44)
-                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color(.separator).opacity(0.5)))
+            HStack(alignment: .top, spacing: 6) {
+                // A dictation puts a command in the field. It waits there for Run, so a command still needs Face ID.
+                VoiceField(onText: { text = DictationText.append(text, DictationText.command($0), sentences: false) }) {
+                    TextField("Type a command", text: $text)
+                        .font(.body.monospaced())
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .submitLabel(.send)
+                        .onSubmit(run)
+                        .padding(.horizontal, 12)
+                        .frame(height: 44)
+                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
+                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color(.separator).opacity(0.5)))
+                }
                 Button(action: run) {
                     Group {
                         if sending {
