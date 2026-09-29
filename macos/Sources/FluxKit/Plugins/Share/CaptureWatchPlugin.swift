@@ -46,8 +46,9 @@ public final class CaptureModel {
 /// `planCapture` decides what goes out, so that no image goes out twice.
 /// On iOS both come from the photo library: screenshots are the images with
 /// the screenshot subtype. iOS runs Flux only on the screen, so the app calls
-/// `catchUp()` when it becomes active, and the images that are newer than the
-/// last one that went out go out, oldest first.
+/// `catchUp()` when it becomes active, and the images that the library got
+/// since the switch turned on and that did not go out yet go out, in the
+/// order that they arrived.
 public final class CaptureWatchPlugin: FluxPlugin, @unchecked Sendable {
     private weak var core: FluxCore?
     public let model: CaptureModel
@@ -76,10 +77,10 @@ public final class CaptureWatchPlugin: FluxPlugin, @unchecked Sendable {
     static let photosKey = "capture.photos"
     /// How long the watch waits after a change before it scans, in seconds.
     static let scanDelay: TimeInterval = 1.5
-    #if os(macOS)
     static let stateKey = "capture.state"
     static let tokenKey = "capture.photoToken"
     static let inboxKey = "capture.photoInbox"
+    #if os(macOS)
     /// A file that changed within this time is still being written, in seconds.
     static let quietTime: TimeInterval = 2
     /// The attribute that macOS puts on each screenshot and screen recording.
@@ -98,10 +99,6 @@ public final class CaptureWatchPlugin: FluxPlugin, @unchecked Sendable {
         }
     }
     #else
-    /// The prefix of the keys that hold, for each kind, the creation date of
-    /// the last image that went out.
-    static let afterKey = "capture.after."
-
     @MainActor
     public init() {
         model = CaptureModel()
@@ -184,8 +181,8 @@ public final class CaptureWatchPlugin: FluxPlugin, @unchecked Sendable {
         refresh()
     }
 
-    /// Sends the screenshots and photos that are newer than the last ones
-    /// that went out. The app calls it when it becomes active.
+    /// Sends the screenshots and photos that the library got and that did
+    /// not go out yet. The app calls it when it becomes active.
     @MainActor
     public func catchUp() {
         commands.yield(.scan)
@@ -302,30 +299,44 @@ public final class CaptureWatchPlugin: FluxPlugin, @unchecked Sendable {
                 saveToken(on ? PHPhotoLibrary.shared().currentChangeToken : nil)
             }
             #else
-            // A switch that turns on starts from the library as it is now.
-            saveAfter(on ? Date() : nil, kind)
+            // Both kinds come from the library. The first switch that turns
+            // on starts from the library as it is now, and the last one that
+            // turns off forgets it.
+            let before = loadState()
+            let state = on ? before.enable(kind, newest: Self.micros(Date())) : before.disable(kind)
+            saveState(state)
+            if before.from.isEmpty != state.from.isEmpty {
+                saveInbox([])
+                saveToken(state.from.isEmpty ? nil : PHPhotoLibrary.shared().currentChangeToken)
+            }
             #endif
         }
     }
 
-    #if os(macOS)
     /// Scans the new images and sends the ones that `planCapture` picks.
     private func scan() async {
         guard let core else { return }
+        #if os(macOS)
         let shots = sendScreenshots
         let photos = sendPhotos && PhotoAccess.current == .authorized
+        #else
+        let shots = false
+        let photos = (sendScreenshots || sendPhotos) && PhotoAccess.current == .authorized
+        #endif
         guard shots || photos else { return }
         let now = Date()
         var state = loadState()
         var items: [CaptureItem] = []
         var sources: [Int64: Source] = [:]
         if photos { readPhotos(state: state, now: now, into: &items, sources: &sources) }
+        #if os(macOS)
         if shots {
             let folder = screenshotFolder
             queue.async { [self] in rewatch(folder) }
             onMain { $0.model.screenshotFolder = folder }
             readScreenshots(in: folder, after: state.baseline, now: now, into: &items, sources: &sources)
         }
+        #endif
         let plan = planCapture(state, items: items, now: Int64(now.timeIntervalSince1970))
         state = plan.state
         saveState(state)
@@ -348,6 +359,7 @@ public final class CaptureWatchPlugin: FluxPlugin, @unchecked Sendable {
         if any { poke() }
     }
 
+    #if os(macOS)
     /// Lists the files in the screenshot folder that arrived after the baseline.
     private func readScreenshots(in folder: URL, after baseline: Int64, now: Date, into items: inout [CaptureItem], sources: inout [Int64: Source]) {
         let keys: Set<URLResourceKey> = [.isRegularFileKey, .addedToDirectoryDateKey, .creationDateKey, .contentModificationDateKey]
@@ -382,10 +394,11 @@ public final class CaptureWatchPlugin: FluxPlugin, @unchecked Sendable {
         guard read == size, let value = try? PropertyListSerialization.propertyList(from: data, format: nil) else { return false }
         return (value as? NSNumber)?.boolValue ?? false
     }
+    #endif
 
-    /// Adds the photos that the library got since the last scan to the inbox,
-    /// and lists the inbox entries after the baseline. A photo goes out when
-    /// it is an image from a camera that was taken after the switch turned on.
+    /// Adds the assets that the library got since the last scan to the inbox,
+    /// and lists the inbox entries after the baseline. `libraryKind` decides
+    /// which of them go out.
     private func readPhotos(state: CaptureState, now: Date, into items: inout [CaptureItem], sources: inout [Int64: Source]) {
         let library = PHPhotoLibrary.shared()
         var inbox = loadInbox()
@@ -418,59 +431,17 @@ public final class CaptureWatchPlugin: FluxPlugin, @unchecked Sendable {
         }
         for entry in waiting {
             let added = entry.id / 1_000_000
-            guard let asset = assets[entry.asset], asset.mediaType == .image, !asset.mediaSubtypes.contains(.photoScreenshot),
-                  let created = asset.creationDate, let start = state.from[.photo], Self.micros(created) > start else {
+            let asset = assets[entry.asset]
+            let seen = asset.map { LibraryAsset(image: $0.mediaType == .image, screenshot: $0.mediaSubtypes.contains(.photoScreenshot), created: $0.creationDate) }
+            guard let asset, let kind = libraryKind(seen, from: state.from) else {
                 items.append(CaptureItem(id: entry.id, kind: nil, name: entry.asset, dateAdded: added))
                 continue
             }
             let resource = Self.photoResource(asset)
-            items.append(CaptureItem(id: entry.id, kind: .photo, name: resource?.originalFilename ?? "IMG_\(entry.id).jpg", dateAdded: added))
+            items.append(CaptureItem(id: entry.id, kind: kind, name: resource?.originalFilename ?? "IMG_\(entry.id).jpg", dateAdded: added))
             sources[entry.id] = .asset(entry.asset)
         }
     }
-
-    #else
-    /// Sends the images of the photo library that `newAssets` picks for the
-    /// switches that are on, oldest first. After each image, the date of
-    /// its kind moves up, so an image that fails stops its kind, and the
-    /// next scan tries it again.
-    private func scan() async {
-        guard let core, PhotoAccess.current == .authorized else { return }
-        let kinds = CaptureKind.allCases.filter { $0 == .screenshot ? sendScreenshots : sendPhotos }
-        guard let oldest = kinds.compactMap(loadAfter).min() else { return }
-        let targets = core.connectedPaired().map(\.id)
-        guard !targets.isEmpty, let share = core.plugin(SharePlugin.self) else { return }
-        let options = PHFetchOptions()
-        options.predicate = NSPredicate(format: "mediaType == %d AND creationDate > %@", PHAssetMediaType.image.rawValue, oldest as NSDate)
-        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: true)]
-        var assets: [String: PHAsset] = [:]
-        var candidates: [(id: String, created: Date, screenshot: Bool)] = []
-        PHAsset.fetchAssets(with: options).enumerateObjects { asset, _, _ in
-            guard let created = asset.creationDate else { return }
-            assets[asset.localIdentifier] = asset
-            candidates.append((id: asset.localIdentifier, created: created, screenshot: asset.mediaSubtypes.contains(.photoScreenshot)))
-        }
-        var list: [(asset: PHAsset, created: Date, kind: CaptureKind)] = []
-        for kind in kinds {
-            for id in newAssets(after: loadAfter(kind), candidates: candidates, kind: kind) {
-                guard let asset = assets[id], let created = asset.creationDate else { continue }
-                list.append((asset, created, kind))
-            }
-        }
-        list.sort { $0.created < $1.created }
-        var stopped = Set<CaptureKind>()
-        for entry in list where !stopped.contains(entry.kind) {
-            let id = Self.micros(entry.created)
-            let name = Self.photoResource(entry.asset)?.originalFilename ?? "IMG_\(id).jpg"
-            let item = CaptureItem(id: id, kind: entry.kind, name: name, dateAdded: Int64(entry.created.timeIntervalSince1970))
-            if await send(item, kind: entry.kind, from: .asset(entry.asset.localIdentifier), to: targets, with: share) {
-                saveAfter(entry.created, entry.kind)
-            } else {
-                stopped.insert(entry.kind)
-            }
-        }
-    }
-    #endif
 
     static func photoResource(_ asset: PHAsset) -> PHAssetResource? {
         let resources = PHAssetResource.assetResources(for: asset)
@@ -532,8 +503,7 @@ public final class CaptureWatchPlugin: FluxPlugin, @unchecked Sendable {
 
     // MARK: Storage
 
-    #if os(macOS)
-    /// 1 photo that the library got after the switch turned on. The ID is
+    /// 1 asset that the library got after the switch turned on. The ID is
     /// the time that Flux first saw it, in microseconds.
     private struct PhotoEntry: Codable {
         var id: Int64
@@ -567,17 +537,6 @@ public final class CaptureWatchPlugin: FluxPlugin, @unchecked Sendable {
         let data = token.flatMap { try? NSKeyedArchiver.archivedData(withRootObject: $0, requiringSecureCoding: true) }
         core?.defaults.set(data, forKey: Self.tokenKey)
     }
-    #else
-    /// The creation date of the last image of the kind that went out, or of
-    /// the time that its switch turned on.
-    private func loadAfter(_ kind: CaptureKind) -> Date? {
-        (core?.defaults.object(forKey: Self.afterKey + kind.rawValue) as? Double).map(Date.init(timeIntervalSince1970:))
-    }
-
-    private func saveAfter(_ date: Date?, _ kind: CaptureKind) {
-        core?.defaults.set(date?.timeIntervalSince1970, forKey: Self.afterKey + kind.rawValue)
-    }
-    #endif
 
     static func micros(_ date: Date) -> Int64 { Int64(date.timeIntervalSince1970 * 1_000_000) }
 
