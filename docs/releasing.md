@@ -11,7 +11,7 @@ An optional final job pushes the tested recipe to AUR.
 | Workflow | Trigger | Result |
 | --- | --- | --- |
 | `build.yml` | Push to `master`, pull request, manual run, or reusable call | Arch package, Go tests, Android tests, lint, debug APK, unsigned release build, FluxKit tests, ad hoc signed macOS app, the iOS app with its simulator tests, an unsigned iOS Release build, and checks of its permission texts and privacy manifests |
-| `release.yml` | Push a `v*` tag or manually select an existing tag | Validated stable tag, tested desktop package, signed APK, and GitHub release |
+| `release.yml` | Push a `v*` tag or manually select an existing tag | Validated stable tag, tested desktop package, signed APK, ad hoc signed macOS app, unsigned iOS app, and GitHub release |
 | `aur.yml` | Reusable call after release publication | AUR commit with `PKGBUILD`, `.SRCINFO`, and the install hook |
 
 The workflows live in [`.github/workflows/`](../.github/workflows/).
@@ -183,7 +183,8 @@ git push origin v0.1.0
 
 The release workflow checks out the exact tag for all builds.
 It waits for the desktop, Android, and macOS checks before publication.
-The release does not publish the macOS app. It skips the iOS tests, because it does not ship the iOS app.
+The release attaches the macOS app from the `macos` job. The app is signed ad hoc and not notarized.
+The release skips the iOS tests. The `ipa` job builds the iOS app in Release without signing, for sideload tools.
 The release starts as a draft until all assets upload.
 
 The workflow writes the release notes in the cliamp format:
@@ -199,6 +200,8 @@ Artifacts include:
 - `omarchy-flux-VERSION-1-x86_64.pkg.tar.zst`.
 - An Arch debug-symbol package when makepkg enables it.
 - `flux-android-VERSION.apk`.
+- `flux-macos-VERSION.zip` with the universal macOS app.
+- `flux-ios-VERSION.ipa` with the unsigned iOS app.
 - `omarchy-flux-VERSION-aur.tar.gz` with `PKGBUILD`, `.SRCINFO`, and the install hook.
 - `android-certificate.txt`.
 - `SHA256SUMS`.
@@ -252,7 +255,7 @@ The GitHub release remains available.
 
 ## TestFlight
 
-The workflows do not sign or upload the iOS app.
+The workflows do not sign the iOS app or upload it to App Store Connect.
 Upload a build to TestFlight from a Mac with Xcode 26 and XcodeGen.
 [Flux for iOS on the App Store](ios-app-store.md) has the store text, the review notes, and the open items.
 

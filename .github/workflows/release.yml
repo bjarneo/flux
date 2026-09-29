@@ -114,8 +114,52 @@ jobs:
           path: android/release/
           if-no-files-found: error
 
+  # The iOS app without signing, for sideload tools that sign it again with
+  # the Apple ID of the user. The build job does not build it for a release.
+  ipa:
+    needs: version
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      # The full history gives the tag that sets the app version.
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.version.outputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      # Xcode 26 by path, so that a new default Xcode on the runner does
+      # not change the build.
+      - name: Select Xcode 26
+        run: |
+          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1 || true)
+          if [[ -z "$xcode" ]]; then echo "This runner has no Xcode 26" >&2; exit 1; fi
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Build the iOS app in Release for iPhones
+        run: make ios-release
+      - name: Verify and package the app
+        env:
+          VERSION: ${{ needs.version.outputs.name }}
+        run: |
+          app=ios/build/Build/Products/Release-iphoneos/Flux.app
+          version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Info.plist")
+          if [[ "$version" != "$VERSION" ]]; then
+            echo "::error::The iOS app has version $version, not $VERSION."
+            exit 1
+          fi
+          mkdir -p release/Payload
+          cp -R "$app" release/Payload/
+          (cd release && zip -qry "flux-ios-$VERSION.ipa" Payload && rm -rf Payload)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-release
+          path: release/
+          if-no-files-found: error
+
   publish:
-    needs: [version, build, apk]
+    needs: [version, build, apk, ipa]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -137,6 +181,14 @@ jobs:
         with:
           name: android-release
           path: artifacts/android
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-app
+          path: artifacts/macos
+      - uses: actions/download-artifact@v4
+        with:
+          name: ios-release
+          path: artifacts/ios
       - name: Prepare release files
         env:
           VERSION: ${{ needs.version.outputs.name }}
@@ -144,9 +196,11 @@ jobs:
           mkdir release
           find artifacts/arch -name '*.pkg.tar.zst' -exec cp {} release/ \;
           cp artifacts/android/* release/
+          cp artifacts/macos/flux-macos.zip "release/flux-macos-$VERSION.zip"
+          cp "artifacts/ios/flux-ios-$VERSION.ipa" release/
           tar -czf "release/omarchy-flux-$VERSION-aur.tar.gz" -C artifacts/aur PKGBUILD .SRCINFO omarchy-flux.install
           cd release
-          sha256sum -- *.pkg.tar.zst *.apk *-aur.tar.gz android-certificate.txt > SHA256SUMS
+          sha256sum -- *.pkg.tar.zst *.apk *.zip *.ipa *-aur.tar.gz android-certificate.txt > SHA256SUMS
       - name: Write release notes
         env:
           GH_TOKEN: ${{ github.token }}

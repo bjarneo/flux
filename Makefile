@@ -171,7 +171,8 @@ ios:
 # the errors that only the optimized build has, as the App Store build would.
 ios-release:
 	cd ios && xcodegen generate --quiet && \
-		xcodebuild -project Flux.xcodeproj -scheme Flux -configuration Release -derivedDataPath build -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build
+		xcodebuild -project Flux.xcodeproj -scheme Flux -configuration Release -derivedDataPath build -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO \
+			MARKETING_VERSION=$(APP_VERSION) build
 
 # The app and FluxKit tests in an iPhone simulator with iOS 17 or later: the
 # booted one, else one of the newest runtime. IOS_SIMULATOR=<id> picks another.

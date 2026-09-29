@@ -110,7 +110,7 @@ make android
 ```
 
 GitHub Actions builds the complete Arch package and Android APKs for pull requests and the `main` branch.
-Stable version tags produce a signed APK, an Arch package, an AUR recipe, and checksums.
+Stable version tags produce a signed APK, an Arch package, an AUR recipe, an ad hoc signed macOS app, an unsigned iOS app for sideload tools, and checksums.
 The optional AUR job publishes the tested recipe after the GitHub release succeeds.
 
 On a Mac with Xcode and XcodeGen, test, build, and install the macOS app:

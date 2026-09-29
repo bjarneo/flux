@@ -69,6 +69,16 @@ The approval notification is time sensitive.
 Focus lets it through only with the time-sensitive entitlement, which the project does not set, because a free team may not be able to sign it.
 Without it, the notification still shows when no Focus is on.
 
+## Install a release with a sideload tool
+
+Each release attaches `flux-ios-VERSION.ipa`. The app in it has no signature.
+A sideload tool such as AltStore, SideStore, or Sideloadly signs it with your Apple ID and installs it.
+The limits of a free Apple ID in the table above also apply.
+
+The share extension needs the App Group `group.org.omarchy.flux`.
+When the sideload tool cannot give the app this group, the share extension cannot queue files for the app.
+To use the share extension with your own team, build the app from Xcode as described above.
+
 ## Pair an iPhone
 
 1. Connect the iPhone and the computer to the same local network.
