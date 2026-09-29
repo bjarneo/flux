@@ -2,8 +2,10 @@ import QtQuick
 import ".."
 
 // Test wrapper for the offscreen test. It adds snapshot("<page>:<path>"),
-// which selects a screen and saves the window as a PNG. Call it with:
+// which selects a screen and saves the window as a PNG, and probe(). Call
+// them with:
 //   qs -p <shell> ipc call shell call flux snapshot overview:/tmp/panel.png
+//   qs -p <shell> ipc call shell call flux probe ring
 Panel {
   id: panel
 
@@ -17,6 +19,18 @@ Panel {
     shot.path = path
     shot.restart()
     return "scheduled"
+  }
+
+  // probe("<method>") calls a fluxd method with no parameters. The log gets
+  // 1 line each time the callback runs, so a test can check that the
+  // callback runs once, also when the connection to fluxd closes.
+  function probe(method) {
+    var m = String(method || "")
+    if (!panel.flux) return "no service"
+    panel.flux.backend.call(m, {}, function (err, result) {
+      console.log("flux test: probe", m, err ? err.code : "ok")
+    })
+    return "sent"
   }
 
   Timer {
