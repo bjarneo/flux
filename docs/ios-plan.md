@@ -7,16 +7,16 @@ It shares FluxKit with [Flux for macOS](macos.md) and offers the Android feature
 
 ## Decisions
 
-- [ ] The iPhone is a device peer that replaces the Android app, like the Mac.
-- [ ] Native Swift and SwiftUI, iOS 17 or later. Citadel needs iOS 17, and so does `AVSampleBufferVideoRenderer`.
-- [ ] FluxKit in `macos/Package.swift` builds for iOS and macOS. The package stays where it is, so the Mac app does not change.
-- [ ] Platform code in FluxKit uses `#if os(macOS)` and `#if os(iOS)` inside the file that needs it. Public APIs that both apps use keep their names.
-- [ ] XcodeGen project in `ios/project.yml`. The app sources are in `ios/App`. The generated project stays out of Git.
-- [ ] One `FluxPlugin` per feature, composed in `ios/App/Features/Features.swift` with one line per entry, like the Mac app.
-- [ ] The iPhone announces itself as `phone` and only the capabilities that it implements.
-- [ ] Discovery follows Android and the Mac: the iPhone listens on TCP 1716 to 1764 and publishes `_kdeconnect._udp` through Bonjour, and `fluxd` connects to it. The iPhone also sends its identity by unicast UDP to each computer that it resolves through Bonjour. It sends no UDP broadcasts, because they need the multicast entitlement.
-- [ ] Wire formats follow the Android app and the Go handlers exactly. New FluxKit wire code gets unit tests.
-- [ ] No signing settings are committed. The simulator needs none. A device build uses the developer's own team in Xcode.
+- [x] The iPhone is a device peer that replaces the Android app, like the Mac.
+- [x] Native Swift and SwiftUI, iOS 17 or later. Citadel needs iOS 17, and so does `AVSampleBufferVideoRenderer`.
+- [x] FluxKit in `macos/Package.swift` builds for iOS and macOS. The package stays where it is, so the Mac app does not change.
+- [x] Platform code in FluxKit uses `#if os(macOS)` and `#if os(iOS)` inside the file that needs it. Public APIs that both apps use keep their names.
+- [x] XcodeGen project in `ios/project.yml`. The app sources are in `ios/App`. The generated project stays out of Git.
+- [x] One `FluxPlugin` per feature, composed in `ios/App/Features/Features.swift` with one line per entry, like the Mac app.
+- [x] The iPhone announces itself as `phone` and only the capabilities that it implements.
+- [x] Discovery follows Android and the Mac: the iPhone listens on TCP 1716 to 1764 and publishes `_kdeconnect._udp` through Bonjour, and `fluxd` connects to it. The iPhone also sends its identity by unicast UDP to each computer that it resolves through Bonjour. It sends no UDP broadcasts, because they need the multicast entitlement.
+- [x] Wire formats follow the Android app and the Go handlers exactly. New FluxKit wire code gets unit tests.
+- [x] No signing settings are committed. The simulator needs none. A device build uses the developer's own team in Xcode.
 
 ## Limits of iOS
 
@@ -112,6 +112,7 @@ It shares FluxKit with [Flux for macOS](macos.md) and offers the Android feature
 - [ ] Checked in the simulator: the microphone stream at `fluxd`.
   The audio input of this simulator stops the app with an RPC timeout in `AURemoteIO`, also in a bare `AVAudioEngine` test, so the stream is not checked yet.
 - [ ] Checked on a device: camera capture, webcam, and microphone.
+  Device only: the simulator has no camera, and its audio input fails as above.
 
 ## Phase 7: Fingerprint approval
 
@@ -159,6 +160,7 @@ Why iOS does not mirror the screen:
   and the app sends "start" for the extension, which announces its port through the App Group while the app is still on the screen.
 
 - [ ] Checked on a device: whether an extension with the encoder and the TLS listener stays under the memory limit, before the design above is built.
+  Device only: the simulator runs no broadcast and encodes in software inside the process.
 
 ## Phase 10: Documentation and integration
 
@@ -166,4 +168,5 @@ Why iOS does not mirror the screen:
 - [x] Index, [architecture](architecture.md), and [development](development.md) updated.
 - [x] A CI job builds the iOS app and runs the FluxKit tests in the simulator.
   The `ios` job in `build.yml` runs `make ios test-ios` on `macos-26`. The `macos` job runs `make test-macos macos`.
-- [ ] The Mac app builds with no new warnings, and `make test-macos` passes.
+- [x] The Mac app builds with no new warnings, and `make test-macos` passes.
+  A clean build of the Mac app has the same 2 deprecation warnings in `LanBackend.swift` as upstream `master`, and the iOS build has no warning in `ios/`.
