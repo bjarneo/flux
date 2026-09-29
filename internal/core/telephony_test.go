@@ -5,9 +5,11 @@ import (
 	"log"
 	"slices"
 	"testing"
+	"time"
 
 	"flux/internal/config"
 	"flux/internal/desktop"
+	"flux/internal/lan"
 	"flux/internal/proto"
 )
 
@@ -84,11 +86,13 @@ func TestHandleTelephony(t *testing.T) {
 
 	d.handleTelephony(dev, telephonyPacket(map[string]any{"event": "ringing", "phoneNumber": "+4712345678"}))
 	d.handleTelephony(dev, telephonyPacket(map[string]any{"event": "talking", "phoneNumber": "+4712345678"}))
+	waitIdle(t, d, &d.content.mediaQ)
 	if !slices.Equal(m.actions, []string{"spotify:Pause"}) {
 		t.Fatalf("ringing and talking: %v", m.actions)
 	}
 	// The phone sends isCancel as a boolean or as a string.
 	d.handleTelephony(dev, telephonyPacket(map[string]any{"event": "talking", "isCancel": "true"}))
+	waitIdle(t, d, &d.content.mediaQ)
 	if !slices.Equal(m.actions, []string{"spotify:Pause", "spotify:Play"}) {
 		t.Fatalf("after the call: %v", m.actions)
 	}
@@ -98,9 +102,69 @@ func TestHandleTelephony(t *testing.T) {
 	m.actions = nil
 	d.handleTelephony(dev, telephonyPacket(map[string]any{"event": "ringing"}))
 	d.handleTelephony(dev, telephonyPacket(map[string]any{"event": "ringing", "isCancel": true}))
+	waitIdle(t, d, &d.content.mediaQ)
 	if len(m.actions) != 0 {
 		t.Fatalf("pause_media_on_call off: %v", m.actions)
 	}
+}
+
+// TestDropCall checks that the call state ends when the link that reported
+// the call drops, so that a later call does not play players that it did
+// not pause.
+func TestDropCall(t *testing.T) {
+	m := &fakeMedia{players: []desktop.Player{{Name: "spotify", Playing: true}}}
+	d := &Daemon{cfg: &config.Config{PauseMediaOnCall: true}, logger: log.New(io.Discard, "", 0), callPlayers: m}
+	dev := &Device{ID: "p1", Name: "Pixel 8"}
+	first, second := &lan.Link{}, &lan.Link{}
+	d.callEvent(dev, nil, callBody{Event: "ringing"})
+	d.calls[dev.ID].link = first
+
+	// A link that did not report the call changes nothing.
+	d.dropCall(dev, second)
+	if d.calls[dev.ID] == nil {
+		t.Fatal("the drop of another link ended the call")
+	}
+	d.dropCall(dev, first)
+	if d.calls[dev.ID] != nil {
+		t.Fatal("the call state stays after its link dropped")
+	}
+	// spotify stays paused. The end of the next call does not play it,
+	// because that call did not pause it.
+	m.actions = nil
+	d.callEvent(dev, nil, callBody{Event: "talking", IsCancel: "true"})
+	if len(m.actions) != 0 {
+		t.Fatalf("the end of a new call ran %v", m.actions)
+	}
+}
+
+// stuckMedia is a set of players that does not answer until release
+// closes, like a stopped mpv that keeps its bus name.
+type stuckMedia struct{ release chan struct{} }
+
+func (s *stuckMedia) Players() []desktop.Player { <-s.release; return nil }
+
+func (s *stuckMedia) Action(string, string) error { <-s.release; return nil }
+
+// TestTelephonyDoesNotBlockReadLoop checks that a call event returns at
+// once while the players do not answer. The read loop of the phone then
+// handles the next packets, such as an approval answer.
+func TestTelephonyDoesNotBlockReadLoop(t *testing.T) {
+	m := &stuckMedia{release: make(chan struct{})}
+	d := &Daemon{cfg: &config.Config{PauseMediaOnCall: true}, logger: log.New(io.Discard, "", 0), callPlayers: m}
+	dev := &Device{ID: "p1", Name: "Pixel 8", Paired: true}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		d.handleTelephony(dev, telephonyPacket(map[string]any{"event": "ringing"}))
+		d.handleTelephony(dev, telephonyPacket(map[string]any{"event": "ringing", "isCancel": true}))
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("a call event waits for the players")
+	}
+	close(m.release)
+	waitIdle(t, d, &d.content.mediaQ)
 }
 
 func TestCaller(t *testing.T) {

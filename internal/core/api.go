@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 
@@ -72,10 +73,11 @@ func (d *Daemon) pick(key string) (*Device, error) {
 	return nil, apiErr("ambiguous", "%d devices are connected (%s). Use --device", len(found), strings.Join(names, ", "))
 }
 
-// Snapshot returns the full state as JSON.
+// Snapshot returns the full state as JSON. It copies the state under d.mu
+// and encodes the copy after the unlock, so that the packets of the devices
+// do not wait for the encode.
 func (d *Daemon) Snapshot() json.RawMessage {
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	devs := make([]*Device, 0, len(d.devices))
 	for _, dev := range d.devices {
 		devs = append(devs, dev)
@@ -98,18 +100,21 @@ func (d *Daemon) Snapshot() json.RawMessage {
 		}
 		v := dev.view()
 		v.AppUpdate = d.appUpdateLocked(dev)
+		// The handlers change these lists in place.
+		v.Notifications = slices.Clone(v.Notifications)
+		v.Addresses = slices.Clone(v.Addresses)
 		views = append(views, v)
 	}
 	clip := d.clipPreviewLocked()
-	transfers := d.transfers
-	if transfers == nil {
-		transfers = []*Transfer{}
+	transfers := make([]*Transfer, 0, len(d.transfers))
+	for _, t := range d.transfers {
+		transfers = append(transfers, t.copyLocked())
 	}
-	commands := d.cfg.Commands
+	commands := slices.Clone(d.cfg.Commands)
 	if commands == nil {
 		commands = []config.Command{}
 	}
-	return mustJSON(map[string]any{
+	state := map[string]any{
 		"self": map[string]any{
 			"id": d.selfID, "name": d.nameLocked(), "type": proto.DeviceType(),
 			"tcpPort": d.lanPort(), "version": d.opts.Version,
@@ -139,7 +144,9 @@ func (d *Daemon) Snapshot() json.RawMessage {
 		"screen":  d.screenViewLocked(),
 		"desktop": d.desktopViewLocked(),
 		"herdr":   d.herdrViewLocked(),
-	})
+	}
+	d.mu.Unlock()
+	return mustJSON(state)
 }
 
 func (d *Daemon) lanPort() int {
@@ -439,6 +446,10 @@ func (d *Daemon) setSetting(key string, value any) error {
 	}
 	if key == "syncDnd" {
 		d.wakeDnd()
+	}
+	if key == "autoClipboard" && !b {
+		// An image that is on its way to the phones stops.
+		d.stopClipSend()
 	}
 	if key == "checkUpdates" {
 		d.wakeRelease()

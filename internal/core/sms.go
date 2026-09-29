@@ -5,9 +5,24 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"flux/internal/proto"
 )
+
+// Limits on the SMS data of a phone. The state holds each conversation,
+// so a device cannot make the state large. fluxd keeps the newest
+// maxConversations conversations. Flux for Android sends at most 500.
+const (
+	maxConversations = 500
+	maxSmsLast       = 1 << 10
+	maxSmsAddresses  = 20
+	maxSmsAddress    = 256
+)
+
+// maxSmsSend is the longest text message in characters that fluxd sends.
+// It is about 10 SMS parts.
+const maxSmsSend = 1600
 
 // SmsMessage is one text message.
 type SmsMessage struct {
@@ -88,11 +103,14 @@ func (w smsWire) message() SmsMessage {
 		m.subID = *w.SubID
 	}
 	for _, a := range w.Addresses {
-		addr := strings.TrimSpace(a.Address)
+		addr := cutText(strings.TrimSpace(a.Address), maxSmsAddress)
 		if addr == "" {
 			continue
 		}
-		name := strings.TrimSpace(a.ContactName)
+		if len(m.Addresses) == maxSmsAddresses {
+			break
+		}
+		name := cutText(strings.TrimSpace(a.ContactName), maxSmsAddress)
 		if name == "" {
 			name = addr
 		}
@@ -108,7 +126,7 @@ func (w smsWire) message() SmsMessage {
 func (m SmsMessage) conversation() *Conversation {
 	return &Conversation{
 		Thread: m.Thread, Name: strings.Join(m.names, ", "), Address: m.Address, Addresses: m.Addresses,
-		Last: m.Body, Time: m.Time, Unread: !m.Read && !m.Outgoing,
+		Last: cutText(m.Body, maxSmsLast), Time: m.Time, Unread: !m.Read && !m.Outgoing,
 		Outgoing: m.Outgoing, Pending: m.Pending, Failed: m.Failed,
 		id: m.ID, ms: m.ms, subID: m.subID,
 	}
@@ -128,12 +146,12 @@ func (d *Daemon) handleSms(dev *Device, p *proto.Packet) {
 		return
 	}
 	msgs := make([]SmsMessage, 0, len(b.Messages))
-	threads := map[int64]bool{}
 	for _, w := range b.Messages {
-		m := w.message()
-		msgs = append(msgs, m)
-		threads[m.Thread] = true
+		msgs = append(msgs, w.message())
 	}
+	// The waiting callers share the slice, so it is sorted here, oldest
+	// first, and the callers only read it.
+	sort.SliceStable(msgs, func(i, j int) bool { return msgs[i].ms < msgs[j].ms })
 	d.mu.Lock()
 	for _, m := range msgs {
 		// A newer message replaces the latest message of its thread. The
@@ -143,6 +161,7 @@ func (d *Daemon) handleSms(dev *Device, p *proto.Packet) {
 			dev.conversations[m.Thread] = m.conversation()
 		}
 	}
+	pruneConversations(dev.conversations, maxConversations)
 	if b.ThreadID != nil {
 		answer := *b.ThreadID
 		for _, ch := range dev.threadWait[answer] {
@@ -175,7 +194,6 @@ func (d *Daemon) SmsThread(dev *Device, thread int64) ([]SmsMessage, error) {
 	}
 	select {
 	case msgs := <-ch:
-		sort.SliceStable(msgs, func(i, j int) bool { return msgs[i].ms < msgs[j].ms })
 		return msgs, nil
 	case <-time.After(8 * time.Second):
 		d.stopWait(dev, thread, ch)
@@ -209,6 +227,9 @@ func (d *Daemon) SendSms(dev *Device, addresses []string, body string) error {
 	if len(list) == 0 || strings.TrimSpace(body) == "" {
 		return apiErr("bad_params", "Give at least 1 address and a message")
 	}
+	if n := utf8.RuneCountInString(body); n > maxSmsSend {
+		return apiErr("bad_params", "The message has %d characters. Send at most %d", n, maxSmsSend)
+	}
 	d.mu.Lock()
 	sub := conversationSim(dev.conversations, clean)
 	d.mu.Unlock()
@@ -234,6 +255,17 @@ func conversationSim(convos map[int64]*Conversation, addresses []string) int64 {
 		sub, newest = c.subID, c.ms
 	}
 	return sub
+}
+
+// pruneConversations removes the oldest conversations until at most max
+// stay.
+func pruneConversations(m map[int64]*Conversation, max int) {
+	if len(m) <= max {
+		return
+	}
+	for _, c := range sortedConversations(m)[max:] {
+		delete(m, c.Thread)
+	}
 }
 
 func sortedConversations(m map[int64]*Conversation) []*Conversation {

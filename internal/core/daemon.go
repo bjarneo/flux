@@ -116,6 +116,10 @@ type Daemon struct {
 	dirty  chan struct{}
 	ctx    context.Context
 	logger *log.Logger
+
+	// content holds the workers and the limits of shares, the clipboard,
+	// notifications, media, calls, and Do Not Disturb.
+	content contentState
 }
 
 // Options change how the daemon runs. The zero value is the normal mode.
@@ -693,21 +697,9 @@ func (d *Daemon) onLink(l *lan.Link) {
 func (d *Daemon) onPairedLink(dev *Device, l *lan.Link) {
 	d.sendBattery(l)
 	d.sendCommandList(l)
-	d.mu.Lock()
-	auto := d.cfg.AutoClipboard
-	d.mu.Unlock()
-	if auto {
-		if text, err := d.clip.Get(); err == nil && text != "" {
-			d.mu.Lock()
-			ts := d.lastLocalClip.UnixMilli()
-			d.mu.Unlock()
-			if ts > 0 {
-				_ = l.Send(proto.New(proto.TypeClipboardConnect, map[string]any{"content": text, "timestamp": ts}))
-			}
-		}
-	}
+	d.sendConnectClipboard(l)
 	if dev.supports(proto.TypeNotification) {
-		_ = l.Send(proto.New(proto.TypeNotificationRequest, map[string]any{"request": true}))
+		d.requestNotifications(dev, l)
 	}
 	if dev.accepts(proto.TypeFluxDnd) {
 		d.wakeDnd()
@@ -716,7 +708,8 @@ func (d *Daemon) onPairedLink(dev *Device, l *lan.Link) {
 		d.sendInputState(l)
 	}
 	if d.media != nil && dev.supports(proto.TypeMprisRequest) {
-		d.sendPlayers(l)
+		// A player that does not answer must not delay the link.
+		d.runMedia(func() { d.sendPlayers(l) })
 	}
 	if dev.accepts(proto.TypeFluxHerdr) {
 		d.mu.Lock()
