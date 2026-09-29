@@ -53,6 +53,10 @@ When the [release check](configuration.md#release-check) found a newer release, 
 For a pacman package, it downloads the release package, checks it against `SHA256SUMS`, and runs `sudo pacman -U`.
 For a source install, it prints the commands for the checkout.
 Without a network, it prints the error and returns 1.
+
+`flux-cli --device "Pixel 8" update --phone` sends the latest Flux for Android to the phone.
+`flux-cli status` shows when a phone has an earlier Android app.
+See [update the app](android.md#update-the-app).
 See [update](install.md#update).
 
 `flux-cli open` starts `fluxd.service` when no `fluxd` answers.

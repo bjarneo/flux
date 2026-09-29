@@ -62,7 +62,20 @@ class ProtocolTest {
         assertEquals("phone", back.deviceType)
         assertEquals(8, back.protocolVersion)
         assertEquals(INCOMING, back.incoming)
+        assertEquals(if (org.omarchy.flux.BuildConfig.DEBUG) "android-debug" else "android", back.app)
+        assertEquals(org.omarchy.flux.BuildConfig.VERSION_NAME, back.appVersion)
         assertNull(Identity.from(Packet(Types.IDENTITY, bodyOf("deviceId" to "short"))))
+    }
+
+    @Test
+    fun identityWithoutApp() {
+        // An earlier Flux sends no app fields.
+        val old = Identity("fedcba9876543210fedcba9876543210", "pc", "laptop", 8, emptyList(), emptyList())
+        val body = Packet.parse(old.toPacket().serialize())!!
+        assertNull(body.string("app"))
+        val back = Identity.from(body)!!
+        assertEquals("", back.app)
+        assertEquals("", back.appVersion)
     }
 
     @Test

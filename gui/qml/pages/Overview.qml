@@ -87,6 +87,15 @@ Item {
           color: Theme.dim
           elide: Text.ElideRight
         }
+        // The Flux app of the device and its version. An earlier app sends
+        // no version.
+        Txt {
+          width: parent.width
+          visible: text !== ""
+          text: root.dev && root.dev.appVersion ? "Flux " + root.dev.appVersion + (root.dev.appUpdate ? " · " + root.dev.appUpdate + " is available" : "") : ""
+          color: root.dev && root.dev.appUpdate ? Theme.warn : Theme.dim
+          elide: Text.ElideRight
+        }
         Txt {
           width: parent.width
           readonly property var b: root.dev ? root.dev.battery : null

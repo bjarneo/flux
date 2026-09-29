@@ -3,6 +3,9 @@ DESTDIR ?=
 GO      ?= go
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 GO_LDFLAGS := -s -w -X main.version=$(VERSION)
+# APP_VERSION is the last release tag without v, such as 0.7.0. The Mac and
+# iPhone apps take it as their version, and send it to fluxd.
+APP_VERSION ?= $(or $(shell git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null | sed 's/^v//'),0.1.0)
 
 GUI_BUILD  := gui/app/build
 PLUGIN_DIR ?= $(HOME)/.config/omarchy/plugins/flux
@@ -143,12 +146,13 @@ snapshot: build-gui
 	QT_QPA_PLATFORM=offscreen $(GUI_BUILD)/flux-gui --snapshot $(CURDIR)/snapshots
 
 android:
-	cd android && ./gradlew :app:assembleDebug
+	cd android && FLUX_VERSION=$(APP_VERSION) ./gradlew :app:assembleDebug
 
 # The macOS app in macos/build. It needs Xcode and XcodeGen.
 macos:
 	cd macos && xcodegen generate --quiet && \
-		xcodebuild -project Flux.xcodeproj -scheme Flux -configuration Debug -derivedDataPath build -destination 'platform=macOS' build
+		xcodebuild -project Flux.xcodeproj -scheme Flux -configuration Debug -derivedDataPath build -destination 'platform=macOS' \
+			MARKETING_VERSION=$(APP_VERSION) build
 
 test-macos:
 	cd macos && swift test
@@ -160,14 +164,16 @@ install-macos:
 # The iOS app for the simulator in ios/build. It needs Xcode and XcodeGen.
 ios:
 	cd ios && xcodegen generate --quiet && \
-		xcodebuild -project Flux.xcodeproj -scheme Flux -configuration Debug -derivedDataPath build -destination 'generic/platform=iOS Simulator' build
+		xcodebuild -project Flux.xcodeproj -scheme Flux -configuration Debug -derivedDataPath build -destination 'generic/platform=iOS Simulator' \
+			MARKETING_VERSION=$(APP_VERSION) build
 
 # The app and FluxKit tests in an iPhone simulator with iOS 17 or later: the
 # booted one, else one of the newest runtime. IOS_SIMULATOR=<id> picks another.
 test-ios:
 	cd ios && xcodegen generate --quiet && \
 		simulator=$$(../scripts/ios-simulator.sh) && \
-		xcodebuild test -project Flux.xcodeproj -scheme Flux -derivedDataPath build -destination "id=$$simulator"
+		xcodebuild test -project Flux.xcodeproj -scheme Flux -derivedDataPath build -destination "id=$$simulator" \
+			MARKETING_VERSION=$(APP_VERSION)
 
 clean:
 	rm -rf bin $(GUI_BUILD) snapshots macos/build ios/build

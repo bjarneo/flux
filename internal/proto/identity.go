@@ -114,6 +114,12 @@ type Identity struct {
 	IncomingCapabilities []string `json:"incomingCapabilities"`
 	OutgoingCapabilities []string `json:"outgoingCapabilities"`
 	TCPPort              int      `json:"tcpPort,omitempty"`
+	// App and AppVersion name the Flux program that sends the identity
+	// and its version: "fluxd", "android", "android-debug", "ios", or
+	// "macos", and a version such as "0.7.0". An earlier Flux app sends
+	// neither.
+	App        string `json:"app,omitempty"`
+	AppVersion string `json:"appVersion,omitempty"`
 	// TargetDeviceID and TargetProtocolVersion go only in the plain-text
 	// identity that the connecting side writes before TLS. The receiver
 	// closes the socket when they do not match its own identity.

@@ -161,6 +161,7 @@ The other permissions need no prompt.
 | `CAMERA` | The camera modes and the webcam | When a camera page opens |
 | `RECORD_AUDIO`, `FOREGROUND_SERVICE_MEDIA_PROJECTION` | The microphone, dictation, and the screen mirror | When the feature starts |
 | `USE_BIOMETRIC` | [Fingerprint approval](approvals.md) of `sudo` and polkit | No prompt |
+| `REQUEST_INSTALL_PACKAGES` | [Updates that the computer sends](android.md#update-the-app) | Android asks to allow **Install unknown apps** at the first update |
 
 `READ_EXTERNAL_STORAGE` applies only to Android 12 and earlier.
 The call log and the contacts are optional for **Call alerts**. They add the number and the name of the caller.

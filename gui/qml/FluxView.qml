@@ -786,6 +786,9 @@ Item {
   // again.
   readonly property var update: (backend && backend.state && backend.state.update) || ({})
   property string laterVersion: ""
+  // The first connected phone with a newer Android app in the release.
+  property var laterApp: ({})
+  readonly property var appUpdateDevice: paired.find(d => d.online && d.appUpdate && !laterApp[d.id + " " + d.appUpdate]) || null
   Column {
     anchors.bottom: parent.bottom
     anchors.right: parent.right
@@ -802,6 +805,20 @@ Item {
       secondary: "Later"
       onActivated: root.call("update.install", {})
       onSecondaryActivated: root.laterVersion = root.update.latest
+    }
+    NoticeBar {
+      width: parent.width
+      visible: root.daemonUp && !!root.appUpdateDevice
+      title: "Flux for Android " + (root.appUpdateDevice ? root.appUpdateDevice.appUpdate : "") + " is available"
+      message: root.appUpdateDevice ? root.appUpdateDevice.name + " has Flux " + root.appUpdateDevice.appVersion + ". Send the new app, then open its notification on the phone to install it." : ""
+      action: "Send to phone"
+      secondary: "Later"
+      onActivated: root.call("update.sendApp", { device: root.appUpdateDevice.id })
+      onSecondaryActivated: {
+        var later = Object.assign({}, root.laterApp)
+        later[root.appUpdateDevice.id + " " + root.appUpdateDevice.appUpdate] = true
+        root.laterApp = later
+      }
     }
     NoticeBar {
       width: parent.width

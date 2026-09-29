@@ -112,6 +112,9 @@ public final class FluxCore: @unchecked Sendable {
         cleanName((SCDynamicStoreCopyComputerName(nil, nil) as String?) ?? Host.current().localizedName ?? "Mac")
     }
 
+    /// The name of this app in the identity.
+    public static let appName = "macos"
+
     /// "laptop" when the Mac has an internal battery, else "desktop".
     public static let deviceType: String = {
         guard let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
@@ -131,6 +134,9 @@ public final class FluxCore: @unchecked Sendable {
 
     /// The iPhone is a phone.
     public static let deviceType = "phone"
+
+    /// The name of this app in the identity.
+    public static let appName = "ios"
 
     /// Stores the device name. An empty name goes back to "iPhone". The new
     /// name goes out through Bonjour and to known computers. A computer reads
@@ -169,8 +175,13 @@ public final class FluxCore: @unchecked Sendable {
 
     public func identity(tcpPort: Int) -> Identity {
         Identity(deviceId: local.deviceId, deviceName: deviceName, deviceType: Self.deviceType, protocolVersion: protocolVersion,
-                 incoming: incomingCapabilities, outgoing: outgoingCapabilities, tcpPort: tcpPort)
+                 incoming: incomingCapabilities, outgoing: outgoingCapabilities, tcpPort: tcpPort,
+                 app: Self.appName, appVersion: Self.appVersion)
     }
+
+    /// The version of this app, from CFBundleShortVersionString. The build
+    /// sets it from the last release tag.
+    public static let appVersion: String = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
 
     /// Sends the identity again to each connected, paired computer, after
     /// the capabilities changed. fluxd takes the new capabilities from it.

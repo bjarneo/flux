@@ -97,9 +97,18 @@ flux-cli watch
 | Text messages | `sms.refresh`, `sms.thread`, `sms.send` |
 | Streams | `webcam.config`, `webcam.stop`, `mic.stop`, `screen.stop`, `desktop.stop` |
 | Approval | `approve.request`, `approve.wait`, `approve.enroll` |
-| Settings and updates | `settings.set`, `update.install` |
+| Settings and updates | `settings.set`, `update.install`, `update.sendApp` |
 
 `update.install` opens a terminal that runs `flux-cli update`.
+`update.sendApp` with a `device` downloads the Android app of the latest release, checks it against `SHA256SUMS`, and sends it to that phone.
+
+Each device has 3 app fields:
+
+| Field | Value |
+| --- | --- |
+| `app` | The Flux program of the device: `android`, `android-debug`, `ios`, `macos`, or `fluxd`. An earlier app sends none. |
+| `appVersion` | The version of that program, such as `0.7.0`. |
+| `appUpdate` | The version of a newer Android app in the latest release, or an empty string. |
 To turn the release check off or on over IPC, send:
 
 ```json

@@ -31,6 +31,7 @@ type releaseInfo struct {
 	Version   string `json:"version"`
 	Page      string `json:"page"`
 	APK       string `json:"apk,omitempty"`
+	Sums      string `json:"sums,omitempty"`
 	CheckedAt int64  `json:"checkedAt"`
 }
 
@@ -141,6 +142,9 @@ func (d *Daemon) checkRelease(ctx context.Context) error {
 	if apk, ok := r.Find(func(n string) bool { return strings.HasPrefix(n, "flux-android-") && strings.HasSuffix(n, ".apk") }); ok {
 		info.APK = apk.URL
 	}
+	if sums, ok := r.Find(func(n string) bool { return n == "SHA256SUMS" }); ok {
+		info.Sums = sums.URL
+	}
 	known := d.release.Version
 	d.release, d.releaseErr = info, ""
 	d.mu.Unlock()
@@ -165,6 +169,50 @@ func (d *Daemon) updateViewLocked() map[string]any {
 	v["latest"], v["url"], v["apk"], v["checkedAt"], v["error"] = r.Version, r.Page, r.APK, r.CheckedAt, d.releaseErr
 	v["available"] = release.Newer(r.Version, d.opts.Version)
 	return v
+}
+
+// appUpdateLocked returns the version of the Android app in the latest
+// release when it is newer than the app on dev, else "". An earlier app
+// sends no version, and a debug build is "android-debug", so neither gets
+// an offer.
+func (d *Daemon) appUpdateLocked(dev *Device) string {
+	r := d.release
+	if !d.cfg.CheckUpdates || d.opts.ReleaseURL == "" || r.APK == "" || r.Sums == "" || dev.App != "android" {
+		return ""
+	}
+	if !release.Newer(r.Version, dev.AppVersion) {
+		return ""
+	}
+	return r.Version
+}
+
+// sendAppUpdate downloads the Android app of the latest release, checks
+// it against SHA256SUMS, and sends it to the phone. The phone opens the
+// Android installer from its notification. The installer accepts only an
+// app with the same signing key.
+func (d *Daemon) sendAppUpdate(dev *Device) error {
+	d.mu.Lock()
+	version := d.appUpdateLocked(dev)
+	r, name := d.release, dev.Name
+	d.mu.Unlock()
+	if version == "" {
+		return apiErr("no_update", "No newer Flux for Android is available for %s", name)
+	}
+	go func() {
+		d.toast("Downloading Flux for Android %s", version)
+		path, err := release.Fetch(d.ctx, r.APK, r.Sums, filepath.Join(cacheDir(), "update"), d.opts.Version)
+		if err != nil {
+			d.logf("app update: %v", err)
+			d.toast("Cannot download Flux for Android %s: %v", version, err)
+			return
+		}
+		if _, err := d.SendFiles(dev, []string{path}); err != nil {
+			d.toast("Cannot send Flux for Android %s: %v", version, err)
+			return
+		}
+		d.toast("Sent Flux for Android %s to %s. Open its notification on the phone to install it", version, name)
+	}()
+	return nil
 }
 
 // installUpdate opens a terminal that runs `flux-cli update`, so that the

@@ -289,7 +289,9 @@ func (d *Daemon) Run() error {
 	d.lan = lan.New(lan.Config{
 		Cert: d.cert,
 		Identity: func() proto.Identity {
-			return proto.NewIdentity(d.selfID, d.Name(), 0)
+			id := proto.NewIdentity(d.selfID, d.Name(), 0)
+			id.App, id.AppVersion = "fluxd", d.opts.Version
+			return id
 		},
 		Trusted: func(id string) (*x509.Certificate, bool) {
 			t, ok := d.trust.Get(id)

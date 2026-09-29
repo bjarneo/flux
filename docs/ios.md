@@ -28,6 +28,8 @@ make test-ios
 ```
 
 `make ios` generates `ios/Flux.xcodeproj` from `ios/project.yml` and builds the app for the simulator in `ios/build`.
+`make ios` and `make test-ios` set the app version to the last release tag, such as `0.7.0`. The app sends it to `fluxd`.
+A build from the Xcode window uses `MARKETING_VERSION` in `ios/project.yml` instead.
 `make test-ios` runs the app tests and the FluxKit tests in the booted iPhone simulator, else in the first available one.
 Set `IOS_SIMULATOR=<id>` to choose another simulator.
 The generated project and `ios/build` stay out of Git.

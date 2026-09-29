@@ -71,6 +71,20 @@ final class ProtocolTests: XCTestCase {
         XCTAssertNil(Identity.from(bad))
     }
 
+    func testIdentityApp() {
+        let id = Identity(deviceId: "9f1c0e5b7a2d4c3e8b6a1f0d2c4e6a8b", deviceName: "mac", deviceType: "laptop", protocolVersion: 8,
+                          incoming: [], outgoing: [], app: "macos", appVersion: "0.7.0")
+        let back = Packet.parse(id.packet().serialize()).flatMap(Identity.from)
+        XCTAssertEqual(back?.app, "macos")
+        XCTAssertEqual(back?.appVersion, "0.7.0")
+        // An earlier Flux sends no app fields.
+        let old = Identity(deviceId: "9f1c0e5b7a2d4c3e8b6a1f0d2c4e6a8b", deviceName: "pc", deviceType: "laptop", protocolVersion: 8, incoming: [], outgoing: [])
+        let parsed = Packet.parse(old.packet().serialize())
+        XCTAssertNil(parsed?.string("app"))
+        XCTAssertEqual(parsed.flatMap(Identity.from)?.app, "")
+        XCTAssertEqual(parsed.flatMap(Identity.from)?.appVersion, "")
+    }
+
     func testOnlyOmarchyComputersAreFlux() {
         func identity(_ type: String, _ incoming: [String]) -> Identity {
             Identity(deviceId: "9f1c0e5b7a2d4c3e8b6a1f0d2c4e6a8b", deviceName: "x", deviceType: type, protocolVersion: 8, incoming: incoming, outgoing: [])

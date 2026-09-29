@@ -55,13 +55,15 @@ type state struct {
 		TCPPort int `json:"tcpPort"`
 	} `json:"self"`
 	Devices []struct {
-		ID        string   `json:"id"`
-		Name      string   `json:"name"`
-		Addresses []string `json:"addresses"`
-		Online    bool     `json:"online"`
-		Paired    bool     `json:"paired"`
-		PairState string   `json:"pairState"`
-		PairKey   string   `json:"pairKey"`
+		ID         string   `json:"id"`
+		Name       string   `json:"name"`
+		App        string   `json:"app"`
+		AppVersion string   `json:"appVersion"`
+		Addresses  []string `json:"addresses"`
+		Online     bool     `json:"online"`
+		Paired     bool     `json:"paired"`
+		PairState  string   `json:"pairState"`
+		PairKey    string   `json:"pairKey"`
 		// Notifications are the notifications that the device sent.
 		Notifications []struct {
 			App   string `json:"app"`
@@ -272,6 +274,12 @@ func TestTwoDaemons(t *testing.T) {
 
 	// Discovery: each daemon broadcasts on start, so they find each other.
 	alpha.wait(t, "beta online", func(s state) bool { _, on, _, _, _ := device(s, "beta"); return on })
+	// The identity names the program and its version.
+	for _, d := range alpha.state(t).Devices {
+		if d.Name == "beta" && (d.App != "fluxd" || d.AppVersion == "") {
+			t.Fatalf("beta has app %q and version %q", d.App, d.AppVersion)
+		}
+	}
 	beta.wait(t, "alpha online", func(s state) bool { _, on, _, _, _ := device(s, "alpha"); return on })
 
 	// Pairing: both sides must show the same verification key.

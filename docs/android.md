@@ -62,6 +62,32 @@ Release APKs use one persistent release key.
 A debug APK cannot replace a release APK with a different key.
 To switch keys, uninstall the previous app first, which removes its local data and pairing identity.
 
+## Update the app
+
+When a newer Flux for Android exists, the Flux window on the computer shows **Flux for Android 0.7.0 is available**.
+The device card also shows the app version of the phone.
+To update the phone:
+
+1. Select **Send to phone** in the window.
+2. On the phone, open the notification **Flux 0.7.0 from COMPUTER**.
+3. The first time, allow **Install unknown apps** for Flux.
+4. Select **Update** in the Android installer.
+
+From the terminal, step 1 is:
+
+```sh
+flux-cli --device "Pixel 8" update --phone
+```
+
+The computer downloads the APK of the latest release and checks it against `SHA256SUMS` before it sends the file.
+The phone reads the package name of the APK. Only a build of Flux gets the update notification.
+The Android installer accepts the update only with the same signing key.
+After the update, Android starts the Flux service again.
+
+The offer needs the [release check](configuration.md#release-check) and a phone app that reports its version.
+Earlier versions of the app do not report it, so update them once with an APK from the release.
+A debug build gets no offer, because a release APK has another signing key and cannot replace it.
+
 ## Build and install
 
 Use JDK 21, Android SDK platform 36, and Build Tools 36.0.0.

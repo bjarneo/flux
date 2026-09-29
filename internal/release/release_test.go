@@ -2,9 +2,13 @@ package release
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -92,5 +96,76 @@ func TestOffline(t *testing.T) {
 	l.Close()
 	if _, err := Latest(context.Background(), "http://"+addr+"/latest", "0.6.0"); err == nil {
 		t.Fatal("no error for a closed port")
+	}
+}
+
+func TestVerify(t *testing.T) {
+	dir := t.TempDir()
+	pkg := filepath.Join(dir, "omarchy-flux-0.7.0-1-x86_64.pkg.tar.zst")
+	if err := os.WriteFile(pkg, []byte("package"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256([]byte("package"))
+	sums := filepath.Join(dir, "SHA256SUMS")
+	write := func(text string) {
+		if err := os.WriteFile(sums, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	write(hex.EncodeToString(sum[:]) + "  omarchy-flux-0.7.0-1-x86_64.pkg.tar.zst\nabc  flux-android-0.7.0.apk\n")
+	if err := Verify(pkg, sums); err != nil {
+		t.Errorf("a matching checksum: %v", err)
+	}
+	write("0000  omarchy-flux-0.7.0-1-x86_64.pkg.tar.zst\n")
+	if err := Verify(pkg, sums); err == nil {
+		t.Error("no error for a wrong checksum")
+	}
+	write("abc  flux-android-0.7.0.apk\n")
+	if err := Verify(pkg, sums); err == nil {
+		t.Error("no error for a missing line")
+	}
+}
+
+// TestFetch downloads a file, checks it, and reuses a complete file. A
+// file with a wrong checksum goes away.
+func TestFetch(t *testing.T) {
+	body := []byte("apk")
+	sum := sha256.Sum256(body)
+	var gets int
+	sums := hex.EncodeToString(sum[:]) + "  flux-android-0.7.0.apk\n"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/SHA256SUMS":
+			w.Write([]byte(sums))
+		case "/flux-android-0.7.0.apk":
+			gets++
+			w.Write(body)
+		}
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	for i := 0; i < 2; i++ {
+		path, err := Fetch(context.Background(), srv.URL+"/flux-android-0.7.0.apk", srv.URL+"/SHA256SUMS", dir, "0.6.0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if b, _ := os.ReadFile(path); string(b) != "apk" {
+			t.Fatalf("the file has %q", b)
+		}
+	}
+	if gets != 1 {
+		t.Errorf("%d downloads, want 1", gets)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "SHA256SUMS")); !os.IsNotExist(err) {
+		t.Errorf("SHA256SUMS stays: %v", err)
+	}
+
+	sums = "0000  flux-android-0.7.0.apk\n"
+	if _, err := Fetch(context.Background(), srv.URL+"/flux-android-0.7.0.apk", srv.URL+"/SHA256SUMS", dir, "0.6.0"); err == nil {
+		t.Fatal("no error for a wrong checksum")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "flux-android-0.7.0.apk")); !os.IsNotExist(err) {
+		t.Errorf("the file stays after a wrong checksum: %v", err)
 	}
 }

@@ -2,7 +2,9 @@ package proto
 
 import (
 	"crypto/x509"
+	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -117,5 +119,24 @@ func TestMediaGoesOneWay(t *testing.T) {
 	}
 	if slices.Contains(Incoming, TypeMpris) || slices.Contains(Outgoing, TypeMprisRequest) {
 		t.Error("the computer must not take player state or send player requests")
+	}
+}
+
+// TestIdentityApp checks the optional app fields. An earlier app sends
+// neither, and the JSON of an identity without them has no such keys.
+func TestIdentityApp(t *testing.T) {
+	var id Identity
+	if err := json.Unmarshal([]byte(`{"deviceId":"x","app":"android","appVersion":"0.7.0"}`), &id); err != nil {
+		t.Fatal(err)
+	}
+	if id.App != "android" || id.AppVersion != "0.7.0" {
+		t.Fatalf("identity %+v", id)
+	}
+	b, err := json.Marshal(NewIdentity("0123456789abcdef0123456789abcdef", "pc", 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), `"app`) {
+		t.Fatalf("an identity without app fields: %s", b)
 	}
 }

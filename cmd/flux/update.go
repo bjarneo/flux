@@ -1,14 +1,9 @@
 package main
 
 import (
-	"bufio"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,14 +18,16 @@ import (
 // update asks GitHub for the latest release and installs it. A pacman
 // package gets the release package after a SHA-256 check. A source
 // install gets the commands for its checkout.
-func update(args []string) error {
+func update(args []string, device string) error {
 	checkOnly := false
 	for _, a := range args {
 		switch a {
 		case "--check", "-n":
 			checkOnly = true
+		case "--phone":
+			return updatePhone(device)
 		default:
-			return fmt.Errorf("unknown option %q. Use --check", a)
+			return fmt.Errorf("unknown option %q. Use --check or --phone", a)
 		}
 	}
 	r, err := release.Latest(context.Background(), release.URL(), version)
@@ -68,6 +65,17 @@ func update(args []string) error {
 	return nil
 }
 
+// updatePhone asks fluxd to send the Android app of the latest release to
+// the phone. fluxd downloads it and checks it against SHA256SUMS first.
+func updatePhone(device string) error {
+	if err := call("update.sendApp", map[string]any{"device": device}); err != nil {
+		return err
+	}
+	fmt.Println("fluxd downloads Flux for Android and sends it to the phone. To install it, open its notification on the phone")
+	fmt.Println("To follow the transfer, run: flux-cli status --json")
+	return nil
+}
+
 // pacmanOwner returns the package that owns path, or "".
 func pacmanOwner(path string) string {
 	out, err := exec.Command("pacman", "-Qqo", path).Output()
@@ -100,21 +108,9 @@ func installPackage(r release.Release, pkg string) error {
 		return fmt.Errorf("the release has no %s package. To build it, run: yay -S %s", packageArch(), pkg)
 	}
 
-	dir := filepath.Join(config.CacheDir(), "update")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	path := filepath.Join(dir, asset.Name)
 	fmt.Printf("Downloading %s (%.1f MB)\n", asset.Name, float64(asset.Size)/1e6)
-	if err := download(asset.URL, path); err != nil {
-		return err
-	}
-	sumsPath := filepath.Join(dir, "SHA256SUMS")
-	if err := download(sums.URL, sumsPath); err != nil {
-		return err
-	}
-	if err := verify(path, sumsPath); err != nil {
-		os.Remove(path)
+	path, err := release.Fetch(context.Background(), asset.URL, sums.URL, filepath.Join(config.CacheDir(), "update"), version)
+	if err != nil {
 		return err
 	}
 	fmt.Println("✓ The SHA-256 checksum matches SHA256SUMS")
@@ -122,7 +118,6 @@ func installPackage(r release.Release, pkg string) error {
 		return fmt.Errorf("pacman did not install %s: %w", asset.Name, err)
 	}
 	os.Remove(path)
-	os.Remove(sumsPath)
 	return nil
 }
 
@@ -132,71 +127,6 @@ func packageAsset(r release.Release, pkg, arch string) (release.Asset, bool) {
 	return r.Find(func(n string) bool {
 		return strings.HasPrefix(n, pkg+"-"+r.Version()+"-") && strings.HasSuffix(n, "-"+arch+".pkg.tar.zst")
 	})
-}
-
-func download(url, path string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("User-Agent", "flux/"+version)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("download %s: %w", url, err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("download %s: %s", url, resp.Status)
-	}
-	f, err := os.Create(path + ".part")
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(f, resp.Body); err != nil {
-		f.Close()
-		os.Remove(path + ".part")
-		return fmt.Errorf("download %s: %w", url, err)
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	return os.Rename(path+".part", path)
-}
-
-// verify compares the SHA-256 checksum of path with its line in sums.
-func verify(path, sums string) error {
-	f, err := os.Open(sums)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	name := filepath.Base(path)
-	want := ""
-	s := bufio.NewScanner(f)
-	for s.Scan() {
-		fields := strings.Fields(s.Text())
-		if len(fields) == 2 && strings.TrimPrefix(fields[1], "*") == name {
-			want = fields[0]
-		}
-	}
-	if want == "" {
-		return fmt.Errorf("SHA256SUMS has no line for %s", name)
-	}
-	in, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	h := sha256.New()
-	if _, err := io.Copy(h, in); err != nil {
-		return err
-	}
-	if got := hex.EncodeToString(h.Sum(nil)); got != want {
-		return fmt.Errorf("the SHA-256 checksum of %s is %s, and SHA256SUMS gives %s. flux-cli removed the file", name, got, want)
-	}
-	return nil
 }
 
 // sourceUpdate prints the commands for a source install.

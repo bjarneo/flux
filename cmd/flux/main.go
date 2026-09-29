@@ -71,6 +71,7 @@ Commands:
   on                     Start fluxd, and start it at each login
   doctor                 Check the setup and print the fixes
   update [--check]       Install the latest release, or only check for it
+  update --phone         Send the latest Flux for Android to the phone
   version                Print the versions of flux-cli and the running fluxd
 
 Without --device, flux-cli uses the only connected paired device.
@@ -148,7 +149,7 @@ func main() {
 	case "doctor":
 		doctor()
 	case "update":
-		err = update(args)
+		err = update(args, device)
 	case "version", "--version":
 		printVersion()
 	case "help", "-h", "--help":
@@ -239,15 +240,18 @@ type State struct {
 		Error     string `json:"error"`
 	} `json:"update"`
 	Devices []struct {
-		ID        string `json:"id"`
-		Name      string `json:"name"`
-		Type      string `json:"type"`
-		IP        string `json:"ip"`
-		Paired    bool   `json:"paired"`
-		Online    bool   `json:"online"`
-		PairState string `json:"pairState"`
-		PairKey   string `json:"pairKey"`
-		Battery   *struct {
+		ID         string `json:"id"`
+		Name       string `json:"name"`
+		Type       string `json:"type"`
+		IP         string `json:"ip"`
+		Paired     bool   `json:"paired"`
+		Online     bool   `json:"online"`
+		PairState  string `json:"pairState"`
+		PairKey    string `json:"pairKey"`
+		App        string `json:"app"`
+		AppVersion string `json:"appVersion"`
+		AppUpdate  string `json:"appUpdate"`
+		Battery    *struct {
 			Charge   int  `json:"charge"`
 			Charging bool `json:"charging"`
 		} `json:"battery"`
@@ -297,6 +301,9 @@ func status(asJSON bool) error {
 			}
 		}
 		fmt.Printf("  %-22s %-7s %-10s %-6s %-15s %s\n", d.Name, d.Type, state, bat, d.IP, pair)
+		if d.AppUpdate != "" {
+			fmt.Printf("  %-22s Flux for Android %s is available. To send it, run: flux-cli --device %q update --phone\n", "", d.AppUpdate, d.Name)
+		}
 	}
 	return nil
 }

@@ -66,8 +66,13 @@ public struct Identity: Sendable, Equatable {
     public var incoming: [String]
     public var outgoing: [String]
     public var tcpPort: Int
+    /// The Flux program of the device and its version: "macos" or "ios"
+    /// and the app version for this device, "fluxd" for a computer. An
+    /// earlier Flux sends neither.
+    public var app: String
+    public var appVersion: String
 
-    public init(deviceId: String, deviceName: String, deviceType: String, protocolVersion: Int, incoming: [String], outgoing: [String], tcpPort: Int = 0) {
+    public init(deviceId: String, deviceName: String, deviceType: String, protocolVersion: Int, incoming: [String], outgoing: [String], tcpPort: Int = 0, app: String = "", appVersion: String = "") {
         self.deviceId = deviceId
         self.deviceName = deviceName
         self.deviceType = deviceType
@@ -75,6 +80,8 @@ public struct Identity: Sendable, Equatable {
         self.incoming = incoming
         self.outgoing = outgoing
         self.tcpPort = tcpPort
+        self.app = app
+        self.appVersion = appVersion
     }
 
     /// Returns the identity packet. Only the UDP broadcast carries tcpPort.
@@ -90,6 +97,8 @@ public struct Identity: Sendable, Equatable {
             "outgoingCapabilities": outgoing,
         ]
         if withPort && tcpPort > 0 { body["tcpPort"] = tcpPort }
+        if !app.isEmpty { body["app"] = app }
+        if !appVersion.isEmpty { body["appVersion"] = appVersion }
         if let target {
             body["targetDeviceId"] = target.deviceId
             body["targetProtocolVersion"] = target.protocolVersion
@@ -114,7 +123,9 @@ public struct Identity: Sendable, Equatable {
             protocolVersion: p.int("protocolVersion") ?? 7,
             incoming: p.strings("incomingCapabilities"),
             outgoing: p.strings("outgoingCapabilities"),
-            tcpPort: p.int("tcpPort") ?? 0
+            tcpPort: p.int("tcpPort") ?? 0,
+            app: p.string("app") ?? "",
+            appVersion: p.string("appVersion") ?? ""
         )
     }
 }

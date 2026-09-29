@@ -13,10 +13,14 @@ bundle_id=org.omarchy.flux.mac
 open_after=1
 [ "${1:-}" = "--no-open" ] && open_after=0
 
+# The app version is the last release tag without v. fluxd shows it.
+version=$(git -C "$root" describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null | sed 's/^v//')
+
 cd "$root/macos"
 xcodegen generate --quiet
 xcodebuild -project Flux.xcodeproj -scheme Flux -configuration Release \
-	-derivedDataPath build -destination "platform=macOS,arch=$(uname -m)" -quiet build
+	-derivedDataPath build -destination "platform=macOS,arch=$(uname -m)" -quiet \
+	MARKETING_VERSION="${version:-0.1.0}" build
 
 if pgrep -xq Flux; then
 	osascript -e "quit app id \"$bundle_id\"" >/dev/null 2>&1 || true

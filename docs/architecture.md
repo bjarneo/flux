@@ -56,6 +56,11 @@ The default Omarchy firewall permits mDNS.
 Flux needs no new inbound desktop firewall rule for these routes.
 Wi-Fi client isolation can still block communication between devices.
 
+## App versions
+
+The identity packet names the Flux program and its version in `app` and `appVersion`.
+fluxd uses them to offer a new Android app. An earlier app sends neither field.
+
 ## Desktop host contract
 
 Keep shared views independent of Quickshell.

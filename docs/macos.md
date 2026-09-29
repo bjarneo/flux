@@ -23,6 +23,7 @@ open macos/build/Build/Products/Debug/Flux.app
 ```
 
 `make macos` generates `macos/Flux.xcodeproj` from `macos/project.yml` and signs the app ad hoc.
+The app version is the last release tag, such as `0.7.0`. The app sends it to `fluxd`, and the Flux window on the computer shows it.
 The generated project and `macos/build` stay out of Git.
 To work in Xcode, run `xcodegen generate` in `macos/` and open `Flux.xcodeproj`.
 

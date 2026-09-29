@@ -153,3 +153,41 @@ func TestInstallUpdateNoTerminal(t *testing.T) {
 		t.Fatal("no error without a terminal")
 	}
 }
+
+// TestAppUpdate checks which devices get the offer of a new Android app.
+func TestAppUpdate(t *testing.T) {
+	d := releaseDaemon(t, "http://example.com/latest")
+	d.release = releaseInfo{Version: "0.7.0", APK: "https://example.com/apk", Sums: "https://example.com/sums"}
+	cases := []struct {
+		app, version, want string
+	}{
+		{"android", "0.6.0", "0.7.0"},
+		{"android", "0.7.0", ""},
+		{"android", "0.8.0", ""},
+		// A release APK cannot update a debug build with another key.
+		{"android-debug", "0.6.0", ""},
+		// An earlier app sends no version.
+		{"", "", ""},
+		{"ios", "0.6.0", ""},
+		{"fluxd", "0.6.0", ""},
+	}
+	for _, c := range cases {
+		dev := &Device{Name: "phone", App: c.app, AppVersion: c.version}
+		if got := d.appUpdateLocked(dev); got != c.want {
+			t.Errorf("%s %s: offer %q, want %q", c.app, c.version, got, c.want)
+		}
+	}
+
+	d.release.APK = ""
+	if got := d.appUpdateLocked(&Device{App: "android", AppVersion: "0.6.0"}); got != "" {
+		t.Errorf("an offer %q without an APK in the release", got)
+	}
+	d.release.APK = "https://example.com/apk"
+	d.cfg.CheckUpdates = false
+	if got := d.appUpdateLocked(&Device{App: "android", AppVersion: "0.6.0"}); got != "" {
+		t.Errorf("an offer %q with the release check off", got)
+	}
+	if err := d.sendAppUpdate(&Device{Name: "phone", App: "android", AppVersion: "0.6.0"}); err == nil {
+		t.Error("sendAppUpdate sent an app with no offer")
+	}
+}

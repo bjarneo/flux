@@ -120,6 +120,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
+          # The tags give the app version.
+          fetch-depth: 0
           persist-credentials: false
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -130,11 +132,14 @@ jobs:
       - name: Test FluxKit
         run: swift test
       # The generic destination builds a universal app for Apple silicon and Intel.
+      # The app version is the last release tag without v.
       - name: Build the app
         run: |
+          version=$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null | sed 's/^v//')
           xcodegen generate --quiet
           xcodebuild -project Flux.xcodeproj -scheme Flux -configuration Release \
-            -derivedDataPath build -destination 'generic/platform=macOS' -quiet build
+            -derivedDataPath build -destination 'generic/platform=macOS' -quiet \
+            MARKETING_VERSION="${version:-0.1.0}" build
       # ditto keeps the executable bits and symbolic links that upload-artifact drops.
       - name: Verify and package the app
         run: |
@@ -158,6 +163,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
+          # The tags give the app version.
+          fetch-depth: 0
           persist-credentials: false
       # Xcode 26 by path, so that a new default Xcode on the runner does
       # not change the build.

@@ -96,7 +96,9 @@ func (d *Daemon) Snapshot() json.RawMessage {
 		if !dev.Paired && dev.link == nil {
 			continue
 		}
-		views = append(views, dev.view())
+		v := dev.view()
+		v.AppUpdate = d.appUpdateLocked(dev)
+		views = append(views, v)
 	}
 	clip := d.clipPreviewLocked()
 	transfers := d.transfers
@@ -243,6 +245,12 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		return ok, d.setSetting(p.Key, p.Value)
 	case "update.install":
 		return ok, d.installUpdate()
+	case "update.sendApp":
+		dev, err := d.pick(p.Device)
+		if err != nil {
+			return nil, err
+		}
+		return ok, d.sendAppUpdate(dev)
 	}
 
 	dev, err := d.pick(p.Device)

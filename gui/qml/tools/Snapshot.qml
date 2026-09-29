@@ -209,6 +209,20 @@ Window {
         s.self.version = "0.6.0"
         s.update = { enabled: true, latest: "0.7.0", available: true, url: "https://github.com/bjarneo/flux/releases/tag/v0.7.0", apk: "", checkedAt: 0, error: "" }
       })
+    }],
+    // A phone with an earlier Android app, and a computer with the latest release.
+    ["45-phone-update", function () {
+      mock.setState(function (s) {
+        s.self.version = "0.7.0"
+        s.update = { enabled: true, latest: "0.7.0", available: false, url: "", apk: "", checkedAt: 0, error: "" }
+        for (var i = 0; i < s.devices.length; i++) {
+          if (s.devices[i].id === pixel) {
+            s.devices[i].app = "android"
+            s.devices[i].appVersion = "0.6.0"
+            s.devices[i].appUpdate = "0.7.0"
+          }
+        }
+      })
     }]
   ]
 

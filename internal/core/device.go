@@ -28,6 +28,10 @@ type Device struct {
 	Cert     *x509.Certificate
 	LastSeen time.Time
 
+	// App and AppVersion come from the identity of the device.
+	App        string
+	AppVersion string
+
 	// Addresses are the extra host names and IP addresses of a paired
 	// device. They come from the trust store.
 	Addresses []string
@@ -102,6 +106,7 @@ func (dev *Device) setIdentity(id proto.Identity) {
 	dev.Version = id.ProtocolVersion
 	dev.Incoming = id.IncomingCapabilities
 	dev.Outgoing = id.OutgoingCapabilities
+	dev.App, dev.AppVersion = id.App, id.AppVersion
 }
 
 // supports reports whether the device sends packets of the type.
@@ -184,6 +189,13 @@ type DeviceView struct {
 	Plugins       []string             `json:"plugins"`
 	Notifications []*PhoneNotification `json:"notifications"`
 	Conversations []*Conversation      `json:"conversations"`
+
+	// App and AppVersion name the Flux app of the device and its version,
+	// or are empty for an earlier app. AppUpdate is the version of a newer
+	// Android app in the latest release, or "".
+	App        string `json:"app"`
+	AppVersion string `json:"appVersion"`
+	AppUpdate  string `json:"appUpdate"`
 }
 
 func (dev *Device) view() DeviceView {
@@ -199,6 +211,7 @@ func (dev *Device) view() DeviceView {
 		PairState: state, PairKey: dev.pairKey, PairedAt: dev.PairedAt,
 		Battery: dev.battery, Signal: dev.signal,
 		Plugins: dev.plugins(), Notifications: dev.notifications,
+		App: dev.App, AppVersion: dev.AppVersion,
 	}
 	if v.Type == "" {
 		v.Type = "phone"

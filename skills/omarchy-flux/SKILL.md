@@ -141,6 +141,8 @@ Confirm the running version:
 flux-cli version
 ```
 
+To send the latest Android app to a phone, run `flux-cli --device "Pixel 8" update --phone`.
+The user then installs it from the notification on the phone.
 `fluxd` checks GitHub once a day for a new release.
 `check_updates = false` in `config.toml` turns the check off.
 

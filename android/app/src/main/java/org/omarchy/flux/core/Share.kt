@@ -73,6 +73,16 @@ object Share {
             return
         }
         val open = Intent(Intent.ACTION_VIEW).setDataAndType(dl.uri, mime ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        // The computer sends a Flux update as flux-android-VERSION.apk. Its
+        // notification opens the Android installer, which accepts only an
+        // app with the same signing key. Another app or an earlier Flux
+        // with this name gets the plain notification.
+        if (name.startsWith("flux-android-") && name.endsWith(".apk") && isFluxUpdate(core.app, dl.uri)) {
+            val version = name.removePrefix("flux-android-").removeSuffix(".apk")
+            Android.showEvent(core.app, "Flux $version from $from", "Tap to install the update", open)
+            core.toast("Flux $version is in Downloads. Open its notification to install it")
+            return
+        }
         Android.showEvent(core.app, "Received $name", "From $from, saved in Downloads", open)
         core.toast("Saved $name in Downloads")
     }
@@ -213,6 +223,23 @@ object Share {
     }
 
     private fun currentTls(): org.omarchy.flux.net.Tls? = FluxCore.tls
+
+    /** Reports whether the APK at [uri] is a newer build of this app. */
+    private fun isFluxUpdate(context: android.content.Context, uri: Uri): Boolean {
+        val copy = java.io.File.createTempFile("received-update", ".apk", context.cacheDir)
+        return try {
+            context.contentResolver.openInputStream(uri)?.use { input -> copy.outputStream().use { input.copyTo(it) } } ?: return false
+            val pm = context.packageManager
+            val archive = pm.getPackageArchiveInfo(copy.path, 0) ?: return false
+            archive.packageName == context.packageName &&
+                archive.longVersionCode > pm.getPackageInfo(context.packageName, 0).longVersionCode
+        } catch (e: Exception) {
+            Log.w(TAG, "read the received app", e)
+            false
+        } finally {
+            copy.delete()
+        }
+    }
 
     private fun sanitize(name: String): String =
         name.substringAfterLast('/').substringAfterLast('\\').replace(Regex("[\\u0000-\\u001f]"), "").ifBlank { "file" }

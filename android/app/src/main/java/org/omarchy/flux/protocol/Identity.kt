@@ -1,5 +1,7 @@
 package org.omarchy.flux.protocol
 
+import org.omarchy.flux.BuildConfig
+
 /** The largest identity line that Flux sends or reads. */
 const val MAX_IDENTITY_LINE = 8192
 
@@ -111,6 +113,15 @@ data class Identity(
     val incoming: List<String>,
     val outgoing: List<String>,
     val tcpPort: Int = 0,
+    /**
+     * The Flux program of the device and its version: "android" and
+     * BuildConfig.VERSION_NAME for this phone, "fluxd" for a computer. A
+     * debug build is "android-debug", because a release APK with another
+     * signing key cannot update it, so fluxd offers it no update. An
+     * earlier Flux sends neither.
+     */
+    val app: String = "",
+    val appVersion: String = "",
 ) {
     /**
      * Returns the identity packet. Only the UDP broadcast carries [tcpPort].
@@ -127,6 +138,8 @@ data class Identity(
             "outgoingCapabilities" to outgoing,
         )
         if (withPort && tcpPort > 0) fields += "tcpPort" to tcpPort
+        if (app.isNotEmpty()) fields += "app" to app
+        if (appVersion.isNotEmpty()) fields += "appVersion" to appVersion
         if (target != null) {
             fields += "targetDeviceId" to target.deviceId
             fields += "targetProtocolVersion" to target.protocolVersion
@@ -150,6 +163,8 @@ data class Identity(
                 incoming = p.strings("incomingCapabilities"),
                 outgoing = p.strings("outgoingCapabilities"),
                 tcpPort = p.int("tcpPort") ?: 0,
+                app = p.string("app") ?: "",
+                appVersion = p.string("appVersion") ?: "",
             )
         }
 
@@ -162,6 +177,8 @@ data class Identity(
             INCOMING + (if (sms) SMS_INCOMING else emptyList()) + (if (clipboardImages) CLIPBOARD_IMAGE_INCOMING else emptyList()),
             if (sms) OUTGOING + SMS_OUTGOING else OUTGOING,
             tcpPort,
+            app = if (BuildConfig.DEBUG) "android-debug" else "android",
+            appVersion = BuildConfig.VERSION_NAME,
         )
     }
 }
