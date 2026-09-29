@@ -215,10 +215,13 @@ Flux does not send `file:` paths or its own files from the share sheet.
 Flux does not send an image that another app puts in the camera or screenshot folder.
 When you turn off a switch, Flux stops the images of that switch that did not go out yet.
 
-When no computer takes an image, Flux tries again after 1 minute.
+When no computer is connected, the new images wait.
+They go out when a computer connects.
+
+When a connected computer does not take an image, Flux tries again after 1 minute.
 Each new wait is 2 times longer, up to 1 hour.
 After 8 tries, Flux stops and shows a notification.
-A computer that connects starts a new try at once.
+Only a try with a connected computer counts.
 
 ### Remote control and the phone lock
 

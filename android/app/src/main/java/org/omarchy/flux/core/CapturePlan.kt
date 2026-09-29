@@ -87,6 +87,14 @@ object CaptureRetries {
 
     /** True when the watch gives up on an image after [r]. */
     fun givesUp(r: CaptureRetry): Boolean = r.failures >= MAX_TRIES
+
+    /**
+     * Returns the time of the next try in seconds, or null when no image
+     * waits for a time. An image in [busy] waits for the end of its upload,
+     * so its time does not count.
+     */
+    fun nextTry(retries: Map<Long, CaptureRetry>, busy: Set<Long>): Long? =
+        retries.filterKeys { it !in busy }.values.minOfOrNull { it.next }
 }
 
 /** The result of 1 scan: the images to send now, and the new state. */
@@ -100,12 +108,19 @@ const val MAX_SENT = 500
  * it is complete, it is in a watched folder, a camera or screenshot app
  * wrote it, its switch is on, it is newer than the time that the switch
  * turned on, and it did not go out before. An image in [retries] waits
- * until the time of its next try. The baseline moves up through the images
+ * until the time of its next try. An image in [busy] waits while an
+ * earlier upload of it goes on. The baseline moves up through the images
  * that need no more work. A pending image or an image that did not go out
  * yet stops it, so that the next scan looks at that image again. [now] is
  * the time in seconds.
  */
-fun planCapture(state: CaptureState, images: List<MediaImage>, now: Long, retries: Map<Long, CaptureRetry> = emptyMap()): CapturePlan {
+fun planCapture(
+    state: CaptureState,
+    images: List<MediaImage>,
+    now: Long,
+    retries: Map<Long, CaptureRetry> = emptyMap(),
+    busy: Set<Long> = emptySet(),
+): CapturePlan {
     val send = mutableListOf<Pair<MediaImage, CaptureKind>>()
     var baseline = state.baseline
     var blocked = false
@@ -118,8 +133,8 @@ fun planCapture(state: CaptureState, images: List<MediaImage>, now: Long, retrie
                 val kind = CaptureRules.kindOf(img.relativePath)
                 val start = kind?.let { state.from[it] }
                 if (kind != null && start != null && img.id > start) {
-                    // An image that waits for its next try still stops the baseline.
-                    if ((retries[img.id]?.next ?: 0) <= now) send += img to kind
+                    // An image that waits for its next try or for its upload still stops the baseline.
+                    if (img.id !in busy && (retries[img.id]?.next ?: 0) <= now) send += img to kind
                     false
                 } else {
                     true

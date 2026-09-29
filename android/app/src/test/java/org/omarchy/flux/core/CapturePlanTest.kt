@@ -122,6 +122,25 @@ class CapturePlanTest {
     }
 
     @Test
+    fun anImageWaitsWhileItsUploadGoesOn() {
+        val state = CaptureState().enable(CaptureKind.Photo, newest = 10)
+        val images = listOf(img(11, "DCIM/Camera/"), img(12, "DCIM/Camera/"))
+        val retry = CaptureRetries.failed(null, now)
+        val plan = planCapture(state, images, now + 120, mapOf(11L to retry), busy = setOf(11L))
+        assertEquals("its next try passed, but its upload still goes on", listOf(12L), plan.send.map { it.first.id })
+        assertEquals("the image still stops the baseline", 10L, plan.state.baseline)
+    }
+
+    @Test
+    fun theNextTryLeavesOutTheImagesThatStillGoOut() {
+        val retries = mapOf(11L to CaptureRetry(1, now - 30), 12L to CaptureRetry(2, now + 120))
+        assertEquals("a past try of a late upload does not start a fast scan", now + 120, CaptureRetries.nextTry(retries, setOf(11L)))
+        assertEquals(now - 30, CaptureRetries.nextTry(retries, emptySet()))
+        assertNull("only late uploads wait", CaptureRetries.nextTry(retries, setOf(11L, 12L)))
+        assertNull(CaptureRetries.nextTry(emptyMap(), emptySet()))
+    }
+
+    @Test
     fun theWaitDoublesUpToAnHourAndThenTheWatchGivesUp() {
         assertEquals(listOf(60L, 120L, 240L, 480L, 960L, 1920L, 3600L, 3600L), (1..8).map { CaptureRetries.wait(it) })
         var r: CaptureRetry? = null

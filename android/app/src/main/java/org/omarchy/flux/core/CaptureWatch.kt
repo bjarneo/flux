@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.MediaStore
 import android.util.Log
 import androidx.core.content.ContextCompat
@@ -42,7 +43,13 @@ object CaptureWatch {
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor { Thread(it, "flux-capture").apply { isDaemon = true } }
     private var observer: ContentObserver? = null
-    private val scan = Runnable { worker.execute { scanNow(FluxCore) } }
+
+    // The uptime of the waiting scan in milliseconds, or 0 when no scan waits. Only the main thread uses it.
+    private var scanAt = 0L
+    private val scan = Runnable {
+        scanAt = 0L
+        worker.execute { scanNow(FluxCore) }
+    }
 
     // The worker uses these. The failed tries of each image, and whether a
     // package may write the images that Flux sends.
@@ -89,7 +96,7 @@ object CaptureWatch {
             } else if (!on && observer != null) {
                 observer?.let { app.contentResolver.unregisterContentObserver(it) }
                 observer = null
-                main.removeCallbacks(scan)
+                cancelScan()
             }
         }
     }
@@ -99,24 +106,45 @@ object CaptureWatch {
         main.post {
             observer?.let { context.applicationContext.contentResolver.unregisterContentObserver(it) }
             observer = null
-            main.removeCallbacks(scan)
+            cancelScan()
         }
     }
 
-    /** Scans soon. A new image, or a computer that connects, calls it. */
+    /** Scans soon. A new image, a computer that connects, or the end of a late upload calls it. */
     fun poke() {
-        main.removeCallbacks(scan)
-        main.postDelayed(scan, SCAN_DELAY_MS)
+        main.post { scanAfter(SCAN_DELAY_MS, keepSooner = false) }
     }
 
-    /** Scans at the next try of an image that no computer took. A new image or a new computer scans earlier. */
-    private fun scanAtNextTry(now: Long) {
-        val next = retries.values.minOfOrNull { it.next } ?: return
-        val delay = maxOf(SCAN_DELAY_MS, (next - now) * 1000)
-        main.post {
-            main.removeCallbacks(scan)
-            main.postDelayed(scan, delay)
-        }
+    /**
+     * Scans at the next try of an image that no computer took. An image
+     * whose upload still goes on does not count, because the end of that
+     * upload scans. A new image or a new computer scans earlier. Runs on
+     * the worker.
+     */
+    private fun scanAtNextTry() {
+        val next = CaptureRetries.nextTry(retries, inFlight) ?: return
+        val delay = maxOf(SCAN_DELAY_MS, (next - System.currentTimeMillis() / 1000) * 1000)
+        main.post { scanAfter(delay, keepSooner = true) }
+    }
+
+    /**
+     * Scans after [delay] milliseconds, in place of the waiting scan. With
+     * [keepSooner], a waiting scan that starts earlier stays, so that a new
+     * image does not wait for the next try of another image. Runs on the
+     * main thread.
+     */
+    private fun scanAfter(delay: Long, keepSooner: Boolean) {
+        val at = SystemClock.uptimeMillis() + delay
+        if (keepSooner && scanAt != 0L && scanAt <= at) return
+        main.removeCallbacks(scan)
+        scanAt = at
+        main.postAtTime(scan, at)
+    }
+
+    /** Removes the waiting scan. Runs on the main thread. */
+    private fun cancelScan() {
+        main.removeCallbacks(scan)
+        scanAt = 0L
     }
 
     /** True while the switch of [kind] is on. The user can turn it off while a batch goes out. */
@@ -218,6 +246,10 @@ object CaptureWatch {
     private fun scanNow(core: FluxCore) {
         val s = core.settings
         if (!(s.sendScreenshots || s.sendPhotos) || !hasAccess(core.app)) return
+        // The images whose upload goes on after its wait. Copy them before the scan reads lateSent.
+        // A late upload adds its image to lateSent before it removes the image from inFlight.
+        // So the image is in 1 of the 2 sets, and it does not go out twice.
+        val busy = inFlight.toSet()
         // An upload that ended after its wait can have gone out.
         for (id in lateSent.toList()) {
             lateSent -= id
@@ -229,14 +261,14 @@ object CaptureWatch {
             .getOrNull() ?: return
         var state = s.captureState
         val now = System.currentTimeMillis() / 1000
-        val plan = planCapture(state, list, now, retries)
+        val plan = planCapture(state, list, now, retries, busy)
         // A full page can have more images after it.
         val more = list.size >= PAGE && plan.state.baseline > state.baseline
         state = plan.state
         s.captureState = state
         retries.keys.retainAll(list.map { it.id }.toSet())
         if (plan.send.isEmpty()) {
-            if (more) poke() else scanAtNextTry(now)
+            if (more) poke() else scanAtNextTry()
             return
         }
         val targets = core.connectedPaired()
@@ -245,15 +277,17 @@ object CaptureWatch {
         var sent = false
         for ((img, kind) in plan.send) {
             // The user can turn the switch off while the batch goes out. The image then waits, as if it did not go out.
-            if (!switchOn(s, kind) || img.id in inFlight) continue
-            if (sendToAll(core, targets, img, kind)) {
+            if (!switchOn(s, kind)) continue
+            val delivery = sendToAll(core, targets, img, kind)
+            if (delivery == Delivery.Taken) {
                 sent = true
                 retries -= img.id
                 state = state.markSent(img.id)
                 s.captureState = state
                 continue
             }
-            if (!switchOn(s, kind)) continue
+            // All computers can leave during the batch. The image then waits for the next computer and does not use a try.
+            if (delivery == Delivery.NoTarget || !switchOn(s, kind)) continue
             val retry = CaptureRetries.failed(retries[img.id], System.currentTimeMillis() / 1000)
             if (CaptureRetries.givesUp(retry)) {
                 // 1 image that no computer takes must not stop the watch.
@@ -267,24 +301,35 @@ object CaptureWatch {
             }
         }
         // The sent images can move the baseline now. After failures only, the next try waits.
-        if (sent || more) poke() else scanAtNextTry(now)
+        if (sent || more) poke() else scanAtNextTry()
     }
 
-    /**
-     * Sends 1 image to each target that is still paired and connected.
-     * Returns true when at least 1 target took it.
-     */
-    private fun sendToAll(core: FluxCore, targets: List<Device>, img: MediaImage, kind: CaptureKind): Boolean {
+    /** What happened to 1 image in [sendToAll]. */
+    private enum class Delivery {
+        /** At least 1 computer took the image. */
+        Taken,
+
+        /** Flux sent the image to at least 1 computer, and no computer took it. This counts as a try. */
+        Failed,
+
+        /** No target was paired and connected, so the image did not go to a computer. This is not a try. */
+        NoTarget,
+    }
+
+    /** Sends 1 image to each target that is still paired and connected. */
+    private fun sendToAll(core: FluxCore, targets: List<Device>, img: MediaImage, kind: CaptureKind): Delivery {
         val uri = ContentUris.withAppendedId(images, img.id)
         val extra: Map<String, Any?> = when (kind) {
             // The photo marker too, so that an older fluxd saves it as a photo.
             CaptureKind.Screenshot -> mapOf("photo" to true, "screenshot" to true)
             CaptureKind.Photo -> mapOf("photo" to true)
         }
+        var tried = false
         var any = false
         for (d in targets) {
             if (!switchOn(core.settings, kind)) break
             if (!d.paired || !d.online) continue
+            tried = true
             val done = CountDownLatch(1)
             val ok = AtomicBoolean(false)
             val waiting = AtomicBoolean(true)
@@ -293,8 +338,12 @@ object CaptureWatch {
                 ok.set(result.isSuccess)
                 done.countDown()
                 // After the wait ended, the scan did not count this upload. A second count does no harm.
-                if (!waiting.get() && result.isSuccess) lateSent += img.id
+                val late = !waiting.get()
+                if (late && result.isSuccess) lateSent += img.id
+                // The image leaves inFlight after it is in lateSent, see scanNow.
                 inFlight -= img.id
+                // The scans skipped the image while this upload went on.
+                if (late) poke()
             }
             done.await(SEND_TIMEOUT_MIN, TimeUnit.MINUTES)
             waiting.set(false)
@@ -309,6 +358,10 @@ object CaptureWatch {
                 Log.i(TAG, "sent ${img.name} to ${d.identity.deviceName}")
             }
         }
-        return any
+        return when {
+            any -> Delivery.Taken
+            tried -> Delivery.Failed
+            else -> Delivery.NoTarget
+        }
     }
 }
