@@ -121,7 +121,8 @@ It shares FluxKit with [Flux for macOS](macos.md) and offers the Android feature
   A device without a Secure Enclave refuses each request at once and says so. The simulator counts as one, because it refuses a key that needs the biometry.
 - [x] Approval prompt in the app and as a notification while Flux runs.
   A sheet shows the request with a countdown, Approve with Face ID or Touch ID, and Deny, and a banner shows a hidden request again.
-  The time-sensitive notification has Deny, which works on the lock screen, and Approve, which needs the iPhone unlocked and opens the sheet.
+  The notification has Deny, which works on the lock screen, and Approve, which needs the iPhone unlocked and opens the sheet.
+  It asks for the time-sensitive level, but the project does not set the time-sensitive entitlement, so iOS shows it as an active notification, which a Focus holds back. See `docs/ios.md`.
 - [x] Checked in the simulator against `fluxd`, through its socket without root: a request without a key and an enrollment are refused with their reasons.
 - [ ] Checked on a device: enrollment and an approval that the Go verifier accepts.
   The simulator cannot make the key, so this needs an iPhone with Face ID or Touch ID and `sudo flux-cli approve setup`.

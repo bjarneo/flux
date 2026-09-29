@@ -125,8 +125,9 @@ public final class ApprovePlugin: FluxPlugin, @unchecked Sendable {
         return nil
     }
 
-    /// An iPhone shows the request through a Focus that allows
-    /// time-sensitive notifications. The Mac keeps the default level.
+    /// An iPhone asks for the time-sensitive level, which goes through a
+    /// Focus only when the app has the time-sensitive entitlement; the
+    /// project does not set it, see docs/ios.md. The Mac keeps the default level.
     private static var interruptionLevel: UNNotificationInterruptionLevel {
         FluxPlatform.current == .phone ? .timeSensitive : .active
     }

@@ -45,7 +45,8 @@ public final class Notifier: NSObject, UNUserNotificationCenterDelegate, @unchec
 
     /// Shows a notification. A later post with the same id replaces it. A
     /// time-sensitive level shows it through a Focus that allows
-    /// time-sensitive notifications.
+    /// time-sensitive notifications, when the app has the time-sensitive
+    /// entitlement. Without it, iOS uses the active level.
     public func post(
         id: String,
         category: String,
