@@ -125,7 +125,7 @@ func (d *Daemon) claimScreen(dev *Device, l streamLink, b screenStart) *screenSe
 	last, started := d.sessions.screenStart[dev.ID]
 	switch {
 	case b.Codec != "" && b.Codec != "h264":
-		err = fmt.Errorf("the codec %q is not supported. Send h264", b.Codec)
+		err = fmt.Errorf("the codec %s is not supported. Send h264", peerText(b.Codec))
 	case b.Port <= 0 || b.Port > 65535:
 		err = fmt.Errorf("the port %d is not valid", b.Port)
 	case d.opts.Headless:

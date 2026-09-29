@@ -94,6 +94,26 @@ func TestRunShortcutRefusesAnInvalidReference(t *testing.T) {
 	}
 }
 
+// A long value from the phone gives a short error for the journal and the
+// answer.
+func TestShortcutErrorsCutTheValue(t *testing.T) {
+	d, _ := inputDaemon(t, true)
+	long := strings.Repeat("x", 1<<20)
+	short := func(what string, err error) {
+		t.Helper()
+		if err == nil {
+			t.Errorf("%s: no error", what)
+		} else if n := len(err.Error()); n > 300 {
+			t.Errorf("%s: an error of %d bytes", what, n)
+		}
+	}
+	short("run", d.runShortcut(shortcutBody{Run: long}))
+	_, err := actionLua(shortcutBody{Action: long})
+	short("action", err)
+	_, err = actionLua(shortcutBody{Action: "focus", Direction: long})
+	short("direction", err)
+}
+
 // fakeHyprctl puts a hyprctl on PATH that writes its arguments to the
 // returned file and waits for delay seconds.
 func fakeHyprctl(t *testing.T, delay string) string {

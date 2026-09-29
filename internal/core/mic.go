@@ -73,7 +73,7 @@ func (b *micStart) check() error {
 	case b.Port <= 0 || b.Port > 65535:
 		return fmt.Errorf("the port %d is not valid", b.Port)
 	case b.Format != "s16le":
-		return fmt.Errorf("the format %q is not supported. Send s16le", b.Format)
+		return fmt.Errorf("the format %s is not supported. Send s16le", peerText(b.Format))
 	case b.Rate < 8000 || b.Rate > 96000:
 		return fmt.Errorf("the rate %d Hz is not supported. Send 8000 to 96000 Hz", b.Rate)
 	case b.Channels != 1 && b.Channels != 2:

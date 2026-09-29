@@ -209,7 +209,7 @@ func (d *Daemon) claimWebcam(dev *Device, l streamLink, b webcamStart) *webcamSe
 	d.mu.Lock()
 	switch {
 	case b.Codec != "" && b.Codec != "h264":
-		err = fmt.Errorf("the codec %q is not supported. Send h264", b.Codec)
+		err = fmt.Errorf("the codec %s is not supported. Send h264", peerText(b.Codec))
 	case d.opts.Headless:
 		err = errors.New("the webcam is off in headless mode")
 	case !dev.Paired:

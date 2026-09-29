@@ -165,14 +165,14 @@ func actionLua(b shortcutBody) (string, error) {
 		return fmt.Sprintf(`hl.dsp.window.move({ workspace = "%d" })`, b.Workspace), nil
 	case "focus", "swap":
 		if !directions[b.Direction] {
-			return "", fmt.Errorf("the direction %q is not l, r, u, or d", b.Direction)
+			return "", fmt.Errorf("the direction %s is not l, r, u, or d", peerText(b.Direction))
 		}
 		if b.Action == "focus" {
 			return fmt.Sprintf(`hl.dsp.focus({ direction = "%s" })`, b.Direction), nil
 		}
 		return fmt.Sprintf(`hl.dsp.window.swap({ direction = "%s" })`, b.Direction), nil
 	}
-	return "", fmt.Errorf("the action %q is not known", b.Action)
+	return "", fmt.Errorf("the action %s is not known", peerText(b.Action))
 }
 
 // hyprctl runs hyprctl with args and returns its output. hyprctl reports a
@@ -303,7 +303,7 @@ func (d *Daemon) runShortcut(b shortcutBody) error {
 	switch {
 	case b.Run != "":
 		if !luaRef.MatchString(b.Run) {
-			return fmt.Errorf("the shortcut %q is not valid", b.Run)
+			return fmt.Errorf("the shortcut %s is not valid", peerText(b.Run))
 		}
 		data, err := hyprctl(ctx, "-j", "binds")
 		if err != nil {
