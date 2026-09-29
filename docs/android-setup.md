@@ -229,7 +229,11 @@ Only a try with a connected computer counts.
 **Touchpad and keyboard** and **Remote desktop** ask for the phone lock before they open.
 They ask also when the switch on the computer is off, because the computer can turn it on while the page shows.
 An unlock stays valid for 5 minutes.
-When the app comes back to the front after this time, the page asks for the phone lock again.
+After this time, the page asks for the phone lock again in these cases:
+
+- The app comes back to the front.
+- The computer connects again, or it turns its switch on.
+
 If you cancel, the page closes.
 
 ### Data and backups

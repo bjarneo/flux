@@ -10,6 +10,7 @@ import android.os.SystemClock
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -98,8 +99,8 @@ object ReplyLock {
 
 /**
  * Keeps a page that controls the computer behind the phone lock. The page
- * asks for the lock when [ready] turns true without a valid unlock, and
- * again when the app comes back to the front after the unlock ends. A
+ * asks for the lock each time [ready] turns true without a valid unlock,
+ * and again when the app comes back to the front after the unlock ends. A
  * cancel or a phone without a lock calls [onLeave]. It returns true while
  * the page can show the computer and send input. A [sample] computer of a
  * debug build takes no input, so its page needs no lock.
@@ -112,6 +113,11 @@ fun rememberRemoteUnlock(ready: Boolean, title: String, purpose: String, onLeave
     var open by remember { mutableStateOf(sample || ReplyLock.valid()) }
     var asking by remember { mutableStateOf(false) }
     var started by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) }
+    // The value of ready in the last composition. An earlier unlock does not open the page when ready
+    // turns true after the unlock ended, for example when the computer turns its switch on later.
+    var wasReady by remember { mutableStateOf(ready) }
+    if (ready && !wasReady && !sample && !ReplyLock.valid()) open = false
+    SideEffect { wasReady = ready }
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
