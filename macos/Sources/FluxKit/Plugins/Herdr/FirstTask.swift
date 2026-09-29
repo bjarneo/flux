@@ -35,9 +35,14 @@ public struct FirstTask: Sendable, Equatable {
     private var seen = false
     /// Since when the agent is ready with no dialog, in system uptime.
     private var readyAt: TimeInterval?
+    /// Since when the task waits for the pane in the agent list, in system uptime.
+    private var missingSince: TimeInterval?
 
     /// How long the agent must stay ready with no dialog before the task goes.
     public static let hold: TimeInterval = 2
+    /// How long the task waits for the new pane in the agent list, as long
+    /// as a create waits for its answer.
+    public static let appearLimit: TimeInterval = 60
 
     public init(text: String, action: Int = 0) {
         self.text = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -69,13 +74,26 @@ public struct FirstTask: Sendable, Equatable {
     /// `update` again then.
     public var due: TimeInterval? { readyAt.map { $0 + Self.hold } }
 
+    /// The time when the task fails, when the agent list never had the
+    /// pane. Call `update` again then.
+    public var appearDue: TimeInterval? {
+        guard !seen, !finished else { return nil }
+        return missingSince.map { $0 + Self.appearLimit }
+    }
+
     /// Takes the status of the agent at `now`, nil when the agent list does
     /// not have its pane, and whether the output on screen ends with a
     /// dialog. It returns true when the task must go now.
     public mutating func update(status: AgentStatus?, choices: Bool, now: TimeInterval) -> Bool {
         guard phase == .waiting || phase == .answering else { return false }
         guard let status else {
-            if seen { phase = .failed("The agent stopped before it got the task.") }
+            if seen {
+                phase = .failed("The agent stopped before it got the task.")
+            } else if let missingSince, now - missingSince >= Self.appearLimit {
+                phase = .failed("The agent did not appear.")
+            } else if missingSince == nil {
+                missingSince = now
+            }
             readyAt = nil
             return false
         }

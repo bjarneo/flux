@@ -329,14 +329,22 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
     /// `FirstTask.hold`. The output on screen counts when it is of the new
     /// agent, so a dialog there holds the task. When the agent becomes
     /// ready, the output is read again, and the task is checked again at
-    /// the end of the hold.
+    /// the end of the hold, and at the deadline for the pane to appear.
     @MainActor
     private func advanceFirstTask(_ deviceId: String) {
-        guard var task = model.firstTasks[deviceId], let pane = task.pane, let state = model.states[deviceId] else { return }
+        guard var task = model.firstTasks[deviceId], let pane = task.pane else { return }
         let out = model.output(deviceId, pane: pane)
-        let before = task.due
-        let go = task.update(status: state.agent(pane)?.status, choices: !(out?.choices.isEmpty ?? true), now: clock())
+        let (before, appearBefore) = (task.due, task.appearDue)
+        let go = task.update(status: model.states[deviceId]?.agent(pane)?.status, choices: !(out?.choices.isEmpty ?? true), now: clock())
         model.firstTasks[deviceId] = task
+        if let due = task.appearDue, due != appearBefore {
+            // The agent list may never have the pane: check again at the deadline.
+            let wait = max(0, due - clock()) + 0.05
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(wait))
+                self?.advanceFirstTask(deviceId)
+            }
+        }
         if let due = task.due, due != before {
             if out != nil { read(deviceId, pane: pane) }
             let wait = max(0, due - clock()) + 0.05

@@ -113,6 +113,31 @@ final class FirstTaskTests: XCTestCase {
         XCTAssertEqual(t.phase, .failed("The agent stopped before it got the task."))
     }
 
+    func testAnAgentThatNeverAppearsFails() {
+        var t = FirstTask(text: "go")
+        t.created(pane: "w4:p1", error: nil)
+        XCTAssertFalse(update(&t, nil))
+        XCTAssertEqual(t.appearDue, now + FirstTask.appearLimit)
+        now += FirstTask.appearLimit - 1
+        XCTAssertFalse(update(&t, nil))
+        XCTAssertEqual(t.phase, .waiting, "the agent list can take a while")
+        now += 1
+        XCTAssertFalse(update(&t, nil))
+        XCTAssertEqual(t.phase, .failed("The agent did not appear."))
+        XCTAssertNil(t.appearDue)
+    }
+
+    func testAnAgentThatAppearsHasNoDeadline() {
+        var t = FirstTask(text: "go")
+        t.created(pane: "w4:p1", error: nil)
+        XCTAssertFalse(update(&t, nil))
+        XCTAssertFalse(update(&t, .working))
+        XCTAssertNil(t.appearDue)
+        now += FirstTask.appearLimit * 2
+        XCTAssertFalse(update(&t, .working))
+        XCTAssertEqual(t.phase, .waiting, "a working agent may take its time")
+    }
+
     func testAFailedPromptFails() {
         var t = FirstTask(text: "go")
         t.created(pane: "w4:p1", error: nil)
@@ -160,6 +185,21 @@ final class FirstTaskTests: XCTestCase {
         XCTAssertEqual(plugin.model.firstTasks["d"]?.phase, .failed("The computer is not reachable"))
         plugin.clearFirstTask("d")
         XCTAssertNil(plugin.model.firstTasks["d"])
+    }
+
+    @MainActor
+    func testThePluginFailsATaskWhoseAgentNeverAppears() {
+        let plugin = HerdrPlugin()
+        var clock: TimeInterval = 50
+        plugin.clock = { clock }
+        plugin.model.actions["d"] = HerdrAction(action: "create", seq: 7, what: "agent")
+        plugin.model.firstTasks["d"] = FirstTask(text: "go", action: 7)
+        plugin.receive(packet(#"{"kind":"created","what":"agent","pane":"w9:p9"}"#), deviceId: "d", computer: "c")
+        XCTAssertEqual(plugin.model.firstTasks["d"]?.phase, .waiting, "the deadline starts without any state")
+        XCTAssertEqual(plugin.model.firstTasks["d"]?.appearDue, 50 + FirstTask.appearLimit)
+        clock += FirstTask.appearLimit
+        plugin.receive(state("idle"), deviceId: "d", computer: "c")
+        XCTAssertEqual(plugin.model.firstTasks["d"]?.phase, .failed("The agent did not appear."))
     }
 
     @MainActor
