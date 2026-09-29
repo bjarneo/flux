@@ -212,6 +212,23 @@ public struct DeviceSnapshot: Sendable, Identifiable, Equatable {
     public var incoming: [String]
     public var outgoing: [String]
 
+    /// The apps build sample devices with it, for example for the demo of
+    /// the iOS app.
+    public init(id: String, name: String, type: String, ip: String, isFlux: Bool, paired: Bool, online: Bool,
+                pairState: PairState, pairKey: String, incoming: [String], outgoing: [String]) {
+        self.id = id
+        self.name = name
+        self.type = type
+        self.ip = ip
+        self.isFlux = isFlux
+        self.paired = paired
+        self.online = online
+        self.pairState = pairState
+        self.pairKey = pairKey
+        self.incoming = incoming
+        self.outgoing = outgoing
+    }
+
     /// True when the peer accepts packets of the type.
     public func accepts(_ type: String) -> Bool { incoming.contains(type) }
 }

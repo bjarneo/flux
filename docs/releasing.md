@@ -10,7 +10,7 @@ An optional final job pushes the tested recipe to AUR.
 
 | Workflow | Trigger | Result |
 | --- | --- | --- |
-| `build.yml` | Push to `master`, pull request, manual run, or reusable call | Arch package, Go tests, Android tests, lint, debug APK, unsigned release build, FluxKit tests, ad hoc signed macOS app, and the iOS app with its simulator tests |
+| `build.yml` | Push to `master`, pull request, manual run, or reusable call | Arch package, Go tests, Android tests, lint, debug APK, unsigned release build, FluxKit tests, ad hoc signed macOS app, the iOS app with its simulator tests, an unsigned iOS Release build, and checks of its permission texts and privacy manifests |
 | `release.yml` | Push a `v*` tag or manually select an existing tag | Validated stable tag, tested desktop package, signed APK, and GitHub release |
 | `aur.yml` | Reusable call after release publication | AUR commit with `PKGBUILD`, `.SRCINFO`, and the install hook |
 
@@ -226,3 +226,58 @@ Test a clean desktop install and an Android update with the same signing key.
 
 If the AUR job fails after publication, fix its credentials or host entry and rerun that failed job.
 The GitHub release remains available.
+
+## TestFlight
+
+The workflows do not sign or upload the iOS app.
+Upload a build to TestFlight from a Mac with Xcode 26 and XcodeGen.
+[Flux for iOS on the App Store](ios-app-store.md) has the store text, the review notes, and the open items.
+
+### Apple setup
+
+Do these steps once, with the Apple account that publishes Flux:
+
+1. Join the paid Apple Developer Program. A free Apple ID cannot upload to App Store Connect.
+2. In **Certificates, Identifiers & Profiles**, register the App Group `group.org.omarchy.flux`.
+3. Register the bundle IDs `org.omarchy.flux.ios` and `org.omarchy.flux.ios.share` with the **App Groups** capability and that group.
+4. In App Store Connect, create the app with the bundle ID `org.omarchy.flux.ios`.
+5. Add the account in **Xcode > Settings > Accounts**.
+
+If the team cannot register `group.org.omarchy.flux`, change `FLUX_APP_GROUP` in `ios/project.yml`.
+See [Install on an iPhone](ios.md#install-on-an-iphone).
+
+### Upload a build
+
+1. In `ios/project.yml`, set `MARKETING_VERSION` to the release version in the `Flux` and `FluxShare` targets.
+   App Store Connect needs the same version in the app and in the share extension.
+2. Set `CURRENT_PROJECT_VERSION` in both targets to a build number above the build number of the previous upload.
+3. Run the iOS checks:
+
+   ```sh
+   make ios test-ios ios-release
+   ```
+
+4. Generate the project and open it:
+
+   ```sh
+   cd ios
+   xcodegen generate
+   open Flux.xcodeproj
+   ```
+
+5. For the **Flux** and **FluxShare** targets, select the team in **Signing & Capabilities**.
+   The generated project stays out of Git, so the team ID stays out of the repository.
+6. Select **Any iOS Device (arm64)** as the run destination, then select **Product > Archive**.
+7. In the Organizer, select the archive, then **Distribute App**, then **TestFlight & App Store**.
+8. In App Store Connect, answer the export compliance questions of the build.
+9. In **TestFlight**, add internal testers.
+   Test the pairing and the main features against a computer that runs `fluxd`.
+
+A TestFlight build is not an App Store release.
+Submit the build for review only after you complete the [open items](ios-app-store.md#open-items).
+
+### Secrets for an upload job
+
+The repository has no Apple secrets, and no workflow uploads the app.
+An upload job needs an App Store Connect API key and the team ID in repository secrets, for example `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_BASE64`, and `APPLE_TEAM_ID`.
+Do not commit signing certificates, provisioning profiles, API keys, or team IDs.

@@ -16,3 +16,4 @@ __pycache__/
 /dist/aur/
 *.jks
 *.keystore
+.DS_Store

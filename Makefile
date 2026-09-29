@@ -20,7 +20,7 @@ define copy-plugin
 		while read -r f; do install -Dm644 "$$f" "$(1)/Flux/$$f"; done
 endef
 
-.PHONY: build build-go build-gui test vet install install-user install-plugin uninstall uninstall-user uninstall-plugin dev open snapshot android macos test-macos install-macos ios test-ios clean
+.PHONY: build build-go build-gui test vet install install-user install-plugin uninstall uninstall-user uninstall-plugin dev open snapshot android macos test-macos install-macos ios ios-release test-ios clean
 
 build: build-go build-gui
 
@@ -166,6 +166,12 @@ ios:
 	cd ios && xcodegen generate --quiet && \
 		xcodebuild -project Flux.xcodeproj -scheme Flux -configuration Debug -derivedDataPath build -destination 'generic/platform=iOS Simulator' \
 			MARKETING_VERSION=$(APP_VERSION) build
+
+# The iOS app for iPhones in Release, without signing, in ios/build. It shows
+# the errors that only the optimized build has, as the App Store build would.
+ios-release:
+	cd ios && xcodegen generate --quiet && \
+		xcodebuild -project Flux.xcodeproj -scheme Flux -configuration Release -derivedDataPath build -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build
 
 # The app and FluxKit tests in an iPhone simulator with iOS 17 or later: the
 # booted one, else one of the newest runtime. IOS_SIMULATOR=<id> picks another.

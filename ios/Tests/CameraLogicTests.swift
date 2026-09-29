@@ -32,17 +32,18 @@ final class CameraLogicTests: XCTestCase {
     }
 }
 
-/// An app model over a core that does not start the network.
+/// An app model over a core that does not start the network. `demo` shows
+/// the sample computers of `DemoMode`, and `plugins` replaces the 3 plugins.
 @MainActor
 enum TestApp {
-    static func model() throws -> AppModel {
+    static func model(demo: Bool = false, plugins: [FluxPlugin]? = nil) throws -> AppModel {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         var config = LanConfig()
         config.loopbackOnly = true
         config.udpPort = 0
         config.tcpPorts = 0...0
         let core = try FluxCore(paths: FluxPaths(data: dir, suite: "org.omarchy.flux.test." + UUID().uuidString), lanConfig: config,
-                                plugins: [SharePlugin(), MicPlugin(), WebcamPlugin()])
-        return AppModel(core: core)
+                                plugins: plugins ?? [SharePlugin(), MicPlugin(), WebcamPlugin()])
+        return AppModel(core: core, demo: demo)
     }
 }

@@ -24,6 +24,9 @@ struct Toast: Equatable {
 @Observable
 final class AppModel {
     let core: FluxCore
+    /// True in the demo for App Review and screenshots. The app then shows
+    /// the sample computers of `DemoMode` and starts no network and no feature.
+    let demo: Bool
     private(set) var state = CoreState()
     private(set) var toast: Toast?
     var path: [Route] = []
@@ -34,9 +37,10 @@ final class AppModel {
     private var toastTask: Task<Void, Never>?
     private var backgroundTask = UIBackgroundTaskIdentifier.invalid
 
-    init(core: FluxCore) {
+    init(core: FluxCore, demo: Bool = false) {
         self.core = core
-        state = core.state
+        self.demo = demo
+        state = demo ? DemoMode.state(core.state) : core.state
         core.onChange = { [weak self] s in MainActor.assumeIsolated { self?.apply(s) } }
         core.onToast = { [weak self] m in MainActor.assumeIsolated { self?.show(m) } }
         core.onPairRequest = { [weak self] d in MainActor.assumeIsolated { self?.pairRequested(d) } }
@@ -71,6 +75,11 @@ final class AppModel {
     }
 
     private func apply(_ s: CoreState) {
+        // The demo keeps its sample computers and leaves the share queue alone.
+        if demo {
+            state = DemoMode.state(s)
+            return
+        }
         let old = state
         state = s
         for d in s.devices where d.pairState != .incoming { Notifier.shared.remove(id: "pair-\(d.id)") }
@@ -122,11 +131,14 @@ final class AppModel {
         switch phase {
         case .active:
             isActive = true
+            // The demo starts no discovery, listener, or link.
+            guard !demo else { return }
             endBackgroundTask()
             core.resume()
             FeatureHooks.sceneChanged(active: true, model: self)
         case .background:
             isActive = false
+            guard !demo else { return }
             FeatureHooks.sceneChanged(active: false, model: self)
             beginBackgroundTask()
         case .inactive:

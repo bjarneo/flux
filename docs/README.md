@@ -43,6 +43,7 @@ A paired device can also connect through [Tailscale](tailscale.md) away from tha
 | [Agent skill](agents.md) | Skill installation, scope, and example prompts |
 | [Approval security design](approve.md) | Trust anchors, signatures, enrollment, and failure behavior |
 | [iOS client plan](ios-plan.md) | Decisions, phases, limits, and checklists for the iPhone app |
+| [iOS on the App Store](ios-app-store.md) | Store text, keywords, screenshots, review notes, privacy, and open items for the iPhone app |
 | [macOS client plan](macos-plan.md) | Decisions, phases, and checklists for the Mac app |
 | [macOS client status](macos-status.md) | Build plan, current state, and what was verified against `fluxd` |
 | [Marketing videos](../marketing/README.md) | Video source, phone captures, music timing, render, and mux |

@@ -109,13 +109,19 @@ See [Flux for macOS](macos.md#test-against-a-computer-on-the-same-mac) to test t
 ## iOS checks
 
 ```sh
-make ios test-ios
+make ios test-ios ios-release
 ```
 
 The build must show no warnings in `ios/`.
 `make test-ios` runs the app tests and the FluxKit tests in an iPhone simulator.
+`make ios-release` builds the app for iPhones in Release without signing, in `ios/build/Build/Products/Release-iphoneos`.
+It shows the errors that only the optimized build has, like the Android release build.
 A change in FluxKit needs both `make test-macos` and `make test-ios`, because the two platforms compile different code.
 See [Flux for iOS](ios.md#local-tests) for the simulator and the device checks.
+
+The `ios` job in `build.yml` also runs `make ios-release`.
+Then it checks that the built `Info.plist` has a text for each permission and lists `_flux._udp`.
+It also checks that the app and the share extension each contain `PrivacyInfo.xcprivacy`.
 
 ## Package and workflow checks
 
@@ -145,7 +151,7 @@ The [release guide](releasing.md) covers the archive-based AUR recipe.
 | Shared QML or host | `make build-gui snapshot` and both host contracts |
 | Android | JVM tests, lint, debug build, and release build |
 | macOS | `make test-macos macos`, then a run against `fluxd` |
-| iOS | `make ios test-ios`, then a run in the simulator against `fluxd` |
+| iOS | `make ios test-ios ios-release`, then a run in the simulator against `fluxd` |
 | Protocol | Go, Kotlin, and Swift tests, plus the two-daemon end-to-end test |
 | Approval | Read `docs/approve.md`, then run Go and Android approval tests |
 | Package or workflow | Shell syntax, `actionlint`, package build, and release-generator tests |

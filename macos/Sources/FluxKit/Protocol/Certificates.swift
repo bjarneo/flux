@@ -25,19 +25,46 @@ public struct LocalCertificate: Sendable {
 
     /// Loads the certificate from the directory. The first call generates a
     /// new RSA 2048 key and a certificate with CN set to a new device ID.
+    /// The directory stays out of backups, also when an older version made
+    /// it, see `excludeFromBackup(directory:)`.
     public static func loadOrCreate(directory: URL) throws -> LocalCertificate {
         let keyURL = directory.appendingPathComponent(keyFile)
         let certURL = directory.appendingPathComponent(certFile)
         if let pem = try? String(contentsOf: keyURL, encoding: .utf8), let der = try? Data(contentsOf: certURL),
            let loaded = try? LocalCertificate(privateKeyPEM: pem, certificateDER: Array(der)) {
+            keepOutOfBackups(directory)
             return loaded
         }
         let created = try generate(deviceId: UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased())
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        keepOutOfBackups(directory)
         try Data(created.privateKeyPEM.utf8).write(to: keyURL, options: [.atomic])
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: keyURL.path)
         try Data(created.certificateDER).write(to: certURL, options: [.atomic])
         return created
+    }
+
+    /// Keeps the directory of the key and the certificate out of iCloud and
+    /// computer backups on iOS. A backup that restores them on another
+    /// iPhone gives 2 devices the same device ID and key. The Mac keeps its
+    /// backups as they were. A missing directory is left alone.
+    static func excludeFromBackup(directory: URL) throws {
+        #if os(iOS)
+        guard FileManager.default.fileExists(atPath: directory.path) else { return }
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        var url = directory
+        try url.setResourceValues(values)
+        #endif
+    }
+
+    /// Flux still starts when the exclusion fails. The identity then stays in backups.
+    private static func keepOutOfBackups(_ directory: URL) {
+        do {
+            try excludeFromBackup(directory: directory)
+        } catch {
+            FluxLog.core.error("the identity stays in backups: \(String(describing: error), privacy: .public)")
+        }
     }
 
     /// Generates a self-signed certificate with the device ID as its common name.

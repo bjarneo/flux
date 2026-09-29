@@ -182,6 +182,31 @@ jobs:
       # tests in the first available iPhone simulator.
       - name: Build the iOS app and run the tests in the simulator
         run: make test-ios
+      # The Release build for iPhones shows the errors that only the
+      # optimized build has, as the App Store build would. It needs no signing.
+      - name: Build the iOS app in Release for iPhones
+        run: make ios-release
+      # iOS stops the app at the first use of a permission without its text.
+      # App Store Connect needs the privacy manifest of each bundle.
+      - name: Check the permission texts and the privacy manifests
+        run: |
+          app=ios/build/Build/Products/Release-iphoneos/Flux.app
+          plist="$app/Info.plist"
+          for key in NSLocalNetworkUsageDescription NSPhotoLibraryUsageDescription NSMicrophoneUsageDescription \
+            NSCameraUsageDescription NSSpeechRecognitionUsageDescription NSFaceIDUsageDescription; do
+            if ! text=$(/usr/libexec/PlistBuddy -c "Print :$key" "$plist") || [[ -z "${text//[[:space:]]/}" ]]; then
+              echo "$plist has no text for $key" >&2
+              exit 1
+            fi
+          done
+          if ! services=$(/usr/libexec/PlistBuddy -c 'Print :NSBonjourServices' "$plist") || [[ "$services" != *_flux._udp* ]]; then
+            echo "NSBonjourServices in $plist does not list _flux._udp" >&2
+            exit 1
+          fi
+          for manifest in "$app/PrivacyInfo.xcprivacy" "$app/PlugIns/FluxShare.appex/PrivacyInfo.xcprivacy"; do
+            if [[ ! -f "$manifest" ]]; then echo "$manifest is missing" >&2; exit 1; fi
+            plutil -lint "$manifest"
+          done
       - name: Upload test results
         if: failure()
         uses: actions/upload-artifact@v4

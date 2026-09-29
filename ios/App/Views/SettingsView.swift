@@ -34,6 +34,8 @@ struct SettingsView: View {
                     get: { model.state.enabled },
                     set: { model.core.enabled = $0 }
                 ))
+                // Flux starts the network when it turns on. The demo uses no network.
+                .disabled(model.demo)
             } header: {
                 Text("This iPhone")
             } footer: {

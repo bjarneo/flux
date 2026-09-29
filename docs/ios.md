@@ -79,6 +79,7 @@ Without it, the notification still shows when no Focus is on.
 You can also start from the computer with `flux-cli pair` and accept on the iPhone.
 The iPhone appears on the computer as `phone`, with the name from **Settings > This iPhone**.
 iOS gives apps only the generic name "iPhone", so set a name there.
+Flux keeps its identity key and certificate out of iCloud and computer backups, so pair again after you restore a backup.
 
 The computer connects to the iPhone.
 The iPhone publishes `_flux._udp` through Bonjour and listens on TCP ports 1716 to 1764.
@@ -175,6 +176,42 @@ iOS asks for each permission on first use:
 | Face ID | The Face ID lock and fingerprint approval |
 | Paste from other apps | Clipboard sync. iOS asks at each read unless you choose **Allow** in **Settings > Apps > Flux > Paste from Other Apps**. |
 
+## Privacy manifests
+
+The app has `ios/App/PrivacyInfo.xcprivacy`, and the share extension has `ios/ShareExtension/PrivacyInfo.xcprivacy`.
+Both declare no tracking, no tracking domains, and no collected data.
+They declare these required-reason APIs:
+
+| Target | API category | Reason | Use |
+| --- | --- | --- | --- |
+| Flux | User defaults | `CA92.1` | The settings of the app and of FluxKit, which only the app reads |
+| Flux | File timestamp | `C617.1` | The creation date of the share queue folders in the App Group, and the attributes of the files that Flux sends and receives in its container |
+| Flux | System boot time | `35F9.1` | The time between events in the app: touches, the Face ID unlock, media positions, dictation, and agent tasks |
+| FluxShare | User defaults | `1C8F.1` | The last computer of the share extension, in the App Group |
+
+When code starts to use another required-reason API, add its category and reason to the manifest of each target that runs the code.
+FluxKit runs only in the app. The code in `ios/Shared` runs in the app and in the share extension.
+`options.fileTypes` in `ios/project.yml` puts each manifest into the bundle of its target.
+
+## Demo mode
+
+The demo shows sample computers without a network, for App Review and screenshots.
+The app shows `omarchy`, a connected laptop, and `workstation`, a desktop that is not reachable.
+It starts no discovery, listener, or link, and the actions on the sample computers reach no computer.
+The paired computers and the share queue stay as they are, and **Flux is on** in **Settings** does not change.
+
+To start the demo in the booted simulator:
+
+```sh
+xcrun simctl launch --terminate-running-process booted org.omarchy.flux.ios -FLUX_DEMO 1
+```
+
+In Xcode, add `-FLUX_DEMO 1` in **Product > Scheme > Edit Scheme > Run > Arguments Passed On Launch**.
+The app reads the argument as the `FLUX_DEMO` user default.
+Start the app without the argument to leave the demo.
+`ios/App/DemoMode.swift` holds the sample computers.
+[Flux for iOS on the App Store](ios-app-store.md#test-without-an-omarchy-computer) explains what App Review can use.
+
 ## Local tests
 
 ```sh
@@ -182,9 +219,10 @@ make test-ios
 ```
 
 The FluxKit tests run on the iPhone simulator and on macOS with `make test-macos`.
-The app tests cover the app logic: pairing, share queue, camera, keys, approval, dictation fields, and the layout of agent output.
+The app tests cover the app logic: pairing, share queue, camera, keys, approval, dictation fields, the layout of agent output, and the demo.
 Some tests render screens.
 With `TEST_RUNNER_FLUX_SCREENS=<folder>`, they save them as PNG files in that folder.
+The demo tests save `demo-01-computers.png` and `demo-02-computer.png`.
 
 The simulator has no camera, no battery, no Secure Enclave key that needs Face ID, and no broadcast.
 Check camera capture, the webcam, the microphone, and approval on an iPhone.

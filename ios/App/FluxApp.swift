@@ -29,7 +29,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         Notifier.shared.start()
         do {
             let core = try FluxCore(plugins: PluginRegistry.make())
-            launch = .ready(AppModel(core: core))
+            launch = .ready(AppModel(core: core, demo: DemoMode.isOn))
         } catch {
             launch = .failed(String(describing: error))
         }
@@ -37,8 +37,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     }
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
-        if case .ready(let model) = launch {
-            // The network starts when the scene becomes active.
+        // The network starts when the scene becomes active. The demo starts
+        // no feature, see `DemoMode`.
+        if case .ready(let model) = launch, !model.demo {
             FeatureHooks.didLaunch(model: model)
         }
         return true
