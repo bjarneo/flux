@@ -19,6 +19,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 // MinProtocol is the oldest herdr API protocol that Flux supports.
@@ -367,6 +369,10 @@ func open(ctx context.Context, path, method string, params any) (net.Conn, *bufi
 	if err != nil {
 		return nil, nil, err
 	}
+	if err := checkOwner(conn, os.Getuid()); err != nil {
+		conn.Close()
+		return nil, nil, err
+	}
 	deadline, ok := ctx.Deadline()
 	if !ok {
 		deadline = time.Now().Add(callTimeout)
@@ -382,6 +388,35 @@ func open(ctx context.Context, path, method string, params any) (net.Conn, *bufi
 		return nil, nil, err
 	}
 	return conn, bufio.NewReader(conn), nil
+}
+
+// checkOwner checks with SO_PEERCRED that the server of conn runs as the
+// user uid. HERDR_SOCKET_PATH can name a shared folder, where another user
+// can listen first. That user must not get the prompts and the terminal
+// input of the phone.
+func checkOwner(conn net.Conn, uid int) error {
+	uc, ok := conn.(*net.UnixConn)
+	if !ok {
+		return errors.New("herdr: the socket is not a Unix socket")
+	}
+	raw, err := uc.SyscallConn()
+	if err != nil {
+		return err
+	}
+	var cred *unix.Ucred
+	var credErr error
+	if err := raw.Control(func(fd uintptr) {
+		cred, credErr = unix.GetsockoptUcred(int(fd), unix.SOL_SOCKET, unix.SO_PEERCRED)
+	}); err != nil {
+		return err
+	}
+	if credErr != nil {
+		return credErr
+	}
+	if int(cred.Uid) != uid {
+		return fmt.Errorf("herdr: the socket belongs to user %d, not to user %d", cred.Uid, uid)
+	}
+	return nil
 }
 
 // await reads replies until the response to the request arrives. It
