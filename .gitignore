@@ -17,3 +17,12 @@ __pycache__/
 *.jks
 *.keystore
 .DS_Store
+# Private keys and signing files. Keep them out of the checkout.
+*.p8
+*.p12
+*.pem
+*.key
+*.cer
+*.mobileprovision
+*.provisionprofile
+*.idsig
