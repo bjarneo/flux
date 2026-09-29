@@ -103,6 +103,10 @@ Disable the Gradle configuration cache for builds that use release secrets:
 | `.github/workflows/release.yml` | Stable version tag or manual rebuild of an existing tag. Publishes the package, signed APK, AUR recipe, certificate details, and checksums. |
 | `.github/workflows/aur.yml` | Reusable call after a successful release. Pushes the tested recipe to AUR. |
 
+`flux-cli update` and `fluxd` find the release assets by name: `omarchy-flux-VERSION-PKGREL-ARCH.pkg.tar.zst`, `flux-android-VERSION.apk`, and `SHA256SUMS`.
+Keep these names when you change `release.yml`.
+Use the upgrade check in `docs/releasing.md` after each release.
+
 Release tags use `vMAJOR.MINOR.PATCH`.
 Prerelease tags do not pass release validation.
 Manual release runs require an existing tag and build that exact tag.

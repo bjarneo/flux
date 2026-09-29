@@ -203,6 +203,11 @@ Artifacts include:
 - `android-certificate.txt`.
 - `SHA256SUMS`.
 
+Installed copies of Flux find their updates by these names.
+`flux-cli update` installs `omarchy-flux-VERSION-PKGREL-ARCH.pkg.tar.zst` after it checks the file against `SHA256SUMS`.
+`fluxd` sends `flux-android-VERSION.apk` to a phone after the same check.
+Keep the names and `SHA256SUMS` when you change the release workflow.
+
 For a manual rebuild of an existing tag:
 
 ```sh
@@ -223,6 +228,24 @@ gh release view v0.1.0
 Download the assets and verify `SHA256SUMS` before a test install.
 Compare the Android certificate with the previous release.
 Test a clean desktop install and an Android update with the same signing key.
+
+### Check an upgrade
+
+Test the upgrade from the previous release on a computer with a paired phone:
+
+1. Install the previous release package, run `flux-cli setup`, and pair the phone.
+2. Open the Flux window.
+3. Run `flux-cli update`, and confirm the pacman prompt.
+   A previous release without `flux-cli update` needs `sudo pacman -U` with the new package.
+4. Run `flux-cli version`. Both lines must show the new version.
+5. Run `flux-cli status`. The phone must show as connected again.
+6. Check that the open window shows **Flux was updated**, and select **Restart**.
+7. Select **Send to phone** in the window, and install the update from the notification on the phone.
+8. Run `flux-cli status`. The phone must show as connected, with no update offer.
+
+`fluxd` restarts about 10 seconds after the install.
+The release check of an installed `fluxd` finds the new release within 1 day.
+To see the offer at once, run `flux-cli update --check`.
 
 If the AUR job fails after publication, fix its credentials or host entry and rerun that failed job.
 The GitHub release remains available.

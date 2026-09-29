@@ -26,6 +26,7 @@ https://github.com/user-attachments/assets/4b8445fe-6734-4100-b200-92f57e1b353a
 | Approve sudo with the phone's fingerprint sensor | [Fingerprint approval](docs/approvals.md) |
 | Reach your phone away from home through Tailscale | [Connect through Tailscale](docs/tailscale.md) |
 | See herdr coding agents on the phone or the Mac, read their output, and answer them | [herdr agents](docs/herdr.md) |
+| Update Flux on the computer and send the new app to the phone | [Update](docs/install.md#update) |
 
 Flux for Android requires Android 10 or later.
 Flux for Android is the supported phone app.
@@ -62,6 +63,7 @@ Run `flux-cli setup` as your desktop user after installation.
 The short name `flux` also works when no other program, such as `fluxcd`, uses that name.
 
 The [install guide](docs/install.md) covers dependencies, source builds, user-only installation, updates, and removal.
+Flux checks for a new release once a day. To install it, run `flux-cli update`.
 
 ## Connect your phone
 
