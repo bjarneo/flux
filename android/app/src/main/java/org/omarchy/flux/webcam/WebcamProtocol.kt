@@ -6,7 +6,7 @@ import org.omarchy.flux.protocol.Types
 import org.omarchy.flux.protocol.bodyOf
 
 /**
- * The flux.webcam extension. The phone opens a TLS listener, sends "start"
+ * The flux.webcam packets. The phone opens a TLS listener, sends "start"
  * with its port, and writes a raw H.264 Annex-B stream to the computer that
  * connects. The computer answers "live", "error", or "stop". Both sides send
  * "config" to change the settings.

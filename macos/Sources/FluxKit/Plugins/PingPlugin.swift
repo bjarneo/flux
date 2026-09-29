@@ -1,6 +1,6 @@
 import Foundation
 
-/// kdeconnect.ping in both directions.
+/// flux.ping in both directions.
 public final class PingPlugin: FluxPlugin, @unchecked Sendable {
     private weak var core: FluxCore?
 

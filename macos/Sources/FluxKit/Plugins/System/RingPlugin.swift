@@ -12,7 +12,7 @@ public final class RingModel {
     init() {}
 }
 
-/// Find my phone: kdeconnect.findmyphone.request from the computer, which
+/// Find my phone: flux.findmyphone.request from the computer, which
 /// `flux-cli ring` sends. The device rings until the user stops it, for 2
 /// minutes at most, like Flux for Android. A second request while it rings
 /// stops it, so the computer can stop a ring that nobody reaches. The app

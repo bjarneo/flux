@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -38,8 +39,21 @@ func doctor() {
 		checkVersion(s, check)
 	}
 
-	check(!running("kdeconnectd"), "kdeconnectd is not running",
-		"kdeconnectd also uses ports 1714 to 1764. Stop it: pkill kdeconnectd")
+	// Phones send their identity to UDP port 1716. A second program on the
+	// port can take the identities that fluxd needs.
+	if others, err := udpHolders(discoveryPort); err != nil {
+		fmt.Printf("? Cannot run ss, so Flux cannot check UDP port %d\n", discoveryPort)
+	} else if len(others) == 0 {
+		fmt.Printf("✓ no other program uses UDP port %d\n", discoveryPort)
+	} else {
+		for _, name := range others {
+			fix := fmt.Sprintf("Stop it: pkill -x %s", name)
+			if name == "" {
+				name, fix = "a program of another user", fmt.Sprintf("Find it: sudo ss -ulnp 'sport = :%d'", discoveryPort)
+			}
+			check(false, "", fmt.Sprintf("%s also uses UDP port %d, so phones cannot always reach fluxd. %s", name, discoveryPort, fix))
+		}
+	}
 
 	// Flux needs no open port. fluxd opens every connection, and mDNS
 	// finds the phones. The default ufw rules let mDNS in.
@@ -181,8 +195,31 @@ func shortName() string {
 	return fmt.Sprintf("- The short name flux runs %s, not flux-cli. Use flux-cli", p)
 }
 
-func running(name string) bool {
-	return exec.Command("pgrep", "-x", name).Run() == nil
+// discoveryPort is the UDP port that fluxd listens on for identities.
+const discoveryPort = 1716
+
+// udpHolders returns the programs other than fluxd that listen on the UDP
+// port. The name of a program of another user is empty, because ss shows
+// only the sockets of this user.
+func udpHolders(port int) ([]string, error) {
+	out, err := exec.Command("ss", "-Hulnp", fmt.Sprintf("sport = :%d", port)).Output()
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
+			continue
+		}
+		name := ""
+		if _, rest, ok := strings.Cut(line, `users:(("`); ok {
+			name, _, _ = strings.Cut(rest, `"`)
+		}
+		if name != "fluxd" && !slices.Contains(names, name) {
+			names = append(names, name)
+		}
+	}
+	return names, nil
 }
 
 func active(unit string) bool {

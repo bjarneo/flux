@@ -7,7 +7,7 @@ import kotlin.math.abs
 import kotlin.math.max
 
 /**
- * The flux.mic extension. The phone opens a TLS listener, sends "start"
+ * The flux.mic packets. The phone opens a TLS listener, sends "start"
  * with its port and the audio format, and writes raw PCM to the computer
  * that connects. The computer answers "live", "error", or "stop".
  */

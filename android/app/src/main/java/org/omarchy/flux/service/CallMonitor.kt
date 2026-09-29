@@ -24,7 +24,7 @@ private const val TAG = "FluxCalls"
 
 /**
  * Sends the calls of this phone to the connected computers as
- * kdeconnect.telephony packets. FluxService runs it, so it works with the
+ * flux.telephony packets. FluxService runs it, so it works with the
  * app in the background.
  *
  * The call state comes from TelephonyCallback on Android 12 and later, and

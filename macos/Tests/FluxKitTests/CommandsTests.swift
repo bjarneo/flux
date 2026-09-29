@@ -15,13 +15,13 @@ final class CommandsTests: XCTestCase {
         ])
     }
 
-    func testObjectListSortsByName() {
+    func testObjectListGivesNoCommands() {
+        // fluxd sends commandList as a JSON string.
         let obj: [String: Any?] = [
             "k1": ["name": "Suspend", "command": "systemctl suspend"],
             "k2": ["command": "omarchy-system-lock"],
         ]
-        XCTAssertEqual(list(obj).map(\.name), ["k2", "Suspend"])
-        XCTAssertEqual(list(obj).first?.command, "omarchy-system-lock")
+        XCTAssertEqual(list(obj), [])
     }
 
     func testBadListsGiveNoCommands() {

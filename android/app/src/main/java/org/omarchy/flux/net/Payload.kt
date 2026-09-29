@@ -2,18 +2,17 @@ package org.omarchy.flux.net
 
 import java.io.InputStream
 import java.io.OutputStream
-import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
-import java.net.Socket
 import java.security.cert.X509Certificate
 
 /** The TCP port range for payload servers. */
 val PAYLOAD_PORTS = 1739..1764
 
 /**
- * Payload transfer. The sender listens on a port and is the TLS server. The
- * receiver connects and is the TLS client.
+ * Payload transfer from this phone. The phone listens on a port and is the
+ * TLS server. The computer connects and is the TLS client. A payload from
+ * the computer comes through a [Tunnel].
  */
 object Payload {
     /** Opens a listener on the first free port in the payload range. */
@@ -58,26 +57,6 @@ object Payload {
                 ssl.outputStream.flush()
             }
         }
-    }
-
-    /** Connects to the sender and writes the payload into [output]. */
-    fun receive(
-        tls: Tls,
-        address: InetAddress,
-        port: Int,
-        size: Long,
-        output: OutputStream,
-        progress: (Long) -> Unit = {},
-    ) {
-        val socket = Socket()
-        val ssl = try {
-            socket.connect(InetSocketAddress(address, port), 10_000)
-            tls.wrap(socket, server = false)
-        } catch (e: Exception) {
-            runCatching { socket.close() }
-            throw e
-        }
-        ssl.use { copy(it.inputStream, output, size, progress) }
     }
 
     internal fun copy(input: InputStream, output: OutputStream, size: Long, progress: (Long) -> Unit) {

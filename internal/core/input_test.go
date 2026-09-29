@@ -70,10 +70,6 @@ func TestInputActions(t *testing.T) {
 		{`{"dx":3.5,"dy":-2}`, []inputAction{{kind: "move", dx: 3.5, dy: -2}}},
 		{`{"dx":1e9,"dy":0}`, []inputAction{{kind: "move", dx: maxInputDelta}}},
 		{`{"singleclick":true,"dx":5}`, []inputAction{{kind: "button", button: left, pressed: true}, {kind: "button", button: left}}},
-		{`{"doubleclick":true}`, []inputAction{
-			{kind: "button", button: left, pressed: true}, {kind: "button", button: left},
-			{kind: "button", button: left, pressed: true}, {kind: "button", button: left},
-		}},
 		{`{"rightclick":true}`, []inputAction{{kind: "button", button: right, pressed: true}, {kind: "button", button: right}}},
 		{`{"middleclick":true}`, []inputAction{{kind: "button", button: middle, pressed: true}, {kind: "button", button: middle}}},
 		{`{"singlehold":true}`, []inputAction{{kind: "button", button: left, pressed: true}}},

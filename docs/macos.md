@@ -3,7 +3,7 @@
 [Documentation index](README.md)
 
 Flux for macOS connects a Mac to an Omarchy computer that runs `fluxd`.
-The Mac takes the place of the Android phone: it uses KDE Connect protocol version 8 with Flux extensions and pairs, shares, and streams the same way.
+The Mac takes the place of the Android phone: it uses Flux protocol version 8 and pairs, shares, and streams the same way.
 The app requires macOS 14 or later.
 
 ## Build and run
@@ -61,12 +61,12 @@ To change the icons, edit and run `swift macos/tools/render-icon.swift`.
 4. Accept the request on the computer when it shows the same 8-character key.
 
 You can also start from the computer with `flux-cli pair` and accept on the Mac.
-The Mac announces itself with UDP broadcasts on port 1716 and as `_kdeconnect._udp` through Bonjour, like the phone.
+The Mac announces itself with UDP broadcasts on port 1716 and as `_flux._udp` through Bonjour, like the phone.
 It appears on the computer as `laptop` when it has a battery and `desktop` otherwise.
 
 The Mac is a remote for Omarchy computers.
 It connects and pairs only with a computer that runs `fluxd`.
-It ignores phones, tablets, other Macs, and other KDE Connect devices, and it removes old pairings with them when it starts.
+It ignores phones, tablets, and other Macs, and it removes old pairings with them when it starts.
 
 Flux searches the network for 10 seconds when it starts.
 It does not search all the time.

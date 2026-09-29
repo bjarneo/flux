@@ -43,14 +43,14 @@ data class ScannedCode(
     val product: Boolean = false,
 )
 
-/** The packet that an action sends. It becomes the body of kdeconnect.share.request. */
+/** The packet that an action sends. It becomes the body of flux.share.request. */
 sealed interface ShareBody {
     data class OpenUrl(val url: String) : ShareBody
     data class Copy(val text: String) : ShareBody
     data class Save(val text: String) : ShareBody
 }
 
-/** Returns the fields of the kdeconnect.share.request body. */
+/** Returns the fields of the flux.share.request body. */
 fun ShareBody.fields(): List<Pair<String, Any?>> = when (this) {
     is ShareBody.OpenUrl -> listOf("url" to url)
     is ShareBody.Copy -> listOf("text" to text)

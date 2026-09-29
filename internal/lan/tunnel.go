@@ -16,9 +16,9 @@ import (
 	"flux/internal/proto"
 )
 
-// The Flux tunnel extension turns a payload socket around. In KDE Connect
-// the sender of a payload listens and the receiver connects in, which a
-// firewall on this computer blocks. With a tunnel, the phone listens, sends
+// A tunnel turns a payload socket around. Without a tunnel, the sender of
+// a payload listens and the receiver connects in, which a firewall on this
+// computer blocks. With a tunnel, the phone listens, sends
 // its port in a flux.tunnel packet, and fluxd connects out. The listener is
 // the TLS server, and fluxd is the TLS client.
 

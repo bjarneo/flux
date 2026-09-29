@@ -13,12 +13,8 @@ final class ClipImageTests: XCTestCase {
 
     func testReadsTheImageThatFluxdSends() {
         // clipboard.go sendClipImage: proto.New(TypeFluxClipboardImage, {"mime": mime}) with a payload.
-        let port = Packet.parse(#"{"id":1790000000001,"type":"flux.clipboard.image","body":{"mime":"image/png"},"payloadSize":5,"payloadTransferInfo":{"port":1739}}"#)!
-        XCTAssertEqual(port.type, PacketType.fluxClipboardImage)
-        XCTAssertTrue(ClipImage.accepts(port))
-        XCTAssertEqual(ClipImage.mime(of: port), "image/png")
-
         let tunnel = Packet.parse(#"{"id":1790000000002,"type":"flux.clipboard.image","body":{"mime":"image/webp"},"payloadSize":5,"payloadTransferInfo":{"tunnel":"t1"}}"#)!
+        XCTAssertEqual(tunnel.type, PacketType.fluxClipboardImage)
         XCTAssertTrue(ClipImage.accepts(tunnel))
         XCTAssertEqual(tunnel.payloadTunnel, "t1")
         XCTAssertEqual(ClipImage.mime(of: tunnel), "image/webp")

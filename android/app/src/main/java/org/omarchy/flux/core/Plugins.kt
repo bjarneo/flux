@@ -46,14 +46,13 @@ object Plugins {
                 d.battery = p.int("currentCharge")?.takeIf { it >= 0 }
                 d.charging = p.bool("isCharging") ?: false
             }
-            Types.BATTERY_REQUEST -> sendBattery(core, d)
             Types.CLIPBOARD -> receiveClipboard(core, p.string("content"), null)
             Types.CLIPBOARD_CONNECT -> receiveClipboard(core, p.string("content"), p.long("timestamp") ?: 0L)
             Types.SHARE -> Share.receive(core, d, p)
             Types.SHARE_UPDATE -> Unit
             Types.NOTIFICATION -> {
                 val n = ComputerNotification.from(p, d.id, d.identity.deviceName, System.currentTimeMillis()) ?: return
-                if (n.cancel) Android.cancelFromComputer(core.app, n) else Android.showFromComputer(core.app, n)
+                Android.showFromComputer(core.app, n)
             }
             Types.NOTIFICATION_REQUEST -> {
                 if (p.bool("request") == true) NotificationSync.sendAll(d)
@@ -160,10 +159,9 @@ object Plugins {
     // --------------------------------------------------------- run commands
 
     private fun parseCommands(p: Packet): List<RemoteCommand> {
-        val raw = p.body["commandList"] ?: return emptyList()
-        val obj: JsonObject = (raw as? JsonObject)
-            ?: runCatching { json.parseToJsonElement(raw.str() ?: "{}") as JsonObject }.getOrNull()
-            ?: return emptyList()
+        // The computer sends the command list as a JSON string.
+        val raw = p.string("commandList") ?: return emptyList()
+        val obj = runCatching { json.parseToJsonElement(raw) as JsonObject }.getOrNull() ?: return emptyList()
         return obj.entries.mapNotNull { (key, v) ->
             val o = v as? JsonObject ?: return@mapNotNull null
             RemoteCommand(key, o.str("name") ?: key, o.str("command") ?: "")
@@ -255,7 +253,7 @@ object Plugins {
 }
 
 /**
- * Merges a kdeconnect.mpris packet from the computer into the state of a
+ * Merges a flux.mpris packet from the computer into the state of a
  * player. A field that the packet leaves out keeps its old value. The
  * volume is different: the computer sends the whole state with isPlaying,
  * and leaves out the volume for a player that takes no volume.

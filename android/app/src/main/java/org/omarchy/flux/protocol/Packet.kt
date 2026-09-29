@@ -16,13 +16,13 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
-/** The KDE Connect protocol version that Flux speaks. */
+/** The protocol version that Flux speaks. */
 const val PROTOCOL_VERSION = 8
 
 val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
 /**
- * One KDE Connect network packet. On the wire, a packet is one JSON object
+ * One Flux network packet. On the wire, a packet is one JSON object
  * followed by a newline.
  */
 data class Packet(
@@ -30,10 +30,14 @@ data class Packet(
     val body: JsonObject = JsonObject(emptyMap()),
     val id: Long = System.currentTimeMillis(),
     val payloadSize: Long = 0,
+    /**
+     * The port of the payload server of this phone. Only packets that this
+     * phone sends carry it, and the computer connects to the port.
+     */
     val payloadPort: Int = 0,
     /**
-     * Flux extension: the token of a tunnel payload. The computer cannot
-     * accept connections, so this phone listens and the computer connects.
+     * The token of a tunnel payload from the computer. This phone listens,
+     * and the computer connects.
      */
     val payloadTunnel: String? = null,
 ) {
@@ -69,7 +73,11 @@ data class Packet(
         array(key)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull } ?: emptyList()
 
     companion object {
-        /** Parses one packet line. It returns null for a line that is not a packet. */
+        /**
+         * Parses one packet line. It returns null for a line that is not a
+         * packet. The computer sends each payload through a tunnel, so the
+         * parse ignores a payload port.
+         */
         fun parse(line: String): Packet? {
             val obj = runCatching { json.parseToJsonElement(line.trim()).jsonObject }.getOrNull() ?: return null
             val type = (obj["type"] as? JsonPrimitive)?.contentOrNull ?: return null
@@ -77,9 +85,8 @@ data class Packet(
             val body = obj["body"] as? JsonObject ?: JsonObject(emptyMap())
             val size = (obj["payloadSize"] as? JsonPrimitive)?.longOrNull ?: 0L
             val info = obj["payloadTransferInfo"] as? JsonObject
-            val port = (info?.get("port") as? JsonPrimitive)?.let { it.intOrNull ?: it.contentOrNull?.toIntOrNull() } ?: 0
             val tunnel = (info?.get("tunnel") as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotEmpty() }
-            return Packet(type, body, id, size, port, if (port > 0) null else tunnel)
+            return Packet(type, body, id, size, payloadTunnel = tunnel)
         }
 
         /** Builds a packet from a map of simple values. */

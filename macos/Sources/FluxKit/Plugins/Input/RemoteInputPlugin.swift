@@ -26,7 +26,7 @@ public final class RemoteInputModel {
     }
 }
 
-/// kdeconnect.mousepad.request out, flux.input in: the trackpad, the mouse,
+/// flux.mousepad.request out, flux.input in: the trackpad, the mouse,
 /// and the keyboard of this Mac control the pointer and the keys of the
 /// computer. The computer runs the input only while its remote_input
 /// setting is on. It sends flux.input {"enabled": bool, "desktop": bool}
@@ -45,7 +45,7 @@ public final class RemoteInputPlugin: FluxPlugin, @unchecked Sendable {
     public func attach(core: FluxCore) { self.core = core }
 
     /// True when the computer takes remote input. An older fluxd does not
-    /// list kdeconnect.mousepad.request.
+    /// list flux.mousepad.request.
     public static func supported(_ device: DeviceSnapshot) -> Bool { device.accepts(PacketType.mousepadRequest) }
 
     public func handle(_ packet: Packet, from device: Device) {

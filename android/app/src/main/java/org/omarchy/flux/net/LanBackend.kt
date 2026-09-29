@@ -29,7 +29,7 @@ const val UDP_PORT = 1716
 val TCP_PORTS = 1716..1764
 
 /**
- * The KDE Connect LAN backend. It broadcasts the identity over UDP, accepts
+ * The LAN backend. It broadcasts the identity over UDP, accepts
  * TCP links, connects to devices that broadcast, and runs the TLS handshake.
  */
 class LanBackend(
@@ -232,27 +232,23 @@ class LanBackend(
     }
 
     /**
-     * Checks the peer certificate and, for protocol version 8, exchanges the
-     * identity again over TLS. The identity inside TLS is the one to trust.
+     * Checks the peer certificate and exchanges the identity again over
+     * TLS. The identity inside TLS is the one to trust.
      */
     private fun finish(ssl: SSLSocket, plain: Identity?) {
         val cert = Tls.peerCertificate(ssl) ?: throw IllegalStateException("peer sent no certificate")
         val cn = commonName(cert)
-        var id = plain
-        if (plain == null || plain.protocolVersion >= 8) {
-            // Both sides write the identity at once. KDE Connect closes the
-            // link when it does not arrive within 1 second.
-            val out = ssl.outputStream
-            out.write(identity(0).toPacket().serialize().toByteArray())
-            out.flush()
-            ssl.soTimeout = 10_000
-            val line = readLine(ssl.inputStream, MAX_IDENTITY_LINE) ?: throw SocketTimeoutException("no identity after TLS")
-            ssl.soTimeout = 0
-            id = Packet.parse(line)?.let { Identity.from(it) } ?: throw IllegalStateException("bad identity after TLS")
-            if (plain != null && plain.deviceId != id.deviceId) throw IllegalStateException("device ID changed after TLS")
-            if (plain != null && plain.protocolVersion != id.protocolVersion) throw IllegalStateException("protocol version changed after TLS")
-        }
-        val identity = id ?: throw IllegalStateException("no identity")
+        // Both sides write the identity at once, so that neither side
+        // waits for the other.
+        val out = ssl.outputStream
+        out.write(identity(0).toPacket().serialize().toByteArray())
+        out.flush()
+        ssl.soTimeout = 10_000
+        val line = readLine(ssl.inputStream, MAX_IDENTITY_LINE) ?: throw SocketTimeoutException("no identity after TLS")
+        ssl.soTimeout = 0
+        val identity = Packet.parse(line)?.let { Identity.from(it) } ?: throw IllegalStateException("bad identity after TLS")
+        if (plain != null && plain.deviceId != identity.deviceId) throw IllegalStateException("device ID changed after TLS")
+        if (plain != null && plain.protocolVersion != identity.protocolVersion) throw IllegalStateException("protocol version changed after TLS")
         if (cn != identity.deviceId) throw IllegalStateException("certificate CN $cn does not match ${identity.deviceId}")
         val pinned = callbacks.trustedCertificate(identity.deviceId)
         if (pinned != null && !pinned.encoded.contentEquals(cert.encoded)) {

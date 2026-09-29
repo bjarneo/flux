@@ -84,8 +84,8 @@ public final class FluxCore: @unchecked Sendable {
         for t in trust.all() {
             let identity = Identity(deviceId: t.id, deviceName: t.name, deviceType: t.type, protocolVersion: protocolVersion,
                                     incoming: t.isFlux ? [PacketType.fluxTunnel] : [], outgoing: [])
-            // Older versions paired with any KDE Connect device, for example
-            // a phone with Flux for Android. Drop those pairings.
+            // Older versions paired with any device, for example phones and
+            // other Macs. Drop those pairings.
             guard identity.isFlux else {
                 FluxLog.core.info("removed the pairing with \(t.name, privacy: .public), which is not an Omarchy computer")
                 trust.remove(t.id)

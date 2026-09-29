@@ -20,7 +20,7 @@ const (
 	avahiServer   = "org.freedesktop.Avahi.Server"
 	avahiGroup    = "org.freedesktop.Avahi.EntryGroup"
 	avahiBrowser  = "org.freedesktop.Avahi.ServiceBrowser"
-	serviceType   = "_kdeconnect._udp"
+	serviceType   = "_flux._udp"
 	ifaceUnspec   = int32(-1)
 	protoInet     = int32(0)
 	lookupNoFlags = uint32(0)

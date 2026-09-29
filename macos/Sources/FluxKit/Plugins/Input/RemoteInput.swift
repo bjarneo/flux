@@ -5,11 +5,11 @@ import UIKit
 #endif
 import Foundation
 
-/// The packets of kdeconnect.mousepad.request: this Mac moves the pointer,
-/// clicks, scrolls, and types on the computer, like KDE Connect. A packet
+/// The packets of flux.mousepad.request: this Mac moves the pointer,
+/// clicks, scrolls, and types on the computer. A packet
 /// holds 1 action. docs/remote-input.md describes the fields.
 public enum RemoteInput {
-    /// Special keys, with the numbers that KDE Connect uses.
+    /// Special keys, with the specialKey numbers of flux.mousepad.request.
     public enum Key: Int, CaseIterable, Sendable {
         case backspace = 1, tab = 2, left = 4, up = 5, right = 6, down = 7
         case pageUp = 8, pageDown = 9, home = 10, end = 11, enter = 12, delete = 13, escape = 14
@@ -92,7 +92,7 @@ public enum RemoteInput {
 
     // MARK: Remote desktop
 
-    /// Flux extension: puts the pointer on the position x, y of the remote
+    /// Puts the pointer on the position x, y of the remote
     /// desktop, from 0 at the top left corner to 1 at the bottom right
     /// corner. The computer runs the action of the packet after the move.
     public static func at(x: Double, y: Double) -> Packet { Packet(PacketType.mousepadRequest, position(x, y)) }

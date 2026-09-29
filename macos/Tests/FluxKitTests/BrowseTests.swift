@@ -5,44 +5,27 @@ final class BrowseTests: XCTestCase {
     private func offer(_ line: String) -> SftpOffer? { SftpOffer.parse(Packet.parse(line)!) }
 
     func testTunnelOfferFromFluxd() throws {
-        let o = try XCTUnwrap(offer(#"{"id":1,"type":"kdeconnect.sftp","body":{"tunnel":"s1","user":"kdeconnect","password":"pw","path":"/home/u","multiPaths":["/home/u","/home/u/Pictures"],"pathNames":["Home","Pictures"]}}"#))
-        XCTAssertTrue(o.viaTunnel)
+        let o = try XCTUnwrap(offer(#"{"id":1,"type":"flux.sftp","body":{"tunnel":"s1","user":"flux","password":"pw","path":"/home/u","multiPaths":["/home/u","/home/u/Pictures"],"pathNames":["Home","Pictures"]}}"#))
         XCTAssertEqual(o.tunnel, "s1")
-        XCTAssertEqual(o.user, "kdeconnect")
+        XCTAssertEqual(o.user, "flux")
         XCTAssertEqual(o.password, "pw")
         XCTAssertEqual(o.roots, [BrowseRoot(name: "Home", path: "/home/u"), BrowseRoot(name: "Pictures", path: "/home/u/Pictures")])
     }
 
-    func testDirectOfferFallsBackToHomeRoot() throws {
-        let o = try XCTUnwrap(offer(#"{"id":1,"type":"kdeconnect.sftp","body":{"ip":"192.168.1.5","port":1739,"user":"kdeconnect","password":"pw","path":"/"}}"#))
-        XCTAssertFalse(o.viaTunnel)
-        XCTAssertEqual(o.ip, "192.168.1.5")
-        XCTAssertEqual(o.port, 1739)
-        XCTAssertEqual(o.roots, [BrowseRoot(name: "Home", path: "/")])
-    }
-
-    func testAddressWinsOverTunnel() throws {
-        let o = try XCTUnwrap(offer(#"{"id":1,"type":"kdeconnect.sftp","body":{"ip":"10.0.0.2","port":1740,"tunnel":"t","user":"k","password":"p"}}"#))
-        XCTAssertFalse(o.viaTunnel)
-        XCTAssertEqual(o.path, "/")
-        // Without an IP, the tunnel wins even with a port.
-        let t = try XCTUnwrap(offer(#"{"id":1,"type":"kdeconnect.sftp","body":{"ip":"","port":1740,"tunnel":"t","user":"k","password":"p"}}"#))
-        XCTAssertTrue(t.viaTunnel)
-        XCTAssertNil(t.ip)
-    }
-
-    func testMismatchedRootListsFallBackToPath() throws {
-        let o = try XCTUnwrap(offer(#"{"id":1,"type":"kdeconnect.sftp","body":{"tunnel":"t","user":"k","password":"p","path":"/home/u","multiPaths":["/home/u","/srv"],"pathNames":["Home"]}}"#))
-        XCTAssertEqual(o.roots, [BrowseRoot(name: "Home", path: "/home/u")])
+    func testBadRootListsAreRejected() {
+        XCTAssertNil(offer(#"{"id":1,"type":"flux.sftp","body":{"tunnel":"t","user":"k","password":"p","path":"/home/u","multiPaths":["/home/u","/srv"],"pathNames":["Home"]}}"#), "the lists differ in length")
+        XCTAssertNil(offer(#"{"id":1,"type":"flux.sftp","body":{"tunnel":"t","user":"k","password":"p","path":"/home/u"}}"#), "no lists")
+        XCTAssertNil(offer(#"{"id":1,"type":"flux.sftp","body":{"tunnel":"t","user":"k","password":"p","multiPaths":[],"pathNames":[]}}"#), "empty lists")
     }
 
     func testRejectedOffers() {
-        XCTAssertNil(offer(#"{"id":1,"type":"kdeconnect.sftp","body":{"errorMessage":"no"}}"#))
-        XCTAssertNil(offer(#"{"id":1,"type":"kdeconnect.sftp","body":{"errorMessage":"","tunnel":"t","user":"k","password":"p"}}"#))
-        XCTAssertNil(offer(#"{"id":1,"type":"kdeconnect.sftp","body":{"user":"k","password":"p"}}"#))
-        XCTAssertNil(offer(#"{"id":1,"type":"kdeconnect.sftp","body":{"tunnel":"","user":"k","password":"p"}}"#))
-        XCTAssertNil(offer(#"{"id":1,"type":"kdeconnect.sftp","body":{"tunnel":"t","password":"p"}}"#))
-        XCTAssertNil(offer(#"{"id":1,"type":"kdeconnect.sftp.request","body":{"tunnel":"t","user":"k","password":"p"}}"#))
+        XCTAssertNil(offer(#"{"id":1,"type":"flux.sftp","body":{"errorMessage":"no"}}"#))
+        XCTAssertNil(offer(#"{"id":1,"type":"flux.sftp","body":{"errorMessage":"","tunnel":"t","user":"k","password":"p","multiPaths":["/h"],"pathNames":["Home"]}}"#))
+        XCTAssertNil(offer(#"{"id":1,"type":"flux.sftp","body":{"user":"k","password":"p","multiPaths":["/h"],"pathNames":["Home"]}}"#))
+        XCTAssertNil(offer(#"{"id":1,"type":"flux.sftp","body":{"ip":"10.0.0.2","port":1740,"user":"k","password":"p","multiPaths":["/h"],"pathNames":["Home"]}}"#), "an address is not a tunnel")
+        XCTAssertNil(offer(#"{"id":1,"type":"flux.sftp","body":{"tunnel":"","user":"k","password":"p","multiPaths":["/h"],"pathNames":["Home"]}}"#))
+        XCTAssertNil(offer(#"{"id":1,"type":"flux.sftp","body":{"tunnel":"t","password":"p","multiPaths":["/h"],"pathNames":["Home"]}}"#))
+        XCTAssertNil(offer(#"{"id":1,"type":"flux.sftp.request","body":{"tunnel":"t","user":"k","password":"p","multiPaths":["/h"],"pathNames":["Home"]}}"#))
     }
 
     func testListingHidesDotFilesAndSortsFoldersFirst() {

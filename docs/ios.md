@@ -3,7 +3,7 @@
 [Documentation index](README.md)
 
 Flux for iOS connects an iPhone to an Omarchy computer that runs `fluxd`.
-The iPhone takes the place of the Android phone: it uses KDE Connect protocol version 8 with Flux extensions and pairs, shares, and streams the same way.
+The iPhone takes the place of the Android phone: it uses Flux protocol version 8 and pairs, shares, and streams the same way.
 It shares the Swift package FluxKit with [Flux for macOS](macos.md) and offers the Android features that iOS allows.
 The app requires iOS 17 or later.
 
@@ -79,7 +79,7 @@ The iPhone appears on the computer as `phone`, with the name from **Settings > T
 iOS gives apps only the generic name "iPhone", so set a name there.
 
 The computer connects to the iPhone.
-The iPhone publishes `_kdeconnect._udp` through Bonjour and listens on TCP ports 1716 to 1764.
+The iPhone publishes `_flux._udp` through Bonjour and listens on TCP ports 1716 to 1764.
 It also sends its identity to each computer that it finds through Bonjour.
 It sends no UDP broadcasts, because iOS needs a special entitlement for them.
 

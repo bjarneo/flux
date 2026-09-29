@@ -60,8 +60,7 @@ type smsWire struct {
 	Type   int    `json:"type"`
 	Read   int    `json:"read"`
 	SubID  *int64 `json:"sub_id"`
-	// ContactName is a Flux extension. KDE Connect phones send only the
-	// address.
+	// The phone leaves ContactName out when it does not know the name.
 	Addresses []struct {
 		Address     string `json:"address"`
 		ContactName string `json:"contactName"`
@@ -121,9 +120,8 @@ func (m SmsMessage) conversation() *Conversation {
 func (d *Daemon) handleSms(dev *Device, p *proto.Packet) {
 	var b struct {
 		Messages []smsWire `json:"messages"`
-		// ThreadID is a Flux extension. A Flux phone names the thread in
-		// the answer to a thread request, so that a new message does not
-		// count as the answer.
+		// ThreadID names the thread in the answer to a thread request, so
+		// that a new message does not count as the answer.
 		ThreadID *int64 `json:"threadID"`
 	}
 	if p.Decode(&b) != nil {
@@ -145,18 +143,8 @@ func (d *Daemon) handleSms(dev *Device, p *proto.Packet) {
 			dev.conversations[m.Thread] = m.conversation()
 		}
 	}
-	// Other phones send the answer without a thread, so a packet with 1
-	// thread counts as the answer.
-	answer, found := int64(0), false
-	switch {
-	case b.ThreadID != nil:
-		answer, found = *b.ThreadID, true
-	case !dev.fluxApp() && len(threads) == 1:
-		for t := range threads {
-			answer, found = t, true
-		}
-	}
-	if found {
+	if b.ThreadID != nil {
+		answer := *b.ThreadID
 		for _, ch := range dev.threadWait[answer] {
 			select {
 			case ch <- msgs:
@@ -222,10 +210,9 @@ func (d *Daemon) SendSms(dev *Device, addresses []string, body string) error {
 		return apiErr("bad_params", "Give at least 1 address and a message")
 	}
 	d.mu.Lock()
-	flux := dev.fluxApp()
 	sub := conversationSim(dev.conversations, clean)
 	d.mu.Unlock()
-	if len(list) > 1 && flux {
+	if len(list) > 1 {
 		return apiErr("unsupported", "%s sends a text message to 1 address. Send group messages on the phone", dev.Name)
 	}
 	b := map[string]any{"version": 2, "addresses": list, "messageBody": body}

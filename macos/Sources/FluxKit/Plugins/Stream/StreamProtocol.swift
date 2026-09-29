@@ -1,6 +1,6 @@
 import Foundation
 
-/// The flux.webcam extension. This Mac opens a TLS listener, sends "start"
+/// The flux.webcam packets. This Mac opens a TLS listener, sends "start"
 /// with its port, and writes a raw H.264 Annex-B stream to the computer that
 /// connects. The computer answers "live", "error", or "stop". Both sides send
 /// "config" to change the settings.
@@ -56,7 +56,7 @@ enum WebcamReply: Equatable {
     }
 }
 
-/// The flux.screen extension. This Mac opens a TLS listener, sends "start"
+/// The flux.screen packets. This Mac opens a TLS listener, sends "start"
 /// with its port and the frame size, and writes a raw H.264 Annex-B stream of
 /// a display to the computer that connects. The computer answers "live",
 /// "error", or "stop". The computer only shows the screen.

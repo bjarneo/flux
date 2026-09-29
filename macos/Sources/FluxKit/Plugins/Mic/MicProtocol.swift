@@ -1,6 +1,6 @@
 import Foundation
 
-/// The flux.mic extension. This Mac opens a TLS listener, sends "start" with
+/// The flux.mic packets. This Mac opens a TLS listener, sends "start" with
 /// its port and the audio format, and writes raw PCM to the computer that
 /// connects. The computer answers "live", "error", or "stop".
 public enum MicPackets {

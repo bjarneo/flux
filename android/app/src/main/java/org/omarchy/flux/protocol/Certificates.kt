@@ -49,13 +49,13 @@ class LocalCertificate(val privateKey: PrivateKey, val certificate: X509Certific
             return created
         }
 
-        /** Generates a self-signed certificate in the KDE Connect format. */
+        /** Generates a self-signed certificate with the device ID as its common name. */
         fun generate(deviceId: String): LocalCertificate {
             val pair = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair()
             val name = X500NameBuilder(BCStyle.INSTANCE)
                 .addRDN(BCStyle.CN, deviceId)
-                .addRDN(BCStyle.OU, "KDE Connect")
-                .addRDN(BCStyle.O, "KDE")
+                .addRDN(BCStyle.OU, "Flux")
+                .addRDN(BCStyle.O, "Omarchy")
                 .build()
             val now = Calendar.getInstance()
             val notBefore = (now.clone() as Calendar).apply { add(Calendar.YEAR, -1) }.time

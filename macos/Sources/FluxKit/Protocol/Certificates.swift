@@ -40,14 +40,14 @@ public struct LocalCertificate: Sendable {
         return created
     }
 
-    /// Generates a self-signed certificate in the KDE Connect format.
+    /// Generates a self-signed certificate with the device ID as its common name.
     public static func generate(deviceId: String) throws -> LocalCertificate {
         let rsa = try _RSA.Signing.PrivateKey(keySize: .bits2048)
         let key = Certificate.PrivateKey(rsa)
         let name = try DistinguishedName {
             CommonName(deviceId)
-            OrganizationalUnitName("KDE Connect")
-            OrganizationName("KDE")
+            OrganizationalUnitName("Flux")
+            OrganizationName("Omarchy")
         }
         let now = Date()
         let cert = try Certificate(

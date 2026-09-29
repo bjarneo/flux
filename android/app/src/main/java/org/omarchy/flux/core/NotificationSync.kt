@@ -16,7 +16,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 private const val TAG = "FluxNotif"
 
-/** Sends phone notifications to the paired computers: kdeconnect.notification. */
+/** Sends phone notifications to the paired computers: flux.notification. */
 object NotificationSync {
     /** The listener service while Android keeps it bound. */
     @Volatile var listener: NotificationListenerService? = null

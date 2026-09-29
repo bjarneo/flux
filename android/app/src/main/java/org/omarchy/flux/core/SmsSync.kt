@@ -284,18 +284,12 @@ object SmsSync {
         return load(context, newest.result(MAX_CONVERSATIONS))
     }
 
-    /**
-     * The newest messages of 1 thread, before the time of the request when
-     * it gives one. The arguments are text, and SQLite converts them to
-     * numbers only in a comparison with a column. So the MMS table, which
-     * keeps seconds, gets the time in seconds, rounded up.
-     */
+    /** The newest messages of 1 thread. */
     private fun thread(context: Context, r: ThreadRequest): List<TextMessage> {
-        val range = if (r.before > 0) " AND date < ?" else ""
-        fun args(before: Long) = if (r.before > 0) arrayOf(r.threadId.toString(), before.toString()) else arrayOf(r.threadId.toString())
-        val sms = smsRows(context, "thread_id = ? AND $SMS_SHOWN$range", args(r.before), "date DESC", r.count)
+        val args = arrayOf(r.threadId.toString())
+        val sms = smsRows(context, "thread_id = ? AND $SMS_SHOWN", args, "date DESC", r.count)
         val mms = runCatching {
-            mmsRows(context, "thread_id = ? AND $MMS_SHOWN$range", args((r.before + 999) / 1000), "date DESC", r.count)
+            mmsRows(context, "thread_id = ? AND $MMS_SHOWN", args, "date DESC", r.count)
         }.getOrElse {
             Log.w(TAG, "cannot read MMS", it)
             emptyList()

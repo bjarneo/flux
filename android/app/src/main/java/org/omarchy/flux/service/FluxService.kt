@@ -121,7 +121,7 @@ class FluxService : Service() {
     }
 
     /**
-     * KDE Connect desktops announce _kdeconnect._udp over mDNS. Flux answers a
+     * fluxd announces _flux._udp over mDNS. Flux answers a
      * found host with a unicast identity, and the host then connects.
      */
     @Suppress("DEPRECATION")
@@ -140,7 +140,7 @@ class FluxService : Service() {
     private var registration: NsdManager.RegistrationListener? = null
 
     /**
-     * Announces this phone as _kdeconnect._udp over mDNS. A computer that
+     * Announces this phone as _flux._udp over mDNS. A computer that
      * blocks incoming connections finds the phone this way and connects to it.
      * The service name is the device ID. The port is the TCP link port.
      */
@@ -302,7 +302,7 @@ class FluxService : Service() {
         const val ACTION_TURN_OFF = "org.omarchy.flux.TURN_OFF"
         const val ACTION_SCAN = "org.omarchy.flux.SCAN"
         const val SCAN_MS = 10_000L
-        const val MDNS_TYPE = "_kdeconnect._udp"
+        const val MDNS_TYPE = "_flux._udp"
 
         fun start(context: Context, action: String? = null) {
             // Flux stays off until the user turns it on again.

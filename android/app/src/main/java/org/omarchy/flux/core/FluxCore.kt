@@ -81,7 +81,7 @@ object FluxCore {
         // The system keeps the night mode of the app, but a restore or a data clear can change the setting.
         Android.setNightMode(app, settings.theme)
         for (t in trust.all()) {
-            val identity = Identity(t.id, t.name, t.type, 8, if (t.isFlux) listOf(Types.FLUX_TUNNEL) else emptyList(), emptyList())
+            val identity = Identity(t.id, t.name, t.type, 8, emptyList(), emptyList())
             val d = Device(this, identity)
             d.pairState = PairState.Paired
             d.lastIp = t.lastIp
@@ -211,7 +211,7 @@ object FluxCore {
             d.lastIp = link.address.hostAddress ?: ""
             if (trust.get(id) != null) {
                 d.pairState = PairState.Paired
-                trust.update(id) { it.copy(name = link.identity.deviceName, lastIp = d.lastIp, isFlux = link.identity.isFlux) }
+                trust.update(id) { it.copy(name = link.identity.deviceName, lastIp = d.lastIp) }
             }
             link.start(onPacket = { p -> receive(d, p) }, onClose = { detach(d, link) })
             if (d.paired) onConnected(d)

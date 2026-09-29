@@ -26,7 +26,7 @@ targets:
         NSHumanReadableCopyright: ""
         NSLocalNetworkUsageDescription: Flux finds and connects to your Omarchy computers on the local network.
         NSBonjourServices:
-          - _kdeconnect._udp
+          - _flux._udp
         NSCameraUseContinuityCameraDeviceType: true
         NSCameraUsageDescription: Flux streams the camera to your computer and captures photos and scans.
         NSMicrophoneUsageDescription: Flux streams the microphone to your computer and turns your speech into text in the text fields of the app.

@@ -1,9 +1,9 @@
 import Foundation
 
-/// The KDE Connect protocol version that Flux speaks.
+/// The protocol version that Flux speaks.
 public let protocolVersion = 8
 
-/// One KDE Connect network packet. On the wire, a packet is one JSON object
+/// One Flux network packet. On the wire, a packet is one JSON object
 /// followed by a newline.
 public struct Packet: Sendable, Equatable {
     public var type: String
@@ -11,8 +11,8 @@ public struct Packet: Sendable, Equatable {
     public var id: Int64
     public var payloadSize: Int64
     public var payloadPort: Int
-    /// Flux extension: the token of a tunnel payload. The computer cannot
-    /// accept connections, so this device listens and the computer connects.
+    /// The token of a tunnel payload. This device listens, and the computer
+    /// connects.
     public var payloadTunnel: String?
 
     public init(

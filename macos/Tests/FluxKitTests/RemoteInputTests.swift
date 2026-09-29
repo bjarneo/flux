@@ -10,7 +10,7 @@ final class RemoteInputTests: XCTestCase {
 
     func testCapabilitiesMatchTheComputer() {
         let plugin = RemoteInputPlugin()
-        XCTAssertEqual(plugin.outgoing, ["kdeconnect.mousepad.request"])
+        XCTAssertEqual(plugin.outgoing, ["flux.mousepad.request"])
         XCTAssertEqual(plugin.incoming, ["flux.input"])
     }
 
@@ -45,7 +45,7 @@ final class RemoteInputTests: XCTestCase {
         XCTAssertEqual(RemoteInput.click(.left).body.count, 1)
     }
 
-    func testKeysUseTheKdeNumbers() throws {
+    func testKeysUseTheProtocolNumbers() throws {
         let enter = try roundTrip(RemoteInput.key(.enter))
         XCTAssertEqual(enter.int("specialKey"), 12)
         XCTAssertEqual(enter.body.count, 1)

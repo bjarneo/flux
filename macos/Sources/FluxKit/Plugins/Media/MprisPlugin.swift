@@ -19,7 +19,7 @@ public final class MediaModel {
     }
 }
 
-/// kdeconnect.mpris.request out, kdeconnect.mpris in: this Mac controls the
+/// flux.mpris.request out, flux.mpris in: this Mac controls the
 /// media players on the computer.
 public final class MprisPlugin: FluxPlugin, @unchecked Sendable {
     private weak var core: FluxCore?

@@ -71,7 +71,7 @@ public final class Device: @unchecked Sendable {
     /// Returns the key that a request with the timestamp shows, before it is sent.
     func previewKey(timestamp: Int64) -> String {
         guard let peer = certificate else { return "" }
-        return verificationKey(ownCertificate: core.local.certificateDER, peerCertificate: peer, timestamp: identity.protocolVersion >= 8 ? timestamp : 0)
+        return verificationKey(ownCertificate: core.local.certificateDER, peerCertificate: peer, timestamp: timestamp)
     }
 
     /// Sends a pairing request with the timestamp that the dialog showed.
@@ -109,7 +109,7 @@ public final class Device: @unchecked Sendable {
         "\(computer) unpaired \(platform.deviceNoun)"
     }
 
-    /// Handles a kdeconnect.pair packet.
+    /// Handles a flux.pair packet.
     func onPairPacket(_ p: Packet) {
         let wants = p.bool("pair") ?? false
         if !wants {
@@ -141,16 +141,13 @@ public final class Device: @unchecked Sendable {
     }
 
     private func incoming(_ p: Packet) {
-        let ts = p.long("timestamp")
         let now = Int64(Date().timeIntervalSince1970)
-        if identity.protocolVersion >= 8 {
-            guard let ts, abs(now - ts) <= maxTimestampDifference else {
-                send(Packet(PacketType.pair, ["pair": false]))
-                core.toast(ts == nil ? "Pairing refused: \(name) sent no timestamp" : "Pairing refused: the clock of \(name) is wrong")
-                return
-            }
+        guard let ts = p.long("timestamp"), abs(now - ts) <= maxTimestampDifference else {
+            send(Packet(PacketType.pair, ["pair": false]))
+            core.toast(p.long("timestamp") == nil ? "Pairing refused: \(name) sent no timestamp" : "Pairing refused: the clock of \(name) is wrong")
+            return
         }
-        pairTimestamp = ts ?? 0
+        pairTimestamp = ts
         pairKey = computeKey()
         pairState = .incoming
         armTimer(incomingPairTimeout)
@@ -197,7 +194,7 @@ public final class Device: @unchecked Sendable {
 
     private func computeKey() -> String {
         guard let peer = certificate else { return "" }
-        return verificationKey(ownCertificate: core.local.certificateDER, peerCertificate: peer, timestamp: identity.protocolVersion >= 8 ? pairTimestamp : 0)
+        return verificationKey(ownCertificate: core.local.certificateDER, peerCertificate: peer, timestamp: pairTimestamp)
     }
 }
 

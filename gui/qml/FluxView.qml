@@ -22,7 +22,6 @@ Item {
     { key: "files", label: "Files", page: "Files", icon: "transfers" },
     { key: "notifications", label: "Notifications", page: "Notifications", icon: "bell" },
     { key: "messages", label: "Messages", page: "Messages", icon: "message" },
-    { key: "browse", label: "Browse files", page: "Browse", icon: "browse" },
     { key: "commands", label: "Phone commands", page: "PhoneCommands", icon: "console" }
   ]
 
@@ -85,7 +84,6 @@ Item {
 
   function tabAllowed(key) {
     if (key === "messages") return has("sms")
-    if (key === "browse") return has("sftp")
     return true
   }
 

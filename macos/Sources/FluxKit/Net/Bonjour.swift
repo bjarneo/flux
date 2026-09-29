@@ -1,12 +1,12 @@
 import dnssd
 import Foundation
 
-/// mDNS through Bonjour. KDE Connect desktops announce _kdeconnect._udp.
+/// mDNS through Bonjour. fluxd announces _flux._udp.
 /// This device announces itself the same way, so that a computer that blocks
 /// incoming connections finds it and connects. A found host gets a unicast
 /// identity, and the host then connects.
 public final class Bonjour: @unchecked Sendable {
-    static let serviceType = "_kdeconnect._udp"
+    static let serviceType = "_flux._udp"
 
     private let queue = DispatchQueue(label: "org.omarchy.flux.bonjour")
     private var registration: DNSServiceRef?

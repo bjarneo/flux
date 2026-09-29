@@ -1,8 +1,8 @@
 import Foundation
 
 /// Browse files on the computer, read-only. This Mac asks with
-/// kdeconnect.sftp.request. The computer answers with kdeconnect.sftp: a
-/// tunnel token or an address, the user, and a one-time password. fluxd then
+/// flux.sftp.request. The computer answers with flux.sftp: a
+/// tunnel token, the user, and a one-time password. fluxd then
 /// connects to a tunnel listener on this Mac, and the SSH session runs
 /// inside the tunnel.
 public final class BrowsePlugin: FluxPlugin, @unchecked Sendable {
@@ -41,9 +41,9 @@ public final class BrowsePlugin: FluxPlugin, @unchecked Sendable {
 
     public func handle(_ packet: Packet, from device: Device) {
         guard let core else { return }
-        let tls = core.tls, certificate = device.certificate, address = device.link?.address, id = device.id
+        let tls = core.tls, certificate = device.certificate, id = device.id
         Task { @MainActor in
-            self.browsers[id]?.receive(packet, tls: tls, certificate: certificate, address: address)
+            self.browsers[id]?.receive(packet, tls: tls, certificate: certificate)
         }
     }
 

@@ -2,7 +2,7 @@ import NIOCore
 import NIOSSL
 import NIOTLS
 
-/// TLS for KDE Connect links. Both sides present a self-signed certificate.
+/// TLS for Flux links. Both sides present a self-signed certificate.
 /// The handshake accepts any certificate. The link code checks the peer
 /// certificate against the device ID and the pinned certificate after the
 /// handshake.
@@ -16,8 +16,7 @@ public final class FluxTLS: Sendable {
         let cert = try NIOSSLCertificate(bytes: local.certificateDER, format: .der)
         let key = try NIOSSLPrivateKey(bytes: Array(local.privateKeyPEM.utf8), format: .pem)
 
-        // KDE Connect for Android uses TLS 1.2 because TLS 1.3 caused problems
-        // with some peers. Flux does the same.
+        // The Flux apps use only TLS 1.2, and fluxd accepts it.
         var server = TLSConfiguration.makeServerConfiguration(certificateChain: [.certificate(cert)], privateKey: .privateKey(key))
         server.minimumTLSVersion = .tlsv12
         server.maximumTLSVersion = .tlsv12

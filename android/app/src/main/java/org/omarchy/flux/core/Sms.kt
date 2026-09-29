@@ -27,16 +27,15 @@ data class TextMessage(
 /** A request from a computer to send a text message. [subId] is -1 for the default SIM. */
 data class SmsSend(val addresses: List<String>, val body: String, val subId: Int)
 
-/** A request from a computer for the messages of 1 thread. [before] is 0 for the newest messages. */
-data class ThreadRequest(val threadId: Long, val count: Int, val before: Long)
+/** A request from a computer for the newest messages of 1 thread. */
+data class ThreadRequest(val threadId: Long, val count: Int)
 
 /** The place of 1 message in the SMS or the MMS table. [date] is in milliseconds. */
 data class MessageRef(val mms: Boolean, val id: Long, val threadId: Long, val date: Long)
 
 /**
- * The kdeconnect.sms packets. The message fields follow KDE Connect.
- * Flux adds 2 fields: contactName in an address, and threadID in the answer
- * to a thread request.
+ * The flux.sms packets. An address can carry contactName, and the answer
+ * to a thread request carries threadID.
  */
 object SmsPackets {
     // The message types of the SMS table. The MMS boxes use the same values.
@@ -53,12 +52,12 @@ object SmsPackets {
     /** The most messages that 1 thread request gets. */
     const val MAX_THREAD = 500
 
-    // The event flags of KDE Connect.
+    // The event flags of a message.
     private const val EVENT_TEXT = 1
     private const val EVENT_MULTI_TARGET = 2
 
     /**
-     * The kdeconnect.sms.messages packet for [list]. [names] maps an address
+     * The flux.sms.messages packet for [list]. [names] maps an address
      * to its contact name. [threadId] marks the answer to a thread request,
      * so that the computer can tell it from a new message.
      */
@@ -87,13 +86,11 @@ object SmsPackets {
     )
 
     /**
-     * Reads a kdeconnect.sms.request. Version 2 gives a list of addresses,
-     * and older peers give 1 phoneNumber. It returns null without an address
-     * or a message.
+     * Reads a flux.sms.request, which gives a list of addresses. It returns
+     * null without an address or a message.
      */
     fun send(p: Packet): SmsSend? {
-        val listed = p.array("addresses")?.mapNotNull { (it as? JsonObject)?.str("address") }.orEmpty()
-        val addresses = (listed.ifEmpty { listOfNotNull(p.string("phoneNumber")) })
+        val addresses = p.array("addresses")?.mapNotNull { (it as? JsonObject)?.str("address") }.orEmpty()
             .map { it.trim() }.filter { it.isNotEmpty() }.distinct()
         val body = p.string("messageBody") ?: return null
         if (addresses.isEmpty() || body.isBlank()) return null
@@ -101,15 +98,13 @@ object SmsPackets {
     }
 
     /**
-     * Reads a kdeconnect.sms.request_conversation. A missing or bad
-     * numberToRequest gets [DEFAULT_THREAD]. A rangeStartTimestamp above 0
-     * asks for the messages before that time.
+     * Reads a flux.sms.request_conversation. A missing or bad
+     * numberToRequest gets [DEFAULT_THREAD].
      */
     fun thread(p: Packet): ThreadRequest? {
         val id = p.long("threadID") ?: return null
         val n = p.int("numberToRequest")?.takeIf { it > 0 } ?: DEFAULT_THREAD
-        val before = p.long("rangeStartTimestamp")?.takeIf { it > 0 } ?: 0
-        return ThreadRequest(id, n.coerceAtMost(MAX_THREAD), before)
+        return ThreadRequest(id, n.coerceAtMost(MAX_THREAD))
     }
 
     /** True for a sent message that is still on its way. */

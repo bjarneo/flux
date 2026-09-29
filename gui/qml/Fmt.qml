@@ -81,14 +81,6 @@ QtObject {
     return "battery-" + Math.max(10, Math.floor(b.charge / 10) * 10)
   }
 
-  // The icon name for a file, from Fmt.kindOf.
-  function fileIcon(name, dir) {
-    var k = kindOf(name, dir)
-    var map = { "folder": "folder", "image": "file-image", "video": "file-video", "audio": "file-audio", "pdf": "file-pdf",
-                "text": "file-text", "archive": "file-archive" }
-    return map[k] || "file"
-  }
-
   // The icon name for a phone app, or a bell for an app with no icon.
   readonly property var appIcons: ({
     "messages": "message", "sms": "message", "phone": "phone", "calendar": "calendar", "clock": "clock",
@@ -118,15 +110,6 @@ QtObject {
     return b.charge + "%"
   }
 
-  function signal(s) {
-    if (!s || !s.type) return ""
-    var bars = "▂▄▆█"
-    var n = Math.max(0, Math.min(4, s.strength || 0))
-    var out = ""
-    for (var i = 0; i < 4; i++) out += i < n ? bars.charAt(i) : "_"
-    return s.type + " " + out
-  }
-
   // A stable color token name for an app, so each app keeps one color.
   readonly property var appTokens: ({
     "messages": "ok", "whatsapp": "ok", "phone": "ok", "calendar": "warn", "clock": "warn",
@@ -144,27 +127,12 @@ QtObject {
     return tokens[h % tokens.length]
   }
 
-  function kindOf(name, dir) {
-    if (dir) return "folder"
-    var m = (name || "").toLowerCase().match(/\.([a-z0-9]+)$/)
-    var ext = m ? m[1] : ""
-    if (["jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp", "svg", "avif"].indexOf(ext) >= 0) return "image"
-    if (["mp4", "mov", "mkv", "webm", "avi", "3gp", "m4v"].indexOf(ext) >= 0) return "video"
-    if (["mp3", "flac", "ogg", "opus", "m4a", "wav", "aac"].indexOf(ext) >= 0) return "audio"
-    if (ext === "pdf") return "pdf"
-    if (["md", "txt", "log", "csv", "json"].indexOf(ext) >= 0) return "text"
-    if (["zip", "tar", "gz", "xz", "zst", "7z", "rar"].indexOf(ext) >= 0) return "archive"
-    if (ext === "iso") return "iso"
-    if (ext === "apk") return "apk"
-    return "file"
-  }
-
   // The codepoints of the icons in the Nerd Fonts "md" range, by name. Icon
   // reads this 1 table, so each icon does not make its own copy.
   readonly property var icons: ({
     "dashboard": 0xF0A1D, "clipboard": 0xF0A38, "transfers": 0xF1A96, "bell": 0xF009C,
     "bell-ring": 0xF009F, "bell-off": 0xF0A91, "music": 0xF075A, "message": 0xF036A,
-    "browse": 0xF0969, "console": 0xF018D,
+    "console": 0xF018D,
 
     "phone": 0xF011C, "laptop": 0xF0322, "monitor": 0xF0379, "tablet": 0xF04F6, "tv": 0xF0502,
     "phone-off": 0xF0950, "link": 0xF0339, "unlink": 0xF033A, "key": 0xF030B,
@@ -173,7 +141,6 @@ QtObject {
     "battery-60": 0xF007F, "battery-50": 0xF007E, "battery-40": 0xF007D, "battery-30": 0xF007C,
     "battery-20": 0xF007B, "battery-10": 0xF007A, "battery-empty": 0xF008E,
     "battery-charging": 0xF0084, "battery-unknown": 0xF0091,
-    "signal-1": 0xF08BC, "signal-2": 0xF08BD, "signal-3": 0xF08BE, "signal-off": 0xF08BF,
     "wifi": 0xF05A9, "wifi-off": 0xF05AA,
 
     "paste": 0xF0192, "copy": 0xF018F, "send": 0xF048A, "upload": 0xF0552, "download": 0xF01DA,
@@ -188,10 +155,6 @@ QtObject {
     "camera": 0xF0D5D, "webcam": 0xF05A0, "video": 0xF0BDC, "record": 0xF044B,
     "switch-camera": 0xF084A, "rotate": 0xF0467,
     "mic": 0xF036C, "mic-off": 0xF036D, "screen-share": 0xF1483,
-
-    "folder": 0xF024B, "folder-outline": 0xF0256, "file": 0xF0224, "file-text": 0xF09EE,
-    "file-image": 0xF0EB0, "file-video": 0xF0E2C, "file-audio": 0xF0E2A, "file-pdf": 0xF0226,
-    "file-archive": 0xF07B9, "file-code": 0xF0169, "home": 0xF06A1, "disk": 0xF02CA,
 
     "calendar": 0xF0B67, "github": 0xF02A4, "bank": 0xF0E80, "chat": 0xF0EDE, "mail": 0xF01F0,
     "account": 0xF0B55, "whatsapp": 0xF05A3, "slack": 0xF04B1, "spotify": 0xF04C7,

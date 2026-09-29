@@ -5,7 +5,7 @@ final class RingTests: XCTestCase {
     func testPluginTakesTheRingRequest() {
         let plugin = MainActor.assumeIsolated { RingPlugin() }
         XCTAssertEqual(plugin.incoming, [PacketType.findMyPhone])
-        XCTAssertEqual(PacketType.findMyPhone, "kdeconnect.findmyphone.request", "fluxd sends it for flux-cli ring")
+        XCTAssertEqual(PacketType.findMyPhone, "flux.findmyphone.request", "fluxd sends it for flux-cli ring")
         XCTAssertEqual(plugin.outgoing, [])
     }
 

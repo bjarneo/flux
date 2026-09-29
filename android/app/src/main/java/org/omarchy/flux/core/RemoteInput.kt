@@ -9,11 +9,11 @@ import kotlin.math.roundToInt
 
 /**
  * The touchpad and the keyboard of this phone for a computer, with
- * kdeconnect.mousepad.request. The computer runs the input only while its
+ * flux.mousepad.request. The computer runs the input only while its
  * remote_input setting is on. It tells the phone with flux.input.
  */
 object RemoteInput {
-    /** Special keys, with the numbers that KDE Connect uses. */
+    /** Special keys, with the specialKey numbers of flux.mousepad.request. */
     enum class Key(val code: Int, val label: String) {
         Backspace(1, "⌫"), Tab(2, "tab"), Left(4, "←"), Up(5, "↑"), Right(6, "→"), Down(7, "↓"),
         Home(10, "home"), End(11, "end"), Enter(12, "⏎"), Delete(13, "del"), Escape(14, "esc"),
@@ -49,7 +49,7 @@ object RemoteInput {
     fun key(k: Key, mods: Mods = Mods()) = Packet(Types.MOUSEPAD_REQUEST, bodyOf("specialKey" to k.code, *mods.fields().toTypedArray()))
 
     /**
-     * Flux extension: puts the pointer on the position [x], [y] of the
+     * Puts the pointer on the position [x], [y] of the
      * remote desktop, from 0 at the top left corner to 1 at the bottom right
      * corner. The computer runs the action of the packet after the move.
      */

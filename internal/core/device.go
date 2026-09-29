@@ -5,9 +5,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/pkg/sftp"
-	"golang.org/x/crypto/ssh"
-
 	"flux/internal/config"
 	"flux/internal/lan"
 	"flux/internal/proto"
@@ -49,33 +46,17 @@ type Device struct {
 
 	battery       *Battery
 	batteryLow    bool // the low-battery notification of this discharge showed
-	signal        *Signal
 	notifications []*PhoneNotification
 	notifDesktop  map[string]uint32
 	conversations map[int64]*Conversation
 	threadWait    map[int64][]chan []SmsMessage
-	sftpWait      []chan SftpInfo
-	sftpSSH       *ssh.Client
-	sftpClient    *sftp.Client
-	sftpRoots     []BrowseRoot
 	theme         string
-
-	// sftpTimer closes the SFTP session after sftpIdle. sftpBusy counts the
-	// downloads that use the session.
-	sftpTimer *time.Timer
-	sftpBusy  int
 }
 
 // Battery is the battery state of a device.
 type Battery struct {
 	Charge   int  `json:"charge"`
 	Charging bool `json:"charging"`
-}
-
-// Signal is the cellular signal of a phone.
-type Signal struct {
-	Type     string `json:"type"`
-	Strength int    `json:"strength"`
 }
 
 func newDevice(id string) *Device {
@@ -110,14 +91,9 @@ func (dev *Device) supports(typ string) bool { return slices.Contains(dev.Outgoi
 // accepts reports whether the device receives packets of the type.
 func (dev *Device) accepts(typ string) bool { return slices.Contains(dev.Incoming, typ) }
 
-// fluxApp reports whether the device runs Flux for Android or Flux for
-// macOS. Only the Flux apps send flux.tunnel.
-func (dev *Device) fluxApp() bool { return dev.supports(proto.TypeFluxTunnel) }
-
 // plugins returns the features that the device offers to this computer.
 // The window uses them to show or hide tabs. Each check looks at the
-// direction that the feature needs. For example, the Browse files tab
-// needs a device that sends kdeconnect.sftp, not one that only asks for it.
+// direction that the feature needs.
 func (dev *Device) plugins() []string {
 	checks := []struct {
 		name string
@@ -130,8 +106,6 @@ func (dev *Device) plugins() []string {
 		{"findmyphone", dev.accepts(proto.TypeFindMyPhone)},
 		{"sms", dev.supports(proto.TypeSmsMessages)},
 		{"runcommand", dev.supports(proto.TypeRunCommandRequest)},
-		{"sftp", dev.sharesStorage()},
-		{"connectivity", dev.supports(proto.TypeConnectivity)},
 	}
 	out := []string{}
 	for _, c := range checks {
@@ -140,30 +114,6 @@ func (dev *Device) plugins() []string {
 		}
 	}
 	return out
-}
-
-// sharesStorage reports whether the device runs an SFTP server for its own
-// storage, which the Browse files tab needs. fluxd also sends
-// kdeconnect.sftp, but only to answer Browse PC, so a desktop does not
-// count.
-func (dev *Device) sharesStorage() bool {
-	return dev.supports(proto.TypeSftp) && dev.Type != "desktop" && dev.Type != "laptop"
-}
-
-func (dev *Device) closeSftp() {
-	if dev.sftpTimer != nil {
-		dev.sftpTimer.Stop()
-		dev.sftpTimer = nil
-	}
-	if dev.sftpClient != nil {
-		dev.sftpClient.Close()
-		dev.sftpClient = nil
-	}
-	if dev.sftpSSH != nil {
-		dev.sftpSSH.Close()
-		dev.sftpSSH = nil
-	}
-	dev.sftpRoots = nil
 }
 
 // DeviceView is the device as the UI sees it.
@@ -180,7 +130,6 @@ type DeviceView struct {
 	PairedAt      string               `json:"pairedAt"`
 	LastSeen      int64                `json:"lastSeen"`
 	Battery       *Battery             `json:"battery"`
-	Signal        *Signal              `json:"signal"`
 	Plugins       []string             `json:"plugins"`
 	Notifications []*PhoneNotification `json:"notifications"`
 	Conversations []*Conversation      `json:"conversations"`
@@ -197,7 +146,7 @@ func (dev *Device) view() DeviceView {
 		ID: dev.ID, Name: dev.Name, Type: dev.Type, IP: dev.IP, Addresses: dev.Addresses,
 		Paired: dev.Paired, Online: dev.link != nil,
 		PairState: state, PairKey: dev.pairKey, PairedAt: dev.PairedAt,
-		Battery: dev.battery, Signal: dev.signal,
+		Battery: dev.battery,
 		Plugins: dev.plugins(), Notifications: dev.notifications,
 	}
 	if v.Type == "" {

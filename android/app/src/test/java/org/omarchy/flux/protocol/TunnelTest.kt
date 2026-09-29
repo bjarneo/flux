@@ -21,7 +21,7 @@ import kotlin.concurrent.thread
 class TunnelTest {
     @Test
     fun parsesTunnelPayload() {
-        val line = """{"id":1,"type":"kdeconnect.share.request","body":{"filename":"a.jpg"},"payloadSize":42,"payloadTransferInfo":{"tunnel":"tok-1"}}"""
+        val line = """{"id":1,"type":"flux.share.request","body":{"filename":"a.jpg"},"payloadSize":42,"payloadTransferInfo":{"tunnel":"tok-1"}}"""
         val p = Packet.parse(line)!!
         assertTrue(p.hasPayload)
         assertEquals(0, p.payloadPort)
@@ -30,11 +30,14 @@ class TunnelTest {
     }
 
     @Test
-    fun portWinsOverTunnel() {
-        val line = """{"id":1,"type":"kdeconnect.share.request","body":{},"payloadSize":5,"payloadTransferInfo":{"port":1740,"tunnel":"x"}}"""
-        val p = Packet.parse(line)!!
-        assertEquals(1740, p.payloadPort)
-        assertNull(p.payloadTunnel)
+    fun incomingPortIsNoPayload() {
+        // The computer sends each payload through a tunnel, so the parse ignores a port.
+        val both = Packet.parse("""{"id":1,"type":"flux.share.request","body":{},"payloadSize":5,"payloadTransferInfo":{"port":1740,"tunnel":"x"}}""")!!
+        assertEquals(0, both.payloadPort)
+        assertEquals("x", both.payloadTunnel)
+        val port = Packet.parse("""{"id":1,"type":"flux.share.request","body":{},"payloadSize":5,"payloadTransferInfo":{"port":1740}}""")!!
+        assertEquals(0, port.payloadPort)
+        assertFalse(port.hasPayload)
     }
 
     @Test
@@ -47,7 +50,7 @@ class TunnelTest {
 
     @Test
     fun emptyTunnelIsNoPayload() {
-        val p = Packet.parse("""{"id":1,"type":"kdeconnect.share.request","body":{},"payloadSize":5,"payloadTransferInfo":{"tunnel":""}}""")!!
+        val p = Packet.parse("""{"id":1,"type":"flux.share.request","body":{},"payloadSize":5,"payloadTransferInfo":{"tunnel":""}}""")!!
         assertFalse(p.hasPayload)
     }
 
@@ -64,37 +67,29 @@ class TunnelTest {
     }
 
     @Test
-    fun fluxdIsDetectedByIncomingTunnel() {
-        val fluxd = Identity("fedcba9876543210fedcba9876543210", "pc", "laptop", 8, listOf(Types.PING, Types.FLUX_TUNNEL), emptyList())
-        val kde = Identity("fedcba9876543210fedcba9876543210", "pc", "laptop", 8, listOf(Types.PING), listOf(Types.FLUX_TUNNEL))
-        assertTrue(fluxd.isFlux)
-        assertFalse(kde.isFlux)
-    }
-
-    @Test
     fun capabilitiesListTunnel() {
         assertTrue(Types.FLUX_TUNNEL in INCOMING)
         assertTrue(Types.FLUX_TUNNEL in OUTGOING)
     }
 
+    private fun sftp(body: String) = SftpOffer.parse(Packet.parse("""{"id":1,"type":"flux.sftp","body":$body}""")!!)
+
     @Test
     fun sftpOffers() {
-        val tunnel = SftpOffer.parse(
-            Packet.parse("""{"id":1,"type":"kdeconnect.sftp","body":{"tunnel":"s1","user":"kdeconnect","password":"pw","path":"/home/u","multiPaths":["/home/u","/home/u/Pictures"],"pathNames":["Home","Pictures"]}}""")!!,
-        )!!
-        assertTrue(tunnel.viaTunnel)
-        assertEquals("s1", tunnel.tunnel)
-        assertEquals(listOf("Home" to "/home/u", "Pictures" to "/home/u/Pictures"), tunnel.roots)
+        val offer = sftp("""{"tunnel":"s1","user":"flux","password":"pw","path":"/home/u","multiPaths":["/home/u","/home/u/Pictures"],"pathNames":["Home","Pictures"]}""")!!
+        assertEquals("s1", offer.tunnel)
+        assertEquals("flux", offer.user)
+        assertEquals("pw", offer.password)
+        assertEquals(listOf("Home" to "/home/u", "Pictures" to "/home/u/Pictures"), offer.roots)
 
-        val direct = SftpOffer.parse(
-            Packet.parse("""{"id":1,"type":"kdeconnect.sftp","body":{"ip":"192.168.1.5","port":1739,"user":"kdeconnect","password":"pw","path":"/"}}""")!!,
-        )!!
-        assertFalse(direct.viaTunnel)
-        assertEquals(1739, direct.port)
-        assertEquals(listOf("Home" to "/"), direct.roots)
-
-        assertNull(SftpOffer.parse(Packet.parse("""{"id":1,"type":"kdeconnect.sftp","body":{"errorMessage":"no"}}""")!!))
-        assertNull(SftpOffer.parse(Packet.parse("""{"id":1,"type":"kdeconnect.sftp","body":{"user":"k","password":"p"}}""")!!))
+        assertNull(sftp("""{"errorMessage":"no"}"""))
+        // An offer without a tunnel has no way to connect.
+        assertNull(sftp("""{"ip":"192.168.1.5","port":1739,"user":"flux","password":"pw","path":"/","multiPaths":["/"],"pathNames":["Home"]}"""))
+        assertNull(sftp("""{"tunnel":"","user":"flux","password":"pw","multiPaths":["/"],"pathNames":["Home"]}"""))
+        // The root lists must be present and have the same length.
+        assertNull(sftp("""{"tunnel":"s1","user":"flux","password":"pw","path":"/"}"""))
+        assertNull(sftp("""{"tunnel":"s1","user":"flux","password":"pw","path":"/","multiPaths":["/","/tmp"],"pathNames":["Home"]}"""))
+        assertNull(sftp("""{"tunnel":"s1","user":"flux","multiPaths":["/"],"pathNames":["Home"]}"""))
     }
 
     private val phone = LocalCertificate.generate("0123456789abcdef0123456789abcdef")

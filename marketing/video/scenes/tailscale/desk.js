@@ -45,7 +45,7 @@ const ok = (t) => [txt('✓ ', C.ok), txt(t)]
 const DOCTOR = [
   ok('fluxd is running'),
   ok('fluxd listens on TCP 1716'),
-  ok('kdeconnectd is not running'),
+  ok('no other program uses UDP port 1716'),
   ok('ufw lets mDNS in, so fluxd finds phones with no open port'),
   ok('avahi-daemon runs, so fluxd can find phones with mDNS'),
   [txt('✓ ', C.ok), txt('pixel-8', C.accent), txt(' resolves, so fluxd can reach Pixel 8 through it', C.fgBright)],

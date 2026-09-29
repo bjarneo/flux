@@ -243,7 +243,7 @@ Each frame on the stream has this form:
 The first frame is the video size.
 Each frame comes whole, so the phone can decode it when its last byte arrives.
 
-The touches are `kdeconnect.mousepad.request` packets with the Flux fields `x` and `y`.
+The touches are `flux.mousepad.request` packets with the fields `x` and `y`.
 The values go from 0 at the top left corner to 1 at the bottom right corner of the monitor.
 `fluxd` moves the pointer to the position, then runs the action of the packet.
 It moves the pointer through a `zwlr_virtual_pointer_v1` pointer for the monitor of the stream.

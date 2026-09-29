@@ -161,7 +161,7 @@ A presenter remote that sends Page Up and Page Down works the same way.
 
 ## How it works
 
-The phone and the Mac send `kdeconnect.mousepad.request` packets, like KDE Connect.
+The phone and the Mac send `flux.mousepad.request` packets.
 `fluxd` runs them only while `remote_input` is on.
 After the link starts and after the setting changes, `fluxd` sends `flux.input` with `{"enabled": true}` or `{"enabled": false}`.
 
@@ -175,20 +175,20 @@ A packet holds 1 action:
 | --- | --- |
 | `dx`, `dy` | Move the pointer by that many logical pixels. |
 | `scroll` with `dx`, `dy` | Scroll. A positive `dy` scrolls down. |
-| `singleclick`, `doubleclick`, `middleclick`, `rightclick` | Click. |
+| `singleclick`, `middleclick`, `rightclick` | Click. |
 | `singlehold`, `singlerelease` | Press or release the left button. |
 | `key` | Type the text. Control characters are removed. |
 | `specialKey` | Press a key: 1 Backspace, 2 Tab, 4 Left, 5 Up, 6 Right, 7 Down, 8 Page Up, 9 Page Down, 10 Home, 11 End, 12 Enter, 13 Delete, 14 Escape, 21 to 32 F1 to F12. |
 | `ctrl`, `alt`, `shift`, `super` | Hold the modifier for `key` or `specialKey`. |
-| `x`, `y` | Flux extension: move the pointer to this position of the [remote desktop](remote-desktop.md) first. The values go from 0 to 1 across the monitor. |
+| `x`, `y` | Move the pointer to this position of the [remote desktop](remote-desktop.md) first. The values go from 0 to 1 across the monitor. |
 
 ## Troubleshooting
 
 | Problem | Next step |
 | --- | --- |
 | The phone or the Mac says that remote input is off | Set `remote_input = true` and reload `fluxd`. |
-| The phone or the Mac says to update Flux on the computer | Install a `fluxd` that lists `kdeconnect.mousepad.request`. |
-| The Mac shows no **Touchpad and Keyboard** card | Connect the Mac to the computer. The card shows only for a `fluxd` that lists `kdeconnect.mousepad.request`. |
+| The phone or the Mac says to update Flux on the computer | Install a `fluxd` that lists `flux.mousepad.request`. |
+| The Mac shows no **Touchpad and Keyboard** card | Connect the Mac to the computer. The card shows only for a `fluxd` that lists `flux.mousepad.request`. |
 | The Mac cursor does not come back | Press Control and Option together, then release them. Or press Command-Tab. |
 | The pointer does not move | Run `journalctl --user -u fluxd --no-pager \| grep "remote input"`. The compositor must offer `zwlr_virtual_pointer_manager_v1`. |
 | The keys do nothing | Run `flux-cli doctor` and install `wtype` if it is missing. |

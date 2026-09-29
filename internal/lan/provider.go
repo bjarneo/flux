@@ -140,8 +140,7 @@ func (p *Provider) udpIdentity() *proto.Packet {
 // before TLS. It names the device that it answers.
 func (p *Provider) plainIdentity(target proto.Identity) *proto.Packet {
 	id := p.cfg.Identity()
-	// tcpPort lets the peer connect back later without UDP. KDE Connect
-	// peers ignore it here.
+	// tcpPort lets the peer connect back later without UDP.
 	id.TCPPort = p.tcpPort
 	id.TargetDeviceID = target.DeviceID
 	id.TargetProtocolVersion = proto.ProtocolVersion
@@ -394,6 +393,10 @@ func (p *Provider) finish(tc *tls.Conn, plainID proto.Identity, outgoing bool) b
 		p.logf("%s: "+format, append([]any{plainID.DeviceName}, args...)...)
 		tc.Close()
 	}
+	if plainID.ProtocolVersion < proto.ProtocolVersion {
+		fail("protocol version %d is too old", plainID.ProtocolVersion)
+		return false
+	}
 	if err := tc.Handshake(); err != nil {
 		fail("TLS handshake: %v", err)
 		return false
@@ -412,29 +415,25 @@ func (p *Provider) finish(tc *tls.Conn, plainID proto.Identity, outgoing bool) b
 		return false
 	}
 	reader := bufio.NewReaderSize(tc, 64<<10)
-	id := plainID
-	if plainID.ProtocolVersion >= 8 {
-		line, _ := p.secureIdentity().Marshal()
-		if _, err := tc.Write(line); err != nil {
-			fail("send identity: %v", err)
-			return false
-		}
-		raw, err := readLine(reader, maxIdentitySize)
-		if err != nil {
-			fail("read identity: %v", err)
-			return false
-		}
-		pkt, err := proto.Unmarshal(raw)
-		if err != nil || pkt.Type != proto.TypeIdentity {
-			fail("expected identity after TLS")
-			return false
-		}
-		var secure proto.Identity
-		if err := json.Unmarshal(pkt.Body, &secure); err != nil || secure.DeviceID != plainID.DeviceID || secure.ProtocolVersion != plainID.ProtocolVersion {
-			fail("identity after TLS does not match")
-			return false
-		}
-		id = secure
+	line, _ := p.secureIdentity().Marshal()
+	if _, err := tc.Write(line); err != nil {
+		fail("send identity: %v", err)
+		return false
+	}
+	raw, err := readLine(reader, maxIdentitySize)
+	if err != nil {
+		fail("read identity: %v", err)
+		return false
+	}
+	pkt, err := proto.Unmarshal(raw)
+	if err != nil || pkt.Type != proto.TypeIdentity {
+		fail("expected identity after TLS")
+		return false
+	}
+	var id proto.Identity
+	if err := json.Unmarshal(pkt.Body, &id); err != nil || id.DeviceID != plainID.DeviceID || id.ProtocolVersion != plainID.ProtocolVersion {
+		fail("identity after TLS does not match")
+		return false
 	}
 	_ = tc.SetDeadline(time.Time{})
 	id.DeviceName = proto.CleanName(id.DeviceName)

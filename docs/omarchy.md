@@ -21,7 +21,7 @@ omarchy-shell shell summon flux '{"page":"files"}'
 ```
 
 The payload is optional. `page` is one of `overview`, `clipboard`, `files`,
-`notifications`, `messages`, `browse`, or `commands`.
+`notifications`, `messages`, or `commands`.
 To open or close the window, use `omarchy-shell shell toggle flux '{}'`.
 
 The panel loads the Flux view when the window opens and unloads it when the

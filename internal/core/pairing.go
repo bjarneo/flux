@@ -84,7 +84,7 @@ func (d *Daemon) Unpair(dev *Device) error {
 	return nil
 }
 
-// handlePair runs the pairing state machine for a kdeconnect.pair packet.
+// handlePair runs the pairing state machine for a flux.pair packet.
 func (d *Daemon) handlePair(dev *Device, p *proto.Packet) {
 	var body struct {
 		Pair      bool  `json:"pair"`
@@ -130,17 +130,15 @@ func (d *Daemon) handlePair(dev *Device, p *proto.Packet) {
 		d.mu.Unlock()
 		_ = d.trust.Remove(dev.ID)
 	}
-	if dev.Version >= 8 {
-		if body.Timestamp == 0 {
-			_ = l.Send(proto.New(proto.TypePair, map[string]any{"pair": false}))
-			return
-		}
-		skew := time.Since(time.Unix(body.Timestamp, 0))
-		if skew > maxClockSkew || skew < -maxClockSkew {
-			_ = l.Send(proto.New(proto.TypePair, map[string]any{"pair": false}))
-			d.toast("%s has a clock that differs by more than 30 minutes. Fix the time and pair again", dev.Name)
-			return
-		}
+	if body.Timestamp == 0 {
+		_ = l.Send(proto.New(proto.TypePair, map[string]any{"pair": false}))
+		return
+	}
+	skew := time.Since(time.Unix(body.Timestamp, 0))
+	if skew > maxClockSkew || skew < -maxClockSkew {
+		_ = l.Send(proto.New(proto.TypePair, map[string]any{"pair": false}))
+		d.toast("%s has a clock that differs by more than 30 minutes. Fix the time and pair again", dev.Name)
+		return
 	}
 	d.mu.Lock()
 	dev.pairState, dev.pairTime = "incoming", body.Timestamp
@@ -183,9 +181,6 @@ func (d *Daemon) pairingDone(dev *Device) {
 func (d *Daemon) keyLocked(dev *Device, ts int64) string {
 	if dev.Cert == nil {
 		return ""
-	}
-	if dev.Version < 8 {
-		ts = 0
 	}
 	return proto.VerificationKey(d.cert.Leaf, dev.Cert, ts)
 }

@@ -212,10 +212,6 @@ object Android {
         NotificationManagerCompat.from(context).notify(TAG_COMPUTER, n.notificationId, b.build())
     }
 
-    fun cancelFromComputer(context: Context, n: ComputerNotification) {
-        NotificationManagerCompat.from(context).cancel(TAG_COMPUTER, n.notificationId)
-    }
-
     private fun agentId(deviceId: String, pane: String) = "$deviceId|$pane".hashCode()
 
     /**

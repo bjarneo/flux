@@ -8,9 +8,9 @@ import (
 
 func TestPacketIDAcceptsNumberAndString(t *testing.T) {
 	for _, line := range []string{
-		`{"id":1727260000000,"type":"kdeconnect.ping","body":{}}`,
-		`{"id":"1727260000000","type":"kdeconnect.ping","body":{}}`,
-		`{"id":1727260000000.0,"type":"kdeconnect.ping"}`,
+		`{"id":1727260000000,"type":"flux.ping","body":{}}`,
+		`{"id":"1727260000000","type":"flux.ping","body":{}}`,
+		`{"id":1727260000000.0,"type":"flux.ping"}`,
 	} {
 		p, err := Unmarshal([]byte(line))
 		if err != nil {

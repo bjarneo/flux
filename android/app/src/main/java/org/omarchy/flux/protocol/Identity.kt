@@ -5,73 +5,72 @@ const val MAX_IDENTITY_LINE = 8192
 
 /** Packet types that the Flux phone app uses. */
 object Types {
-    const val IDENTITY = "kdeconnect.identity"
-    const val PAIR = "kdeconnect.pair"
-    const val PING = "kdeconnect.ping"
-    const val BATTERY = "kdeconnect.battery"
-    const val BATTERY_REQUEST = "kdeconnect.battery.request"
-    const val CLIPBOARD = "kdeconnect.clipboard"
-    const val CLIPBOARD_CONNECT = "kdeconnect.clipboard.connect"
-    const val SHARE = "kdeconnect.share.request"
-    const val SHARE_UPDATE = "kdeconnect.share.request.update"
-    const val NOTIFICATION = "kdeconnect.notification"
-    const val NOTIFICATION_REQUEST = "kdeconnect.notification.request"
-    const val NOTIFICATION_REPLY = "kdeconnect.notification.reply"
-    const val NOTIFICATION_ACTION = "kdeconnect.notification.action"
-    const val FIND_MY_PHONE = "kdeconnect.findmyphone.request"
-    const val RUN_COMMAND = "kdeconnect.runcommand"
-    const val RUN_COMMAND_REQUEST = "kdeconnect.runcommand.request"
-    const val MPRIS = "kdeconnect.mpris"
-    const val MPRIS_REQUEST = "kdeconnect.mpris.request"
-    const val SFTP = "kdeconnect.sftp"
-    const val SFTP_REQUEST = "kdeconnect.sftp.request"
-    const val TELEPHONY = "kdeconnect.telephony"
-    const val SMS_MESSAGES = "kdeconnect.sms.messages"
-    const val SMS_REQUEST = "kdeconnect.sms.request"
-    const val SMS_REQUEST_CONVERSATIONS = "kdeconnect.sms.request_conversations"
-    const val SMS_REQUEST_CONVERSATION = "kdeconnect.sms.request_conversation"
-    const val MOUSEPAD_REQUEST = "kdeconnect.mousepad.request"
+    const val IDENTITY = "flux.identity"
+    const val PAIR = "flux.pair"
+    const val PING = "flux.ping"
+    const val BATTERY = "flux.battery"
+    const val CLIPBOARD = "flux.clipboard"
+    const val CLIPBOARD_CONNECT = "flux.clipboard.connect"
+    const val SHARE = "flux.share.request"
+    const val SHARE_UPDATE = "flux.share.request.update"
+    const val NOTIFICATION = "flux.notification"
+    const val NOTIFICATION_REQUEST = "flux.notification.request"
+    const val NOTIFICATION_REPLY = "flux.notification.reply"
+    const val NOTIFICATION_ACTION = "flux.notification.action"
+    const val FIND_MY_PHONE = "flux.findmyphone.request"
+    const val RUN_COMMAND = "flux.runcommand"
+    const val RUN_COMMAND_REQUEST = "flux.runcommand.request"
+    const val MPRIS = "flux.mpris"
+    const val MPRIS_REQUEST = "flux.mpris.request"
+    const val SFTP = "flux.sftp"
+    const val SFTP_REQUEST = "flux.sftp.request"
+    const val TELEPHONY = "flux.telephony"
+    const val SMS_MESSAGES = "flux.sms.messages"
+    const val SMS_REQUEST = "flux.sms.request"
+    const val SMS_REQUEST_CONVERSATIONS = "flux.sms.request_conversations"
+    const val SMS_REQUEST_CONVERSATION = "flux.sms.request_conversation"
+    const val MOUSEPAD_REQUEST = "flux.mousepad.request"
 
-    /** Flux extension: this phone opens a listener that the computer connects to. */
+    /** This phone opens a listener that the computer connects to. */
     const val FLUX_TUNNEL = "flux.tunnel"
 
-    /** Flux extension: this phone streams its camera to the computer as a virtual webcam. */
+    /** This phone streams its camera to the computer as a virtual webcam. */
     const val FLUX_WEBCAM = "flux.webcam"
 
-    /** Flux extension: the Do Not Disturb state, {"on": bool}, after a local change. Both sides send it. */
+    /** The Do Not Disturb state, {"on": bool}, after a local change. Both sides send it. */
     const val FLUX_DND = "flux.dnd"
 
-    /** Flux extension: this phone streams its microphone to the computer as a virtual source. */
+    /** This phone streams its microphone to the computer as a virtual source. */
     const val FLUX_MIC = "flux.mic"
 
-    /** Flux extension: this phone streams its screen to a window on the computer. */
+    /** This phone streams its screen to a window on the computer. */
     const val FLUX_SCREEN = "flux.screen"
 
-    /** Flux extension: the computer asks this phone to approve sudo with a fingerprint. */
+    /** The computer asks this phone to approve sudo with a fingerprint. */
     const val FLUX_APPROVE = "flux.approve"
 
-    /** Flux extension: the computer sends its herdr agents, and this phone asks for their output. Both sides send it. */
+    /** The computer sends its herdr agents, and this phone asks for their output. Both sides send it. */
     const val FLUX_HERDR = "flux.herdr"
 
-    /** Flux extension: an image that one side copied, as the payload, with {"mime": "image/png"}. Both sides send it. */
+    /** An image that one side copied, as the payload, with {"mime": "image/png"}. Both sides send it. */
     const val FLUX_CLIPBOARD_IMAGE = "flux.clipboard.image"
 
     /**
-     * Flux extension: the computer tells whether it accepts remote input and
+     * The computer tells whether it accepts remote input and
      * whether it shows its screen, {"enabled": bool, "desktop": bool}.
      */
     const val FLUX_INPUT = "flux.input"
 
-    /** Flux extension: the computer streams its screen to this phone. */
+    /** The computer streams its screen to this phone. */
     const val FLUX_DESKTOP = "flux.desktop"
 
-    /** Flux extension: the computer sends its Hyprland key bindings and workspaces, and runs them for this phone. Both sides send it. */
+    /** The computer sends its Hyprland key bindings and workspaces, and runs them for this phone. Both sides send it. */
     const val FLUX_SHORTCUTS = "flux.shortcuts"
 }
 
 /** Packet types that the phone accepts. */
 val INCOMING = listOf(
-    Types.PING, Types.BATTERY, Types.BATTERY_REQUEST, Types.CLIPBOARD, Types.CLIPBOARD_CONNECT,
+    Types.PING, Types.BATTERY, Types.CLIPBOARD, Types.CLIPBOARD_CONNECT,
     Types.SHARE, Types.SHARE_UPDATE, Types.NOTIFICATION, Types.NOTIFICATION_REQUEST, Types.NOTIFICATION_REPLY,
     Types.NOTIFICATION_ACTION, Types.FIND_MY_PHONE, Types.RUN_COMMAND, Types.MPRIS,
     Types.SFTP, Types.FLUX_TUNNEL, Types.FLUX_WEBCAM, Types.FLUX_DND,
@@ -102,7 +101,7 @@ val CLIPBOARD_IMAGE_INCOMING = listOf(Types.FLUX_CLIPBOARD_IMAGE)
 val SMS_INCOMING = listOf(Types.SMS_REQUEST, Types.SMS_REQUEST_CONVERSATIONS, Types.SMS_REQUEST_CONVERSATION)
 val SMS_OUTGOING = listOf(Types.SMS_MESSAGES)
 
-/** The body of a kdeconnect.identity packet. */
+/** The body of a flux.identity packet. */
 data class Identity(
     val deviceId: String,
     val deviceName: String,
@@ -134,19 +133,18 @@ data class Identity(
         return Packet(Types.IDENTITY, bodyOf(*fields.toTypedArray()), id = System.currentTimeMillis())
     }
 
-    /** True when the peer is an Omarchy desktop that runs fluxd. fluxd accepts flux.tunnel. */
-    val isFlux: Boolean get() = Types.FLUX_TUNNEL in incoming
-
     companion object {
+        /** Reads an identity packet. It returns null without a valid device ID or a protocol version. */
         fun from(p: Packet): Identity? {
             if (p.type != Types.IDENTITY) return null
             val id = p.string("deviceId") ?: return null
             if (!validDeviceId(id)) return null
+            val version = p.int("protocolVersion") ?: return null
             return Identity(
                 deviceId = id,
                 deviceName = cleanName(p.string("deviceName") ?: "unnamed"),
                 deviceType = p.string("deviceType") ?: "desktop",
-                protocolVersion = p.int("protocolVersion") ?: 7,
+                protocolVersion = version,
                 incoming = p.strings("incomingCapabilities"),
                 outgoing = p.strings("outgoingCapabilities"),
                 tcpPort = p.int("tcpPort") ?: 0,
@@ -169,11 +167,11 @@ data class Identity(
 private val deviceIdRegex = Regex("^[a-zA-Z0-9_-]{32,38}$")
 private val invalidNameChars = Regex("[\"',;:.!?()\\[\\]<>]")
 
-/** Reports whether the ID has the KDE Connect device ID format. */
+/** Reports whether the ID has the Flux device ID format. */
 fun validDeviceId(id: String): Boolean = deviceIdRegex.matches(id)
 
 /**
- * Removes the characters that KDE Connect does not allow in a device name and
+ * Removes the characters that Flux does not allow in a device name and
  * limits the name to 32 characters.
  */
 fun cleanName(name: String): String {

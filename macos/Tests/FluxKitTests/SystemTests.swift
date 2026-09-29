@@ -48,30 +48,22 @@ final class ComputerNotificationTests: XCTestCase {
         XCTAssertEqual(n.subtitle, "omarchy-xps")
         XCTAssertEqual(n.title, "Build done")
         XCTAssertEqual(n.text, "make · 42s")
-        XCTAssertFalse(n.cancel)
         XCTAssertEqual(n.key, "pc1:flux-1")
     }
 
     func testNotificationFromAnotherApp() {
-        // Another app name shows next to the computer name. A packet with
-        // only a ticker uses it as the title.
-        let n = ComputerNotification(packet(["id": "7", "appName": "Firefox", "ticker": "Download done"]), deviceId: "pc1", computer: "omarchy-xps")!
+        // Another app name shows next to the computer name.
+        let n = ComputerNotification(packet(["id": "7", "appName": "Firefox", "title": "Download done"]), deviceId: "pc1", computer: "omarchy-xps")!
         XCTAssertEqual(n.subtitle, "Firefox · omarchy-xps")
         XCTAssertEqual(n.title, "Download done")
         XCTAssertEqual(n.text, "")
     }
 
-    func testTextWithoutTitleBecomesTheTitle() {
-        let n = ComputerNotification(packet(["id": "8", "text": "only text"]), deviceId: "pc1", computer: "pc")!
-        XCTAssertEqual(n.title, "only text")
-        XCTAssertEqual(n.text, "")
-    }
-
-    func testNotificationCancelAndEmpty() {
-        let cancel = ComputerNotification(packet(["id": "flux-1", "isCancel": true]), deviceId: "pc1", computer: "omarchy-xps")!
-        XCTAssertTrue(cancel.cancel)
-        XCTAssertEqual(cancel.key, "pc1:flux-1")
+    func testNotificationWithoutTitleOrID() {
         XCTAssertNil(ComputerNotification(packet(["id": "x"]), deviceId: "pc1", computer: "omarchy-xps"))
+        XCTAssertNil(ComputerNotification(packet(["id": "8", "text": "only text"]), deviceId: "pc1", computer: "pc"), "the text is not a title")
+        XCTAssertNil(ComputerNotification(packet(["id": "9", "ticker": "Download done"]), deviceId: "pc1", computer: "pc"), "the ticker is not a title")
+        XCTAssertNil(ComputerNotification(packet(["id": "10", "title": "  "]), deviceId: "pc1", computer: "pc"), "a blank title")
         XCTAssertNil(ComputerNotification(packet(["title": "no id"]), deviceId: "pc1", computer: "omarchy-xps"))
     }
 }

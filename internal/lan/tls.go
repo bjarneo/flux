@@ -1,4 +1,4 @@
-// Package lan is the KDE Connect LAN backend: UDP discovery, TCP links
+// Package lan is the Flux LAN backend: UDP discovery, TCP links
 // with TLS, and payload sockets.
 package lan
 
@@ -8,7 +8,7 @@ import (
 	"errors"
 )
 
-// Port ranges from the KDE Connect protocol.
+// The port ranges of the Flux protocol.
 const (
 	UDPPort         = 1716
 	MinTCPPort      = 1716
@@ -18,8 +18,8 @@ const (
 	maxIdentitySize = 64 << 10
 )
 
-// cipherSuites limits TLS 1.2 to forward-secret suites. The CBC suites keep
-// older Android and Qt peers working. TLS 1.3 ignores this list.
+// cipherSuites limits TLS 1.2 to forward-secret AEAD suites. TLS 1.3
+// ignores this list.
 var cipherSuites = []uint16{
 	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
 	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
@@ -27,12 +27,9 @@ var cipherSuites = []uint16{
 	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 	tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
 	tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-	tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-	tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-	tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
 }
 
-// serverConfig is for the side that acts as TLS server. KDE Connect needs a
+// serverConfig is for the side that acts as TLS server. Flux needs a
 // certificate from both sides, so the server asks for one. Flux checks the
 // certificate after the handshake, because peers use self-signed
 // certificates.

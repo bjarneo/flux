@@ -76,8 +76,8 @@ func waitLink(t *testing.T, ch chan *Link) *Link {
 	}
 }
 
-// TestHandshake runs discovery, the TLS handshake with the KDE Connect
-// roles, and the second identity exchange between 2 providers.
+// TestHandshake runs discovery, the TLS handshake with the Flux roles,
+// and the second identity exchange between 2 providers.
 func TestHandshake(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

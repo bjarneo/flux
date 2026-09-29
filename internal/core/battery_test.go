@@ -16,7 +16,7 @@ func TestLowBatteryAlertsOncePerDischarge(t *testing.T) {
 		{true, 13, false, false},
 		// A reconnect sends the same reading again.
 		{true, 13, false, false},
-		// KDE Connect marks only the first low reading. The next one
+		// The protocol marks only the first low reading. The next one
 		// does not end the discharge.
 		{false, 12, false, false},
 		{true, 12, false, false},

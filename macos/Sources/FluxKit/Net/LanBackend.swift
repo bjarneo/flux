@@ -48,7 +48,7 @@ public protocol LanBackendDelegate: AnyObject, Sendable {
     func knownAddresses() -> [String]
 }
 
-/// The KDE Connect LAN backend. It broadcasts the identity over UDP, accepts
+/// The LAN backend. It broadcasts the identity over UDP, accepts
 /// TCP links, connects to devices that broadcast, and runs the TLS handshake.
 public final class LanBackend: @unchecked Sendable {
     public let tls: FluxTLS
@@ -313,8 +313,8 @@ final class PlainIdentityHandler: ChannelInboundHandler, RemovableChannelHandler
     }
 }
 
-/// Exchanges the identity inside TLS for protocol version 8, checks the
-/// certificate, and then turns the channel into a link.
+/// Exchanges the identity inside TLS, checks the certificate, and then turns
+/// the channel into a link.
 final class SecureIdentityHandler: ChannelInboundHandler, RemovableChannelHandler {
     typealias InboundIn = ByteBuffer
     unowned let backend: LanBackend
@@ -338,16 +338,12 @@ final class SecureIdentityHandler: ChannelInboundHandler, RemovableChannelHandle
 
     func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
         if let tlsEvent = event as? TLSUserEvent, case .handshakeCompleted = tlsEvent {
-            if let plain, plain.protocolVersion < 8 {
-                complete(context: context, identity: plain)
-            } else {
-                // Both sides write the identity at once. KDE Connect closes the
-                // link when it does not arrive within 1 second.
-                let data = backend.identity(0).packet().serialize()
-                var buffer = context.channel.allocator.buffer(capacity: data.count)
-                buffer.writeBytes(data)
-                context.writeAndFlush(NIOAny(buffer), promise: nil)
-            }
+            // Both sides write the identity at once, so that neither side
+            // waits for the other.
+            let data = backend.identity(0).packet().serialize()
+            var buffer = context.channel.allocator.buffer(capacity: data.count)
+            buffer.writeBytes(data)
+            context.writeAndFlush(NIOAny(buffer), promise: nil)
         }
         context.fireUserInboundEventTriggered(event)
     }

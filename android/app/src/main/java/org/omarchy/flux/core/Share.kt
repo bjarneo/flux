@@ -10,11 +10,10 @@ import org.omarchy.flux.protocol.TunnelPackets
 import org.omarchy.flux.protocol.Packet
 import org.omarchy.flux.protocol.Types
 import org.omarchy.flux.protocol.bodyOf
-import java.net.InetAddress
 
 private const val TAG = "FluxShare"
 
-/** File, text, and link sharing: kdeconnect.share.request. */
+/** File, text, and link sharing: flux.share.request. */
 object Share {
     /** Handles a share packet. The core lock is held, so the transfer runs on the IO pool. */
     fun receive(core: FluxCore, d: Device, p: Packet) {
@@ -32,39 +31,32 @@ object Share {
             return
         }
         if (!p.hasPayload) return
+        val token = p.payloadTunnel ?: return
         val name = sanitize(p.string("filename") ?: "file-${System.currentTimeMillis()}")
-        val address = d.link?.address ?: return
         val cert = d.certificate ?: return
         val tls = currentTls() ?: return
         core.toast("Receiving $name")
-        core.io.execute { download(core, d, from, address, cert, p, name, tls) }
+        core.io.execute { download(core, d, from, token, cert, p, name, tls) }
     }
 
     private fun download(
         core: FluxCore,
         d: Device,
         from: String,
-        address: InetAddress,
+        token: String,
         cert: java.security.cert.X509Certificate,
         p: Packet,
         name: String,
         tls: org.omarchy.flux.net.Tls,
     ) {
         val mime = Android.mimeType(name)
-        val token = p.payloadTunnel
         val dl = runCatching { Android.createDownload(core.app, name, mime) }.getOrElse {
             core.toast("Cannot save $name: ${it.message}")
-            if (token != null) d.send(TunnelPackets.failed(token, "cannot save the file"))
+            d.send(TunnelPackets.failed(token, "cannot save the file"))
             return
         }
-        val ok = runCatching {
-            if (token != null) {
-                // The computer blocks incoming connections: listen and let it connect.
-                Tunnel.receive(tls, cert, token, p.payloadSize, dl.stream, announce = { d.send(it) })
-            } else {
-                Payload.receive(tls, address, p.payloadPort, p.payloadSize, dl.stream)
-            }
-        }
+        // The computer blocks incoming connections. This phone listens, and the computer connects.
+        val ok = runCatching { Tunnel.receive(tls, cert, token, p.payloadSize, dl.stream, announce = { d.send(it) }) }
             .onFailure { Log.w(TAG, "receive $name failed", it) }
             .isSuccess
         Android.finishDownload(core.app, dl, ok)

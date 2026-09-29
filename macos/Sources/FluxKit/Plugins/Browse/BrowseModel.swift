@@ -56,7 +56,7 @@ public final class BrowseModel {
     public private(set) var entries: [BrowseEntry] = []
     public private(set) var downloads: [BrowseDownload] = []
 
-    /// How long the computer has to answer kdeconnect.sftp.request.
+    /// How long the computer has to answer flux.sftp.request.
     static let answerTimeout: Duration = .seconds(10)
 
     @ObservationIgnored private let core: FluxCore
@@ -218,8 +218,8 @@ public final class BrowseModel {
 
     // MARK: Plugin events
 
-    /// Handles kdeconnect.sftp from the computer.
-    func receive(_ p: Packet, tls: FluxTLS, certificate: [UInt8]?, address: String?) {
+    /// Handles flux.sftp from the computer.
+    func receive(_ p: Packet, tls: FluxTLS, certificate: [UInt8]?) {
         guard awaitingOffer else { return }
         awaitingOffer = false
         if let message = p.string("errorMessage") {
@@ -237,7 +237,7 @@ public final class BrowseModel {
         Task { [weak self, core] in
             do {
                 let session = try await BrowseSession.open(
-                    offer, tls: tls, certificate: certificate, address: address,
+                    offer, tls: tls, certificate: certificate,
                     announce: { core.send($0, to: deviceId) },
                     onClose: { Task { @MainActor in self?.sessionEnded(current) } }
                 )

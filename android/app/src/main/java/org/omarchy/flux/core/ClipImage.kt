@@ -15,7 +15,6 @@ import org.omarchy.flux.protocol.Types
 import org.omarchy.flux.protocol.bodyOf
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.net.InetAddress
 import java.security.cert.X509Certificate
 
 private const val TAG = "FluxClipImage"
@@ -56,31 +55,23 @@ object ClipImage {
      * transfer runs on the IO pool.
      */
     fun receive(core: FluxCore, d: Device, p: Packet) {
-        val token = p.payloadTunnel
+        val token = p.payloadTunnel ?: return
         val size = p.payloadSize
-        if (!core.settings.syncClipboard || !p.hasPayload || size <= 0 || size > MAX_BYTES) {
-            if (token != null) d.send(TunnelPackets.failed(token, "the phone does not accept this clipboard image"))
+        if (!core.settings.syncClipboard || size <= 0 || size > MAX_BYTES) {
+            d.send(TunnelPackets.failed(token, "the phone does not accept this clipboard image"))
             return
         }
         val mime = p.string("mime")?.takeIf { it in TYPES } ?: "image/png"
-        val address = d.link?.address ?: return
         val cert = d.certificate ?: return
         val tls = FluxCore.tls ?: return
-        core.io.execute { download(core, d, p, address, cert, tls, mime) }
+        core.io.execute { download(core, d, p, token, cert, tls, mime) }
     }
 
-    private fun download(core: FluxCore, d: Device, p: Packet, address: InetAddress, cert: X509Certificate, tls: Tls, mime: String) {
+    private fun download(core: FluxCore, d: Device, p: Packet, token: String, cert: X509Certificate, tls: Tls, mime: String) {
         val dir = File(core.app.cacheDir, DIR).apply { mkdirs() }
         val file = File(dir, "clip-${System.currentTimeMillis()}.${extension(mime)}")
-        val token = p.payloadTunnel
         val ok = runCatching {
-            file.outputStream().use { out ->
-                if (token != null) {
-                    Tunnel.receive(tls, cert, token, p.payloadSize, out, announce = { d.send(it) })
-                } else {
-                    Payload.receive(tls, address, p.payloadPort, p.payloadSize, out)
-                }
-            }
+            file.outputStream().use { out -> Tunnel.receive(tls, cert, token, p.payloadSize, out, announce = { d.send(it) }) }
         }.onFailure { Log.w(TAG, "receive from ${d.identity.deviceName} failed", it) }.isSuccess
         if (!ok) {
             file.delete()

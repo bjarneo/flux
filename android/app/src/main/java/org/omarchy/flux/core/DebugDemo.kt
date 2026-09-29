@@ -104,7 +104,7 @@ object DebugDemo {
     )
 
     private fun device(id: String, name: String, type: String, ip: String, paired: Boolean, online: Boolean) = DeviceUi(
-        id = id, name = name, type = type, ip = ip, isFlux = true, paired = paired, online = online,
+        id = id, name = name, type = type, ip = ip, paired = paired, online = online,
         pairState = if (paired) PairState.Paired else PairState.None, pairKey = "", pairOutgoing = false,
         battery = null, charging = false, players = emptyList(), player = null,
         commands = emptyList(), commandsLoaded = false,

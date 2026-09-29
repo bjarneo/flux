@@ -42,7 +42,7 @@ flux-cli on
 flux-cli open files
 ```
 
-Window pages: `overview`, `clipboard`, `files`, `notifications`, `messages`, `browse`, and `commands`.
+Window pages: `overview`, `clipboard`, `files`, `notifications`, `messages`, and `commands`.
 
 `flux-cli version` prints the version of `flux-cli` and of the running `fluxd`.
 After an update, it also prints the new `fluxd` version that waits for its restart.

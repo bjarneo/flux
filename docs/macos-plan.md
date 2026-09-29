@@ -3,7 +3,7 @@
 [Documentation index](README.md)
 
 This plan builds Flux for macOS: a native Swift and SwiftUI app that takes the place of the Android phone app toward `fluxd`.
-It uses KDE Connect protocol version 8 with the Flux extensions and offers the Android features that macOS allows.
+It uses Flux protocol version 8 and offers the Android features that macOS allows.
 See [status](macos-status.md) for the details of each check and [Flux for macOS](macos.md) for use.
 
 ## Decisions
@@ -11,7 +11,7 @@ See [status](macos-status.md) for the details of each check and [Flux for macOS]
 - [x] The Mac is a device peer that replaces the Android app, not the Omarchy desktop side.
 - [x] Native Swift and SwiftUI, macOS 14 or later.
 - [x] SwiftNIO and swift-nio-ssl for links, because the protocol reads a plain-text identity and then starts TLS on the same socket.
-- [x] swift-certificates and swift-crypto for the KDE Connect certificate and the verification key.
+- [x] swift-certificates and swift-crypto for the self-signed certificate and the verification key.
 - [x] XcodeGen project in `macos/project.yml`; the generated project stays out of Git.
 - [x] One `FluxPlugin` per feature, composed in `macos/App/Features/Features.swift` with one line per entry.
 - [x] Wire formats follow the Android app and the Go handlers exactly.
@@ -29,7 +29,7 @@ See [status](macos-status.md) for the details of each check and [Flux for macOS]
 
 ### Protocol
 
-- [x] `JSONValue` that accepts the loose types KDE Connect peers send.
+- [x] `JSONValue` that accepts a number or a string for the same field.
 - [x] `Packet` with payload fields for a port or a tunnel.
 - [x] `Identity`, packet types, device ID rules, and name cleanup.
 - [x] RSA 2048 self-signed certificate with CN set to the device ID.
@@ -46,7 +46,7 @@ See [status](macos-status.md) for the details of each check and [Flux for macOS]
 - [x] Links with packet framing and buffering before start.
 - [x] Payload server and client on ports 1739 to 1764.
 - [x] `flux.tunnel` listener with the pinned certificate.
-- [x] Bonjour publish and browse for `_kdeconnect._udp`.
+- [x] Bonjour publish and browse for `_flux._udp`.
 - [x] Test variables: `FLUX_DATA_DIR`, `FLUX_UDP_PORT`, `FLUX_PEER_UDP_PORT`, `FLUX_LOOPBACK`.
 
 ### Core
@@ -88,7 +88,7 @@ Each feature gets its own branch, worktree, and isolated `fluxd`, then merges in
 
 ### Files, text, links, clipboard, and captures
 
-- [x] Receive files over a payload port or a tunnel, with unique names and no overwrite.
+- [x] Receive files over a tunnel, with unique names and no overwrite.
 - [x] Send files, text, and links with Android's fields.
 - [x] Capture and scan sends for the camera modes.
 - [x] Clipboard sync in both directions with Android's timestamp and echo rules.
@@ -123,7 +123,6 @@ Each feature gets its own branch, worktree, and isolated `fluxd`, then merges in
 - [x] Request the SFTP offer and connect through a tunnel with a loopback bridge.
 - [x] Read-only browsing, downloads with progress, and a window per computer.
 - [x] Checked: listing, subfolders, downloads with identical sha256, the `share_home` error, and reconnect.
-- [ ] Checked: the direct ip and port route.
 
 ### Microphone
 

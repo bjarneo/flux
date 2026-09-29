@@ -167,26 +167,10 @@ public final class PayloadServer: Sendable {
     }
 }
 
-/// Payload transfer. The sender listens on a port and is the TLS server. The
-/// receiver connects and is the TLS client.
-public enum Payload {
-    /// Connects to the sender at host:port.
-    public static func connect(tls: FluxTLS, host: String, port: Int) async throws -> TLSStream {
-        let stream = try await ClientBootstrap(group: MultiThreadedEventLoopGroup.singleton)
-            .connectTimeout(.seconds(10))
-            .connect(host: host, port: port) { ch in
-                ch.eventLoop.makeCompletedFuture {
-                    try ch.pipeline.syncOperations.addHandler(try tls.clientHandler())
-                    return try NIOAsyncChannel<ByteBuffer, ByteBuffer>(wrappingChannelSynchronously: ch)
-                }
-            }
-        return TLSStream(channel: stream, peerCertificate: nil)
-    }
-}
-
-/// Flux tunnels. When the computer blocks incoming connections, it asks this
-/// device to listen. This device opens a TLS listener and answers with
-/// flux.tunnel {id, port}, or {id, error}. The computer then connects.
+/// Flux tunnels. The computer asks this device to listen, because a firewall
+/// on the computer can block incoming connections. This device opens a TLS
+/// listener and answers with flux.tunnel {id, port}, or {id, error}. The
+/// computer then connects.
 public enum Tunnel {
     public static func ready(token: String, port: Int) -> Packet {
         Packet(PacketType.fluxTunnel, ["id": token, "port": port])

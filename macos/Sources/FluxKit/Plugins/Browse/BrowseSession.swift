@@ -14,50 +14,42 @@ final class BrowseSession: @unchecked Sendable {
 
     private let ssh: SSHClient
     private let sftp: SFTPClient
-    private let bridge: LoopbackBridge?
+    private let bridge: LoopbackBridge
 
-    private init(ssh: SSHClient, sftp: SFTPClient, bridge: LoopbackBridge?) {
+    private init(ssh: SSHClient, sftp: SFTPClient, bridge: LoopbackBridge) {
         self.ssh = ssh
         self.sftp = sftp
         self.bridge = bridge
     }
 
-    /// Connects with the offer. When the computer blocks incoming
-    /// connections, it connects to this Mac through a tunnel, and a loopback
-    /// bridge feeds the TLS stream to the SSH client. `address` is the IP of
-    /// the link, for an offer without an IP. `onClose` runs when the SSH
-    /// connection ends for any reason.
+    /// Connects with the offer. The computer connects to this device through
+    /// the tunnel of the offer, and a loopback bridge feeds the TLS stream to
+    /// the SSH client. `onClose` runs when the SSH connection ends for any
+    /// reason.
     static func open(
         _ offer: SftpOffer,
         tls: FluxTLS,
         certificate: [UInt8]?,
-        address: String?,
         announce: @escaping @Sendable (Packet) -> Void,
         onClose: @escaping @Sendable () -> Void
     ) async throws -> BrowseSession {
-        if offer.viaTunnel, let token = offer.tunnel {
-            guard let certificate else { throw FluxError("the link is not ready") }
-            let stream = try await Tunnel.accept(tls: tls, expected: certificate, token: token, announce: announce)
-            let bridge = try await LoopbackBridge.open(stream)
-            return try await connect(host: bridge.host, port: bridge.port, offer: offer, bridge: bridge, onClose: onClose)
-        }
-        guard let host = offer.ip ?? address, !host.isEmpty else { throw FluxError("no address") }
-        return try await connect(host: host, port: offer.port, offer: offer, bridge: nil, onClose: onClose)
+        guard let certificate else { throw FluxError("the link is not ready") }
+        let stream = try await Tunnel.accept(tls: tls, expected: certificate, token: offer.tunnel, announce: announce)
+        let bridge = try await LoopbackBridge.open(stream)
+        return try await connect(through: bridge, offer: offer, onClose: onClose)
     }
 
     private static func connect(
-        host: String,
-        port: Int,
+        through bridge: LoopbackBridge,
         offer: SftpOffer,
-        bridge: LoopbackBridge?,
         onClose: @escaping @Sendable () -> Void
     ) async throws -> BrowseSession {
         let user = offer.user, password = offer.password
         // The computer makes a new host key for each session. The password
         // comes over the paired TLS link, so the key is not pinned.
         var settings = SSHClientSettings(
-            host: host,
-            port: port,
+            host: bridge.host,
+            port: bridge.port,
             authenticationMethod: { .passwordBased(username: user, password: password) },
             hostKeyValidator: .acceptAnything()
         )
@@ -73,7 +65,7 @@ final class BrowseSession: @unchecked Sendable {
                 throw error
             }
         } catch {
-            bridge?.close()
+            bridge.close()
             throw error
         }
     }
@@ -132,7 +124,7 @@ final class BrowseSession: @unchecked Sendable {
     func close() async {
         try? await sftp.close()
         try? await ssh.close()
-        bridge?.close()
+        bridge.close()
     }
 
     /// A short reason for the user.

@@ -1,6 +1,6 @@
 import Foundation
 
-/// What a kdeconnect.share.request packet from the computer carries. Text
+/// What a flux.share.request packet from the computer carries. Text
 /// wins over a URL, and a URL over a file, like in Flux for Android.
 public enum ShareRequest: Equatable, Sendable {
     case text(String)

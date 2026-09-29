@@ -53,7 +53,7 @@ final class ShareWireTests: XCTestCase {
         XCTAssertEqual(ShareRequest(both), .text("hi"))
         let url = Packet(PacketType.share, ["url": "https://x.org", "filename": "a"], payloadSize: 3, payloadPort: 1739)
         XCTAssertEqual(ShareRequest(url), .url("https://x.org"))
-        let file = Packet.parse(#"{"id":1,"type":"kdeconnect.share.request","body":{"filename":"r.txt","open":false,"lastModified":1700000000123},"payloadSize":3,"payloadTransferInfo":{"tunnel":"t1"}}"#)!
+        let file = Packet.parse(#"{"id":1,"type":"flux.share.request","body":{"filename":"r.txt","open":false,"lastModified":1700000000123},"payloadSize":3,"payloadTransferInfo":{"tunnel":"t1"}}"#)!
         XCTAssertEqual(ShareRequest(file), .file(name: "r.txt", open: false, lastModified: 1_700_000_000_123))
         XCTAssertNil(ShareRequest(Packet(PacketType.share, ["filename": "a"])), "a file needs a payload")
     }

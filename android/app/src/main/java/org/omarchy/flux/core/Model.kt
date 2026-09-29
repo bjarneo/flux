@@ -54,7 +54,6 @@ data class DeviceUi(
     val name: String,
     val type: String,
     val ip: String,
-    val isFlux: Boolean,
     val paired: Boolean,
     val online: Boolean,
     val pairState: PairState,

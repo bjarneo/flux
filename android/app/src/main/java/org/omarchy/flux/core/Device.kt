@@ -83,7 +83,6 @@ class Device(private val core: FluxCore, var identity: Identity) {
         name = identity.deviceName,
         type = identity.deviceType,
         ip = link?.address?.hostAddress ?: lastIp,
-        isFlux = identity.isFlux,
         paired = paired,
         online = online,
         pairState = pairState,
@@ -113,7 +112,7 @@ class Device(private val core: FluxCore, var identity: Identity) {
     /** Returns the key that a request with the timestamp shows, before it is sent. */
     fun previewKey(timestamp: Long): String {
         val peer = certificate ?: return ""
-        return verificationKey(core.local.certificate, peer, if (identity.protocolVersion >= 8) timestamp else 0L)
+        return verificationKey(core.local.certificate, peer, timestamp)
     }
 
     /** Sends a pairing request with the timestamp that the dialog showed. */
@@ -147,7 +146,7 @@ class Device(private val core: FluxCore, var identity: Identity) {
         resetPair()
     }
 
-    /** Handles a kdeconnect.pair packet. */
+    /** Handles a flux.pair packet. */
     fun onPairPacket(p: Packet) {
         val wants = p.bool("pair") ?: false
         if (!wants) {
@@ -175,14 +174,12 @@ class Device(private val core: FluxCore, var identity: Identity) {
     private fun incoming(p: Packet) {
         val ts = p.long("timestamp")
         val now = System.currentTimeMillis() / 1000
-        if (identity.protocolVersion >= 8) {
-            if (ts == null || abs(now - ts) > MAX_TIMESTAMP_DIFFERENCE_SECONDS) {
-                send(Packet(Types.PAIR, bodyOf("pair" to false)))
-                core.toast(if (ts == null) "Pairing refused: ${identity.deviceName} sent no timestamp" else "Pairing refused: the clock of ${identity.deviceName} is wrong")
-                return
-            }
+        if (ts == null || abs(now - ts) > MAX_TIMESTAMP_DIFFERENCE_SECONDS) {
+            send(Packet(Types.PAIR, bodyOf("pair" to false)))
+            core.toast(if (ts == null) "Pairing refused: ${identity.deviceName} sent no timestamp" else "Pairing refused: the clock of ${identity.deviceName} is wrong")
+            return
         }
-        pairTimestamp = ts ?: 0L
+        pairTimestamp = ts
         pairKey = computeKey()
         pairState = PairState.Incoming
         armTimer(INCOMING_TIMEOUT_SECONDS)
@@ -200,7 +197,6 @@ class Device(private val core: FluxCore, var identity: Identity) {
                 type = identity.deviceType,
                 certificate = TrustStore.encode(cert),
                 lastIp = link?.address?.hostAddress ?: "",
-                isFlux = identity.isFlux,
             ),
         )
         core.toast("Paired with ${identity.deviceName}")
@@ -228,7 +224,6 @@ class Device(private val core: FluxCore, var identity: Identity) {
 
     private fun computeKey(): String {
         val peer = certificate ?: return ""
-        val stamp = if (identity.protocolVersion >= 8) pairTimestamp else 0L
-        return verificationKey(core.local.certificate, peer, stamp)
+        return verificationKey(core.local.certificate, peer, pairTimestamp)
     }
 }

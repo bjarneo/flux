@@ -24,7 +24,7 @@ import (
 // On a GPU that gpu-screen-recorder does not support, such as one on
 // nouveau, wf-recorder captures the monitor and encodes it on the CPU.
 // The phone shows the stream and sends its touches as
-// kdeconnect.mousepad.request packets with a position on the monitor. The
+// flux.mousepad.request packets with a position on the monitor. The
 // stream needs remote_desktop, and the touches also need remote_input.
 
 const (

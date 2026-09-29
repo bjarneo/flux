@@ -19,9 +19,6 @@ func TestNowPlayingSendsVolumeOnlyWhenPlayerTakesIt(t *testing.T) {
 	if b["volume"] != float64(40) {
 		t.Errorf("volume: got %v, want 40", b["volume"])
 	}
-	if b["nowPlaying"] != "Band - Song" {
-		t.Errorf("nowPlaying: got %v", b["nowPlaying"])
-	}
 	b = body(desktop.Player{Name: "chromium", Volume: 100})
 	if _, ok := b["volume"]; ok {
 		t.Errorf("a player that takes no volume sent %v", b["volume"])

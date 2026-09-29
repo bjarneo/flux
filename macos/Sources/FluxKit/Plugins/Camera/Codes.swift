@@ -87,7 +87,7 @@ public struct ScannedCode: Equatable, Sendable {
     }
 }
 
-/// The packet that a code action sends: the body of kdeconnect.share.request.
+/// The packet that a code action sends: the body of flux.share.request.
 public enum ShareBody: Equatable, Sendable {
     /// The computer opens the link.
     case openURL(String)
@@ -96,7 +96,7 @@ public enum ShareBody: Equatable, Sendable {
     /// The computer saves the text in a file in the scan folder.
     case save(String)
 
-    /// The fields of the kdeconnect.share.request body.
+    /// The fields of the flux.share.request body.
     public var fields: [String: JSONValue] {
         switch self {
         case .openURL(let url): ["url": .string(url)]

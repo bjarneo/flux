@@ -11,35 +11,25 @@ public struct BrowseRoot: Sendable, Equatable, Hashable {
     }
 }
 
-/// The body of kdeconnect.sftp. A computer that accepts connections sends
-/// `ip` and `port`. A computer behind a firewall sends `tunnel` instead.
+/// The body of flux.sftp. The computer sends a tunnel token, the user, a
+/// one-time password, and the folders that it shares.
 public struct SftpOffer: Sendable, Equatable {
-    public var ip: String?
-    public var port: Int
-    public var tunnel: String?
+    /// The token of the Flux tunnel that carries the SSH session.
+    public var tunnel: String
     public var user: String
     public var password: String
-    public var path: String
     public var roots: [BrowseRoot]
 
-    /// True when the SSH session runs inside a Flux tunnel.
-    public var viaTunnel: Bool { tunnel != nil && (ip == nil || port <= 0) }
-
-    /// Parses kdeconnect.sftp. It returns nil for an error answer or a packet
-    /// with no way to connect.
+    /// Parses flux.sftp. It returns nil for an error answer, a packet
+    /// without a tunnel, or root lists that are empty or differ in length.
     public static func parse(_ p: Packet) -> SftpOffer? {
         guard p.type == PacketType.sftp, !p.has("errorMessage"),
-              let user = p.string("user"), let password = p.string("password") else { return nil }
-        let ip = p.string("ip").flatMap { $0.isEmpty ? nil : $0 }
-        let port = p.int("port") ?? 0
-        let tunnel = p.string("tunnel").flatMap { $0.isEmpty ? nil : $0 }
-        if tunnel == nil && port <= 0 { return nil }
-        let path = p.string("path") ?? "/"
+              let user = p.string("user"), let password = p.string("password"),
+              let tunnel = p.string("tunnel"), !tunnel.isEmpty else { return nil }
         let paths = p.strings("multiPaths")
         let names = p.strings("pathNames")
-        let roots = !paths.isEmpty && paths.count == names.count
-            ? zip(names, paths).map { BrowseRoot(name: $0, path: $1) }
-            : [BrowseRoot(name: "Home", path: path)]
-        return SftpOffer(ip: ip, port: port, tunnel: tunnel, user: user, password: password, path: path, roots: roots)
+        guard !paths.isEmpty, paths.count == names.count else { return nil }
+        let roots = zip(names, paths).map { BrowseRoot(name: $0, path: $1) }
+        return SftpOffer(tunnel: tunnel, user: user, password: password, roots: roots)
     }
 }

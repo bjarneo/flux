@@ -21,10 +21,6 @@
      "charge": 78,
      "charging": false
     },
-    "signal": {
-     "type": "LTE",
-     "strength": 4
-    },
     "plugins": [
      "battery",
      "clipboard",
@@ -32,9 +28,7 @@
      "notification",
      "findmyphone",
      "sms",
-     "sftp",
-     "runcommand",
-     "connectivity"
+     "runcommand"
     ],
     "notifications": [
      {
@@ -148,18 +142,13 @@
      "charge": 42,
      "charging": true
     },
-    "signal": {
-     "type": "5G",
-     "strength": 3
-    },
     "plugins": [
      "battery",
      "clipboard",
      "share",
      "notification",
      "findmyphone",
-     "runcommand",
-     "connectivity"
+     "runcommand"
     ],
     "notifications": [],
     "conversations": []
@@ -176,7 +165,6 @@
     "pairedAt": "2025-12-20",
     "lastSeen": 1789920000,
     "battery": null,
-    "signal": null,
     "plugins": [],
     "notifications": [],
     "conversations": []
@@ -193,7 +181,6 @@
     "pairedAt": "",
     "lastSeen": -1,
     "battery": null,
-    "signal": null,
     "plugins": [],
     "notifications": [],
     "conversations": []
@@ -424,150 +411,6 @@
     "time": -5300,
     "outgoing": true,
     "failed": true
-   }
-  ]
- },
- "roots": [
-  {
-   "name": "DCIM",
-   "path": "/storage/emulated/0/DCIM"
-  },
-  {
-   "name": "Download",
-   "path": "/storage/emulated/0/Download"
-  },
-  {
-   "name": "Documents",
-   "path": "/storage/emulated/0/Documents"
-  },
-  {
-   "name": "Music",
-   "path": "/storage/emulated/0/Music"
-  },
-  {
-   "name": "Pictures",
-   "path": "/storage/emulated/0/Pictures"
-  }
- ],
- "dirs": {
-  "/storage/emulated/0/DCIM": [
-   {
-    "name": "Camera",
-    "dir": true,
-    "size": 0,
-    "mtime": -3600
-   },
-   {
-    "name": "Screenshots",
-    "dir": true,
-    "size": 0,
-    "mtime": -3600
-   },
-   {
-    "name": "IMG_2041.jpg",
-    "dir": false,
-    "size": 4200000,
-    "mtime": -3600
-   },
-   {
-    "name": "IMG_2040.jpg",
-    "dir": false,
-    "size": 3900000,
-    "mtime": -3600
-   },
-   {
-    "name": "VID_20260925.mp4",
-    "dir": false,
-    "size": 182000000,
-    "mtime": -3600
-   }
-  ],
-  "/storage/emulated/0/DCIM/Camera": [
-   {
-    "name": "IMG_1998.jpg",
-    "dir": false,
-    "size": 3800000,
-    "mtime": -3600
-   },
-   {
-    "name": "IMG_1999.jpg",
-    "dir": false,
-    "size": 4100000,
-    "mtime": -3600
-   }
-  ],
-  "/storage/emulated/0/Download": [
-   {
-    "name": "boarding-pass.pdf",
-    "dir": false,
-    "size": 220000,
-    "mtime": -3600
-   },
-   {
-    "name": "omarchy-3.1.iso",
-    "dir": false,
-    "size": 6100000000,
-    "mtime": -3600
-   },
-   {
-    "name": "invoice-0925.pdf",
-    "dir": false,
-    "size": 88000,
-    "mtime": -3600
-   }
-  ],
-  "/storage/emulated/0/Documents": [
-   {
-    "name": "notes.md",
-    "dir": false,
-    "size": 12000,
-    "mtime": -3600
-   },
-   {
-    "name": "passport-scan.jpg",
-    "dir": false,
-    "size": 2100000,
-    "mtime": -3600
-   },
-   {
-    "name": "lease-2026.pdf",
-    "dir": false,
-    "size": 1400000,
-    "mtime": -3600
-   }
-  ],
-  "/storage/emulated/0/Music": [
-   {
-    "name": "Weightless.flac",
-    "dir": false,
-    "size": 82000000,
-    "mtime": -3600
-   },
-   {
-    "name": "podcasts",
-    "dir": true,
-    "size": 0,
-    "mtime": -3600
-   }
-  ],
-  "/storage/emulated/0/Pictures": [
-   {
-    "name": "wallpapers",
-    "dir": true,
-    "size": 0,
-    "mtime": -3600
-   },
-   {
-    "name": "kanagawa.png",
-    "dir": false,
-    "size": 5800000,
-    "mtime": -3600
-   },
-   {
-    "name": "avatar.png",
-    "dir": false,
-    "size": 240000,
-    "mtime": -3600
    }
   ]
  }

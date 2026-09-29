@@ -1,13 +1,9 @@
 package core
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
-	"io"
-	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -31,7 +27,6 @@ type PhoneNotification struct {
 	ReplyID string   `json:"replyId"`
 	Actions []string `json:"actions"`
 	Clear   bool     `json:"dismissable"`
-	Icon    string   `json:"icon,omitempty"`
 }
 
 // flexString decodes a JSON string, number, or boolean as a string.
@@ -53,7 +48,6 @@ func (d *Daemon) handleNotification(dev *Device, l *lan.Link, p *proto.Packet) {
 	var b struct {
 		ID          string     `json:"id"`
 		AppName     string     `json:"appName"`
-		Ticker      string     `json:"ticker"`
 		Title       string     `json:"title"`
 		Text        string     `json:"text"`
 		Time        flexString `json:"time"`
@@ -63,7 +57,6 @@ func (d *Daemon) handleNotification(dev *Device, l *lan.Link, p *proto.Packet) {
 		OnlyOnce    flexString `json:"onlyOnce"`
 		ReplyID     string     `json:"requestReplyId"`
 		Actions     []string   `json:"actions"`
-		PayloadHash string     `json:"payloadHash"`
 	}
 	if p.Decode(&b) != nil || b.ID == "" {
 		return
@@ -81,9 +74,6 @@ func (d *Daemon) handleNotification(dev *Device, l *lan.Link, p *proto.Packet) {
 		return
 	}
 	title, text := b.Title, b.Text
-	if title == "" && text == "" {
-		title = b.Ticker
-	}
 	ms, _ := strconv.ParseInt(string(b.Time), 10, 64)
 	n := &PhoneNotification{
 		ID: b.ID, App: b.AppName, Title: title, Text: text, Time: ms / 1000,
@@ -97,7 +87,6 @@ func (d *Daemon) handleNotification(dev *Device, l *lan.Link, p *proto.Packet) {
 	}
 	d.mu.Lock()
 	_, seen := dev.notifDesktop[b.ID]
-	existing := findNotification(dev.notifications, b.ID)
 	dev.notifications = removeNotification(dev.notifications, b.ID)
 	dev.notifications = append([]*PhoneNotification{n}, dev.notifications...)
 	if len(dev.notifications) > maxNotifications {
@@ -106,23 +95,12 @@ func (d *Daemon) handleNotification(dev *Device, l *lan.Link, p *proto.Packet) {
 		}
 		dev.notifications = dev.notifications[:maxNotifications]
 	}
-	if existing != nil {
-		n.Icon = existing.Icon
-	}
 	show := d.cfg.Notifications && !b.Silent.bool() && !(seen && b.OnlyOnce.bool())
 	replaces := dev.notifDesktop[b.ID]
 	d.mu.Unlock()
 	d.markDirty()
 
 	go func() {
-		if p.HasPayload() && n.Icon == "" {
-			if path := d.fetchIcon(l, p, b.PayloadHash); path != "" {
-				d.mu.Lock()
-				n.Icon = path
-				d.mu.Unlock()
-				d.markDirty()
-			}
-		}
 		if !show {
 			return
 		}
@@ -139,7 +117,7 @@ func (d *Daemon) handleNotification(dev *Device, l *lan.Link, p *proto.Packet) {
 		}
 		id := d.notify(desktop.Notification{
 			AppName: app + " · " + dev.Name, Title: n.Title, Body: n.Text,
-			IconPath: n.Icon, Actions: actions, ReplacesID: replaces,
+			Actions: actions, ReplacesID: replaces,
 		})
 		if id != 0 {
 			d.mu.Lock()
@@ -147,69 +125,6 @@ func (d *Daemon) handleNotification(dev *Device, l *lan.Link, p *proto.Packet) {
 			d.mu.Unlock()
 		}
 	}()
-}
-
-var hashRe = regexp.MustCompile(`^[a-zA-Z0-9]{1,128}$`)
-
-// fetchIcon downloads a notification icon into the cache. It returns the
-// path, or "" when the download fails.
-func (d *Daemon) fetchIcon(l *lan.Link, p *proto.Packet, hash string) string {
-	if !hashRe.MatchString(hash) {
-		hash = strconv.FormatInt(int64(p.ID), 10)
-	}
-	dir := iconDir()
-	path := filepath.Join(dir, hash+".png")
-	if _, err := os.Stat(path); err == nil {
-		// pruneIcons keeps an icon that is in use.
-		now := time.Now()
-		_ = os.Chtimes(path, now, now)
-		return path
-	}
-	ctx, cancel := context.WithTimeout(d.ctx, 10*time.Second)
-	defer cancel()
-	rc, err := l.FetchPayload(ctx, p)
-	if err != nil {
-		return ""
-	}
-	defer rc.Close()
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return ""
-	}
-	f, err := os.Create(path + ".part")
-	if err != nil {
-		return ""
-	}
-	_, err = io.Copy(f, io.LimitReader(rc, 4<<20))
-	f.Close()
-	if err != nil {
-		os.Remove(path + ".part")
-		return ""
-	}
-	if os.Rename(path+".part", path) != nil {
-		return ""
-	}
-	return path
-}
-
-// iconMaxAge is the time after which fluxd removes a notification icon
-// that no notification used.
-const iconMaxAge = 30 * 24 * time.Hour
-
-func iconDir() string { return filepath.Join(cacheDir(), "icons") }
-
-// pruneIcons removes the icons in dir that no notification used for
-// maxAge.
-func pruneIcons(dir string, maxAge time.Duration) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return
-	}
-	for _, e := range entries {
-		info, err := e.Info()
-		if err == nil && info.Mode().IsRegular() && time.Since(info.ModTime()) > maxAge {
-			os.Remove(filepath.Join(dir, e.Name()))
-		}
-	}
 }
 
 func findNotification(list []*PhoneNotification, id string) *PhoneNotification {

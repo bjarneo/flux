@@ -2,8 +2,8 @@ import QtQuick
 
 // A stand-in for a host backend that serves state from fixture.json. The
 // snapshot harness uses it. It follows the backend contract in README.md.
-// A negative "time", "lastSeen", or "mtime" value means that many seconds
-// before now. Loading the fixture needs QML_XHR_ALLOW_FILE_READ=1.
+// A negative "time" or "lastSeen" value means that many seconds before
+// now. Loading the fixture needs QML_XHR_ALLOW_FILE_READ=1.
 QtObject {
   id: root
 
@@ -30,7 +30,7 @@ QtObject {
       var out = {}
       for (var k in v) {
         var x = v[k]
-        if ((k === "time" || k === "lastSeen" || k === "mtime") && typeof x === "number" && x < 0) out[k] = now + x
+        if ((k === "time" || k === "lastSeen") && typeof x === "number" && x < 0) out[k] = now + x
         else out[k] = fixTimes(x)
       }
       return out
@@ -54,9 +54,7 @@ QtObject {
   function call(method, params, cb) {
     calls.push(method)
     var result = {}
-    if (method === "browse.open") result = { roots: fixture.roots }
-    else if (method === "browse.list") result = { entries: fixTimes((fixture.dirs || {})[params.path] || []) }
-    else if (method === "sms.thread") result = { messages: fixTimes((fixture.threads || {})[String(params.thread)] || []) }
+    if (method === "sms.thread") result = { messages: fixTimes((fixture.threads || {})[String(params.thread)] || []) }
     else if (method === "notification.dismissAll") {
       var n = 0
       updateDevice(params.device, function (d) {

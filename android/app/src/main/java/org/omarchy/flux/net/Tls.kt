@@ -12,14 +12,13 @@ import javax.net.ssl.X509ExtendedKeyManager
 import javax.net.ssl.X509ExtendedTrustManager
 
 /**
- * TLS for KDE Connect links. Both sides present a self-signed certificate.
+ * TLS for Flux links. Both sides present a self-signed certificate.
  * The handshake accepts any certificate. The link code checks the peer
  * certificate against the device ID and the pinned certificate after the
  * handshake.
  */
 class Tls(private val local: LocalCertificate) {
-    // KDE Connect for Android uses TLS 1.2 because TLS 1.3 caused problems
-    // with some peers. Flux does the same.
+    // The Flux apps use only TLS 1.2, and fluxd accepts it.
     private val context: SSLContext = SSLContext.getInstance("TLSv1.2").apply {
         init(arrayOf(SingleKeyManager(local)), arrayOf(AcceptAllTrustManager), null)
     }

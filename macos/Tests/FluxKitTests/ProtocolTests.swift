@@ -4,13 +4,13 @@ import XCTest
 final class ProtocolTests: XCTestCase {
     func testPacketIDAcceptsNumberAndString() {
         for line in [
-            #"{"id":1727260000000,"type":"kdeconnect.ping","body":{}}"#,
-            #"{"id":"1727260000000","type":"kdeconnect.ping","body":{}}"#,
-            #"{"id":1727260000000.0,"type":"kdeconnect.ping"}"#,
+            #"{"id":1727260000000,"type":"flux.ping","body":{}}"#,
+            #"{"id":"1727260000000","type":"flux.ping","body":{}}"#,
+            #"{"id":1727260000000.0,"type":"flux.ping"}"#,
         ] {
             let p = Packet.parse(line)
             XCTAssertEqual(p?.id, 1_727_260_000_000, line)
-            XCTAssertEqual(p?.type, "kdeconnect.ping", line)
+            XCTAssertEqual(p?.type, "flux.ping", line)
         }
     }
 
@@ -69,6 +69,8 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(id?.isFlux, true)
         let bad = Packet(PacketType.identity, ["deviceId": "x"])
         XCTAssertNil(Identity.from(bad))
+        let noVersion = Packet(PacketType.identity, ["deviceId": "9f1c0e5b7a2d4c3e8b6a1f0d2c4e6a8b", "deviceName": "desk", "incomingCapabilities": ["flux.tunnel"]])
+        XCTAssertNil(Identity.from(noVersion), "an identity without protocolVersion is not a Flux peer")
     }
 
     func testOnlyOmarchyComputersAreFlux() {
@@ -79,7 +81,7 @@ final class ProtocolTests: XCTestCase {
         XCTAssertTrue(identity("laptop", ["flux.tunnel"]).isFlux, "fluxd on a laptop")
         XCTAssertFalse(identity("phone", ["flux.tunnel"]).isFlux, "Flux for Android also accepts flux.tunnel")
         XCTAssertFalse(identity("tablet", ["flux.tunnel"]).isFlux)
-        XCTAssertFalse(identity("laptop", ["kdeconnect.ping"]).isFlux, "another Mac or a KDE Connect desktop")
+        XCTAssertFalse(identity("laptop", ["flux.ping"]).isFlux, "another Mac")
     }
 
     func testGeneratedCertificateAndVerificationKey() throws {

@@ -358,15 +358,6 @@ func (m *Media) Action(name, action string) error {
 	return obj.Call(mprisPlayerIface+"."+action, 0).Err
 }
 
-// Seek moves the position by offsetUs microseconds.
-func (m *Media) Seek(name string, offsetUs int64) error {
-	obj, err := m.object(name)
-	if err != nil {
-		return err
-	}
-	return obj.Call(mprisPlayerIface+".Seek", 0, offsetUs).Err
-}
-
 // SetPosition moves the position of the current track to ms milliseconds.
 func (m *Media) SetPosition(name string, ms int64) error {
 	obj, err := m.object(name)

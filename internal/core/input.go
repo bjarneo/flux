@@ -32,20 +32,20 @@ const (
 	inputQueue = 256
 )
 
-// specialKeys maps the specialKey numbers of kdeconnect.mousepad.request
-// to XKB key names. KDE Connect uses the same numbers.
+// specialKeys maps the specialKey numbers of flux.mousepad.request
+// to XKB key names.
 var specialKeys = map[int]string{
-	1: "BackSpace", 2: "Tab", 3: "Linefeed", 4: "Left", 5: "Up", 6: "Right", 7: "Down",
+	1: "BackSpace", 2: "Tab", 4: "Left", 5: "Up", 6: "Right", 7: "Down",
 	8: "Page_Up", 9: "Page_Down", 10: "Home", 11: "End", 12: "Return", 13: "Delete",
-	14: "Escape", 15: "Sys_Req", 16: "Scroll_Lock",
+	14: "Escape",
 	21: "F1", 22: "F2", 23: "F3", 24: "F4", 25: "F5", 26: "F6",
 	27: "F7", 28: "F8", 29: "F9", 30: "F10", 31: "F11", 32: "F12",
 }
 
-// mousepadBody is the body of kdeconnect.mousepad.request. A packet holds
+// mousepadBody is the body of flux.mousepad.request. A packet holds
 // 1 action: a click, a button press or release, a scroll, text or a key,
-// or a pointer motion. The Flux extension X and Y puts the pointer on a
-// position of the remote desktop before the action.
+// or a pointer motion. The fields X and Y put the pointer on a position
+// of the remote desktop before the action.
 type mousepadBody struct {
 	Dx            float64  `json:"dx"`
 	Dy            float64  `json:"dy"`
@@ -53,7 +53,6 @@ type mousepadBody struct {
 	Y             *float64 `json:"y"`
 	Scroll        bool     `json:"scroll"`
 	SingleClick   bool     `json:"singleclick"`
-	DoubleClick   bool     `json:"doubleclick"`
 	MiddleClick   bool     `json:"middleclick"`
 	RightClick    bool     `json:"rightclick"`
 	SingleHold    bool     `json:"singlehold"`
@@ -79,7 +78,7 @@ type inputAction struct {
 }
 
 // inputActions turns a mousepad body into the steps for the backend. A
-// position comes first. The action follows the order of KDE Connect:
+// position comes first. The action follows this order:
 // clicks, then a held button, then a scroll, then keys, then a motion.
 func inputActions(b mousepadBody) []inputAction {
 	if b.X == nil || b.Y == nil || !finite(*b.X) || !finite(*b.Y) {
@@ -104,8 +103,6 @@ func mousepadAction(b mousepadBody) []inputAction {
 	switch {
 	case b.SingleClick:
 		return click(desktop.BtnLeft, 1)
-	case b.DoubleClick:
-		return click(desktop.BtnLeft, 2)
 	case b.MiddleClick:
 		return click(desktop.BtnMiddle, 1)
 	case b.RightClick:

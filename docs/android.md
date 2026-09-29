@@ -3,7 +3,7 @@
 [Documentation index](README.md)
 
 Flux for Android connects a phone to an Omarchy computer that runs `fluxd`.
-It uses KDE Connect protocol version 8 with Flux extensions.
+It uses Flux protocol version 8.
 Flux supports the Flux desktop and phone apps as a pair.
 The app requires Android 10 or later, API 29.
 

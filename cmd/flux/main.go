@@ -25,7 +25,7 @@ const usage = `Usage: flux-cli [command] [--device NAME] [args]
 Commands:
   open [page]            Open the Flux window: the omarchy-shell plugin when it is
                          enabled, else flux-gui. Pages: overview, clipboard, files,
-                         notifications, messages, commands, browse
+                         notifications, messages, commands
   status [--json]        Show this computer and the known devices
   discover               Broadcast this computer on the network now
   pair DEVICE            Ask a device to pair and show the verification key

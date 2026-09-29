@@ -82,7 +82,7 @@ public enum JSONValue: Sendable, Equatable, Hashable {
         (try? JSONSerialization.data(withJSONObject: foundation, options: [.fragmentsAllowed, .withoutEscapingSlashes])) ?? Data("null".utf8)
     }
 
-    // MARK: Accessors that accept the loose types that KDE Connect peers send.
+    // MARK: Accessors that accept a number or a string for the same field.
 
     public var string: String? {
         switch self {

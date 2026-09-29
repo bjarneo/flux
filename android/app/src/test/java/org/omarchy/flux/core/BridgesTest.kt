@@ -71,26 +71,24 @@ class BridgesTest {
         assertEquals("make · 42s", n.text)
         assertEquals(1790000000000L, n.time)
         assertTrue(n.clearable)
-        assertFalse(n.cancel)
         assertEquals("pc1:flux-1".hashCode(), n.notificationId)
     }
 
     @Test
     fun notificationFromAnotherApp() {
-        // Another app name shows next to the computer name. A packet with
-        // only a ticker uses it as the title.
-        val n = ComputerNotification.from(notification("id" to "7", "appName" to "Firefox", "ticker" to "Download done"), "pc1", "omarchy-xps", now = 5)!!
+        // Another app name shows next to the computer name.
+        val n = ComputerNotification.from(notification("id" to "7", "appName" to "Firefox", "title" to "Download done"), "pc1", "omarchy-xps", now = 5)!!
         assertEquals("Firefox · omarchy-xps", n.subText)
         assertEquals("Download done", n.title)
+        assertEquals("", n.text)
         assertEquals(5L, n.time)
     }
 
     @Test
-    fun notificationCancelAndEmpty() {
-        val cancel = ComputerNotification.from(notification("id" to "flux-1", "isCancel" to true), "pc1", "omarchy-xps", 0)!!
-        assertTrue(cancel.cancel)
-        assertEquals("pc1:flux-1".hashCode(), cancel.notificationId)
+    fun notificationWithoutIdOrTitle() {
         assertNull(ComputerNotification.from(notification("id" to "x"), "pc1", "omarchy-xps", 0))
+        assertNull(ComputerNotification.from(notification("id" to "x", "title" to "  ", "text" to "body only"), "pc1", "omarchy-xps", 0))
+        assertNull(ComputerNotification.from(notification("id" to "x", "ticker" to "ticker only"), "pc1", "omarchy-xps", 0))
         assertNull(ComputerNotification.from(notification("title" to "no id"), "pc1", "omarchy-xps", 0))
     }
 }

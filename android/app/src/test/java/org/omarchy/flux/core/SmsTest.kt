@@ -88,23 +88,25 @@ class SmsTest {
         )
         assertEquals(SmsSend(listOf("+4791234567"), "On my way", 1), SmsPackets.send(v2))
 
-        // Older peers send 1 phoneNumber and no SIM.
-        val old = Packet(Types.SMS_REQUEST, bodyOf("phoneNumber" to "12345", "messageBody" to "Hi"))
-        assertEquals(SmsSend(listOf("12345"), "Hi", -1), SmsPackets.send(old))
+        // A request without a SIM uses the default SIM.
+        val to = listOf(mapOf("address" to "12345"))
+        assertEquals(SmsSend(listOf("12345"), "Hi", -1), SmsPackets.send(Packet(Types.SMS_REQUEST, bodyOf("addresses" to to, "messageBody" to "Hi"))))
 
-        assertNull(SmsPackets.send(Packet(Types.SMS_REQUEST, bodyOf("phoneNumber" to "12345", "messageBody" to "  "))))
+        assertNull(SmsPackets.send(Packet(Types.SMS_REQUEST, bodyOf("addresses" to to, "messageBody" to "  "))))
         assertNull(SmsPackets.send(Packet(Types.SMS_REQUEST, bodyOf("messageBody" to "Hi"))))
-        assertNull(SmsPackets.send(Packet(Types.SMS_REQUEST, bodyOf("phoneNumber" to "12345"))))
+        assertNull(SmsPackets.send(Packet(Types.SMS_REQUEST, bodyOf("addresses" to to))))
+        // A request needs the list of addresses. A single phoneNumber is not enough.
+        assertNull(SmsPackets.send(Packet(Types.SMS_REQUEST, bodyOf("phoneNumber" to "12345", "messageBody" to "Hi"))))
     }
 
     @Test
     fun threadRequest() {
         val p = Packet(Types.SMS_REQUEST_CONVERSATION, bodyOf("threadID" to 4, "numberToRequest" to 100))
-        assertEquals(ThreadRequest(4, 100, 0), SmsPackets.thread(p))
-        val older = Packet(Types.SMS_REQUEST_CONVERSATION, bodyOf("threadID" to "4", "rangeStartTimestamp" to 1790000000000))
-        assertEquals(ThreadRequest(4, SmsPackets.DEFAULT_THREAD, 1790000000000), SmsPackets.thread(older))
-        val big = Packet(Types.SMS_REQUEST_CONVERSATION, bodyOf("threadID" to 4, "numberToRequest" to 1_000_000, "rangeStartTimestamp" to -1))
-        assertEquals(ThreadRequest(4, SmsPackets.MAX_THREAD, 0), SmsPackets.thread(big))
+        assertEquals(ThreadRequest(4, 100), SmsPackets.thread(p))
+        val none = Packet(Types.SMS_REQUEST_CONVERSATION, bodyOf("threadID" to "4"))
+        assertEquals(ThreadRequest(4, SmsPackets.DEFAULT_THREAD), SmsPackets.thread(none))
+        val big = Packet(Types.SMS_REQUEST_CONVERSATION, bodyOf("threadID" to 4, "numberToRequest" to 1_000_000))
+        assertEquals(ThreadRequest(4, SmsPackets.MAX_THREAD), SmsPackets.thread(big))
         assertNull(SmsPackets.thread(Packet(Types.SMS_REQUEST_CONVERSATION, bodyOf("numberToRequest" to 5))))
     }
 

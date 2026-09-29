@@ -58,7 +58,7 @@ type callState struct {
 	notice uint32
 }
 
-// callBody is the body of a kdeconnect.telephony packet.
+// callBody is the body of a flux.telephony packet.
 type callBody struct {
 	Event       string     `json:"event"`
 	PhoneNumber string     `json:"phoneNumber"`

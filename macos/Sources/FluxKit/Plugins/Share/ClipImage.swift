@@ -104,10 +104,8 @@ enum ClipboardImage {
 
 /// Moves clipboard images between this device and a computer.
 enum ClipImageTransfer {
-    /// Receives the image of the packet: from the payload port of the
-    /// computer, or through a tunnel when the computer blocks incoming
-    /// connections.
-    static func receive(_ p: Packet, tls: FluxTLS, address: String, cert: [UInt8], announce: @escaping @Sendable (Packet) -> Void) async throws -> Data {
+    /// Receives the image of the packet through the tunnel `token`.
+    static func receive(_ p: Packet, token: String, tls: FluxTLS, cert: [UInt8], announce: @escaping @Sendable (Packet) -> Void) async throws -> Data {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("flux-clip-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -115,12 +113,7 @@ enum ClipImageTransfer {
         guard FileManager.default.createFile(atPath: file.path, contents: nil) else { throw FluxError("cannot create \(file.path)") }
         let handle = try FileHandle(forWritingTo: file)
         do {
-            let stream: TLSStream
-            if let token = p.payloadTunnel {
-                stream = try await Tunnel.accept(tls: tls, expected: cert, token: token, announce: announce)
-            } else {
-                stream = try await Payload.connect(tls: tls, host: address, port: p.payloadPort)
-            }
+            let stream = try await Tunnel.accept(tls: tls, expected: cert, token: token, announce: announce)
             try await stream.receive(into: handle, size: p.payloadSize)
             try handle.close()
         } catch {

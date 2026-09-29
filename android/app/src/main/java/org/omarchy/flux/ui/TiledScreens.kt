@@ -79,8 +79,6 @@ import org.omarchy.flux.screen.ScreenMirrorService
 import org.omarchy.flux.screen.ScreenSession
 import org.omarchy.flux.service.FluxNotificationListener
 
-private fun typeLabel(d: DeviceUi): String = if (d.isFlux) "Omarchy" else d.type.replaceFirstChar { it.uppercase() }
-
 // ───────────────────────── Devices ─────────────────────────
 
 /**
@@ -433,7 +431,7 @@ fun TiledHomeScreen(
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = TiledGutter)) {
-        TiledTopBar("${typeLabel(d)} · ${d.ip}", onBack) { DeviceMenu(d.name, onUnpair) }
+        TiledTopBar("Omarchy · ${d.ip}", onBack) { DeviceMenu(d.name, onUnpair) }
         Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
             StatusTile(d)
             TileRow(TileUnit2) {

@@ -8,12 +8,11 @@ import org.omarchy.flux.protocol.bodyOf
 /** The state of the phone line, as TelephonyManager reports it. */
 enum class LineState { Idle, Ringing, OffHook }
 
-/** 1 kdeconnect.telephony event. [cancel] is true when the event ends. */
+/** 1 flux.telephony event. [cancel] is true when the event ends. */
 data class CallEvent(val event: String, val cancel: Boolean = false)
 
 /**
- * Turns the line states of the phone into telephony events, in the order
- * that KDE Connect sends them:
+ * Turns the line states of the phone into telephony events in this order:
  *
  * - Idle to Ringing: ringing.
  * - Ringing or Idle to OffHook: talking. The user answered, or started a call.
@@ -42,7 +41,7 @@ object CallPackets {
     const val UNKNOWN = "Unknown caller"
 
     /**
-     * The body of a kdeconnect.telephony packet. Without the contacts
+     * The body of a flux.telephony packet. Without the contacts
      * permission, [name] is null, and the packet has only the number. With
      * no number either, the name is [UNKNOWN].
      */

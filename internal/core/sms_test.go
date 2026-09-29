@@ -133,15 +133,6 @@ func TestHandleSmsThreadAnswer(t *testing.T) {
 	if got := <-ch; len(got) != 0 {
 		t.Fatalf("the empty answer has %d messages", len(got))
 	}
-
-	// Other phones send the answer without a thread.
-	other := newDevice("kde")
-	other.Outgoing = []string{proto.TypeSmsMessages}
-	ch = wait(other, 1)
-	d.handleSms(other, smsPacket(one))
-	if got := <-ch; len(got) != 1 {
-		t.Fatalf("the answer has %d messages", len(got))
-	}
 }
 
 func TestSendSmsGroupToFluxPhone(t *testing.T) {

@@ -4,10 +4,9 @@ import AppKit
 import Foundation
 import UserNotifications
 
-/// File, text, and link sharing: kdeconnect.share.request in both
-/// directions. A file from the computer comes on a payload port, or through a
-/// Flux tunnel when the computer blocks incoming connections. A file to the
-/// computer goes out on a payload port that this device opens.
+/// File, text, and link sharing: flux.share.request in both
+/// directions. A file from the computer comes through a Flux tunnel. A file
+/// to the computer goes out on a payload port that this device opens.
 public final class SharePlugin: FluxPlugin, @unchecked Sendable {
     private weak var core: FluxCore?
     public let model: ShareModel
@@ -143,9 +142,9 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
             }
             core.toast("Link from \(from)")
         case .file(let name, let open, let lastModified):
-            guard let address = device.link?.address, let cert = device.certificate else { return }
+            guard let token = packet.payloadTunnel, let cert = device.certificate else { return }
             core.toast("Receiving \(name)")
-            let job = Download(deviceId: device.id, from: from, address: address, cert: cert, packet: packet,
+            let job = Download(deviceId: device.id, from: from, token: token, cert: cert, packet: packet,
                                name: name, open: open, lastModified: lastModified)
             Task.detached { [self] in await download(job) }
         }
@@ -155,7 +154,8 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
     private struct Download: Sendable {
         let deviceId: String
         let from: String
-        let address: String
+        /// The tunnel that the payload comes through.
+        let token: String
         let cert: [UInt8]
         let packet: Packet
         let name: String
@@ -166,7 +166,6 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
     private func download(_ job: Download) async {
         guard let core else { return }
         let folder = downloadFolder
-        let token = job.packet.payloadTunnel
         let transfer = FileTransfer(id: UUID(), deviceId: job.deviceId, name: job.name, incoming: true, size: job.packet.payloadSize)
         ui { $0.start(transfer) }
         let part: (url: URL, handle: FileHandle)
@@ -175,19 +174,14 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
             part = try Self.createExclusive(in: folder, name: job.name + ".part")
         } catch {
             core.toast("Cannot save \(job.name): \(error.localizedDescription)")
-            if let token { core.send(Tunnel.failed(token: token, error: "cannot save the file"), to: job.deviceId) }
+            core.send(Tunnel.failed(token: job.token, error: "cannot save the file"), to: job.deviceId)
             ui { $0.finish(transfer.id, file: nil, error: error) }
             return
         }
         do {
-            let stream: TLSStream
-            if let token {
-                // The computer blocks incoming connections: listen and let it connect.
-                stream = try await Tunnel.accept(tls: core.tls, expected: job.cert, token: token) { [weak core] p in
-                    core?.send(p, to: job.deviceId)
-                }
-            } else {
-                stream = try await Payload.connect(tls: core.tls, host: job.address, port: job.packet.payloadPort)
+            // Listen and let the computer connect.
+            let stream = try await Tunnel.accept(tls: core.tls, expected: job.cert, token: job.token) { [weak core] p in
+                core?.send(p, to: job.deviceId)
             }
             try await stream.receive(into: part.handle, size: job.packet.payloadSize, progress: progress(transfer.id))
             try part.handle.close()

@@ -29,8 +29,7 @@ const (
 
 // LoadOrCreateCert returns the TLS certificate of this device. The first
 // run generates a self-signed ECDSA P-256 certificate with CN set to a new
-// device ID, as current KDE Connect versions do. The device ID is the CN of
-// the certificate.
+// device ID. The device ID is the CN of the certificate.
 func LoadOrCreateCert(dir string) (tls.Certificate, string, error) {
 	certPath, keyPath := filepath.Join(dir, certFile), filepath.Join(dir, keyFile)
 	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
@@ -72,8 +71,8 @@ func generateCert(id string) (certPEM, keyPEM []byte, err error) {
 		SerialNumber: big.NewInt(10),
 		Subject: pkix.Name{
 			CommonName:         id,
-			Organization:       []string{"KDE"},
-			OrganizationalUnit: []string{"KDE Connect"},
+			Organization:       []string{"Omarchy"},
+			OrganizationalUnit: []string{"Flux"},
 		},
 		NotBefore:          now.AddDate(-1, 0, 0),
 		NotAfter:           now.AddDate(10, 0, 0),

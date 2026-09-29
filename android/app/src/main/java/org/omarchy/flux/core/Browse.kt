@@ -20,8 +20,8 @@ private const val TAG = "FluxBrowse"
 
 /**
  * Browse PC. The phone asks the computer for an SFTP session with
- * kdeconnect.sftp.request. The computer answers with kdeconnect.sftp and the
- * address, the user, and a one-time password.
+ * flux.sftp.request. The computer answers with flux.sftp and a tunnel
+ * token, the user, and a one-time password.
  */
 object Browse {
     private var ssh: SSHClient? = null
@@ -47,7 +47,7 @@ object Browse {
         }, 10, java.util.concurrent.TimeUnit.SECONDS)
     }
 
-    /** Handles kdeconnect.sftp. The core lock is held. */
+    /** Handles flux.sftp. The core lock is held. */
     fun onCredentials(core: FluxCore, d: Device, p: Packet) {
         val state = core.browseState()
         if (state == null || state.deviceId != d.id) return
@@ -72,19 +72,14 @@ object Browse {
                 val c = SSHClient(DefaultConfig()).also { client = it }
                 c.addHostKeyVerifier(PromiscuousVerifier())
                 c.connectTimeout = 8_000
-                if (offer.viaTunnel) {
-                    // The computer blocks incoming connections. It connects to
-                    // this phone, and the TLS stream carries the SSH session.
-                    // sshj opens its own socket, so a loopback bridge feeds it.
-                    if (cert == null || tls == null) error("the link is not ready")
-                    val tunnel = Tunnel.accept(tls, cert, offer.tunnel!!, announce = { d.send(it) })
-                    val loop = LoopbackBridge(tunnel).also { b = it }
-                    if (generation != gen) return@execute
-                    c.connect(loop.host, loop.port)
-                } else {
-                    val ip = offer.ip ?: d.link?.address?.hostAddress ?: error("no address")
-                    c.connect(ip, offer.port)
-                }
+                // The computer connects to this phone, and the TLS stream
+                // carries the SSH session. sshj opens its own socket, so a
+                // loopback bridge feeds it.
+                if (cert == null || tls == null) error("the link is not ready")
+                val tunnel = Tunnel.accept(tls, cert, offer.tunnel, announce = { d.send(it) })
+                val loop = LoopbackBridge(tunnel).also { b = it }
+                if (generation != gen) return@execute
+                c.connect(loop.host, loop.port)
                 if (generation != gen) return@execute
                 c.authPassword(offer.user, offer.password)
                 if (generation != gen) return@execute

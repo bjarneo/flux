@@ -94,13 +94,6 @@ Item {
           color: root.online ? Theme.ok : Theme.dim
           elide: Text.ElideRight
         }
-        Txt {
-          width: parent.width
-          visible: text !== ""
-          text: root.dev ? Fmt.signal(root.dev.signal) : ""
-          color: Theme.dim
-          elide: Text.ElideRight
-        }
       }
     }
 
@@ -114,10 +107,13 @@ Item {
       rowSpacing: 10
       uniformCellWidths: true
 
-      // Flux rings only phones. A computer does not list findmyphone.
+      // The tiles fill the height of the row, so they line up with the
+      // battery card. Flux rings only phones. A computer does not list
+      // findmyphone.
       Tile {
         id: ringTile
         Layout.fillWidth: true
+        Layout.fillHeight: true
         visible: root.view ? root.view.has("findmyphone") : true
         icon: "bell-ring"
         label: "Ring " + Fmt.noun(root.dev ? root.dev.type : "")
@@ -126,17 +122,11 @@ Item {
       }
       Tile {
         Layout.fillWidth: true
+        Layout.fillHeight: true
+        Layout.columnSpan: ringTile.visible ? 1 : 2
         icon: "upload"
         label: "Send file"
         onClicked: root.view.go("files")
-      }
-      Tile {
-        Layout.fillWidth: true
-        Layout.columnSpan: ringTile.visible ? 2 : 1
-        icon: "browse"
-        label: "Browse storage"
-        active: root.view ? root.view.has("sftp") : true
-        onClicked: root.view.go("browse")
       }
     }
 

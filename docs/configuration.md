@@ -73,7 +73,6 @@ Use the [CLI](cli.md#desktop-commands) or the Phone commands page to add command
 | `~/Pictures/flux/` | Camera photos by default |
 | `~/Pictures/flux/screenshots/` | Automatically received screenshots by default |
 | `~/Pictures/flux/signatures/` | Signatures from the camera by default |
-| `~/.cache/flux/` | Notification icons and album art |
 | `~/.cache/flux/release.json` | The last answer of the [release check](#release-check) |
 | `~/.cache/flux/update/` | The package that `flux-cli update` downloads, until pacman installs it |
 | `$XDG_RUNTIME_DIR/flux/fluxd.sock` | Local IPC socket |

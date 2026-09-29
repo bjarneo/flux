@@ -324,24 +324,6 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		return ok, d.SendNotification(dev, p.Title, p.Body)
 	case "sms.send":
 		return ok, d.SendSms(dev, p.Addresses, p.Body)
-	case "browse.open":
-		roots, err := d.BrowseOpen(dev)
-		if err != nil {
-			return nil, err
-		}
-		return map[string]any{"roots": roots}, nil
-	case "browse.list":
-		entries, err := d.BrowseList(dev, p.Path)
-		if err != nil {
-			return nil, err
-		}
-		return map[string]any{"entries": entries}, nil
-	case "browse.get":
-		t, err := d.BrowseGet(dev, p.Path)
-		if err != nil {
-			return nil, err
-		}
-		return map[string]any{"transfer": t.ID}, nil
 	}
 	return nil, apiErr("unknown_method", "Unknown method %q", method)
 }

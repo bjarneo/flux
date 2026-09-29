@@ -128,12 +128,12 @@ Flux then stays off after a restart, until you turn it on again.
 
 ### Network
 
-Flux uses KDE Connect protocol version 8 with Flux extensions.
+Flux uses Flux protocol version 8.
 Both devices must be on the same local network, or use an [extra address](tailscale.md).
 
 | Part | Port or name | Direction |
 | --- | --- | --- |
-| mDNS announcement | `_kdeconnect._udp` | The phone announces itself for as long as the service runs. `fluxd` finds the phone this way. |
+| mDNS announcement | `_flux._udp` | The phone announces itself for as long as the service runs. `fluxd` finds the phone this way. |
 | UDP identity | UDP port 1716 | The phone listens for identities from computers and sends its own identity. |
 | TLS link | A TCP port from 1716 to 1764 | The phone accepts links and opens links to computers. |
 

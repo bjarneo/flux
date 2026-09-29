@@ -15,7 +15,6 @@ data class TrustedDevice(
     val type: String,
     val certificate: String,
     val lastIp: String = "",
-    val isFlux: Boolean = false,
 ) {
     fun cert(): X509Certificate = parseCertificate(Base64.decode(certificate, Base64.NO_WRAP))
 }

@@ -21,7 +21,6 @@ func (d *Daemon) handleDesktopMediaRequest(l *lan.Link, p *proto.Packet) {
 		RequestNowPlaying bool   `json:"requestNowPlaying"`
 		RequestVolume     bool   `json:"requestVolume"`
 		Action            string `json:"action"`
-		Seek              *int64 `json:"Seek"`
 		SetPosition       *int64 `json:"SetPosition"`
 		SetVolume         *int   `json:"setVolume"`
 	}
@@ -38,8 +37,6 @@ func (d *Daemon) handleDesktopMediaRequest(l *lan.Link, p *proto.Packet) {
 	switch {
 	case b.Action != "":
 		err = d.media.Action(b.Player, b.Action)
-	case b.Seek != nil:
-		err = d.media.Seek(b.Player, *b.Seek)
 	case b.SetPosition != nil:
 		err = d.media.SetPosition(b.Player, *b.SetPosition)
 	case b.SetVolume != nil:
@@ -63,7 +60,7 @@ func (d *Daemon) sendPlayers(links ...*lan.Link) {
 	for _, pl := range players {
 		names = append(names, pl.Name)
 	}
-	packets := []*proto.Packet{proto.New(proto.TypeMpris, map[string]any{"playerList": names, "supportAlbumArtPayload": false})}
+	packets := []*proto.Packet{proto.New(proto.TypeMpris, map[string]any{"playerList": names})}
 	for _, pl := range players {
 		packets = append(packets, nowPlaying(pl))
 	}
@@ -80,17 +77,12 @@ func (d *Daemon) sendNowPlaying(l *lan.Link, name string) {
 	}
 }
 
-// nowPlaying returns the kdeconnect.mpris packet with the state of a
+// nowPlaying returns the flux.mpris packet with the state of a
 // player.
 func nowPlaying(pl desktop.Player) *proto.Packet {
-	now := pl.Title
-	if pl.Artist != "" {
-		now = pl.Artist + " - " + pl.Title
-	}
 	body := map[string]any{
 		"player": pl.Name, "title": pl.Title, "artist": pl.Artist, "album": pl.Album,
-		"nowPlaying": now, "isPlaying": pl.Playing, "pos": pl.Position, "length": pl.Length,
-		"canPlay": pl.CanPlay, "canPause": pl.CanPause,
+		"isPlaying": pl.Playing, "pos": pl.Position, "length": pl.Length,
 		"canGoNext": pl.CanGoNext, "canGoPrevious": pl.CanGoPrevious, "canSeek": pl.CanSeek,
 		"albumArtUrl": pl.ArtURL,
 	}

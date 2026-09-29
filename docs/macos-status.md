@@ -8,7 +8,7 @@ For build, use, and permissions, see [Flux for macOS](macos.md).
 ## Goal
 
 A native Mac app, in Swift and SwiftUI, that takes the place of the Android phone app toward `fluxd`.
-It speaks KDE Connect protocol version 8 with the Flux extensions and offers the Android features that macOS allows.
+It speaks Flux protocol version 8 and offers the Android features that macOS allows.
 The Mac is a device peer, not a replacement for the Omarchy desktop side.
 
 ## Plan as executed
@@ -30,8 +30,8 @@ The resulting headless daemon (`fluxd -headless -udp-port … -tcp-port …`) se
 
 | Layer | Content |
 | --- | --- |
-| Protocol | `JSONValue`, `Packet`, `Identity`, packet types, RSA 2048 self-signed certificate in the KDE Connect format, SubjectPublicKeyInfo extraction, and the 8-character verification key |
-| Network | TLS 1.2 with SwiftNIO and swift-nio-ssl, UDP identity broadcasts, the TCP listener and dialer, the plain-text identity then TLS upgrade on the same socket, links, payload servers and clients, `flux.tunnel`, and Bonjour `_kdeconnect._udp` |
+| Protocol | `JSONValue`, `Packet`, `Identity`, packet types, RSA 2048 self-signed certificate with the device ID as its common name, SubjectPublicKeyInfo extraction, and the 8-character verification key |
+| Network | TLS 1.2 with SwiftNIO and swift-nio-ssl, UDP identity broadcasts, the TCP listener and dialer, the plain-text identity then TLS upgrade on the same socket, links, payload servers and clients, `flux.tunnel`, and Bonjour `_flux._udp` |
 | Core | `FluxCore`, `Device` with pairing, `TrustStore` with pinned certificates, the `FluxPlugin` protocol, and one shared `Notifier` for UserNotifications |
 
 SwiftNIO was chosen because the protocol reads a plain-text identity line and then starts TLS on the same socket.
@@ -78,19 +78,19 @@ The integrator merged each branch into `macos-client`, resolved the composition 
 
 | Direction | Packet types |
 | --- | --- |
-| Incoming | `kdeconnect.ping`, `kdeconnect.battery`, `kdeconnect.battery.request`, `kdeconnect.clipboard`, `kdeconnect.clipboard.connect`, `kdeconnect.share.request`, `kdeconnect.share.request.update`, `kdeconnect.notification`, `kdeconnect.runcommand`, `kdeconnect.mpris`, `kdeconnect.sftp`, `flux.webcam`, `flux.screen`, `flux.mic`, `flux.dnd`, `flux.approve`, `flux.input`, `flux.herdr`, `flux.desktop`, `flux.shortcuts` |
-| Outgoing | `kdeconnect.ping`, `kdeconnect.battery`, `kdeconnect.clipboard`, `kdeconnect.clipboard.connect`, `kdeconnect.share.request`, `kdeconnect.share.request.update`, `kdeconnect.runcommand.request`, `kdeconnect.mpris.request`, `kdeconnect.sftp.request`, `kdeconnect.mousepad.request`, `flux.tunnel`, `flux.webcam`, `flux.screen`, `flux.mic`, `flux.dnd`, `flux.approve`, `flux.herdr`, `flux.desktop`, `flux.shortcuts` |
+| Incoming | `flux.ping`, `flux.battery`, `flux.clipboard`, `flux.clipboard.connect`, `flux.share.request`, `flux.share.request.update`, `flux.notification`, `flux.runcommand`, `flux.mpris`, `flux.sftp`, `flux.webcam`, `flux.screen`, `flux.mic`, `flux.dnd`, `flux.approve`, `flux.input`, `flux.herdr`, `flux.desktop`, `flux.shortcuts` |
+| Outgoing | `flux.ping`, `flux.battery`, `flux.clipboard`, `flux.clipboard.connect`, `flux.share.request`, `flux.share.request.update`, `flux.runcommand.request`, `flux.mpris.request`, `flux.sftp.request`, `flux.mousepad.request`, `flux.tunnel`, `flux.webcam`, `flux.screen`, `flux.mic`, `flux.dnd`, `flux.approve`, `flux.herdr`, `flux.desktop`, `flux.shortcuts` |
 
-A Mac without an internal battery announces `kdeconnect.battery` as incoming only.
+A Mac without an internal battery announces `flux.battery` as incoming only.
 `fluxd` decides whether to use tunnels from the peer's outgoing `flux.tunnel` (`Link.CanTunnel`), so the Mac does not list it as incoming.
 
 ### Not possible on macOS
 
 | Android feature | Reason |
 | --- | --- |
-| Mirror phone notifications (`kdeconnect.notification` outgoing, `.request`, `.reply`, `.action`) | macOS gives apps no access to other apps' notifications |
-| Call alerts (`kdeconnect.telephony`) | A Mac has no telephony |
-| Text messages (`kdeconnect.sms.messages` outgoing, `kdeconnect.sms.request` and the conversation requests incoming) | macOS gives apps no access to SMS |
+| Mirror phone notifications (`flux.notification` outgoing, `.request`, `.reply`, `.action`) | macOS gives apps no access to other apps' notifications |
+| Call alerts (`flux.telephony`) | A Mac has no telephony |
+| Text messages (`flux.sms.messages` outgoing, `flux.sms.request` and the conversation requests incoming) | macOS gives apps no access to SMS |
 | Read and set Do Not Disturb directly | No public Focus API for an ad hoc signed app. The Mac reads Focus through a Focus filter and sets it by running user-chosen Shortcuts |
 | Camera zoom, exposure, and white balance presets | No macOS API. Zoom is digital, and exposure is a software gain |
 
@@ -119,7 +119,7 @@ Unless noted, the peer was the headless `fluxd` described above, driven with `fl
 | Clipboard | `flux-cli clip` reached the Mac pasteboard. A Mac pasteboard change appeared in `fluxd`'s clipboard history |
 | Screenshots | A new screenshot in a watched folder was sent once |
 | Notifications | `flux-cli notify` and `flux-cli notify --run` produced Mac notifications, including the exit code. The app delivered a banner |
-| Battery | `flux-cli status --json` showed the Mac battery, and `battery.request` was answered |
+| Battery | `flux-cli status --json` showed the Mac battery |
 | Do Not Disturb | With a non-headless `fluxd` and a fake `makoctl`: a Mac change made `fluxd` switch the mako mode. A change on the computer made the Mac run the configured shortcut command. The guard stopped echoes |
 | Media, Mac to computer | Request packets and parsing checked in the log and in unit tests. Headless `fluxd` has no MPRIS players |
 | Commands | `flux-cli commands add`, then running it from the Mac created the file on the computer side, from the smoke client and from the app UI |

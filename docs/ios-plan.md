@@ -14,7 +14,7 @@ It shares FluxKit with [Flux for macOS](macos.md) and offers the Android feature
 - [x] XcodeGen project in `ios/project.yml`. The app sources are in `ios/App`. The generated project stays out of Git.
 - [x] One `FluxPlugin` per feature, composed in `ios/App/Features/Features.swift` with one line per entry, like the Mac app.
 - [x] The iPhone announces itself as `phone` and only the capabilities that it implements.
-- [x] Discovery follows Android and the Mac: the iPhone listens on TCP 1716 to 1764 and publishes `_kdeconnect._udp` through Bonjour, and `fluxd` connects to it. The iPhone also sends its identity by unicast UDP to each computer that it resolves through Bonjour. It sends no UDP broadcasts, because they need the multicast entitlement.
+- [x] Discovery follows Android and the Mac: the iPhone listens on TCP 1716 to 1764 and publishes `_flux._udp` through Bonjour, and `fluxd` connects to it. The iPhone also sends its identity by unicast UDP to each computer that it resolves through Bonjour. It sends no UDP broadcasts, because they need the multicast entitlement.
 - [x] Wire formats follow the Android app and the Go handlers exactly. New FluxKit wire code gets unit tests.
 - [x] No signing settings are committed. The simulator needs none. A device build uses the developer's own team in Xcode.
 

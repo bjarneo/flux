@@ -43,10 +43,11 @@ class ClipImageTest {
     @Test
     fun packetCarriesTheTypeAndThePayload() {
         val p = Packet(Types.FLUX_CLIPBOARD_IMAGE, bodyOf("mime" to "image/png"), payloadSize = 2048, payloadPort = 1739)
-        val back = Packet.parse(p.serialize().trim())!!
+        val line = p.serialize().trim()
+        val back = Packet.parse(line)!!
         assertEquals(Types.FLUX_CLIPBOARD_IMAGE, back.type)
         assertEquals("image/png", back.string("mime"))
         assertEquals(2048L, back.payloadSize)
-        assertTrue(back.hasPayload)
+        assertTrue(line.contains(""""payloadTransferInfo":{"port":1739}"""))
     }
 }

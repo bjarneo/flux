@@ -20,7 +20,9 @@ class ProtocolTest {
         assertEquals(false, q.bool("open"))
         assertEquals(2, q.int("numberOfFiles"))
         assertEquals(1234L, q.payloadSize)
-        assertEquals(1740, q.payloadPort)
+        // Only this phone announces a payload port, so the parse ignores it.
+        assertTrue(line.contains(""""payloadTransferInfo":{"port":1740}"""))
+        assertEquals(0, q.payloadPort)
     }
 
     @Test
@@ -32,7 +34,7 @@ class ProtocolTest {
 
     @Test
     fun parseAcceptsStringId() {
-        val p = Packet.parse("""{"id":"1790000000123","type":"kdeconnect.ping","body":{}}""")!!
+        val p = Packet.parse("""{"id":"1790000000123","type":"flux.ping","body":{}}""")!!
         assertEquals(1790000000123L, p.id)
     }
 
@@ -63,6 +65,7 @@ class ProtocolTest {
         assertEquals(8, back.protocolVersion)
         assertEquals(INCOMING, back.incoming)
         assertNull(Identity.from(Packet(Types.IDENTITY, bodyOf("deviceId" to "short"))))
+        assertNull(Identity.from(Packet(Types.IDENTITY, bodyOf("deviceId" to id.deviceId, "deviceName" to "pc"))))
     }
 
     @Test
@@ -104,8 +107,8 @@ class ProtocolTest {
         val c = LocalCertificate.generate(id)
         assertEquals(id, c.deviceId)
         val dn = c.certificate.subjectX500Principal.name
-        assertTrue(dn.contains("O=KDE"))
-        assertTrue(dn.contains("OU=KDE Connect"))
+        assertTrue(dn.contains("O=Omarchy"))
+        assertTrue(dn.contains("OU=Flux"))
         val spki = subjectPublicKeyInfo(c.certificate)
         assertTrue(spki.contentEquals(c.certificate.publicKey.encoded))
         val other = LocalCertificate.generate("fedcba9876543210fedcba9876543210")

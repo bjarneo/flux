@@ -1,12 +1,12 @@
 import CoreGraphics
 import Foundation
 
-/// The flux.desktop extension. This Mac opens a TLS listener and sends
+/// The flux.desktop packets. This Mac opens a TLS listener and sends
 /// "start" with its port, the longest side of the stream, and optionally a
 /// monitor. The computer connects and writes frames, see
 /// `DesktopFrameReader`. The computer answers "live" with the monitor and
 /// the size, "error", or "stop". The mouse goes as
-/// kdeconnect.mousepad.request with a position. docs/remote-desktop.md
+/// flux.mousepad.request with a position. docs/remote-desktop.md
 /// describes the fields.
 public enum DesktopPackets {
     /// The limits of the longest side of the stream, as fluxd has them.

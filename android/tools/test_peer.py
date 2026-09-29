@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A minimal KDE Connect desktop peer for testing the Flux Android app.
+"""A minimal Flux desktop peer for testing the Flux Android app.
 
 The peer reaches the phone through `adb forward`, so no firewall rule is
 needed on the computer. It opens TCP to the app, sends a plain-text
@@ -24,6 +24,8 @@ import argparse
 import hashlib
 import json
 import os
+import queue
+import select
 import socket
 import ssl
 import struct
@@ -112,16 +114,16 @@ def make_identity(dev_id, target=None, name="flux-test-peer", desktop=False):
         "deviceType": "laptop",
         "protocolVersion": 8,
         "incomingCapabilities": [
-            "kdeconnect.ping", "kdeconnect.battery", "kdeconnect.clipboard", "kdeconnect.clipboard.connect",
-            "kdeconnect.share.request", "kdeconnect.notification", "kdeconnect.runcommand.request",
-            "kdeconnect.mpris.request", "kdeconnect.sftp.request", "flux.tunnel",
+            "flux.ping", "flux.battery", "flux.clipboard", "flux.clipboard.connect",
+            "flux.share.request", "flux.notification", "flux.runcommand.request",
+            "flux.mpris.request", "flux.sftp.request", "flux.tunnel",
             "flux.clipboard.image",
-            "kdeconnect.mousepad.request",
+            "flux.mousepad.request",
         ] + (["flux.desktop", "flux.shortcuts"] if desktop else []),
         "outgoingCapabilities": [
-            "kdeconnect.ping", "kdeconnect.battery", "kdeconnect.clipboard", "kdeconnect.share.request",
-            "kdeconnect.notification.request", "kdeconnect.findmyphone.request", "kdeconnect.runcommand",
-            "kdeconnect.mpris", "kdeconnect.sftp", "flux.clipboard.image", "flux.input",
+            "flux.ping", "flux.battery", "flux.clipboard", "flux.share.request",
+            "flux.notification.request", "flux.findmyphone.request", "flux.runcommand",
+            "flux.mpris", "flux.sftp", "flux.clipboard.image", "flux.input",
         ] + (["flux.desktop", "flux.shortcuts"] if desktop else []),
     }
     if target:
@@ -136,7 +138,7 @@ def main():
     ap.add_argument("--seconds", type=int, default=600, help="how long to answer requests after pairing")
     ap.add_argument("--send-file", help="send this file to the phone after pairing")
     ap.add_argument("--clipboard-image", help="put this PNG image on the clipboard of the phone after pairing")
-    ap.add_argument("--sftp-port", type=int, help="answer Browse PC with an SFTP server on 127.0.0.1:<port>")
+    ap.add_argument("--sftp-port", type=int, help="answer Browse PC through a tunnel to an SFTP server on 127.0.0.1:<port>")
     ap.add_argument("--sftp-root", default="/", help="the folder that the SFTP server serves")
     ap.add_argument("--sftp-password", default="flux-test")
     ap.add_argument("--wait-for-pair", action="store_true", help="let the phone start the pairing")
@@ -156,7 +158,7 @@ def main():
         with open(id_file, "w") as f:
             f.write(uuid.uuid4().hex)
         sh("openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes",
-           "-keyout", key, "-out", cert, "-days", "3650", "-subj", f"/O=KDE/OU=KDE Connect/CN={open(id_file).read()}")
+           "-keyout", key, "-out", cert, "-days", "3650", "-subj", f"/O=Omarchy/OU=Flux/CN={open(id_file).read()}")
     dev_id = open(id_file).read().strip()
     own_der = sh("openssl", "x509", "-in", cert, "-outform", "DER")
 
@@ -169,7 +171,7 @@ def main():
     sh(*adb, "forward", f"tcp:{FORWARD_PORT}", "tcp:1716")
     raw = socket.create_connection(("127.0.0.1", FORWARD_PORT), timeout=10)
     desktop = args.desktop is not None
-    raw.sendall(packet("kdeconnect.identity", make_identity(dev_id, target=phone_id, name=args.name, desktop=desktop)))
+    raw.sendall(packet("flux.identity", make_identity(dev_id, target=phone_id, name=args.name, desktop=desktop)))
 
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.maximum_version = ssl.TLSVersion.TLSv1_2
@@ -182,10 +184,10 @@ def main():
     peer = tls.getpeercert(binary_form=True)
     assert peer == phone_der, "phone presented a different certificate"
 
-    tls.sendall(packet("kdeconnect.identity", make_identity(dev_id, name=args.name, desktop=desktop)))
+    tls.sendall(packet("flux.identity", make_identity(dev_id, name=args.name, desktop=desktop)))
     reader = tls.makefile("rb")
     ident = json.loads(reader.readline())
-    assert ident["type"] == "kdeconnect.identity", ident
+    assert ident["type"] == "flux.identity", ident
     b = ident["body"]
     assert b["deviceId"] == phone_id and b["protocolVersion"] == 8, b
     assert "tcpPort" not in b, "post-TLS identity must not carry tcpPort"
@@ -196,7 +198,7 @@ def main():
     if not already and not args.wait_for_pair:
         ts = int(time.time())
         expected = verification_key(spki(own_der), spki(phone_der), ts)
-        tls.sendall(packet("kdeconnect.pair", {"pair": True, "timestamp": ts}))
+        tls.sendall(packet("flux.pair", {"pair": True, "timestamp": ts}))
         print(f"pair request sent. The phone must show {expected}")
 
     lock = threading.Lock()
@@ -221,9 +223,9 @@ def main():
                 "canPlay": True, "canPause": True, "canGoNext": True, "canGoPrevious": True, "volume": volume["v"]}
 
     def after_pair():
-        send("kdeconnect.battery", {"currentCharge": 64, "isCharging": False, "thresholdEvent": 0})
-        send("kdeconnect.runcommand", {"commandList": json.dumps(commands), "canAddCommand": True})
-        send("kdeconnect.mpris", {"playerList": ["spotify"], "supportAlbumArtPayload": False})
+        send("flux.battery", {"currentCharge": 64, "isCharging": False, "thresholdEvent": 0})
+        send("flux.runcommand", {"commandList": json.dumps(commands), "canAddCommand": True})
+        send("flux.mpris", {"playerList": ["spotify"], "supportAlbumArtPayload": False})
         # The touchpad screen works. The peer prints the input that it gets.
         send("flux.input", {"enabled": True, "desktop": desktop})
         if args.send_file:
@@ -231,31 +233,96 @@ def main():
         if args.clipboard_image:
             send_file(args.clipboard_image, "flux.clipboard.image", {"mime": "image/png"})
 
-    def send_file(path, kind="kdeconnect.share.request", body=None):
+    def phone_client(sock):
+        """Runs TLS as the client on a connection to a listener of the
+        phone. The phone must present its certificate."""
+        cctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        cctx.check_hostname = False
+        cctx.maximum_version = ssl.TLSVersion.TLSv1_2
+        cctx.load_cert_chain(cert, key)
+        cctx.verify_mode = ssl.CERT_REQUIRED
+        cctx.load_verify_locations(cadata=phone_pem)
+        cctx.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
+        return cctx.wrap_socket(sock)
+
+    # The flux.tunnel answers of the phone, by token. The read loop fills them.
+    tunnels = {}
+
+    def new_tunnel():
+        """Returns a token for a tunnel and registers it, like NewTunnelID in fluxd."""
+        token = uuid.uuid4().hex[:24]
+        tunnels[token] = queue.Queue()
+        return token
+
+    def open_tunnel(token):
+        """Waits for the port of the tunnel, forwards a free local port to it,
+        and connects as the TLS client, like OpenTunnel in fluxd. It returns
+        the TLS socket and the local port. Remove the forward after use."""
+        try:
+            reply = tunnels[token].get(timeout=30)
+        except queue.Empty:
+            raise OSError("the phone did not open a tunnel within 30 seconds") from None
+        finally:
+            tunnels.pop(token, None)
+        if "error" in reply:
+            raise OSError(f"the phone could not open a tunnel: {reply['error']}")
+        with socket.socket() as free:
+            free.bind(("127.0.0.1", 0))
+            local = free.getsockname()[1]
+        sh(*adb, "forward", f"tcp:{local}", f"tcp:{reply['port']}")
+        try:
+            conn = phone_client(socket.create_connection(("127.0.0.1", local), timeout=10))
+        except OSError:
+            sh(*adb, "forward", "--remove", f"tcp:{local}")
+            raise
+        conn.settimeout(None)
+        return conn, local
+
+    def send_file(path, kind="flux.share.request", body=None):
+        """Sends a file through a tunnel, like pushPayload in fluxd."""
         data = open(path, "rb").read()
         if body is None:
             body = {"filename": os.path.basename(path), "open": False}
-        srv = socket.socket()
-        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        srv.bind(("127.0.0.1", 0))
-        port = srv.getsockname()[1]
-        srv.listen(1)
-        # The phone connects to 127.0.0.1:<port> on itself. adb reverse maps it here.
-        sh(*adb, "reverse", f"tcp:{port}", f"tcp:{port}")
-        send(kind, body, payloadSize=len(data), payloadTransferInfo={"port": port})
-        conn, _ = srv.accept()
-        pctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        pctx.maximum_version = ssl.TLSVersion.TLSv1_2
-        pctx.load_cert_chain(cert, key)
-        pctx.verify_mode = ssl.CERT_REQUIRED
-        pctx.load_verify_locations(cadata=phone_pem)
-        pctx.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
-        c = pctx.wrap_socket(conn, server_side=True)
-        c.sendall(data)
-        c.close()
-        srv.close()
-        sh(*adb, "reverse", "--remove", f"tcp:{port}")
+        token = new_tunnel()
+        send(kind, body, payloadSize=len(data), payloadTransferInfo={"tunnel": token})
+        try:
+            conn, local = open_tunnel(token)
+        except OSError as e:
+            print(f"cannot send {path}: {e}")
+            return
+        try:
+            conn.sendall(data)
+            conn.close()
+        finally:
+            sh(*adb, "forward", "--remove", f"tcp:{local}")
         print(f"sent {path} ({len(data)} bytes)")
+
+    def serve_sftp(token):
+        """Relays the Browse PC session between the tunnel and the SFTP
+        server on 127.0.0.1:<sftp-port>. fluxd runs its SSH server in the
+        tunnel instead."""
+        try:
+            conn, local = open_tunnel(token)
+        except OSError as e:
+            print(f"Browse PC tunnel: {e}")
+            return
+        try:
+            with socket.create_connection(("127.0.0.1", args.sftp_port), timeout=10) as server:
+                server.settimeout(None)
+                while True:
+                    # TLS can keep decrypted bytes that select does not see.
+                    ready = [conn] if conn.pending() else select.select([conn, server], [], [])[0]
+                    for src in ready:
+                        data = src.recv(65536)
+                        if not data:
+                            return
+                        (server if src is conn else conn).sendall(data)
+        except OSError as e:
+            print(f"Browse PC relay closed: {e}")
+        finally:
+            conn.close()
+            sh(*adb, "forward", "--remove", f"tcp:{local}")
+            print("Browse PC session ended")
 
     recorder = {"proc": None, "stopped": False}
 
@@ -287,14 +354,7 @@ def main():
         w, h = int(mw * scale) // 2 * 2, int(mh * scale) // 2 * 2
         sh(*adb, "forward", f"tcp:{port}", f"tcp:{port}")
         try:
-            cctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-            cctx.check_hostname = False
-            cctx.maximum_version = ssl.TLSVersion.TLSv1_2
-            cctx.load_cert_chain(cert, key)
-            cctx.verify_mode = ssl.CERT_REQUIRED
-            cctx.load_verify_locations(cadata=phone_pem)
-            cctx.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
-            conn = cctx.wrap_socket(socket.create_connection(("127.0.0.1", port), timeout=10))
+            conn = phone_client(socket.create_connection(("127.0.0.1", port), timeout=10))
             conn.settimeout(None)
             proc = subprocess.Popen(
                 ["gpu-screen-recorder", "-w", name, "-c", "flv", "-k", "h264", "-s", f"{w}x{h}", "-f", "30",
@@ -333,12 +393,12 @@ def main():
             break
         p = json.loads(line)
         kind, body = p["type"], p.get("body", {})
-        if kind == "kdeconnect.pair":
+        if kind == "flux.pair":
             if body.get("pair") and "timestamp" in body:
                 # The phone started the pairing. Accept it, like a user who
                 # compares the key and clicks Accept.
                 print(f"phone asks to pair with key {verification_key(spki(own_der), spki(phone_der), body['timestamp'])}")
-                send("kdeconnect.pair", {"pair": True})
+                send("flux.pair", {"pair": True})
             if body.get("pair"):
                 print("PAIRED")
                 with open(paired_file, "w") as f:
@@ -353,19 +413,19 @@ def main():
                 break
             continue
         print(f"<- {kind} {json.dumps(body)[:160]}" + (f" payload={p.get('payloadSize')}" if "payloadSize" in p else ""))
-        if kind == "kdeconnect.runcommand.request" and body.get("requestCommandList"):
-            send("kdeconnect.runcommand", {"commandList": json.dumps(commands), "canAddCommand": True})
-        elif kind == "kdeconnect.mpris.request":
+        if kind == "flux.runcommand.request" and body.get("requestCommandList"):
+            send("flux.runcommand", {"commandList": json.dumps(commands), "canAddCommand": True})
+        elif kind == "flux.mpris.request":
             if body.get("requestPlayerList"):
-                send("kdeconnect.mpris", {"playerList": ["spotify"], "supportAlbumArtPayload": False})
+                send("flux.mpris", {"playerList": ["spotify"], "supportAlbumArtPayload": False})
             if body.get("requestNowPlaying"):
-                send("kdeconnect.mpris", now_playing())
+                send("flux.mpris", now_playing())
             if body.get("action") == "PlayPause":
                 playing["v"] = not playing["v"]
-                send("kdeconnect.mpris", now_playing())
+                send("flux.mpris", now_playing())
             if "setVolume" in body:
                 volume["v"] = max(0, min(100, int(body["setVolume"])))
-                send("kdeconnect.mpris", now_playing())
+                send("flux.mpris", now_playing())
         elif kind == "flux.desktop":
             if body.get("state") == "start" and desktop:
                 threading.Thread(target=stream_desktop, args=(body,), daemon=True).start()
@@ -380,16 +440,22 @@ def main():
                 target = body.get("workspace", 1)
                 spaces["windows"][target] = spaces["windows"].get(target, 0) + 1
             send("flux.shortcuts", shortcut_state(bool(body.get("request"))))
-        elif kind == "kdeconnect.sftp.request":
+        elif kind == "flux.tunnel":
+            waiter = tunnels.get(body.get("id"))
+            if waiter:
+                waiter.put(body)
+        elif kind == "flux.sftp.request":
             if args.sftp_port:
-                sh(*adb, "reverse", f"tcp:{args.sftp_port}", f"tcp:{args.sftp_port}")
-                root = args.sftp_root.rstrip("/")
-                names = sorted(n for n in os.listdir(root) if os.path.isdir(os.path.join(root, n)))
-                send("kdeconnect.sftp", {"ip": "127.0.0.1", "port": args.sftp_port, "user": "kdeconnect",
-                                         "password": args.sftp_password, "path": root or "/",
-                                         "multiPaths": [f"{root}/{n}" for n in names], "pathNames": names})
+                # Like fluxd: the root first as Home, then its folders. The lists have the same length.
+                root = args.sftp_root.rstrip("/") or "/"
+                folders = sorted(n for n in os.listdir(root) if os.path.isdir(os.path.join(root, n)))
+                token = new_tunnel()
+                send("flux.sftp", {"tunnel": token, "user": "flux", "password": args.sftp_password, "path": root,
+                                   "multiPaths": [root] + [os.path.join(root, n) for n in folders],
+                                   "pathNames": ["Home"] + folders})
+                threading.Thread(target=serve_sftp, args=(token,), daemon=True).start()
             else:
-                send("kdeconnect.sftp", {"errorMessage": "The test peer has no SFTP server."})
+                send("flux.sftp", {"errorMessage": "The test peer has no SFTP server."})
         if deadline and time.time() > deadline:
             break
     sh(*adb, "forward", "--remove", f"tcp:{FORWARD_PORT}")

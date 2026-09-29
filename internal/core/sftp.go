@@ -6,14 +6,9 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"errors"
-	"fmt"
-	"io"
 	"net"
 	"os"
-	"path"
 	"path/filepath"
-	"sort"
-	"strings"
 	"time"
 
 	"github.com/pkg/sftp"
@@ -24,288 +19,10 @@ import (
 	"flux/internal/proto"
 )
 
-// SftpInfo is the body of a kdeconnect.sftp packet.
-type SftpInfo struct {
-	IP         string   `json:"ip"`
-	Port       int      `json:"port"`
-	User       string   `json:"user"`
-	Password   string   `json:"password"`
-	Path       string   `json:"path"`
-	MultiPaths []string `json:"multiPaths"`
-	PathNames  []string `json:"pathNames"`
-	Error      string   `json:"errorMessage"`
-}
-
-// BrowseRoot is a top folder that the phone shares.
-type BrowseRoot struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
-}
-
-// BrowseEntry is one file or folder on the phone.
-type BrowseEntry struct {
-	Name  string `json:"name"`
-	Path  string `json:"path"`
-	Dir   bool   `json:"dir"`
-	Size  int64  `json:"size"`
-	Mtime int64  `json:"mtime"`
-	Kind  string `json:"kind"`
-}
-
-func (d *Daemon) handleSftp(dev *Device, p *proto.Packet) {
-	var info SftpInfo
-	if p.Decode(&info) != nil {
-		return
-	}
-	d.mu.Lock()
-	waiters := dev.sftpWait
-	dev.sftpWait = nil
-	d.mu.Unlock()
-	for _, ch := range waiters {
-		select {
-		case ch <- info:
-		default:
-		}
-	}
-}
-
-// BrowseOpen starts the SFTP server on the phone and connects to it.
-func (d *Daemon) BrowseOpen(dev *Device) ([]BrowseRoot, error) {
-	d.mu.Lock()
-	if dev.sftpClient != nil {
-		roots := dev.sftpRoots
-		d.mu.Unlock()
-		if _, err := dev.sftpClient.Getwd(); err == nil {
-			d.mu.Lock()
-			d.touchSftpLocked(dev)
-			d.mu.Unlock()
-			return roots, nil
-		}
-		d.mu.Lock()
-		dev.closeSftp()
-	}
-	ch := make(chan SftpInfo, 1)
-	dev.sftpWait = append(dev.sftpWait, ch)
-	d.mu.Unlock()
-	if err := d.send(dev, proto.New(proto.TypeSftpRequest, map[string]any{"startBrowsing": true})); err != nil {
-		return nil, err
-	}
-	var info SftpInfo
-	select {
-	case info = <-ch:
-	case <-time.After(15 * time.Second):
-		return nil, apiErr("timeout", "%s did not start file sharing. Allow storage access in the KDE Connect app", dev.Name)
-	}
-	if info.Error != "" {
-		return nil, apiErr("phone", "%s", info.Error)
-	}
-	host := info.IP
-	if host == "" {
-		host = dev.IP
-	}
-	conn, err := ssh.Dial("tcp", net.JoinHostPort(host, fmt.Sprint(info.Port)), &ssh.ClientConfig{
-		User: info.User,
-		Auth: []ssh.AuthMethod{ssh.Password(info.Password)},
-		// The phone makes a new host key for each install. The password comes
-		// over the TLS link, so the key is not pinned.
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         10 * time.Second,
-	})
-	if err != nil {
-		return nil, apiErr("sftp", "Connect to %s: %v", dev.Name, err)
-	}
-	client, err := sftp.NewClient(conn)
-	if err != nil {
-		conn.Close()
-		return nil, apiErr("sftp", "SFTP on %s: %v", dev.Name, err)
-	}
-	roots := []BrowseRoot{}
-	for i, p := range info.MultiPaths {
-		name := path.Base(p)
-		if i < len(info.PathNames) && info.PathNames[i] != "" {
-			name = info.PathNames[i]
-		}
-		roots = append(roots, BrowseRoot{Name: name, Path: p})
-	}
-	if len(roots) == 0 {
-		roots = append(roots, BrowseRoot{Name: path.Base(info.Path), Path: info.Path})
-	}
-	d.mu.Lock()
-	if dev.sftpClient != nil {
-		// A parallel call connected first. Keep its session.
-		roots = dev.sftpRoots
-		d.mu.Unlock()
-		client.Close()
-		conn.Close()
-		return roots, nil
-	}
-	dev.sftpSSH, dev.sftpClient, dev.sftpRoots = conn, client, roots
-	d.touchSftpLocked(dev)
-	d.mu.Unlock()
-	return roots, nil
-}
-
-// sftpIdle is the time after the last browse call when fluxd closes the
-// SFTP session to the phone. A download keeps the session open.
-const sftpIdle = 5 * time.Minute
-
-// touchSftpLocked starts the idle time of the SFTP session again.
-func (d *Daemon) touchSftpLocked(dev *Device) {
-	if dev.sftpClient == nil {
-		return
-	}
-	if dev.sftpTimer != nil {
-		dev.sftpTimer.Reset(sftpIdle)
-		return
-	}
-	var t *time.Timer
-	t = time.AfterFunc(sftpIdle, func() {
-		d.mu.Lock()
-		defer d.mu.Unlock()
-		if dev.sftpTimer != t {
-			return
-		}
-		if dev.sftpBusy > 0 {
-			t.Reset(sftpIdle)
-			return
-		}
-		dev.closeSftp()
-	})
-	dev.sftpTimer = t
-}
-
-func (d *Daemon) sftpFor(dev *Device) (*sftp.Client, error) {
-	d.mu.Lock()
-	c := dev.sftpClient
-	d.touchSftpLocked(dev)
-	d.mu.Unlock()
-	if c != nil {
-		return c, nil
-	}
-	if _, err := d.BrowseOpen(dev); err != nil {
-		return nil, err
-	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return dev.sftpClient, nil
-}
-
-// BrowseList lists a folder on the phone. Folders come first.
-func (d *Daemon) BrowseList(dev *Device, dir string) ([]BrowseEntry, error) {
-	c, err := d.sftpFor(dev)
-	if err != nil {
-		return nil, err
-	}
-	infos, err := c.ReadDir(dir)
-	if err != nil {
-		return nil, apiErr("sftp", "%s: %v", dir, err)
-	}
-	out := make([]BrowseEntry, 0, len(infos))
-	for _, fi := range infos {
-		if strings.HasPrefix(fi.Name(), ".") {
-			continue
-		}
-		e := BrowseEntry{Name: fi.Name(), Path: path.Join(dir, fi.Name()), Dir: fi.IsDir(), Size: fi.Size(), Mtime: fi.ModTime().Unix()}
-		e.Kind = fileKind(e.Name, e.Dir)
-		out = append(out, e)
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Dir != out[j].Dir {
-			return out[i].Dir
-		}
-		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
-	})
-	return out, nil
-}
-
-// BrowseGet downloads a file from the phone into the download folder.
-func (d *Daemon) BrowseGet(dev *Device, remote string) (*Transfer, error) {
-	c, err := d.sftpFor(dev)
-	if err != nil {
-		return nil, err
-	}
-	fi, err := c.Stat(remote)
-	if err != nil {
-		return nil, apiErr("sftp", "%s: %v", remote, err)
-	}
-	t := d.newTransfer(dev, path.Base(remote), "in", fi.Size())
-	ctx, cancel := context.WithCancel(d.ctx)
-	d.mu.Lock()
-	t.cancel = cancel
-	dir := d.cfg.DownloadPath()
-	dev.sftpBusy++
-	d.mu.Unlock()
-	go func() {
-		defer cancel()
-		defer func() {
-			d.mu.Lock()
-			dev.sftpBusy--
-			d.touchSftpLocked(dev)
-			d.mu.Unlock()
-		}()
-		err := func() error {
-			src, err := c.Open(remote)
-			if err != nil {
-				return err
-			}
-			defer src.Close()
-			stop := context.AfterFunc(ctx, func() { src.Close() })
-			defer stop()
-			if err := os.MkdirAll(dir, 0o755); err != nil {
-				return err
-			}
-			dest := uniquePath(filepath.Join(dir, safeName(path.Base(remote))))
-			d.mu.Lock()
-			t.Path, t.Name = dest, filepath.Base(dest)
-			d.mu.Unlock()
-			f, err := os.Create(dest + ".part")
-			if err != nil {
-				return err
-			}
-			_, err = io.Copy(f, &countingReader{r: src, fn: d.progress(t)})
-			if cerr := f.Close(); err == nil {
-				err = cerr
-			}
-			if err != nil {
-				os.Remove(dest + ".part")
-				return err
-			}
-			return os.Rename(dest+".part", dest)
-		}()
-		d.finishTransfer(t, err)
-	}()
-	return t, nil
-}
-
-func fileKind(name string, dir bool) string {
-	if dir {
-		return "folder"
-	}
-	switch strings.ToLower(path.Ext(name)) {
-	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".avif":
-		return "image"
-	case ".mp4", ".mkv", ".mov", ".webm", ".3gp":
-		return "video"
-	case ".mp3", ".flac", ".ogg", ".opus", ".m4a", ".wav":
-		return "audio"
-	case ".pdf":
-		return "pdf"
-	case ".txt", ".md", ".json", ".csv", ".log":
-		return "text"
-	case ".zip", ".tar", ".gz", ".7z", ".rar":
-		return "archive"
-	case ".apk":
-		return "apk"
-	case ".iso", ".img":
-		return "iso"
-	}
-	return "file"
-}
-
 // maxBrowseSession is the longest time that a Browse PC session stays open.
 const maxBrowseSession = time.Hour
 
-// handleBrowseRequest answers kdeconnect.sftp.request from a Flux phone.
+// handleBrowseRequest answers flux.sftp.request from a Flux phone.
 // The SFTP server does not listen on the network. The phone opens a tunnel
 // listener, fluxd connects out to it, and the SSH session runs inside the
 // tunnel, so Browse PC works with a firewall that blocks incoming traffic.
@@ -348,7 +65,7 @@ func (d *Daemon) handleBrowseRequest(dev *Device, l *lan.Link, p *proto.Packet) 
 	}
 	id := l.NewTunnelID()
 	if err := l.Send(proto.New(proto.TypeSftp, map[string]any{
-		"tunnel": id, "user": "kdeconnect", "password": password,
+		"tunnel": id, "user": "flux", "password": password,
 		"path": home, "multiPaths": roots, "pathNames": names,
 	})); err != nil {
 		l.CancelTunnel(id)
@@ -384,7 +101,7 @@ func browseConfig() (*ssh.ServerConfig, string, error) {
 	password := config.NewID(16)
 	cfg := &ssh.ServerConfig{
 		PasswordCallback: func(c ssh.ConnMetadata, pw []byte) (*ssh.Permissions, error) {
-			if c.User() == "kdeconnect" && subtle.ConstantTimeCompare(pw, []byte(password)) == 1 {
+			if c.User() == "flux" && subtle.ConstantTimeCompare(pw, []byte(password)) == 1 {
 				return nil, nil
 			}
 			return nil, errors.New("access denied")

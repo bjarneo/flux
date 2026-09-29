@@ -52,8 +52,6 @@ func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.handlePing(dev, p)
 	case proto.TypeBattery:
 		d.handleBattery(dev, p)
-	case proto.TypeConnectivity:
-		d.handleConnectivity(dev, p)
 	case proto.TypeClipboard, proto.TypeClipboardConnect:
 		d.handleClipboard(dev, p)
 	case proto.TypeFluxClipboardImage:
@@ -71,8 +69,6 @@ func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.handleRunCommand(dev, l, p)
 	case proto.TypeMprisRequest:
 		d.handleDesktopMediaRequest(l, p)
-	case proto.TypeSftp:
-		d.handleSftp(dev, p)
 	case proto.TypeSftpRequest:
 		d.handleBrowseRequest(dev, l, p)
 	case proto.TypeFluxWebcam:
@@ -125,11 +121,7 @@ func (d *Daemon) handleBattery(dev *Device, p *proto.Packet) {
 		return
 	}
 	d.mu.Lock()
-	if body.Charge < 0 {
-		dev.battery = nil
-	} else {
-		dev.battery = &Battery{Charge: body.Charge, Charging: body.Charging}
-	}
+	dev.battery = &Battery{Charge: body.Charge, Charging: body.Charging}
 	alert := dev.lowBatteryAlert(body.Threshold == 1, body.Charge, body.Charging)
 	d.mu.Unlock()
 	if alert {
@@ -194,29 +186,6 @@ func (d *Daemon) batteryLoop(ctx context.Context) {
 	}
 }
 
-func (d *Daemon) handleConnectivity(dev *Device, p *proto.Packet) {
-	var body struct {
-		Signals map[string]struct {
-			Type     string `json:"networkType"`
-			Strength int    `json:"signalStrength"`
-		} `json:"signalStrengths"`
-	}
-	if p.Decode(&body) != nil {
-		return
-	}
-	d.mu.Lock()
-	dev.signal = nil
-	best := -1
-	for _, s := range body.Signals {
-		if s.Strength > best {
-			best = s.Strength
-			dev.signal = &Signal{Type: s.Type, Strength: s.Strength}
-		}
-	}
-	d.mu.Unlock()
-	d.markDirty()
-}
-
 func (d *Daemon) handleRunCommand(dev *Device, l *lan.Link, p *proto.Packet) {
 	var body struct {
 		Key         string `json:"key"`
@@ -254,7 +223,7 @@ func (d *Daemon) runLocal(cmd config.Command) error {
 	})
 }
 
-// sendCommandList sends the command list. KDE Connect encodes the list as
+// sendCommandList sends the command list. The protocol encodes the list as
 // a JSON string inside the body. The object is written in config order,
 // because a JSON map from encoding/json sorts the keys, and phones show the
 // commands in the order they read them.
@@ -274,6 +243,5 @@ func (d *Daemon) sendCommandList(l *lan.Link) {
 	}
 	b.WriteByte('}')
 	d.mu.Unlock()
-	// canAddCommand is false: the user edits the commands in config.toml.
-	_ = l.Send(proto.New(proto.TypeRunCommand, map[string]any{"commandList": b.String(), "canAddCommand": false}))
+	_ = l.Send(proto.New(proto.TypeRunCommand, map[string]any{"commandList": b.String()}))
 }

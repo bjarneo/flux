@@ -14,23 +14,11 @@ public struct RemoteCommand: Sendable, Equatable, Identifiable {
         self.command = command
     }
 
-    /// The commands of a kdeconnect.runcommand packet. The computer sends
-    /// commandList as a JSON string, in the order that it shows them, or as
-    /// an object. An object arrives without its key order, so its commands
-    /// sort by name.
+    /// The commands of a flux.runcommand packet. The computer sends
+    /// commandList as a JSON string, in the order that it shows them.
     public static func list(from p: Packet) -> [RemoteCommand] {
-        switch p.body["commandList"] {
-        case .string(let text)?:
-            guard case .object(let obj)? = JSONValue.parse(Data(text.utf8)) else { return [] }
-            return JSONKeys.ordered(text).compactMap { key in obj[key].flatMap { command(key, $0) } }
-        case .object(let obj)?:
-            return obj.compactMap { command($0.key, $0.value) }.sorted {
-                let order = $0.name.localizedStandardCompare($1.name)
-                return order == .orderedSame ? $0.key < $1.key : order == .orderedAscending
-            }
-        default:
-            return []
-        }
+        guard let text = p.string("commandList"), case .object(let obj)? = JSONValue.parse(Data(text.utf8)) else { return [] }
+        return JSONKeys.ordered(text).compactMap { key in obj[key].flatMap { command(key, $0) } }
     }
 
     private static func command(_ key: String, _ value: JSONValue) -> RemoteCommand? {
@@ -117,7 +105,7 @@ public final class CommandsModel {
     fileprivate func set(_ deviceId: String, _ list: [RemoteCommand]) { lists[deviceId] = list }
 }
 
-/// kdeconnect.runcommand.request out, kdeconnect.runcommand in: this Mac runs
+/// flux.runcommand.request out, flux.runcommand in: this Mac runs
 /// the commands that the computer publishes.
 public final class RunCommandPlugin: FluxPlugin, @unchecked Sendable {
     private weak var core: FluxCore?

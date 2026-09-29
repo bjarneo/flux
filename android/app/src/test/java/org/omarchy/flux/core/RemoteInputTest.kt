@@ -42,7 +42,7 @@ class RemoteInputTest {
     }
 
     @Test
-    fun keysUseTheKdeNumbers() {
+    fun keysUseTheProtocolNumbers() {
         val enter = roundTrip(RemoteInput.key(RemoteInput.Key.Enter))
         assertEquals("12", enter.body["specialKey"].toString())
         assertEquals(1, RemoteInput.Key.Backspace.code)

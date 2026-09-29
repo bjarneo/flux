@@ -128,7 +128,6 @@ func (d *Daemon) handleShare(dev *Device, l *lan.Link, p *proto.Packet) {
 		Filename string `json:"filename"`
 		Text     string `json:"text"`
 		URL      string `json:"url"`
-		Open     bool   `json:"open"`
 		// Scan marks text or a PDF that the phone camera scanned. Photo marks
 		// a photo from the phone camera. Screenshot marks a new screenshot
 		// that the phone sends by itself, together with Photo, so that an
@@ -170,7 +169,7 @@ func (d *Daemon) handleShare(dev *Device, l *lan.Link, p *proto.Packet) {
 		case body.Photo:
 			kind = destPhoto
 		}
-		go d.receiveFile(dev, l, p, body.Filename, body.Open, kind)
+		go d.receiveFile(dev, l, p, body.Filename, kind)
 	}
 }
 
@@ -206,7 +205,7 @@ func destDir(cfg *config.Config, kind fileDest) string {
 	return cfg.DownloadPath()
 }
 
-func (d *Daemon) receiveFile(dev *Device, l *lan.Link, p *proto.Packet, name string, open bool, kind fileDest) {
+func (d *Daemon) receiveFile(dev *Device, l *lan.Link, p *proto.Packet, name string, kind fileDest) {
 	name = safeName(name)
 	t := d.newTransfer(dev, name, "in", p.PayloadSize)
 	ctx, cancel := context.WithCancel(d.ctx)
@@ -278,9 +277,6 @@ func (d *Daemon) receiveFile(dev *Device, l *lan.Link, p *proto.Packet, name str
 		AppName: "Flux", Title: title, Body: body,
 		Actions: []desktop.Action{{Key: "open:" + t.Path, Label: "Open"}, {Key: "reveal:" + t.Path, Label: "Show in folder"}},
 	})
-	if open {
-		_ = desktop.Open(t.Path)
-	}
 }
 
 // copyImage puts the PNG file at path on the clipboard, so that the user
@@ -408,7 +404,6 @@ func (d *Daemon) sendFile(l *lan.Link, t *Transfer, path string, info os.FileInf
 	p := proto.New(proto.TypeShare, map[string]any{
 		"filename":         filepath.Base(path),
 		"lastModified":     info.ModTime().UnixMilli(),
-		"open":             false,
 		"numberOfFiles":    count,
 		"totalPayloadSize": total,
 	})

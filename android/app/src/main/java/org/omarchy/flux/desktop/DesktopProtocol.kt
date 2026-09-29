@@ -11,11 +11,11 @@ import java.io.IOException
 import java.io.InputStream
 
 /**
- * The flux.desktop extension. The phone opens a TLS listener and sends
+ * The flux.desktop packets. The phone opens a TLS listener and sends
  * "start" with its port, the longest side of the stream, and optionally
  * a monitor. The computer connects and writes frames, see [FrameReader].
  * The computer answers "live" with the monitor and the size, "error", or
- * "stop". The touches go as kdeconnect.mousepad.request with a position.
+ * "stop". The touches go as flux.mousepad.request with a position.
  */
 object DesktopPackets {
     /** The longest side of the stream that the phone asks for, in pixels. */

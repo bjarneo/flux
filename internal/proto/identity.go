@@ -10,35 +10,34 @@ import (
 
 // Packet types that Flux uses.
 const (
-	TypeIdentity            = "kdeconnect.identity"
-	TypePair                = "kdeconnect.pair"
-	TypePing                = "kdeconnect.ping"
-	TypeBattery             = "kdeconnect.battery"
-	TypeClipboard           = "kdeconnect.clipboard"
-	TypeClipboardConnect    = "kdeconnect.clipboard.connect"
-	TypeShare               = "kdeconnect.share.request"
-	TypeShareUpdate         = "kdeconnect.share.request.update"
-	TypeNotification        = "kdeconnect.notification"
-	TypeNotificationRequest = "kdeconnect.notification.request"
-	TypeNotificationReply   = "kdeconnect.notification.reply"
-	TypeNotificationAction  = "kdeconnect.notification.action"
-	TypeFindMyPhone         = "kdeconnect.findmyphone.request"
-	TypeRunCommand          = "kdeconnect.runcommand"
-	TypeRunCommandRequest   = "kdeconnect.runcommand.request"
-	TypeMpris               = "kdeconnect.mpris"
-	TypeMprisRequest        = "kdeconnect.mpris.request"
-	TypeSftp                = "kdeconnect.sftp"
-	TypeSftpRequest         = "kdeconnect.sftp.request"
-	TypeSmsMessages         = "kdeconnect.sms.messages"
-	TypeSmsRequest          = "kdeconnect.sms.request"
-	TypeSmsConversations    = "kdeconnect.sms.request_conversations"
-	TypeSmsConversation     = "kdeconnect.sms.request_conversation"
-	TypeConnectivity        = "kdeconnect.connectivity_report"
-	TypeTelephony           = "kdeconnect.telephony"
+	TypeIdentity            = "flux.identity"
+	TypePair                = "flux.pair"
+	TypePing                = "flux.ping"
+	TypeBattery             = "flux.battery"
+	TypeClipboard           = "flux.clipboard"
+	TypeClipboardConnect    = "flux.clipboard.connect"
+	TypeShare               = "flux.share.request"
+	TypeShareUpdate         = "flux.share.request.update"
+	TypeNotification        = "flux.notification"
+	TypeNotificationRequest = "flux.notification.request"
+	TypeNotificationReply   = "flux.notification.reply"
+	TypeNotificationAction  = "flux.notification.action"
+	TypeFindMyPhone         = "flux.findmyphone.request"
+	TypeRunCommand          = "flux.runcommand"
+	TypeRunCommandRequest   = "flux.runcommand.request"
+	TypeMpris               = "flux.mpris"
+	TypeMprisRequest        = "flux.mpris.request"
+	TypeSftp                = "flux.sftp"
+	TypeSftpRequest         = "flux.sftp.request"
+	TypeSmsMessages         = "flux.sms.messages"
+	TypeSmsRequest          = "flux.sms.request"
+	TypeSmsConversations    = "flux.sms.request_conversations"
+	TypeSmsConversation     = "flux.sms.request_conversation"
+	TypeTelephony           = "flux.telephony"
 	// TypeMousepadRequest moves the pointer, clicks, scrolls, and types on
 	// this computer. The phone sends it. docs/remote-input.md describes
 	// the body.
-	TypeMousepadRequest = "kdeconnect.mousepad.request"
+	TypeMousepadRequest = "flux.mousepad.request"
 
 	// TypeFluxTunnel carries the port of a listener that a Flux phone opens,
 	// so that fluxd can connect out for payloads and Browse PC. The phone
@@ -87,8 +86,8 @@ const (
 var Incoming = []string{
 	TypePing, TypeBattery, TypeClipboard, TypeClipboardConnect,
 	TypeShare, TypeShareUpdate, TypeNotification, TypeRunCommandRequest,
-	TypeMprisRequest, TypeSftp, TypeSftpRequest,
-	TypeSmsMessages, TypeConnectivity, TypeTelephony,
+	TypeMprisRequest, TypeSftpRequest,
+	TypeSmsMessages, TypeTelephony,
 	TypeFluxTunnel, TypeFluxWebcam, TypeFluxDnd, TypeFluxMic, TypeFluxScreen,
 	TypeFluxApprove, TypeFluxHerdr, TypeFluxClipboardImage, TypeMousepadRequest,
 	TypeFluxDesktop, TypeFluxShortcuts,
@@ -99,13 +98,13 @@ var Outgoing = []string{
 	TypePing, TypeBattery, TypeClipboard, TypeClipboardConnect, TypeShare,
 	TypeNotification, TypeNotificationRequest, TypeNotificationReply, TypeNotificationAction,
 	TypeFindMyPhone, TypeRunCommand, TypeMpris,
-	TypeSftpRequest, TypeSmsRequest, TypeSmsConversations,
+	TypeSmsRequest, TypeSmsConversations,
 	TypeSmsConversation, TypeSftp, TypeFluxWebcam, TypeFluxDnd,
 	TypeFluxMic, TypeFluxScreen, TypeFluxApprove, TypeFluxHerdr,
 	TypeFluxClipboardImage, TypeFluxInput, TypeFluxDesktop, TypeFluxShortcuts,
 }
 
-// Identity is the body of a kdeconnect.identity packet.
+// Identity is the body of a flux.identity packet.
 type Identity struct {
 	DeviceID             string   `json:"deviceId"`
 	DeviceName           string   `json:"deviceName"`
@@ -139,10 +138,10 @@ var (
 	nameInvalidChars = regexp.MustCompile(`["',;:.!?()\[\]<>]`)
 )
 
-// ValidDeviceID reports whether id has the KDE Connect device ID format.
+// ValidDeviceID reports whether id has the Flux device ID format.
 func ValidDeviceID(id string) bool { return deviceIDRe.MatchString(id) }
 
-// CleanName removes the characters that KDE Connect does not allow in a
+// CleanName removes the characters that Flux does not allow in a
 // device name and limits the name to 32 characters.
 func CleanName(name string) string {
 	name = strings.TrimSpace(nameInvalidChars.ReplaceAllString(name, ""))

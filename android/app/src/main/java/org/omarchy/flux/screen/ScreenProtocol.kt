@@ -7,7 +7,7 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * The flux.screen extension. The phone opens a TLS listener, sends "start"
+ * The flux.screen packets. The phone opens a TLS listener, sends "start"
  * with its port and the frame size, and writes a raw H.264 Annex-B stream
  * of its screen to the computer that connects. The computer answers
  * "live", "error", or "stop". The computer only shows the screen.

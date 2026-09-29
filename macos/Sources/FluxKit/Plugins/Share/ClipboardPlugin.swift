@@ -15,7 +15,7 @@ public final class ClipboardModel {
     public internal(set) var sync = true
 }
 
-/// Clipboard sync: kdeconnect.clipboard and kdeconnect.clipboard.connect in
+/// Clipboard sync: flux.clipboard and flux.clipboard.connect in
 /// both directions. macOS has no clipboard change notification, so while
 /// sync is on and a paired computer is connected, the plugin polls the
 /// change count of the general pasteboard. iOS asks the user before each
@@ -261,14 +261,14 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
     /// a Task, because the core lock is held.
     private func receiveImage(_ p: Packet, from device: Device) {
         guard let core else { return }
-        guard images, sync, ClipImage.accepts(p), let address = device.link?.address, let cert = device.certificate else {
+        guard images, sync, ClipImage.accepts(p), let tunnel = p.payloadTunnel, let cert = device.certificate else {
             if let token = p.payloadTunnel { device.send(Tunnel.failed(token: token, error: ClipImage.rejected)) }
             return
         }
         let (id, name, mime) = (device.id, device.name, ClipImage.mime(of: p))
         Task.detached { [self] in
             do {
-                let data = try await ClipImageTransfer.receive(p, tls: core.tls, address: address, cert: cert) { [weak core] packet in
+                let data = try await ClipImageTransfer.receive(p, token: tunnel, tls: core.tls, cert: cert) { [weak core] packet in
                     core?.send(packet, to: id)
                 }
                 onMain { plugin in

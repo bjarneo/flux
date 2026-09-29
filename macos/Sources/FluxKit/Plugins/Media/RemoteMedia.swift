@@ -45,7 +45,7 @@ public struct RemoteMedia: Sendable, Equatable {
     /// The state of the player that this Mac controls.
     public var player: RemotePlayer? { current.flatMap { states[$0] } }
 
-    /// Merges a kdeconnect.mpris packet. It returns the player whose now
+    /// Merges a flux.mpris packet. It returns the player whose now
     /// playing state this Mac asks for next, if any.
     public mutating func apply(_ p: Packet, now: TimeInterval) -> String? {
         var request: String?
