@@ -123,7 +123,12 @@ object Share {
             core.toast("Receiving $name failed")
             return
         }
-        val open = Intent(Intent.ACTION_VIEW).setDataAndType(dl.uri, mime ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        // A file of an unknown type opens Downloads. The type */* matches every app, the Android installer too.
+        val open = if (mime == null) {
+            Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)
+        } else {
+            Intent(Intent.ACTION_VIEW).setDataAndType(dl.uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
         // The computer sends a Flux update as flux-android-VERSION.apk. Its
         // notification opens the Android installer only for a newer Flux with
         // the signing key of this app. Any other app only shows in Downloads,

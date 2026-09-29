@@ -202,6 +202,7 @@ Flux saves each received file in **Downloads**.
 Flux removes control characters and format characters, such as the marks that change the text direction, from the file name.
 A received app opens the Android installer only when it is a newer Flux with the signing key of the installed Flux.
 Flux saves any other app in **Downloads**, and its notification does not install it.
+The notification of a file with a type that Android does not know opens **Downloads**.
 
 Flux opens a received link only when it is an `http` or `https` URL with a host.
 Flux puts any other value, such as a `file:` URL, on the clipboard as text.
