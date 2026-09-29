@@ -3,6 +3,8 @@ package org.omarchy.flux.core
 import android.Manifest
 import android.content.ContentUris
 import android.content.Context
+import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.database.ContentObserver
 import android.net.Uri
@@ -13,9 +15,11 @@ import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
 import androidx.core.content.ContextCompat
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 private const val TAG = "FluxCapture"
 
@@ -31,13 +35,24 @@ private const val SEND_TIMEOUT_MIN = 10L
 /**
  * Sends each new screenshot and camera photo to the connected computers,
  * when its switch is on. It watches MediaStore, and [planCapture] decides
- * what goes out, so that no image goes out twice.
+ * what goes out, so that no image goes out twice. An image that no
+ * computer takes waits longer before each new try, see [CaptureRetries].
  */
 object CaptureWatch {
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor { Thread(it, "flux-capture").apply { isDaemon = true } }
     private var observer: ContentObserver? = null
     private val scan = Runnable { worker.execute { scanNow(FluxCore) } }
+
+    // The worker uses these. The failed tries of each image, and whether a
+    // package may write the images that Flux sends.
+    private val retries = HashMap<Long, CaptureRetry>()
+    private val systemApps = HashMap<String, Boolean>()
+
+    // The images that an upload still sends after its wait ended, and the
+    // images whose late upload succeeded. The IO threads change them.
+    private val inFlight: MutableSet<Long> = ConcurrentHashMap.newKeySet()
+    private val lateSent: MutableSet<Long> = ConcurrentHashMap.newKeySet()
 
     private val images: Uri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
 
@@ -94,6 +109,22 @@ object CaptureWatch {
         main.postDelayed(scan, SCAN_DELAY_MS)
     }
 
+    /** Scans at the next try of an image that no computer took. A new image or a new computer scans earlier. */
+    private fun scanAtNextTry(now: Long) {
+        val next = retries.values.minOfOrNull { it.next } ?: return
+        val delay = maxOf(SCAN_DELAY_MS, (next - now) * 1000)
+        main.post {
+            main.removeCallbacks(scan)
+            main.postDelayed(scan, delay)
+        }
+    }
+
+    /** True while the switch of [kind] is on. The user can turn it off while a batch goes out. */
+    private fun switchOn(s: Settings, kind: CaptureKind): Boolean = when (kind) {
+        CaptureKind.Screenshot -> s.sendScreenshots
+        CaptureKind.Photo -> s.sendPhotos
+    }
+
     /**
      * Turns a switch on or off. A new switch starts at the newest image now,
      * so that older images do not go out. Runs on the worker, in order with
@@ -135,9 +166,11 @@ object CaptureWatch {
             MediaStore.Images.Media.DISPLAY_NAME,
             MediaStore.Images.Media.IS_PENDING,
             MediaStore.Images.Media.DATE_ADDED,
+            MediaStore.Images.Media.OWNER_PACKAGE_NAME,
         )
         @Suppress("DEPRECATION")
         val uri = if (Build.VERSION.SDK_INT >= 30) images else MediaStore.setIncludePending(images)
+        val cameras = cameraApps(context)
         val out = mutableListOf<MediaImage>()
         context.contentResolver.query(uri, cols, queryArgs(after, limit = PAGE), null)?.use { c ->
             while (c.moveToNext()) {
@@ -147,42 +180,100 @@ object CaptureWatch {
                     name = c.getString(2) ?: "image-${c.getLong(0)}.jpg",
                     pending = c.getInt(3) != 0,
                     dateAdded = c.getLong(4),
+                    trusted = trustedOwner(context, c.getString(5), cameras),
                 )
             }
         }
         return out
     }
 
+    /**
+     * Reports whether an image of [owner] can go out by itself. Any app can
+     * add an image to a camera folder through MediaStore. So only an app of
+     * the system, such as the camera or the screenshot tool, or the default
+     * camera app counts. An image without an owner comes from the media
+     * scanner, and an app needs a storage permission to write it.
+     */
+    private fun trustedOwner(context: Context, owner: String?, cameras: Set<String>): Boolean {
+        if (owner.isNullOrEmpty() || owner in cameras) return true
+        val system = systemApps.getOrPut(owner) {
+            runCatching {
+                val flags = context.packageManager.getApplicationInfo(owner, 0).flags
+                flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+            }.getOrDefault(false)
+        }
+        if (!system) Log.i(TAG, "skipped an image of $owner: not a camera or screenshot app")
+        return system
+    }
+
+    /** The default camera apps: the apps that open for the camera button and for a photo request. */
+    private fun cameraApps(context: Context): Set<String> {
+        val pm = context.packageManager
+        return listOf(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA, MediaStore.ACTION_IMAGE_CAPTURE).mapNotNull { action ->
+            runCatching { pm.resolveActivity(Intent(action), PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName }.getOrNull()
+        }.filter { it != "android" }.toSet()
+    }
+
     /** Scans the new images and sends the ones that [planCapture] picks. Runs on the worker. */
     private fun scanNow(core: FluxCore) {
         val s = core.settings
         if (!(s.sendScreenshots || s.sendPhotos) || !hasAccess(core.app)) return
+        // An upload that ended after its wait can have gone out.
+        for (id in lateSent.toList()) {
+            lateSent -= id
+            retries -= id
+            s.captureState = s.captureState.markSent(id)
+        }
         val list = runCatching { readImages(core.app, s.captureState.baseline) }
             .onFailure { Log.w(TAG, "scan failed", it) }
             .getOrNull() ?: return
         var state = s.captureState
-        val plan = planCapture(state, list, System.currentTimeMillis() / 1000)
+        val now = System.currentTimeMillis() / 1000
+        val plan = planCapture(state, list, now, retries)
         // A full page can have more images after it.
         val more = list.size >= PAGE && plan.state.baseline > state.baseline
         state = plan.state
         s.captureState = state
+        retries.keys.retainAll(list.map { it.id }.toSet())
         if (plan.send.isEmpty()) {
-            if (more) poke()
+            if (more) poke() else scanAtNextTry(now)
             return
         }
         val targets = core.connectedPaired()
+        // A computer that connects scans again.
         if (targets.isEmpty()) return
+        var sent = false
         for ((img, kind) in plan.send) {
+            // The user can turn the switch off while the batch goes out. The image then waits, as if it did not go out.
+            if (!switchOn(s, kind) || img.id in inFlight) continue
             if (sendToAll(core, targets, img, kind)) {
+                sent = true
+                retries -= img.id
                 state = state.markSent(img.id)
                 s.captureState = state
+                continue
+            }
+            if (!switchOn(s, kind)) continue
+            val retry = CaptureRetries.failed(retries[img.id], System.currentTimeMillis() / 1000)
+            if (CaptureRetries.givesUp(retry)) {
+                // 1 image that no computer takes must not stop the watch.
+                retries -= img.id
+                state = state.markSent(img.id)
+                s.captureState = state
+                Log.w(TAG, "gave up on ${img.name} after ${retry.failures} tries")
+                Android.showEvent(core.app, "Flux did not send ${img.name}", "The computers did not take it after ${retry.failures} tries.")
+            } else {
+                retries[img.id] = retry
             }
         }
-        // The sent images can move the baseline now.
-        poke()
+        // The sent images can move the baseline now. After failures only, the next try waits.
+        if (sent || more) poke() else scanAtNextTry(now)
     }
 
-    /** Sends 1 image to each target. Returns true when at least 1 target took it. */
+    /**
+     * Sends 1 image to each target that is still paired and connected.
+     * Returns true when at least 1 target took it.
+     */
     private fun sendToAll(core: FluxCore, targets: List<Device>, img: MediaImage, kind: CaptureKind): Boolean {
         val uri = ContentUris.withAppendedId(images, img.id)
         val extra: Map<String, Any?> = when (kind) {
@@ -192,14 +283,28 @@ object CaptureWatch {
         }
         var any = false
         for (d in targets) {
+            if (!switchOn(core.settings, kind)) break
+            if (!d.paired || !d.online) continue
             val done = CountDownLatch(1)
-            var ok = false
+            val ok = AtomicBoolean(false)
+            val waiting = AtomicBoolean(true)
+            inFlight += img.id
             Share.sendCapture(core, d.id, uri, img.name, extra) { result ->
-                ok = result.isSuccess
+                ok.set(result.isSuccess)
                 done.countDown()
+                // After the wait ended, the scan did not count this upload. A second count does no harm.
+                if (!waiting.get() && result.isSuccess) lateSent += img.id
+                inFlight -= img.id
             }
             done.await(SEND_TIMEOUT_MIN, TimeUnit.MINUTES)
-            if (ok) {
+            waiting.set(false)
+            // The upload can end between the wait and the flag, so the latch decides.
+            if (done.count > 0) {
+                // The upload goes on. The next scans skip the image until it ends.
+                Log.w(TAG, "${img.name} to ${d.identity.deviceName} takes more than $SEND_TIMEOUT_MIN minutes")
+                break
+            }
+            if (ok.get()) {
                 any = true
                 Log.i(TAG, "sent ${img.name} to ${d.identity.deviceName}")
             }
