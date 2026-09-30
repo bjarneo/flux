@@ -106,6 +106,13 @@ func (d *Daemon) addClipLocked(e ClipEntry) {
 // addClipImage saves an image in the runtime folder and adds it to the
 // clipboard history as the entry e.
 func (d *Daemon) addClipImage(e ClipEntry, data []byte, mime string) error {
+	return d.addClipImageIf(e, data, mime, nil)
+}
+
+// addClipImageIf is addClipImage with the condition ok, which runs under
+// d.mu after the save. When ok returns false, addClipImageIf removes the
+// saved file and the history does not change. A nil ok is always true.
+func (d *Daemon) addClipImageIf(e ClipEntry, data []byte, mime string, ok func() bool) error {
 	d.mu.Lock()
 	dir := d.clipDir
 	d.mu.Unlock()
@@ -119,6 +126,11 @@ func (d *Daemon) addClipImage(e ClipEntry, data []byte, mime string) error {
 	sum := sha256.Sum256(data)
 	e.Text, e.Image, e.sum = "", path, hex.EncodeToString(sum[:])
 	d.mu.Lock()
+	if ok != nil && !ok() {
+		d.mu.Unlock()
+		os.Remove(path)
+		return nil
+	}
 	d.addClipLocked(e)
 	d.mu.Unlock()
 	d.markDirty()
@@ -334,6 +346,12 @@ func (d *Daemon) handleClipboard(dev *Device, p *proto.Packet) {
 	// A clipboard.connect packet is older than a local change.
 	stale := p.Type == proto.TypeClipboardConnect && body.Timestamp > 0 && body.Timestamp <= d.lastLocalClip.UnixMilli()
 	if !stale {
+		// The text is newer than an image of the device that is still on
+		// its way.
+		if f := d.content.clipImages[dev.ID]; f != nil {
+			f.cancel()
+			f.stale = true
+		}
 		d.addClipLocked(ClipEntry{Text: body.Content, Dir: "in", Device: dev.ID, DeviceName: dev.Name, Time: time.Now().Unix()})
 	}
 	d.mu.Unlock()
@@ -362,6 +380,7 @@ func (d *Daemon) handleClipboardImage(dev *Device, l *lan.Link, p *proto.Packet)
 	}
 	if old := d.content.clipImages[dev.ID]; old != nil {
 		old.cancel()
+		old.stale = true
 	}
 	d.content.clipImages[dev.ID] = fetch
 	d.mu.Unlock()
@@ -380,33 +399,47 @@ func (d *Daemon) handleClipboardImage(dev *Device, l *lan.Link, p *proto.Packet)
 			d.logf("%s: receive clipboard image: %v", d.nameOf(dev), err)
 			return
 		}
-		d.receiveClipImage(dev, data)
+		d.receiveClipImage(dev, fetch, data)
 	}()
 }
 
 // receiveClipImage adds an image from a device to the history and, with
 // automatic sync on, puts it on the local clipboard. An image that arrives
-// after an unpair is dropped.
-func (d *Daemon) receiveClipImage(dev *Device, data []byte) {
+// after an unpair is dropped. So is an image of the fetch f after a newer
+// text or image of the device. The worker of the texts from the devices
+// sets the image, so that a text that comes later stays on the clipboard.
+// The history and the worker check f again under d.mu, because a text can
+// come while fluxd saves the image.
+func (d *Daemon) receiveClipImage(dev *Device, f *clipFetch, data []byte) {
 	d.mu.Lock()
-	paired, auto, name := dev.Paired, d.cfg.AutoClipboard, dev.Name
+	paired, name, stale := dev.Paired, dev.Name, f.stale
 	d.mu.Unlock()
 	mime := clipImageType(data)
 	if mime == "" {
 		d.logf("%s: the clipboard image is not a PNG, JPEG, GIF, or WebP image", name)
 		return
 	}
-	if !paired {
+	if !paired || stale {
 		return
 	}
-	if err := d.addClipImage(ClipEntry{Dir: "in", Device: dev.ID, DeviceName: name, Time: time.Now().Unix()}, data, mime); err != nil {
+	// current runs under d.mu. It is false after an unpair or after a newer
+	// text or image of the device. The image then stays out of the history
+	// and does not replace the job of the newer text in the worker.
+	current := func() bool { return dev.Paired && !f.stale }
+	if err := d.addClipImageIf(ClipEntry{Dir: "in", Device: dev.ID, DeviceName: name, Time: time.Now().Unix()}, data, mime, current); err != nil {
 		d.logf("save clipboard image: %v", err)
 	}
-	if auto {
+	d.runContentIf(&d.content.clipQ, 0, current, func() {
+		d.mu.Lock()
+		ok := dev.Paired && d.cfg.AutoClipboard && !f.stale
+		d.mu.Unlock()
+		if !ok {
+			return
+		}
 		if err := d.clip.SetImage(data, mime); err != nil {
 			d.logf("set clipboard image: %v", err)
 		}
-	}
+	})
 }
 
 // fetchAll reads the whole payload of p.

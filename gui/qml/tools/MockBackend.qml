@@ -81,6 +81,7 @@ QtObject {
     else if (method === "mic.stop") setState(function (s) { s.mic = null })
     else if (method === "screen.stop") setState(function (s) { s.screen = null })
     else if (method === "desktop.stop") setState(function (s) { s.desktop = null })
+    else if (method === "browse.stop") setState(function (s) { s.browse = [] })
     else if (method === "settings.set") setState(function (s) { s.settings[params.key] = params.value })
     else if (method === "webcam.config") {
       var restarts = false

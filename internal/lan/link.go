@@ -37,7 +37,19 @@ type Link struct {
 	// after Receive logged a line that is not a packet.
 	maxLine   atomic.Int64
 	badLogged atomic.Bool
+
+	// queued is the number of bytes of the packets in Send, which wait for
+	// wmu or which Send writes now.
+	queued atomic.Int64
 }
+
+// maxSendQueue is the largest number of bytes that can wait in Send on 1
+// link. Each Send waits while the peer does not read, so without a limit
+// the waiting packets can fill the memory. Send then closes the link. The
+// tests change it.
+var maxSendQueue int64 = 32 << 20
+
+var errSendQueueFull = errors.New("the peer does not read the packets")
 
 func newLink(p *Provider, conn *tls.Conn, reader *bufio.Reader, id proto.Identity, cert *x509.Certificate, outgoing bool) *Link {
 	addr, _ := conn.RemoteAddr().(*net.TCPAddr)
@@ -103,11 +115,21 @@ func (l *Link) IP() string {
 func (l *Link) LocalAddr() net.Addr { return l.conn.LocalAddr() }
 
 // Send writes one packet. It is safe to call from more than one goroutine.
+// It closes the link when more than maxSendQueue bytes wait in Send. A
+// packet that nothing waits before always goes, also when it is larger.
 func (l *Link) Send(p *proto.Packet) error {
 	line, err := p.Marshal()
 	if err != nil {
 		return err
 	}
+	n := int64(len(line))
+	if q := l.queued.Add(n); q > maxSendQueue && q > n {
+		l.queued.Add(-n)
+		l.provider.logf("%s: closed the link, because %d bytes wait to be sent", l.Identity.DeviceName, q)
+		l.Close()
+		return errSendQueueFull
+	}
+	defer l.queued.Add(-n)
 	l.wmu.Lock()
 	defer l.wmu.Unlock()
 	select {

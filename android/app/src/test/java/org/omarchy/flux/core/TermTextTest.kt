@@ -261,6 +261,12 @@ class TermTextTest {
     }
 
     @Test
+    fun ansiDropsC1AndMarksBidiControls() {
+        val line = parseAnsi("ok \u202Eexe.sh\u202C \u0085done\u009B\u2066x\u2069\u2028").single()
+        assertEquals("ok \uFFFDexe.sh\uFFFD done\uFFFDx\uFFFD\uFFFD", line.text)
+    }
+
+    @Test
     fun ansiKeepsLastLines() {
         val lines = parseAnsi((1..50).joinToString("\n") { "line $it" }, maxLines = 10)
         assertEquals(10, lines.size)

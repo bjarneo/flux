@@ -58,7 +58,8 @@ Method names and parameter handling live in `internal/core/api.go`.
 ## State and events
 
 Call `state` for a snapshot.
-The snapshot includes `self`, `devices`, `clipboard`, `transfers`, `commands`, `settings`, `webcam`, `mic`, `screen`, `desktop`, and `herdr`.
+The snapshot includes `self`, `devices`, `clipboard`, `transfers`, `commands`, `settings`, `webcam`, `mic`, `screen`, `desktop`, `browse`, and `herdr`.
+`browse` lists the [Browse PC](features.md#browse-pc) sessions, the oldest first: the `device` ID, the `name`, and `since`, the Unix time of the start.
 
 `self` describes this computer:
 
@@ -145,7 +146,7 @@ A device that is not paired shows only while it has a link.
 | Commands | `commands.add`, `commands.remove`, `commands.run` |
 | Notifications | `notification.dismiss`, `notification.dismissAll`, `notification.reply`, `notification.action`, `notify.send` |
 | Text messages | `sms.refresh`, `sms.thread`, `sms.send` |
-| Streams | `webcam.config`, `webcam.stop`, `mic.stop`, `screen.stop`, `desktop.stop` |
+| Streams | `webcam.config`, `webcam.stop`, `mic.stop`, `screen.stop`, `desktop.stop`, `browse.stop` |
 | Approval | `approve.request`, `approve.wait`, `approve.enroll`, `approve.cancel` |
 | Settings and updates | `settings.set`, `update.install`, `update.sendApp` |
 
@@ -185,6 +186,7 @@ Without `device`, a method uses the only connected paired device.
 | `sms.refresh`, `sms.thread`, `sms.send` | See [text messages](#text-messages). |
 | `webcam.config` | `config`, or `reset` set to `true` |
 | `webcam.stop`, `mic.stop`, `screen.stop`, `desktop.stop` | None |
+| `browse.stop` | An optional `device`. Without `device`, it ends every Browse PC session. It returns `not_active` when no session ends. |
 | `approve.request`, `approve.enroll`, `approve.wait`, `approve.cancel` | For the approval helper and `flux-cli approve`. See [approval](#approval). |
 | `settings.set` | `key`, `value` |
 | `update.install` | None |
@@ -307,6 +309,8 @@ The call copies the full text or the image of the entry.
 
 `sms.refresh` asks the phone for the latest message of each conversation.
 The conversations arrive in the `conversations` list of the device in the next state event.
+The answer of Flux for Android replaces the list, so a conversation that you delete on the phone goes.
+An older app only adds conversations.
 `sms.thread` returns the last 100 messages of 1 conversation, the oldest first:
 
 ```json

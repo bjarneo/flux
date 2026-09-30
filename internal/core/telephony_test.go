@@ -198,3 +198,30 @@ func TestCallEventNeedsPairedLink(t *testing.T) {
 		t.Fatalf("actions %v, call state %+v", m.actions, d.calls[dev.ID])
 	}
 }
+
+// slowMedia is a set of players that reports each Players call and then
+// answers late.
+type slowMedia struct{ called chan struct{} }
+
+func (s *slowMedia) Players() []desktop.Player {
+	s.called <- struct{}{}
+	time.Sleep(50 * time.Millisecond)
+	return nil
+}
+
+func (s *slowMedia) Action(string, string) error { return nil }
+
+// TestCallEventReadsNameUnderLock checks that a call event on the media
+// worker reads the device name under the lock, while a new identity of the
+// phone changes the name. Run it with -race.
+func TestCallEventReadsNameUnderLock(t *testing.T) {
+	m := &slowMedia{called: make(chan struct{}, 1)}
+	d := &Daemon{cfg: &config.Config{PauseMediaOnCall: true}, logger: log.New(io.Discard, "", 0), callPlayers: m}
+	dev := &Device{ID: "p1", Name: "Pixel 8", Paired: true}
+	d.handleTelephony(dev, telephonyPacket(map[string]any{"event": "ringing"}))
+	<-m.called
+	d.mu.Lock()
+	dev.setIdentity(proto.Identity{DeviceName: "Pixel 9"})
+	d.mu.Unlock()
+	waitIdle(t, d, &d.content.mediaQ)
+}

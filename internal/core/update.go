@@ -27,7 +27,8 @@ const (
 	releaseRetry = time.Hour
 	// releaseRetryGap is the shortest time between a failed check and
 	// the check that a network change starts. A network that changes
-	// often then does not start a check at each change.
+	// often then does not start a check at each change. A change in the
+	// gap starts the check at the end of the gap.
 	releaseRetryGap = time.Minute
 )
 
@@ -93,7 +94,10 @@ func (d *Daemon) releaseLoop(ctx context.Context) {
 		case <-timer.C:
 			due = d.releaseWait(time.Now(), 0) == 0
 		case <-d.releaseWake:
-			due = d.releaseWait(time.Now(), 0) == 0 || d.releaseRetryDue(time.Now())
+			d.mu.Lock()
+			d.releaseWoken = true
+			d.mu.Unlock()
+			due = d.releaseWait(time.Now(), 0) == 0
 		}
 		if due {
 			_ = d.checkRelease(ctx)
@@ -111,6 +115,8 @@ func (d *Daemon) releaseLoop(ctx context.Context) {
 // releaseWait returns the time until the next check, at least least. While
 // check_updates is off, only a wake starts a check. A check time in the
 // future comes from a clock that was wrong, so the next check is due.
+// After a failed check, a wake makes the retry due releaseRetryGap after
+// the failure. A network change often ends the error.
 func (d *Daemon) releaseWait(now time.Time, least time.Duration) time.Duration {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -119,6 +125,8 @@ func (d *Daemon) releaseWait(now time.Time, least time.Duration) time.Duration {
 	switch {
 	case !d.cfg.CheckUpdates:
 		wait = releaseInterval
+	case d.releaseErr != "" && d.releaseWoken:
+		wait = d.releaseTried.Add(releaseRetryGap).Sub(now)
 	case d.releaseErr != "":
 		wait = d.releaseTried.Add(releaseRetry).Sub(now)
 	case d.release.CheckedAt == 0 || checked.After(now):
@@ -127,14 +135,6 @@ func (d *Daemon) releaseWait(now time.Time, least time.Duration) time.Duration {
 		wait = checked.Add(releaseInterval).Sub(now)
 	}
 	return max(min(wait, releaseInterval), least, 0)
-}
-
-// releaseRetryDue reports whether a wake starts a check after a failed
-// check. A network change often ends the error.
-func (d *Daemon) releaseRetryDue(now time.Time) bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return d.cfg.CheckUpdates && d.releaseErr != "" && now.Sub(d.releaseTried) >= releaseRetryGap
 }
 
 // wakeRelease starts a check when one is due: after check_updates turns
@@ -152,7 +152,7 @@ func (d *Daemon) checkRelease(ctx context.Context) error {
 	r, err := release.Latest(ctx, d.opts.ReleaseURL, d.opts.Version)
 	now := time.Now()
 	d.mu.Lock()
-	d.releaseTried = now
+	d.releaseTried, d.releaseWoken = now, false
 	if err != nil {
 		changed := d.releaseErr != err.Error()
 		d.releaseErr = err.Error()

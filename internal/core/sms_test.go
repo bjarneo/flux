@@ -104,6 +104,47 @@ func TestHandleSmsConversations(t *testing.T) {
 	}
 }
 
+func TestHandleSmsConversationsAnswer(t *testing.T) {
+	d := &Daemon{}
+	dev := newDevice("p1")
+	threads := func() []int64 {
+		var out []int64
+		for _, c := range sortedConversations(dev.conversations) {
+			out = append(out, c.Thread)
+		}
+		slices.Sort(out)
+		return out
+	}
+	d.handleSms(dev, smsPacket(map[string]any{"messages": []any{
+		wireMessage(1, 1, 1790000000000, 1, 1), wireMessage(2, 2, 1790000001000, 1, 1), wireMessage(3, 3, 1790000002000, 1, 1),
+	}}))
+
+	// An answer without the marker comes from an older app. It only adds.
+	d.handleSms(dev, smsPacket(map[string]any{"messages": []any{wireMessage(1, 1, 1790000000000, 1, 1)}}))
+	if got := threads(); !slices.Equal(got, []int64{1, 2, 3}) {
+		t.Fatalf("an answer without the marker removed threads: %v", got)
+	}
+	// The marker in the answer to a thread request changes nothing.
+	d.handleSms(dev, smsPacket(map[string]any{"conversations": true, "threadID": 1, "messages": []any{wireMessage(1, 1, 1790000000000, 1, 1)}}))
+	if got := threads(); !slices.Equal(got, []int64{1, 2, 3}) {
+		t.Fatalf("a thread answer removed threads: %v", got)
+	}
+
+	// The user deleted thread 2 on the phone. The phone splits its answer
+	// into 2 packets. The first packet has the marker and replaces the
+	// list, and the second packet adds to it.
+	d.handleSms(dev, smsPacket(map[string]any{"conversations": true, "messages": []any{wireMessage(3, 3, 1790000002000, 1, 1)}}))
+	d.handleSms(dev, smsPacket(map[string]any{"messages": []any{wireMessage(1, 1, 1790000000000, 1, 1)}}))
+	if got := threads(); !slices.Equal(got, []int64{1, 3}) {
+		t.Fatalf("threads after the answer: %v", got)
+	}
+	// A new message after the answer adds its thread.
+	d.handleSms(dev, smsPacket(map[string]any{"messages": []any{wireMessage(4, 4, 1790000003000, 1, 0)}}))
+	if got := threads(); !slices.Equal(got, []int64{1, 3, 4}) {
+		t.Fatalf("threads after a new message: %v", got)
+	}
+}
+
 func TestHandleSmsThreadAnswer(t *testing.T) {
 	d := &Daemon{}
 	wait := func(dev *Device, thread int64) chan []SmsMessage {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 )
 
 // mic shows the phone microphone state, or stops it.
@@ -181,5 +182,35 @@ func screen(args []string) error {
 	default:
 		fmt.Printf("%s is starting its screen mirror\n", v.FromName)
 	}
+	return nil
+}
+
+// browse lists the devices that browse this computer with Browse PC, or
+// stops them. Without --device, stop ends every session.
+func browse(args []string, device string) error {
+	switch first(args) {
+	case "stop":
+		return call("browse.stop", map[string]any{"device": device})
+	case "":
+	default:
+		return fmt.Errorf("unknown argument %q. Usage: flux-cli browse [stop]", first(args))
+	}
+	var s struct {
+		Browse []struct {
+			Name  string `json:"name"`
+			Since int64  `json:"since"`
+		} `json:"browse"`
+	}
+	if err := callInto("state", nil, &s); err != nil {
+		return err
+	}
+	if len(s.Browse) == 0 {
+		fmt.Println("No device browses this computer.")
+		return nil
+	}
+	for _, b := range s.Browse {
+		fmt.Printf("%s browses this computer since %s\n", safe(b.Name), time.Unix(b.Since, 0).Format("15:04"))
+	}
+	fmt.Println("Stop it with: flux-cli browse stop")
 	return nil
 }

@@ -299,9 +299,11 @@ The release attaches the macOS app from the `macos` job. The app is signed ad ho
 The release skips the iOS tests. The `ipa` job builds the iOS app in Release without signing, for sideload tools.
 The release starts as a draft until all assets upload.
 
-Only the highest stable tag becomes the latest release on GitHub.
+Only the highest stable tag on `master` becomes the latest release on GitHub.
+A tag that is not on `master` gets no release and does not count.
 A patch tag on an earlier line, such as `v0.6.1` after `v0.7.0`, gets a release that is not the latest.
 `flux-cli update` and `fluxd` read only the latest release, so they do not offer that patch.
+The run shows a warning for a release that is not the latest.
 
 The workflow writes the release notes in the cliamp format:
 

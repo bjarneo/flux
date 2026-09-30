@@ -78,7 +78,7 @@ install:
 	@if [ -z "$(DESTDIR)" ]; then sh dist/post-install.sh; fi
 
 uninstall:
-	@if [ -z "$(DESTDIR)" ]; then sh dist/pre-remove.sh; fi
+	@if [ -z "$(DESTDIR)" ]; then FLUX_PREFIX=$(PREFIX) sh dist/pre-remove.sh; fi
 	rm -f $(DESTDIR)$(PREFIX)/bin/fluxd $(DESTDIR)$(PREFIX)/bin/flux-cli $(DESTDIR)$(PREFIX)/bin/flux-gui
 	rm -rf $(DESTDIR)$(PREFIX)/share/flux
 	rm -rf $(DESTDIR)$(PREFIX)/lib/flux

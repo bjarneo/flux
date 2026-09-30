@@ -87,8 +87,10 @@ Other settings apply while the stream runs.
 The phone limits values to its camera's capabilities and saves them for the next stream.
 
 `fluxd` takes the settings and the camera capabilities only from the phone that streams.
-It refuses settings with more than 4096 bytes, a list with more than 16 values, or a text with more than 32 characters.
+It refuses settings with more than 4096 bytes, a list with more than 16 values, or a text with more than 128 characters.
 It forgets the settings when the stream stops.
+`fluxd` sends only the keys in the table to the phone.
+It refuses a number outside the range -65536 to 65536, and a resolution that is negative or not a whole number.
 
 The udev rule `61-flux-v4l2loopback.rules` gives the user at the seat access to the control device of `v4l2loopback`.
 Each process of that user can then add and remove the loopback devices that no app has open.

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"cmp"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -46,6 +48,29 @@ type browseSession struct {
 	// notice is the desktop notification that shows while the session
 	// runs.
 	notice uint32
+
+	// start is the time when the session began.
+	start time.Time
+}
+
+// BrowseView is 1 Browse PC session for the window. Since is the start in
+// Unix seconds.
+type BrowseView struct {
+	Device string `json:"device"`
+	Name   string `json:"name"`
+	Since  int64  `json:"since"`
+}
+
+// browseViewLocked lists the Browse PC sessions, the oldest first.
+func (d *Daemon) browseViewLocked() []BrowseView {
+	out := make([]BrowseView, 0, len(d.sessions.browse))
+	for _, s := range d.sessions.browse {
+		out = append(out, BrowseView{Device: s.dev.ID, Name: s.dev.Name, Since: s.start.Unix()})
+	}
+	slices.SortFunc(out, func(a, b BrowseView) int {
+		return cmp.Or(cmp.Compare(a.Since, b.Since), strings.Compare(a.Device, b.Device))
+	})
+	return out
 }
 
 // handleBrowseRequest answers flux.sftp.request from a Flux phone.
@@ -122,9 +147,10 @@ func (d *Daemon) startBrowse(dev *Device, l interface{ Done() <-chan struct{} },
 		defer d.dropBrowse(n, s)
 		defer cancel()
 		defer fsys.Close()
+		name := d.nameOf(dev)
 		tc, err := open(ctx)
 		if err != nil {
-			d.logf("%s: Browse PC tunnel: %v", dev.Name, err)
+			d.logf("%s: Browse PC tunnel: %v", name, err)
 			return
 		}
 		stop := context.AfterFunc(ctx, func() { tc.Close() })
@@ -134,17 +160,20 @@ func (d *Daemon) startBrowse(dev *Device, l interface{ Done() <-chan struct{} },
 			tc.Close()
 			return
 		}
+		// The notification stays until the session ends, so that the user
+		// sees the session and its Stop button.
 		notice := d.notify(desktop.Notification{
-			AppName: "Flux", Title: dev.Name + " browses this computer",
+			AppName: "Flux", Title: name + " browses this computer",
 			Body:    "The device can read the files in your home folder.",
 			Actions: []desktop.Action{{Key: "browse-stop:" + strconv.FormatUint(n, 10), Label: "Stop"}},
+			Timeout: -1,
 		})
 		d.mu.Lock()
 		s.notice = notice
 		d.mu.Unlock()
-		d.logf("%s: Browse PC started", dev.Name)
+		d.logf("%s: Browse PC started", name)
 		serveSSH(tc, cfg, fsys, d.logf)
-		d.logf("%s: Browse PC stopped", dev.Name)
+		d.logf("%s: Browse PC stopped", name)
 	}()
 	return ctx
 }
@@ -152,7 +181,7 @@ func (d *Daemon) startBrowse(dev *Device, l interface{ Done() <-chan struct{} },
 // addBrowse registers a new Browse PC session of a device and ends the
 // older session of that device. It returns the number of the session.
 func (d *Daemon) addBrowse(dev *Device, cancel context.CancelFunc) (uint64, *browseSession) {
-	s := &browseSession{dev: dev, cancel: cancel}
+	s := &browseSession{dev: dev, cancel: cancel, start: time.Now()}
 	d.mu.Lock()
 	if d.sessions.browse == nil {
 		d.sessions.browse = map[uint64]*browseSession{}
@@ -208,6 +237,23 @@ func (d *Daemon) endBrowse(deviceID string) int {
 		d.markDirty()
 	}
 	return len(ended)
+}
+
+// StopBrowse ends the Browse PC session of the device with the ID or the
+// name key. An empty key ends every session.
+func (d *Daemon) StopBrowse(key string) error {
+	id := ""
+	if key != "" {
+		dev, err := d.find(key, nil)
+		if err != nil {
+			return err
+		}
+		id = dev.ID
+	}
+	if d.endBrowse(id) == 0 {
+		return apiErr("not_active", "No device browses this computer")
+	}
+	return nil
 }
 
 // stopBrowse ends the Browse PC session with the number from the Stop

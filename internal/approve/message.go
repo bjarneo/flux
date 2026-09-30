@@ -31,6 +31,11 @@ const maxField = 256
 // maxFuture is how far in the future a signed time can be.
 const maxFuture = 5 * time.Second
 
+// maxTime is the largest time in seconds that a message can have: 2^40,
+// about the year 36812. The apps refuse a larger time, and an older app
+// can stop on it.
+const maxTime = 1 << 40
+
 var (
 	// ErrBadSignature means that the signature does not match the key and
 	// the message.
@@ -61,6 +66,9 @@ func (r Request) Message() ([]byte, error) {
 	if err := checkFields(map[string]string{"tty": r.TTY, "rhost": r.RHost}, false); err != nil {
 		return nil, err
 	}
+	if err := checkTimeRange(r.Time); err != nil {
+		return nil, err
+	}
 	if err := checkNonce(r.Nonce); err != nil {
 		return nil, err
 	}
@@ -88,6 +96,9 @@ type Enrollment struct {
 // spki, the public key in DER.
 func (e Enrollment) Message(spki []byte) ([]byte, error) {
 	if err := checkFields(map[string]string{"host": e.Host, "user": e.User}, true); err != nil {
+		return nil, err
+	}
+	if err := checkTimeRange(e.Time); err != nil {
 		return nil, err
 	}
 	if err := checkNonce(e.Nonce); err != nil {
@@ -129,6 +140,13 @@ func checkFields(fields map[string]string, required bool) error {
 		if err := CheckField(name, v); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func checkTimeRange(t int64) error {
+	if t <= 0 || t > maxTime {
+		return ErrStale
 	}
 	return nil
 }

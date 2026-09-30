@@ -61,6 +61,11 @@ final class HerdrTests: XCTestCase {
         XCTAssertEqual(TermText.parse("x\(esc)").map(\.text), ["x"], "a lone escape at the end goes")
     }
 
+    func testDropsC1AndMarksBidiControls() {
+        let text = "ok \u{202E}exe.sh\u{202C} \u{85}done\u{9B}\u{2066}x\u{2069}\u{2028}"
+        XCTAssertEqual(TermText.parse(text).map(\.text), ["ok \u{FFFD}exe.sh\u{FFFD} done\u{FFFD}x\u{FFFD}\u{FFFD}"])
+    }
+
     func testExpandsTabsAndSplitsLines() {
         let lines = TermText.parse("a\tb\r\n\tc\n")
         XCTAssertEqual(lines.map(\.text), ["a       b", "        c"])

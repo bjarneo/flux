@@ -231,9 +231,13 @@ func (d *Daemon) handleRunCommand(dev *Device, l *lan.Link, p *proto.Packet) {
 	d.toast("%s ran %s", name, cmd.Name)
 }
 
+// runDesktopCommand starts a shell command on the desktop. Tests replace
+// it.
+var runDesktopCommand = desktop.RunCommand
+
 // runLocal starts a command and logs a failure with its output.
 func (d *Daemon) runLocal(cmd config.Command) error {
-	return desktop.RunCommand(cmd.Command, func(err error, out []byte) {
+	return runDesktopCommand(cmd.Command, func(err error, out []byte) {
 		if err != nil {
 			d.logf("command %s failed: %v: %s", cmd.ID, err, strings.TrimSpace(string(out)))
 			d.toast("%s failed: %v", cmd.Name, err)

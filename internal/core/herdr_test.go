@@ -469,6 +469,14 @@ func TestCleanPlain(t *testing.T) {
 	}
 }
 
+// The error of an agent that did not start has the last line of its pane,
+// with the characters that textRune removes or marks.
+func TestPaneLastLine(t *testing.T) {
+	if got := paneLastLine("$ claude\r\nok \u202eexe.sh\u202c \u0085done\t\x1b\r\n"); got != "ok \ufffdexe.sh\ufffd done" {
+		t.Errorf("paneLastLine: %q", got)
+	}
+}
+
 func TestTrimStyledEndSkipsBrokenSequences(t *testing.T) {
 	for in, want := range map[string]string{
 		"\x1bm":         "\x1bm",
@@ -635,21 +643,52 @@ func TestReadHerdrOnce(t *testing.T) {
 	}
 
 	// 3 reads on one link make 1 herdr call and get 1 answer. A read on
-	// another link runs on its own. A read with another line count or
-	// format needs another answer, so it runs on its own too.
+	// another link runs on its own.
 	link := &lan.Link{}
 	hold := f.holdReads()
 	for range 3 {
 		d.readHerdrOnce(dev, link, "w1:p1", 1, false, send)
 	}
 	d.readHerdrOnce(dev, &lan.Link{}, "w1:p1", 1, false, send)
-	d.readHerdrOnce(dev, link, "w1:p1", 2, false, send)
-	d.readHerdrOnce(dev, link, "w1:p1", 1, true, send)
-	waitFor(t, "4 reads", func() bool { return f.heldReads() == 4 })
+	waitFor(t, "2 reads", func() bool { return f.heldReads() == 2 })
 	close(hold)
-	answers(4)
-	if calls := f.takeCalls(); len(calls) != 4 {
+	answers(2)
+	if calls := f.takeCalls(); len(calls) != 2 {
 		t.Errorf("read calls %v", calls)
+	}
+
+	// Reads with other line counts and formats do not run at the same
+	// time. The reads that came during the read get 1 new read with the
+	// values of the newest read.
+	hold = f.holdReads()
+	d.readHerdrOnce(dev, link, "w1:p1", 1, false, send)
+	waitFor(t, "the read", func() bool { return f.heldReads() == 1 })
+	for lines := 2; lines <= 1000; lines++ {
+		d.readHerdrOnce(dev, link, "w1:p1", lines, lines%2 == 0, send)
+	}
+	d.readHerdrOnce(dev, link, "w1:p1", 7, true, send)
+	close(hold)
+	answers(2)
+	// An ANSI read of an agent also reads the plain history.
+	calls := f.takeCalls()
+	if len(calls) < 2 || !strings.Contains(calls[0], `"lines":1,`) || !strings.Contains(calls[1], `"format":"ansi"`) {
+		t.Errorf("read calls with other line counts %v", calls)
+	}
+	for _, c := range calls[1:] {
+		if !strings.Contains(c, `"lines":7,`) {
+			t.Errorf("a read call without the values of the newest read: %s", c)
+		}
+	}
+
+	// A pane that fluxd does not know gets its answer at once, with no
+	// herdr call and no read that runs.
+	var unknown *proto.Packet
+	d.readHerdrOnce(dev, link, "w9:p9", 1, false, func(p *proto.Packet) { unknown = p })
+	if unknown == nil || outputBody(t, unknown)["error"] != "No agent runs in w9:p9" {
+		t.Errorf("answer for an unknown pane: %v", unknown)
+	}
+	if calls := f.takeCalls(); len(calls) != 0 {
+		t.Errorf("herdr calls for an unknown pane: %v", calls)
 	}
 
 	// A new status during the read makes the answer old, so the reads
@@ -1392,6 +1431,78 @@ func TestHerdrRequestNumber(t *testing.T) {
 			t.Errorf("%v: answer has the request %v, want none", c.body, got["request"])
 		}
 	}
+}
+
+// TestHerdrSendLimit checks that at most herdrMaxSends keys, prompt,
+// input, and close jobs run for each device, and that a pane that fluxd
+// does not know takes no job.
+func TestHerdrSendLimit(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	f := newFakeHerdr(t)
+	d := herdrDaemon(ctx, f.path)
+	d.cfg.HerdrControl = true
+	d.herdrAgents = []HerdrAgent{{Pane: "w1:p1", Agent: "claude"}}
+	dev, tablet := &Device{ID: "phone1", Name: "Pixel 8", Paired: true}, &Device{ID: "tablet", Paired: true}
+	for range herdrMaxSends {
+		if got := d.startHerdrSend(dev, "w1:p1"); got != herdrSendStarted {
+			t.Fatalf("a job under the limit: %d", got)
+		}
+	}
+	if got := d.startHerdrSend(dev, "w1:p1"); got != herdrSendBusy {
+		t.Fatalf("a job over the limit: %d", got)
+	}
+	if got := d.startHerdrSend(tablet, "w1:p1"); got != herdrSendStarted {
+		t.Fatalf("a job of another device: %d", got)
+	}
+	d.endHerdrSend(tablet)
+	if got := d.startHerdrSend(dev, "w9:p9"); got != herdrSendUnknown {
+		t.Fatalf("a job for an unknown pane: %d", got)
+	}
+
+	desk, phone, _, _ := linkPair(t, ctx)
+	answers := make(chan map[string]any, 16)
+	go phone.Receive(func(p *proto.Packet) {
+		if f := p.Fields(); p.Type == proto.TypeFluxHerdr && f["kind"] != "state" {
+			answers <- f
+		}
+	})
+	answer := func(body map[string]any) map[string]any {
+		t.Helper()
+		d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, body))
+		select {
+		case got := <-answers:
+			return got
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%v: no answer within 5 seconds", body)
+		}
+		return nil
+	}
+	// A device with herdrMaxSends jobs gets the busy answer at once.
+	if got := answer(map[string]any{"kind": "keys", "pane": "w1:p1", "keys": []string{"1"}, "request": 5}); got["kind"] != "sent" || got["error"] != errHerdrBusy || got["request"] != 5.0 {
+		t.Errorf("keys while busy: %v", got)
+	}
+	if got := answer(map[string]any{"kind": "close", "pane": "w1:p1", "request": 6}); got["kind"] != "closed" || got["error"] != errHerdrBusy || got["request"] != 6.0 {
+		t.Errorf("close while busy: %v", got)
+	}
+	// A pane that fluxd does not know gets its answer also while busy.
+	if got := answer(map[string]any{"kind": "prompt", "pane": "w9:p9", "text": "hi", "request": 7}); got["error"] != "No agent runs in w9:p9" || got["request"] != 7.0 {
+		t.Errorf("prompt to an unknown pane: %v", got)
+	}
+	if calls := f.takeCalls(); len(calls) != 0 {
+		t.Errorf("herdr calls while busy: %v", calls)
+	}
+	for range herdrMaxSends {
+		d.endHerdrSend(dev)
+	}
+	if got := answer(map[string]any{"kind": "keys", "pane": "w1:p1", "keys": []string{"1"}, "request": 8}); got["error"] != nil {
+		t.Errorf("keys after the jobs ended: %v", got)
+	}
+	waitFor(t, "the end of the job", func() bool {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		return len(d.herdrJobs.sending) == 0
+	})
 }
 
 // TestUnsavedHerdrSettings checks that herdr_control and herdr_terminals

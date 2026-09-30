@@ -51,7 +51,14 @@ type contentQueue struct {
 }
 
 // clipFetch is the clipboard image that 1 device sends.
-type clipFetch struct{ cancel context.CancelFunc }
+type clipFetch struct {
+	cancel context.CancelFunc
+
+	// stale is true when a newer text or image of the device came. The
+	// image then does not go on the clipboard or into the history. d.mu
+	// guards it.
+	stale bool
+}
 
 // contentState is the state of the workers and the limits for shares, the
 // clipboard, notifications, media, calls, and Do Not Disturb. d.mu guards
@@ -83,9 +90,18 @@ type contentState struct {
 // run. With max 0, q keeps only the newest waiting job. Otherwise it
 // returns false and drops the job when q holds max jobs.
 func (d *Daemon) runContent(q *contentQueue, max int, job func()) bool {
+	return d.runContentIf(q, max, nil, job)
+}
+
+// runContentIf is runContent with the condition ok, which runs under d.mu
+// before q changes. When ok returns false, runContentIf returns false and
+// q keeps its jobs. A nil ok is always true.
+func (d *Daemon) runContentIf(q *contentQueue, max int, ok func() bool, job func()) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	switch {
+	case ok != nil && !ok():
+		return false
 	case max == 0:
 		clear(q.jobs)
 		q.jobs = append(q.jobs[:0], job)

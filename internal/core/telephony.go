@@ -98,9 +98,9 @@ func (d *Daemon) handleTelephony(dev *Device, p *proto.Packet) {
 	}
 	b.ContactName, b.PhoneNumber = cutText(b.ContactName, maxCaller), cutText(b.PhoneNumber, maxCaller)
 	d.mu.Lock()
-	l := dev.link
+	l, name := dev.link, dev.Name
 	d.mu.Unlock()
-	d.logf("%s: call %s cancel=%v", dev.Name, b.Event, b.IsCancel.bool())
+	d.logf("%s: call %s cancel=%v", name, b.Event, b.IsCancel.bool())
 	// The media calls and the notifications go over D-Bus, so they run on
 	// the media worker and not in the read loop of the device.
 	d.runMedia(func() { d.callEvent(dev, l, b) })
@@ -128,7 +128,7 @@ func (d *Daemon) callEvent(dev *Device, l *lan.Link, b callBody) {
 	if watch {
 		c.link = l
 	}
-	pauseMedia := d.cfg.PauseMediaOnCall
+	pauseMedia, name := d.cfg.PauseMediaOnCall, dev.Name
 	d.mu.Unlock()
 	if watch {
 		go func() {
@@ -161,13 +161,13 @@ func (d *Daemon) callEvent(dev *Device, l *lan.Link, b callBody) {
 			// A second ringing packet, with the number or the name, replaces
 			// the first notification.
 			c.notice = d.notify(desktop.Notification{
-				AppName: dev.Name, Title: "Call from " + b.caller(), Body: callDetail(b, dev.Name),
+				AppName: name, Title: "Call from " + b.caller(), Body: callDetail(b, name),
 				Category: "call.incoming", Urgency: 2, Timeout: -1, ReplacesID: c.notice,
 			})
 		}
 	case b.Event == "missedCall":
 		d.notify(desktop.Notification{
-			AppName: dev.Name, Title: "Missed call from " + b.caller(), Body: callDetail(b, dev.Name),
+			AppName: name, Title: "Missed call from " + b.caller(), Body: callDetail(b, name),
 			Category: "call.unanswered", Timeout: -1,
 		})
 	}
@@ -210,10 +210,10 @@ func (d *Daemon) SendNotification(dev *Device, title, body string) error {
 		return apiErr("bad_params", "title is empty")
 	}
 	d.mu.Lock()
-	accepts := dev.accepts(proto.TypeNotification)
+	accepts, name := dev.accepts(proto.TypeNotification), dev.Name
 	d.mu.Unlock()
 	if !accepts {
-		return apiErr("not_supported", "%s does not show notifications from this computer. Update Flux for Android", dev.Name)
+		return apiErr("not_supported", "%s does not show notifications from this computer. Update Flux for Android", name)
 	}
 	now := time.Now()
 	ticker := title

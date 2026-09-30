@@ -297,7 +297,7 @@ func enrollKey(device string) (*approve.Key, error) {
 		KeyPath:  approve.KeyPath(u.Name),
 		KeyOwner: 0,
 		Waiting: func(phone string) {
-			fmt.Printf("Confirm on %s. Flux for Android asks for your fingerprint.\n", safe(phone))
+			fmt.Printf("Confirm on %s. Flux asks for your fingerprint, Face ID, or Touch ID.\n", safe(phone))
 		},
 		Confirm: confirmCode,
 	})

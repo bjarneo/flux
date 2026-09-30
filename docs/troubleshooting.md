@@ -102,7 +102,7 @@ systemctl --user daemon-reload
 Flux works without the internet.
 Only the daily [release check](configuration.md#release-check) needs a connection to `api.github.com`.
 `flux-cli doctor` shows the error of the last failed check.
-`fluxd` tries again after 1 hour or at the next network change.
+`fluxd` tries again after 1 hour or at the next network change, but not earlier than 1 minute after the failure.
 
 To turn the check off, set `check_updates = false` in `~/.config/flux/config.toml`, then run:
 

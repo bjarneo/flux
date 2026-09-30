@@ -78,6 +78,10 @@ The journal names the device. To pair it again, run:
 flux-cli unpair DEVICE_ID
 ```
 
+If `devices.json` does not parse, `fluxd` moves it to `devices.json.broken-<Unix time>` in the same folder and starts without paired devices.
+The journal and a desktop notification name the moved file.
+Pair your devices again.
+
 ## Files, clipboard, and links
 
 Use the Files and Clipboard pages in the desktop window, or run:
@@ -144,7 +148,15 @@ A symlink to another drive does not show in the home folder.
 When `~/Documents` or another folder of the list is such a symlink, open it from the list of folders.
 `fluxd` does not offer a `download_dir` that holds the home folder, such as `/`, or a `download_dir` in a folder of home with a dot name.
 
-While the phone browses, the desktop shows a notification with a **Stop** button.
+While the phone browses, the desktop shows a notification with a **Stop** button until the session ends.
+The Overview page of the Flux window shows a **BROWSE PC** card with a **Stop** button too.
+To see and end the sessions from a terminal, run:
+
+```sh
+flux-cli browse
+flux-cli browse stop
+```
+
 A session ends after 1 hour, when the phone closes it, when the link drops, or when the device is unpaired.
 A new session of the same phone ends the old one.
 
@@ -178,7 +190,7 @@ The phone sends PNG, JPEG, GIF, and WebP images.
 Flux syncs images of up to 16 MiB.
 A copy that also has plain text syncs as text, for example cells from a spreadsheet.
 
-Each device sends 1 image at a time. A newer image stops the image that is on its way.
+Each device sends 1 image at a time. A newer image or text stops the image that is on its way.
 When you turn off `auto_clipboard` or unpair the phone, the desktop stops the image that it sends.
 An image that arrives after an unpair does not go into the history.
 

@@ -535,6 +535,21 @@ Item {
       compare(card.aspects, ["16:9", "4:3", "1:1", "9:16"])
     }
 
+    function test_overviewShowsBrowseSessions() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "overview"
+      var card = null
+      tryVerify(function () { card = findBy(page(view), "objectName", "browseCard"); return !!card })
+      verify(!card.visible)
+      mock.setState(function (s) { s.browse = [{ device: top.pixel, name: "Pixel 8", since: 1790000000 }] })
+      verify(card.visible)
+      compare(card.title, "Pixel 8 browses this computer")
+      card.stop()
+      compare(requestsOf("browse.stop").length, 1)
+      verify(!card.visible)
+    }
+
     function test_overviewShowsFingerprint() {
       var view = createTemporaryObject(viewComponent, top)
       view.selectedId = top.pixel

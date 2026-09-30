@@ -370,6 +370,9 @@ For a direct source install, run from the checkout:
 sudo make uninstall
 ```
 
+Give the same `PREFIX` as for the install.
+Only an install with `PREFIX=/usr` removes the fingerprint approval from the PAM files, because the PAM line names `/usr/lib/flux/flux-approve`.
+
 For a user-only install, stop the service before you remove the binaries:
 
 ```sh

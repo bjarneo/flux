@@ -103,11 +103,12 @@ func (d *Daemon) handleWebcam(dev *Device, l streamLink, p *proto.Packet) {
 }
 
 // Limits for the webcam settings from the phone. The window shows each
-// value, so a larger value is refused.
+// value, so a larger value is refused. The Mac names each camera by its
+// device name, so maxWebcamText also fits a long camera name.
 const (
 	maxWebcamJSON    = 4096
 	maxWebcamList    = 16
-	maxWebcamText    = 32
+	maxWebcamText    = 128
 	maxWebcamNumbers = 1 << 16
 )
 
@@ -391,7 +392,9 @@ func (d *Daemon) StopWebcam() error {
 
 // ConfigureWebcam sends changed settings to the phone that streams. With
 // reset, the phone goes back to the neutral values. A change of the format
-// or the camera makes the phone restart the stream.
+// or the camera makes the phone restart the stream. fluxd sends only the
+// known settings, with the limits of the settings from the phone, so that
+// a value cannot stop an older app.
 func (d *Daemon) ConfigureWebcam(config json.RawMessage, reset bool) error {
 	d.mu.Lock()
 	s := d.webcam
@@ -404,11 +407,19 @@ func (d *Daemon) ConfigureWebcam(config json.RawMessage, reset bool) error {
 	case reset:
 		body["reset"] = true
 	case len(config) > 0:
-		var m map[string]any
-		if err := json.Unmarshal(config, &m); err != nil || len(m) == 0 {
+		dec := json.NewDecoder(bytes.NewReader(config))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&webcamConfig{}); err != nil {
+			return apiErr("bad_params", "The webcam settings are not valid: %v", err)
+		}
+		clean, _, err := cleanWebcamConfig(config, nil)
+		if err != nil {
+			return apiErr("bad_params", "The webcam settings are not valid: %v", err)
+		}
+		if string(clean) == "{}" {
 			return apiErr("bad_params", "config must be an object with at least 1 setting")
 		}
-		body["config"] = m
+		body["config"] = clean
 	default:
 		return apiErr("bad_params", "Give config or reset")
 	}

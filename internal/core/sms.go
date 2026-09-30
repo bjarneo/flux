@@ -146,6 +146,11 @@ func (d *Daemon) handleSms(dev *Device, p *proto.Packet) {
 		// ThreadID names the thread in the answer to a thread request, so
 		// that a new message does not count as the answer.
 		ThreadID *int64 `json:"threadID"`
+		// Conversations marks the first packet of the answer to a
+		// conversations request. That answer has the latest message of each
+		// thread of the phone. An older app sends no marker, and fluxd then
+		// only adds messages.
+		Conversations bool `json:"conversations"`
 	}
 	if p.Decode(&b) != nil {
 		return
@@ -158,6 +163,12 @@ func (d *Daemon) handleSms(dev *Device, p *proto.Packet) {
 	// first, and the callers only read it.
 	sort.SliceStable(msgs, func(i, j int) bool { return msgs[i].ms < msgs[j].ms })
 	d.mu.Lock()
+	// The first packet of the answer replaces the list, so that a thread
+	// that the user deleted on the phone goes. The phone can split 1 answer
+	// into more packets, and fluxd adds the packets that follow.
+	if b.Conversations && b.ThreadID == nil {
+		dev.conversations = map[int64]*Conversation{}
+	}
 	for _, m := range msgs {
 		// A newer message replaces the latest message of its thread. The
 		// same message can come again with a new type or read state.

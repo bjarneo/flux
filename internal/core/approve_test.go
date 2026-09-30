@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -57,6 +58,7 @@ func TestApproveRequestChecks(t *testing.T) {
 	}{
 		{"a newline in a field", map[string]any{"user": "alice\nservice=sshd"}, "bad_params"},
 		{"a short nonce", map[string]any{"nonce": "abcd"}, "bad_params"},
+		{"a negative time", map[string]any{"time": int64(math.MinInt64)}, "bad_params"},
 		{"an unknown phone", map[string]any{"device": "other"}, "not_found"},
 		{"an offline phone", nil, "offline"},
 	}

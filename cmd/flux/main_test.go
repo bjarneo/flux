@@ -30,6 +30,11 @@ func TestWebcamSettings(t *testing.T) {
 	if _, err := webcamSettings([]string{"white_balance=daylight"}); err == nil {
 		t.Fatal("an unknown setting must fail")
 	}
+	for _, v := range []string{"resolution=1e300", "resolution=-9.2e18", "resolution=720.5", "zoom=inf", "zoom=NaN", "warmth=-70000"} {
+		if _, err := webcamSettings([]string{v}); err == nil {
+			t.Errorf("%s: no error", v)
+		}
+	}
 }
 
 // The status shows the ID and the fingerprint of each device, so that the

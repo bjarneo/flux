@@ -383,8 +383,11 @@ When the phone opens the agent list, `fluxd` tries at once.
 
 `fluxd` limits the work that one device can start:
 
-- One read of each pane with the same line count and format runs at a time for each device. A read that comes during the herdr calls of that read gets the same answer. A read that comes while `fluxd` sends the answer gets a new read after it.
+- One read of each pane runs at a time for each device. A read that comes during the herdr calls of that read gets the same answer. A read that comes while `fluxd` sends the answer gets a new read after it.
 - When the agent status changes or a reply goes to the pane during the herdr calls, the answer can be old. The reads that came during the herdr calls then get a new read.
+- A read that comes during the herdr calls with another line count or format also gets a new read. That read uses the line count and the format of the newest read.
+- A read, a reply, or a close for a pane that `fluxd` does not know gets its error at once.
+- Up to 4 keys, prompt, input, and close requests run at a time for each device. A 5th request gets the error `fluxd is busy with earlier replies from this device. Try again.`
 - `fluxd` keeps the plain history of an idle agent for 3 seconds, so a new read in that time does not make herdr scroll the agent again. A new status of the agent, a reply to it, and a new agent in the pane end this time.
 - One start of an agent or a terminal runs at a time for each device.
 

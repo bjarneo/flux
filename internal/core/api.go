@@ -181,6 +181,7 @@ func (d *Daemon) Snapshot() json.RawMessage {
 		"mic":     d.micViewLocked(),
 		"screen":  d.screenViewLocked(),
 		"desktop": d.desktopViewLocked(),
+		"browse":  d.browseViewLocked(),
 		"herdr":   d.herdrViewLocked(),
 	}
 	d.mu.Unlock()
@@ -255,6 +256,8 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		return ok, d.StopScreen()
 	case "desktop.stop":
 		return ok, d.StopDesktop()
+	case "browse.stop":
+		return ok, d.StopBrowse(p.Device)
 	case "approve.request", "approve.enroll":
 		return d.startApproval(ctx, method, raw)
 	case "approve.wait":
@@ -580,7 +583,8 @@ func (d *Daemon) Reload() error {
 // is the configuration before the change. A switch that gives a device
 // access to this computer must not turn on after the error, so it gets its
 // old value back. A switch that turned off stops the sessions at once and
-// stays off until fluxd restarts.
+// stays off until fluxd restarts. Each other setting gets its old value
+// back, so that fluxd and the window keep the value of config.toml.
 func (d *Daemon) unsavedSetting(key string, before *config.Config, err error) error {
 	var field *bool
 	var old bool
@@ -596,10 +600,27 @@ func (d *Daemon) unsavedSetting(key string, before *config.Config, err error) er
 		field, old = &d.cfg.HerdrControl, before.HerdrControl
 	case "herdrTerminals":
 		field, old = &d.cfg.HerdrTerminals, before.HerdrTerminals
+	case "autoClipboard":
+		d.cfg.AutoClipboard = before.AutoClipboard
+	case "notifications":
+		d.cfg.Notifications = before.Notifications
+	case "pauseMediaOnCall":
+		d.cfg.PauseMediaOnCall = before.PauseMediaOnCall
+	case "syncDnd":
+		d.cfg.SyncDnd = before.SyncDnd
+	case "herdr":
+		d.cfg.Herdr = before.Herdr
+	case "checkUpdates":
+		d.cfg.CheckUpdates = before.CheckUpdates
+	case "name":
+		d.cfg.Name = before.Name
+	case "downloadDir":
+		d.cfg.DownloadDir = before.DownloadDir
 	}
 	if field == nil {
 		d.mu.Unlock()
-		return err
+		d.markDirty()
+		return fmt.Errorf("%s did not change, because config.toml could not keep the change: %w", key, err)
 	}
 	on := *field
 	if on {

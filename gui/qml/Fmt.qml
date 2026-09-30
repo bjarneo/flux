@@ -152,7 +152,7 @@ QtObject {
     "paste": 0xF0192, "copy": 0xF018F, "send": 0xF048A, "upload": 0xF0552, "download": 0xF01DA,
     "tray-up": 0xF011D, "tray-down": 0xF0120, "arrow-in": 0xF0042, "arrow-out": 0xF005C,
     "arrow-down": 0xF0045, "arrow-up": 0xF005D, "reply": 0xF045A, "snooze": 0xF068E,
-    "open": 0xF03CC, "refresh": 0xF0450, "plus": 0xF0415, "close": 0xF0156, "check": 0xF012C,
+    "open": 0xF03CC, "folder": 0xF024B, "refresh": 0xF0450, "plus": 0xF0415, "close": 0xF0156, "check": 0xF012C,
     "check-circle": 0xF05E1, "error": 0xF015A, "alert": 0xF05D6, "info": 0xF02FD,
     "trash": 0xF0A7A, "tune": 0xF1542, "cog": 0xF08BB, "search": 0xF0349, "chevron": 0xF0142,
     "more": 0xF01D9, "menu": 0xF035C, "arrow-left": 0xF004D, "clock": 0xF0150, "power": 0xF0425, "play-circle": 0xF040D,

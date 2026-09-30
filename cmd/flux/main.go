@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -71,6 +72,7 @@ Commands:
   screen [stop]          Show the phone screen mirror state, or stop the mirror
   desktop [stop]         Show whether a phone shows this screen, or stop it
   desktop on|off         Let a paired phone or Mac show this screen, or stop that
+  browse [stop]          Show the devices that browse this computer, or stop them
   input [on|off]         Show whether a paired phone or Mac can move the pointer
                          and type on this computer, or turn that on or off
   approve [status]       Show whether a phone can approve sudo with a fingerprint
@@ -154,6 +156,8 @@ func main() {
 		err = screen(args)
 	case "desktop":
 		err = remoteDesktop(args)
+	case "browse":
+		err = browse(args, device)
 	case "input":
 		err = remoteInput(args)
 	case "approve":
@@ -920,8 +924,14 @@ func webcam(args []string) error {
 // ignores other keys, so the CLI refuses them.
 var webcamKeys = []string{"aspect", "resolution", "camera", "mirror", "zoom", "exposure", "whiteBalance", "brightness", "contrast", "saturation", "warmth"}
 
+// maxWebcamNumber is the largest size of a webcam setting number that
+// fluxd sends to the phone.
+const maxWebcamNumber = 1 << 16
+
 // webcamSettings turns KEY=VALUE arguments into a config object. true and
 // false become booleans, numbers become numbers, and the rest stays text.
+// A number must be finite and in the range that fluxd accepts. The
+// resolution must be a whole number that is not negative.
 func webcamSettings(args []string) (map[string]any, error) {
 	if len(args) == 0 {
 		return nil, errors.New("give at least 1 KEY=VALUE, for example: flux-cli webcam set aspect=16:9")
@@ -940,6 +950,9 @@ func webcamSettings(args []string) (map[string]any, error) {
 			cfg[k] = v == "true"
 		default:
 			if n, err := strconv.ParseFloat(v, 64); err == nil {
+				if math.IsNaN(n) || math.Abs(n) > maxWebcamNumber || (k == "resolution" && (n < 0 || n != math.Trunc(n))) {
+					return nil, fmt.Errorf("%s=%s is out of range", k, v)
+				}
 				cfg[k] = n
 			} else {
 				cfg[k] = v
