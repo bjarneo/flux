@@ -75,7 +75,9 @@ Flux checks for a new release once a day. To install it, run `flux-cli update`.
 4. Select **+ Pair new device**.
 5. Compare the 16-character verification key on both screens, for example `5EE6 825F 974E D59A`.
 6. Accept the matching request on the phone.
+7. Select **Confirm** in the Flux window or in the notification on the desktop. The desktop pins the phone only after this step.
 
+Each step waits at most 30 seconds.
 Compare all 16 characters.
 Earlier Flux apps show only 8 characters, so update Flux on each phone, iPhone, and Mac before you pair.
 
@@ -84,6 +86,9 @@ You can also start the pair request from a terminal:
 ```sh
 flux-cli pair "Pixel 8"
 ```
+
+After the phone accepts, `flux-cli pair` asks whether the phone shows the same key.
+Type `y` to confirm.
 
 To connect an iPhone, install the app with Xcode and follow [Pair an iPhone](docs/ios.md#pair-an-iphone).
 To connect a Mac, build the app and follow [Pair a Mac](docs/macos.md#pair-a-mac).

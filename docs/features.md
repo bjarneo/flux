@@ -20,10 +20,12 @@ See [sync switches](android-setup.md#sync-switches) and [security](security.md).
 6. Select the phone.
 7. Compare the 16-character key on both screens, for example `5EE6 825F 974E D59A`.
 8. Accept the matching request on the phone.
+9. Select **Confirm** on the desktop, in the Flux window or in the notification. The desktop pins the phone only after this step.
 
 Compare all 16 characters.
 An earlier Flux app shows only 8 characters. Update Flux on each phone, iPhone, and Mac before you pair.
 If the keys differ, reject the request and pair again.
+Each step waits at most 30 seconds. After that, the pairing stops, and the phone removes it.
 
 To pair from the terminal:
 
@@ -33,6 +35,9 @@ flux-cli pair "Pixel 8"
 flux-cli status
 ```
 
+After the phone accepts, `flux-cli pair` asks `Does Pixel 8 show 5EE6 825F 974E D59A? [y/N]`.
+Type `y` only when the phone shows the same key.
+When stdin is not a terminal, `flux-cli pair` prints the `flux-cli accept` command with the device ID and the key. Run it after you compare the key.
 `flux-cli pair` and `flux-cli accept` print the name, the device ID, and the key of the pairing.
 `flux-cli unpair` prints the name, the device ID, and the fingerprint of the certificate that it removed.
 When the name matches more than 1 device, `fluxd` refuses the name with the `ambiguous` error and lists the device IDs.
@@ -54,12 +59,17 @@ To use the phone away from the local network, see [Connect through Tailscale](ta
 ### Pairing security
 
 - The key comes from the certificates of both devices and the time of the request. It has 64 bits, so a device between the phone and the computer cannot find a certificate with the same key while the request is open.
+- A pairing that the desktop starts needs a confirmation on each side. After the phone accepts, the desktop waits for **Confirm**. A device that copies the name of your phone cannot pair with 1 click.
+- Each accept and each confirm names the key that you compared. The Flux window, the pair notification, and `flux-cli` send the key, and `fluxd` refuses the answer when the open pairing has another key. Without a key, `flux-cli accept` shows the key and asks you to compare it. Without a terminal, it accepts nothing and prints the command with the key. `flux-cli reject` without a key rejects the pairing that is open when it runs. `fluxd` closes the pair notification when the pairing ends.
 - A pairing stays on the connection and the certificate on which it started. While a pairing is open, `fluxd` refuses a second connection with another certificate for the same device ID. When the connection of the pairing closes, the pairing stops.
 - After the pairing, `fluxd` refuses each connection that does not show the pinned certificate.
 - The state from `flux-cli status --json` has the `fingerprint` of each device: 16 hex digits from its certificate. `flux-cli status` shows the device ID and the fingerprint under each device. Use them to tell 2 devices with the same name apart.
-- When you unpair on either side, the other side gets the unpair message and `fluxd` closes the connection. `fluxd` also removes the notifications, messages, and battery state of the device.
+- When you unpair on either side, the other side gets the unpair message and `fluxd` closes the connection. `fluxd` also removes the notifications, messages, and battery state of the device, and closes the desktop notifications of the phone.
 - A device that is not paired can send packets of at most 64 KiB. `fluxd` closes its connection when it sends no pair request for 2 minutes.
-- `fluxd` shows at most 1 pair notification for each device and at most 4 open pair requests.
+- `fluxd` shows at most 1 pair notification for each device and at most 4 open pair requests. At most 2 of them come from 1 address.
+- When a request of a device ends with a withdraw, a reject, a timeout, or the end of its connection, `fluxd` refuses a new request of that device for 30 seconds.
+- When `fluxd` refuses a request because too many requests are open, the Flux window shows the name and the address of the device. Reject the other requests, or pair from the desktop.
+- The Flux window opens the sidebar for a request only once in 5 minutes for each device.
 
 If `devices.json` has a certificate that `fluxd` cannot read, the device counts as not paired, and `fluxd` refuses its connections.
 The journal names the device. To pair it again, run:

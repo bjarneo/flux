@@ -573,9 +573,10 @@ func (d *Daemon) discoveredLocked(id string) *Device {
 }
 
 // forgettable reports whether fluxd can remove the device from its list:
-// it is not paired, not connected, and has no pairing.
+// it is not paired, not connected, has no pairing, and gets no pair false
+// on its next link.
 func (dev *Device) forgettable() bool {
-	return !dev.Paired && !dev.badTrust && dev.link == nil && dev.pairState == ""
+	return !dev.Paired && !dev.badTrust && dev.link == nil && dev.pairState == "" && !dev.unpairPeer
 }
 
 // lastHeard returns the last time that UDP or mDNS reported the device.
@@ -782,10 +783,11 @@ func (d *Daemon) onLink(l *lan.Link) {
 		return
 	}
 	// A pairing ends with its link. The device can pair again on the new
-	// link.
+	// link, after pairRetry when it had an incoming request.
 	stopped := dev.pairState != "" && dev.pairLink != l
+	var note uint32
 	if stopped {
-		dev.clearPairingLocked()
+		note = dev.pairLinkEndedLocked()
 	}
 	dev.link = l
 	dev.ignored = 0
@@ -810,8 +812,17 @@ func (d *Daemon) onLink(l *lan.Link) {
 	if !paired {
 		evict = d.unpairedOverflowLocked(l)
 	}
+	// The device pinned this computer in a pairing that ended before the
+	// user of this computer confirmed it. Only a link with the certificate
+	// of that pairing clears the flag, so that another host with the device
+	// ID cannot take the pair false of the device.
+	unpair := dev.unpairPeer && !paired && l.Cert != nil && dev.unpairCert.Equal(l.Cert)
+	if unpair {
+		dev.unpairPeer, dev.unpairCert = false, nil
+	}
 	name, typ, ip, port := dev.Name, dev.Type, dev.IP, dev.Port
 	d.mu.Unlock()
+	d.closeNotes(note)
 	for _, e := range evict {
 		d.logf("%s: too many links of devices that are not paired, closing the oldest", e.Identity.DeviceName)
 		e.Close()
@@ -820,6 +831,9 @@ func (d *Daemon) onLink(l *lan.Link) {
 		old.Close()
 	}
 	d.logf("link up: %s (%s) paired=%v", name, ip, paired)
+	if unpair {
+		_ = l.Send(proto.New(proto.TypePair, map[string]any{"pair": false}))
+	}
 	if stopped {
 		d.toast("Pairing with %s stopped, because the connection changed. Pair again", name)
 	}
@@ -918,12 +932,20 @@ func (d *Daemon) receive(dev *Device, l *lan.Link) {
 		dev.link = nil
 		dev.LastSeen = time.Now()
 	}
+	var note uint32
+	stopped := false
 	if current || dev.pairLink == l {
-		dev.clearPairingLocked()
+		state := dev.pairState
+		stopped = state == "requested" || state == "confirm"
+		note = dev.pairLinkEndedLocked()
 	}
 	name := dev.Name
 	d.mu.Unlock()
+	d.closeNotes(note)
 	d.logf("link down: %s: %v", name, err)
+	if stopped {
+		d.toast("Pairing with %s stopped, because the connection closed", name)
+	}
 	d.markDirty()
 	// The device can be back at once on another address, for example
 	// through Tailscale after it left the Wi-Fi. Do not wait for the next

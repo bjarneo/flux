@@ -468,11 +468,14 @@ func (d *Daemon) onNotificationAction(_ uint32, key string) {
 	case "reveal":
 		_ = desktop.Open(filepath.Dir(rest))
 	case "pair-accept", "pair-reject":
-		if dev := d.lookup(rest); dev != nil {
+		// The key binds the click to the pairing that the notification
+		// showed. A later pairing of the device has another key.
+		id, key, _ := strings.Cut(rest, ":")
+		if dev := d.lookup(id); dev != nil && key != "" {
 			if kind == "pair-accept" {
-				_ = d.AcceptPair(dev)
+				_ = d.AcceptPair(dev, key)
 			} else {
-				_ = d.RejectPair(dev)
+				_ = d.RejectPair(dev, key)
 			}
 		}
 	case "desktop-stop":

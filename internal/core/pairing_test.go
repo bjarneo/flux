@@ -308,11 +308,15 @@ func TestPairRequestIgnoresSecondLink(t *testing.T) {
 		t.Fatal("the attacker got a trust entry")
 	}
 
-	// The phone accepts on the link of the request.
+	// The phone accepts on the link of the request. fluxd waits for the
+	// user of the computer.
 	if err := onPhone.Send(proto.New(proto.TypePair, map[string]any{"pair": true})); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the pairing", func() bool { return field(d, func() bool { return dev.Paired }) })
+	waitFor(t, "the confirm state", func() bool { return field(d, func() string { return dev.pairState }) == "confirm" })
+	if err := d.AcceptPair(dev, key); err != nil {
+		t.Fatal(err)
+	}
 	if c := pinned(t, d, dev.ID); c == nil || !c.Equal(phoneCert.Leaf) {
 		t.Fatal("the trust store does not pin the certificate of the phone")
 	}
@@ -348,7 +352,7 @@ func TestPairAcceptIgnoresSecondLink(t *testing.T) {
 	d.onLink(stray)
 	waitClosed(t, stray)
 
-	if err := d.AcceptPair(dev); err != nil {
+	if err := d.AcceptPair(dev, proto.VerificationKey(d.cert.Leaf, phoneCert.Leaf, ts)); err != nil {
 		t.Fatal(err)
 	}
 	if body := nextPair(t, fromDesk); body["pair"] != true {
@@ -373,7 +377,7 @@ func TestAcceptReadsLongLines(t *testing.T) {
 	waitFor(t, "the incoming request", func() bool { return field(d, func() string { return dev.pairState }) == "incoming" })
 
 	accepted := make(chan error, 1)
-	go func() { accepted <- d.AcceptPair(dev) }()
+	go func() { accepted <- d.AcceptPair(dev, "") }()
 	if body := nextPair(t, fromDesk); body["pair"] != true {
 		t.Fatalf("answer %v", body)
 	}
@@ -414,7 +418,7 @@ func TestAcceptOnce(t *testing.T) {
 	results := make(chan result, 2)
 	for range 2 {
 		go func() {
-			res, err := d.pairCall("pair.accept", dev)
+			res, err := d.pairCall("pair.accept", dev, "")
 			results <- result{res, err}
 		}()
 	}
@@ -482,7 +486,7 @@ func TestAcceptSendFails(t *testing.T) {
 	dev.link, dev.pairLink, dev.pairCert, dev.pairState = l, l, l.Cert, "incoming"
 	d.mu.Unlock()
 	l.Close()
-	if err := d.AcceptPair(dev); err == nil {
+	if err := d.AcceptPair(dev, ""); err == nil {
 		t.Fatal("AcceptPair succeeded without the answer")
 	}
 	if field(d, func() bool { return dev.Paired }) || pinned(t, d, dev.ID) != nil {
@@ -508,19 +512,19 @@ func TestPairingEndsWithItsLink(t *testing.T) {
 	if state := field(d, func() string { return dev.pairState }); state != "" {
 		t.Fatalf("pair state %q after a new link", state)
 	}
-	if err := d.AcceptPair(dev); errCode(err) != "no_request" {
+	if err := d.AcceptPair(dev, ""); errCode(err) != "no_request" {
 		t.Fatalf("AcceptPair after a new link: %v", err)
 	}
 
-	// pairingDone refuses a pairing whose link is not the current link.
-	d.mu.Lock()
-	dev.pairState, dev.pairLink, dev.pairCert = "incoming", onDesk, phoneCert.Leaf
-	d.mu.Unlock()
-	if err := d.AcceptPair(dev); errCode(err) != "no_request" {
-		t.Fatalf("AcceptPair on an old link: %v", err)
-	}
-	if err := d.pairingDone(dev, onDesk); err == nil {
-		t.Fatal("pairingDone pinned the certificate of an old link")
+	// An accept refuses a pairing whose link is not the current link, in
+	// both states that wait for the user of this computer.
+	for _, state := range []string{"incoming", "confirm"} {
+		d.mu.Lock()
+		dev.pairState, dev.pairLink, dev.pairCert = state, onDesk, phoneCert.Leaf
+		d.mu.Unlock()
+		if err := d.AcceptPair(dev, ""); errCode(err) != "no_request" {
+			t.Fatalf("AcceptPair in state %s on an old link: %v", state, err)
+		}
 	}
 	if pinned(t, d, dev.ID) != nil || field(d, func() bool { return dev.Paired }) {
 		t.Fatal("the device is paired")
@@ -596,7 +600,7 @@ func TestHandlePairChecks(t *testing.T) {
 		t.Fatalf("a request within the cooldown changed the timestamp to %d", got)
 	}
 
-	if err := d.AcceptPair(dev); err != nil {
+	if err := d.AcceptPair(dev, ""); err != nil {
 		t.Fatal(err)
 	}
 	nextPair(t, fromDesk)
@@ -611,7 +615,7 @@ func TestHandlePairChecks(t *testing.T) {
 	if pinned(t, d, dev.ID) != nil || field(d, func() bool { return dev.Paired }) {
 		t.Fatal("a paired device that asks again keeps its trust")
 	}
-	if err := d.AcceptPair(dev); err != nil {
+	if err := d.AcceptPair(dev, ""); err != nil {
 		t.Fatal(err)
 	}
 	nextPair(t, fromDesk)
@@ -624,20 +628,32 @@ func TestHandlePairChecks(t *testing.T) {
 	}
 }
 
-// TestPairTimeout checks that a request ends after pairTimeout.
+// TestPairTimeout checks that a request ends after pairTimeout, and that
+// the device gets pair false.
 func TestPairTimeout(t *testing.T) {
 	old := pairTimeout
 	pairTimeout = 100 * time.Millisecond
 	t.Cleanup(func() { pairTimeout = old })
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	d, _, _, dev, _, _, _ := phonePair(t, ctx)
+	d, _, _, dev, _, _, fromDesk := phonePair(t, ctx)
 	if _, err := d.RequestPair(dev); err != nil {
 		t.Fatal(err)
 	}
+	if body := nextPair(t, fromDesk); body["pair"] != true {
+		t.Fatalf("request %v", body)
+	}
+	if body := nextPair(t, fromDesk); body["pair"] != false {
+		t.Fatalf("after the timeout %v", body)
+	}
 	waitFor(t, "the end of the request", func() bool { return field(d, func() string { return dev.pairState }) == "" })
-	if err := d.AcceptPair(dev); errCode(err) != "no_request" {
+	if err := d.AcceptPair(dev, ""); errCode(err) != "no_request" {
 		t.Fatalf("AcceptPair after the timeout: %v", err)
+	}
+	// The phone did not answer the request of this computer, so a request
+	// of the phone counts at once.
+	if !field(d, func() time.Time { return dev.pairEnded }).IsZero() {
+		t.Fatal("the timeout of a request of this computer started the retry wait")
 	}
 }
 
@@ -651,7 +667,7 @@ func TestUnpairClosesLink(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "the incoming request", func() bool { return field(d, func() string { return dev.pairState }) == "incoming" })
-	if err := d.AcceptPair(dev); err != nil {
+	if err := d.AcceptPair(dev, ""); err != nil {
 		t.Fatal(err)
 	}
 	nextPair(t, fromDesk)
@@ -677,7 +693,7 @@ func TestUnpairClosesLink(t *testing.T) {
 	if err := d.Unpair(dev); errCode(err) != "not_paired" {
 		t.Fatalf("Unpair of a device that is not paired: %v", err)
 	}
-	if err := d.RejectPair(dev); errCode(err) != "no_request" {
+	if err := d.RejectPair(dev, ""); errCode(err) != "no_request" {
 		t.Fatalf("RejectPair without a request: %v", err)
 	}
 }
@@ -920,21 +936,28 @@ func TestDiscoveryKeepsPairedAddress(t *testing.T) {
 }
 
 // TestDiscoveredDevicesAreBounded sends identities with new IDs and a
-// large device type. fluxd keeps at most maxDiscovered of them.
+// large device type. fluxd keeps at most maxDiscovered of them. A device
+// that gets pair false on its next link stays.
 func TestDiscoveredDevicesAreBounded(t *testing.T) {
 	d := &Daemon{devices: map[string]*Device{}}
 	phone := newDevice(strings.Repeat("p", 32))
 	phone.Paired = true
 	d.devices[phone.ID] = phone
+	owed := newDevice(strings.Repeat("q", 32))
+	owed.unpairPeer = true
+	d.devices[owed.ID] = owed
 	big := strings.Repeat("x", 60<<10)
 	for i := range 1000 {
 		d.onIdentity(proto.Identity{DeviceID: fmt.Sprintf("%032x", i), DeviceType: big, TCPPort: 1716}, "192.0.2.1")
 	}
-	if n := len(d.devices); n > maxDiscovered+1 {
+	if n := len(d.devices); n > maxDiscovered+2 {
 		t.Fatalf("%d devices after 1000 identities", n)
 	}
 	if d.devices[phone.ID] != phone {
 		t.Fatal("the paired device is gone")
+	}
+	if d.devices[owed.ID] != owed {
+		t.Fatal("the device that gets pair false is gone")
 	}
 	if dev := d.devices[fmt.Sprintf("%032x", 999)]; dev == nil || dev.Type != "" {
 		t.Fatal("the newest device is missing or keeps its type")
@@ -1127,5 +1150,317 @@ func TestFingerprintInState(t *testing.T) {
 	dev.Cert = cert.Leaf
 	if fp := dev.view().Fingerprint; fp != proto.Fingerprint(cert.Leaf) || len(fp) != 16 {
 		t.Fatalf("fingerprint %q", fp)
+	}
+}
+
+// confirmState makes the daemon ask the phone to pair, and makes the phone
+// accept. It returns the key of the pairing.
+func confirmState(t *testing.T, d *Daemon, dev *Device, onPhone *lan.Link, fromDesk chan *proto.Packet) string {
+	t.Helper()
+	key, err := d.RequestPair(dev)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body := nextPair(t, fromDesk); body["pair"] != true {
+		t.Fatalf("request %v", body)
+	}
+	if err := onPhone.Send(proto.New(proto.TypePair, map[string]any{"pair": true})); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the confirm state", func() bool { return field(d, func() string { return dev.pairState }) == "confirm" })
+	return key
+}
+
+// noPairBefore sends a ping marker on the link of the daemon and fails
+// when the phone gets a pair packet before it.
+func noPairBefore(t *testing.T, onDesk *lan.Link, fromDesk chan *proto.Packet) {
+	t.Helper()
+	_ = onDesk.Send(proto.New(proto.TypePing, nil))
+	for {
+		select {
+		case p := <-fromDesk:
+			switch p.Type {
+			case proto.TypePing:
+				return
+			case proto.TypePair:
+				t.Fatalf("the phone got %s", p.Body)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("no marker packet")
+		}
+	}
+}
+
+// TestConfirmNeedsLocalAccept checks a pairing that the desktop starts.
+// The answer of the phone does not pin the phone. Only an accept on this
+// computer with the key of the pairing pins it, and the phone gets no
+// second answer.
+func TestConfirmNeedsLocalAccept(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d, _, phoneCert, dev, onDesk, onPhone, fromDesk := phonePair(t, ctx)
+	key := confirmState(t, d, dev, onPhone, fromDesk)
+	if pinned(t, d, dev.ID) != nil || field(d, func() bool { return dev.Paired }) {
+		t.Fatal("the answer of the phone pinned it")
+	}
+	if v := field(d, dev.view); v.PairState != "confirm" || v.PairKey != key {
+		t.Fatalf("view %q %q", v.PairState, v.PairKey)
+	}
+	// A repeated answer keeps the pairing.
+	if err := onPhone.Send(proto.New(proto.TypePair, map[string]any{"pair": true})); err != nil {
+		t.Fatal(err)
+	}
+	noPairBefore(t, onDesk, fromDesk)
+	if state := field(d, func() string { return dev.pairState }); state != "confirm" {
+		t.Fatalf("pair state %q after a repeated answer", state)
+	}
+
+	if err := d.AcceptPair(dev, "0000000000000000"); errCode(err) != "no_request" {
+		t.Fatalf("AcceptPair with another key: %v", err)
+	}
+	// The key can come in groups and in lower case.
+	res, err := d.pairCall("pair.accept", dev, strings.ToLower(proto.FormatKey(key)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := res.(map[string]any)["key"]; got != key {
+		t.Fatalf("key %v, want %s", got, key)
+	}
+	if c := pinned(t, d, dev.ID); c == nil || !c.Equal(phoneCert.Leaf) || !field(d, func() bool { return dev.Paired }) {
+		t.Fatal("the accept did not pin the phone")
+	}
+	noPairBefore(t, onDesk, fromDesk)
+}
+
+// TestConfirmRejectAndTimeout checks that a reject and a timeout in state
+// "confirm" send pair false, so that the phone removes its pin, and pin
+// nothing.
+func TestConfirmRejectAndTimeout(t *testing.T) {
+	old := pairTimeout
+	pairTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { pairTimeout = old })
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d, _, _, dev, _, onPhone, fromDesk := phonePair(t, ctx)
+
+	key := confirmState(t, d, dev, onPhone, fromDesk)
+	if err := d.RejectPair(dev, "0000000000000000"); errCode(err) != "no_request" {
+		t.Fatalf("RejectPair with another key: %v", err)
+	}
+	if err := d.RejectPair(dev, key); err != nil {
+		t.Fatal(err)
+	}
+	if body := nextPair(t, fromDesk); body["pair"] != false {
+		t.Fatalf("after the reject %v", body)
+	}
+	if field(d, func() string { return dev.pairState }) != "" || field(d, func() time.Time { return dev.pairEnded }).IsZero() {
+		t.Fatal("the reject did not end the pairing")
+	}
+
+	confirmState(t, d, dev, onPhone, fromDesk)
+	if body := nextPair(t, fromDesk); body["pair"] != false {
+		t.Fatalf("after the timeout %v", body)
+	}
+	waitFor(t, "the end of the pairing", func() bool { return field(d, func() string { return dev.pairState }) == "" })
+	if pinned(t, d, dev.ID) != nil || field(d, func() bool { return dev.Paired }) {
+		t.Fatal("the device is paired")
+	}
+}
+
+// TestConfirmEndsWithLink checks that a pairing in state "confirm" ends
+// with its link, and that the next link of the phone gets pair false. The
+// phone pinned this computer, and it must remove the pin. A link of
+// another host with the ID of the phone does not take the pair false.
+func TestConfirmEndsWithLink(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d, _, phoneCert, dev, onDesk, onPhone, fromDesk := phonePair(t, ctx)
+
+	// A new link of the phone replaces the link of the pairing.
+	confirmState(t, d, dev, onPhone, fromDesk)
+	again := newTestPeer(t, ctx, phoneCert).dial(t, ctx, d, d.lan.TCPPort())
+	fromAgain := packets(again)
+	if body := nextPair(t, fromAgain); body["pair"] != false {
+		t.Fatalf("on the new link %v", body)
+	}
+	waitFor(t, "the new link", func() bool { return field(d, func() *lan.Link { return dev.link }) != onDesk })
+	if state := field(d, func() string { return dev.pairState }); state != "" {
+		t.Fatalf("pair state %q after a new link", state)
+	}
+
+	// The link of the pairing closes, and the phone links again later.
+	confirmState(t, d, dev, again, fromAgain)
+	again.Close()
+	waitFor(t, "the end of the link", func() bool { return field(d, func() *lan.Link { return dev.link }) == nil })
+	if field(d, dev.forgettable) {
+		t.Fatal("fluxd can forget the device before it gets pair false")
+	}
+
+	// A host with the ID of the phone and another certificate links first.
+	evil := newTestPeer(t, ctx, certFor(t, dev.ID)).dial(t, ctx, d, d.lan.TCPPort())
+	_, onEvil := linked(t, d, dev.ID)
+	if !field(d, func() bool { return dev.unpairPeer && dev.unpairCert.Equal(phoneCert.Leaf) }) {
+		t.Fatal("the link of another host took the pair false of the phone")
+	}
+	evil.Close()
+	waitClosed(t, onEvil)
+	waitFor(t, "the end of the link of the host", func() bool { return field(d, func() *lan.Link { return dev.link }) == nil })
+
+	last := newTestPeer(t, ctx, phoneCert).dial(t, ctx, d, d.lan.TCPPort())
+	if body := nextPair(t, packets(last)); body["pair"] != false {
+		t.Fatalf("on the next link %v", body)
+	}
+	if pinned(t, d, dev.ID) != nil || field(d, func() bool { return dev.unpairPeer }) {
+		t.Fatal("the device is pinned, or fluxd sends pair false again")
+	}
+}
+
+// TestAcceptBoundToKey is the regression test for an accept that pinned a
+// later pairing. The phone asks to pair, and its link closes. A host with
+// the ID of the phone and another certificate then asks to pair. An accept
+// with the key of the phone must not pin the host.
+func TestAcceptBoundToKey(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d, _, phoneCert, dev, _, onPhone, _ := phonePair(t, ctx)
+	ts := time.Now().Unix()
+	if err := onPhone.Send(proto.New(proto.TypePair, map[string]any{"pair": true, "timestamp": ts})); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the incoming request", func() bool { return field(d, func() string { return dev.pairState }) == "incoming" })
+	phoneKey := proto.VerificationKey(d.cert.Leaf, phoneCert.Leaf, ts)
+	onPhone.Close()
+	waitFor(t, "the end of the link", func() bool { return field(d, func() *lan.Link { return dev.link }) == nil })
+
+	evil := newTestPeer(t, ctx, certFor(t, dev.ID)).dial(t, ctx, d, d.lan.TCPPort())
+	linked(t, d, dev.ID)
+	// The host waits until the retry wait of the closed request ends.
+	d.mu.Lock()
+	dev.pairAt, dev.pairEnded = time.Time{}, time.Time{}
+	d.mu.Unlock()
+	if err := evil.Send(proto.New(proto.TypePair, map[string]any{"pair": true, "timestamp": ts + 1})); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the request of the host", func() bool { return field(d, func() string { return dev.pairState }) == "incoming" })
+	if err := d.AcceptPair(dev, phoneKey); errCode(err) != "no_request" {
+		t.Fatalf("AcceptPair with the key of the phone: %v", err)
+	}
+	d.onNotificationAction(0, "pair-accept:"+dev.ID+":"+phoneKey)
+	d.onNotificationAction(0, "pair-accept:"+dev.ID)
+	if pinned(t, d, dev.ID) != nil || field(d, func() bool { return dev.Paired }) {
+		t.Fatal("an accept for the key of the phone pinned the host")
+	}
+}
+
+// toasts records the toasts of the daemon.
+func toasts(d *Daemon) func() []string {
+	var mu sync.Mutex
+	var list []string
+	d.mu.Lock()
+	if d.subs == nil {
+		d.subs = map[int]func(string, any){}
+	}
+	d.mu.Unlock()
+	d.Subscribe(func(event string, data any) {
+		if event != "toast" {
+			return
+		}
+		mu.Lock()
+		list = append(list, data.(map[string]string)["text"])
+		mu.Unlock()
+	})
+	return func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.Clone(list)
+	}
+}
+
+// TestPairRequestSpam checks the limits for pair requests. After a pair
+// false, a device waits pairRetry before a new request counts. An incoming
+// request that ends with its link also starts the wait. 1 address can hold
+// maxIncomingPerIP requests, and a refused request shows a toast.
+func TestPairRequestSpam(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d, logs, phoneCert, dev, _, onPhone, fromDesk := phonePair(t, ctx)
+	shown := toasts(d)
+	// peer is the link of the phone that sends the requests.
+	peer := onPhone
+	send := func(body map[string]any) {
+		t.Helper()
+		d.mu.Lock()
+		dev.pairAt = time.Time{}
+		d.mu.Unlock()
+		if err := peer.Send(proto.New(proto.TypePair, body)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	state := func() string { return field(d, func() string { return dev.pairState }) }
+
+	send(map[string]any{"pair": true, "timestamp": time.Now().Unix()})
+	waitFor(t, "the first request", func() bool { return state() == "incoming" })
+	send(map[string]any{"pair": false})
+	waitFor(t, "the withdraw", func() bool { return state() == "" })
+	send(map[string]any{"pair": true, "timestamp": time.Now().Unix() + 1})
+	if body := nextPair(t, fromDesk); body["pair"] != false {
+		t.Fatalf("a request after a withdraw: answer %v", body)
+	}
+	if state() != "" || !logs.has("its last pairing ended") {
+		t.Fatal("a request after a withdraw counted")
+	}
+
+	// 2 open requests from the address of the phone.
+	d.mu.Lock()
+	dev.pairEnded = time.Time{}
+	for i := range maxIncomingPerIP {
+		o := newDevice(fmt.Sprintf("%032d", i))
+		o.pairState = "incoming"
+		o.pairLink = &lan.Link{Addr: &net.TCPAddr{IP: net.ParseIP("127.0.0.1")}}
+		d.devices[o.ID] = o
+	}
+	d.mu.Unlock()
+	send(map[string]any{"pair": true, "timestamp": time.Now().Unix()})
+	if body := nextPair(t, fromDesk); body["pair"] != false {
+		t.Fatalf("a third request from 1 address: answer %v", body)
+	}
+	waitFor(t, "the toast", func() bool {
+		return slices.ContainsFunc(shown(), func(s string) bool { return strings.Contains(s, "refused the pair request") })
+	})
+
+	// Requests from other addresses do not count for the phone.
+	d.mu.Lock()
+	for i := range maxIncomingPerIP {
+		d.devices[fmt.Sprintf("%032d", i)].pairLink = &lan.Link{Addr: &net.TCPAddr{IP: net.ParseIP("192.0.2.1")}}
+	}
+	d.mu.Unlock()
+	send(map[string]any{"pair": true, "timestamp": time.Now().Unix()})
+	waitFor(t, "a request from another address", func() bool { return state() == "incoming" })
+
+	// The phone closes the link of its request and links again.
+	ended := func() bool { return !field(d, func() time.Time { return dev.pairEnded }).IsZero() }
+	peer.Close()
+	waitFor(t, "the end of the link", func() bool { return field(d, func() *lan.Link { return dev.link }) == nil })
+	if state() != "" || !ended() {
+		t.Fatal("the end of the link did not start the wait")
+	}
+	peer = newTestPeer(t, ctx, phoneCert).dial(t, ctx, d, d.lan.TCPPort())
+	fromDesk = packets(peer)
+	_, onDesk := linked(t, d, dev.ID)
+	send(map[string]any{"pair": true, "timestamp": time.Now().Unix() + 2})
+	if body := nextPair(t, fromDesk); body["pair"] != false || state() != "" {
+		t.Fatalf("a request after a closed link: answer %v, state %q", body, state())
+	}
+
+	// A new link of the phone replaces the link of its request.
+	d.mu.Lock()
+	dev.pairEnded = time.Time{}
+	d.mu.Unlock()
+	send(map[string]any{"pair": true, "timestamp": time.Now().Unix() + 3})
+	waitFor(t, "the request on the new link", func() bool { return state() == "incoming" })
+	newTestPeer(t, ctx, phoneCert).dial(t, ctx, d, d.lan.TCPPort())
+	waitClosed(t, onDesk)
+	if state() != "" || !ended() {
+		t.Fatal("a new link did not start the wait")
 	}
 }

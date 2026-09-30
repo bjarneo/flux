@@ -1,11 +1,14 @@
 import QtQuick
 import ".."
 
-// A pair request from a device. It shows the verification key, which must
-// match the key on the device.
+// A pairing that waits for the user of this computer: a pair request of a
+// device, or a pairing that this computer started and the device accepted
+// (pairState "confirm"). It shows the verification key, which must match
+// the key on the device.
 Rectangle {
   id: root
   property var device: ({})
+  readonly property bool confirm: device.pairState === "confirm"
   // A value that changes when the card moves on the screen, for example
   // the scroll position of the sidebar.
   property var motion
@@ -55,7 +58,11 @@ Rectangle {
 
     Txt {
       width: parent.width
-      text: (root.device.name ? Fmt.showControls(root.device.name) : "A device") + " wants to pair"
+      text: {
+        var name = root.device.name ? Fmt.showControls(root.device.name) : ""
+        if (root.confirm) return "Confirm the pairing with " + (name || "the device")
+        return (name || "A device") + " wants to pair"
+      }
       font.weight: Font.DemiBold
       wrapMode: Text.Wrap
     }
@@ -86,7 +93,7 @@ Rectangle {
       spacing: 8
       topPadding: 2
       onYChanged: root.hold()
-      AccentButton { icon: "link"; text: "Accept"; padX: 12; padY: 6; fontSize: 12; active: root.armed; onClicked: root.accept() }
+      AccentButton { icon: "link"; text: root.confirm ? "Confirm" : "Accept"; padX: 12; padY: 6; fontSize: 12; active: root.armed; onClicked: root.accept() }
       OutlineButton { icon: "close"; text: "Reject"; padX: 12; padY: 6; fontSize: 12; onClicked: root.reject() }
     }
   }

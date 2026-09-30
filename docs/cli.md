@@ -114,6 +114,7 @@ FLUX_GUI=plugin flux-cli open notifications
 flux-cli discover
 flux-cli pair "Pixel 8"
 flux-cli accept "Pixel 8"
+flux-cli accept DEVICE_ID 5EE6 825F 974E D59A
 flux-cli reject "Pixel 8"
 flux-cli unpair "Pixel 8"
 ```
@@ -122,12 +123,60 @@ The verification key has 16 uppercase hex digits in 4 groups of 4, for example `
 Compare all 16 characters on both devices before you accept.
 An earlier Flux app shows only 8 characters, so update Flux on each device before you pair.
 
+`flux-cli pair` asks the device to pair and prints the key.
+After the device accepts, `flux-cli pair` asks you to compare the key:
+
+```text
+Confirm 5EE6 825F 974E D59A on Pixel 8 (DEVICE_ID)…
+Does Pixel 8 show 5EE6 825F 974E D59A? [y/N] y
+✓ Pixel 8 (DEVICE_ID) paired with the key 5EE6 825F 974E D59A
+```
+
+Type `y` only when the device shows the same key.
+Any other answer rejects the pairing, and the device removes it.
+The question ends when the pairing ends in another way.
+For example, you select **Confirm** in the Flux window, the device ends the pairing, or the 30 seconds end.
+When stdin is not a terminal, `flux-cli pair` prints the command that confirms the pairing, and then it stops:
+
+```text
+Pixel 8 accepted. Compare the key. When Pixel 8 shows 5EE6 825F 974E D59A, run:
+  flux-cli accept DEVICE_ID 5EE6 825F 974E D59A
+```
+
+Run that command within 30 seconds, after you compare the key.
+
+`flux-cli accept` accepts a pair request of a device.
+It also confirms a pairing that this computer started and that the device accepted.
+It always sends a key to `fluxd`, and `fluxd` accepts only the pairing with that key.
+To accept only the key that you compared, give the key after the device.
+The key can have spaces, for example `flux-cli accept DEVICE_ID "5EE6 825F 974E D59A"`.
+Without a key, `flux-cli accept` shows the key of the open pairing and asks you to compare it:
+
+```text
+Does Pixel 8 show 5EE6 825F 974E D59A? [y/N] y
+✓ Pixel 8 (DEVICE_ID) paired with the key 5EE6 825F 974E D59A
+```
+
+`flux-cli accept` sends the key that it showed, so `fluxd` refuses the answer when another pairing opened after the question.
+Any answer other than `y` rejects the pairing.
+When stdin is not a terminal, `flux-cli accept` without a key accepts nothing.
+It prints the command with the key and exits with status 1:
+
+```text
+flux-cli: compare the key first. When Pixel 8 shows 5EE6 825F 974E D59A, run:
+  flux-cli accept DEVICE_ID 5EE6 825F 974E D59A
+```
+
+`flux-cli reject` also sends a key, and it takes the same key argument.
+Without a key, `flux-cli reject` rejects the pairing that is open when it runs.
+With the device ID, it also cancels a pair request of this computer that the device did not answer.
+
 Each command prints the device ID next to the name:
 
 | Command | Output |
 | --- | --- |
-| `flux-cli pair` | `Confirm 5EE6 825F 974E D59A on Pixel 8 (DEVICE_ID)…`, then `✓ Pixel 8 (DEVICE_ID) paired with the key 5EE6 825F 974E D59A` |
-| `flux-cli accept` | `✓ Pixel 8 (DEVICE_ID) paired with the key 5EE6 825F 974E D59A` |
+| `flux-cli pair` | `Confirm 5EE6 825F 974E D59A on Pixel 8 (DEVICE_ID)…`, then the question, then `✓ Pixel 8 (DEVICE_ID) paired with the key 5EE6 825F 974E D59A` |
+| `flux-cli accept` | Without a key, the question. Then `✓ Pixel 8 (DEVICE_ID) paired with the key 5EE6 825F 974E D59A` |
 | `flux-cli unpair` | `Unpaired Pixel 8 (DEVICE_ID), certificate FINGERPRINT` |
 
 The fingerprint has 16 hex digits from the public key of the certificate of the device.
@@ -142,7 +191,7 @@ The `fingerprint` field of each device in `flux-cli status --json` has the same 
 
 A name matches only a device that is paired or connected, and a paired device comes first.
 `flux-cli pair` finds a name only among the devices that are connected and not paired.
-`flux-cli accept` and `flux-cli reject` find a name only among the devices with an open pair request.
+`flux-cli accept` and `flux-cli reject` find a name only among the devices with an open pair request or a pairing in state `confirm`.
 When the name still matches more than 1 device, the command returns the `ambiguous` error with the device IDs:
 
 ```text

@@ -76,6 +76,8 @@ A received payload fails when the device sends nothing for 60 seconds.
 - A pairing is bound to the link and the certificate on which it started. While a pairing is open, or when the device has a trust entry, a new link for the device ID must show that certificate. The provider checks it before the identity exchange, and `onLink` checks it again under the lock.
 - Pair packets count only on the current link of the device. `fluxd` pins the certificate from which it computed the key, and only while the link of the pairing is the current link.
 - When the user accepts a request of the device, `fluxd` pins the certificate before it sends `pair: true`. The link then reads long lines from the first packet after the answer, and only 1 accept counts for each request. When the answer cannot go out, `fluxd` removes the pin again.
+- When the device accepts a request of this computer, the pair state changes to `confirm`, and `fluxd` pins nothing. The user of this computer confirms the key with `pair.accept`, and only then `fluxd` pins the certificate. A reject, the timeout, and a new link send `pair: false`, so that the device removes the pin that it made. When the link of the pairing drops, the next link of the device with the certificate of the pairing gets `pair: false`. A link with another certificate does not get it, and `fluxd` keeps the device in its list until then.
+- `pair.accept` and `pair.reject` can name the key that the user compared, and the buttons of the pair notification always name it. `fluxd` then acts only on the pairing with that key. Each path that ends a pairing closes its notification.
 - A trust entry with a certificate that does not parse counts as not paired, and it refuses every link.
 - An unpair on either side sends `pair: false`, and `fluxd` closes the link. `fluxd` then sends no feature packet to the device.
 - The `fingerprint` of a device in the state is the first 8 bytes of the SHA-256 hash of the SubjectPublicKeyInfo of its certificate, as 16 uppercase hex digits.
@@ -95,9 +97,9 @@ Any host on the network can send identities and open links.
 | Links of devices that are not paired | 8 in total and 2 for each address. A new link closes the oldest link without a pairing. |
 | Link without a pair request | Closed after 2 minutes |
 | Incoming connections before the link | 32 in total and 4 for each address |
-| Outgoing connections at the same time | 16 |
+| Outgoing connections at the same time | 16 to devices without a trust entry or an open pairing. Dials to the other devices do not count. |
 | Devices from UDP and mDNS | 64 that are not paired. A new device replaces the device with the oldest report. |
-| Pair requests | 1 for each device in 2 seconds, 1 notification for each device, and 4 open requests |
+| Pair requests | 1 for each device in 2 seconds, 1 notification for each device, and 4 open requests, 2 of them from 1 address. After a pairing in state `incoming` or `confirm` ends with a pair false, a reject, or a timeout, or an `incoming` request ends with its link, 30 seconds before a new request of the device counts. |
 | Ports from discovery | 1716 to 1764 |
 
 A daemon that runs with `-tcp-port` on another port accepts any port from discovery, because its test peers use other ports too.

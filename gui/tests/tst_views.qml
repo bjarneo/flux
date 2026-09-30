@@ -266,6 +266,49 @@ Item {
       request("c0ffee0000000000000000000000cafe", "5555666677778888")
       verify(view.drawerOpen)
       compare(view.pairRequest.id, "c0ffee0000000000000000000000beef")
+      view.drawerOpen = false
+      // Both devices withdraw, and 1 of them asks again.
+      withdraw("c0ffee0000000000000000000000beef")
+      withdraw("c0ffee0000000000000000000000cafe")
+      request("c0ffee0000000000000000000000beef", "9999AAAABBBBCCCC")
+      verify(!view.drawerOpen)
+      // After 5 minutes, the request counts as new again.
+      withdraw("c0ffee0000000000000000000000beef")
+      var shown = view.requestShown
+      shown["c0ffee0000000000000000000000beef"].until = Date.now() - view.requestQuiet - 1000
+      view.requestShown = shown
+      request("c0ffee0000000000000000000000beef", "DDDDEEEEFFFF0000")
+      verify(view.drawerOpen)
+    }
+
+    function withdraw(id) {
+      mock.setState(function (s) { s.devices = s.devices.filter(function (d) { return d.id !== id }) })
+    }
+
+    // The desktop started the pairing, and the device accepted. The card
+    // offers Confirm with the delay of Accept, and each answer names the
+    // key of the pairing.
+    function test_confirmCard() {
+      var view = createTemporaryObject(viewComponent, top)
+      tryVerify(function () { return view.allDevices.length > 0 })
+      var confirm = mock.fixture.pairing.confirm
+      mock.updateDevice(confirm.id, function () { return JSON.parse(JSON.stringify(confirm)) })
+      compare(view.pairRequest.id, confirm.id)
+      verify(!view.discoveredRows.some(function (d) { return d.id === confirm.id }))
+      var card = findBy(view, "armKey", confirm.id + ":" + confirm.pairKey)
+      verify(!!card && card.visible && card.confirm)
+      verify(!!findBy(card, "text", "Confirm the pairing with OnePlus 12"))
+      var button = findBy(card, "text", "Confirm")
+      verify(!!button)
+      verify(!card.armed)
+      tryCompare(card, "armed", true, 3000)
+      button.clicked()
+      var accepts = requestsOf("pair.accept")
+      compare(accepts.length, 1)
+      compare(accepts[0].params.device, confirm.id)
+      compare(accepts[0].params.key, confirm.pairKey)
+      card.reject()
+      compare(requestsOf("pair.reject")[0].params.key, confirm.pairKey)
     }
 
     function test_acceptArmsAfterDelay() {

@@ -97,6 +97,9 @@ While Flux is in the background, a notification shows the request and the key.
 **Reject** also works on the lock screen.
 After a reject, Flux ends new requests from the same computer or address for 2 minutes.
 To pair in that time, start the pairing on the iPhone.
+After the iPhone accepts, the computer asks you to confirm the key.
+Select **Confirm** in the Flux window or in the notification, or type `y` at the `flux-cli pair` prompt.
+The computer pins the iPhone only after this step, and each step waits at most 30 seconds.
 Flux asks for permission to show notifications when you pair the first computer.
 The iPhone appears on the computer as `phone`, with the name from **Settings > This iPhone**.
 iOS gives apps only the generic name "iPhone", so set a name there.

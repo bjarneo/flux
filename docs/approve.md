@@ -280,12 +280,23 @@ enrollment is never a valid approval, and the reverse.
    the mode of `/etc/flux` to 0755 when other users cannot pass through
    it. The `hyprlock` helper runs as the user and must read the key.
 
-The typed key code in step 7 is the protection against a changed `fluxd`.
-A changed `fluxd` can send its own key, but it cannot make the phone show
-the code of that key. The command does not trust its terminal output, so a
-rewritten terminal line does not help the changed `fluxd`. This check is
-defense in depth only. Code that runs as the user can also get root when
-the user runs `sudo`, for example with a shell alias.
+The typed key code in step 7 stops only a changed `fluxd` that cannot
+send keys to the terminal. Such a `fluxd` can send its own key, but it
+cannot make the phone show the code of that key. The command does not
+trust its terminal output, so a rewritten terminal line does not help it.
+
+The typed key code does not stop code that runs as the user. A changed
+`fluxd` runs as the user too, and it knows the code of the key that it
+sent. It can type that code into the terminal of
+`sudo flux-cli approve enroll`. It can use a virtual keyboard, for example
+`wtype`, which Omarchy installs for the phone keyboard. It can also use
+the remote control of the terminal. The command reads the code from
+`/dev/tty`, and it cannot tell typed keys from synthetic keys. The command
+then writes the key of the attacker, and the attacker can approve `sudo`
+without the phone. So this check is defense in depth only. Run the
+enrollment only in a session that you trust. Code that runs as the user
+can also get root when the user runs `sudo`, for example with a shell
+alias.
 
 ## Replay protection
 
@@ -344,7 +355,7 @@ Every failure gives a non-zero exit, and PAM asks for the password.
 | Attacker | Can | Cannot |
 | --- | --- | --- |
 | Network | Block or delay the link, so that PAM asks for the password | Read or change the messages, because the link uses TLS with pinned certificates. Make a valid signature. |
-| Code that runs as the user | Stop the approval, so that PAM asks for the password. Send requests to the phone. Start `sudo` and wait for the user to approve it. | Make a valid signature. Change the key file, except through a `sudo` that it controls, see the open risks. Point the helper to another key. Use an old signature again. |
+| Code that runs as the user | Stop the approval, so that PAM asks for the password. Send requests to the phone. Start `sudo` and wait for the user to approve it. Enroll its own key during `sudo flux-cli approve enroll`, because it can type the key code into the terminal, see the open risks. | Make a valid signature. Change the key file without an enrollment or a `sudo` that the user starts. Point the helper to another key. Use an old signature again. |
 | A person with the locked phone | See a request on the lock screen, and deny it | Approve a request without the fingerprint |
 | A person with the unlocked phone | Deny requests. Remove Flux. | Approve a request without the fingerprint |
 
@@ -387,5 +398,11 @@ person at the keyboard. The password protects against the same person.
 - **Enrollment depends on the phone screen.** The user must type the code
   from the phone. If the user types a code from another source, a changed
   `fluxd` can enroll its own key.
+- **Enrollment trusts the session.** Code that runs as the user can type
+  the key code of its own key into the terminal of the enrollment. It can
+  use a virtual keyboard, such as `wtype`, or the remote control of the
+  terminal. The command cannot tell these keys from the keys of the user.
+  The typed code stops only a changed `fluxd` that cannot send keys. Run
+  `sudo flux-cli approve enroll` only in a session that you trust.
 - **Only local users.** The helper finds the user in `/etc/passwd`. Users
   from a network directory do not work.

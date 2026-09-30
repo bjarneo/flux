@@ -427,5 +427,35 @@
     "failed": true
    }
   ]
+ },
+ "pairing": {
+  "incoming": {
+   "id": "c0ffee0000000000000000000000beef",
+   "name": "work-thinkpad",
+   "type": "laptop",
+   "ip": "192.168.1.70",
+   "paired": false,
+   "online": true,
+   "pairState": "incoming",
+   "pairKey": "9B03E7D16A2FC048",
+   "fingerprint": "71C0E5A93B2D8F46",
+   "plugins": [],
+   "notifications": [],
+   "conversations": []
+  },
+  "confirm": {
+   "id": "e4a1c8f2b9d3470a8c5e6f1d2b9a7c30",
+   "name": "OnePlus 12",
+   "type": "phone",
+   "ip": "192.168.1.61",
+   "paired": false,
+   "online": true,
+   "pairState": "confirm",
+   "pairKey": "4F21A9C3E08B7D52",
+   "fingerprint": "D02B6E4F19A7C385",
+   "plugins": [],
+   "notifications": [],
+   "conversations": []
+  }
  }
 }

@@ -2,6 +2,8 @@ import QtQuick
 
 // A stand-in for a host backend that serves state from fixture.json. The
 // snapshot harness uses it. It follows the backend contract in README.md.
+// fixture.pairing holds sample devices with an open pairing for the view
+// tests and the snapshots.
 // A negative "time" or "lastSeen" value means that many seconds before
 // now. Loading the fixture needs QML_XHR_ALLOW_FILE_READ=1.
 QtObject {

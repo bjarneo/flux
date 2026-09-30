@@ -125,6 +125,10 @@ Window {
     ["22-pair-requested", function () {
       mock.updateDevice(oneplus, function (d) { d.pairState = "requested"; d.pairKey = "4F21A9C3E08B7D52"; return d })
     }],
+    // The phone accepted, and this computer confirms the key.
+    ["22-pair-confirm", function () {
+      mock.updateDevice(oneplus, function () { return JSON.parse(JSON.stringify(mock.fixture.pairing.confirm)) })
+    }],
     ["23-paired", function () {
       mock.updateDevice(oneplus, function (d) { d.pairState = "paired"; d.paired = true; d.pairedAt = "2026-09-25"; d.battery = { charge: 91, charging: false }; return d })
     }],
