@@ -68,6 +68,10 @@ The journal names the device. To pair it again, run:
 flux-cli unpair DEVICE_ID
 ```
 
+If `devices.json` does not parse, `fluxd` moves it to `devices.json.broken-<Unix time>` in the same folder and starts without paired devices.
+The journal and a desktop notification name the moved file.
+Pair your devices again.
+
 ## Files, clipboard, and links
 
 Use the Files and Clipboard pages in the desktop window, or run:

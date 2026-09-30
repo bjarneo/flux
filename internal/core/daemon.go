@@ -143,6 +143,10 @@ type Daemon struct {
 	// After a failed check, the next check then runs releaseRetryGap after
 	// the failure and not after releaseRetry.
 	releaseWoken bool
+	// trustNote tells the user that devices.json did not parse, or is "".
+	// The first window that connects shows it, with a desktop
+	// notification.
+	trustNote string
 }
 
 // Options change how the daemon runs. The zero value is the normal mode.
@@ -247,6 +251,10 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 		// the desktop, so it keeps its clipboard images in its own folder.
 		d.clipDir = filepath.Join(os.TempDir(), "fluxd-clipboard-"+config.NewID(6))
 		d.input = nil
+	}
+	if trust.Broken != "" {
+		d.logf("%v. fluxd moved the file to %s and starts without paired devices", trust.BrokenErr, trust.Broken)
+		d.trustNote = fmt.Sprintf("devices.json was damaged, so Flux starts without paired devices. Pair your devices again. The old file is %s", trust.Broken)
 	}
 	for _, t := range trust.All() {
 		dev := d.deviceLocked(t.ID)
@@ -1073,14 +1081,21 @@ func (d *Daemon) publishLoop(ctx context.Context) {
 }
 
 // Subscribe registers a receiver for events. It sends the current state at
-// once. The returned function removes the receiver.
+// once. The first receiver also gets the note about a damaged
+// devices.json. The returned function removes the receiver.
 func (d *Daemon) Subscribe(send func(event string, data any)) func() {
 	d.mu.Lock()
 	d.nextID++
 	id := d.nextID
 	d.subs[id] = send
+	note := d.trustNote
+	d.trustNote = ""
 	d.mu.Unlock()
 	send("state", d.Snapshot())
+	if note != "" {
+		send("toast", map[string]string{"text": note})
+		d.notify(desktop.Notification{Title: "Flux lost the paired devices", Body: note, Timeout: -1})
+	}
 	return func() {
 		d.mu.Lock()
 		delete(d.subs, id)

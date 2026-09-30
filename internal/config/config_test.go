@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -194,5 +195,39 @@ func TestCheckReportsAParseError(t *testing.T) {
 	}
 	if err := Check(); err == nil || !strings.Contains(err.Error(), Path()) {
 		t.Fatalf("a bad file: %v", err)
+	}
+}
+
+// A devices.json that does not parse moves aside, and fluxd starts with an
+// empty trust store.
+func TestLoadTrustMovesABrokenFile(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	path := filepath.Join(DataDir(), "devices.json")
+	if err := os.MkdirAll(DataDir(), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`[{"id":"phone"`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ts, err := LoadTrust()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ts.All()) != 0 || ts.BrokenErr == nil || !strings.HasPrefix(ts.Broken, path+".broken-") {
+		t.Fatalf("store with %d devices, broken %q, error %v", len(ts.All()), ts.Broken, ts.BrokenErr)
+	}
+	if data, err := os.ReadFile(ts.Broken); err != nil || string(data) != `[{"id":"phone"` {
+		t.Fatalf("moved file %q: %v", data, err)
+	}
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("devices.json stays: %v", err)
+	}
+	// The store works, and the next start finds the new file.
+	if err := ts.Put(TrustedDevice{ID: "tablet"}); err != nil {
+		t.Fatal(err)
+	}
+	ts, err = LoadTrust()
+	if err != nil || ts.Broken != "" || len(ts.All()) != 1 {
+		t.Fatalf("second load: %v, broken %q, %d devices", err, ts.Broken, len(ts.All()))
 	}
 }
