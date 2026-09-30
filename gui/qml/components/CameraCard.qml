@@ -17,6 +17,16 @@ Card {
   readonly property bool failed: !!cam.error
   readonly property bool live: !!cam.active && !failed
 
+  // The chips of each setting. fluxd keeps at most 16 values in a list, and
+  // the card also shows at most 16. A number as a Repeater model makes that
+  // number of chips, so only an array gives chips.
+  readonly property int maxChips: 16
+  function chips(v, fallback) { return Array.isArray(v) && v.length > 0 ? v.slice(0, maxChips) : fallback }
+  readonly property var aspects: chips(caps.aspects, ["16:9", "4:3", "1:1", "9:16"])
+  readonly property var resolutions: chips(caps.resolutions, [720, 1080])
+  readonly property var cameras: chips(caps.cameras, [])
+  readonly property var whiteBalances: chips(caps.whiteBalance, [])
+
   implicitHeight: col.implicitHeight + 38
 
   // A Format or Resolution change restarts the stream on the phone, because
@@ -212,7 +222,7 @@ Card {
         Group {
           label: "FORMAT"
           Repeater {
-            model: root.caps.aspects && root.caps.aspects.length ? root.caps.aspects : ["16:9", "4:3", "1:1", "9:16"]
+            model: root.aspects
             delegate: Chip {
               required property var modelData
               text: modelData
@@ -225,7 +235,7 @@ Card {
         Group {
           label: "RESOLUTION"
           Repeater {
-            model: root.caps.resolutions && root.caps.resolutions.length ? root.caps.resolutions : [720, 1080]
+            model: root.resolutions
             delegate: Chip {
               required property var modelData
               text: modelData + "p"
@@ -237,9 +247,9 @@ Card {
 
         Group {
           label: "CAMERA"
-          visible: !!root.caps.cameras && root.caps.cameras.length > 0
+          visible: root.cameras.length > 0
           Repeater {
-            model: root.caps.cameras || []
+            model: root.cameras
             delegate: Chip {
               required property var modelData
               text: root.title(modelData)
@@ -251,9 +261,9 @@ Card {
 
         Group {
           label: "WHITE BALANCE"
-          visible: !!root.caps.whiteBalance && root.caps.whiteBalance.length > 0
+          visible: root.whiteBalances.length > 0
           Repeater {
-            model: root.caps.whiteBalance || []
+            model: root.whiteBalances
             delegate: Chip {
               required property var modelData
               text: root.title(modelData)

@@ -398,4 +398,60 @@ Item {
       tryVerify(function () { var t = findBy(view, "message", msg); return !!t && t.visible })
     }
   }
+
+  TestCase {
+    name: "Limits"
+    when: mock.ready
+
+    function init() {
+      mock.state = mock.fixTimes(mock.fixture.state)
+      mock.requests = []
+    }
+
+    function test_notificationShowsAtMost8Actions() {
+      var actions = []
+      for (var i = 0; i < 12; i++) actions.push("Action " + i)
+      mock.updateDevice(top.pixel, function (d) {
+        d.notifications = [
+          { id: "many", app: "Mail", title: "Many actions", text: "", time: 1, dismissable: true, actions: actions },
+          { id: "number", app: "Mail", title: "Number actions", text: "", time: 1, dismissable: true, actions: 1000 }
+        ]
+        return d
+      })
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "notifications"
+      tryVerify(function () { return !!page(view) && !!findBy(page(view), "text", "Many actions") })
+      verify(!!findBy(page(view), "text", "Action 7"))
+      verify(!findBy(page(view), "text", "Action 8"))
+      compare(findBy(page(view), "actionsText", JSON.stringify(actions.slice(0, 8))).actions.length, 8)
+    }
+
+    function test_cameraShowsAtMost16Chips() {
+      mock.setState(function (s) {
+        var aspects = []
+        var resolutions = []
+        for (var i = 0; i < 40; i++) {
+          aspects.push(i + ":1")
+          resolutions.push(100 + i)
+        }
+        s.webcam.caps.aspects = aspects
+        s.webcam.caps.resolutions = resolutions
+        s.webcam.caps.cameras = 100000
+        s.webcam.caps.whiteBalance = "auto"
+      })
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "overview"
+      var card = null
+      tryVerify(function () { card = findBy(page(view), "objectName", "cameraCard"); return !!card })
+      compare(card.aspects.length, 16)
+      compare(card.resolutions.length, 16)
+      compare(card.cameras.length, 0)
+      compare(card.whiteBalances.length, 0)
+      // An empty list gives the default formats.
+      mock.setState(function (s) { s.webcam.caps.aspects = [] })
+      compare(card.aspects, ["16:9", "4:3", "1:1", "9:16"])
+    }
+  }
 }
