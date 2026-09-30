@@ -2,13 +2,16 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"time"
 
 	"flux/internal/config"
@@ -141,11 +144,16 @@ func doctor() {
 	// herdr is optional. When it runs, the phone shows its agents.
 	if _, err := exec.LookPath("herdr"); err == nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		pong, perr := herdr.Ping(ctx, herdr.SocketPath())
+		path := herdr.SocketPath()
+		pong, perr := herdr.Ping(ctx, path)
 		cancel()
-		if perr != nil {
+		switch {
+		case herdrDown(perr):
 			fmt.Println("- herdr does not run. Start herdr to show its agents on the phone")
-		} else {
+		case perr != nil:
+			// For example, the socket belongs to another user.
+			check(false, "", safe(fmt.Sprintf("The herdr socket %s does not work: %v", path, perr)))
+		default:
 			check(pong.Protocol >= herdr.MinProtocol, fmt.Sprintf("herdr %s runs, so the phone can show its agents", pong.Version),
 				fmt.Sprintf("herdr %s uses API protocol %d, and Flux needs %d or newer. Run: herdr update", pong.Version, pong.Protocol, herdr.MinProtocol))
 		}
@@ -285,4 +293,10 @@ func udpHolders(port int) ([]string, error) {
 
 func active(unit string) bool {
 	return exec.Command("systemctl", "is-active", "--quiet", unit).Run() == nil
+}
+
+// herdrDown reports whether err is a plain connection failure to the
+// herdr socket: the socket does not exist, or nothing listens on it.
+func herdrDown(err error) bool {
+	return errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ECONNREFUSED)
 }

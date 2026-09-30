@@ -1,9 +1,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"net"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"flux/internal/herdr"
 )
 
 func TestWebcamSettings(t *testing.T) {
@@ -40,5 +46,29 @@ func TestPrintStatus(t *testing.T) {
 	}
 	if !strings.Contains(out, "ID d4e5f6\n") || strings.Count(out, "certificate") != 1 {
 		t.Errorf("the second device has no fingerprint:\n%s", out)
+	}
+}
+
+// doctor says that herdr does not run only for a plain connection
+// failure. Another error, such as a socket of another user, shows as it is.
+func TestHerdrDown(t *testing.T) {
+	dir := t.TempDir()
+	_, err := herdr.Ping(context.Background(), filepath.Join(dir, "none.sock"))
+	if !herdrDown(err) {
+		t.Errorf("a missing socket: %v", err)
+	}
+	path := filepath.Join(dir, "herdr.sock")
+	ln, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The socket file stays, and nothing listens on it.
+	ln.SetUnlinkOnClose(false)
+	ln.Close()
+	if _, err := herdr.Ping(context.Background(), path); !herdrDown(err) {
+		t.Errorf("a socket without a server: %v", err)
+	}
+	if herdrDown(errors.New("herdr: the socket belongs to user 1001, not to user 1000")) {
+		t.Error("the owner check is not a plain connection failure")
 	}
 }
