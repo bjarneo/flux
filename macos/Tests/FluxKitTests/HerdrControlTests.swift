@@ -116,6 +116,23 @@ final class HerdrControlTests: XCTestCase {
 
     private func packet(_ json: String) -> Packet { Packet.parse(#"{"id":1,"type":"flux.herdr","body":\#(json)}"#)! }
 
+    /// A poll waits while the last read did not end, so that reads do not
+    /// pile up on a slow link. A manual read always goes out.
+    @MainActor
+    func testAPollWaitsForTheLastRead() {
+        let plugin = HerdrPlugin()
+        plugin.model.outputs["d"] = HerdrOutput(pane: "w1:p1", loading: true)
+        plugin.poll("d", pane: "w1:p1")
+        XCTAssertEqual(plugin.model.outputs["d"], HerdrOutput(pane: "w1:p1", loading: true), "the poll skips while the read loads")
+        plugin.read("d", pane: "w1:p1")
+        XCTAssertEqual(plugin.model.outputs["d"]?.error, "The computer is not reachable", "a manual read goes out")
+        plugin.poll("d", pane: "w1:p1")
+        XCTAssertEqual(plugin.model.outputs["d"]?.loading, false)
+        plugin.model.outputs["d"] = HerdrOutput(pane: "w1:p2", loading: true)
+        plugin.poll("d", pane: "w1:p1")
+        XCTAssertEqual(plugin.model.outputs["d"]?.pane, "w1:p1", "a read of another pane does not stop the poll")
+    }
+
     @MainActor
     func testCreatedAnswersTheCreate() {
         let plugin = HerdrPlugin()

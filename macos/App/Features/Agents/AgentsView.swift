@@ -170,11 +170,12 @@ private struct AgentDetail: View {
         .padding(16)
         .task(id: Refresh(online: model.device?.online == true, status: agent?.status, visible: model.visible)) {
             guard model.visible, model.device?.online == true, agent != nil else { return }
+            // A new status reads at once. Only the polls wait for the last read.
             model.plugin.read(model.deviceId, pane: pane)
             while agent?.status == .working {
                 try? await Task.sleep(for: workingRefresh)
                 if Task.isCancelled { return }
-                model.plugin.read(model.deviceId, pane: pane)
+                model.plugin.poll(model.deviceId, pane: pane)
             }
         }
         .onDisappear { model.plugin.closeOutput(model.deviceId, pane: pane) }

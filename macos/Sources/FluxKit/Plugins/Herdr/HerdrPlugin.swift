@@ -237,6 +237,15 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
         }
     }
 
+    /// Reads the output of `pane` again, unless the last read did not end.
+    /// The polls of the screens use it, so that reads do not pile up on a
+    /// slow link. A manual refresh uses `read`.
+    @MainActor
+    public func poll(_ deviceId: String, pane: String) {
+        guard model.output(deviceId, pane: pane)?.loading != true else { return }
+        read(deviceId, pane: pane)
+    }
+
     /// Forgets the output and the last reply when the window stops showing the agent.
     @MainActor
     public func closeOutput(_ deviceId: String, pane: String) {
