@@ -2,6 +2,8 @@ package core
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"os"
@@ -362,4 +364,32 @@ func TestBrowseStopButton(t *testing.T) {
 	d.mu.Unlock()
 	d.onNotificationAction(0, key)
 	waitDone(t, ctx, "the Browse PC session")
+}
+
+// The state lists each Browse PC session, and browse.stop ends it.
+func TestBrowseStateAndStop(t *testing.T) {
+	d, dev, ctx, _, _ := browseSessionDaemon(t)
+	var state struct {
+		Browse []BrowseView `json:"browse"`
+	}
+	if err := json.Unmarshal(d.Snapshot(), &state); err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Browse) != 1 || state.Browse[0].Device != dev.ID || state.Browse[0].Name != dev.Name || state.Browse[0].Since <= 0 {
+		t.Fatalf("browse state %+v", state.Browse)
+	}
+	var e *Error
+	if _, err := d.Call(context.Background(), "browse.stop", json.RawMessage(`{"device":"other"}`)); !errors.As(err, &e) || e.Code != "not_found" {
+		t.Fatalf("stop of an unknown device: %v", err)
+	}
+	if _, err := d.Call(context.Background(), "browse.stop", json.RawMessage(`{"device":"`+dev.ID+`"}`)); err != nil {
+		t.Fatal(err)
+	}
+	waitDone(t, ctx, "the Browse PC session")
+	if _, err := d.Call(context.Background(), "browse.stop", nil); !errors.As(err, &e) || e.Code != "not_active" {
+		t.Fatalf("stop without a session: %v", err)
+	}
+	if err := json.Unmarshal(d.Snapshot(), &state); err != nil || len(state.Browse) != 0 {
+		t.Fatalf("browse state after the stop %+v, %v", state.Browse, err)
+	}
 }

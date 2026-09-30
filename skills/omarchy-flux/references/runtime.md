@@ -158,6 +158,7 @@ Key settings:
 
 Each setting applies to every paired device. Flux has no setting for 1 device.
 `docs/security.md` lists what a paired device can do and which settings limit it.
+`flux-cli browse` lists the devices that browse the computer with Browse PC, and `flux-cli browse stop` ends their sessions.
 
 `download_dir`, `scan_dir`, and `photo_dir` select destination folders.
 The identity and paired-device certificates live in `~/.local/share/flux/`.

@@ -65,6 +65,7 @@ Commands:
   screen [stop]          Show the phone screen mirror state, or stop the mirror
   desktop [stop]         Show whether a phone shows this screen, or stop it
   desktop on|off         Let a paired phone or Mac show this screen, or stop that
+  browse [stop]          Show the devices that browse this computer, or stop them
   input [on|off]         Show whether a paired phone or Mac can move the pointer
                          and type on this computer, or turn that on or off
   approve [status]       Show whether a phone can approve sudo with a fingerprint
@@ -146,6 +147,8 @@ func main() {
 		err = screen(args)
 	case "desktop":
 		err = remoteDesktop(args)
+	case "browse":
+		err = browse(args, device)
 	case "input":
 		err = remoteInput(args)
 	case "approve":

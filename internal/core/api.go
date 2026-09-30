@@ -181,6 +181,7 @@ func (d *Daemon) Snapshot() json.RawMessage {
 		"mic":     d.micViewLocked(),
 		"screen":  d.screenViewLocked(),
 		"desktop": d.desktopViewLocked(),
+		"browse":  d.browseViewLocked(),
 		"herdr":   d.herdrViewLocked(),
 	}
 	d.mu.Unlock()
@@ -255,6 +256,8 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		return ok, d.StopScreen()
 	case "desktop.stop":
 		return ok, d.StopDesktop()
+	case "browse.stop":
+		return ok, d.StopBrowse(p.Device)
 	case "approve.request", "approve.enroll":
 		return d.startApproval(ctx, method, raw)
 	case "approve.wait":
