@@ -301,7 +301,7 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 	case "pair.request":
 		match = func(dev *Device) bool { return !dev.Paired && dev.link != nil }
 	case "pair.accept", "pair.reject":
-		match = func(dev *Device) bool { return dev.pairState == "incoming" }
+		match = func(dev *Device) bool { return dev.pairState == "incoming" || dev.pairState == "confirm" }
 	}
 	dev, err := d.pickMatch(p.Device, match)
 	var e *Error
@@ -320,7 +320,7 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 	}
 	switch method {
 	case "pair.request", "pair.accept", "pair.reject", "pair.unpair":
-		return d.pairCall(method, dev)
+		return d.pairCall(method, dev, p.Key)
 	}
 	d.mu.Lock()
 	paired, ring, name := dev.Paired, dev.accepts(proto.TypeFindMyPhone), dev.Name

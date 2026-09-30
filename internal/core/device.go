@@ -44,7 +44,7 @@ type Device struct {
 	// ignored, so that it logs that once.
 	inputRefused bool
 
-	pairState string // "", "requested", or "incoming"
+	pairState string // "", "requested", "confirm", or "incoming"
 	pairTime  int64
 	pairKey   string
 	pairTimer *time.Timer
@@ -80,6 +80,14 @@ type Device struct {
 	// ignored counts the packets of the current link that fluxd dropped,
 	// because the device is not paired.
 	ignored int
+
+	// pairEnded is the time of the last pair false, reject, or timeout of
+	// a pairing. A new pair request of the device counts only pairRetry
+	// after it. unpairPeer is true when a pairing in state "confirm" ended
+	// with its link. The device pinned this computer, so fluxd sends pair
+	// false on the next link of the device.
+	pairEnded  time.Time
+	unpairPeer bool
 }
 
 // Battery is the battery state of a device.

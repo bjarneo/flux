@@ -301,7 +301,11 @@ func TestTwoDaemons(t *testing.T) {
 	if req.Device != betaID || req.Key != keyA {
 		t.Fatalf("pair.request returned %+v", req)
 	}
-	beta.call(t, "pair.accept", map[string]any{"device": "alpha"}, nil)
+	beta.call(t, "pair.accept", map[string]any{"device": "alpha", "key": keyB}, nil)
+	// alpha started the pairing, so its user confirms the key too. The
+	// answer of beta pins nothing on alpha.
+	alpha.wait(t, "confirm state", func(s state) bool { _, _, p, ps, k := device(s, "beta"); return !p && ps == "confirm" && k == keyA })
+	alpha.call(t, "pair.accept", map[string]any{"device": "beta", "key": keyA}, nil)
 	sa = alpha.wait(t, "paired", func(s state) bool { _, _, p, _, _ := device(s, "beta"); return p })
 	beta.wait(t, "paired", func(s state) bool { _, _, p, _, _ := device(s, "alpha"); return p })
 	for _, d := range sa.Devices {

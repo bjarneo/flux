@@ -784,8 +784,12 @@ func (d *Daemon) onLink(l *lan.Link) {
 	// A pairing ends with its link. The device can pair again on the new
 	// link.
 	stopped := dev.pairState != "" && dev.pairLink != l
+	var note uint32
 	if stopped {
-		dev.clearPairingLocked()
+		if dev.pairState == "confirm" {
+			dev.unpairPeer = true
+		}
+		note = dev.clearPairingLocked()
 	}
 	dev.link = l
 	dev.ignored = 0
@@ -810,8 +814,13 @@ func (d *Daemon) onLink(l *lan.Link) {
 	if !paired {
 		evict = d.unpairedOverflowLocked(l)
 	}
+	// The device pinned this computer in a pairing that ended before the
+	// user of this computer confirmed it.
+	unpair := dev.unpairPeer && !paired
+	dev.unpairPeer = false
 	name, typ, ip, port := dev.Name, dev.Type, dev.IP, dev.Port
 	d.mu.Unlock()
+	d.closeNotes(note)
 	for _, e := range evict {
 		d.logf("%s: too many links of devices that are not paired, closing the oldest", e.Identity.DeviceName)
 		e.Close()
@@ -820,6 +829,9 @@ func (d *Daemon) onLink(l *lan.Link) {
 		old.Close()
 	}
 	d.logf("link up: %s (%s) paired=%v", name, ip, paired)
+	if unpair {
+		_ = l.Send(proto.New(proto.TypePair, map[string]any{"pair": false}))
+	}
 	if stopped {
 		d.toast("Pairing with %s stopped, because the connection changed. Pair again", name)
 	}
@@ -918,12 +930,23 @@ func (d *Daemon) receive(dev *Device, l *lan.Link) {
 		dev.link = nil
 		dev.LastSeen = time.Now()
 	}
+	var note uint32
+	stopped := false
 	if current || dev.pairLink == l {
-		dev.clearPairingLocked()
+		// A device that pinned this computer in state "confirm" gets pair
+		// false on its next link.
+		state := dev.pairState
+		dev.unpairPeer = dev.unpairPeer || state == "confirm"
+		stopped = state == "requested" || state == "confirm"
+		note = dev.clearPairingLocked()
 	}
 	name := dev.Name
 	d.mu.Unlock()
+	d.closeNotes(note)
 	d.logf("link down: %s: %v", name, err)
+	if stopped {
+		d.toast("Pairing with %s stopped, because the connection closed", name)
+	}
 	d.markDirty()
 	// The device can be back at once on another address, for example
 	// through Tailscale after it left the Wi-Fi. Do not wait for the next
