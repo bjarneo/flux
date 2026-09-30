@@ -298,6 +298,8 @@ the user runs `sudo`, for example with a shell alias.
   the past and at most 5 seconds in the future.
 - The phone refuses a request whose time is more than 10 minutes from the
   phone clock.
+- `fluxd`, the helper, and the phones refuse a time that is not from 1 to
+  2^40 seconds.
 
 ## Timeouts
 

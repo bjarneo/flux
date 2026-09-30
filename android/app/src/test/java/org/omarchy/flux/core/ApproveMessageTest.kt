@@ -83,6 +83,10 @@ class ApproveMessageTest {
         assertNull(ApproveMessage.parse(packet("service" to ""), "pc1", "pc"))
         assertNull(ApproveMessage.parse(packet("kind" to "other"), "pc1", "pc"))
         assertNull(ApproveMessage.parse(packet("id" to ""), "pc1", "pc"))
+        for (time in listOf(Long.MIN_VALUE, -1L, 0L, 1L shl 41, Long.MAX_VALUE)) {
+            assertNull("time $time", ApproveMessage.parse(packet("time" to time), "pc1", "pc"))
+        }
+        assertNotNull(ApproveMessage.parse(packet("time" to (1L shl 40)), "pc1", "pc"))
     }
 
     @Test
@@ -99,6 +103,9 @@ class ApproveMessageTest {
         assertTrue(ApproveMessage.fresh(request, request.time - 30))
         assertFalse(ApproveMessage.fresh(request, request.time + 601))
         assertFalse(ApproveMessage.fresh(request, request.time - 601))
+        // nowSeconds - time wraps for a time near now - 2^63.
+        assertFalse(ApproveMessage.fresh(request.copy(time = request.time + Long.MIN_VALUE), request.time))
+        assertFalse(ApproveMessage.fresh(request.copy(time = Long.MIN_VALUE), request.time))
     }
 
     @Test
