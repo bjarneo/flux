@@ -27,9 +27,10 @@ const maxClockSkew = 30 * time.Minute
 const pairCooldown = 2 * time.Second
 
 // pairRetry is the time after a pair false, a reject, or a timeout in which
-// fluxd refuses a new pair request of the device. A device on the network
-// then cannot show its request again and again. A request of this computer
-// that the device did not accept starts no wait, because the user of this
+// fluxd refuses a new pair request of the device. An incoming request that
+// ends with its link also starts the wait. A device on the network then
+// cannot show its request again and again. A request of this computer that
+// the device did not accept starts no wait, because the user of this
 // computer sent it.
 const pairRetry = 30 * time.Second
 
@@ -571,12 +572,16 @@ func (d *Daemon) startPairTimerLocked(dev *Device) {
 }
 
 // pairLinkEndedLocked ends the open pairing of the device, because the
-// link of the pairing went away. A device that pinned this computer in
-// state "confirm" gets pair false on its next link with the certificate
-// of the pairing. It returns the desktop notification of the pairing, as
-// clearPairingLocked does. The caller holds d.mu.
+// link of the pairing went away. A device that ends its incoming request
+// in this way waits pairRetry, as after a pair false. A device that pinned
+// this computer in state "confirm" gets pair false on its next link with
+// the certificate of the pairing. It returns the desktop notification of
+// the pairing, as clearPairingLocked does. The caller holds d.mu.
 func (dev *Device) pairLinkEndedLocked() uint32 {
-	if dev.pairState == "confirm" {
+	switch dev.pairState {
+	case "incoming":
+		dev.pairEnded = time.Now()
+	case "confirm":
 		dev.unpairPeer, dev.unpairCert = true, dev.pairCert
 	}
 	return dev.clearPairingLocked()

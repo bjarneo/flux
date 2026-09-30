@@ -82,8 +82,9 @@ type Device struct {
 	ignored int
 
 	// pairEnded is the time of the last pair false, reject, or timeout of
-	// a pairing in state "incoming" or "confirm". A new pair request of the
-	// device counts only pairRetry after it.
+	// a pairing in state "incoming" or "confirm", or of the end of the link
+	// of an incoming request. A new pair request of the device counts only
+	// pairRetry after it.
 	//
 	// unpairPeer is true when a pairing in state "confirm" ended with its
 	// link. The device pinned this computer, so fluxd sends pair false on

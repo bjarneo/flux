@@ -1334,8 +1334,9 @@ func TestAcceptBoundToKey(t *testing.T) {
 
 	evil := newTestPeer(t, ctx, certFor(t, dev.ID)).dial(t, ctx, d, d.lan.TCPPort())
 	linked(t, d, dev.ID)
+	// The host waits until the retry wait of the closed request ends.
 	d.mu.Lock()
-	dev.pairAt = time.Time{}
+	dev.pairAt, dev.pairEnded = time.Time{}, time.Time{}
 	d.mu.Unlock()
 	if err := evil.Send(proto.New(proto.TypePair, map[string]any{"pair": true, "timestamp": ts + 1})); err != nil {
 		t.Fatal(err)
@@ -1376,19 +1377,22 @@ func toasts(d *Daemon) func() []string {
 }
 
 // TestPairRequestSpam checks the limits for pair requests. After a pair
-// false, a device waits pairRetry before a new request counts. 1 address
-// can hold maxIncomingPerIP requests, and a refused request shows a toast.
+// false, a device waits pairRetry before a new request counts. An incoming
+// request that ends with its link also starts the wait. 1 address can hold
+// maxIncomingPerIP requests, and a refused request shows a toast.
 func TestPairRequestSpam(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	d, logs, _, dev, _, onPhone, fromDesk := phonePair(t, ctx)
+	d, logs, phoneCert, dev, _, onPhone, fromDesk := phonePair(t, ctx)
 	shown := toasts(d)
+	// peer is the link of the phone that sends the requests.
+	peer := onPhone
 	send := func(body map[string]any) {
 		t.Helper()
 		d.mu.Lock()
 		dev.pairAt = time.Time{}
 		d.mu.Unlock()
-		if err := onPhone.Send(proto.New(proto.TypePair, body)); err != nil {
+		if err := peer.Send(proto.New(proto.TypePair, body)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1432,4 +1436,31 @@ func TestPairRequestSpam(t *testing.T) {
 	d.mu.Unlock()
 	send(map[string]any{"pair": true, "timestamp": time.Now().Unix()})
 	waitFor(t, "a request from another address", func() bool { return state() == "incoming" })
+
+	// The phone closes the link of its request and links again.
+	ended := func() bool { return !field(d, func() time.Time { return dev.pairEnded }).IsZero() }
+	peer.Close()
+	waitFor(t, "the end of the link", func() bool { return field(d, func() *lan.Link { return dev.link }) == nil })
+	if state() != "" || !ended() {
+		t.Fatal("the end of the link did not start the wait")
+	}
+	peer = newTestPeer(t, ctx, phoneCert).dial(t, ctx, d, d.lan.TCPPort())
+	fromDesk = packets(peer)
+	_, onDesk := linked(t, d, dev.ID)
+	send(map[string]any{"pair": true, "timestamp": time.Now().Unix() + 2})
+	if body := nextPair(t, fromDesk); body["pair"] != false || state() != "" {
+		t.Fatalf("a request after a closed link: answer %v, state %q", body, state())
+	}
+
+	// A new link of the phone replaces the link of its request.
+	d.mu.Lock()
+	dev.pairEnded = time.Time{}
+	d.mu.Unlock()
+	send(map[string]any{"pair": true, "timestamp": time.Now().Unix() + 3})
+	waitFor(t, "the request on the new link", func() bool { return state() == "incoming" })
+	newTestPeer(t, ctx, phoneCert).dial(t, ctx, d, d.lan.TCPPort())
+	waitClosed(t, onDesk)
+	if state() != "" || !ended() {
+		t.Fatal("a new link did not start the wait")
+	}
 }

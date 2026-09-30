@@ -783,7 +783,7 @@ func (d *Daemon) onLink(l *lan.Link) {
 		return
 	}
 	// A pairing ends with its link. The device can pair again on the new
-	// link.
+	// link, after pairRetry when it had an incoming request.
 	stopped := dev.pairState != "" && dev.pairLink != l
 	var note uint32
 	if stopped {
