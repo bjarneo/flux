@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -49,7 +50,8 @@ func LoadTrust() (*TrustStore, error) {
 	}
 	var list []TrustedDevice
 	if err := json.Unmarshal(data, &list); err != nil {
-		return nil, err
+		// The path tells the user which file to repair.
+		return nil, fmt.Errorf("%s: %w", ts.path, err)
 	}
 	for _, d := range list {
 		ts.devices[d.ID] = d

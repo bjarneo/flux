@@ -3,12 +3,11 @@ package approve
 import (
 	"bufio"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
 	"time"
 
-	"golang.org/x/sys/unix"
+	"flux/internal/ipc"
 )
 
 // maxLine is the longest line that the helper reads from fluxd.
@@ -31,40 +30,38 @@ type conn struct {
 	next int64
 }
 
-// dial connects to the fluxd socket and checks with SO_PEERCRED that the
+// SocketPath returns the fixed fluxd socket of the user uid. It is the
+// path that fluxd uses when XDG_RUNTIME_DIR is /run/user/<uid>. The helper
+// and `flux-cli approve` do not read FLUX_SOCKET or XDG_RUNTIME_DIR,
+// because the environment of a PAM caller is not trusted.
+func SocketPath(uid int) string { return fmt.Sprintf("/run/user/%d/flux/fluxd.sock", uid) }
+
+// dial connects to the fluxd socket. It checks that the folder of the
+// socket and the socket belong to peerUID, and with SO_PEERCRED that the
 // server runs as peerUID.
 func dial(path string, peerUID int, timeout time.Duration) (*conn, error) {
+	if err := ipc.CheckSocket(path, peerUID); err != nil {
+		return nil, err
+	}
 	c, err := net.DialTimeout("unix", path, timeout)
 	if err != nil {
 		return nil, err
 	}
-	uc, ok := c.(*net.UnixConn)
-	if !ok {
-		c.Close()
-		return nil, errors.New("the socket is not a Unix socket")
-	}
-	raw, err := uc.SyscallConn()
-	if err != nil {
+	if err := ipc.CheckPeer(c, peerUID); err != nil {
 		c.Close()
 		return nil, err
-	}
-	var cred *unix.Ucred
-	var credErr error
-	if err := raw.Control(func(fd uintptr) {
-		cred, credErr = unix.GetsockoptUcred(int(fd), unix.SOL_SOCKET, unix.SO_PEERCRED)
-	}); err != nil {
-		c.Close()
-		return nil, err
-	}
-	if credErr != nil {
-		c.Close()
-		return nil, credErr
-	}
-	if int(cred.Uid) != peerUID {
-		c.Close()
-		return nil, fmt.Errorf("the socket belongs to user %d, not to user %d", cred.Uid, peerUID)
 	}
 	return &conn{c: c, r: bufio.NewReaderSize(c, 4096)}, nil
+}
+
+// Reachable reports whether fluxd of the user uid answers on the socket
+// path, with the same checks as the helper.
+func Reachable(path string, uid int) error {
+	c, err := dial(path, uid, dialTimeout)
+	if err != nil {
+		return err
+	}
+	return c.Close()
 }
 
 func (c *conn) Close() error { return c.c.Close() }

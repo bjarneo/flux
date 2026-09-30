@@ -178,3 +178,20 @@ func TestParsePublicKeyRefusesOtherCurves(t *testing.T) {
 		t.Fatal("a P-384 key must fail")
 	}
 }
+
+func TestSameCode(t *testing.T) {
+	code := "5EE6 825F 974E D59A"
+	for typed, want := range map[string]bool{
+		"5EE6 825F 974E D59A": true,
+		"5ee6825f974ed59a":    true,
+		"5ee6-825f-974e-d59a": true,
+		" 5EE6825F974ED59A ":  true,
+		"5EE6 825F":           false,
+		"5EE6 825F 974E D59B": false,
+		"":                    false,
+	} {
+		if got := SameCode(typed, code); got != want {
+			t.Errorf("%q: got %v, want %v", typed, got, want)
+		}
+	}
+}

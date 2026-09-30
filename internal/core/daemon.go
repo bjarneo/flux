@@ -134,6 +134,10 @@ type Daemon struct {
 	// sessions is the state of the remote sessions: the input queue, the
 	// streams, Browse PC, and the shortcut requests.
 	sessions sessionState
+
+	// ready closes when Run has started the network. fluxd serves the
+	// socket only after that, because requests use the network.
+	ready chan struct{}
 }
 
 // Options change how the daemon runs. The zero value is the normal mode.
@@ -228,6 +232,7 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 		dndWake:     make(chan struct{}, 1),
 		releaseWake: make(chan struct{}, 1),
 	}
+	d.ready = make(chan struct{})
 	if exe, err := os.Executable(); err == nil {
 		d.binDir = filepath.Dir(exe)
 	}
@@ -265,6 +270,9 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 }
 
 func (d *Daemon) logf(format string, args ...any) { d.logger.Printf(format, args...) }
+
+// Ready returns a channel that closes when Run has started the network.
+func (d *Daemon) Ready() <-chan struct{} { return d.ready }
 
 // SetPendingVersion records the version of a new fluxd binary on disk.
 func (d *Daemon) SetPendingVersion(v string) {
@@ -354,6 +362,7 @@ func (d *Daemon) Run() error {
 	d.mu.Lock()
 	d.lan = p
 	d.mu.Unlock()
+	close(d.ready)
 	d.logf("fluxd %s listening on TCP %d as %q", d.selfID, p.TCPPort(), d.Name())
 	go d.releaseLoop(ctx)
 	if d.opts.Headless {
@@ -1106,7 +1115,9 @@ func (d *Daemon) notify(n desktop.Notification) uint32 {
 
 // send sends a feature packet to a device. It returns an API error when
 // the device is not paired or offline, so that no feature reaches a device
-// after an unpair.
+// after an unpair. A button of an old desktop notification then also does
+// not reach an unpaired device. The pairing code sends pair packets on the
+// link directly.
 func (d *Daemon) send(dev *Device, p *proto.Packet) error {
 	d.mu.Lock()
 	l, paired := dev.link, dev.Paired

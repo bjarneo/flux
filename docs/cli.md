@@ -24,6 +24,11 @@ Names match without case.
 Use the device ID when names are not unique.
 `-d NAME` and `--device=NAME` also work.
 
+Put the device flag before the command, or right after the command name.
+`flux-cli` reads it only in these places.
+The text after the first argument of a command stays as you typed it.
+For example, `flux-cli commands add Sync rsync -a -d src dst` keeps `-d src` in the command.
+
 ## Service and window
 
 ```sh
@@ -43,6 +48,37 @@ flux-cli open files
 ```
 
 Window pages: `overview`, `clipboard`, `files`, `notifications`, `messages`, and `commands`.
+
+`flux-cli setup` returns 1 when a step fails, so a script can check it:
+
+```sh
+flux-cli setup && echo "Flux is ready"
+```
+
+`flux-cli setup` and `flux-cli on` wait until `fluxd` answers a request on its socket.
+`fluxd` answers only after it starts the network, so a connection alone does not count.
+If `fluxd` stops at start, for example because `config.toml` has an error, the command prints the cause and returns 1.
+In a checkout, `flux-cli setup` refuses a `fluxd` path with a quote or a backslash, because systemd cannot run it.
+To see the log of the service, run `journalctl --user -u fluxd -e`.
+
+After you install the package, `flux-cli setup` removes the `~/.config/systemd/user/fluxd.service` unit that an earlier `flux-cli setup` of a checkout or of `make install-user` wrote.
+That unit hides the unit of the package.
+`flux-cli setup` keeps a unit that you changed and prints its path.
+To change the service, use a drop-in file:
+
+```sh
+systemctl --user edit fluxd
+```
+
+`flux-cli doctor` shows which unit file systemd loads for `fluxd.service`, and whether its program exists.
+
+When `fluxd` does not answer, `flux-cli` tells you the cause:
+
+| Message | Next step |
+| --- | --- |
+| `fluxd is off` | Run `flux-cli on`. |
+| `fluxd does not run` | Run `flux-cli on`, then `flux-cli doctor`. |
+| `cannot connect to fluxd on PATH` | The socket or its folder belongs to another user, or it is not a socket. See [data paths](configuration.md#data-paths). |
 
 `flux-cli version` prints the version of `flux-cli` and of the running `fluxd`.
 After an update, it also prints the new `fluxd` version that waits for its restart.
@@ -138,9 +174,19 @@ flux-cli --device "Pixel 8" notify --run -- rsync -a ~/Photos nas:/backup
 
 Flux runs the command in the current terminal.
 It sends the result, exit code, and elapsed time to the phone.
+The notification has only the program name, such as `make`, because the phone can show it on the lock screen.
+The arguments of a command can hold a password or a token.
 The CLI returns the command's exit code.
 Ctrl+C stops the command and still sends the result.
 Put Flux flags before `--`.
+
+To send the full command line, add `--show-command` right after `--run`:
+
+```sh
+flux-cli notify --run --show-command -- make -j8
+```
+
+The phone then gets at most the first 200 bytes of the command line.
 
 ## Desktop commands
 
@@ -154,6 +200,15 @@ flux-cli run COMMAND_ID
 `flux-cli commands` lists desktop commands available to the phone.
 Replace `COMMAND_ID` with an ID from that list.
 `flux-cli run` executes the command on the desktop.
+
+Give the command as 1 argument in quotes. `fluxd` runs it with `sh -c`:
+
+```sh
+flux-cli commands add Backup "rsync -a ~/Documents nas:/backup"
+```
+
+When you give more than 1 argument, `flux-cli` quotes each argument for `sh`.
+So `flux-cli commands add Open xdg-open "My File.pdf"` stores `xdg-open 'My File.pdf'`.
 
 ## Streams and approval
 
@@ -202,5 +257,6 @@ flux-cli watch
 ```
 
 The command prints one JSON event per line until you stop it.
+When `fluxd` stops, the command prints `fluxd closed the connection` and returns 1.
 Use `flux-cli status --json` for a single snapshot.
 See [IPC](ipc.md) for the event envelope and socket protocol.

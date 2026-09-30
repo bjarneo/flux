@@ -9,6 +9,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 
 	"flux/internal/config"
 	"flux/internal/proto"
@@ -131,6 +132,11 @@ func (d *Daemon) Snapshot() json.RawMessage {
 	views := make([]DeviceView, 0, len(devs))
 	for _, dev := range devs {
 		v := dev.view()
+		if !dev.Paired {
+			// The phone data of a device that is not paired stays out of
+			// the state, also after an unpair.
+			v.Battery, v.Notifications, v.Conversations = nil, []*PhoneNotification{}, []*Conversation{}
+		}
 		v.AppUpdate = d.appUpdateLocked(dev)
 		// The handlers change these lists in place.
 		v.Notifications = slices.Clone(v.Notifications)
@@ -249,10 +255,8 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		return ok, d.StopScreen()
 	case "desktop.stop":
 		return ok, d.StopDesktop()
-	case "approve.request":
-		return d.ApproveRequest(raw)
-	case "approve.enroll":
-		return d.ApproveEnroll(raw)
+	case "approve.request", "approve.enroll":
+		return d.startApproval(ctx, method, raw)
 	case "approve.wait":
 		return d.ApproveWait(ctx, p.ID)
 	case "approve.cancel":
@@ -284,14 +288,13 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		return ok, d.setSetting(p.Key, p.Value)
 	case "update.install":
 		return ok, d.installUpdate()
-	case "update.sendApp":
-		dev, err := d.pick(p.Device)
-		if err != nil {
-			return nil, err
-		}
-		return ok, d.sendAppUpdate(dev)
 	}
 
+	// An unknown method gets its own error before the device choice, so
+	// that a typo or an earlier fluxd does not look like a missing device.
+	if !deviceMethods[method] {
+		return nil, apiErr("unknown_method", "Unknown method %q", method)
+	}
 	// A name finds only the devices that the pairing method can act on.
 	var match func(*Device) bool
 	switch method {
@@ -387,8 +390,34 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		return ok, d.SendNotification(dev, p.Title, p.Body)
 	case "sms.send":
 		return ok, d.SendSms(dev, p.Addresses, p.Body)
+	case "update.sendApp":
+		return ok, d.sendAppUpdate(dev)
 	}
 	return nil, apiErr("unknown_method", "Unknown method %q", method)
+}
+
+// deviceMethods are the methods of Call that act on a device.
+var deviceMethods = map[string]bool{
+	"pair.request": true, "pair.accept": true, "pair.reject": true, "pair.unpair": true,
+	"addresses.add": true, "addresses.remove": true,
+	"ring": true, "ping": true,
+	"clipboard.send": true, "share.files": true, "share.text": true, "share.url": true,
+	"notification.dismiss": true, "notification.dismissAll": true, "notification.reply": true, "notification.action": true,
+	"sms.refresh": true, "sms.thread": true, "sms.send": true,
+	"notify.send":    true,
+	"update.sendApp": true,
+}
+
+// cfgSaves orders the changes of the configuration and their saves, so
+// that config.toml always gets the newest change.
+var cfgSaves sync.Mutex
+
+// configCopyLocked returns a copy of d.cfg to save. The caller holds
+// cfgSaves and d.mu.
+func (d *Daemon) configCopyLocked() config.Config {
+	cfg := *d.cfg
+	cfg.Commands = slices.Clone(cfg.Commands)
+	return cfg
 }
 
 // addCommand saves a new command in config.toml and sends the list to the
@@ -399,11 +428,14 @@ func (d *Daemon) addCommand(name, command string) (any, error) {
 		return nil, apiErr("bad_params", "Give a name and a command")
 	}
 	c := config.Command{ID: config.NewID(4), Name: name, Command: command}
+	cfgSaves.Lock()
 	d.mu.Lock()
 	d.cfg.Commands = append(d.cfg.Commands, c)
-	cfg := *d.cfg
+	cfg := d.configCopyLocked()
 	d.mu.Unlock()
-	if err := config.Save(&cfg); err != nil {
+	err := config.Save(&cfg)
+	cfgSaves.Unlock()
+	if err != nil {
 		return nil, err
 	}
 	d.commandsChanged()
@@ -413,6 +445,7 @@ func (d *Daemon) addCommand(name, command string) (any, error) {
 // removeCommand deletes a command from config.toml and sends the list to
 // the connected phones.
 func (d *Daemon) removeCommand(id string) error {
+	cfgSaves.Lock()
 	d.mu.Lock()
 	out := make([]config.Command, 0, len(d.cfg.Commands))
 	found := false
@@ -424,12 +457,15 @@ func (d *Daemon) removeCommand(id string) error {
 		out = append(out, c)
 	}
 	d.cfg.Commands = out
-	cfg := *d.cfg
+	cfg := d.configCopyLocked()
 	d.mu.Unlock()
 	if !found {
+		cfgSaves.Unlock()
 		return apiErr("not_found", "No command with ID %s", id)
 	}
-	if err := config.Save(&cfg); err != nil {
+	err := config.Save(&cfg)
+	cfgSaves.Unlock()
+	if err != nil {
 		return err
 	}
 	d.commandsChanged()
@@ -446,6 +482,7 @@ func (d *Daemon) commandsChanged() {
 func (d *Daemon) setSetting(key string, value any) error {
 	b, isBool := value.(bool)
 	s, isString := value.(string)
+	cfgSaves.Lock()
 	d.mu.Lock()
 	before := *d.cfg
 	switch {
@@ -477,11 +514,14 @@ func (d *Daemon) setSetting(key string, value any) error {
 		d.cfg.DownloadDir = strings.TrimSpace(s)
 	default:
 		d.mu.Unlock()
+		cfgSaves.Unlock()
 		return apiErr("bad_setting", "Unknown setting %q or wrong value type", key)
 	}
-	cfg := *d.cfg
+	cfg := d.configCopyLocked()
 	d.mu.Unlock()
-	if err := config.Save(&cfg); err != nil {
+	err := config.Save(&cfg)
+	cfgSaves.Unlock()
+	if err != nil {
 		return d.unsavedSetting(key, &before, err)
 	}
 	if key == "name" {
@@ -512,13 +552,16 @@ func (d *Daemon) setSetting(key string, value any) error {
 
 // Reload reads config.toml again. fluxd calls it on SIGHUP.
 func (d *Daemon) Reload() error {
+	cfgSaves.Lock()
 	cfg, err := config.Load()
 	if err != nil {
+		cfgSaves.Unlock()
 		return err
 	}
 	d.mu.Lock()
 	d.cfg = cfg
 	d.mu.Unlock()
+	cfgSaves.Unlock()
 	d.commandsChanged()
 	d.herdrChanged()
 	d.inputChanged()

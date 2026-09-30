@@ -121,7 +121,9 @@ func (d *Daemon) RejectPair(dev *Device) error {
 }
 
 // Unpair removes the trust, tells the device, and closes the link. No
-// session of the device outlives the pairing.
+// session of the device outlives the pairing. It returns the error of
+// devices.json, because the device is paired again after a restart when
+// the file keeps it.
 func (d *Daemon) Unpair(dev *Device) error {
 	d.mu.Lock()
 	if !dev.Paired && !dev.badTrust {
@@ -131,7 +133,7 @@ func (d *Daemon) Unpair(dev *Device) error {
 	}
 	l := dev.link
 	dev.clearPairingLocked()
-	d.dropTrustLocked(dev)
+	err := d.dropTrustLocked(dev)
 	if l == nil {
 		delete(d.devices, dev.ID)
 	}
@@ -144,14 +146,18 @@ func (d *Daemon) Unpair(dev *Device) error {
 		}
 		l.Close()
 	}
+	if err != nil {
+		return apiErr("not_saved", "%s is unpaired until fluxd restarts, because devices.json did not change: %v", name, err)
+	}
 	return nil
 }
 
 // dropTrustLocked removes the trust of a device in memory and in
 // devices.json, and the data that the device shared. The trust store
 // changes under d.mu, so that a new link sees the same state in memory and
-// on disk. The caller holds d.mu.
-func (d *Daemon) dropTrustLocked(dev *Device) {
+// on disk. It logs and returns the error of devices.json. The caller holds
+// d.mu.
+func (d *Daemon) dropTrustLocked(dev *Device) error {
 	dev.Paired, dev.PairedAt, dev.badTrust = false, "", false
 	dev.Addresses = nil
 	dev.seenIP, dev.seenPort = "", 0
@@ -162,9 +168,11 @@ func (d *Daemon) dropTrustLocked(dev *Device) {
 	if dev.link != nil {
 		dev.link.SetPaired(false)
 	}
-	if err := d.trust.Remove(dev.ID); err != nil {
+	err := d.trust.Remove(dev.ID)
+	if err != nil {
 		d.logf("save trust: %v", err)
 	}
+	return err
 }
 
 // handlePair runs the pairing state machine for a flux.pair packet that

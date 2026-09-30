@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -131,5 +132,59 @@ func TestInstalledNextToBinary(t *testing.T) {
 	}
 	if src, views, err := Source(exe); err != nil || src != want || views != "" {
 		t.Fatalf("Source = %q, %q, %v", src, views, err)
+	}
+}
+
+// Sync keeps the files that the user added, and it removes only the files
+// that an earlier Sync wrote.
+func TestSyncKeepsUserFiles(t *testing.T) {
+	src := t.TempDir()
+	write(t, src, "manifest.json", "Panel.qml", "Flux/Old.qml")
+	dest := filepath.Join(t.TempDir(), "flux")
+	write(t, dest, "notes.txt", "Flux/Mine.qml")
+	sync(t, src, "", dest)
+	if err := os.Remove(filepath.Join(src, "Flux", "Old.qml")); err != nil {
+		t.Fatal(err)
+	}
+	sync(t, src, "", dest)
+	for _, keep := range []string{"notes.txt", "Flux/Mine.qml", "Panel.qml"} {
+		if _, err := os.Stat(filepath.Join(dest, keep)); err != nil {
+			t.Errorf("%s is gone: %v", keep, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dest, "Flux", "Old.qml")); !os.IsNotExist(err) {
+		t.Errorf("the file of the earlier version stays: %v", err)
+	}
+}
+
+// Sync does not write through a Flux folder that links to a checkout, and
+// it does not remove the link.
+func TestSyncRefusesLinkedFolder(t *testing.T) {
+	src := t.TempDir()
+	write(t, src, "manifest.json", "Flux/Main.qml")
+	checkout := t.TempDir()
+	if err := os.WriteFile(filepath.Join(checkout, "Main.qml"), []byte("my edit"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(t.TempDir(), "flux")
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(checkout, filepath.Join(dest, "Flux")); err != nil {
+		t.Fatal(err)
+	}
+	files, err := Files(src, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed, err := Sync(files, dest)
+	if !errors.Is(err, ErrLinked) || changed {
+		t.Fatalf("changed %v, err %v", changed, err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(checkout, "Main.qml")); string(b) != "my edit" {
+		t.Fatalf("the checkout file has %q", b)
+	}
+	if fi, err := os.Lstat(filepath.Join(dest, "Flux")); err != nil || fi.Mode()&fs.ModeSymlink == 0 {
+		t.Fatalf("the link is gone: %v", err)
 	}
 }

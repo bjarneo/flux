@@ -131,20 +131,26 @@ enrollment is never a valid approval, and the reverse.
 ## Approval flow
 
 1. PAM starts `flux-approve` through `pam_exec`. The helper reads
-   `PAM_USER`, `PAM_SERVICE`, `PAM_TTY`, and `PAM_RHOST`.
+   `PAM_USER`, `PAM_SERVICE`, `PAM_TTY`, `PAM_RHOST`, `PAM_RUSER`, and its
+   real user ID.
 2. The helper refuses the `sshd` service, and the user names that are not
-   valid local user names.
+   valid local user names. It also refuses a request that another user
+   makes: `PAM_RUSER` is set and differs from `PAM_USER`, or the real user
+   ID is not 0 and not the user ID of `PAM_USER`. For `polkit-1`, the real
+   user ID must be the user ID of `PAM_USER`, because polkit gives no PAM
+   item for the user that asks.
 3. The helper reads and checks the key file. With no key file, it stops at
    once.
 4. The helper makes a 32-byte nonce with `crypto/rand` and takes the time.
-5. The helper connects to `/run/user/<uid>/flux/fluxd.sock`. It checks with
+5. The helper connects to `/run/user/<uid>/flux/fluxd.sock`. It checks that
+   the folder of the socket and the socket belong to the user, and with
    `SO_PEERCRED` that the process at the other end runs as the same user.
    Without `fluxd`, it stops at once.
 6. The helper calls `approve.request`. `fluxd` sends a `flux.approve`
    request to the phone in the key file. If the phone is not connected,
    `fluxd` returns an error, and the helper stops at once.
-7. The helper prints 1 line: `Approve on <phone>, or wait for the password
-   prompt.`
+7. The helper prints 1 line: `Approve on <phone> for terminal <tty>, or
+   wait for the password prompt.` Without a TTY, the line has no terminal.
 8. The phone shows `Approve sudo for user <user> on host <host>?` with the
    TTY, the remote host, and the time. It shows Approve and Deny.
 9. Approve opens `BiometricPrompt`. After the fingerprint, the phone signs
@@ -173,15 +179,23 @@ enrollment is never a valid approval, and the reverse.
 6. The command checks the signature with the new public key. This proves
    that the phone has the private key and that the key works with the
    fingerprint.
-7. The command shows the same key code and asks the user to compare it with
-   the phone. The user must type `y`.
+7. The command asks the user to type the key code that the phone shows. It
+   compares the typed code with the code of the public key that it got. It
+   ignores spaces, hyphens, and case, and it needs all 16 hex digits. The
+   user has 3 tries. The terminal does not show the code of the public key,
+   because code that runs as the user can write to the terminal of the user.
 8. The command writes the key file. It writes a temporary file in the same
    folder, sets the mode to 0644 and the owner to root, syncs it, and
-   renames it.
+   renames it. It sets the mode of `/etc/flux/approve` to 0755. It sets
+   the mode of `/etc/flux` to 0755 when other users cannot pass through
+   it. The `hyprlock` helper runs as the user and must read the key.
 
-The comparison of the key codes in step 7 is the protection against a
-changed `fluxd`. A changed `fluxd` can send its own key, but it cannot make
-the phone show the code of that key.
+The typed key code in step 7 is the protection against a changed `fluxd`.
+A changed `fluxd` can send its own key, but it cannot make the phone show
+the code of that key. The command does not trust its terminal output, so a
+rewritten terminal line does not help the changed `fluxd`. This check is
+defense in depth only. Code that runs as the user can also get root when
+the user runs `sudo`, for example with a shell alias.
 
 ## Replay protection
 
@@ -226,20 +240,24 @@ Every failure gives a non-zero exit, and PAM asks for the password.
 | The phone has no strong biometric | The phone sends an error |
 | A new fingerprint on the phone | The key is invalid, the phone sends an error, and the user enrolls again |
 | The service is `sshd` | The helper stops at once |
+| Another user asks, for example with the sudoers option `targetpw` | The helper stops at once |
+| `polkit-1` without a setuid `polkit-agent-helper-1` | The helper stops at once. `flux-cli approve enable polkit-1` refuses this service |
+| The PAM caller stops, for example when the user closes the terminal or kills `sudo` | The helper gets `SIGTERM` and ends the request. `fluxd` also ends a request when the connection of its helper closes, and it closes the request on the phone |
 
 ## What an attacker can do
 
 | Attacker | Can | Cannot |
 | --- | --- | --- |
 | Network | Block or delay the link, so that PAM asks for the password | Read or change the messages, because the link uses TLS with pinned certificates. Make a valid signature. |
-| Code that runs as the user | Stop the approval, so that PAM asks for the password. Send requests to the phone. Start `sudo` and wait for the user to approve it. | Make a valid signature. Change the key file. Point the helper to another key. Use an old signature again. |
+| Code that runs as the user | Stop the approval, so that PAM asks for the password. Send requests to the phone. Start `sudo` and wait for the user to approve it. | Make a valid signature. Change the key file, except through a `sudo` that it controls, see the open risks. Point the helper to another key. Use an old signature again. |
 | A person with the locked phone | See a request on the lock screen, and deny it | Approve a request without the fingerprint |
 | A person with the unlocked phone | Deny requests. Remove Flux. | Approve a request without the fingerprint |
 
 The helper runs as root for `sudo`. It reads only the key file, the socket,
-and its PAM variables. It limits each line from `fluxd` to 64 KiB, and it
-parses the lines with the Go JSON decoder, so the data from the user
-process cannot corrupt its memory. It does not read any file of the user.
+`/etc/passwd`, and its PAM variables. It limits each line from `fluxd` to
+64 KiB, and it parses the lines with the Go JSON decoder, so the data from
+the user process cannot corrupt its memory. It does not read any file of
+the user.
 
 For a lock screen, the helper runs as the user. Code that runs as the user
 can already end the lock screen, so the approval protects only against a
@@ -256,7 +274,20 @@ person at the keyboard. The password protects against the same person.
 - **No key attestation.** The computer trusts that the phone made the key
   with the settings above. Android key attestation can prove it, but Flux
   does not check it yet.
-- **Enrollment depends on the user.** If the user does not compare the key
-  codes, a changed `fluxd` can enroll its own key.
+- **A substituted request.** A changed `fluxd` sees a real request of the
+  user. It can start its own `sudo` in the same second and send that
+  request to the phone in its place. The phone then shows the same
+  service, user, host, and time. Only the terminal differs, so the helper
+  prints the terminal of the request. The advice to approve right after you
+  typed the command does not find this substitution.
+- **Requests from other users.** The helper refuses a request that another
+  user makes for the user. polkit gives no PAM item for the user that asks.
+  So `polkit-1` works only with a setuid `polkit-agent-helper-1`. polkit 126
+  and later on Arch Linux run the agent helper as a system service that
+  cannot reach the socket of `fluxd`, and approvals for `polkit-1` do not
+  work there.
+- **Enrollment depends on the phone screen.** The user must type the code
+  from the phone. If the user types a code from another source, a changed
+  `fluxd` can enroll its own key.
 - **Only local users.** The helper finds the user in `/etc/passwd`. Users
   from a network directory do not work.

@@ -45,6 +45,11 @@ func LoadOrCreateCert(dir string) (tls.Certificate, string, error) {
 	if !errors.Is(err, os.ErrNotExist) {
 		return tls.Certificate{}, "", fmt.Errorf("load certificate: %w", err)
 	}
+	// A new identity never replaces a private key. The paired devices
+	// pinned the certificate of that key, so the user decides.
+	if _, err := os.Lstat(keyPath); err == nil {
+		return tls.Certificate{}, "", fmt.Errorf("%s is missing, but %s exists. Restore the certificate, or remove the key to make a new identity that each device must pair with again", certPath, keyPath)
+	}
 	id := strings.ReplaceAll(newUUID(), "-", "")
 	certPEM, keyPEM, err := generateCert(id)
 	if err != nil {
@@ -53,10 +58,24 @@ func LoadOrCreateCert(dir string) (tls.Certificate, string, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return tls.Certificate{}, "", err
 	}
-	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
+	// The certificate comes first. A stop between the 2 writes then leaves
+	// a certificate without its key, which the next start replaces.
+	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
 		return tls.Certificate{}, "", err
 	}
-	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
+	f, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return tls.Certificate{}, "", err
+	}
+	if _, err := f.Write(keyPEM); err != nil {
+		f.Close()
+		return tls.Certificate{}, "", err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return tls.Certificate{}, "", err
+	}
+	if err := f.Close(); err != nil {
 		return tls.Certificate{}, "", err
 	}
 	return LoadOrCreateCert(dir)

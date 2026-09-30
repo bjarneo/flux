@@ -151,7 +151,7 @@ Key settings:
 `download_dir`, `scan_dir`, and `photo_dir` select destination folders.
 The identity and paired-device certificates live in `~/.local/share/flux/`.
 The socket is `$XDG_RUNTIME_DIR/flux/fluxd.sock`, with `FLUX_SOCKET` as an override.
-Without `XDG_RUNTIME_DIR`, Flux uses a user-specific directory in the system temporary directory.
+Without `XDG_RUNTIME_DIR`, Flux uses `/run/user/<uid>/flux/fluxd.sock`. It never uses the system temporary directory.
 
 Do not delete the identity or trust store to diagnose a routine connection failure.
 Their removal changes pairing identity.
@@ -218,10 +218,12 @@ The daemon carries approval messages but does not establish trust by itself.
 ```sh
 flux-cli approve
 sudo flux-cli approve setup
-sudo flux-cli approve enable polkit-1 hyprlock
+sudo flux-cli approve enable hyprlock
 sudo flux-cli approve disable
 sudo flux-cli approve remove
 ```
+
+`polkit-1` works only with a setuid `polkit-agent-helper-1`, so current Arch Linux cannot use it.
 
 Use root commands only for the requested setup or removal.
 Keep the password fallback.
