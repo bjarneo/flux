@@ -51,15 +51,18 @@ Item {
   readonly property bool daemonUp: !!backend && backend.connected
   readonly property var allDevices: backend ? (backend.devices || []) : []
   readonly property var paired: allDevices.filter(d => d.paired)
-  readonly property var discovered: allDevices.filter(d => !d.paired && d.online && d.pairState !== "incoming")
-  readonly property var incoming: allDevices.filter(d => d.pairState === "incoming")
+  readonly property var discovered: allDevices.filter(d => !d.paired && d.online && d.pairState !== "incoming" && d.pairState !== "confirm")
+  // The pairings that wait for the user of this computer: a pair request of
+  // a device, and a pairing that this computer started and the device
+  // accepted ("confirm").
+  readonly property var incoming: allDevices.filter(d => d.pairState === "incoming" || d.pairState === "confirm")
   readonly property var requested: allDevices.find(d => d.pairState === "requested") || null
   // The fields of the pair requests and of the discovered devices that the
   // sidebar shows. As for pairedRows, the text changes only when 1 of these
   // fields changes, so a state event does not build a card or a row again
   // under the pointer.
   readonly property string incomingText: JSON.stringify(incoming.map(d => ({
-    id: d.id, name: d.name, ip: d.ip || "", pairKey: d.pairKey || ""
+    id: d.id, name: d.name, ip: d.ip || "", pairKey: d.pairKey || "", pairState: d.pairState
   })))
   readonly property var incomingRows: JSON.parse(incomingText)
   readonly property string discoveredText: JSON.stringify(discovered.map(d => ({
@@ -67,17 +70,28 @@ Item {
     pairState: d.pairState, twin: twinText(d)
   })))
   readonly property var discoveredRows: JSON.parse(discoveredText)
-  // The IDs of the pair requests that already showed, in the order in
-  // which they came. The list empties when no request is open.
-  property var seenRequests: []
+  // The pair requests that showed, by device ID: since is the time in ms at
+  // which the request first showed, and until is the time at which it
+  // stopped showing, or 0 while it is open. An entry stays for requestQuiet
+  // after the request stopped showing, so a device that withdraws its
+  // request and sends it again does not count as new.
+  property var requestShown: ({})
+  readonly property int requestQuiet: 5 * 60 * 1000
   // The sidebar shows 1 pair request: the oldest one that is still open.
   // A later request does not replace the card under the pointer.
   readonly property var pairRequest: {
-    for (var i = 0; i < seenRequests.length; i++) {
-      var r = incomingRows.find(d => d.id === seenRequests[i])
-      if (r) return r
+    var best = null
+    var bestAt = 0
+    for (var i = 0; i < incomingRows.length; i++) {
+      var r = incomingRows[i]
+      var e = Fmt.lookup(requestShown, r.id)
+      var at = e ? e.since : Number.MAX_VALUE
+      if (!best || at < bestAt) {
+        best = r
+        bestAt = at
+      }
     }
-    return incomingRows.length > 0 ? incomingRows[0] : null
+    return best
   }
   // The fields of the paired devices that the device rows and the rail
   // show. The text changes only when 1 of these fields changes, so a new
@@ -184,17 +198,28 @@ Item {
 
   // A new pair request scrolls the sidebar to the top, where the card is.
   // The card shows only in the full sidebar, so a narrow window opens the
-  // drawer. This happens once for each request, so a device that sends its
-  // request again does not open the drawer again or move the sidebar.
+  // drawer. This happens only for a device whose request did not show in
+  // the last requestQuiet, so a device that withdraws its request and sends
+  // it again does not open the drawer again or move the sidebar.
   onIncomingRowsChanged: {
-    var ids = incomingRows.map(d => d.id)
-    if (ids.length === 0) {
-      seenRequests = []
-      return
+    var now = Date.now()
+    var open = {}
+    incomingRows.forEach(d => { open[d.id] = true })
+    var shown = {}
+    for (var id in requestShown) {
+      var e = requestShown[id]
+      var isOpen = !!Fmt.lookup(open, id)
+      if (!e.until) shown[id] = isOpen ? e : { since: e.since, until: now }
+      else if (now - e.until < requestQuiet) shown[id] = isOpen ? { since: now, until: 0 } : e
     }
-    var fresh = ids.filter(id => seenRequests.indexOf(id) < 0)
-    if (fresh.length === 0) return
-    seenRequests = seenRequests.concat(fresh)
+    var fresh = false
+    for (var rid in open) {
+      if (Fmt.lookup(shown, rid)) continue
+      shown[rid] = { since: now, until: 0 }
+      fresh = true
+    }
+    requestShown = shown
+    if (!fresh) return
     sideFlick.contentY = 0
     if (!wideLayout) drawerOpen = true
   }
@@ -421,8 +446,9 @@ Item {
             width: side.width
             device: root.pairRequest || ({})
             motion: [sideFlick.contentY, root.sidebarFull, sidebar.width]
-            onAccept: root.call("pair.accept", { device: pairCard.device.id })
-            onReject: root.call("pair.reject", { device: pairCard.device.id })
+            // The key binds the answer to the pairing that the card shows.
+            onAccept: root.call("pair.accept", { device: pairCard.device.id, key: pairCard.device.pairKey })
+            onReject: root.call("pair.reject", { device: pairCard.device.id, key: pairCard.device.pairKey })
           }
           Txt {
             visible: root.incomingRows.length > 1
@@ -492,7 +518,7 @@ Item {
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
               onClicked: {
-                if (root.requested) root.call("pair.reject", { device: root.requested.id })
+                if (root.requested) root.call("pair.reject", { device: root.requested.id, key: root.requested.pairKey })
                 else root.startPair()
               }
             }
