@@ -290,15 +290,19 @@ jobs:
           echo "sums=$(base64 -w0 release/SHA256SUMS)" >> "$GITHUB_OUTPUT"
       # A patch tag on an earlier line, such as v0.6.1 after v0.7.0, does
       # not become the latest release, because fluxd and flux-cli update
-      # read only the latest release.
+      # read only the latest release. Only tags on master count. The
+      # version job refuses other tags, so they have no release.
       - name: Find the highest stable tag
         id: latest
         env:
           TAG: ${{ needs.version.outputs.tag }}
         run: |
-          highest=$(git tag -l 'v*' | grep -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' | sort -V | tail -n 1)
+          highest=$(git tag -l 'v*' --merged origin/master | grep -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' | sort -V | tail -n 1)
           if [[ "$TAG" == "$highest" ]]; then latest=true; else latest=false; fi
           echo "$TAG is the latest release: $latest"
+          if [[ "$latest" == false ]]; then
+            echo "::warning::$TAG is not the latest release, because $highest is higher. fluxd and flux-cli update do not offer $TAG."
+          fi
           echo "latest=$latest" >> "$GITHUB_OUTPUT"
       - name: Write release notes
         env:
