@@ -1,6 +1,7 @@
 #if os(macOS)
 import AppKit
 #else
+import Security
 import UIKit
 #endif
 import Crypto
@@ -62,6 +63,8 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
     @MainActor private var lastRemoteImage: Data?
     /// The image transfers from computers that run, so that an unpair ends them.
     private let imageStreams = NIOLockedValueBox<[UUID: (deviceId: String, stream: TLSStream)]>([:])
+    /// The key of the text digests, see `ClipboardDigestKey`. Flux reads it once.
+    private let digestKey = NIOLockedValueBox<Data?>(nil)
     #endif
 
     static let syncKey = "clipboard.sync"
@@ -309,7 +312,7 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
     @MainActor
     private func put(_ text: String) {
         lastRemote.withLockedValue { $0 = text }
-        core?.defaults.set(Self.digest(text), forKey: Self.remoteDigestKey)
+        if let digest = digest(text) { core?.defaults.set(digest, forKey: Self.remoteDigestKey) }
         ClipboardText.write(text)
         markSeen(ClipboardText.changeCount)
     }
@@ -326,8 +329,30 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
 
     // MARK: Digests
 
-    /// Identifies a text, so that Flux can compare texts without keeping them.
-    static func digest(_ text: String) -> Data { Data(SHA256.hash(data: Data(text.utf8))) }
+    /// Identifies a text, so that Flux can compare texts without keeping
+    /// them. The digest is an HMAC-SHA256 with the random key of this
+    /// install. The digests go into a backup of the settings and the key
+    /// does not, so a digest does not give away a short text, such as a
+    /// password.
+    static func digest(_ text: String, key: Data) -> Data {
+        Data(HMAC<SHA256>.authenticationCode(for: Data(text.utf8), using: SymmetricKey(data: key)))
+    }
+
+    /// The digest of a text on the iPhone, see `ClipboardDigestKey`. Only the
+    /// iOS app compares texts, so the Mac keeps no digests.
+    private func digest(_ text: String) -> Data? {
+        #if os(iOS)
+        let key = digestKey.withLockedValue { cached -> Data in
+            if let known = cached { return known }
+            let loaded = ClipboardDigestKey.load()
+            cached = loaded
+            return loaded
+        }
+        return Self.digest(text, key: key)
+        #else
+        return nil
+        #endif
+    }
 
     /// Reports whether a text is the last text that Flux sent or the last
     /// text that a computer put on the clipboard.
@@ -339,14 +364,15 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
     /// that a computer put on the clipboard. Send Text to Computer can skip
     /// such text, for example in an automation that runs often.
     public func isUnchanged(_ text: String) -> Bool {
-        Self.isUnchanged(Self.digest(text), sent: core?.defaults.data(forKey: Self.sentDigestKey),
-                         remote: core?.defaults.data(forKey: Self.remoteDigestKey))
+        guard let digest = digest(text) else { return false }
+        return Self.isUnchanged(digest, sent: core?.defaults.data(forKey: Self.sentDigestKey),
+                                remote: core?.defaults.data(forKey: Self.remoteDigestKey))
     }
 
     /// Keeps the digest of text that went out. A copy that went out by
     /// Send Text to Computer is kept apart until Flux sees the clipboard.
     private func noteSent(_ text: String, byShortcut: Bool = false) {
-        let digest = Self.digest(text)
+        guard let digest = digest(text) else { return }
         core?.defaults.set(digest, forKey: Self.sentDigestKey)
         if byShortcut {
             core?.defaults.set(digest, forKey: Self.shortcutDigestKey)
@@ -491,7 +517,7 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
         #endif
         guard let text = ClipboardText.text(includingPrivate: false) else { return false }
         if text == lastRemote.withLockedValue({ $0 }) { return false }
-        if let skipping, Self.digest(text) == skipping { return false }
+        if let skipping, digest(text) == skipping { return false }
         timestamp = Packet.now()
         noteSent(text)
         let p = Packet(PacketType.clipboard, ["content": text])
@@ -669,6 +695,45 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
         }
     }
 }
+
+#if os(iOS)
+/// The random key of the clipboard digests, see `ClipboardPlugin.digest`.
+/// It stays in the Keychain of this iPhone. It is available after the first
+/// unlock and does not go into a backup or to another iPhone.
+enum ClipboardDigestKey {
+    static let service = "org.omarchy.flux.clipboard"
+    static let account = "digest"
+
+    /// The key from the Keychain, or a new key that Flux adds there. When
+    /// the Keychain fails, the new key lasts until Flux quits. The digests
+    /// of an earlier launch then do not match, so a text counts as new.
+    static func load() -> Data {
+        let item: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+        var query = item
+        query[kSecReturnData as String] = true
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecSuccess, let key = result as? Data, key.count == 32 { return key }
+        let key = SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) }
+        guard status == errSecItemNotFound else {
+            FluxLog.plugin.error("cannot use the clipboard key in the Keychain: status \(status)")
+            return key
+        }
+        var add = item
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        add[kSecValueData as String] = key
+        let added = SecItemAdd(add as CFDictionary, nil)
+        if added != errSecSuccess {
+            FluxLog.plugin.error("cannot keep the clipboard key in the Keychain: status \(added)")
+        }
+        return key
+    }
+}
+#endif
 
 /// The text of the general pasteboard.
 enum ClipboardText {

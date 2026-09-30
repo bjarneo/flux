@@ -228,6 +228,8 @@ The clipboard sync in the app skips copies with these marks.
 The action sends text only.
 Turn on **Skip unchanged text** in the action when an automation runs it often.
 The action then does not send the text that Flux sent last or that a computer put on the clipboard.
+Flux compares keyed digests of these texts and does not keep the texts.
+The key stays in the Keychain of the iPhone and does not go into a backup.
 A copy that the action sent does not go out again when Flux opens.
 
 To send with Siri or Spotlight, say or search **Send clipboard with Flux**.

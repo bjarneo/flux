@@ -114,12 +114,15 @@ final class LifecycleTests: XCTestCase {
     }
 
     func testTheSameTextIsUnchanged() {
-        let a = ClipboardPlugin.digest("a")
-        XCTAssertEqual(a, ClipboardPlugin.digest("a"))
-        XCTAssertNotEqual(a, ClipboardPlugin.digest("b"))
+        let key = Data(repeating: 7, count: 32)
+        let a = ClipboardPlugin.digest("a", key: key)
+        XCTAssertEqual(a, ClipboardPlugin.digest("a", key: key))
+        XCTAssertNotEqual(a, ClipboardPlugin.digest("b", key: key))
+        XCTAssertNotEqual(a, ClipboardPlugin.digest("a", key: Data(repeating: 8, count: 32)),
+                          "without the key of this install, a digest in a backup does not give away the text")
         XCTAssertTrue(ClipboardPlugin.isUnchanged(a, sent: a, remote: nil), "the text that Flux sent last")
         XCTAssertTrue(ClipboardPlugin.isUnchanged(a, sent: nil, remote: a), "the text from a computer does not echo back")
-        XCTAssertFalse(ClipboardPlugin.isUnchanged(a, sent: ClipboardPlugin.digest("b"), remote: nil))
+        XCTAssertFalse(ClipboardPlugin.isUnchanged(a, sent: ClipboardPlugin.digest("b", key: key), remote: nil))
         XCTAssertFalse(ClipboardPlugin.isUnchanged(a, sent: nil, remote: nil))
     }
 
