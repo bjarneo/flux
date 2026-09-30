@@ -187,6 +187,9 @@ Some notifications stay on the phone:
 - A notification that the lock screen hides, because the notification or its channel has the visibility `VISIBILITY_SECRET`.
 - The notifications of Flux, ongoing notifications, the notifications of foreground services, and group summaries.
 
+Flux also shares the notifications of the apps in a work profile, with their reply fields and buttons.
+Flux has no separate switch for them.
+
 A button that needs the phone unlock or text input also stays on the phone.
 The computer gets the reply field only when the reply does not need the phone unlock.
 See [shared notifications](android-setup.md#shared-notifications).
@@ -234,7 +237,7 @@ The desktop then shows the **Messages** page for that phone:
 - A reply goes out on the SIM of the conversation. A new message uses the default SMS SIM of the phone.
 - The list keeps the 500 newest conversations and shows the first 1 KiB of each latest message.
 - A conversation keeps up to 20 addresses and the first 256 bytes of its name. `fluxd` ignores an address that is longer than 64 bytes.
-- A message from the desktop has at most 1600 characters, which is about 10 SMS parts.
+- A message from the desktop has at most 1600 characters, which is about 10 SMS parts. The phone also refuses a longer message.
 
 To send a text message from a script, use the [SMS command](cli.md#share-and-communicate):
 
@@ -325,7 +328,7 @@ Selected-photo access does not expose new captures.
 Flux sends each completed image to every connected computer once.
 The switches apply to every paired computer.
 Images from before the option was enabled stay on the phone.
-An image that no computer received waits for a computer to connect.
+An image waits while no computer is connected.
 The desktop notification includes an Open action.
 
 Any app can put an image in a camera folder.
