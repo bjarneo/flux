@@ -359,7 +359,7 @@ func printStatus(w io.Writer, s *State) {
 		}
 		fmt.Fprintf(w, "  %-22s %s\n", "", id)
 		if d.AppUpdate != "" {
-			fmt.Fprintf(w, "  %-22s Flux for Android %s is available. To send it, run: flux-cli --device %q update --phone\n", "", d.AppUpdate, d.Name)
+			fmt.Fprintf(w, "  %-22s Flux for Android %s is available. To send it, run: flux-cli --device %s update --phone\n", "", d.AppUpdate, d.ID)
 		}
 	}
 }

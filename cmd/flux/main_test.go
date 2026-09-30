@@ -29,11 +29,12 @@ func TestWebcamSettings(t *testing.T) {
 }
 
 // The status shows the ID and the fingerprint of each device, so that the
-// user can give the ID when 2 devices have 1 name.
+// user can give the ID when 2 devices have 1 name. The app update hint
+// also names the device by its ID.
 func TestPrintStatus(t *testing.T) {
 	var s State
 	raw := `{"self":{"name":"desk","type":"desktop","tcpPort":1716},"devices":[
-		{"id":"a1b2c3","name":"Pixel 8","type":"phone","online":true,"paired":true,"pairState":"paired","fingerprint":"71C0E5A93B2D8F46"},
+		{"id":"a1b2c3","name":"Pixel 8","type":"phone","online":true,"paired":true,"pairState":"paired","fingerprint":"71C0E5A93B2D8F46","appUpdate":"1.2.0"},
 		{"id":"d4e5f6","name":"Pixel 8","type":"phone","pairState":"none","fingerprint":""}]}`
 	if err := json.Unmarshal([]byte(raw), &s); err != nil {
 		t.Fatal(err)
@@ -46,6 +47,9 @@ func TestPrintStatus(t *testing.T) {
 	}
 	if !strings.Contains(out, "ID d4e5f6\n") || strings.Count(out, "certificate") != 1 {
 		t.Errorf("the second device has no fingerprint:\n%s", out)
+	}
+	if !strings.Contains(out, "run: flux-cli --device a1b2c3 update --phone\n") {
+		t.Errorf("the app update hint does not name the device ID:\n%s", out)
 	}
 }
 
