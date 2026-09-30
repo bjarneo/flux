@@ -59,7 +59,7 @@ command = "omarchy-system-lock"
 
 The destination paths expand `~`.
 When `fluxd` cannot save `config.toml`, `settings.set` returns an error.
-Then `remote_input`, `remote_desktop`, and `share_home` do not turn on.
+Then `remote_input`, `remote_desktop`, `share_home`, `herdr_control`, and `herdr_terminals` do not turn on.
 When 1 of them turns off, it is off at once, until `fluxd` restarts.
 
 A command without `id` gets an ID from its name and its command.
