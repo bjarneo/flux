@@ -23,10 +23,18 @@ struct ShareSettings: View {
         if let clipboard = model.core.plugin(ClipboardPlugin.self) {
             Section {
                 Toggle("Sync clipboard", isOn: Binding(get: { clipboard.model.sync }, set: { clipboard.setSync($0) }))
+                if clipboard.model.sync, let hint = PasteAccess.hint {
+                    LabeledContent {
+                        Button("Open Privacy Settings") { NSWorkspace.shared.open(PasteAccess.settings) }
+                    } label: {
+                        Label(hint, systemImage: "exclamationmark.triangle")
+                            .font(.caption)
+                    }
+                }
             } header: {
                 Text("Clipboard")
             } footer: {
-                Text("Text that you copy goes to your connected computers, and text that they copy comes here.")
+                Text("Text that you copy goes to your connected computers, and text that they copy comes here. A copy while no computer is connected goes out when one connects.")
             }
         }
         if let capture = model.core.plugin(CaptureWatchPlugin.self) {
@@ -43,6 +51,26 @@ struct ShareSettings: View {
         panel.prompt = "Choose"
         panel.message = "Choose the folder for files from your computers."
         if panel.runModal() == .OK, let url = panel.url { share.setDownloadFolder(url) }
+    }
+}
+
+/// The pasteboard access of Flux. From macOS 15.4, the user can make macOS
+/// ask before, or deny, each read of the clipboard that is not a paste.
+enum PasteAccess {
+    static let settings = URL(string: "x-apple.systempreferences:com.apple.preference.security")!
+
+    /// A line for the settings when macOS does not let Flux read the
+    /// clipboard by itself, else nil.
+    static var hint: String? {
+        guard #available(macOS 15.4, *) else { return nil }
+        switch NSPasteboard.general.accessBehavior {
+        case .alwaysDeny:
+            return "macOS does not let Flux read what you copy, so copies do not go out. Choose Allow for Flux in Privacy & Security > Paste from Other Apps."
+        case .ask:
+            return "macOS asks before Flux reads each copy. Choose Allow for Flux in Privacy & Security > Paste from Other Apps."
+        default:
+            return nil
+        }
     }
 }
 

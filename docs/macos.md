@@ -67,6 +67,14 @@ The output shows `flags=0x10002(adhoc,runtime)`.
 Flux keeps running in the menu bar after the window closes.
 Quit it from the menu bar item.
 
+To start Flux when you log in, turn on **Settings > General > Open at login**.
+Flux then opens its window at each login.
+When you close the window, Flux keeps running in the menu bar.
+macOS can ask you to allow Flux in **System Settings > General > Login Items**.
+While macOS waits for this, the setting shows **Open Login Items…**.
+When the setting shows an error, add Flux with **+** in **System Settings > General > Login Items**.
+Without this setting, the clipboard does not sync after a restart until you open Flux.
+
 The app icon uses the Flux mark from the desktop and Android icons.
 **Settings > General > Appearance** sets the windows and the Dock icon: Automatic follows macOS, or choose Light or Dark.
 Finder and Launchpad keep the dark bundle icon.
@@ -114,7 +122,7 @@ A computer that is not paired finds the Mac through Bonjour, and `fluxd` then co
 | Feature | Mac behavior |
 | --- | --- |
 | Files, text, and links | Send from the device page, a drop on the window or Dock icon, **Open With**, or **Services > Send to Flux**. Received files go to `~/Downloads` or the folder in Settings, with the quarantine mark of a download, so Gatekeeper checks them when you open them. Flux refuses a file that leaves less than 256 MB free. A received file or link shows in a notification, and it opens only after a click. Flux never opens a received file by itself. |
-| Clipboard | Syncs text both ways while a paired computer is connected. Password manager entries are not synced automatically. Images do not sync to or from the Mac. |
+| Clipboard | Syncs text both ways by itself, also while the window is closed. A copy while no computer is connected goes out when a computer connects. Password manager entries are not synced automatically. Images do not sync to or from the Mac. See [Clipboard](#clipboard). |
 | Screenshots and photos | **Send new screenshots** watches the macOS screenshot folder. **Send new photos** sends new photos from the Photos library and needs full Photos access. 1 scan sends at most 50 images. The rest go with the next scan, for example after the next new image or the next connect. |
 | Media | Controls the computer's players. The computer does not control the players on the Mac. |
 | Commands | Lists and runs the commands configured on the computer. |
@@ -134,6 +142,25 @@ A computer that is not paired finds the Mac through Bonjour, and `fluxd` then co
 
 The Mac cannot mirror notifications from other apps, report calls, or send SMS, because macOS gives apps no access to them.
 Flux does not advertise those capabilities.
+
+## Clipboard
+
+Each copy on the Mac reaches the clipboard of the Omarchy computer without a click.
+Keep **Sync clipboard** on in **Settings > Features**, and keep `auto_clipboard = true` on the computer.
+Both are on by default.
+
+- While a paired computer is connected, Flux checks the clipboard every 0.5 seconds and sends each new copy.
+- While no computer is connected, Flux reads only the change count every 2 seconds. It keeps the time of a new copy and does not read the copy. A copy from the last 0.5 seconds before the last link drops also keeps its time.
+- When a computer connects, the Mac and the computer compare the times of their last copies. The newer copy goes on both clipboards.
+- Flux skips the copies that password managers mark as concealed, transient, or generated.
+- Text that a computer put on the clipboard does not go back to that computer. This is also true when the computer connects again.
+
+The time of a copy can be up to 2 seconds late, and both clocks must be correct.
+When the clock of the Mac differs from the clock of the computer, 2 copies close in time can win in the wrong order.
+
+On macOS 15.4 and later, macOS can ask before an app reads the clipboard, or deny the read.
+When macOS asks or denies, **Sync clipboard** shows a warning with **Open Privacy Settings**.
+To sync without a question, choose **Allow** for Flux in **System Settings > Privacy & Security > Paste from Other Apps**.
 
 ## Touch ID lock
 
@@ -192,6 +219,7 @@ macOS asks for each permission on first use:
 | Screen & System Audio Recording | Screen mirror, and **Screen Region…** in the camera modes, which runs `/usr/sbin/screencapture -i` |
 | Photos | Send new photos |
 | Downloads folder | Received files |
+| Paste from Other Apps | Clipboard sync, on macOS 15.4 and later when macOS asks before clipboard reads. See [Clipboard](#clipboard). |
 
 ## Test against a computer on the same Mac
 

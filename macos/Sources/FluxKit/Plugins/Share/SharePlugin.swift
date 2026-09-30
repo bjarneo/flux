@@ -134,7 +134,7 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
         let from = device.name
         switch request {
         case .text(let text):
-            core.plugin(ClipboardPlugin.self)?.putFromComputer(text)
+            core.plugin(ClipboardPlugin.self)?.putFromComputer(text, from: device.id)
             core.toast("Text from \(from) is on the clipboard")
         case .url(let web):
             core.toast("Link from \(from)")

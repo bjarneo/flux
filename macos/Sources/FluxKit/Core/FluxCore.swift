@@ -677,6 +677,51 @@ public final class FluxCore: @unchecked Sendable {
     /// the device is offline or not paired.
     @discardableResult
     public func send(_ p: Packet, to id: String) -> Bool { lock.withLock { devices[id]?.send(p) ?? false } }
+
+    /// Sends a packet like `send` and waits until the link wrote it to the
+    /// network, so that a `stop` after it does not lose the packet. It
+    /// returns false when the device is offline or not paired, or the write
+    /// failed.
+    public func sendFlushed(_ p: Packet, to id: String) async -> Bool {
+        let link = lock.withLock { () -> Link? in
+            guard let d = devices[id], d.paired, let l = d.link, l.isOpen else { return nil }
+            return l
+        }
+        guard let link else { return false }
+        return await link.sendFlushed(p)
+    }
+
+    /// Waits for the links of the paired computers after `resume`, for
+    /// example for an App Intent while the iOS app is in the background. It
+    /// checks every 100 ms and returns the IDs of the connected, paired
+    /// computers, see `linkWaitEnds`.
+    public func waitForPairedLinks(timeout: Duration, settle: Duration = .seconds(2)) async -> [String] {
+        let clock = ContinuousClock()
+        let start = clock.now
+        var first: ContinuousClock.Instant?
+        while true {
+            let ids = connectedPairedIds()
+            let paired = lock.withLock { devices.values.filter(\.paired).count }
+            let now = clock.now
+            if first == nil, !ids.isEmpty { first = now }
+            if Task.isCancelled || Self.linkWaitEnds(connected: ids.count, paired: paired, waited: start.duration(to: now),
+                                                     sinceFirst: first?.duration(to: now), timeout: timeout, settle: settle) {
+                return ids
+            }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+    }
+
+    /// Reports whether the wait for links ends: no computer is paired, each
+    /// paired computer is connected, `settle` passed since the first link,
+    /// or `timeout` passed. A paired computer that is off does not hold the
+    /// others for long.
+    static func linkWaitEnds(connected: Int, paired: Int, waited: Duration, sinceFirst: Duration?, timeout: Duration, settle: Duration) -> Bool {
+        // With no paired computer, 0 of 0 are connected.
+        if connected >= paired { return true }
+        if let sinceFirst, sinceFirst >= settle { return true }
+        return waited >= timeout
+    }
 }
 
 /// Connects the backend to the core without a retain cycle. The backend can

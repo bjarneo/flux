@@ -138,7 +138,7 @@ Flux must still be open on the iPhone. See [limits](#limits-of-ios).
 | --- | --- |
 | Files, text, and links | Send from the Files picker, the photo picker, the Share field, or the share sheet of any app. An `http` or `https` link with a host opens in the browser of the computer. Text and each other link go on its clipboard. Text has a limit of 1 MB. Received files go to the Flux folder in the Files app. A received file or link shows in a notification, and it opens only after a tap on the notification or on the transfer. |
 | Share sheet | **Flux** in the share sheet of other apps queues files, photos, text, and links for a computer. A text file, such as a `.txt` or `.md` file, goes as a file with its name. **Cancel** stops the share. Flux sends the items when it opens and connects. See [limits](#limits-of-ios). |
-| Clipboard | Text and images both ways while **Sync clipboard** is on and Flux is on the screen. The **Clipboard** quick action sends it at once. |
+| Clipboard | Text and images both ways while **Sync clipboard** is on and Flux is on the screen. When Flux opens, a new copy from another app goes out once. The **Clipboard** quick action sends it at once. To send without opening Flux, see [Send the clipboard without opening Flux](#send-the-clipboard-without-opening-flux). |
 | Screenshots and photos | **Send new screenshots** and **Send new photos** send new items from the Photos library when Flux opens. An item goes only when its original is on this iPhone and it was taken at most 1 day before its switch turned on. Photos that only iCloud has, for example from your other devices or from a Shared Library, stay home. PhotoKit does not tell which device took a photo, so with **Download and Keep Originals** in iCloud Photos, new photos from those sources can go too. 1 scan sends at most 50 items. The rest go with the next scan, for example when Flux opens again. |
 | Media | Controls the players of the computer. The computer does not control the players on the iPhone. |
 | Commands | Lists and runs the commands configured on the computer. |
@@ -165,7 +165,7 @@ Flux for iOS does not advertise notifications of other apps, SMS, calls, or the 
 | --- | --- |
 | iOS suspends Flux soon after it leaves the screen | The link closes, and Flux connects again when it opens. Approvals, agent alerts, notifications, and clipboard changes reach the iPhone only while Flux runs. The microphone stream keeps running in the background. |
 | Other apps' notifications, text messages, and calls | iOS gives apps no access to them. Flux does not advertise `notification.request`, `sms.*`, or `telephony`. |
-| Clipboard | iOS asks before each read of text that another app copied. Flux reads the clipboard only while it is on the screen, and when a computer connects only after the clipboard changed. Text and images from a computer stay on the iPhone and do not go to Universal Clipboard. |
+| Clipboard | iOS gives apps no event for a new copy, and it asks before each read of text that another app copied. Flux reads the clipboard only while it is on the screen. When Flux opens and when a computer connects, it reads only after the clipboard changed. A shortcut with **Send Text to Computer** sends a copy while Flux stays closed. Text and images from a computer stay on the iPhone and do not go to Universal Clipboard. |
 | Screenshots and photos | They go to the computer when Flux opens, not in the background. |
 | Share sheet | The share extension runs apart from the app and cannot open Flux or hold a link. It queues the items in the App Group. Flux sends them when it opens and connects, and keeps failed items with the reason on the **Share** screen. The queue holds up to 200 items and 1 GB, and an item that failed 5 times or waited 7 days goes, with a notification. The extension checks the size of each file before the copy, and the size of each text before it decodes the text. Send a file larger than 1 GB from the **Share** screen of Flux. A text or link has a limit of 1 MB. Folders do not go. |
 | Focus | Flux cannot read or set the Focus. It reports the Focus through the Focus filter and ignores Do Not Disturb from the computer. A change while Flux has no link goes to each computer that was paired at the change, when that computer connects. |
@@ -181,6 +181,68 @@ The broadcast also runs apart from the app.
 When the user leaves Flux to show another app, iOS suspends Flux and its link closes, and `fluxd` ends a mirror when the link that started it drops.
 Keeping the mirror alive needs a change to `fluxd` and the identity key in a second process.
 See [Phase 9 of the plan](ios-plan.md#phase-9-screen-mirror) for the details.
+
+## Send the clipboard without opening Flux
+
+iOS lets only the app on the screen read the clipboard.
+The **Send Text to Computer** action sends text while Flux stays closed.
+The Shortcuts app reads the clipboard and gives the text to the action.
+After the setup, each copy needs 1 gesture, for example a double tap on the back of the iPhone.
+
+To make the shortcut:
+
+1. Open **Shortcuts** and make a new shortcut.
+2. Add the **Get Clipboard** action.
+3. Add **Flux > Send Text to Computer**. It takes the clipboard as its text.
+4. Choose 1 way to run the shortcut:
+   - **Settings > Accessibility > Touch > Back Tap**, then **Double Tap**, then the shortcut.
+   - **Settings > Action Button**, then **Shortcut**, then the shortcut. This needs an iPhone with the Action button.
+   - Control Center, then **+**, then **Add a Control**, then **Shortcut**, then the shortcut. This needs iOS 18 or later.
+5. Run the shortcut once. Answer each question from Shortcuts with **Always Allow**.
+
+**Send without opening Flux** in the settings of Flux opens the Flux page in Shortcuts and shows these places.
+
+The action runs in the background and needs an unlocked iPhone.
+With no paired computer, it stops at once and shows **No computer is paired**.
+It starts the links and waits for the paired computers.
+The wait ends when each paired computer is connected, 2 seconds after the first computer connects, or after 20 seconds.
+The action sends the text as `flux.clipboard` to each computer that is connected at that time.
+It then closes the links again, unless Flux is on the screen.
+The computer puts the text on its clipboard while `auto_clipboard` is on, which is the default.
+While only the action keeps Flux running, the items of the share queue and new screenshots and photos do not go.
+The links close when the action ends and would stop their transfers.
+They go when Flux opens.
+
+A link usually takes 0.5 to 3 seconds.
+When the computer misses the Bonjour service of the iPhone, it connects only at its next check, which runs every 30 seconds.
+This worst case takes up to 30 seconds, but iOS ends an action after about 30 seconds.
+The action waits at most 20 seconds and then shows **No computer connected**.
+Run the shortcut again.
+Away from the local network, a link through Tailscale also waits for this check.
+
+**Warning:** When you copy a password, do not run the shortcut.
+The action cannot see the marks that password managers put on a copied password.
+The password goes to the computer and into its clipboard history.
+The clipboard sync in the app skips copies with these marks.
+
+The action sends text only.
+Turn on **Skip unchanged text** in the action when an automation runs it often.
+The action then does not send the text that Flux sent last or that a computer put on the clipboard.
+Flux compares keyed digests of these texts and does not keep the texts.
+The key stays in the Keychain of the iPhone and does not go into a backup.
+A copy that the action sent does not go out again when Flux opens.
+
+To send with Siri or Spotlight, say or search **Send clipboard with Flux**.
+This App Shortcut opens Flux, because iOS lets only the app on the screen read the clipboard.
+It sends text or an image to each connected computer.
+
+While **Send the clipboard when Flux opens** is on, Flux sends a new copy from another app once when it opens.
+The setting is on by default.
+With no computer connected, the first computer that connects gets the copy.
+Flux cannot know when you made the copy, so the copy counts as new and replaces the clipboard of the computer.
+iOS asks before Flux reads the copy.
+To skip the question, choose **Allow** in **Settings > Apps > Flux > Paste from Other Apps**.
+**Paste from Other Apps** in the settings of Flux opens the Flux page in the Settings app.
 
 ## Focus
 
@@ -212,7 +274,7 @@ Flux asks for notifications when you pair the first computer, not at the first s
 | Speech Recognition | Dictation in the text fields |
 | Photos | Send new screenshots and photos, the photo picker |
 | Face ID | The Face ID lock and fingerprint approval |
-| Paste from other apps | Clipboard sync. iOS asks at each read unless you choose **Allow** in **Settings > Apps > Flux > Paste from Other Apps**. |
+| Paste from other apps | Clipboard sync and the send when Flux opens. iOS asks at each read unless you choose **Allow** in **Settings > Apps > Flux > Paste from Other Apps**. **Send Text to Computer** needs no permission, because Shortcuts reads the clipboard. |
 
 ## Privacy manifests
 
@@ -257,7 +319,7 @@ make test-ios
 ```
 
 The FluxKit tests run on the iPhone simulator and on macOS with `make test-macos`.
-The app tests cover the app logic: pairing, share queue, camera, keys, approval, dictation fields, the layout of agent output, and the demo.
+The app tests cover the app logic: pairing, share queue, clipboard actions, camera, keys, approval, dictation fields, the layout of agent output, and the demo.
 Some tests render screens.
 With `TEST_RUNNER_FLUX_SCREENS=<folder>`, they save them as PNG files in that folder.
 The demo tests save `demo-01-computers.png` and `demo-02-computer.png`.

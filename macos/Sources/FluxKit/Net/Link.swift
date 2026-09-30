@@ -88,6 +88,22 @@ public final class Link: @unchecked Sendable {
         channel.writeAndFlush(buffer).whenFailure { [weak self] _ in self?.close() }
     }
 
+    /// Sends a packet and waits until the channel wrote it. It returns false
+    /// when the link is closed or the write fails.
+    public func sendFlushed(_ p: Packet) async -> Bool {
+        guard isOpen else { return false }
+        let data = p.serialize()
+        var buffer = channel.allocator.buffer(capacity: data.count)
+        buffer.writeBytes(data)
+        do {
+            try await channel.writeAndFlush(buffer).get()
+            return true
+        } catch {
+            close()
+            return false
+        }
+    }
+
     public var isOpen: Bool { !state.withLockedValue { $0.closed } && channel.isActive }
 
     public func close() {
