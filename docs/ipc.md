@@ -122,8 +122,8 @@ Each device in `devices` has these fields:
 | `id`, `name`, `type` | The device ID, the name, and the device type, such as `phone` or `laptop`. |
 | `fingerprint` | 16 uppercase hex digits: the first 8 bytes of the SHA-256 of the SubjectPublicKeyInfo of the certificate of the device. An empty string when fluxd knows no certificate. It tells 2 devices with the same name apart. |
 | `paired`, `online` | Whether the device is paired, and whether it has a link now. |
-| `pairState` | `none`, `paired`, `requested` for a request of this computer, or `incoming` for a request of the device. |
-| `pairKey` | The verification key of an open pair request: 16 uppercase hex digits. The apps show it in 4 groups of 4. |
+| `pairState` | `none`, `paired`, `requested` for a request of this computer, `confirm` for a request of this computer that the device accepted, or `incoming` for a request of the device. |
+| `pairKey` | The verification key of an open pairing: 16 uppercase hex digits. The apps show it in 4 groups of 4. |
 | `ip`, `addresses`, `lastSeen` | The address of the last link, the [extra addresses](#extra-addresses), and the Unix time of the last packet. |
 | `battery`, `notifications`, `conversations` | The phone data. A device that is not paired has none. |
 | `plugins` | The features that the device offers. |
@@ -165,7 +165,8 @@ Without `device`, a method uses the only connected paired device.
 | Method | Parameters |
 | --- | --- |
 | `state`, `subscribe`, `discover` | None |
-| `pair.request`, `pair.accept`, `pair.reject`, `pair.unpair` | `device` |
+| `pair.request`, `pair.unpair` | `device` |
+| `pair.accept`, `pair.reject` | `device`, and an optional `key`. See [pairing](#pairing). |
 | `addresses.add`, `addresses.remove` | `device`, `address` |
 | `ring` | `device` |
 | `ping` | `device`, and an optional `message` |
@@ -216,8 +217,25 @@ To turn the release check off or on over IPC, send:
 | `fingerprint` | The `fingerprint` of the device, as in the state. |
 
 `pair.request` finds a name only among the devices that are connected and not paired.
-`pair.accept` and `pair.reject` find a name only among the devices with an open request.
+`pair.accept` and `pair.reject` find a name only among the devices with `pairState` `incoming` or `confirm`.
 A client follows the device ID of the result, so that another device with the same name cannot change the answer.
+
+A pairing that this computer starts has 2 steps:
+
+1. `pair.request` sets `pairState` to `requested`, and the device shows the key.
+2. When the device accepts, `pairState` changes to `confirm`. The device pinned this computer, but `fluxd` pins the device only after `pair.accept`.
+
+In state `confirm`, `pair.accept` pins the device and sends nothing to it.
+`pair.reject`, the timeout of 30 seconds, and a new link of the device send `pair: false`, so that the device removes its pin.
+
+`pair.accept` and `pair.reject` take the `key` that the user compared.
+The key can have spaces and lower case letters.
+With a `key`, fluxd acts only on the pairing with that key, and returns `no_request` when the open pairing has another key.
+The Flux window and `flux-cli` always send the key:
+
+```json
+{"id":8,"method":"pair.accept","params":{"device":"DEVICE_ID","key":"5EE6825F974ED59A"}}
+```
 
 `pair.unpair` sends `pair: false` to the device, closes its link, and ends each session of the device.
 
@@ -233,7 +251,7 @@ These codes need a step from the client:
 | `not_found` | No device, command, transfer, clipboard entry, or request has the name or the ID. |
 | `no_device` | No paired device is connected, and the request has no `device`. |
 | `not_paired`, `offline` | The device is not paired, or it has no link now. |
-| `no_request` | No device with the name has an open pair request. |
+| `no_request` | No device with the name has an open pair request, or the open pairing has another `key`. |
 | `not_saved` | `pair.unpair` could not save `devices.json`. The device is unpaired only until fluxd restarts. |
 | `too_large` | The text has more than 256 KiB, the most that fluxd sends to a device. |
 | `bad_params`, `bad_setting` | A parameter or a setting is missing or has the wrong type. |

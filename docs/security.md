@@ -28,6 +28,12 @@ If 1 item is not true, reject the request.
 An earlier Flux app shows only 8 characters.
 Update Flux on the computer and on each phone, iPhone, and Mac before you pair, and compare all 16 characters.
 
+A pairing that the computer starts needs a confirmation on the computer too.
+After the device accepts, the Flux window, the notification, and `flux-cli pair` ask you to confirm the key.
+`fluxd` pins the device only after that step.
+So a device that copies the name of your phone cannot pair when you select it by mistake.
+Each accept and each confirm names the key that you compared, and `fluxd` refuses it when the open pairing has another key.
+
 After the pairing, `fluxd` pins the certificate of the device.
 It refuses each link that does not show that certificate.
 Each device in `flux-cli status --json` has a `fingerprint`: 16 hex digits from the public key of its certificate.
@@ -134,7 +140,10 @@ It keeps these limits for such devices:
 - A link reads lines of at most 64 KiB.
 - `fluxd` keeps at most 8 such links, and 2 for each address. A new link closes the oldest one.
 - A link without a pair request closes after 2 minutes.
-- `fluxd` takes 1 pair request for each device in 2 seconds, shows 1 notification for each device, and keeps at most 4 open requests.
+- `fluxd` takes 1 pair request for each device in 2 seconds, shows 1 notification for each device, and keeps at most 4 open requests. At most 2 of them come from 1 address.
+- When a request of a device ends with a withdraw, a reject, or a timeout, `fluxd` refuses a new request of that device for 30 seconds.
+- When `fluxd` refuses a request because too many requests are open, the Flux window shows the name and the address of the device.
+- Dials to these devices share a limit of 16 at the same time. Dials to paired devices do not count, so these devices cannot keep a paired device offline.
 
 See [limits for devices that are not paired](architecture.md#limits-for-devices-that-are-not-paired) for the complete list.
 
@@ -156,7 +165,7 @@ An unpair from either side ends every session of the device:
 - `fluxd` sends the unpair message, `pair: false`, to the device and closes the link.
 - Browse PC, the streams, the remote desktop, and remote input stop. `fluxd` drops the input that waits and releases a held button.
 - `fluxd` sends no answer of a herdr read, a reply, or a start that still runs.
-- `fluxd` removes the notifications, the messages, the battery state, and the extra addresses of the device.
+- `fluxd` removes the notifications, the messages, the battery state, and the extra addresses of the device. It closes the desktop notifications of the device, because their buttons no longer reach it.
 
 When `fluxd` cannot save `devices.json`, the command returns the `not_saved` error.
 The device is then unpaired only until `fluxd` restarts, because `~/.local/share/flux/devices.json` still has it.

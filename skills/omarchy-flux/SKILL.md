@@ -83,11 +83,13 @@ Use an explicit command for diagnostics.
 4. Run `flux-cli pair "Pixel 8"` with the device name from the state.
 5. Ask the user to compare all 16 characters of the verification key on both devices.
 6. Let the user accept the matching request on the phone.
-7. Confirm that the device is paired and online.
+7. Ask the user to select **Confirm** in the Flux window or in the notification on the desktop. The desktop pins the phone only after this step.
+8. Confirm that the device is paired and online.
 
 The verification key has 16 uppercase hex digits in 4 groups of 4, for example `5EE6 825F 974E D59A`.
 An earlier Flux app shows only 8 characters. Tell the user to update Flux on every device before the pairing.
 `flux-cli pair` prints the device ID and the key. `flux-cli status` shows the ID and the certificate fingerprint of each device.
+When stdin is not a terminal, `flux-cli pair` prints a `flux-cli accept` command after the phone accepts. Run it only after the user says that the phone shows the same key. The pairing stops after 30 seconds.
 A name matches only a paired or connected device, and a paired device comes first. When the name still matches more than 1 device, the command returns the `ambiguous` error with the IDs. Give the ID then. `docs/cli.md#pair-and-discover` has the match rule of each command.
 
 The desktop discovers phones through Avahi and mDNS.
