@@ -106,6 +106,13 @@ func (d *Daemon) addClipLocked(e ClipEntry) {
 // addClipImage saves an image in the runtime folder and adds it to the
 // clipboard history as the entry e.
 func (d *Daemon) addClipImage(e ClipEntry, data []byte, mime string) error {
+	return d.addClipImageIf(e, data, mime, nil)
+}
+
+// addClipImageIf is addClipImage with the condition ok, which runs under
+// d.mu after the save. When ok returns false, addClipImageIf removes the
+// saved file and the history does not change. A nil ok is always true.
+func (d *Daemon) addClipImageIf(e ClipEntry, data []byte, mime string, ok func() bool) error {
 	d.mu.Lock()
 	dir := d.clipDir
 	d.mu.Unlock()
@@ -119,6 +126,11 @@ func (d *Daemon) addClipImage(e ClipEntry, data []byte, mime string) error {
 	sum := sha256.Sum256(data)
 	e.Text, e.Image, e.sum = "", path, hex.EncodeToString(sum[:])
 	d.mu.Lock()
+	if ok != nil && !ok() {
+		d.mu.Unlock()
+		os.Remove(path)
+		return nil
+	}
 	d.addClipLocked(e)
 	d.mu.Unlock()
 	d.markDirty()
@@ -396,6 +408,8 @@ func (d *Daemon) handleClipboardImage(dev *Device, l *lan.Link, p *proto.Packet)
 // after an unpair is dropped. So is an image of the fetch f after a newer
 // text or image of the device. The worker of the texts from the devices
 // sets the image, so that a text that comes later stays on the clipboard.
+// The history and the worker check f again under d.mu, because a text can
+// come while fluxd saves the image.
 func (d *Daemon) receiveClipImage(dev *Device, f *clipFetch, data []byte) {
 	d.mu.Lock()
 	paired, name, stale := dev.Paired, dev.Name, f.stale
@@ -408,10 +422,14 @@ func (d *Daemon) receiveClipImage(dev *Device, f *clipFetch, data []byte) {
 	if !paired || stale {
 		return
 	}
-	if err := d.addClipImage(ClipEntry{Dir: "in", Device: dev.ID, DeviceName: name, Time: time.Now().Unix()}, data, mime); err != nil {
+	// current runs under d.mu. It is false after an unpair or after a newer
+	// text or image of the device. The image then stays out of the history
+	// and does not replace the job of the newer text in the worker.
+	current := func() bool { return dev.Paired && !f.stale }
+	if err := d.addClipImageIf(ClipEntry{Dir: "in", Device: dev.ID, DeviceName: name, Time: time.Now().Unix()}, data, mime, current); err != nil {
 		d.logf("save clipboard image: %v", err)
 	}
-	d.runContent(&d.content.clipQ, 0, func() {
+	d.runContentIf(&d.content.clipQ, 0, current, func() {
 		d.mu.Lock()
 		ok := dev.Paired && d.cfg.AutoClipboard && !f.stale
 		d.mu.Unlock()

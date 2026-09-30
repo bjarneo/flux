@@ -90,9 +90,18 @@ type contentState struct {
 // run. With max 0, q keeps only the newest waiting job. Otherwise it
 // returns false and drops the job when q holds max jobs.
 func (d *Daemon) runContent(q *contentQueue, max int, job func()) bool {
+	return d.runContentIf(q, max, nil, job)
+}
+
+// runContentIf is runContent with the condition ok, which runs under d.mu
+// before q changes. When ok returns false, runContentIf returns false and
+// q keeps its jobs. A nil ok is always true.
+func (d *Daemon) runContentIf(q *contentQueue, max int, ok func() bool, job func()) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	switch {
+	case ok != nil && !ok():
+		return false
 	case max == 0:
 		clear(q.jobs)
 		q.jobs = append(q.jobs[:0], job)
