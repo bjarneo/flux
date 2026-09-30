@@ -95,7 +95,7 @@ func (d *Daemon) herdrKeys(dev *Device, pane string, keys []string) *proto.Packe
 		if err := herdr.SendKeys(ctx, d.herdrPath, pane, keys); err != nil {
 			return err
 		}
-		d.logf("%s sent the keys %s to the herdr agent in %s", dev.Name, strings.Join(keys, " "), pane)
+		d.logf("%s sent the keys %s to the herdr agent in %s", d.nameOf(dev), strings.Join(keys, " "), pane)
 		return nil
 	})
 }
@@ -139,7 +139,7 @@ func (d *Daemon) herdrPrompt(dev *Device, pane, text string, answer bool) *proto
 		if err != nil {
 			return err
 		}
-		d.logf("%s sent %s of %d characters to the herdr agent in %s", dev.Name, what, len([]rune(text)), pane)
+		d.logf("%s sent %s of %d characters to the herdr agent in %s", d.nameOf(dev), what, len([]rune(text)), pane)
 		return nil
 	})
 }
@@ -174,7 +174,7 @@ func (d *Daemon) herdrInput(dev *Device, pane, text string, keys []string) *prot
 		if err := herdr.SendInput(ctx, d.herdrPath, pane, text, keys); err != nil {
 			return err
 		}
-		d.logf("%s sent %d characters and the keys %q to the herdr terminal %s", dev.Name, len([]rune(text)), strings.Join(keys, " "), pane)
+		d.logf("%s sent %d characters and the keys %q to the herdr terminal %s", d.nameOf(dev), len([]rune(text)), strings.Join(keys, " "), pane)
 		return nil
 	})
 }
@@ -292,9 +292,9 @@ func (d *Daemon) herdrCreate(dev *Device, what, kind, cwd, workspace string) *pr
 		return proto.New(proto.TypeFluxHerdr, reply)
 	}
 	if what == "agent" {
-		d.logf("%s started the herdr agent %s in %s (%s)", dev.Name, kind, pane, cwd)
+		d.logf("%s started the herdr agent %s in %s (%s)", d.nameOf(dev), kind, pane, cwd)
 	} else {
-		d.logf("%s opened the herdr terminal %s (%s)", dev.Name, pane, cwd)
+		d.logf("%s opened the herdr terminal %s (%s)", d.nameOf(dev), pane, cwd)
 	}
 	d.waitHerdrPane(pane)
 	reply["pane"] = pane
@@ -419,7 +419,7 @@ func (d *Daemon) herdrClose(dev *Device, pane string) *proto.Packet {
 			reply["error"] = herdrError(pane, err)
 			break
 		}
-		d.logf("%s closed the herdr pane %s", dev.Name, pane)
+		d.logf("%s closed the herdr pane %s", d.nameOf(dev), pane)
 		d.wakeHerdr()
 	}
 	return proto.New(proto.TypeFluxHerdr, reply)

@@ -678,7 +678,7 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 			d.herdrSend(dev, l, withRequest(d.herdrClose(dev, body.Pane), req))
 		}()
 	default:
-		d.logf("%s: unknown flux.herdr kind %q", dev.Name, body.Kind)
+		d.logf("%s: unknown flux.herdr kind %q", d.nameOf(dev), body.Kind)
 	}
 }
 
