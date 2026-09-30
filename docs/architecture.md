@@ -52,8 +52,15 @@ The routes are the same for each of them.
 | Browse the desktop from the phone | SSH inside a `flux.tunnel` |
 | Show the desktop on the phone | Phone listens for the stream, then desktop connects |
 
-The default Omarchy firewall permits mDNS.
-Flux needs no new inbound desktop firewall rule for these routes.
+`fluxd` also listens on all network interfaces:
+
+- TCP on the first free port from 1716 to 1764, for links that a device opens after it gets the UDP identity of `fluxd`.
+- UDP on port 1716, for the identity broadcasts of the devices.
+
+The default Omarchy firewall blocks inbound traffic to these ports and permits mDNS.
+The desktop opens each link itself, so Flux needs no new inbound desktop firewall rule for these routes.
+Without such a firewall, each host that reaches the ports can open a link and send a pair request.
+See [security](security.md#network-ports) and the [limits below](#limits-for-devices-that-are-not-paired).
 Wi-Fi client isolation can still block communication between devices.
 
 A payload server for a device without `flux.tunnel` listens on the local address of the link.
