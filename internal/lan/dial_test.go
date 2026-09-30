@@ -119,12 +119,19 @@ func TestStalledDialsKeepPinnedDial(t *testing.T) {
 	}
 	var mu sync.Mutex
 	var held []net.Conn
+	closed := false
 	t.Cleanup(func() {
 		silent.Close()
 		mu.Lock()
-		defer mu.Unlock()
+		closed = true
 		for _, c := range held {
 			c.Close()
+		}
+		mu.Unlock()
+		// Each stalled dial logs its end through t, so the test ends only
+		// after the log line of each one.
+		for range maxDials {
+			desk.waitLog(t, "stalled")
 		}
 	})
 	go func() {
@@ -134,13 +141,17 @@ func TestStalledDialsKeepPinnedDial(t *testing.T) {
 				return
 			}
 			mu.Lock()
-			held = append(held, c)
+			if closed {
+				c.Close()
+			} else {
+				held = append(held, c)
+			}
 			mu.Unlock()
 		}
 	}()
 	port := silent.Addr().(*net.TCPAddr).Port
 	for i := range maxDials {
-		desk.prov.DialAddrs(ctx, addrs(port, "127.0.0.1"), proto.Identity{DeviceID: fmt.Sprintf("stalled%025d", i), ProtocolVersion: 8})
+		desk.prov.DialAddrs(ctx, addrs(port, "127.0.0.1"), proto.Identity{DeviceID: fmt.Sprintf("stalled%025d", i), DeviceName: "stalled", ProtocolVersion: 8})
 	}
 	if n := len(desk.prov.dials); n != maxDials {
 		t.Fatalf("%d dials hold a token, want %d", n, maxDials)
