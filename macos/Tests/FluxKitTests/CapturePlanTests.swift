@@ -104,6 +104,22 @@ final class CapturePlanTests: XCTestCase {
         XCTAssertTrue(plan.state.sent.contains(Int64(12 + maxCaptureSent)))
     }
 
+    /// 1 scan sends at most 50 images, the oldest first. The rest wait for
+    /// the next scan.
+    func testAScanSendsAtMost50Images() {
+        var state = CaptureState().enable(.photo, newest: 10)
+        let items = (Int64(11)...Int64(70)).map { photo($0) }
+        let first = planCapture(state, items: items, now: now)
+        XCTAssertEqual(first.send.map(\.item.id), Array(Int64(11)...Int64(60)), "the oldest go first")
+        XCTAssertEqual(first.waiting, 10)
+        XCTAssertEqual(first.state.baseline, 10)
+        state = first.send.reduce(first.state) { $0.markSent($1.item.id) }
+        let second = planCapture(state, items: items, now: now)
+        XCTAssertEqual(second.send.map(\.item.id), Array(Int64(61)...Int64(70)), "the next scan sends the rest")
+        XCTAssertEqual(second.waiting, 0)
+        XCTAssertEqual(second.state.baseline, 60, "the sent images move the baseline")
+    }
+
     func testStateSurvivesARestart() throws {
         let state = CaptureState().enable(.screenshot, newest: 10).enable(.photo, newest: 20).markSent(11)
         let data = try JSONEncoder().encode(state)
