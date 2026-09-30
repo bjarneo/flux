@@ -57,8 +57,8 @@ type Config struct {
 // Limits for connections that are not links yet. maxHandshakes is the
 // number of incoming connections that can wait for their identity and
 // their TLS handshake at the same time. maxHandshakesPerIP is the part of
-// 1 address. maxDials is the number of outgoing connections that can run
-// at the same time.
+// 1 address. maxDials is the number of outgoing connections to devices
+// without a pin that can run at the same time.
 const (
 	maxHandshakes      = 32
 	maxHandshakesPerIP = 4
@@ -84,9 +84,10 @@ type Provider struct {
 
 	// pruned is the last time that shouldAttempt removed old attempts.
 	// handshakes and perIP count the incoming connections before their
-	// link, and dials holds 1 token for each outgoing connection. udpPort
-	// is the port of the discovery socket. anyPort is true when a peer can
-	// listen outside MinTCPPort to MaxTCPPort, for tests and development.
+	// link, and dials holds 1 token for each outgoing connection to a
+	// device without a pin. udpPort is the port of the discovery socket.
+	// anyPort is true when a peer can listen outside MinTCPPort to
+	// MaxTCPPort, for tests and development.
 	pruned     time.Time
 	handshakes int
 	perIP      map[string]int
@@ -365,7 +366,10 @@ func (p *Provider) DialAny(ctx context.Context, hosts []string, port int, target
 // host and a port, for example the last address of a paired device and an
 // address that discovery reported. DialAddrs prefers the first address and
 // skips an address whose port is not a Flux port. At most maxDials
-// connections run at the same time.
+// connections to devices without a pin run at the same time. A dial to a
+// paired device or to a device with an open pairing takes no token, so
+// that devices on the network cannot hold every token and keep the paired
+// devices offline.
 func (p *Provider) DialAddrs(ctx context.Context, addrs []string, target proto.Identity) {
 	var ok []string
 	for _, a := range addrs {
@@ -380,18 +384,23 @@ func (p *Provider) DialAddrs(ctx context.Context, addrs []string, target proto.I
 	if target.DeviceID == p.selfID() || p.cfg.HasLink(target.DeviceID) || !p.shouldAttempt(target.DeviceID) {
 		return
 	}
-	select {
-	case p.dials <- struct{}{}:
-	default:
-		// The next trigger tries again.
-		p.forgetAttempt(target.DeviceID)
-		return
+	_, pinned := p.cfg.Trusted(target.DeviceID)
+	if !pinned {
+		select {
+		case p.dials <- struct{}{}:
+		default:
+			// The next trigger tries again.
+			p.forgetAttempt(target.DeviceID)
+			return
+		}
 	}
 	if target.ProtocolVersion == 0 {
 		target.ProtocolVersion = proto.ProtocolVersion
 	}
 	go func() {
-		defer func() { <-p.dials }()
+		if !pinned {
+			defer func() { <-p.dials }()
+		}
 		p.connect(ctx, ok, target)
 	}()
 }
