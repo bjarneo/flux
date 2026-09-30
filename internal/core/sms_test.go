@@ -119,23 +119,22 @@ func TestHandleSmsConversationsAnswer(t *testing.T) {
 		wireMessage(1, 1, 1790000000000, 1, 1), wireMessage(2, 2, 1790000001000, 1, 1), wireMessage(3, 3, 1790000002000, 1, 1),
 	}}))
 
-	d.handleSms(dev, smsPacket(map[string]any{"conversations": true, "messages": []any{wireMessage(3, 3, 1790000002000, 1, 1)}}))
-	if got := threads(); !slices.Equal(got, []int64{1, 2, 3}) {
-		t.Fatalf("an answer that fluxd did not ask for removed threads: %v", got)
-	}
 	// An answer without the marker comes from an older app. It only adds.
-	_ = d.RefreshSms(dev)
 	d.handleSms(dev, smsPacket(map[string]any{"messages": []any{wireMessage(1, 1, 1790000000000, 1, 1)}}))
 	if got := threads(); !slices.Equal(got, []int64{1, 2, 3}) {
 		t.Fatalf("an answer without the marker removed threads: %v", got)
 	}
+	// The marker in the answer to a thread request changes nothing.
+	d.handleSms(dev, smsPacket(map[string]any{"conversations": true, "threadID": 1, "messages": []any{wireMessage(1, 1, 1790000000000, 1, 1)}}))
+	if got := threads(); !slices.Equal(got, []int64{1, 2, 3}) {
+		t.Fatalf("a thread answer removed threads: %v", got)
+	}
 
 	// The user deleted thread 2 on the phone. The phone splits its answer
-	// into 2 packets with the marker. The first packet replaces the list,
-	// and the second packet adds to it.
-	_ = d.RefreshSms(dev)
+	// into 2 packets. The first packet has the marker and replaces the
+	// list, and the second packet adds to it.
 	d.handleSms(dev, smsPacket(map[string]any{"conversations": true, "messages": []any{wireMessage(3, 3, 1790000002000, 1, 1)}}))
-	d.handleSms(dev, smsPacket(map[string]any{"conversations": true, "messages": []any{wireMessage(1, 1, 1790000000000, 1, 1)}}))
+	d.handleSms(dev, smsPacket(map[string]any{"messages": []any{wireMessage(1, 1, 1790000000000, 1, 1)}}))
 	if got := threads(); !slices.Equal(got, []int64{1, 3}) {
 		t.Fatalf("threads after the answer: %v", got)
 	}

@@ -146,9 +146,10 @@ func (d *Daemon) handleSms(dev *Device, p *proto.Packet) {
 		// ThreadID names the thread in the answer to a thread request, so
 		// that a new message does not count as the answer.
 		ThreadID *int64 `json:"threadID"`
-		// Conversations marks the answer to a conversations request. That
-		// answer has the latest message of each thread of the phone. An
-		// older app sends no marker, and fluxd then only adds messages.
+		// Conversations marks the first packet of the answer to a
+		// conversations request. That answer has the latest message of each
+		// thread of the phone. An older app sends no marker, and fluxd then
+		// only adds messages.
 		Conversations bool `json:"conversations"`
 	}
 	if p.Decode(&b) != nil {
@@ -165,8 +166,7 @@ func (d *Daemon) handleSms(dev *Device, p *proto.Packet) {
 	// The first packet of the answer replaces the list, so that a thread
 	// that the user deleted on the phone goes. The phone can split 1 answer
 	// into more packets, and fluxd adds the packets that follow.
-	if b.Conversations && b.ThreadID == nil && dev.smsAsked {
-		dev.smsAsked = false
+	if b.Conversations && b.ThreadID == nil {
 		dev.conversations = map[int64]*Conversation{}
 	}
 	for _, m := range msgs {
@@ -194,9 +194,6 @@ func (d *Daemon) handleSms(dev *Device, p *proto.Packet) {
 
 // RefreshSms asks the phone for the latest message of each thread.
 func (d *Daemon) RefreshSms(dev *Device) error {
-	d.mu.Lock()
-	dev.smsAsked = true
-	d.mu.Unlock()
 	return d.send(dev, proto.New(proto.TypeSmsConversations, map[string]any{}))
 }
 
