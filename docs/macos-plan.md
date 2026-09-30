@@ -34,7 +34,7 @@ See [status](macos-status.md) for the details of each check and [Flux for macOS]
 - [x] `Identity`, packet types, device ID rules, and name cleanup.
 - [x] RSA 2048 self-signed certificate with CN set to the device ID.
 - [x] SubjectPublicKeyInfo taken from the certificate bytes as stored.
-- [x] 8-character verification key.
+- [x] Verification key of 16 characters in 4 groups of 4. The first builds showed 8 characters.
 - [x] Unit tests for packets, identity, certificates, and the key.
 
 ### Network

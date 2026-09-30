@@ -30,7 +30,7 @@ The resulting headless daemon (`fluxd -headless -udp-port … -tcp-port …`) se
 
 | Layer | Content |
 | --- | --- |
-| Protocol | `JSONValue`, `Packet`, `Identity`, packet types, RSA 2048 self-signed certificate with the device ID as its common name, SubjectPublicKeyInfo extraction, and the 8-character verification key |
+| Protocol | `JSONValue`, `Packet`, `Identity`, packet types, RSA 2048 self-signed certificate with the device ID as its common name, SubjectPublicKeyInfo extraction, and the verification key. The key now has 16 characters in 4 groups of 4. The first builds showed 8 characters. |
 | Network | TLS 1.2 with SwiftNIO and swift-nio-ssl, UDP identity broadcasts, the TCP listener and dialer, the plain-text identity then TLS upgrade on the same socket, links, payload servers and clients, `flux.tunnel`, and Bonjour `_flux._udp` |
 | Core | `FluxCore`, `Device` with pairing, `TrustStore` with pinned certificates, the `FluxPlugin` protocol, and one shared `Notifier` for UserNotifications |
 

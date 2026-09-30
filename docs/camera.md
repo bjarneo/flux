@@ -75,7 +75,7 @@ Other settings apply while the stream runs.
 | `resolution` | `720`, `1080`, measured on the frame's short side | `720` |
 | `camera` | `back`, `front` | `back` |
 | `mirror` | `true`, `false` | `false` |
-| `zoom` | `1` to the camera maximum | `1` |
+| `zoom` | `1` to the camera maximum. Flux for Android allows at most `10`, and the iPhone and the Mac at most `4`. | `1` |
 | `exposure` | The camera's EV range | `0` |
 | `whiteBalance` | `auto`, `daylight`, `cloudy`, `shade`, `incandescent`, `fluorescent`, `twilight` | `auto` |
 | `brightness` | `-1` to `1` | `0` |

@@ -53,6 +53,8 @@ The output screen of the phone shows up to 1000 lines of recent output.
 The screen part of the output has the colors and styles of the terminal.
 The older lines above it are plain text.
 It reads the output again every 5 seconds while the agent works, and after each status change.
+A timed read waits while the last read still loads, so the reads do not pile up on a slow link.
+A new status reads at once.
 Select refresh to read it at once.
 
 When you scroll up to read older lines, the screen stays there when new output comes.
@@ -116,7 +118,7 @@ The output screen then shows the reply controls:
 - The key bar sends Esc, Tab, Up, Down, and Enter.
 - The text field sends a prompt to the agent.
 - When the agent waits for a choice, `fluxd` refuses the text with the message `The agent waits for a choice. Pick a choice first.` A digit or Enter in the text can select a choice of the dialog, for example an approval. Pick a choice with the buttons or the key bar first.
-- An app can send the text as an answer to a question that needs free text. `fluxd` then checks that the agent still waits, types the text on one line, and presses Enter.
+- After this refusal, the message shows **Send as answer** next to it while the field holds the same text. Select it when the agent asks a question that needs free text, for example an answer that is not in the choices. The app sends the same text again with `"answer": true`. `fluxd` checks that the agent still waits, types the text on one line, and presses Enter. The iPhone and the Mac show the same action.
 
 Before the first reply, the phone asks for its fingerprint or screen lock.
 The unlock stays valid for 5 minutes.
@@ -190,7 +192,7 @@ Select a terminal to see its output and to type in it:
 - Type a command in the field, then select **Run**. The phone types the command and presses Enter.
 - To speak a command, select the mic key next to **Run**. The command goes in at the cursor without the capital and the period of a sentence. Read it, then select **Run**.
 - The key bar sends Esc, Tab, Ctrl-C, Ctrl-D, Up, Down, and Enter.
-- The screen reads the output again every 3 seconds.
+- The screen reads the output again every 3 seconds. A read waits while the last read still loads.
 - To close the terminal, select **Close**, then confirm.
 
 To open a new terminal, select the add button on the **Agents** screen, then select **terminal** under **Run**.
@@ -413,6 +415,17 @@ The `kind` field selects the message.
 | `close` | Phone | `pane`. The computer answers with `closed`. |
 
 When `fluxd` cannot finish an answer because of an internal error, it sends the answer with an `error`, for example `fluxd could not read the pane`.
+
+The apps add a `request` number to each `keys`, `prompt`, `input`, `create`, and `close` packet.
+`fluxd` copies the number into the answer: `sent`, `created`, or `closed`.
+So an app matches each answer to its request, also when 2 requests for 1 pane wait.
+`fluxd` copies only a number. An answer to a packet without a number has no `request`, and an app then matches the answer by the pane and the action.
+The `request` field is not the `request` kind of the table.
+
+```json
+{"kind":"prompt","pane":"w5:p1","text":"Run the tests","request":8}
+{"kind":"sent","pane":"w5:p1","action":"prompt","request":8}
+```
 
 The computer sends `state` when the phone connects, after each change, and as the answer to `request`.
 Each agent has `pane`, `agent`, `status`, `title`, `project`, and `workspace`:
