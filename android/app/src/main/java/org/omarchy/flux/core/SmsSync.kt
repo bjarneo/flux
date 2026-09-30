@@ -163,6 +163,11 @@ object SmsSync {
     // ------------------------------------------------------------------ send
 
     private fun send(context: Context, req: SmsSend) {
+        // fluxd refuses a longer message, but an older fluxd or another peer can still ask for one.
+        if (SmsPackets.tooLong(req.body)) {
+            Log.w(TAG, "not sent: the message has more than ${SmsPackets.MAX_SEND} characters")
+            return
+        }
         if (req.addresses.size > 1) {
             Log.w(TAG, "not sent: a message to ${req.addresses.size} addresses needs MMS")
             return

@@ -59,6 +59,12 @@ object SmsPackets {
     const val CUT_MARK = " […]"
 
     /**
+     * The longest text message that the phone sends for a computer, in
+     * characters. It is about 10 SMS parts. fluxd uses the same limit.
+     */
+    const val MAX_SEND = 1600
+
+    /**
      * The largest flux.sms.messages packet, in bytes of JSON. fluxd closes a
      * link that sends a line of more than 16 MiB, so 1 large message thread
      * must not reach that limit.
@@ -141,6 +147,9 @@ object SmsPackets {
             if (name.isEmpty()) mapOf("address" to a) else mapOf("address" to a, "contactName" to name)
         },
     )
+
+    /** True when [body] has more than [MAX_SEND] characters. As in fluxd, a character is 1 Unicode code point. */
+    fun tooLong(body: String): Boolean = body.codePointCount(0, body.length) > MAX_SEND
 
     /**
      * Reads a flux.sms.request, which gives a list of addresses. It returns

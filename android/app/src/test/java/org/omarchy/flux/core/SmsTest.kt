@@ -100,6 +100,15 @@ class SmsTest {
     }
 
     @Test
+    fun sendLimitCountsCharacters() {
+        assertFalse(SmsPackets.tooLong("a".repeat(SmsPackets.MAX_SEND)))
+        assertTrue(SmsPackets.tooLong("a".repeat(SmsPackets.MAX_SEND + 1)))
+        // An emoji takes 2 UTF-16 units, but it is 1 character, as in fluxd.
+        assertFalse(SmsPackets.tooLong("\uD83D\uDE00".repeat(SmsPackets.MAX_SEND)))
+        assertTrue(SmsPackets.tooLong("\uD83D\uDE00".repeat(SmsPackets.MAX_SEND + 1)))
+    }
+
+    @Test
     fun threadRequest() {
         val p = Packet(Types.SMS_REQUEST_CONVERSATION, bodyOf("threadID" to 4, "numberToRequest" to 100))
         assertEquals(ThreadRequest(4, 100), SmsPackets.thread(p))
