@@ -37,7 +37,7 @@ jobs:
           pacman -Su --noconfirm --needed go cmake ninja git python \
             qt6-base qt6-declarative qt6-svg qt6-wayland ttf-jetbrains-mono-nerd \
             wl-clipboard pipewire avahi xdg-utils
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
           fetch-depth: 0
@@ -69,7 +69,7 @@ jobs:
           # shellcheck disable=SC2016
           runuser -u builder -- bash -c 'cd "$1" && makepkg --noconfirm --nocheck && makepkg --printsrcinfo > .SRCINFO' bash "$package_dir"
       - name: Upload Arch package
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: arch-package
           path: |
@@ -79,7 +79,7 @@ jobs:
           retention-days: 14
       - name: Upload AUR recipe
         if: inputs.tag != ''
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: aur-package
           path: |
@@ -95,23 +95,23 @@ jobs:
       run:
         working-directory: android
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
           persist-credentials: false
-      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: '21'
       # The default packages of the action include "tools", which the
       # current cmdline-tools no longer have.
-      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
         with:
           packages: platform-tools platforms;android-36 build-tools;36.0.0
-      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
       - name: Test and build APKs
         run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease --no-daemon --stacktrace
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: android-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
@@ -119,7 +119,7 @@ jobs:
           retention-days: 14
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: android-reports
           path: android/app/build/reports/
@@ -135,7 +135,7 @@ jobs:
       run:
         working-directory: macos
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
           # The tags give the app version.
@@ -183,7 +183,7 @@ jobs:
           codesign -dv "$app" 2>&1 | grep 'flags=.*runtime'
           lipo -info "$app/Contents/MacOS/Flux"
           ditto -c -k --keepParent "$app" flux-macos.zip
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: macos-app
           path: macos/flux-macos.zip
@@ -199,7 +199,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
           # The tags give the app version.
@@ -258,7 +258,7 @@ jobs:
           done
       - name: Upload test results
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ios-test-results
           path: ios/build/Logs/Test/
