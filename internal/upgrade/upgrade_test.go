@@ -2,8 +2,10 @@ package upgrade
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -39,6 +41,8 @@ func install(t *testing.T, path, out string) {
 type result struct {
 	mu    sync.Mutex
 	found []string
+	// logs gets each log line of the watcher.
+	logs chan string
 }
 
 func (r *result) add(v string) {
@@ -55,8 +59,16 @@ func (r *result) get() []string {
 
 func watch(t *testing.T, b *Binary, ready func() bool) (*result, chan string, context.CancelFunc) {
 	t.Helper()
-	r := &result{}
-	w := &Watcher{Binary: b, Interval: 10 * time.Millisecond, Found: r.add, Ready: ready, Logf: t.Logf}
+	r := &result{logs: make(chan string, 16)}
+	logf := func(format string, args ...any) {
+		line := fmt.Sprintf(format, args...)
+		t.Log(line)
+		select {
+		case r.logs <- line:
+		default:
+		}
+	}
+	w := &Watcher{Binary: b, Interval: 10 * time.Millisecond, Found: r.add, Ready: ready, Logf: logf}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan string, 1)
 	go func() { done <- w.Run(ctx) }()
@@ -105,7 +117,15 @@ func TestBrokenBinaryIsIgnored(t *testing.T) {
 	defer cancel()
 
 	install(t, path, "not fluxd")
-	time.Sleep(100 * time.Millisecond)
+	// The watcher logs a file that does not run after it ran the file.
+	select {
+	case line := <-r.logs:
+		if !strings.Contains(line, "does not run") {
+			t.Fatalf("log line %q", line)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the watcher did not check the file that is not fluxd")
+	}
 	if got := r.get(); len(got) != 0 {
 		t.Fatalf("found %v for a file that is not fluxd", got)
 	}
