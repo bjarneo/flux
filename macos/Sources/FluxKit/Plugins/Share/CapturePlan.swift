@@ -88,19 +88,29 @@ public struct CaptureState: Codable, Sendable, Equatable {
 public struct CapturePlan: Sendable {
     public var send: [(item: CaptureItem, kind: CaptureKind)]
     public var state: CaptureState
+
+    /// The number of items that are due but wait for the next scan,
+    /// because 1 scan sends at most `maxCaptureSend` items.
+    public var waiting = 0
 }
 
 /// The most IDs that `CaptureState.sent` keeps.
 public let maxCaptureSent = 500
+
+/// The most items that 1 scan sends, so that no scan sends a large batch
+/// at once. The next scan sends the rest.
+public let maxCaptureSend = 50
 
 /// Plans a scan of the items after the baseline. An item goes out when it
 /// is complete, its kind is known, its switch is on, it is newer than the
 /// time that the switch turned on, and it did not go out before. The
 /// baseline moves up through the items that need no more work. A pending
 /// item or an item that did not go out yet stops it, so that the next scan
-/// looks at that item again. `now` is the time in seconds.
+/// looks at that item again. The oldest `maxCaptureSend` items go out, and
+/// the rest wait for the next scan. `now` is the time in seconds.
 public func planCapture(_ state: CaptureState, items: [CaptureItem], now: Int64) -> CapturePlan {
     var send: [(item: CaptureItem, kind: CaptureKind)] = []
+    var waiting = 0
     var baseline = state.baseline
     var blocked = false
     for item in items.filter({ $0.id > state.baseline }).sorted(by: { $0.id < $1.id }) {
@@ -110,7 +120,11 @@ public func planCapture(_ state: CaptureState, items: [CaptureItem], now: Int64)
         } else if item.pending {
             done = now - item.dateAdded > CaptureRules.pendingLimit
         } else if let kind = item.kind, let start = state.from[kind], item.id > start {
-            send.append((item, kind))
+            if send.count < maxCaptureSend {
+                send.append((item, kind))
+            } else {
+                waiting += 1
+            }
             done = false
         } else {
             done = true
@@ -121,7 +135,7 @@ public func planCapture(_ state: CaptureState, items: [CaptureItem], now: Int64)
     var next = state
     next.baseline = baseline
     next.sent = Set(state.sent.filter { $0 > baseline }.sorted().suffix(maxCaptureSent))
-    return CapturePlan(send: send, state: next)
+    return CapturePlan(send: send, state: next, waiting: waiting)
 }
 
 /// 1 asset that the photo library got, as the capture watch sees it.

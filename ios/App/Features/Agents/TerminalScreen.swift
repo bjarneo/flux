@@ -19,6 +19,8 @@ struct TerminalScreen: View {
     private struct Refresh: Equatable {
         var online: Bool
         var active: Bool
+        /// False when the terminal closed or the computer turned terminals off.
+        var alive: Bool
     }
 
     var body: some View {
@@ -28,6 +30,8 @@ struct TerminalScreen: View {
         if let plugin = model.core.plugin(HerdrPlugin.self) {
             let herdr = plugin.model.states[deviceId]
             let term = herdr?.terminal(pane)
+            // Before the first agent list, the terminal counts as open.
+            let alive = herdr.map { $0.terminals && term != nil } ?? true
             let out = plugin.model.output(deviceId, pane: pane)
             let closing = plugin.model.actions[deviceId].map { $0.action == "close" && $0.pane == pane && $0.sending } ?? false
             VStack(spacing: 10) {
@@ -76,10 +80,12 @@ struct TerminalScreen: View {
                     }
                 }
             }
-            .task(id: Refresh(online: online, active: scenePhase == .active)) {
-                guard online, scenePhase == .active else { return }
+            // The polls stop when the terminal closes or the computer turns
+            // terminals off. A poll waits while the last read did not end.
+            .task(id: Refresh(online: online, active: scenePhase == .active, alive: alive)) {
+                guard online, scenePhase == .active, alive else { return }
                 while !Task.isCancelled {
-                    plugin.read(deviceId, pane: pane)
+                    plugin.poll(deviceId, pane: pane)
                     try? await Task.sleep(for: terminalRefresh)
                 }
             }

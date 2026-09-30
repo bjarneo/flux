@@ -4,6 +4,7 @@ import SwiftUI
 struct DeviceDetailView: View {
     @Environment(AppModel.self) private var model
     let device: DeviceSnapshot
+    @State private var confirmUnpair = false
 
     var body: some View {
         Group {
@@ -19,10 +20,15 @@ struct DeviceDetailView: View {
             if device.paired {
                 ToolbarItem {
                     Menu {
-                        Button("Unpair \(device.name)", role: .destructive) { model.core.unpair(device.id) }
+                        Button("Unpair \(device.name)…", role: .destructive) { confirmUnpair = true }
                     } label: { Label("More", systemImage: "ellipsis.circle") }
                 }
             }
+        }
+        .confirmationDialog("Unpair \(device.name)?", isPresented: $confirmUnpair) {
+            Button("Unpair", role: .destructive) { model.unpair(device.id) }
+        } message: {
+            Text(model.unpairMessage(device))
         }
     }
 }

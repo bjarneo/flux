@@ -81,6 +81,11 @@ public final class FluxCore: @unchecked Sendable {
     /// True after Bonjour reported that the local network is not allowed.
     private var localNetworkDenied = false
 
+    /// The hosts whose last incoming pairing request ended without a pairing.
+    private var pairCooldown = PairCooldown()
+    /// How long an incoming pairing request stays open. A test sets a shorter time.
+    var incomingPairSeconds = incomingPairTimeout
+
     /// The most devices that are not paired and have a link. A new link
     /// closes the oldest one, so that strangers cannot fill the list.
     static let maxUnpairedLinks = 8
@@ -390,6 +395,16 @@ public final class FluxCore: @unchecked Sendable {
                 order.append(id)
             }
             d.identity = link.identity
+            // A pairing is bound to the link on which it started. fluxd ends
+            // its side when a new link replaces that link, so this side ends
+            // too, before the new link can accept it.
+            if let old, old !== link, d.pairState == .requested || d.pairState == .incoming {
+                FluxLog.core.info("ended the pairing with \(d.name, privacy: .public): a new link replaced its link")
+                // The reset of an incoming pairing makes its host wait.
+                let incoming = d.pairState == .incoming
+                d.resetPair()
+                toast(Device.pairStoppedText(computer: d.name, incoming: incoming))
+            }
             // Set the new link first, so that closing the old link does not
             // mark the device offline.
             d.link = link
@@ -578,6 +593,18 @@ public final class FluxCore: @unchecked Sendable {
     /// The lock is held.
     func hasIncomingPair(except id: String) -> Bool {
         devices.values.contains { $0.id != id && $0.pairState == .incoming }
+    }
+
+    /// Makes the host of the device wait after its incoming request ended
+    /// without a pairing, see `PairCooldown`. The lock is held.
+    func incomingPairEnded(_ d: Device) {
+        pairCooldown.add(id: d.id, ip: d.link?.address ?? d.lastIp, at: ProcessInfo.processInfo.systemUptime)
+    }
+
+    /// True while the host of the device waits after its last incoming
+    /// request. The lock is held.
+    func pairCooldownBlocks(_ d: Device) -> Bool {
+        pairCooldown.blocks(id: d.id, ip: d.link?.address ?? d.lastIp, at: ProcessInfo.processInfo.systemUptime)
     }
 
     public func connectedPaired() -> [Device] { lock.withLock { order.compactMap { devices[$0] }.filter { $0.paired && $0.online } } }

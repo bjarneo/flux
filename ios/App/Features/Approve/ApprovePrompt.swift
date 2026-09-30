@@ -99,7 +99,7 @@ struct ApprovePromptSheet: View {
 
     var body: some View {
         if let r = model.shown {
-            ApprovePromptView(request: r, phase: model.phase, deadline: model.deadline, texts: .current,
+            ApprovePromptView(request: r, phase: model.phase, deadline: model.deadline, texts: .current, replacesKey: plugin.replacesKey(r),
                               approve: { plugin.approve() }, deny: { plugin.deny() }, done: { plugin.closeResult() })
         }
     }
@@ -113,6 +113,8 @@ struct ApprovePromptView: View {
     let phase: ApprovePhase
     let deadline: Date?
     let texts: ApproveTexts
+    /// True when the enrollment replaces the current key of the computer.
+    var replacesKey = false
     let approve: () -> Void
     let deny: () -> Void
     let done: () -> Void
@@ -126,7 +128,7 @@ struct ApprovePromptView: View {
                 case .failed(let message):
                     FailedResult(message: message, done: done)
                 case .ask, .working:
-                    AskContent(request: request, deadline: deadline, texts: texts, working: phase == .working,
+                    AskContent(request: request, replacesKey: replacesKey, deadline: deadline, texts: texts, working: phase == .working,
                                approve: approve, deny: deny)
                 }
             }
@@ -143,6 +145,7 @@ struct ApprovePromptView: View {
 
 private struct AskContent: View {
     let request: ApproveRequest
+    let replacesKey: Bool
     let deadline: Date?
     let texts: ApproveTexts
     let working: Bool
@@ -159,7 +162,7 @@ private struct AskContent: View {
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
         VStack(spacing: 6) {
-            ForEach(ApprovePlugin.details(request), id: \.self) { line in
+            ForEach(ApprovePlugin.details(request, replacesKey: replacesKey), id: \.self) { line in
                 Text(line)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

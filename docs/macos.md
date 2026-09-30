@@ -90,6 +90,12 @@ Return does not accept a request.
 After the Mac accepts, the computer asks you to confirm the key.
 Select **Confirm** in the Flux window or in the notification, or type `y` at the `flux-cli pair` prompt.
 The computer pins the Mac only after this step, and each step waits at most 30 seconds.
+Flux shows 1 request at a time.
+When a request ends without a pairing, for example after a reject or a timeout, Flux ends new requests from the same computer or address for 30 seconds.
+To pair in that time, start the pairing on the Mac.
+A pairing is bound to its link.
+When the computer connects again while a pairing runs, the pairing stops, so pair again.
+A request from the computer that stops this way also starts the wait of 30 seconds.
 The Mac announces itself with UDP broadcasts on port 1716 and as `_flux._udp` through Bonjour, like the phone.
 It appears on the computer as `laptop` when it has a battery and `desktop` otherwise.
 
@@ -109,7 +115,7 @@ A computer that is not paired finds the Mac through Bonjour, and `fluxd` then co
 | --- | --- |
 | Files, text, and links | Send from the device page, a drop on the window or Dock icon, **Open With**, or **Services > Send to Flux**. Received files go to `~/Downloads` or the folder in Settings, with the quarantine mark of a download, so Gatekeeper checks them when you open them. Flux refuses a file that leaves less than 256 MB free. A received file or link shows in a notification, and it opens only after a click. Flux never opens a received file by itself. |
 | Clipboard | Syncs text both ways while a paired computer is connected. Password manager entries are not synced automatically. Images do not sync to or from the Mac. |
-| Screenshots and photos | **Send new screenshots** watches the macOS screenshot folder. **Send new photos** sends new photos from the Photos library and needs full Photos access. |
+| Screenshots and photos | **Send new screenshots** watches the macOS screenshot folder. **Send new photos** sends new photos from the Photos library and needs full Photos access. 1 scan sends at most 50 images. The rest go with the next scan, for example after the next new image or the next connect. |
 | Media | Controls the computer's players. The computer does not control the players on the Mac. |
 | Commands | Lists and runs the commands configured on the computer. |
 | Browse | Opens the computer's shared folders read-only through SSH inside a `flux.tunnel`, and downloads files. |
@@ -117,7 +123,7 @@ A computer that is not paired finds the Mac through Bonjour, and `fluxd` then co
 | Screen mirror | Streams a display to a window on the computer in H.264, with the long side at most 1080 pixels. |
 | Camera modes | Text, QR, Photo, Document, and Signature, like the phone. Text, QR, Document, and Signature also read an opened, pasted, or dropped image or a screen region. To read an image, select **From Image**, then **Open Image…**, **Screen Region…**, or **Paste Image**. In Signature, **From Image** shows with the **Paper** source. Signature also accepts a drawn signature with the **Draw** source. |
 | Microphone | Streams the Mac microphone as 48 kHz mono audio. |
-| Notifications | Shows notifications from `flux-cli notify`. Each computer can show 10 notifications at once, then 1 more each second. Received links count toward this limit. |
+| Notifications | Shows notifications from `flux-cli notify`. Each computer can show 10 notifications at once, then 1 more each second. Only the first notification of a burst makes a sound. Each computer keeps at most 20 notifications in Notification Center, and a new one removes the oldest. Received links count toward these limits. |
 | Battery | A Mac with a battery reports it. The page shows the computer's battery. |
 | Do Not Disturb | See [Focus](#focus). |
 | Fingerprint approval | Approves `sudo` and polkit with Touch ID. See [approval](#approval). |

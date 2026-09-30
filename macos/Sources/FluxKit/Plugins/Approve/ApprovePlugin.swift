@@ -56,6 +56,27 @@ public final class ApprovePlugin: FluxPlugin, @unchecked Sendable {
         }
     }
 
+    /// An unpair from either side ends the open request of the computer. A
+    /// link that only drops leaves it, because the computer can connect
+    /// again before the request expires. The core lock is held.
+    public func onDisconnected(_ device: Device) {
+        guard !device.paired else { return }
+        let computerId = device.id
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated { self.unpaired(computerId) }
+        }
+    }
+
+    /// Ends the open request or enrollment of a computer that is no longer
+    /// paired. An enrollment also drops its new key.
+    @MainActor
+    func unpaired(_ computerId: String) {
+        guard let r = model.current, r.computerId == computerId else { return }
+        FluxLog.plugin.info("approve: the request of \(r.computerName, privacy: .public) ended with the unpair")
+        if r.kind == .enroll { keys.discard(computerId) }
+        end(r.id, .unpaired)
+    }
+
     // MARK: Requests
 
     @MainActor
@@ -110,7 +131,7 @@ public final class ApprovePlugin: FluxPlugin, @unchecked Sendable {
         }
         Notifier.shared.post(id: Self.notificationId, category: Self.notificationCategory,
                              title: r.kind == .approve ? "Approve \(r.service) on \(r.host)?" : texts.enrollTitle(host: r.host),
-                             body: ([ApproveMessage.question(r)] + Self.details(r)).joined(separator: "\n"),
+                             body: ([ApproveMessage.question(r)] + Self.details(r, replacesKey: replacesKey(r))).joined(separator: "\n"),
                              userInfo: ["id": r.id], interruptionLevel: Self.interruptionLevel)
         model.present?()
     }
@@ -163,8 +184,10 @@ public final class ApprovePlugin: FluxPlugin, @unchecked Sendable {
         }
     }
 
-    /// The lines under the question: the terminal, the remote host, and who asks.
-    public static func details(_ r: ApproveRequest) -> [String] {
+    /// The lines under the question: the terminal, the remote host, and who
+    /// asks. An enrollment that replaces the current key of the computer
+    /// says so.
+    public static func details(_ r: ApproveRequest, replacesKey: Bool = false) -> [String] {
         switch r.kind {
         case .approve:
             var lines: [String] = []
@@ -174,8 +197,16 @@ public final class ApprovePlugin: FluxPlugin, @unchecked Sendable {
             lines.append("Asked at \(time) by \(r.computerName)")
             return lines
         case .enroll:
-            return [ApproveTexts.current.enrollDetail(computer: r.computerName)]
+            let texts = ApproveTexts.current
+            let detail = texts.enrollDetail(computer: r.computerName)
+            return replacesKey ? [detail, texts.enrollReplaces(computer: r.computerName)] : [detail]
         }
+    }
+
+    /// True when the enrollment `r` replaces the current key of its computer.
+    @MainActor
+    public func replacesKey(_ r: ApproveRequest) -> Bool {
+        r.kind == .enroll && model.keys[r.computerId] != nil
     }
 
     // MARK: Actions

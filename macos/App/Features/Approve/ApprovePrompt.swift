@@ -59,7 +59,7 @@ struct ApprovePromptView: View {
                 FailedView(message: message) { plugin.closeResult() }
             case .ask, .working:
                 if let r = model.shown {
-                    AskView(request: r, deadline: model.deadline, working: model.phase == .working,
+                    AskView(request: r, replacesKey: plugin.replacesKey(r), deadline: model.deadline, working: model.phase == .working,
                             approve: { plugin.approve() }, deny: { plugin.deny() })
                 }
             }
@@ -76,6 +76,7 @@ struct ApprovePromptView: View {
 
 private struct AskView: View {
     let request: ApproveRequest
+    let replacesKey: Bool
     let deadline: Date?
     let working: Bool
     let approve: () -> Void
@@ -89,7 +90,7 @@ private struct AskView: View {
             .font(.title2)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
-        ForEach(ApprovePlugin.details(request), id: \.self) { line in
+        ForEach(ApprovePlugin.details(request, replacesKey: replacesKey), id: \.self) { line in
             Text(line)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

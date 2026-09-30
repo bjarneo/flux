@@ -71,11 +71,12 @@ struct AgentScreen: View {
             }
             .task(id: Refresh(online: online, active: scenePhase == .active, status: agent?.status)) {
                 guard online, scenePhase == .active, agent != nil else { return }
+                // A new status reads at once. Only the polls wait for the last read.
                 plugin.read(deviceId, pane: pane)
                 while agent?.status == .working {
                     try? await Task.sleep(for: workingRefresh)
                     if Task.isCancelled { return }
-                    plugin.read(deviceId, pane: pane)
+                    plugin.poll(deviceId, pane: pane)
                 }
             }
             .onDisappear { plugin.closeOutput(deviceId, pane: pane) }

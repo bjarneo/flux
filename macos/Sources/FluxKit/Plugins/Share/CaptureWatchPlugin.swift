@@ -343,6 +343,9 @@ public final class CaptureWatchPlugin: FluxPlugin, @unchecked Sendable {
         saveInbox(loadInbox().filter { $0.id > state.baseline })
         // A file that is still being written needs another look.
         if items.contains(where: \.pending) { poke() }
+        if plan.waiting > 0 {
+            FluxLog.plugin.info("capture: \(plan.waiting, privacy: .public) images wait for the next scan, because 1 scan sends at most \(maxCaptureSend, privacy: .public)")
+        }
         guard !plan.send.isEmpty else { return }
         let targets = core.connectedPairedIds()
         guard !targets.isEmpty, let share = core.plugin(SharePlugin.self) else { return }
@@ -356,8 +359,10 @@ public final class CaptureWatchPlugin: FluxPlugin, @unchecked Sendable {
                 saveState(state)
             }
         }
-        // The sent images can move the baseline now.
-        if any { poke() }
+        // The sent images can move the baseline now. Images that wait go
+        // with the next change, connect, or start, not at once, so that a
+        // large batch does not go out in a row of scans.
+        if any && plan.waiting == 0 { poke() }
     }
 
     #if os(macOS)

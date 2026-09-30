@@ -97,11 +97,15 @@ A swipe down on the sheet rejects it.
 While Flux is in the background, a notification shows the request and the key.
 **Accept** in the notification needs an unlocked iPhone and opens Flux.
 **Reject** also works on the lock screen.
-After a reject, Flux ends new requests from the same computer or address for 2 minutes.
+Flux shows 1 request at a time.
+When a request ends without a pairing, for example after a reject or a timeout, Flux ends new requests from the same computer or address for 30 seconds.
 To pair in that time, start the pairing on the iPhone.
 After the iPhone accepts, the computer asks you to confirm the key.
 Select **Confirm** in the Flux window or in the notification, or type `y` at the `flux-cli pair` prompt.
 The computer pins the iPhone only after this step, and each step waits at most 30 seconds.
+A pairing is bound to its link.
+When the computer connects again while a pairing runs, the pairing stops, so pair again.
+A request from the computer that stops this way also starts the wait of 30 seconds.
 Flux asks for permission to show notifications when you pair the first computer.
 The iPhone appears on the computer as `phone`, with the name from **Settings > This iPhone**.
 iOS gives apps only the generic name "iPhone", so set a name there.
@@ -135,14 +139,14 @@ Flux must still be open on the iPhone. See [limits](#limits-of-ios).
 | Files, text, and links | Send from the Files picker, the photo picker, the Share field, or the share sheet of any app. An `http` or `https` link with a host opens in the browser of the computer. Text and each other link go on its clipboard. Text has a limit of 1 MB. Received files go to the Flux folder in the Files app. A received file or link shows in a notification, and it opens only after a tap on the notification or on the transfer. |
 | Share sheet | **Flux** in the share sheet of other apps queues files, photos, text, and links for a computer. A text file, such as a `.txt` or `.md` file, goes as a file with its name. **Cancel** stops the share. Flux sends the items when it opens and connects. See [limits](#limits-of-ios). |
 | Clipboard | Text and images both ways while **Sync clipboard** is on and Flux is on the screen. The **Clipboard** quick action sends it at once. |
-| Screenshots and photos | **Send new screenshots** and **Send new photos** send new items from the Photos library when Flux opens. An item goes only when its original is on this iPhone and it was taken at most 1 day before its switch turned on. Photos that only iCloud has, for example from your other devices or from a Shared Library, stay home. PhotoKit does not tell which device took a photo, so with **Download and Keep Originals** in iCloud Photos, new photos from those sources can go too. |
+| Screenshots and photos | **Send new screenshots** and **Send new photos** send new items from the Photos library when Flux opens. An item goes only when its original is on this iPhone and it was taken at most 1 day before its switch turned on. Photos that only iCloud has, for example from your other devices or from a Shared Library, stay home. PhotoKit does not tell which device took a photo, so with **Download and Keep Originals** in iCloud Photos, new photos from those sources can go too. 1 scan sends at most 50 items. The rest go with the next scan, for example when Flux opens again. |
 | Media | Controls the players of the computer. The computer does not control the players on the iPhone. |
 | Commands | Lists and runs the commands configured on the computer. |
 | Browse | Opens the shared folders of the computer read-only through SSH inside a `flux.tunnel`, and saves files to the Files app. |
 | Camera modes | Text, QR, Photo, Document, and Signature, like the Android app, from the camera, a picked photo, or a pasted image. A document has at most 30 pages. |
 | Webcam | Streams the front or back camera to the computer as a virtual webcam in H.264. **Also send the microphone** starts the microphone with it. It stops when Flux leaves the screen. The screen of the iPhone stays on while the webcam or the remote desktop streams and while the touchpad shows. |
 | Microphone | Streams the microphone as 48 kHz mono audio. It keeps streaming in the background and while the iPhone is locked. |
-| Notifications | Shows notifications from `flux-cli notify`. Each computer can show 10 notifications at once, then 1 more each second. Received links count toward this limit. |
+| Notifications | Shows notifications from `flux-cli notify`. Each computer can show 10 notifications at once, then 1 more each second. Only the first notification of a burst makes a sound. Each computer keeps at most 20 notifications in Notification Center, and a new one removes the oldest. Received links count toward these limits. |
 | Battery | Reports the battery of the iPhone. The device screen shows the battery of the computer. |
 | Ring | `flux-cli ring` rings the iPhone. |
 | Do Not Disturb | Reports the Focus through a Focus filter. The iPhone does not follow the computer. See [Focus](#focus). |

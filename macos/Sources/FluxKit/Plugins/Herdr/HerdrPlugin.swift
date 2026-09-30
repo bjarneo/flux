@@ -97,9 +97,10 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
     @MainActor private var trackers: [String: HerdrTracker] = [:]
     /// The finished notifications that wait for `finishHold`, by device ID and pane.
     @MainActor private var pending: [String: Task<Void, Never>] = [:]
-    /// Counts the reads and the replies, so that a late timeout does not
-    /// replace a newer answer.
-    @MainActor private var reads = 0
+    /// Counts the reads of each computer and all replies, so that a late
+    /// timeout does not replace a newer answer. A read of 1 computer does
+    /// not cancel the read timeout of another computer.
+    @MainActor private var reads: [String: Int] = [:]
     @MainActor private var replies = 0
     /// Counts the creates and the closes, so that a late timeout does not
     /// replace a newer one.
@@ -227,14 +228,23 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
             model.outputs[deviceId]?.error = "\(computerName(deviceId)) is not reachable"
             return
         }
-        reads += 1
-        let token = reads
+        let token = reads[deviceId, default: 0] + 1
+        reads[deviceId] = token
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: Self.readTimeout)
-            guard let self, token == self.reads, let out = self.model.output(deviceId, pane: pane), out.loading else { return }
+            guard let self, token == self.reads[deviceId], let out = self.model.output(deviceId, pane: pane), out.loading else { return }
             self.model.outputs[deviceId]?.loading = false
             self.model.outputs[deviceId]?.error = "\(self.computerName(deviceId)) did not answer"
         }
+    }
+
+    /// Reads the output of `pane` again, unless the last read did not end.
+    /// The polls of the screens use it, so that reads do not pile up on a
+    /// slow link. A manual refresh uses `read`.
+    @MainActor
+    public func poll(_ deviceId: String, pane: String) {
+        guard model.output(deviceId, pane: pane)?.loading != true else { return }
+        read(deviceId, pane: pane)
     }
 
     /// Forgets the output and the last reply when the window stops showing the agent.

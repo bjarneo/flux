@@ -93,6 +93,15 @@ public final class Notifier: NSObject, UNUserNotificationCenterDelegate, @unchec
         center?.removePendingNotificationRequests(withIdentifiers: [id])
     }
 
+    /// Passes the IDs of the notifications that Notification Center shows,
+    /// the oldest first, to `body` on a queue of the center. It includes
+    /// the notifications of an earlier run of Flux.
+    func deliveredIds(_ body: @escaping @Sendable ([String]) -> Void) {
+        center?.getDeliveredNotifications { notes in
+            body(notes.sorted { $0.date < $1.date }.map(\.request.identifier))
+        }
+    }
+
     // MARK: UNUserNotificationCenterDelegate
 
     public func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
