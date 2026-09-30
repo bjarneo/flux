@@ -81,6 +81,31 @@ final class ComputerNotificationTests: XCTestCase {
         XCTAssertFalse(limit.allow("pc1", now: 1000), "a long pause gives the burst again, not more")
     }
 
+    /// Only a notification that finds the full burst makes a sound.
+    func testABurstMakesOneSound() {
+        var limit = NotificationLimit()
+        XCTAssertEqual(limit.take("pc1", now: 100), .sound)
+        XCTAssertEqual(limit.take("pc1", now: 100), .quiet)
+        XCTAssertEqual(limit.take("pc1", now: 100.5), .quiet)
+        XCTAssertEqual(limit.take("pc2", now: 100.5), .sound, "another computer has its own burst")
+        XCTAssertEqual(limit.take("pc1", now: 200), .sound, "a pause fills the burst again")
+    }
+
+    /// A computer keeps at most 20 delivered notifications. A new one
+    /// removes the oldest.
+    func testAComputerKeepsAtMost20Notifications() {
+        var delivered = DeliveredNotifications()
+        var removed: [String] = []
+        for i in 0..<30 { removed += delivered.add("n\(i)", deviceId: "pc1") }
+        XCTAssertEqual(delivered.delivered("pc1").count, 20)
+        XCTAssertEqual(delivered.delivered("pc1").first, "n10")
+        XCTAssertEqual(removed, (0..<10).map { "n\($0)" }, "the oldest go first")
+        XCTAssertEqual(delivered.add("n15", deviceId: "pc1"), [], "a post with the same ID replaces that notification")
+        XCTAssertEqual(delivered.delivered("pc1").count, 20)
+        XCTAssertEqual(delivered.delivered("pc1").last, "n15")
+        XCTAssertEqual(delivered.add("x", deviceId: "pc2"), [], "another computer has its own list")
+    }
+
     /// Notifications and received links of a computer take tokens from 1 shared limit.
     func testSharedLimitPerComputer() {
         let pc = UUID().uuidString
