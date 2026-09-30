@@ -650,6 +650,11 @@ func TestPairTimeout(t *testing.T) {
 	if err := d.AcceptPair(dev, ""); errCode(err) != "no_request" {
 		t.Fatalf("AcceptPair after the timeout: %v", err)
 	}
+	// The phone did not answer the request of this computer, so a request
+	// of the phone counts at once.
+	if !field(d, func() time.Time { return dev.pairEnded }).IsZero() {
+		t.Fatal("the timeout of a request of this computer started the retry wait")
+	}
 }
 
 // TestUnpairClosesLink checks that Unpair tells the device, closes the

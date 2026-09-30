@@ -28,7 +28,9 @@ const pairCooldown = 2 * time.Second
 
 // pairRetry is the time after a pair false, a reject, or a timeout in which
 // fluxd refuses a new pair request of the device. A device on the network
-// then cannot show its request again and again.
+// then cannot show its request again and again. A request of this computer
+// that the device did not accept starts no wait, because the user of this
+// computer sent it.
 const pairRetry = 30 * time.Second
 
 // maxIncoming is the number of incoming pair requests that can be open at
@@ -269,7 +271,7 @@ func (d *Daemon) handlePair(dev *Device, l *lan.Link, p *proto.Packet) {
 		var notes []uint32
 		if paired {
 			notes, _ = d.dropTrustLocked(dev)
-		} else if state != "" {
+		} else if state == "incoming" || state == "confirm" {
 			// A device that ends a pairing waits before a new request
 			// counts, so that it cannot withdraw and send its request in a
 			// loop.
@@ -550,7 +552,9 @@ func (d *Daemon) startPairTimerLocked(dev *Device) {
 			l = nil
 		}
 		note := dev.clearPairingLocked()
-		dev.pairEnded = time.Now()
+		if state != "requested" {
+			dev.pairEnded = time.Now()
+		}
 		name := dev.Name
 		d.mu.Unlock()
 		d.closeNotes(note)
