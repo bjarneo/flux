@@ -15,12 +15,20 @@ import (
 )
 
 // fakeBinary writes a script at path that prints out for -version, and
-// returns a Binary that runs the first file at path.
+// returns a Binary that runs the first file at path. The test keeps the
+// first file open, as the running fluxd keeps its binary. Otherwise the
+// file system can give its inode to a later install, and the watcher then
+// sees no change.
 func fakeBinary(t *testing.T, path, out string) *Binary {
 	t.Helper()
 	install(t, path, out)
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { f.Close() })
 	var st unix.Stat_t
-	if err := unix.Stat(path, &st); err != nil {
+	if err := unix.Fstat(int(f.Fd()), &st); err != nil {
 		t.Fatal(err)
 	}
 	return &Binary{Path: path, dev: uint64(st.Dev), ino: st.Ino}
