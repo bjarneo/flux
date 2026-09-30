@@ -59,6 +59,7 @@ Wi-Fi client isolation can still block communication between devices.
 A payload server for a device without `flux.tunnel` listens on the local address of the link.
 It accepts connections from the address of the link until 1 of them shows the certificate of the device, or for 20 seconds.
 A received payload fails when the device sends nothing for 60 seconds.
+`fluxd` connects to a payload, tunnel, or stream port of the device from the local address of the link, because the phone accepts only that address.
 
 ## Pairing and trust
 
