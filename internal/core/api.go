@@ -560,6 +560,7 @@ func (d *Daemon) Reload() error {
 	}
 	d.mu.Lock()
 	d.cfg = cfg
+	auto := cfg.AutoClipboard
 	d.mu.Unlock()
 	cfgSaves.Unlock()
 	d.commandsChanged()
@@ -568,6 +569,10 @@ func (d *Daemon) Reload() error {
 	d.shareHomeChanged()
 	d.wakeDnd()
 	d.wakeRelease()
+	if !auto {
+		// An image that is on its way to the phones stops.
+		d.stopClipSend()
+	}
 	return nil
 }
 
@@ -587,6 +592,10 @@ func (d *Daemon) unsavedSetting(key string, before *config.Config, err error) er
 		field, old = &d.cfg.RemoteDesktop, before.RemoteDesktop
 	case "shareHome":
 		field, old = &d.cfg.ShareHome, before.ShareHome
+	case "herdrControl":
+		field, old = &d.cfg.HerdrControl, before.HerdrControl
+	case "herdrTerminals":
+		field, old = &d.cfg.HerdrTerminals, before.HerdrTerminals
 	}
 	if field == nil {
 		d.mu.Unlock()
@@ -597,9 +606,12 @@ func (d *Daemon) unsavedSetting(key string, before *config.Config, err error) er
 		*field = old
 	}
 	d.mu.Unlock()
-	if key == "shareHome" {
+	switch key {
+	case "shareHome":
 		d.shareHomeChanged()
-	} else {
+	case "herdrControl", "herdrTerminals":
+		d.herdrChanged()
+	default:
 		d.inputChanged()
 	}
 	d.markDirty()

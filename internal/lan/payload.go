@@ -185,8 +185,7 @@ func (l *Link) FetchPayload(ctx context.Context, p *proto.Packet) (io.ReadCloser
 	if port < MinPayloadPort || port > MaxPayloadPort {
 		return nil, fmt.Errorf("the device sent payload port %d, outside %d to %d", port, MinPayloadPort, MaxPayloadPort)
 	}
-	d := net.Dialer{Timeout: 10 * time.Second}
-	conn, err := d.DialContext(ctx, "tcp", net.JoinHostPort(l.IP(), fmt.Sprint(port)))
+	conn, err := l.dialPort(ctx, port)
 	if err != nil {
 		return nil, err
 	}

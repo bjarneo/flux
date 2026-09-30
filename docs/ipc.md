@@ -120,6 +120,7 @@ flux-cli watch
 | Approval | `approve.request`, `approve.wait`, `approve.enroll` |
 | Settings and updates | `settings.set`, `update.install`, `update.sendApp` |
 
+`share.files` takes `paths`, a list of absolute file paths. A relative path returns the error code `bad_params`.
 `update.install` opens a terminal that runs `flux-cli update`.
 `update.sendApp` with a `device` downloads the Android app of the latest release, checks it against `SHA256SUMS`, and sends it to that phone.
 

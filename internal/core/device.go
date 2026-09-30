@@ -55,7 +55,6 @@ type Device struct {
 	notifDesktop  map[string]uint32
 	conversations map[int64]*Conversation
 	threadWait    map[int64][]chan []SmsMessage
-	theme         string
 
 	// pairLink and pairCert are the link and the certificate on which the
 	// open pairing started. pairKey comes from pairCert, and only pairCert
@@ -173,6 +172,15 @@ func (d *Daemon) nameOf(dev *Device) string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return dev.Name
+}
+
+// stillPaired reports whether dev is paired now. A transfer or a herdr
+// call can take seconds, and it must not act for the device after an
+// unpair.
+func (d *Daemon) stillPaired(dev *Device) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return dev.Paired
 }
 
 // supports reports whether the device sends packets of the type.

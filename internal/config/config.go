@@ -45,8 +45,10 @@ type Config struct {
 	SyncDnd bool `toml:"sync_dnd"`
 	// Herdr shows the herdr agents of this computer on the phone.
 	Herdr bool `toml:"herdr"`
-	// HerdrControl lets the phone send keys and prompts to the herdr
-	// agents. It is off by default, because an agent can run commands.
+	// HerdrControl lets every paired device send keys and prompts to the
+	// herdr agents, and start and close agents. An agent runs the commands
+	// that a prompt asks for, so each paired device can then run any
+	// command on this computer through an agent. It is off by default.
 	HerdrControl bool `toml:"herdr_control"`
 	// HerdrTerminals lets the phone open herdr terminals, read them, and
 	// type commands in them. It is off by default, because it gives the

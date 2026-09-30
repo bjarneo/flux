@@ -82,9 +82,10 @@ Shared text goes on the desktop clipboard and in the clipboard history.
 A notification shows the first 300 characters.
 `flux-cli url` sends only an `http` or `https` URL with a host and refuses other values.
 
-Flux syncs clipboard text and shared text of up to 1 MiB in both directions.
+`fluxd` sends clipboard text and shared text of up to 256 KiB to a device, and it takes up to 1 MiB from a device.
 `fluxd` ignores a larger text from a device and shows a message in the desktop window.
-`flux-cli clip` refuses a larger text.
+A desktop copy above 256 KiB goes only to the clipboard history. When a paired device is connected, the desktop window shows a message.
+`flux-cli clip` and the `share.text` method refuse a text above 256 KiB.
 The clipboard history keeps at most 16 MiB of text and drops the oldest entries first.
 When `fluxd` restarts, the desktop clipboard loses text or an image that came from a device.
 

@@ -217,17 +217,18 @@ func (d *Daemon) handleRunCommand(dev *Device, l *lan.Link, p *proto.Packet) {
 	if body.Key == "" {
 		return
 	}
+	name := d.nameOf(dev)
 	cmd, ok := d.command(body.Key)
 	if !ok {
-		d.logf("%s: no command with ID %q", dev.Name, body.Key)
+		d.logf("%s: no command with ID %q", name, body.Key)
 		return
 	}
-	d.logf("%s runs %s: %s", dev.Name, cmd.ID, cmd.Command)
+	d.logf("%s runs %s: %s", name, cmd.ID, cmd.Command)
 	if err := d.runLocal(cmd); err != nil {
-		d.toast("%s could not run %s: %v", dev.Name, cmd.Name, err)
+		d.toast("%s could not run %s: %v", name, cmd.Name, err)
 		return
 	}
-	d.toast("%s ran %s", dev.Name, cmd.Name)
+	d.toast("%s ran %s", name, cmd.Name)
 }
 
 // runLocal starts a command and logs a failure with its output.

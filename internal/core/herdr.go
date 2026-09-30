@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -623,10 +624,15 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 		Cwd       string   `json:"cwd"`
 		Workspace string   `json:"workspace"`
 		Answer    bool     `json:"answer"`
+		// Request is the number of a keys, prompt, input, create, or close
+		// packet. The answer carries the same number, so the phone matches
+		// a late answer to its packet.
+		Request json.RawMessage `json:"request"`
 	}
 	if p.Decode(&body) != nil {
 		return
 	}
+	req := herdrRequest(body.Request)
 	switch body.Kind {
 	case "request":
 		// The phone opened its agent list. When herdr was not running,
@@ -641,7 +647,7 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 	case "keys", "prompt", "input":
 		go func() {
 			failed := map[string]any{"kind": "sent", "pane": body.Pane, "action": body.Kind, "error": "fluxd could not send the reply"}
-			defer d.herdrRecover(body.Kind, d.herdrFailed(dev, l, failed))
+			defer d.herdrRecover(body.Kind, d.herdrFailed(dev, l, req, failed))
 			var reply *proto.Packet
 			switch body.Kind {
 			case "keys":
@@ -651,43 +657,35 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 			default:
 				reply = d.herdrInput(dev, body.Pane, body.Text, body.Keys)
 			}
-			d.herdrSend(dev, l, reply)
+			d.herdrSend(dev, l, withRequest(reply, req))
 		}()
 	case "create":
 		go func() {
 			failed := map[string]any{"kind": "created", "what": body.What, "error": "fluxd could not open the pane"}
-			defer d.herdrRecover("create", d.herdrFailed(dev, l, failed))
+			defer d.herdrRecover("create", d.herdrFailed(dev, l, req, failed))
 			reply := d.herdrCreate(dev, body.What, body.Agent, body.Cwd, body.Workspace)
 			// The phone opens the new pane at once, so it must know the
 			// pane before the answer.
 			d.mu.Lock()
 			state := herdrStatePacket(d.herdrViewLocked())
 			d.mu.Unlock()
-			d.herdrSend(dev, l, state, reply)
+			d.herdrSend(dev, l, state, withRequest(reply, req))
 		}()
 	case "close":
 		go func() {
 			failed := map[string]any{"kind": "closed", "pane": body.Pane, "error": "fluxd could not close the pane"}
-			defer d.herdrRecover("close", d.herdrFailed(dev, l, failed))
-			d.herdrSend(dev, l, d.herdrClose(dev, body.Pane))
+			defer d.herdrRecover("close", d.herdrFailed(dev, l, req, failed))
+			d.herdrSend(dev, l, withRequest(d.herdrClose(dev, body.Pane), req))
 		}()
 	default:
-		d.logf("%s: unknown flux.herdr kind %q", dev.Name, body.Kind)
+		d.logf("%s: unknown flux.herdr kind %q", d.nameOf(dev), body.Kind)
 	}
-}
-
-// herdrPaired reports whether the device is paired now. A herdr call can
-// take seconds, and an answer must not go out after an unpair.
-func (d *Daemon) herdrPaired(dev *Device) bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return dev.Paired
 }
 
 // herdrSend sends the packets on the link l while the device is paired.
 func (d *Daemon) herdrSend(dev *Device, l *lan.Link, packets ...*proto.Packet) {
 	for _, p := range packets {
-		if !d.herdrPaired(dev) {
+		if !d.stillPaired(dev) {
 			return
 		}
 		_ = l.Send(p)
@@ -695,9 +693,37 @@ func (d *Daemon) herdrSend(dev *Device, l *lan.Link, packets ...*proto.Packet) {
 }
 
 // herdrFailed returns a function that sends a flux.herdr packet with the
-// body to the device. herdrRecover calls it after a panic.
-func (d *Daemon) herdrFailed(dev *Device, l *lan.Link, body map[string]any) func() {
-	return func() { d.herdrSend(dev, l, proto.New(proto.TypeFluxHerdr, body)) }
+// body and the request number req to the device. herdrRecover calls it
+// after a panic.
+func (d *Daemon) herdrFailed(dev *Device, l *lan.Link, req json.Number, body map[string]any) func() {
+	return func() { d.herdrSend(dev, l, withRequest(proto.New(proto.TypeFluxHerdr, body), req)) }
+}
+
+// herdrRequest returns the request number of a flux.herdr packet, or ""
+// when the packet has no number in the field.
+func herdrRequest(raw json.RawMessage) json.Number {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var v any
+	if dec.Decode(&v) != nil {
+		return ""
+	}
+	n, _ := v.(json.Number)
+	return n
+}
+
+// withRequest adds the request number req to the answer p. An answer to a
+// packet without a number stays as it is.
+func withRequest(p *proto.Packet, req json.Number) *proto.Packet {
+	if req == "" {
+		return p
+	}
+	var body map[string]json.RawMessage
+	if p.Decode(&body) != nil {
+		return p
+	}
+	body["request"] = json.RawMessage(req)
+	return proto.New(p.Type, body)
 }
 
 // herdrRecover logs a panic in the answer to a flux.herdr packet and ends
@@ -741,7 +767,7 @@ func (d *Daemon) readHerdrOnce(dev *Device, l *lan.Link, pane string, lines int,
 			failed["format"] = "ansi"
 		}
 		defer d.herdrRecover("read", func() {
-			if d.herdrPaired(dev) {
+			if d.stillPaired(dev) {
 				send(proto.New(proto.TypeFluxHerdr, failed))
 			}
 		})

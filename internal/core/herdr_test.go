@@ -178,6 +178,12 @@ func (f *fakeHerdr) serve(conn net.Conn) {
 			result = f.readText
 		}
 		f.calls = append(f.calls, req.Method+" "+string(req.Params))
+	case "events.subscribe":
+		f.subs = append(f.subs, conn)
+		f.subCalls = append(f.subCalls, string(req.Params))
+		f.mu.Unlock()
+		_, _ = conn.Write([]byte(`{"id":"` + req.ID + `","result":{"type":"subscription_started"}}` + "\n"))
+		return
 	default:
 		result = `"result":{"type":"ok"}`
 		if r, ok := f.replies[req.Method]; ok {
@@ -187,12 +193,6 @@ func (f *fakeHerdr) serve(conn net.Conn) {
 			result, f.queue[req.Method] = q[0], q[1:]
 		}
 		f.calls = append(f.calls, req.Method+" "+string(req.Params))
-	case "events.subscribe":
-		f.subs = append(f.subs, conn)
-		f.subCalls = append(f.subCalls, string(req.Params))
-		f.mu.Unlock()
-		_, _ = conn.Write([]byte(`{"id":"` + req.ID + `","result":{"type":"subscription_started"}}` + "\n"))
-		return
 	}
 	f.mu.Unlock()
 	_, _ = conn.Write([]byte(`{"id":"` + req.ID + `",` + result + "}\n"))
@@ -1341,5 +1341,76 @@ func TestHerdrViewControl(t *testing.T) {
 	d.cfg.Herdr = false
 	if d.herdrViewLocked().Control {
 		t.Fatal("control needs herdr sync")
+	}
+}
+
+// TestHerdrRequestNumber checks that the answers sent, created, and closed
+// carry the request number of the packet from the phone, and that an
+// answer to a packet without a number has none.
+func TestHerdrRequestNumber(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	f := newFakeHerdr(t)
+	d := herdrDaemon(ctx, f.path)
+	d.cfg.HerdrControl = true
+	d.herdrAgents = []HerdrAgent{{Pane: "w1:p1", Agent: "claude"}}
+	desk, phone, _, _ := linkPair(t, ctx)
+	dev := &Device{ID: "phone1", Name: "Pixel 8", Paired: true}
+	answers := make(chan map[string]any, 16)
+	go phone.Receive(func(p *proto.Packet) {
+		if f := p.Fields(); p.Type == proto.TypeFluxHerdr && f["kind"] != "state" {
+			answers <- f
+		}
+	})
+	cases := []struct {
+		body map[string]any
+		kind string
+	}{
+		{map[string]any{"kind": "keys", "pane": "w1:p1", "keys": []string{"1"}, "request": 7}, "sent"},
+		{map[string]any{"kind": "prompt", "pane": "w1:p1", "text": "Run the tests", "request": 8}, "sent"},
+		{map[string]any{"kind": "input", "pane": "w1:p9", "text": "ls", "request": 9}, "sent"},
+		{map[string]any{"kind": "create", "what": "agent", "agent": "none", "request": 10}, "created"},
+		{map[string]any{"kind": "close", "pane": "w1:p1", "request": 11}, "closed"},
+		{map[string]any{"kind": "keys", "pane": "w1:p1", "keys": []string{"2"}}, "sent"},
+		{map[string]any{"kind": "keys", "pane": "w1:p1", "keys": []string{"3"}, "request": "12"}, "sent"},
+	}
+	for _, c := range cases {
+		d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, c.body))
+		var got map[string]any
+		select {
+		case got = <-answers:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%v: no answer within 5 seconds", c.body)
+		}
+		want, numbered := c.body["request"].(int)
+		switch {
+		case got["kind"] != c.kind:
+			t.Errorf("%v: answer %v", c.body, got)
+		case numbered && got["request"] != float64(want):
+			t.Errorf("%v: answer has the request %v", c.body, got["request"])
+		case !numbered && got["request"] != nil:
+			t.Errorf("%v: answer has the request %v, want none", c.body, got["request"])
+		}
+	}
+}
+
+// TestUnsavedHerdrSettings checks that herdr_control and herdr_terminals
+// do not turn on when config.toml cannot keep them, because each lets a
+// paired device run commands on this computer.
+func TestUnsavedHerdrSettings(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	// config.toml cannot be written, because the flux folder is a file.
+	if err := os.WriteFile(filepath.Join(dir, "flux"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	d := herdrDaemon(context.Background(), "")
+	for _, key := range []string{"herdrControl", "herdrTerminals"} {
+		if err := d.setSetting(key, true); err == nil || !strings.Contains(err.Error(), "did not change") {
+			t.Errorf("%s: error %v", key, err)
+		}
+	}
+	if d.cfg.HerdrControl || d.cfg.HerdrTerminals {
+		t.Fatalf("a herdr switch is on after the error: %+v", d.cfg)
 	}
 }

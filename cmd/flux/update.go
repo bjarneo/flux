@@ -35,18 +35,21 @@ func update(args []string, device string) error {
 		return fmt.Errorf("cannot reach GitHub: %v\nFlux works without the internet. To update, connect to a network and run flux-cli update again", err)
 	}
 	latest, current := r.Version(), strings.TrimPrefix(version, "v")
+	// The tag and the page come from GitHub, so safe cleans them for the
+	// terminal.
+	shown, page := safe(latest), safe(r.Page)
 	switch {
 	case !release.Valid(version):
-		fmt.Printf("flux-cli %s is a development build. The latest release is %s: %s\n", current, latest, r.Page)
+		fmt.Printf("flux-cli %s is a development build. The latest release is %s: %s\n", current, shown, page)
 		if checkOnly {
 			return nil
 		}
 		return sourceUpdate()
 	case !release.Newer(latest, version):
-		fmt.Printf("Flux %s is the latest release, and this computer has %s\n", latest, current)
+		fmt.Printf("Flux %s is the latest release, and this computer has %s\n", shown, current)
 		return nil
 	}
-	fmt.Printf("Flux %s is available. This computer has %s\n%s\n", latest, current, r.Page)
+	fmt.Printf("Flux %s is available. This computer has %s\n%s\n", shown, current, page)
 	if checkOnly {
 		return nil
 	}
@@ -119,7 +122,7 @@ func installPackage(r release.Release, pkg string) error {
 	}
 	sig, _ := r.Find(func(n string) bool { return n == "SHA256SUMS.sig" })
 
-	fmt.Printf("Downloading %s (%.1f MB)\n", asset.Name, float64(asset.Size)/1e6)
+	fmt.Printf("Downloading %s (%.1f MB)\n", safe(asset.Name), float64(asset.Size)/1e6)
 	path, sum, err := release.Fetch(context.Background(), asset, sums.URL, sig.URL, filepath.Join(config.CacheDir(), "update"), version)
 	if err != nil {
 		return err

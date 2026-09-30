@@ -18,6 +18,7 @@ import (
 
 	"flux/internal/config"
 	"flux/internal/desktop"
+	"flux/internal/lan"
 	"flux/internal/proto"
 )
 
@@ -158,6 +159,28 @@ func TestShareTextURL(t *testing.T) {
 	for key, v := range map[string]string{"url": "https://omarchy.org", "text": "file:///etc/passwd"} {
 		if err := d.ShareText(dev, key, v); !errors.As(err, &e) || e.Code != "offline" {
 			t.Errorf("%s %q: %v", key, v, err)
+		}
+	}
+}
+
+// TestSentTextLimit checks that fluxd sends at most maxSentText of text
+// to a device. Flux for Android from before this limit stops on a larger
+// text.
+func TestSentTextLimit(t *testing.T) {
+	d := testDaemon()
+	dev := &Device{ID: "p1", Name: "Pixel 8", Paired: true}
+	var e *Error
+	for _, n := range []int{maxSentText, maxSentText + 1} {
+		want := "offline"
+		if n > maxSentText {
+			want = "too_large"
+		}
+		text := strings.Repeat("a", n)
+		if err := d.ShareText(dev, "text", text); !errors.As(err, &e) || e.Code != want {
+			t.Errorf("share %d bytes: %v, want %s", n, err, want)
+		}
+		if err := d.SendClipboard(dev, text); !errors.As(err, &e) || e.Code != want {
+			t.Errorf("clipboard %d bytes: %v, want %s", n, err, want)
 		}
 	}
 }
@@ -498,5 +521,38 @@ func TestSpaceWriterStops(t *testing.T) {
 	w.since = spaceCheck
 	if _, err := w.Write([]byte("b")); err == nil {
 		t.Fatal("the transfer went on with a nearly full disk")
+	}
+}
+
+// TestSendFilesNeedsAbsolutePaths checks that share.files refuses a path
+// that is not absolute, because the folder of fluxd is not the folder of
+// the client.
+func TestSendFilesNeedsAbsolutePaths(t *testing.T) {
+	d, _ := approveDaemon()
+	for _, paths := range []string{`["photo.jpg"]`, `["/tmp/a.jpg","../b.jpg"]`, `[]`} {
+		_, err := d.Call(context.Background(), "share.files", []byte(`{"device":"phone1","paths":`+paths+`}`))
+		if errCode(err) != "bad_params" {
+			t.Errorf("%s: %v", paths, err)
+		}
+	}
+	// An absolute path passes the check and needs the link.
+	_, err := d.Call(context.Background(), "share.files", []byte(`{"device":"phone1","paths":["/tmp/a.jpg"]}`))
+	if errCode(err) != "offline" {
+		t.Errorf("an absolute path: %v", err)
+	}
+}
+
+// TestSendFilesNeedsPairing checks that files and clipboard images do not
+// go on the link of a device that is not paired. A device that sends a
+// pair request again loses its trust and keeps its link.
+func TestSendFilesNeedsPairing(t *testing.T) {
+	d := testDaemon()
+	dev := &Device{ID: "p1", Name: "Pixel 8", link: &lan.Link{}, Incoming: []string{proto.TypeFluxClipboardImage}}
+	if _, err := d.SendFiles(dev, []string{"/tmp/a.jpg"}); errCode(err) != "not_paired" {
+		t.Errorf("SendFiles: %v", err)
+	}
+	d.clip.(*memClipboard).image = []byte("\x89PNG\r\n\x1a\n")
+	if err := d.SendClipboard(dev, ""); errCode(err) != "not_paired" {
+		t.Errorf("SendClipboard with an image: %v", err)
 	}
 }

@@ -294,3 +294,18 @@ func TestConnectClipboardText(t *testing.T) {
 		t.Fatalf("last text after an image %q", d.content.lastClip)
 	}
 }
+
+// TestLargeLocalText checks that a local copy above maxSentText stays in
+// the history, and that a device that connects gets no text.
+func TestLargeLocalText(t *testing.T) {
+	d, _ := clipDaemon(t, true)
+	d.onLocalClipboard("small text")
+	large := strings.Repeat("a", maxSentText+1)
+	d.onLocalClipboard(large)
+	if d.content.lastClip != "" {
+		t.Fatalf("last text has %d bytes", len(d.content.lastClip))
+	}
+	if len(d.clipboard) != 2 || d.clipboard[0].Text != large {
+		t.Fatalf("history has %d entries", len(d.clipboard))
+	}
+}
