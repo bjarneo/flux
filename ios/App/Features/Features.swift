@@ -161,6 +161,7 @@ enum FeatureOverlays {
 enum FeatureHooks {
     /// Runs once after launch, before the network starts.
     static func didLaunch(model: AppModel) {
+        ClipboardIntentBridge.model = model
         NotificationAccess.shared.refresh()
         ShareFeature.didLaunch(model: model)
         SystemFeature.didLaunch(model: model)
@@ -177,6 +178,8 @@ enum FeatureHooks {
     /// Runs when the app comes on the screen or leaves it.
     static func sceneChanged(active: Bool, model: AppModel) {
         model.core.plugin(ClipboardPlugin.self)?.setActive(active)
+        // A copy that the user made in another app goes out once.
+        if active { model.core.plugin(ClipboardPlugin.self)?.catchUp() }
         if active { NotificationAccess.shared.refresh() }
         // A computer that connects also gets the new images, through the plugin.
         if active { model.core.plugin(CaptureWatchPlugin.self)?.catchUp() }
@@ -197,9 +200,10 @@ enum FeatureHooks {
 
     /// True while a feature runs in the background and needs the links:
     /// the microphone stream, which keeps Flux running with the audio
-    /// background mode.
+    /// background mode, and an App Intent such as Send Text to Computer.
     static func runsInBackground(model: AppModel) -> Bool {
         model.core.plugin(MicPlugin.self)?.model.status.active == true
+            || model.intentsRunning > 0
     }
 
     /// True while the screen of the iPhone must stay on: the webcam or the

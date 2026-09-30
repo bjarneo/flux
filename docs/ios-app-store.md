@@ -35,7 +35,7 @@ Flux connects your iPhone to your Omarchy computer on the same local network. Th
 
 - Send files, photos, text, and links to the computer, also from the share sheet of other apps.
 - Receive files from the computer in the Files app.
-- Share the clipboard with the computer while Flux is open.
+- Share the clipboard with the computer while Flux is open, or send a copy with a shortcut while Flux stays closed.
 - Control the music and video players of the computer.
 - Run the commands that you set up on the computer.
 - Browse the shared folders of the computer and save files to the Files app.
@@ -52,7 +52,7 @@ What iOS does not allow:
 
 - iOS suspends Flux soon after it leaves the screen. Flux connects again when you open it. Only the microphone stream continues in the background.
 - iOS gives apps no access to the notifications of other apps, to text messages, or to calls. Flux does not send them to the computer.
-- The clipboard syncs only while Flux is on the screen.
+- The clipboard syncs only while Flux is on the screen. A shortcut with Get Clipboard and Send Text to Computer sends 1 copy per run.
 - New screenshots and photos go to the computer when you open Flux.
 - The webcam stops when Flux leaves the screen.
 - Flux does not show the screen of the iPhone on the computer.
@@ -115,7 +115,7 @@ Pairing: the iPhone publishes the Bonjour service _flux._udp and listens on TCP 
 
 Encryption: each device makes a self-signed RSA 2048 certificate with its device ID as the common name, O=Omarchy, and OU=Flux. The links use TLS 1.2 through swift-nio-ssl. After the pairing, each side accepts only the certificate that it pinned, because the devices have no public certificate authority. The file browser uses SSH and SFTP through the Citadel library inside a TLS tunnel with the same certificates. Sudo approval signs with a P-256 key in the Secure Enclave through CryptoKit, and each signature needs Face ID or Touch ID. The links use sockets, not URL loading, and the app sets no App Transport Security exception.
 
-Background mode: the app claims only the audio mode. It keeps the microphone stream to the computer running while the iPhone is locked or Flux is in the background, like a voice recorder. Without a microphone stream, Flux closes its links when its background time ends.
+Background mode: the app claims only the audio mode. It keeps the microphone stream to the computer running while the iPhone is locked or Flux is in the background, like a voice recorder. Without a microphone stream, Flux closes its links when its background time ends. The Send Text to Computer action for Shortcuts runs in the background without this mode: it opens the links for at most 20 seconds, sends the text that Shortcuts gives it, and closes the links.
 
 Remote control: the touchpad, keyboard, remote desktop, terminal, and agent screens send input to programs on the user's own computer, like an SSH client. The app asks for Face ID, Touch ID, or the passcode before these screens send input, and an unlock lasts 5 minutes. The app runs no downloaded code.
 

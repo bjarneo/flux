@@ -36,6 +36,9 @@ final class AppModel {
     private(set) var isActive = false
     /// True while the touchpad shows. The screen of the iPhone stays on then.
     var touchpadOpen = false
+    /// The number of App Intents that use the links now. The links stay
+    /// open in the background while one runs, see `withBackgroundLink`.
+    private(set) var intentsRunning = 0
     private var toastTask: Task<Void, Never>?
     private var backgroundTask = UIBackgroundTaskIdentifier.invalid
     /// The pairing sheet that shows now, see `pairSheetClosed`.
@@ -216,6 +219,29 @@ final class AppModel {
         endBackgroundTask()
     }
 
+    /// Starts the links for an App Intent, also while Flux is in the
+    /// background, and runs `body` with the IDs of the connected, paired
+    /// computers, see `FluxCore.waitForPairedLinks`. After `body`, the links
+    /// close again when Flux is not on the screen and no other work needs
+    /// them, so that the computers see the iPhone leave.
+    func withBackgroundLink<T>(timeout: Duration, _ body: @MainActor ([String]) async -> T) async -> T {
+        intentsRunning += 1
+        core.resume()
+        let ids = await core.waitForPairedLinks(timeout: timeout)
+        let result = await body(ids)
+        intentsRunning -= 1
+        stopWhenIdle()
+        return result
+    }
+
+    /// Closes the links while Flux is off the screen, iOS gives it no
+    /// background time, and no feature needs the links in the background.
+    private func stopWhenIdle() {
+        if !isActive, backgroundTask == .invalid, !FeatureHooks.runsInBackground(model: self) {
+            core.stop()
+        }
+    }
+
     /// Closes the links when the work that kept Flux running in the
     /// background ends after its background time, such as a microphone
     /// stream that the computer stops.
@@ -227,9 +253,7 @@ final class AppModel {
                 MainActor.assumeIsolated {
                     guard let self else { return }
                     self.watchBackgroundWork()
-                    if !self.isActive, self.backgroundTask == .invalid, !FeatureHooks.runsInBackground(model: self) {
-                        self.core.stop()
-                    }
+                    self.stopWhenIdle()
                 }
             }
         }
