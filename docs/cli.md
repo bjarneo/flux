@@ -134,6 +134,8 @@ Does Pixel 8 show 5EE6 825F 974E D59A? [y/N] y
 
 Type `y` only when the device shows the same key.
 Any other answer rejects the pairing, and the device removes it.
+The question ends when the pairing ends in another way.
+For example, you select **Confirm** in the Flux window, the device ends the pairing, or the 30 seconds end.
 When stdin is not a terminal, `flux-cli pair` prints the command that confirms the pairing, and then it stops:
 
 ```text

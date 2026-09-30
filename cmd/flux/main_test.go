@@ -5,12 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"flux/internal/herdr"
+	"flux/internal/ipc"
 )
 
 func TestWebcamSettings(t *testing.T) {
@@ -108,12 +111,8 @@ func TestFindPairing(t *testing.T) {
 
 func TestSameKey(t *testing.T) {
 	for answer, want := range map[string]bool{"y\n": true, " YES \n": true, "n\n": false, "\n": false, "": false, "5EE6 825F 974E D59A\n": false} {
-		var out strings.Builder
-		if got := sameKey(bufio.NewReader(strings.NewReader(answer)), &out, "Pixel 8", "5EE6 825F 974E D59A"); got != want {
+		if got := sameKey(bufio.NewReader(strings.NewReader(answer))); got != want {
 			t.Errorf("answer %q: %v, want %v", answer, got, want)
-		}
-		if out.String() != "Does Pixel 8 show 5EE6 825F 974E D59A? [y/N] " {
-			t.Errorf("prompt %q", out.String())
 		}
 	}
 }
@@ -122,6 +121,85 @@ func TestValidKey(t *testing.T) {
 	for key, want := range map[string]bool{"5EE6825F974ED59A": true, "5ee6825f974ed59a": false, "5EE6825F974ED59": false, "5EE6825F974ED59G": false, "": false} {
 		if got := validKey(key); got != want {
 			t.Errorf("validKey(%q) = %v, want %v", key, got, want)
+		}
+	}
+}
+
+// fakeFluxd plays fluxd for waitPair. It sends the events and records the
+// calls.
+type fakeFluxd struct {
+	events chan ipc.Message
+	calls  chan string
+}
+
+func (f *fakeFluxd) Call(method string, params, _ any) error {
+	b, _ := json.Marshal(params)
+	f.calls <- method + " " + string(b)
+	return nil
+}
+
+func (f *fakeFluxd) Events() <-chan ipc.Message { return f.events }
+
+// pairStates returns a fake fluxd that sends a state event for each pair
+// state of the device a1b2c3. The state "paired" marks the device as
+// paired.
+func pairStates(states ...string) *fakeFluxd {
+	f := &fakeFluxd{events: make(chan ipc.Message, len(states)), calls: make(chan string, 4)}
+	for _, st := range states {
+		data := fmt.Sprintf(`{"devices":[{"id":"a1b2c3","name":"Pixel 8","paired":%v,"pairState":%q,"pairKey":"5EE6825F974ED59A"}]}`, st == "paired", st)
+		f.events <- ipc.Message{Event: "state", Data: json.RawMessage(data)}
+	}
+	return f
+}
+
+// TestWaitPair checks the key question of flux-cli pair. The answer y
+// accepts the pairing with the key, and another answer rejects it. The
+// question ends when the pairing ends in another way.
+func TestWaitPair(t *testing.T) {
+	res := pairResult{Device: "a1b2c3", Name: "Pixel 8", Key: "5EE6825F974ED59A"}
+	const question = "Does Pixel 8 show 5EE6 825F 974E D59A? [y/N] "
+	// silent is stdin of a user who does not answer.
+	silent := func() io.Reader {
+		r, w := io.Pipe()
+		t.Cleanup(func() { w.Close() })
+		return r
+	}
+	for _, tc := range []struct {
+		name   string
+		in     io.Reader
+		f      *fakeFluxd
+		call   string
+		out    string
+		errMsg string
+	}{
+		{"y", strings.NewReader("y\n"), pairStates("requested", "confirm"),
+			`pair.accept {"device":"a1b2c3","key":"5EE6825F974ED59A"}`, question + "✓ Pixel 8 (a1b2c3) paired with the key 5EE6 825F 974E D59A\n", ""},
+		{"n", strings.NewReader("n\n"), pairStates("requested", "confirm"),
+			`pair.reject {"device":"a1b2c3","key":"5EE6825F974ED59A"}`, question, "you rejected the pairing with Pixel 8"},
+		{"a confirm in the window", silent(), pairStates("requested", "confirm", "paired"),
+			"", question + "\n✓ Pixel 8 (a1b2c3) paired with the key 5EE6 825F 974E D59A\n", ""},
+		{"a timeout", silent(), pairStates("requested", "confirm", "none"),
+			"", question + "\n", "the pairing with Pixel 8 ended before you answered"},
+		{"a reject on the device", nil, pairStates("requested", "none"),
+			"", "", "Pixel 8 did not pair"},
+		{"no terminal", nil, pairStates("requested", "confirm"),
+			"", "Pixel 8 accepted. Compare the key. When Pixel 8 shows 5EE6 825F 974E D59A, run:\n  flux-cli accept a1b2c3 5EE6 825F 974E D59A\n", ""},
+	} {
+		var out strings.Builder
+		err := waitPair(tc.f, tc.in, &out, res)
+		if got := fmt.Sprint(err); (tc.errMsg == "" && err != nil) || (tc.errMsg != "" && got != tc.errMsg) {
+			t.Errorf("%s: error %v, want %q", tc.name, err, tc.errMsg)
+		}
+		if out.String() != tc.out {
+			t.Errorf("%s: output %q, want %q", tc.name, out.String(), tc.out)
+		}
+		call := ""
+		select {
+		case call = <-tc.f.calls:
+		default:
+		}
+		if call != tc.call {
+			t.Errorf("%s: call %q, want %q", tc.name, call, tc.call)
 		}
 	}
 }

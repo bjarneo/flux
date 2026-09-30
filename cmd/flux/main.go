@@ -399,8 +399,57 @@ func pair(device string) error {
 	}
 	cleanAll(&res)
 	fmt.Printf("Confirm %s on %s (%s)…\n", proto.FormatKey(res.Key), res.Name, res.Device)
+	var in io.Reader
+	if isTerminal(os.Stdin) {
+		in = os.Stdin
+	}
+	return waitPair(c, in, os.Stdout, res)
+}
+
+// pairClient is the part of ipc.Client that waitPair uses.
+type pairClient interface {
+	Call(method string, params, result any) error
+	Events() <-chan ipc.Message
+}
+
+// waitPair follows the state of the device of res until the pairing ends.
+// After the device accepts, it asks on in whether the device shows the
+// key. It follows the state also while the question waits for an answer,
+// so the question ends when the pairing ends in another way: a confirm in
+// the Flux window, a pair false, or the timeout of fluxd. When in is nil,
+// waitPair prints the command that confirms the pairing, and returns.
+func waitPair(c pairClient, in io.Reader, out io.Writer, res pairResult) error {
+	key := proto.FormatKey(res.Key)
 	requested := false
-	for ev := range c.Events() {
+	// answer gets the answer to the question. It is nil until the question
+	// shows.
+	var answer chan bool
+	// endLine ends the line of an open question before a message.
+	endLine := func() {
+		if answer != nil {
+			fmt.Fprintln(out)
+		}
+	}
+	// stop returns the error for a pairing that ended.
+	stop := func(name string) error {
+		endLine()
+		if answer != nil {
+			return fmt.Errorf("the pairing with %s ended before you answered", name)
+		}
+		return fmt.Errorf("%s did not pair", name)
+	}
+	for {
+		var ev ipc.Message
+		select {
+		case yes := <-answer:
+			return answerPair(c, out, res, yes)
+		case m, ok := <-c.Events():
+			if !ok {
+				endLine()
+				return errors.New("fluxd closed the connection")
+			}
+			ev = m
+		}
 		if ev.Event != "state" {
 			continue
 		}
@@ -415,54 +464,64 @@ func pair(device string) error {
 				continue
 			}
 			found = true
+			res.Name = d.Name
 			switch {
 			case d.Paired:
-				fmt.Printf("✓ %s (%s) paired with the key %s\n", d.Name, d.ID, proto.FormatKey(res.Key))
+				endLine()
+				fmt.Fprintf(out, "✓ %s (%s) paired with the key %s\n", d.Name, d.ID, key)
 				return nil
 			case d.PairState == "requested":
 				requested = true
 			case d.PairState == "confirm" && d.PairKey == res.Key:
-				return confirmPair(c, d.Name, res)
+				requested = true
+				if answer == nil && in == nil {
+					fmt.Fprintf(out, "%s accepted. Compare the key. When %s shows %s, run:\n  flux-cli accept %s %s\n", d.Name, d.Name, key, res.Device, key)
+					return nil
+				}
+				if answer == nil {
+					answer = ask(in, out, d.Name, key)
+				}
 			case requested:
-				return fmt.Errorf("%s did not pair", d.Name)
+				return stop(d.Name)
 			}
 		}
 		// A device that is not paired leaves the state when its link ends.
 		if requested && !found {
-			return fmt.Errorf("%s did not pair", res.Name)
+			return stop(res.Name)
 		}
 	}
-	return errors.New("fluxd closed the connection")
 }
 
-// confirmPair asks the user of this computer to compare the key of a
-// pairing that the device accepted. It accepts the pairing with that key
-// on y, and rejects it on any other answer. When stdin is not a terminal,
-// it prints the command that accepts the pairing.
-func confirmPair(c *ipc.Client, name string, res pairResult) error {
-	key := proto.FormatKey(res.Key)
-	if !isTerminal(os.Stdin) {
-		fmt.Printf("%s accepted. Compare the key. When %s shows %s, run:\n  flux-cli accept %s %s\n", name, name, key, res.Device, key)
-		return nil
-	}
+// answerPair sends the answer of the user of this computer for the
+// pairing with the key of res. It accepts the pairing when yes is true,
+// and rejects it else.
+func answerPair(c pairClient, out io.Writer, res pairResult, yes bool) error {
 	params := map[string]any{"device": res.Device, "key": res.Key}
-	if !sameKey(bufio.NewReader(os.Stdin), os.Stdout, name, key) {
+	if !yes {
 		if err := c.Call("pair.reject", params, nil); err != nil {
 			return cleanErr(err)
 		}
-		return fmt.Errorf("you rejected the pairing with %s", name)
+		return fmt.Errorf("you rejected the pairing with %s", res.Name)
 	}
 	if err := c.Call("pair.accept", params, nil); err != nil {
 		return cleanErr(err)
 	}
-	fmt.Printf("✓ %s (%s) paired with the key %s\n", name, res.Device, key)
+	fmt.Fprintf(out, "✓ %s (%s) paired with the key %s\n", res.Name, res.Device, proto.FormatKey(res.Key))
 	return nil
 }
 
-// sameKey asks whether the device shows the key, and reports whether the
-// user answered y.
-func sameKey(in *bufio.Reader, out io.Writer, name, key string) bool {
+// ask asks whether the device shows the key, and reads the answer from in
+// in the background. The channel gets true when the user answers y.
+func ask(in io.Reader, out io.Writer, name, key string) chan bool {
 	fmt.Fprintf(out, "Does %s show %s? [y/N] ", name, key)
+	ch := make(chan bool, 1)
+	go func() { ch <- sameKey(bufio.NewReader(in)) }()
+	return ch
+}
+
+// sameKey reads the answer to the key question from in, and reports
+// whether the user answered y.
+func sameKey(in *bufio.Reader) bool {
 	line, _ := in.ReadString('\n')
 	switch strings.ToLower(strings.TrimSpace(line)) {
 	case "y", "yes":
