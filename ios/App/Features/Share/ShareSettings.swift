@@ -45,10 +45,10 @@ private struct ClipboardShortcutSettings: View {
         } footer: {
             Text("""
             In Shortcuts, make a shortcut with Get Clipboard and then Send Text to Computer. \
-            Run it with Back Tap, the Action button, or Control Center. The text goes to each paired computer \
-            that connects in 20 seconds. Flux cannot see if the text is a password, so do not run the shortcut \
-            after you copy a password. To let Flux read the clipboard without a question when it opens, \
-            choose Allow in Paste from Other Apps.
+            Run it with Back Tap, the Action button, or Control Center. The text goes to the paired computers \
+            that connect first. Flux waits at most 20 seconds for them. Flux cannot see if the text is a password, \
+            so do not run the shortcut after you copy a password. To let Flux read the clipboard without a question \
+            when it opens, choose Allow in Paste from Other Apps.
             """)
         }
     }

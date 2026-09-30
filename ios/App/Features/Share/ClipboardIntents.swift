@@ -36,6 +36,7 @@ struct SendTextToComputerIntent: AppIntent {
             throw ClipboardIntentError.notStarted
         }
         guard model.core.enabled else { throw ClipboardIntentError.off }
+        guard !model.paired.isEmpty else { throw ClipboardIntentError.notPaired }
         switch ClipboardIntentText.check(value, skipUnchanged: skipUnchanged, unchanged: clipboard.isUnchanged(value)) {
         case .empty: throw ClipboardIntentError.empty
         case .tooLarge: throw ClipboardIntentError.tooLarge
@@ -66,6 +67,7 @@ struct SendClipboardIntent: AppIntent {
             throw ClipboardIntentError.notStarted
         }
         guard model.core.enabled else { throw ClipboardIntentError.off }
+        guard !model.paired.isEmpty else { throw ClipboardIntentError.notPaired }
         guard await ClipboardIntentBridge.waitUntilActive(model) else { throw ClipboardIntentError.notStarted }
         let ids = await model.core.waitForPairedLinks(timeout: .seconds(15))
             .filter { id in model.core.withDevice(id) { $0.accepts(PacketType.clipboard) } == true }
@@ -117,6 +119,7 @@ enum ClipboardIntentText: Equatable {
 enum ClipboardIntentError: Error, CustomLocalizedStringResourceConvertible {
     case notStarted
     case off
+    case notPaired
     case empty
     case tooLarge
     case notConnected
@@ -125,6 +128,7 @@ enum ClipboardIntentError: Error, CustomLocalizedStringResourceConvertible {
         switch self {
         case .notStarted: "Flux did not start. Open Flux, then try again."
         case .off: "Flux is off. Turn it on in the settings of Flux."
+        case .notPaired: "No computer is paired. Open Flux and pair a computer."
         case .empty: "The clipboard has no text."
         case .tooLarge: "The text is larger than 1 MB. Send it as a file."
         case .notConnected: "No computer connected. Check that the computer runs Flux and is on the same network."

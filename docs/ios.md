@@ -203,6 +203,7 @@ To make the shortcut:
 **Send without opening Flux** in the settings of Flux opens the Flux page in Shortcuts and shows these places.
 
 The action runs in the background and needs an unlocked iPhone.
+With no paired computer, it stops at once and shows **No computer is paired**.
 It starts the links and waits for the paired computers.
 The wait ends when each paired computer is connected, 2 seconds after the first computer connects, or after 20 seconds.
 The action sends the text as `flux.clipboard` to each computer that is connected at that time.

@@ -712,11 +712,13 @@ public final class FluxCore: @unchecked Sendable {
         }
     }
 
-    /// Reports whether the wait for links ends: each paired computer is
-    /// connected, `settle` passed since the first link, or `timeout` passed.
-    /// A paired computer that is off does not hold the others for long.
+    /// Reports whether the wait for links ends: no computer is paired, each
+    /// paired computer is connected, `settle` passed since the first link,
+    /// or `timeout` passed. A paired computer that is off does not hold the
+    /// others for long.
     static func linkWaitEnds(connected: Int, paired: Int, waited: Duration, sinceFirst: Duration?, timeout: Duration, settle: Duration) -> Bool {
-        if connected > 0, connected >= paired { return true }
+        // With no paired computer, 0 of 0 are connected.
+        if connected >= paired { return true }
         if let sinceFirst, sinceFirst >= settle { return true }
         return waited >= timeout
     }

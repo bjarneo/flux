@@ -133,8 +133,8 @@ final class LifecycleTests: XCTestCase {
         XCTAssertFalse(ends(connected: 1, paired: 2, waited: .seconds(1), sinceFirst: .seconds(1)), "the other computer can still connect")
         XCTAssertTrue(ends(connected: 1, paired: 2, waited: .seconds(3), sinceFirst: .seconds(2)), "a computer that is off does not hold the send")
         XCTAssertTrue(ends(connected: 0, paired: 1, waited: .seconds(20), sinceFirst: nil), "the wait ends after the timeout")
+        XCTAssertTrue(ends(connected: 0, paired: 0, waited: .zero, sinceFirst: nil), "with no paired computer, no link can come")
         XCTAssertTrue(ends(connected: 0, paired: 0, waited: .seconds(20), sinceFirst: nil))
-        XCTAssertFalse(ends(connected: 0, paired: 0, waited: .seconds(1), sinceFirst: nil), "no link, so no end before the timeout")
     }
 
     @MainActor
