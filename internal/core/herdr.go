@@ -112,24 +112,38 @@ type herdrJobs struct {
 	kinds     []string
 	kindsAt   time.Time
 	kindsBusy bool
+
+	// sending counts the keys, prompt, input, and close jobs that run for
+	// each device ID.
+	sending map[string]int
 }
 
-// herdrReadKey selects the reads of one pane on one link with the same
-// line count and format. Only such reads can share an answer.
+// herdrMaxSends is the number of keys, prompt, input, and close jobs that
+// can run at a time for each device. Each job opens a connection to herdr.
+const herdrMaxSends = 4
+
+// errHerdrBusy is the reply when herdrMaxSends jobs of the device run.
+const errHerdrBusy = "fluxd is busy with earlier replies from this device. Try again."
+
+// herdrReadKey selects the reads of one pane on one link. One read of
+// the pane runs at a time for each link.
 type herdrReadKey struct {
-	link  *lan.Link
-	pane  string
-	lines int
-	ansi  bool
+	link *lan.Link
+	pane string
 }
 
 // herdrRead is the state of a read that runs. waiting is true when
-// another read with the same key came during the read. stale is true when
-// a reply went to the pane during the herdr calls, so the answer can be
+// another read of the pane came during the read. stale is true when a
+// reply went to the pane during the herdr calls, so the answer can be
 // older than the reply.
 type herdrRead struct {
 	waiting bool
 	stale   bool
+
+	// lines and ansi are the line count and the format of the newest read
+	// that waits.
+	lines int
+	ansi  bool
 }
 
 // agentHistory is the last plain history of an agent. asked is the line
@@ -644,21 +658,37 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 		_ = l.Send(state)
 	case "read":
 		d.readHerdrOnce(dev, l, body.Pane, body.Lines, body.Format == "ansi", func(p *proto.Packet) { _ = l.Send(p) })
-	case "keys", "prompt", "input":
-		go func() {
-			failed := map[string]any{"kind": "sent", "pane": body.Pane, "action": body.Kind, "error": "fluxd could not send the reply"}
-			defer d.herdrRecover(body.Kind, d.herdrFailed(dev, l, req, failed))
-			var reply *proto.Packet
+	case "keys", "prompt", "input", "close":
+		failed := map[string]any{"kind": "sent", "pane": body.Pane, "action": body.Kind, "error": "fluxd could not send the reply"}
+		if body.Kind == "close" {
+			failed = map[string]any{"kind": "closed", "pane": body.Pane, "error": "fluxd could not close the pane"}
+		}
+		run := func() *proto.Packet {
 			switch body.Kind {
 			case "keys":
-				reply = d.herdrKeys(dev, body.Pane, body.Keys)
+				return d.herdrKeys(dev, body.Pane, body.Keys)
 			case "prompt":
-				reply = d.herdrPrompt(dev, body.Pane, body.Text, body.Answer)
-			default:
-				reply = d.herdrInput(dev, body.Pane, body.Text, body.Keys)
+				return d.herdrPrompt(dev, body.Pane, body.Text, body.Answer)
+			case "input":
+				return d.herdrInput(dev, body.Pane, body.Text, body.Keys)
 			}
-			d.herdrSend(dev, l, withRequest(reply, req))
-		}()
+			return d.herdrClose(dev, body.Pane)
+		}
+		switch d.startHerdrSend(dev, body.Pane) {
+		case herdrSendUnknown:
+			// The checks in run refuse a pane that fluxd does not know
+			// before a herdr call, so the answer goes at once.
+			d.herdrSend(dev, l, withRequest(run(), req))
+		case herdrSendBusy:
+			failed["error"] = errHerdrBusy
+			d.herdrSend(dev, l, withRequest(proto.New(proto.TypeFluxHerdr, failed), req))
+		default:
+			go func() {
+				defer d.endHerdrSend(dev)
+				defer d.herdrRecover(body.Kind, d.herdrFailed(dev, l, req, failed))
+				d.herdrSend(dev, l, withRequest(run(), req))
+			}()
+		}
 	case "create":
 		go func() {
 			failed := map[string]any{"kind": "created", "what": body.What, "error": "fluxd could not open the pane"}
@@ -671,14 +701,45 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 			d.mu.Unlock()
 			d.herdrSend(dev, l, state, withRequest(reply, req))
 		}()
-	case "close":
-		go func() {
-			failed := map[string]any{"kind": "closed", "pane": body.Pane, "error": "fluxd could not close the pane"}
-			defer d.herdrRecover("close", d.herdrFailed(dev, l, req, failed))
-			d.herdrSend(dev, l, withRequest(d.herdrClose(dev, body.Pane), req))
-		}()
 	default:
 		d.logf("%s: unknown flux.herdr kind %q", d.nameOf(dev), body.Kind)
+	}
+}
+
+// The results of startHerdrSend.
+const (
+	herdrSendStarted = iota
+	herdrSendUnknown
+	herdrSendBusy
+)
+
+// startHerdrSend counts a new keys, prompt, input, or close job of the
+// device for the pane. It returns herdrSendUnknown and counts nothing for
+// a pane that fluxd does not know. It returns herdrSendBusy when
+// herdrMaxSends jobs of the device run. Call endHerdrSend when a started
+// job ends.
+func (d *Daemon) startHerdrSend(dev *Device, pane string) int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	switch {
+	case !d.herdrAgentLocked(pane) && !d.herdrTerminalLocked(pane):
+		return herdrSendUnknown
+	case d.herdrJobs.sending[dev.ID] >= herdrMaxSends:
+		return herdrSendBusy
+	}
+	if d.herdrJobs.sending == nil {
+		d.herdrJobs.sending = map[string]int{}
+	}
+	d.herdrJobs.sending[dev.ID]++
+	return herdrSendStarted
+}
+
+// endHerdrSend ends a job that startHerdrSend counted.
+func (d *Daemon) endHerdrSend(dev *Device) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.herdrJobs.sending[dev.ID]--; d.herdrJobs.sending[dev.ID] <= 0 {
+		delete(d.herdrJobs.sending, dev.ID)
 	}
 }
 
@@ -739,19 +800,29 @@ func (d *Daemon) herdrRecover(what string, fail func()) {
 }
 
 // readHerdrOnce answers a read of the pane that came on the link l. One
-// read of a pane with the same line count and format runs at a time for
-// each link, from the herdr calls until the answer is sent. A read that
-// comes during the herdr calls gets the answer of that read, so a flood of
-// reads does not make more herdr calls and large packets. fluxd reads once
-// more when the agent status changed during the herdr calls, when a reply
-// went to the pane during them, or when a read came during the send. That
-// read can be newer than the answer. The answer does not go out after an
-// unpair. send sends the answer.
+// read of a pane runs at a time for each link, from the herdr calls until
+// the answer is sent. A read that comes during the herdr calls gets the
+// answer of that read, so a flood of reads does not make more herdr calls
+// and large packets. fluxd reads once more when the agent status changed
+// during the herdr calls, when a reply went to the pane during them, when
+// the read that came asks for another line count or format, or when a
+// read came during the send. That read uses the line count and the format
+// of the newest read, so the phone gets the answer to its last request.
+// A pane that fluxd does not know gets its answer at once, with no herdr
+// call. The answer does not go out after an unpair. send sends the answer.
 func (d *Daemon) readHerdrOnce(dev *Device, l *lan.Link, pane string, lines int, ansi bool, send func(*proto.Packet)) {
-	key := herdrReadKey{link: l, pane: pane, lines: herdrLines(lines), ansi: ansi}
+	key := herdrReadKey{link: l, pane: pane}
+	lines = herdrLines(lines)
 	d.mu.Lock()
+	if !d.herdrAgentLocked(pane) && !d.herdrTerminalLocked(pane) {
+		d.mu.Unlock()
+		if d.stillPaired(dev) {
+			send(d.readHerdr(pane, lines, ansi))
+		}
+		return
+	}
 	if r, running := d.herdrJobs.reads[key]; running {
-		r.waiting = true
+		r.waiting, r.lines, r.ansi = true, lines, ansi
 		d.herdrJobs.reads[key] = r
 		d.mu.Unlock()
 		return
@@ -762,11 +833,11 @@ func (d *Daemon) readHerdrOnce(dev *Device, l *lan.Link, pane string, lines int,
 	d.herdrJobs.reads[key] = herdrRead{}
 	d.mu.Unlock()
 	go func() {
-		failed := map[string]any{"kind": "output", "pane": pane, "error": "fluxd could not read the pane"}
-		if ansi {
-			failed["format"] = "ansi"
-		}
 		defer d.herdrRecover("read", func() {
+			failed := map[string]any{"kind": "output", "pane": pane, "error": "fluxd could not read the pane"}
+			if ansi {
+				failed["format"] = "ansi"
+			}
 			if d.stillPaired(dev) {
 				send(proto.New(proto.TypeFluxHerdr, failed))
 			}
@@ -787,15 +858,21 @@ func (d *Daemon) readHerdrOnce(dev *Device, l *lan.Link, pane string, lines int,
 			p := d.readHerdr(pane, lines, ansi)
 			d.mu.Lock()
 			r := d.herdrJobs.reads[key]
-			again := r.waiting && (r.stale || d.herdrStatusLocked(pane) != status)
+			again := r.waiting && (r.stale || d.herdrStatusLocked(pane) != status || r.lines != lines || r.ansi != ansi)
 			d.herdrJobs.reads[key] = herdrRead{}
 			paired := dev.Paired
 			d.mu.Unlock()
 			if paired {
 				send(p)
 			}
+			if r.waiting {
+				lines, ansi = r.lines, r.ansi
+			}
 			d.mu.Lock()
-			if paired && dev.Paired && (again || d.herdrJobs.reads[key].waiting) {
+			if w := d.herdrJobs.reads[key]; paired && dev.Paired && (again || w.waiting) {
+				if w.waiting {
+					lines, ansi = w.lines, w.ansi
+				}
 				d.herdrJobs.reads[key] = herdrRead{}
 			} else {
 				delete(d.herdrJobs.reads, key)
