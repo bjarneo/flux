@@ -105,6 +105,15 @@ object Android {
         desc?.extras?.getBoolean("android.content.extra.IS_SENSITIVE", false) == true
 
     /**
+     * True when the app that made the current clip marks it as sensitive.
+     * A manual send uses it to tell a sensitive clip from an empty clipboard.
+     */
+    fun clipboardSensitive(context: Context): Boolean {
+        val cm = context.getSystemService(ClipboardManager::class.java) ?: return false
+        return runCatching { sensitive(cm.primaryClipDescription) }.getOrDefault(false)
+    }
+
+    /**
      * The time that ClipboardService set on the current clip, in
      * milliseconds, or 0 when the clipboard is empty. The system sets a new
      * time on each clip. The automatic sync drops a clip whose time matches

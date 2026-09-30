@@ -203,19 +203,21 @@ object Plugins {
     /**
      * Sends the clipboard to each connected paired computer. Call it on the
      * main thread while a window of Flux has focus. [manual] is true for a
-     * user action, for example the tile: it shows 1 toast with the result
-     * and sends the current clip again. The automatic path ([manual] false)
-     * shows no toast and drops a clip that it sent before, a clip that came
-     * from a computer, and a clip that its app marks as sensitive.
+     * user action, for example the tile: it gives 1 result to [notify] and
+     * sends the current clip again. [notify] can run on another thread, for
+     * example after an image transfer. The automatic path ([manual] false)
+     * reports nothing and drops a clip that it sent before and a clip that
+     * came from a computer. Both paths skip text that its app marks as
+     * sensitive.
      */
-    fun sendClipboardToAll(core: FluxCore, manual: Boolean): Boolean {
+    fun sendClipboardToAll(core: FluxCore, manual: Boolean, notify: (String) -> Unit = {}): Boolean {
         if (!core.settings.syncClipboard) {
-            if (manual) core.toast("Turn on Sync clipboard first")
+            if (manual) notify("Turn on Sync clipboard first")
             return false
         }
         val computers = core.connectedPaired()
         if (computers.isEmpty()) {
-            if (manual) core.toast("No computer is connected")
+            if (manual) notify("No computer is connected")
             return false
         }
         val stamp = Android.clipTimestamp(core.app)
@@ -225,14 +227,14 @@ object Plugins {
             if (!manual && uri == ClipImage.lastRemote) return false
             val targets = computers.filter { Types.FLUX_CLIPBOARD_IMAGE in it.identity.incoming }
             if (targets.isEmpty()) {
-                if (manual) core.toast("Update Flux on the computer to send images")
+                if (manual) notify("Update Flux on the computer to send images")
                 return false
             }
             lastSentStamp = stamp
             core.settings.clipboardTimestamp = System.currentTimeMillis()
             ClipImage.send(core, targets, uri, mime, manual = manual) { sent ->
                 if (manual) {
-                    core.toast(
+                    notify(
                         when {
                             sent > 0 -> if (sent == 1) "Image sent to ${targets[0].identity.deviceName}" else "Image sent to $sent computers"
                             sent < 0 -> "The image is larger than ${ClipImage.MAX_BYTES shr 20} MB"
@@ -245,48 +247,26 @@ object Plugins {
         }
         val text = Android.clipboardText(core.app, automatic = true)
         if (text.isNullOrEmpty()) {
-            if (manual) core.toast("The clipboard is empty")
+            if (manual) {
+                notify(
+                    if (Android.clipboardSensitive(core.app)) "Flux does not send a clip that its app marks as sensitive"
+                    else "The clipboard is empty",
+                )
+            }
             return false
         }
         if (!manual && text == lastRemoteClip) return false
         if (text.toByteArray(Charsets.UTF_8).size > MAX_AUTO_TEXT) {
-            if (manual) core.toast("The text is too large for the clipboard")
+            if (manual) notify("The text is too large for the clipboard")
             return false
         }
         lastSentStamp = stamp
         core.settings.clipboardTimestamp = System.currentTimeMillis()
         computers.forEach { it.send(Packet(Types.CLIPBOARD, bodyOf("content" to text))) }
         if (manual) {
-            core.toast(if (computers.size == 1) "Clipboard sent to ${computers[0].identity.deviceName}" else "Clipboard sent to ${computers.size} computers")
+            notify(if (computers.size == 1) "Clipboard sent to ${computers[0].identity.deviceName}" else "Clipboard sent to ${computers.size} computers")
         }
         return true
-    }
-
-    /**
-     * Sends selected text to each connected paired computer, for the "Send
-     * to computer" text action. It shows 1 toast with the result.
-     */
-    fun sendTextToComputers(core: FluxCore, text: String?) {
-        val body = text?.takeIf { it.isNotBlank() }
-        if (body == null) {
-            core.toast("No text to send")
-            return
-        }
-        if (!core.settings.syncClipboard) {
-            core.toast("Turn on Sync clipboard first")
-            return
-        }
-        if (body.toByteArray(Charsets.UTF_8).size > MAX_AUTO_TEXT) {
-            core.toast("The text is too large for the clipboard")
-            return
-        }
-        val computers = core.connectedPaired()
-        if (computers.isEmpty()) {
-            core.toast("No computer is connected")
-            return
-        }
-        computers.forEach { it.send(Packet(Types.CLIPBOARD, bodyOf("content" to body))) }
-        core.toast(if (computers.size == 1) "Sent to ${computers[0].identity.deviceName}" else "Sent to ${computers.size} computers")
     }
 
     // --------------------------------------------------------- run commands
