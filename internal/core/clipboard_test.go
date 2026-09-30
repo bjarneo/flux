@@ -384,7 +384,7 @@ func connectClip(text string, at time.Time) *proto.Packet {
 
 // TestConnectClipboardTwoDevices checks that a device that connects with
 // an older copy does not replace a newer text or image of another device,
-// or a newer desktop copy.
+// a newer shared text, or a newer desktop copy.
 func TestConnectClipboardTwoDevices(t *testing.T) {
 	d, clip := clipDaemon(t, true)
 	phone := &Device{ID: "phone", Name: "Pixel 8", Paired: true}
@@ -414,12 +414,26 @@ func TestConnectClipboardTwoDevices(t *testing.T) {
 		t.Fatalf("history %+v", d.clipboard)
 	}
 
-	// A desktop copy is newer than the copy on the Mac.
-	d.onLocalClipboard("desktop text")
-	d.handleClipboard(mac, connectClip("mac text", older))
-	waitIdle(t, d, &d.content.clipQ)
-	if clip.text != "phone text" || len(d.clipboard) != 3 || d.clipboard[0].Text != "desktop text" {
-		t.Fatalf("clipboard has %q, history %+v", clip.text, d.clipboard)
+	// A shared text or a desktop copy is newer than the copy on the Mac.
+	// Each case starts with a new daemon, so that no other clipboard makes
+	// the copy on the Mac stale.
+	for _, c := range []struct {
+		name  string
+		newer func(d *Daemon)
+		want  string
+	}{
+		{"shared text", func(d *Daemon) { d.receiveText(phone, "shared text") }, "shared text"},
+		{"desktop text", func(d *Daemon) { d.onLocalClipboard("desktop text") }, ""},
+		{"desktop image", func(d *Daemon) { d.onLocalImage(testPNG(2), "image/png") }, ""},
+	} {
+		d, clip := clipDaemon(t, true)
+		d.ctx = t.Context()
+		c.newer(d)
+		d.handleClipboard(mac, connectClip("mac text", older))
+		waitIdle(t, d, &d.content.clipQ)
+		if clip.text != c.want || len(d.clipboard) != 1 || d.clipboard[0].Device == mac.ID {
+			t.Errorf("%s: clipboard has %q, history %+v", c.name, clip.text, d.clipboard)
+		}
 	}
 }
 
