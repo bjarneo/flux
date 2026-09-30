@@ -86,4 +86,27 @@ class ClipWatchTest {
         // The first grab is allowed.
         assertFalse(ClipGate.rateLimited(now = 100, lastGrab = 0))
     }
+
+    @Test
+    fun selfTestRunsOnlyForANewReader() {
+        assertTrue(ClipGate.needsSelfTest(ClipAutoState.Checking, probing = false))
+        // A test that runs already covers the next trip to the background.
+        assertFalse(ClipGate.needsSelfTest(ClipAutoState.Checking, probing = true))
+        // A checked reader needs no test. A test would drop the line of a real copy.
+        assertFalse(ClipGate.needsSelfTest(ClipAutoState.Active, probing = false))
+        assertFalse(ClipGate.needsSelfTest(ClipAutoState.NeedsConsent, probing = false))
+        assertFalse(ClipGate.needsSelfTest(ClipAutoState.Off, probing = false))
+        assertFalse(ClipGate.needsSelfTest(ClipAutoState.Unavailable, probing = false))
+    }
+
+    @Test
+    fun onlyTheFirstLineOfTheSelfTestIsTheProbe() {
+        // The first line in the window is the probe line.
+        assertTrue(ClipGate.isProbeLine(now = 1_000, probeUntil = 2_500, probeSeen = false))
+        // A later line in the window comes from a real copy.
+        assertFalse(ClipGate.isProbeLine(now = 1_200, probeUntil = 2_500, probeSeen = true))
+        // A line after the window, or with no test, is a real copy.
+        assertFalse(ClipGate.isProbeLine(now = 2_500, probeUntil = 2_500, probeSeen = false))
+        assertFalse(ClipGate.isProbeLine(now = 1_000, probeUntil = 0, probeSeen = false))
+    }
 }

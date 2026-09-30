@@ -239,7 +239,7 @@ While **Sync clipboard** is on, a status line under the switches of **Sync with 
 - **Open Flux to resume automatic sync**: the log access ended. Open Flux to resume it.
 
 A tap on the status line opens the setup sheet.
-Flux checks the log access when you leave the app.
+Flux checks the log access the first time that you leave the app after the automatic sync starts.
 Until then, the status line shows **Automatic**.
 
 The automatic sync skips a sensitive clip and a clip that came from a computer.

@@ -162,7 +162,7 @@ A tap on the status line opens a sheet with the same commands and a copy button.
 The sheet also opens the overlay permission screen.
 
 After step 5, the status line shows **Automatic**.
-Flux checks the log access when you leave the app.
+Flux checks the log access the first time that you leave the app after the automatic sync starts.
 If the access is off, the status line then shows **Open Flux to resume automatic sync**.
 
 Android does not keep the log access.

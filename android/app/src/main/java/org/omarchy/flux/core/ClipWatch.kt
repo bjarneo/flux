@@ -26,8 +26,9 @@ enum class ClipAutoState {
     NeedsConsent,
 
     /**
-     * The log reader started while Flux was on top. The self-test runs when
-     * Flux goes to the background and sets [Active] or [NeedsConsent].
+     * The log reader started while Flux was on top. The self-test runs the
+     * next time Flux goes to the background and sets [Active] or
+     * [NeedsConsent].
      */
     Checking,
 
@@ -84,6 +85,23 @@ object ClipGate {
         rateLimited(now + DEBOUNCE_MS, lastGrab) -> lastGrab + RATE_MS - now
         else -> DEBOUNCE_MS
     }
+
+    /**
+     * True when a trip to the background must run the self-test for a
+     * reader in [state]. Only a new reader needs the test, and only 1 test
+     * runs at a time ([probing]). The test ignores a line, so a test on each
+     * trip would drop the line of a real copy.
+     */
+    fun needsSelfTest(state: ClipAutoState, probing: Boolean): Boolean =
+        state == ClipAutoState.Checking && !probing
+
+    /**
+     * True when a line at [now] comes from the self-test read. Only the
+     * first line before [probeUntil] is the probe line. A later line in the
+     * window ([probeSeen] is true) comes from a real copy.
+     */
+    fun isProbeLine(now: Long, probeUntil: Long, probeSeen: Boolean): Boolean =
+        !probeSeen && probeUntil != 0L && now < probeUntil
 }
 
 /**
@@ -141,7 +159,7 @@ object ClipWatch {
             foreground = on
             reconcileListener(context)
             // On the way to the background, the clipboard read is denied and
-            // makes a line, so the reader can confirm the log access.
+            // makes a line, so a new reader can confirm the log access.
             if (!on && armed) selfTest(context)
         }
     }
@@ -271,8 +289,9 @@ object ClipWatch {
         // A line that comes after the user turned off the sync starts no read.
         if (!armed) return
         val now = SystemClock.elapsedRealtime()
-        if (probeUntil != 0L && now < probeUntil) {
+        if (ClipGate.isProbeLine(now, probeUntil, probeSeen)) {
             // The self-test read made this line, so do not grab focus for it.
+            // A copy in the window makes a later line, which still gets a grab.
             probeSeen = true
             return
         }
@@ -280,9 +299,11 @@ object ClipWatch {
     }
 
     /**
-     * Confirms the log access. Flux reads the clipboard once, which is
-     * denied in the background and makes 1 line. The reader marks
-     * [ClipAutoState.Active] when it sees the line within the window.
+     * Confirms the log access of a new reader. Flux reads the clipboard
+     * once, which is denied in the background and makes 1 line. The reader
+     * marks [ClipAutoState.Active] when it sees the line within the window.
+     * After that, [onReaderExit] finds a reader that stops, so the test runs
+     * only in [ClipAutoState.Checking]. See [ClipGate.needsSelfTest].
      */
     private fun selfTest(context: Context) {
         if (!armed) return
@@ -294,6 +315,7 @@ object ClipWatch {
             }
             return
         }
+        if (!ClipGate.needsSelfTest(readerState, probing = probeUntil != 0L)) return
         val app = context.applicationContext
         probeSeen = false
         probeUntil = SystemClock.elapsedRealtime() + PROBE_MS
