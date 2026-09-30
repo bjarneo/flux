@@ -130,6 +130,10 @@ type Daemon struct {
 	// sendAppUpdate, or "". Only 1 app update runs at a time, and Busy
 	// counts it.
 	appSending string
+
+	// sessions is the state of the remote sessions: the input queue, the
+	// streams, Browse PC, and the shortcut requests.
+	sessions sessionState
 }
 
 // Options change how the daemon runs. The zero value is the normal mode.
@@ -290,6 +294,8 @@ func (d *Daemon) Busy() string {
 		what = "the screen mirror"
 	case d.desktop != nil:
 		what = "the remote desktop"
+	case len(d.sessions.browse) > 0:
+		what = "Browse PC"
 	case d.appSending != "":
 		what = "the app update for " + d.appSending
 	}

@@ -51,6 +51,8 @@ See [IPC](ipc.md) for the socket.
 On the phone, open the computer and select **Remote desktop**.
 The phone asks for its screen lock first. The unlock stays valid for 5 minutes.
 A phone without a screen lock cannot open the remote desktop.
+This check protects the phone app only.
+The computer shows its screen to each paired device while `remote_desktop` is on.
 
 The phone turns to landscape and hides its system bars.
 To show the system bars for a moment, swipe from the edge of the screen.
@@ -62,6 +64,7 @@ Select the name to show the next monitor.
 
 The stream runs while the remote desktop shows.
 It stops when you leave the screen, when the app goes to the background, or when the link drops.
+It also stops when the phone closes the stream, and when the device is unpaired.
 The screen of the phone stays on while the stream runs.
 
 ## Unlock the computer
@@ -80,6 +83,9 @@ Tap the video to turn the displays on again.
 
 If your phone keyboard corrects words, turn off the corrections before you type the password.
 The keyboard can change a word after you type it, and the computer then gets the changed text.
+
+`fluxd` does not limit the password tries from a phone.
+The `faillock` setting of PAM on the computer limits them, as for the keyboard of the computer.
 
 ## Use the touches
 
@@ -118,6 +124,11 @@ The panel pins the Omarchy menu, the Apps menu, the terminal, the browser, the f
 
 The panel needs `remote_input = true` and Hyprland with a Lua configuration, as in Omarchy.
 It runs each action in Hyprland, so it works also for the Omarchy bindings that the keys cannot press.
+
+While the computer is locked, the panel shows only the workspaces.
+A shortcut, a window action, or the list of shortcuts shows **Unlock the computer first**.
+The keyboard of the computer also runs no normal binding on the lock screen.
+Unlock the computer on the remote desktop, then open the panel again.
 
 ## Type
 
@@ -216,7 +227,8 @@ To turn off the remote desktop, turn off **Remote desktop** in the Flux window, 
 flux-cli desktop off
 ```
 
-This also stops a stream that runs.
+This also stops a stream that runs, and a stream that still starts.
+To stop the stream of a phone that you do not trust, unpair the phone.
 
 ## How it works
 
@@ -229,6 +241,11 @@ This also stops a stream that runs.
 4. `fluxd` reads each FLV tag and writes its frame to the phone.
 5. `fluxd` sends `flux.desktop` with `{"state": "live"}`, the monitor, the monitor names, and the stream size.
 6. The phone decodes the frames with the hardware decoder of the phone and shows each frame at once.
+
+`fluxd` runs 1 stream at a time.
+A new start stops the stream that runs, and the new recorder starts after the old recorder stopped.
+Before the recorder starts, `fluxd` checks again that `remote_desktop` is on and that the device is paired.
+The phone sends nothing on the stream, so `fluxd` stops the stream when the phone closes it.
 
 The phone can add `"monitor": "DP-1"` to the start packet to select a monitor.
 `maxSize` limits the long side of the stream from 640 to 3840 pixels.
@@ -277,6 +294,13 @@ The Omarchy panel uses `flux.shortcuts`. Each packet needs `remote_input = true`
 `fluxd` answers with `{"shortcuts": [{"ref", "keys", "description"}], "workspaces": [{"id", "windows"}], "active": 3}`, or with `{"error": "..."}`.
 An answer to an action has no `shortcuts`.
 
+While the computer is locked, `fluxd` answers each body except `{}` with `{"error": "Unlock the computer first"}`.
+It finds the lock in 3 ways: the `LockedHint` of the logind session, a running `hyprlock`, or a Hyprland session lock on a monitor.
+The Omarchy lock screen is a Hyprland session lock.
+
+Each device has 1 request in flight.
+The requests that come during it join into 1 next request, and the last action wins.
+
 In a Lua configuration, each Hyprland key binding calls a Lua function.
 `hyprctl binds` shows the registry reference of that function as the argument of the `__lua` dispatcher.
 To run a binding, `fluxd` reads the bindings again, checks that the reference is in the list, and runs `hyprctl eval` with that reference.
@@ -305,3 +329,4 @@ A binding to a key code, such as `SUPER + code:10` for workspace 1, does not mat
 | The pointer goes to the wrong place | The compositor must name its monitors with `wl_output` version 4. Hyprland does. |
 | The Omarchy panel shows an error | Run `flux-cli input on`. The panel also needs `hyprctl` and a Hyprland with a Lua configuration. |
 | A shortcut is gone | Hyprland read its configuration again, so the references changed. Close the panel and open it again. |
+| The Omarchy panel shows **Unlock the computer first** | The computer is locked. Unlock it on the remote desktop, then open the panel again. |

@@ -447,6 +447,7 @@ func (d *Daemon) setSetting(key string, value any) error {
 	b, isBool := value.(bool)
 	s, isString := value.(string)
 	d.mu.Lock()
+	before := *d.cfg
 	switch {
 	case key == "autoClipboard" && isBool:
 		d.cfg.AutoClipboard = b
@@ -481,7 +482,7 @@ func (d *Daemon) setSetting(key string, value any) error {
 	cfg := *d.cfg
 	d.mu.Unlock()
 	if err := config.Save(&cfg); err != nil {
-		return err
+		return d.unsavedSetting(key, &before, err)
 	}
 	if key == "name" {
 		d.announce()
@@ -491,6 +492,9 @@ func (d *Daemon) setSetting(key string, value any) error {
 	}
 	if key == "remoteInput" || key == "remoteDesktop" {
 		d.inputChanged()
+	}
+	if key == "shareHome" {
+		d.shareHomeChanged()
 	}
 	if key == "syncDnd" {
 		d.wakeDnd()
@@ -518,9 +522,48 @@ func (d *Daemon) Reload() error {
 	d.commandsChanged()
 	d.herdrChanged()
 	d.inputChanged()
+	d.shareHomeChanged()
 	d.wakeDnd()
 	d.wakeRelease()
 	return nil
+}
+
+// unsavedSetting handles a switch that config.toml could not keep. before
+// is the configuration before the change. A switch that gives a device
+// access to this computer must not turn on after the error, so it gets its
+// old value back. A switch that turned off stops the sessions at once and
+// stays off until fluxd restarts.
+func (d *Daemon) unsavedSetting(key string, before *config.Config, err error) error {
+	var field *bool
+	var old bool
+	d.mu.Lock()
+	switch key {
+	case "remoteInput":
+		field, old = &d.cfg.RemoteInput, before.RemoteInput
+	case "remoteDesktop":
+		field, old = &d.cfg.RemoteDesktop, before.RemoteDesktop
+	case "shareHome":
+		field, old = &d.cfg.ShareHome, before.ShareHome
+	}
+	if field == nil {
+		d.mu.Unlock()
+		return err
+	}
+	on := *field
+	if on {
+		*field = old
+	}
+	d.mu.Unlock()
+	if key == "shareHome" {
+		d.shareHomeChanged()
+	} else {
+		d.inputChanged()
+	}
+	d.markDirty()
+	if on {
+		return fmt.Errorf("%s did not change, because config.toml could not keep the change: %w", key, err)
+	}
+	return fmt.Errorf("%s is off until fluxd restarts, because config.toml could not keep the change: %w", key, err)
 }
 
 func hostname() string {

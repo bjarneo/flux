@@ -477,6 +477,8 @@ func (d *Daemon) onNotificationAction(_ uint32, key string) {
 		}
 	case "desktop-stop":
 		_ = d.StopDesktop()
+	case "browse-stop":
+		d.stopBrowse(rest)
 	case "notif-dismiss":
 		devID, id, _ := strings.Cut(rest, ":")
 		if dev := d.lookup(devID); dev != nil {

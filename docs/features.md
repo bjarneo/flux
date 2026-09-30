@@ -73,7 +73,7 @@ flux-cli url https://omarchy.org
 
 On Android, share content to Flux from the system share sheet.
 Received files use `download_dir`.
-The phone can browse the desktop home folder read-only when `share_home` is enabled.
+The phone can read folders of the desktop when `share_home` is enabled. See [Browse PC](#browse-pc).
 The tunnel carries SSH traffic without an inbound SSH firewall rule.
 
 A shared link opens in the browser of the desktop only when it is an `http` or `https` URL with a host.
@@ -104,6 +104,42 @@ It stops a transfer when the device sends no data for 1 minute.
 
 The programs that `fluxd` opens, for example a browser, a received file, or a [desktop command](#media-and-desktop-commands), start in their own systemd scope.
 A restart of `fluxd` after an update does not stop them.
+
+## Browse PC
+
+With `share_home = true`, a paired phone can read these folders of the desktop:
+
+- The home folder.
+- The `download_dir` folder.
+- `~/Documents`, `~/Pictures`, `~/Music`, and `~/Videos`, when they exist.
+
+`fluxd` serves only these folders, and only to read:
+
+- It refuses each path outside the folders, also a `..` path and a symlink that points out of its folder.
+- It hides each name that starts with a dot, such as `~/.ssh`, `~/.gnupg`, `~/.config`, and `~/.local`.
+- It hides the Flux folders, which hold the private key of the computer.
+- It shows only files and folders. A device, a socket, or a named pipe does not show.
+- It refuses each change: an upload, a new folder, a rename, a removal, and a link.
+
+A symlink to another drive does not show in the home folder.
+When `~/Documents` or another folder of the list is such a symlink, open it from the list of folders.
+`fluxd` does not offer a `download_dir` that holds the home folder, such as `/`, or a `download_dir` in a folder of home with a dot name.
+
+While the phone browses, the desktop shows a notification with a **Stop** button.
+A session ends after 1 hour, when the phone closes it, when the link drops, or when the device is unpaired.
+A new session of the same phone ends the old one.
+
+To end each session at once and stop new ones, set `share_home = false` in `~/.config/flux/config.toml`, then run:
+
+```sh
+systemctl --user reload fluxd
+```
+
+A script can also call the IPC method `settings.set` with the key `shareHome`:
+
+```json
+{"id":1,"method":"settings.set","params":{"key":"shareHome","value":false}}
+```
 
 ## Clipboard images
 

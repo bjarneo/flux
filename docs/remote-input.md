@@ -43,6 +43,9 @@ See [IPC](ipc.md) for the socket.
 On the phone, open the computer and select **Touchpad and keyboard**.
 The phone asks for its screen lock first. The unlock stays valid for 5 minutes.
 A phone without a screen lock cannot open the touchpad.
+This check protects the phone app only.
+The computer takes the input of each paired device while `remote_input` is on, also on its lock screen.
+The `faillock` setting of PAM on the computer limits the password tries on the lock screen.
 
 | Gesture | Result |
 | --- | --- |
@@ -164,6 +167,18 @@ A presenter remote that sends Page Up and Page Down works the same way.
 The phone and the Mac send `flux.mousepad.request` packets.
 `fluxd` runs them only while `remote_input` is on.
 After the link starts and after the setting changes, `fluxd` sends `flux.input` with `{"enabled": true}` or `{"enabled": false}`.
+
+The actions wait in 1 queue of at most 256 actions and 16384 characters of text.
+A packet goes into the queue with all of its actions, or `fluxd` drops it.
+4 places of the queue stay free for a button release, so a full queue does not keep a button down.
+Before each action, `fluxd` checks again that `remote_input` is on, that the device is paired, and that its link is the same.
+When 1 of these checks fails, `fluxd` does these steps:
+
+- It drops the actions that wait.
+- It stops the text that `wtype` still types.
+- It releases a button that the device holds, for example after a drag.
+
+A `wtype` run stops after 5 seconds plus 5 milliseconds for each character, so a compositor that does not answer does not stop the next keys.
 
 `fluxd` moves the pointer through the `zwlr_virtual_pointer_v1` Wayland protocol.
 It types with `wtype`, which uses the `zwp_virtual_keyboard_v1` Wayland protocol.
