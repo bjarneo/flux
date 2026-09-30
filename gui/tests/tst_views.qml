@@ -453,5 +453,17 @@ Item {
       mock.setState(function (s) { s.webcam.caps.aspects = [] })
       compare(card.aspects, ["16:9", "4:3", "1:1", "9:16"])
     }
+
+    function test_overviewShowsFingerprint() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "overview"
+      var line = null
+      tryVerify(function () { line = findBy(page(view), "objectName", "fingerprint"); return !!line })
+      verify(line.visible)
+      verify(!!findBy(line, "text", "5EE6 825F 974E D59A"))
+      mock.updateDevice(top.pixel, function (d) { d.fingerprint = ""; return d })
+      verify(!line.visible)
+    }
   }
 }

@@ -159,7 +159,8 @@ place, for 1 second. A new key or a move of the card starts the wait again.
 
 In pair mode, each device on the network shows its name, its address, and
 the fingerprint of its certificate. A row with the name of another device
-has a warning line.
+has a warning line. After the pairing, the Overview of the device shows the
+same fingerprint under **certificate**.
 
 ## Layout
 
