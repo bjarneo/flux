@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"flux/internal/config"
@@ -372,5 +373,85 @@ func TestLargeLocalText(t *testing.T) {
 	}
 	if len(d.clipboard) != 2 || d.clipboard[0].Text != large {
 		t.Fatalf("history has %d entries", len(d.clipboard))
+	}
+}
+
+// connectClip returns the flux.clipboard.connect packet of a device that
+// copied text at the time at.
+func connectClip(text string, at time.Time) *proto.Packet {
+	return proto.New(proto.TypeClipboardConnect, map[string]any{"content": text, "timestamp": at.UnixMilli()})
+}
+
+// TestConnectClipboardTwoDevices checks that a device that connects with
+// an older copy does not replace a newer text or image of another device,
+// or a newer desktop copy.
+func TestConnectClipboardTwoDevices(t *testing.T) {
+	d, clip := clipDaemon(t, true)
+	phone := &Device{ID: "phone", Name: "Pixel 8", Paired: true}
+	mac := &Device{ID: "mac", Name: "MacBook", Paired: true}
+	older := time.Now().Add(-time.Minute)
+
+	// The phone text comes after the copy on the Mac.
+	d.handleClipboard(phone, proto.New(proto.TypeClipboard, map[string]any{"content": "phone text"}))
+	d.handleClipboard(mac, connectClip("mac text", older))
+	waitIdle(t, d, &d.content.clipQ)
+	if clip.text != "phone text" {
+		t.Errorf("clipboard has %q, want the phone text", clip.text)
+	}
+	if len(d.clipboard) != 1 || d.clipboard[0].Device != phone.ID {
+		t.Fatalf("history %+v", d.clipboard)
+	}
+
+	// The phone image comes after the copy on the Mac.
+	at := time.Now()
+	d.receiveClipImage(phone, &clipFetch{}, testPNG(1))
+	d.handleClipboard(mac, connectClip("mac text", at))
+	waitIdle(t, d, &d.content.clipQ)
+	if clip.image == nil || clip.text != "phone text" {
+		t.Errorf("clipboard has the text %q and the image %q", clip.text, clip.image)
+	}
+	if len(d.clipboard) != 2 || d.clipboard[0].Image == "" {
+		t.Fatalf("history %+v", d.clipboard)
+	}
+
+	// A desktop copy is newer than the copy on the Mac.
+	d.onLocalClipboard("desktop text")
+	d.handleClipboard(mac, connectClip("mac text", older))
+	waitIdle(t, d, &d.content.clipQ)
+	if clip.text != "phone text" || len(d.clipboard) != 3 || d.clipboard[0].Text != "desktop text" {
+		t.Fatalf("clipboard has %q, history %+v", clip.text, d.clipboard)
+	}
+}
+
+// TestConnectClipboardCopyTime checks that fluxd orders the copies that
+// devices send when they connect by the time of each copy.
+func TestConnectClipboardCopyTime(t *testing.T) {
+	d, clip := clipDaemon(t, true)
+	phone := &Device{ID: "phone", Name: "Pixel 8", Paired: true}
+	mac := &Device{ID: "mac", Name: "MacBook", Paired: true}
+	now := time.Now()
+
+	// The phone copied after the Mac, so the phone text wins.
+	d.handleClipboard(mac, connectClip("mac text", now.Add(-2*time.Minute)))
+	d.handleClipboard(phone, connectClip("phone text", now.Add(-time.Minute)))
+	waitIdle(t, d, &d.content.clipQ)
+	if clip.text != "phone text" || len(d.clipboard) != 2 {
+		t.Fatalf("clipboard has %q, history %+v", clip.text, d.clipboard)
+	}
+
+	// The same copy again after a reconnect changes nothing.
+	d.handleClipboard(mac, connectClip("mac text", now.Add(-2*time.Minute)))
+	waitIdle(t, d, &d.content.clipQ)
+	if clip.text != "phone text" || len(d.clipboard) != 2 || d.clipboard[0].Text != "phone text" {
+		t.Fatalf("clipboard has %q, history %+v", clip.text, d.clipboard)
+	}
+
+	// A copy time after now counts as now, so a device clock that is ahead
+	// does not make the next copies stale.
+	d.handleClipboard(mac, connectClip("mac text from the future", now.Add(time.Hour)))
+	d.handleClipboard(phone, connectClip("new phone text", time.Now().Add(time.Second)))
+	waitIdle(t, d, &d.content.clipQ)
+	if clip.text != "new phone text" {
+		t.Errorf("clipboard has %q, want the new phone text", clip.text)
 	}
 }

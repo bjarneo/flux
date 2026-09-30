@@ -211,6 +211,7 @@ func (d *Daemon) onLocalClipboard(text string) {
 	fits := len(text) <= maxSentText
 	d.mu.Lock()
 	d.lastLocalClip = time.Now()
+	d.lastClipAt = d.lastLocalClip
 	// A device that connects later gets no older text in place of a text
 	// that is too large.
 	d.content.lastClip = ""
@@ -250,6 +251,7 @@ func (d *Daemon) onLocalImage(data []byte, mime string) {
 	}
 	d.mu.Lock()
 	d.lastLocalClip = time.Now()
+	d.lastClipAt = d.lastLocalClip
 	// A device that connects later gets no older text in place of the
 	// image.
 	d.content.lastClip = ""
@@ -343,9 +345,18 @@ func (d *Daemon) handleClipboard(dev *Device, p *proto.Packet) {
 	}
 	d.mu.Lock()
 	auto := d.cfg.AutoClipboard
-	// A clipboard.connect packet is older than a local change.
-	stale := p.Type == proto.TypeClipboardConnect && body.Timestamp > 0 && body.Timestamp <= d.lastLocalClip.UnixMilli()
+	// A clipboard.connect packet is older than the newest clipboard from
+	// the desktop or from any device.
+	connect := p.Type == proto.TypeClipboardConnect && body.Timestamp > 0
+	stale := connect && body.Timestamp <= d.lastClipAt.UnixMilli()
 	if !stale {
+		// A clipboard.connect packet holds the time of the copy on the
+		// device. A time after now counts as now, so that a device clock
+		// that is ahead does not make the next copies stale.
+		d.lastClipAt = time.Now()
+		if connect && body.Timestamp < d.lastClipAt.UnixMilli() {
+			d.lastClipAt = time.UnixMilli(body.Timestamp)
+		}
 		// The text is newer than an image of the device that is still on
 		// its way.
 		if f := d.content.clipImages[dev.ID]; f != nil {
@@ -426,6 +437,11 @@ func (d *Daemon) receiveClipImage(dev *Device, f *clipFetch, data []byte) {
 	// text or image of the device. The image then stays out of the history
 	// and does not replace the job of the newer text in the worker.
 	current := func() bool { return dev.Paired && !f.stale }
+	d.mu.Lock()
+	if current() {
+		d.lastClipAt = time.Now()
+	}
+	d.mu.Unlock()
 	if err := d.addClipImageIf(ClipEntry{Dir: "in", Device: dev.ID, DeviceName: name, Time: time.Now().Unix()}, data, mime, current); err != nil {
 		d.logf("save clipboard image: %v", err)
 	}
