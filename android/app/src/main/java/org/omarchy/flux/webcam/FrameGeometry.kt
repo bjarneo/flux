@@ -3,10 +3,12 @@ package org.omarchy.flux.webcam
 import kotlin.math.abs
 
 /**
- * The mapping from an output frame to the camera image. The output is
- * always 16:9 and upright for the viewer. The camera image is rotated
- * clockwise by a multiple of 90 degrees, cropped in the center to the output
- * shape, and mirrored for the phone preview of the front camera.
+ * The mapping from an output frame to the camera image. The output has the
+ * aspect of the webcam setting, one of 16:9, 4:3, 1:1, and 9:16, and it is
+ * upright for the viewer. The camera image is rotated clockwise by a
+ * multiple of 90 degrees, cropped in the center to the output shape, and
+ * mirrored when the mirror setting is on. The computer and the preview get
+ * the same frame.
  *
  * Coordinates run from 0 to 1, with y up, as in OpenGL texture space.
  */
@@ -27,7 +29,7 @@ object FrameGeometry {
         var sy = 1f
         if (rotatedAspect > outputAspect) sx = outputAspect / rotatedAspect else sy = rotatedAspect / outputAspect
 
-        // Step 1, the preview mirror: x -> 1 - x.
+        // Step 1, the mirror setting: x -> 1 - x.
         var a = Affine(if (mirror) -1f else 1f, 0f, 0f, 1f, if (mirror) 1f else 0f, 0f)
         // Step 2, the center crop in the rotated image.
         a = Affine(sx, 0f, 0f, sy, 0.5f - 0.5f * sx, 0.5f - 0.5f * sy).after(a)
@@ -62,18 +64,20 @@ object FrameGeometry {
 
     /**
      * Removes the mirror of the camera framework from [transform], in place.
-     * The camera adds its mirror as a horizontal flip of the buffer, so a
-     * second flip of the buffer x axis gives the image as the camera sees
-     * it. [uprightRotation] and the mirror setting then work as on Android
-     * 13 and later.
+     * The camera adds FLIP_H to the buffer transform before its rotation, so
+     * the mirror is a horizontal flip of the upright image: the transform
+     * is T * G, where G is x -> 1 - x in the coordinates before the
+     * transform. A second G before the transform gives T, the image as the
+     * camera sees it. [uprightRotation] and the mirror setting then work as
+     * on Android 13 and later.
      */
     fun unmirror(transform: FloatArray) {
         if (!mirrors(transform)) return
-        // x -> 1 - x after the transform: the first row changes its sign, and its offset becomes 1 - offset.
-        transform[0] = -transform[0]
-        transform[4] = -transform[4]
-        transform[8] = -transform[8]
-        transform[12] = 1f - transform[12]
+        // T * G: the first column changes its sign, and the offset column gets the old first column.
+        for (i in 0 until 4) {
+            transform[12 + i] += transform[i]
+            transform[i] = -transform[i]
+        }
     }
 
     /**

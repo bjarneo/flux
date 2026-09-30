@@ -5,6 +5,13 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+// The buffer transform flags of Android. ROT_180 and ROT_270 are made of the others.
+private const val FLIP_H = 1
+private const val FLIP_V = 2
+private const val ROT_90 = 4
+private const val ROT_180 = FLIP_H or FLIP_V
+private const val ROT_270 = ROT_180 or ROT_90
+
 class FrameGeometryTest {
     private val wide = 16f / 9f
     private val tall = 9f / 16f
@@ -117,25 +124,39 @@ class FrameGeometryTest {
         for (i in 0 until 16) assertEquals("element $i", expected[i], actual[i], 1e-5f)
     }
 
+    private fun surfaceTransform(flags: Int, shrink: Float = 0f) =
+        surfaceTransform((flags and FLIP_H) != 0, (flags and FLIP_V) != 0, (flags and ROT_90) != 0, shrink)
+
     @Test
     fun theMirrorOfTheFrontCameraBeforeAndroid13GoesAway() {
-        // A front camera with sensor orientation 270. Android 13 and later
-        // with MIRROR_MODE_NONE use ROT_270 (FLIP_H, FLIP_V, and ROT_90).
-        // Before Android 13, the camera adds FLIP_H, so FLIP_V and ROT_90 stay.
+        // CameraUtils gives a back camera the rotation of its sensor. It
+        // gives a front camera FLIP_H XOR that rotation, and a flip comes
+        // before a rotation. Android 13 and later with MIRROR_MODE_NONE give
+        // the front camera the rotation only. For each sensor orientation:
+        // the flags without the mirror, and the flags with it.
+        val cameras = mapOf(
+            0 to (0 to FLIP_H),
+            90 to (ROT_90 to (FLIP_H xor ROT_270)), // FLIP_V and ROT_90
+            180 to (ROT_180 to (FLIP_H xor ROT_180)), // FLIP_V
+            270 to (ROT_270 to (FLIP_H xor ROT_90)), // FLIP_H and ROT_90
+        )
         for (shrink in listOf(0f, 0.5f / 1080)) {
-            val real = surfaceTransform(h = true, v = true, r90 = true, shrink = shrink)
-            val mirrored = surfaceTransform(h = false, v = true, r90 = true, shrink = shrink)
-            assertFalse(FrameGeometry.mirrors(real))
-            assertTrue(FrameGeometry.mirrors(mirrored))
-            FrameGeometry.unmirror(mirrored)
-            assertMatrix(real, mirrored)
-            assertTrue("the axes still swap, so the rotation rule does not change", FrameGeometry.swapsAxes(mirrored))
+            for ((sensor, flags) in cameras) {
+                val real = surfaceTransform(flags.first, shrink)
+                val mirrored = surfaceTransform(flags.second, shrink)
+                assertFalse("sensor $sensor", FrameGeometry.mirrors(real))
+                assertTrue("sensor $sensor", FrameGeometry.mirrors(mirrored))
+                // The mirror is a horizontal flip of the upright image: a
+                // flip of the x axis before the real transform.
+                assertMatrix(times(real, flipH), mirrored)
+                FrameGeometry.unmirror(mirrored)
+                assertMatrix(real, mirrored)
+                assertEquals("the rotation rule does not change", FrameGeometry.swapsAxes(real), FrameGeometry.swapsAxes(mirrored))
+            }
         }
-        // Sensor orientation 90: ROT_90 without the mirror, FLIP_H and ROT_90 with it.
-        val real = surfaceTransform(h = false, v = false, r90 = true)
-        val mirrored = surfaceTransform(h = true, v = false, r90 = true)
-        FrameGeometry.unmirror(mirrored)
-        assertMatrix(real, mirrored)
+        // On a phone, a front sensor has orientation 90 or 270, so its transform swaps the axes.
+        assertTrue(FrameGeometry.swapsAxes(surfaceTransform(ROT_270)))
+        assertTrue(FrameGeometry.swapsAxes(surfaceTransform(ROT_90)))
     }
 
     @Test
