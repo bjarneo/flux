@@ -180,7 +180,8 @@ object NotificationSync {
     /**
      * Stops the sharing. Each computer drops the notifications that it got,
      * and the phone forgets the reply targets. The Share notifications
-     * switch calls it when it turns off.
+     * switch calls it when it turns off. The listener calls it when the user
+     * takes the notification access away.
      */
     fun stop() {
         for ((id, keys) in gate.keys()) {
