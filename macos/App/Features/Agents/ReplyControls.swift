@@ -97,6 +97,14 @@ struct ReplyControls: View {
                             .buttonStyle(.link)
                             .font(.caption)
                     }
+                    // fluxd refused the prompt because the agent waits for a
+                    // choice. The user can type the same text into the dialog.
+                    if problem == reply?.error, let r = reply, r.blocked, let text = r.text {
+                        Button("Send as answer") { answer(text) }
+                            .buttonStyle(.link)
+                            .font(.caption)
+                            .help("Type the text into the dialog of \(agent.agent)")
+                    }
                 }
             }
         }
@@ -136,6 +144,14 @@ struct ReplyControls: View {
         let deviceId = model.deviceId
         let pane = agent.pane
         guarded { [plugin] in plugin.sendPrompt(deviceId, pane: pane, text) }
+    }
+
+    /// Sends the text of a refused prompt again as the answer to the dialog of the agent.
+    private func answer(_ text: String) {
+        guard reply?.sending != true else { return }
+        let deviceId = model.deviceId
+        let pane = agent.pane
+        guarded { [plugin] in plugin.sendPrompt(deviceId, pane: pane, text, answer: true) }
     }
 
     /// Starts a dictation into the field of this agent. The text waits in the

@@ -245,6 +245,13 @@ private struct AgentReplyControls: View {
             }
             if let problem = lockError ?? voiceError ?? dictation.error ?? reply?.error {
                 Text(problem).font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                // fluxd refused the prompt because the agent waits for a
+                // choice. The user can type the same text into the dialog.
+                if problem == reply?.error, let r = reply, r.blocked, let blocked = r.text {
+                    Button("Send as answer") { answer(blocked) }
+                        .font(.caption.weight(.semibold))
+                        .accessibilityHint("Types the text into the dialog of \(agent.agent)")
+                }
             }
         }
         // A prompt that the computer accepted leaves the field.
@@ -283,6 +290,16 @@ private struct AgentReplyControls: View {
         guarded {
             guard let plugin else { return }
             plugin.sendPrompt(deviceId, pane: agent.pane, t)
+            sentSeq = plugin.model.reply(deviceId, pane: agent.pane)?.seq ?? -1
+        }
+    }
+
+    /// Sends the text of a refused prompt again as the answer to the dialog of the agent.
+    private func answer(_ t: String) {
+        guard plugin?.model.reply(deviceId, pane: agent.pane)?.sending != true else { return }
+        guarded {
+            guard let plugin else { return }
+            plugin.sendPrompt(deviceId, pane: agent.pane, t, answer: true)
             sentSeq = plugin.model.reply(deviceId, pane: agent.pane)?.seq ?? -1
         }
     }
