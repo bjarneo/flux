@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"strings"
@@ -38,8 +39,10 @@ func approveRaw(t *testing.T, fields map[string]any) json.RawMessage {
 	return b
 }
 
+// errCode returns the code of an API error, or "" for another error.
 func errCode(err error) string {
-	if e, ok := err.(*Error); ok {
+	var e *Error
+	if errors.As(err, &e) {
 		return e.Code
 	}
 	return ""

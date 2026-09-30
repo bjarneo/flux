@@ -178,6 +178,12 @@ func (f *fakeHerdr) serve(conn net.Conn) {
 			result = f.readText
 		}
 		f.calls = append(f.calls, req.Method+" "+string(req.Params))
+	case "events.subscribe":
+		f.subs = append(f.subs, conn)
+		f.subCalls = append(f.subCalls, string(req.Params))
+		f.mu.Unlock()
+		_, _ = conn.Write([]byte(`{"id":"` + req.ID + `","result":{"type":"subscription_started"}}` + "\n"))
+		return
 	default:
 		result = `"result":{"type":"ok"}`
 		if r, ok := f.replies[req.Method]; ok {
@@ -187,12 +193,6 @@ func (f *fakeHerdr) serve(conn net.Conn) {
 			result, f.queue[req.Method] = q[0], q[1:]
 		}
 		f.calls = append(f.calls, req.Method+" "+string(req.Params))
-	case "events.subscribe":
-		f.subs = append(f.subs, conn)
-		f.subCalls = append(f.subCalls, string(req.Params))
-		f.mu.Unlock()
-		_, _ = conn.Write([]byte(`{"id":"` + req.ID + `","result":{"type":"subscription_started"}}` + "\n"))
-		return
 	}
 	f.mu.Unlock()
 	_, _ = conn.Write([]byte(`{"id":"` + req.ID + `",` + result + "}\n"))

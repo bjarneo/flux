@@ -9,7 +9,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -242,14 +241,6 @@ func waitClosed(t *testing.T, l *lan.Link) {
 	}
 }
 
-func apiCode(err error) string {
-	var e *Error
-	if errors.As(err, &e) {
-		return e.Code
-	}
-	return ""
-}
-
 // pinned returns the certificate in the trust store for the device.
 func pinned(t *testing.T, d *Daemon, id string) *x509.Certificate {
 	t.Helper()
@@ -433,7 +424,7 @@ func TestAcceptOnce(t *testing.T) {
 		switch {
 		case r.err == nil:
 			ok = append(ok, r.res)
-		case apiCode(r.err) != "no_request":
+		case errCode(r.err) != "no_request":
 			t.Fatalf("second accept: %v", r.err)
 		}
 	}
@@ -517,7 +508,7 @@ func TestPairingEndsWithItsLink(t *testing.T) {
 	if state := field(d, func() string { return dev.pairState }); state != "" {
 		t.Fatalf("pair state %q after a new link", state)
 	}
-	if err := d.AcceptPair(dev); apiCode(err) != "no_request" {
+	if err := d.AcceptPair(dev); errCode(err) != "no_request" {
 		t.Fatalf("AcceptPair after a new link: %v", err)
 	}
 
@@ -525,7 +516,7 @@ func TestPairingEndsWithItsLink(t *testing.T) {
 	d.mu.Lock()
 	dev.pairState, dev.pairLink, dev.pairCert = "incoming", onDesk, phoneCert.Leaf
 	d.mu.Unlock()
-	if err := d.AcceptPair(dev); apiCode(err) != "no_request" {
+	if err := d.AcceptPair(dev); errCode(err) != "no_request" {
 		t.Fatalf("AcceptPair on an old link: %v", err)
 	}
 	if err := d.pairingDone(dev, onDesk); err == nil {
@@ -645,7 +636,7 @@ func TestPairTimeout(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "the end of the request", func() bool { return field(d, func() string { return dev.pairState }) == "" })
-	if err := d.AcceptPair(dev); apiCode(err) != "no_request" {
+	if err := d.AcceptPair(dev); errCode(err) != "no_request" {
 		t.Fatalf("AcceptPair after the timeout: %v", err)
 	}
 }
@@ -683,10 +674,10 @@ func TestUnpairClosesLink(t *testing.T) {
 	if left || pinned(t, d, dev.ID) != nil {
 		t.Fatal("the device keeps its trust or its data after Unpair")
 	}
-	if err := d.Unpair(dev); apiCode(err) != "not_paired" {
+	if err := d.Unpair(dev); errCode(err) != "not_paired" {
 		t.Fatalf("Unpair of a device that is not paired: %v", err)
 	}
-	if err := d.RejectPair(dev); apiCode(err) != "no_request" {
+	if err := d.RejectPair(dev); errCode(err) != "no_request" {
 		t.Fatalf("RejectPair without a request: %v", err)
 	}
 }
@@ -866,18 +857,18 @@ func TestLookup(t *testing.T) {
 	if dev, err := d.find("Pixel 8", incoming); err != nil || dev != asking {
 		t.Fatalf("accept must find the device with the request: %v", err)
 	}
-	if _, err := d.find("Nothing", nil); apiCode(err) != "not_found" {
+	if _, err := d.find("Nothing", nil); errCode(err) != "not_found" {
 		t.Fatalf("an unknown name: %v", err)
 	}
 
 	// 2 devices of the same kind with 1 name are ambiguous.
 	other := add("d", "Pixel 8", true, false, "")
 	_, err := d.find("Pixel 8", nil)
-	if apiCode(err) != "ambiguous" || !strings.Contains(err.Error(), phone.ID) || !strings.Contains(err.Error(), other.ID) {
+	if errCode(err) != "ambiguous" || !strings.Contains(err.Error(), phone.ID) || !strings.Contains(err.Error(), other.ID) {
 		t.Fatalf("2 paired devices with 1 name: %v", err)
 	}
 	add("e", "pixel 8", false, true, "incoming")
-	if _, err := d.find("Pixel 8", incoming); apiCode(err) != "ambiguous" {
+	if _, err := d.find("Pixel 8", incoming); errCode(err) != "ambiguous" {
 		t.Fatalf("2 requests with 1 name: %v", err)
 	}
 
@@ -889,13 +880,13 @@ func TestLookup(t *testing.T) {
 		}
 	}
 	raw, _ := json.Marshal(map[string]any{"device": "Pixel 8"})
-	if _, err := d.Call(context.Background(), "pair.accept", raw); apiCode(err) != "no_request" {
+	if _, err := d.Call(context.Background(), "pair.accept", raw); errCode(err) != "no_request" {
 		t.Fatalf("pair.accept without a request: %v", err)
 	}
 	// A pair request by the name of a paired device says that it is paired.
 	add("f", "Solo", true, true, "")
 	raw, _ = json.Marshal(map[string]any{"device": "Solo"})
-	if _, err := d.Call(context.Background(), "pair.request", raw); apiCode(err) != "paired" {
+	if _, err := d.Call(context.Background(), "pair.request", raw); errCode(err) != "paired" {
 		t.Fatalf("pair.request to a paired device: %v", err)
 	}
 }
@@ -1115,11 +1106,11 @@ func TestSendNeedsPairing(t *testing.T) {
 	d := &Daemon{devices: map[string]*Device{}}
 	dev := newDevice("phone")
 	dev.link = &lan.Link{}
-	if err := d.send(dev, proto.New(proto.TypePing, nil)); apiCode(err) != "not_paired" {
+	if err := d.send(dev, proto.New(proto.TypePing, nil)); errCode(err) != "not_paired" {
 		t.Fatalf("send to a device that is not paired: %v", err)
 	}
 	dev.link = nil
-	if err := d.send(dev, proto.New(proto.TypePing, nil)); apiCode(err) != "offline" {
+	if err := d.send(dev, proto.New(proto.TypePing, nil)); errCode(err) != "offline" {
 		t.Fatalf("send to an offline device: %v", err)
 	}
 }

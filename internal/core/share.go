@@ -222,6 +222,7 @@ func (d *Daemon) handleShare(dev *Device, l *lan.Link, p *proto.Packet) {
 	if p.Decode(&body) != nil {
 		return
 	}
+	name := d.nameOf(dev)
 	switch {
 	case body.URL != "":
 		if link, ok := webURL(body.URL); ok {
@@ -230,7 +231,7 @@ func (d *Daemon) handleShare(dev *Device, l *lan.Link, p *proto.Packet) {
 		}
 		// A path, a file: URL, or another scheme would start a local
 		// program through xdg-open, so the value arrives as text.
-		d.logf("%s: shared a value that is not an http or https URL, received it as text", dev.Name)
+		d.logf("%s: shared a value that is not an http or https URL, received it as text", name)
 		d.receiveText(dev, body.URL)
 	case body.Text != "" && body.Scan:
 		d.saveScan(dev, body.Text)
@@ -238,7 +239,7 @@ func (d *Daemon) handleShare(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.receiveText(dev, body.Text)
 	case p.HasPayload():
 		if p.PayloadSize <= 0 {
-			d.logf("%s: ignored a file share with a payload size of %d", dev.Name, p.PayloadSize)
+			d.logf("%s: ignored a file share with a payload size of %d", name, p.PayloadSize)
 			return
 		}
 		kind := destDownload
@@ -253,7 +254,7 @@ func (d *Daemon) handleShare(dev *Device, l *lan.Link, p *proto.Packet) {
 			kind = destPhoto
 		}
 		if !d.startReceive(dev) {
-			d.logf("%s: refused %q, because %d files arrive from the device", dev.Name, body.Filename, maxReceives)
+			d.logf("%s: refused %q, because %d files arrive from the device", name, body.Filename, maxReceives)
 			t := d.newTransfer(dev, safeName(body.Filename), "", "in", p.PayloadSize)
 			d.finishTransfer(t, fmt.Errorf("the device sends more than %d files at the same time", maxReceives))
 			return
@@ -279,27 +280,30 @@ func webURL(s string) (string, bool) {
 
 // openLink opens a web link from a device in the browser.
 func (d *Daemon) openLink(dev *Device, link string) {
+	name := d.nameOf(dev)
 	if err := openWebLink(link); err != nil {
 		d.logf("open %s: %v", link, err)
-		d.toast("Could not open %s from %s: %v", link, dev.Name, err)
+		d.toast("Could not open %s from %s: %v", link, name, err)
 		return
 	}
-	d.toast("%s opened %s", dev.Name, link)
+	d.toast("%s opened %s", name, link)
 }
 
 // receiveText puts shared text on the clipboard and in the clipboard
 // history, and shows the start of the text in a desktop notification.
 func (d *Daemon) receiveText(dev *Device, text string) {
 	if len(text) > desktop.MaxClipboardText {
-		d.logf("%s: ignored a shared text of %d bytes", dev.Name, len(text))
-		d.toast("%s shared a text that is larger than %d MiB", dev.Name, desktop.MaxClipboardText>>20)
+		name := d.nameOf(dev)
+		d.logf("%s: ignored a shared text of %d bytes", name, len(text))
+		d.toast("%s shared a text that is larger than %d MiB", name, desktop.MaxClipboardText>>20)
 		return
 	}
 	d.setClipboard(dev, text, false)
 	d.mu.Lock()
-	d.addClipLocked(ClipEntry{Text: text, Dir: "in", Device: dev.ID, DeviceName: dev.Name, Source: "share", Time: time.Now().Unix()})
+	name := dev.Name
+	d.addClipLocked(ClipEntry{Text: text, Dir: "in", Device: dev.ID, DeviceName: name, Source: "share", Time: time.Now().Unix()})
 	d.mu.Unlock()
-	d.notifyAsync(desktop.Notification{AppName: "Flux", Title: "Text from " + dev.Name, Body: previewText(text, maxSharePreview)})
+	d.notifyAsync(desktop.Notification{AppName: "Flux", Title: "Text from " + name, Body: previewText(text, maxSharePreview)})
 	d.markDirty()
 }
 
@@ -395,15 +399,16 @@ func (d *Daemon) receiveFile(dev *Device, l *lan.Link, p *proto.Packet, name str
 	}
 	title := "Received " + t.Name
 	body := "Saved as " + t.Path
+	from := d.nameOf(dev)
 	switch kind {
 	case destScan:
-		title = "Scanned document from " + dev.Name
+		title = "Scanned document from " + from
 	case destPhoto:
-		title = "Photo from " + dev.Name
+		title = "Photo from " + from
 	case destScreenshot:
-		title = "Screenshot from " + dev.Name
+		title = "Screenshot from " + from
 	case destSignature:
-		title = "Signature from " + dev.Name
+		title = "Signature from " + from
 		if err := d.copyImage(t.Path); err != nil {
 			d.logf("copy signature %s: %v", t.Path, err)
 		} else {
@@ -490,13 +495,6 @@ func (d *Daemon) saveFile(ctx context.Context, dev *Device, t *Transfer, dir str
 		return err
 	}
 	return os.Rename(f.Name(), dest)
-}
-
-// stillPaired reports whether dev is paired.
-func (d *Daemon) stillPaired(dev *Device) bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return dev.Paired
 }
 
 // freeSpace returns the bytes that the user can write in dir and the size
@@ -642,13 +640,13 @@ func (d *Daemon) copyImage(path string) error {
 // saveScan writes text that the phone camera read into a new file in the
 // scan folder. The file shows in the Files tab as a received file.
 func (d *Daemon) saveScan(dev *Device, text string) {
+	d.mu.Lock()
+	dir, from := d.cfg.ScanPath(), dev.Name
+	d.mu.Unlock()
 	if len(text) > desktop.MaxClipboardText {
-		d.logf("%s: ignored a scanned text of %d bytes", dev.Name, len(text))
+		d.logf("%s: ignored a scanned text of %d bytes", from, len(text))
 		return
 	}
-	d.mu.Lock()
-	dir := d.cfg.ScanPath()
-	d.mu.Unlock()
 	path, err := "", os.MkdirAll(dir, 0o755)
 	if err == nil {
 		err = checkSpace(dir, int64(len(text)))
@@ -668,7 +666,7 @@ func (d *Daemon) saveScan(dev *Device, text string) {
 		return
 	}
 	d.notifyAsync(desktop.Notification{
-		AppName: "Flux", Title: "Scanned text from " + dev.Name, Body: "Saved as " + path,
+		AppName: "Flux", Title: "Scanned text from " + from, Body: "Saved as " + path,
 		Actions: []desktop.Action{{Key: "open:" + path, Label: "Open"}, {Key: "reveal:" + path, Label: "Show in folder"}},
 	})
 }

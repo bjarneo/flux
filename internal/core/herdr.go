@@ -682,18 +682,10 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 	}
 }
 
-// herdrPaired reports whether the device is paired now. A herdr call can
-// take seconds, and an answer must not go out after an unpair.
-func (d *Daemon) herdrPaired(dev *Device) bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return dev.Paired
-}
-
 // herdrSend sends the packets on the link l while the device is paired.
 func (d *Daemon) herdrSend(dev *Device, l *lan.Link, packets ...*proto.Packet) {
 	for _, p := range packets {
-		if !d.herdrPaired(dev) {
+		if !d.stillPaired(dev) {
 			return
 		}
 		_ = l.Send(p)
@@ -775,7 +767,7 @@ func (d *Daemon) readHerdrOnce(dev *Device, l *lan.Link, pane string, lines int,
 			failed["format"] = "ansi"
 		}
 		defer d.herdrRecover("read", func() {
-			if d.herdrPaired(dev) {
+			if d.stillPaired(dev) {
 				send(proto.New(proto.TypeFluxHerdr, failed))
 			}
 		})

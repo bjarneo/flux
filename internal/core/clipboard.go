@@ -324,8 +324,9 @@ func (d *Daemon) handleClipboard(dev *Device, p *proto.Packet) {
 		return
 	}
 	if len(body.Content) > desktop.MaxClipboardText {
-		d.logf("%s: ignored a clipboard text of %d bytes", dev.Name, len(body.Content))
-		d.toast("%s copied a text that is larger than %d MiB. Flux did not sync it", dev.Name, desktop.MaxClipboardText>>20)
+		name := d.nameOf(dev)
+		d.logf("%s: ignored a clipboard text of %d bytes", name, len(body.Content))
+		d.toast("%s copied a text that is larger than %d MiB. Flux did not sync it", name, desktop.MaxClipboardText>>20)
 		return
 	}
 	d.mu.Lock()
@@ -350,7 +351,7 @@ func (d *Daemon) handleClipboard(dev *Device, p *proto.Packet) {
 // stops the older one.
 func (d *Daemon) handleClipboardImage(dev *Device, l *lan.Link, p *proto.Packet) {
 	if !p.HasPayload() || p.PayloadSize <= 0 || p.PayloadSize > desktop.MaxClipboardImage {
-		d.logf("%s: ignored a clipboard image of %d bytes", dev.Name, p.PayloadSize)
+		d.logf("%s: ignored a clipboard image of %d bytes", d.nameOf(dev), p.PayloadSize)
 		return
 	}
 	ctx, cancel := context.WithTimeout(d.ctx, clipImageTimeout)
@@ -376,7 +377,7 @@ func (d *Daemon) handleClipboardImage(dev *Device, l *lan.Link, p *proto.Packet)
 		}()
 		data, err := fetchAll(ctx, l, p)
 		if err != nil {
-			d.logf("%s: receive clipboard image: %v", dev.Name, err)
+			d.logf("%s: receive clipboard image: %v", d.nameOf(dev), err)
 			return
 		}
 		d.receiveClipImage(dev, data)
@@ -387,18 +388,18 @@ func (d *Daemon) handleClipboardImage(dev *Device, l *lan.Link, p *proto.Packet)
 // automatic sync on, puts it on the local clipboard. An image that arrives
 // after an unpair is dropped.
 func (d *Daemon) receiveClipImage(dev *Device, data []byte) {
+	d.mu.Lock()
+	paired, auto, name := dev.Paired, d.cfg.AutoClipboard, dev.Name
+	d.mu.Unlock()
 	mime := clipImageType(data)
 	if mime == "" {
-		d.logf("%s: the clipboard image is not a PNG, JPEG, GIF, or WebP image", dev.Name)
+		d.logf("%s: the clipboard image is not a PNG, JPEG, GIF, or WebP image", name)
 		return
 	}
-	d.mu.Lock()
-	paired, auto := dev.Paired, d.cfg.AutoClipboard
-	d.mu.Unlock()
 	if !paired {
 		return
 	}
-	if err := d.addClipImage(ClipEntry{Dir: "in", Device: dev.ID, DeviceName: dev.Name, Time: time.Now().Unix()}, data, mime); err != nil {
+	if err := d.addClipImage(ClipEntry{Dir: "in", Device: dev.ID, DeviceName: name, Time: time.Now().Unix()}, data, mime); err != nil {
 		d.logf("save clipboard image: %v", err)
 	}
 	if auto {
@@ -460,13 +461,16 @@ func (d *Daemon) SendClipboard(dev *Device, text string) error {
 func (d *Daemon) sendImageTo(dev *Device, data []byte) error {
 	d.mu.Lock()
 	l := dev.link
-	accepts := dev.accepts(proto.TypeFluxClipboardImage)
-	d.mu.Unlock()
-	if l == nil {
-		return offline(dev)
+	var err error
+	switch {
+	case l == nil:
+		err = offline(dev)
+	case !dev.accepts(proto.TypeFluxClipboardImage):
+		err = apiErr("unsupported", "%s does not accept clipboard images. Flux for Android accepts them while Sync clipboard is on", dev.Name)
 	}
-	if !accepts {
-		return apiErr("unsupported", "%s does not accept clipboard images. Flux for Android accepts them while Sync clipboard is on", dev.Name)
+	d.mu.Unlock()
+	if err != nil {
+		return err
 	}
 	ctx, cancel := d.newClipSend()
 	defer cancel()

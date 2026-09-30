@@ -261,7 +261,7 @@ func (d *Daemon) showNotification(dev *Device, n *PhoneNotification) {
 		// A newer packet for the same notification, a cancel, an unpair, or
 		// the switch makes this packet old.
 		current := dev.Paired && d.cfg.Notifications && findNotification(dev.notifications, n.ID) == n
-		replaces := dev.notifDesktop[n.ID]
+		replaces, name := dev.notifDesktop[n.ID], dev.Name
 		d.mu.Unlock()
 		if !current {
 			return
@@ -275,10 +275,10 @@ func (d *Daemon) showNotification(dev *Device, n *PhoneNotification) {
 		}
 		app := n.App
 		if app == "" {
-			app = dev.Name
+			app = name
 		}
 		id := d.notify(desktop.Notification{
-			AppName: app + " · " + dev.Name, Title: n.Title, Body: n.Text,
+			AppName: app + " · " + name, Title: n.Title, Body: n.Text,
 			Actions: actions, ReplacesID: replaces,
 		})
 		if id == 0 {
