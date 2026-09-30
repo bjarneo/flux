@@ -38,6 +38,19 @@ final class ApprovePluginLogicTests: XCTestCase {
         XCTAssertEqual(refusal(nil, secureEnclave: false), "The request is not valid")
     }
 
+    /// Only the computer of the open request can cancel it, as in the
+    /// Android app.
+    @MainActor
+    func testOnlyTheComputerOfTheRequestCancelsIt() {
+        let plugin = ApprovePlugin()
+        plugin.model.current = request()
+        let cancel = Packet(PacketType.fluxApprove, ["kind": "cancel", "id": "req1"])
+        plugin.receive(cancel, computerId: "pc2", computerName: "other")
+        XCTAssertEqual(plugin.model.current?.id, "req1", "another computer cannot close the request")
+        plugin.receive(cancel, computerId: "pc1", computerName: "omarchy-xps")
+        XCTAssertNil(plugin.model.current)
+    }
+
     func testNotificationRoutes() {
         XCTAssertEqual(ApprovePlugin.notificationRoute("approve", platform: .mac), .approve, "the Mac asks for Touch ID at once, as before")
         XCTAssertEqual(ApprovePlugin.notificationRoute("approve", platform: .phone), .present,
