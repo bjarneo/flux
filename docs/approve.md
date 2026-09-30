@@ -1,14 +1,31 @@
 # Approve with fingerprint: security design
 
-Flux can approve `sudo`, polkit, and a lock screen with a fingerprint on
-the paired phone. The phone signs each request with a private key that
-never leaves its secure hardware. A small helper on the computer checks
-the signature with a public key that only root can change. If anything
-fails, PAM asks for the password as usual.
+Flux can approve `sudo`, polkit, and the `hyprlock` lock screen on a
+paired device: an Android phone, an iPhone, or a Mac. The device signs
+each request with a private key that never leaves its secure hardware,
+and only after a fingerprint, Face ID, or Touch ID. A small helper on the
+computer checks the signature with a public key that only root can
+change. If anything fails, PAM asks for the password as usual.
+
+The Omarchy lock screen runs in `omarchy-shell` with its own PAM
+services, `omarchy-lock-password` and `omarchy-lock-fingerprint`. Flux
+does not change them, so an approval does not unlock the Omarchy lock
+screen. The `hyprlock` service applies only when `hyprlock` is the lock
+screen.
+
+In this document, "the phone" means the device that signs: Flux for
+Android, Flux for iOS, or Flux for macOS. A section that names 1 app
+applies only to that app.
 
 This document is the design. The code must follow it. Read it before you
-change `internal/approve`, `cmd/flux-approve`, `internal/core/approve.go`,
-or the approve code in Flux for Android.
+change one of these parts:
+
+- `internal/approve`, `cmd/flux-approve`, and `internal/core/approve.go`.
+- The approve code in Flux for Android: `core/Approve*` and
+  `ui/ApproveActivity.kt`.
+- The approve code of the iPhone and the Mac:
+  `macos/Sources/FluxKit/Plugins/Approve/`, `macos/App/Features/Approve/`,
+  and `ios/App/Features/Approve/`.
 
 ## Parts
 
@@ -17,7 +34,8 @@ or the approve code in Flux for Android.
 | `flux-approve` | The PAM caller, root for `sudo` and polkit | Makes the request, checks the signature, and gives the PAM result |
 | `/etc/flux/approve/<user>.pub` | A file owned by root | The trust anchor: the public key of the phone |
 | `fluxd` | The user | Carries the messages between the helper and the phone |
-| Flux for Android | The phone user | Shows the request, asks for the fingerprint, and signs |
+| Flux for Android | The phone user | Shows the request, asks for the fingerprint, and signs with a key in the Android Keystore |
+| Flux for iOS and Flux for macOS | The user of the iPhone or the Mac | Show the request, ask for Face ID or Touch ID, and sign with a key in the Secure Enclave. The code is in `FluxKit`. |
 | `flux-cli approve enroll` | root, through `sudo` | Gets the public key from the phone and writes the key file |
 
 ## Threat model
@@ -70,11 +88,16 @@ The PEM headers `Device-Id` and `Device-Name` name the phone. The helper
 uses them only to find the phone and to name it on the screen. They do
 not change what a valid signature is.
 
-## Keys on the phone
+## Keys on the device
 
-- Flux for Android makes 1 key for each paired computer, in the Android
-  Keystore. The alias is `flux-approve-<computer device ID>`.
-- The key is EC P-256, for signing with SHA-256 only.
+Each app makes 1 key for each paired computer. The key is EC P-256, for
+signing with SHA-256 only. A signature is not possible without a new
+biometric check, even for code that runs in the Flux app.
+
+### Android
+
+- Flux for Android keeps the key in the Android Keystore. The alias is
+  `flux-approve-<computer device ID>`.
 - The key needs user authentication for each use, with a strong
   biometric and no time window. On Android 11 and later, this is
   `setUserAuthenticationParameters(0, AUTH_BIOMETRIC_STRONG)`. On Android
@@ -83,8 +106,65 @@ not change what a valid signature is.
   then enrolls again.
 - The phone uses StrongBox when the phone has it.
 - The phone signs only through `BiometricPrompt` with a `CryptoObject`
-  that holds the `Signature` object. So a signature is not possible
-  without a fingerprint, even for code that runs in the Flux app.
+  that holds the `Signature` object. The prompt allows only
+  `BIOMETRIC_STRONG`, so the PIN of the phone cannot sign.
+- An enrollment keeps the current key until the phone sends the new key
+  to the computer. The phone makes the new key under the second alias,
+  `flux-approve-<computer device ID>.b`, or under the first alias when the
+  current key uses the second. When the send works, the phone deletes the
+  old key. When the user cancels, the fingerprint check fails, or the send
+  fails, the phone deletes the new key, and the old key stays. With 2
+  keys, the older key is the current key. When the command then writes no
+  key file, for example after a wrong key code, each approval fails until
+  the next enrollment.
+- An unpair on the phone deletes the keys of that computer.
+- On Android 12 and later, the approval screen hides the windows of other
+  apps. The phone refuses **Approve** when the window of another app
+  covered the screen during the tap.
+
+### iPhone and Mac
+
+- Flux for iOS and Flux for macOS keep the key in the Secure Enclave. The
+  code is in `ApproveKeys.swift`.
+- The access control is `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`
+  with the flags `.privateKeyUsage` and `.biometryCurrentSet`. Do not add
+  `.devicePasscode` or `.userPresence`, because the passcode or the
+  password could then sign.
+- Each signature uses a new `LAContext` with
+  `touchIDAuthenticationAllowableReuseDuration` set to 0 and
+  `localizedFallbackTitle` set to an empty string. So 1 biometric check
+  does not sign 2 requests, and the system offers no password fallback.
+- The key works only while the device is unlocked. A signature on a
+  locked device fails with an error.
+- The Secure Enclave wraps the private key. Flux stores the wrapped blob,
+  the public key, the host, the user, and the time of the enrollment in
+  `<data>/approve/<computer device ID>.json`. `<data>` is
+  `~/Library/Application Support/Flux` on the Mac, and the Application
+  Support folder of the app on the iPhone. The file has mode 0600, and
+  the folder has mode 0700. Only the Secure Enclave of the same device can
+  use the blob. The key needs no keychain entitlement, so it works in an
+  ad hoc signed app.
+- On the iPhone, the `approve` folder is excluded from iCloud and
+  computer backups.
+- Flux stores `evaluatedPolicyDomainState` with the key. When the
+  enrolled fingerprints or faces change, the Secure Enclave refuses the
+  key, and Flux deletes it before it asks. The user then enrolls again.
+- A device without a Secure Enclave refuses each request. Flux never
+  makes a key outside the Secure Enclave. The iOS simulator counts as a
+  device without a Secure Enclave.
+- An enrollment keeps the current key until the new key goes out to the
+  computer. Flux stores the new key in `<computer device ID>.pending` in
+  the same folder. When the send works, Flux renames the file to
+  `<computer device ID>.json` in place of the old key. When the send
+  fails, Flux deletes the new key, and the old key stays. When the command
+  then writes no key file, for example after a wrong key code, each
+  approval fails until the next enrollment.
+- An unpair does not delete the key. **Remove Key** on the page of the
+  computer deletes it.
+- On the iPhone, **Approve** in the notification needs an unlocked iPhone
+  and opens Flux, because Face ID needs Flux on the screen. **Deny** works
+  on the lock screen. On the Mac, **Approve** in the notification asks for
+  Touch ID at once.
 
 ## Messages
 
@@ -105,7 +185,7 @@ time=<Unix time in seconds>
 nonce=<32 random bytes as 64 lowercase hex digits>
 ```
 
-An enrollment message has 7 lines:
+An enrollment message has 6 lines. Each line ends with 1 newline character:
 
 ```text
 flux-approve-enroll-v1
@@ -124,6 +204,10 @@ check them, and a request that breaks a rule fails:
   So each message has only 1 meaning.
 - `host`, `user`, and `service` are not empty.
 - `nonce` is exactly 64 lowercase hex digits.
+
+The Go, Kotlin, and Swift code build the same bytes. The tests
+`internal/approve/message_test.go`, `ApproveMessageTest.kt`, and
+`ApproveMessageTests.swift` check them with the same vectors.
 
 The first line names the version and the purpose. So a signature for an
 enrollment is never a valid approval, and the reverse.
@@ -145,16 +229,19 @@ enrollment is never a valid approval, and the reverse.
 5. The helper connects to `/run/user/<uid>/flux/fluxd.sock`. It checks that
    the folder of the socket and the socket belong to the user, and with
    `SO_PEERCRED` that the process at the other end runs as the same user.
-   Without `fluxd`, it stops at once.
+   Without `fluxd`, it stops at once. The helper does not read
+   `FLUX_SOCKET` or `XDG_RUNTIME_DIR`, so it finds only a `fluxd` that
+   listens on this path.
 6. The helper calls `approve.request`. `fluxd` sends a `flux.approve`
    request to the phone in the key file. If the phone is not connected,
    `fluxd` returns an error, and the helper stops at once.
 7. The helper prints 1 line: `Approve on <phone> for terminal <tty>, or
    wait for the password prompt.` Without a TTY, the line has no terminal.
-8. The phone shows `Approve sudo for user <user> on host <host>?` with the
-   TTY, the remote host, and the time. It shows Approve and Deny.
-9. Approve opens `BiometricPrompt`. After the fingerprint, the phone signs
-   the approval message and sends it. Deny sends a denial.
+8. The phone shows `Approve <service> for user <user> on host <host>?`
+   with the TTY, the remote host, and the time. It shows Approve and Deny.
+9. Approve asks for the biometric check: `BiometricPrompt` on Android,
+   Face ID or Touch ID on the iPhone and the Mac. After the check, the
+   phone signs the approval message and sends it. Deny sends a denial.
 10. The helper calls `approve.wait` until it gets a result or its time
     ends.
 11. The helper builds the approval message again from its own fields. It
@@ -172,13 +259,15 @@ enrollment is never a valid approval, and the reverse.
 3. The command makes a nonce and calls `approve.enroll`. `fluxd` sends the
    enrollment request to the phone.
 4. The phone shows `Use this phone to approve sudo for user <user> on host
-   <host>?`. Approve makes a new key and opens `BiometricPrompt`.
-5. After the fingerprint, the phone signs the enrollment message and sends
-   the public key and the signature. The phone shows the key code, which
-   is the first 8 bytes of the SHA-256 of the public key, in 4 groups.
+   <host>?`. The iPhone and the Mac say `this iPhone` and `this Mac`.
+   Approve makes a new key and asks for the biometric check.
+5. After the check, the phone signs the enrollment message and sends the
+   public key and the signature. The phone shows the key code: the first 8
+   bytes of the SHA-256 of the public key, as 16 uppercase hex digits in 4
+   groups of 4.
 6. The command checks the signature with the new public key. This proves
    that the phone has the private key and that the key works with the
-   fingerprint.
+   biometric check.
 7. The command asks the user to type the key code that the phone shows. It
    compares the typed code with the code of the public key that it got. It
    ignores spaces, hyphens, and case, and it needs all 16 hex digits. The
@@ -219,8 +308,13 @@ the user runs `sudo`, for example with a shell alias.
 | The whole helper | 130 seconds at most, whatever `fluxd` says |
 | The request on the phone | The wait time, then the phone closes it |
 
-At the end of the wait, `fluxd` sends a cancel to the phone, and the
-helper exits with a failure. PAM then asks for the password.
+The helper waits in `approve.wait`. When the wait time ends during
+`approve.wait`, `fluxd` sends a cancel to the phone, and the helper exits
+with a failure. PAM then asks for the password. `fluxd` also sends a
+cancel when the connection that started the request closes, and for
+`approve.cancel`. The phone closes the request at the end of the wait time
+in each case, also when no cancel comes. The phone takes a cancel only
+from the computer of the open request.
 
 ## Failure modes
 
@@ -273,7 +367,10 @@ person at the keyboard. The password protects against the same person.
   password in other ways, for example with a shell alias for `sudo`.
 - **No key attestation.** The computer trusts that the phone made the key
   with the settings above. Android key attestation can prove it, but Flux
-  does not check it yet.
+  does not check it yet. The computer also cannot check the settings of a
+  Secure Enclave key. Apple App Attest is a different mechanism, and Flux
+  does not use it. So a changed app on any device can enroll a key without
+  these settings.
 - **A substituted request.** A changed `fluxd` sees a real request of the
   user. It can start its own `sudo` in the same second and send that
   request to the phone in its place. The phone then shows the same
