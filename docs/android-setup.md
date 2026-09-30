@@ -189,6 +189,8 @@ Flux does not send these notifications:
 - Group summaries.
 - Notifications whose visibility, or whose channel lock screen visibility, is `VISIBILITY_SECRET`. The lock screen setting of the whole phone does not change what Flux sends.
 
+Flux sends the notifications of the apps in a work profile too.
+
 A computer gets the reply field and the buttons of a notification.
 Flux keeps a button on the phone when it needs text input or the phone unlock.
 A reply that needs the phone unlock also stays on the phone.

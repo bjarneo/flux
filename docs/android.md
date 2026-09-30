@@ -109,10 +109,12 @@ A paired computer connects at any time, also through Tailscale.
 
 Flux for Android applies these limits to the network:
 
-- A computer that is not paired can send lines of at most 64 KiB. While Flux is not on screen, its connection closes after 2 minutes without data.
+- A computer that is not paired can send lines of at most 64 KiB. The phone drops a longer line. While Flux is not on screen, its connection closes after 2 minutes without data.
+- A computer that is not paired can send only pair packets. The phone answers another packet with an unpair, once for each connection. A computer that still trusts the phone then removes its old pairing.
 - The phone keeps at most 8 connections of computers that are not paired. A new computer closes the oldest one.
 - The handshake of a new connection must finish in 10 seconds.
-- A pairing stays on the connection and the certificate on which it started. While a pairing is open, and after pairing, the phone refuses a connection with another certificate for the same device ID.
+- At most 4 connections that UDP identities start run at a time. They do not use the handshake slots of the incoming connections, in total or for one address.
+- A pairing stays on the connection and the certificate on which it started. A new connection of the computer ends an open pairing, and you pair again. While a pairing is open, and after pairing, the phone refuses a connection with another certificate for the same device ID.
 - A file, stream, or tunnel port takes only the paired computer from the address of its link. Other connections close, and the port waits for the computer.
 - The phone sends its identity to a stored address only when the address is on a network of the phone or on Tailscale.
 - The phone finds a computer that sleeps or loses power in 90 seconds or less. While data waits for the computer, it finds it in 30 seconds.

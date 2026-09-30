@@ -42,8 +42,11 @@ private const val HANDSHAKE_MS = 10_000L
 /** The most handshakes at a time. More connections close at once. */
 private const val MAX_HANDSHAKES = 16
 
-/** The most handshakes at a time from one address. */
+/** The most handshakes of incoming connections at a time from one address. */
 private const val MAX_HANDSHAKES_PER_SOURCE = 4
+
+/** The most connects at a time that UDP identities start. */
+private const val MAX_UDP_CONNECTS = 4
 
 /** The shortest time between 2 connects that UDP identities start, for one device ID or one address. */
 private const val UDP_CONNECT_GAP_MS = 1_000L
@@ -57,7 +60,7 @@ private const val RETRY_MS = 500L
 /**
  * The LAN backend. It broadcasts the identity over UDP, accepts
  * TCP links, connects to devices that broadcast, and runs the TLS handshake.
- * The work before a device is known runs on a small pool with a deadline,
+ * The work before a device is known runs on small pools with a deadline,
  * so that a flood of connections cannot use up the threads of the app.
  */
 class LanBackend(
@@ -90,9 +93,19 @@ class LanBackend(
     var listeningUdp = false
         private set
 
-    /** Runs the handshakes. A full pool closes a new connection. */
+    /** Runs the handshakes of incoming connections. A full pool closes a new connection. */
     private val handshakes = ThreadPoolExecutor(0, MAX_HANDSHAKES, 30, TimeUnit.SECONDS, SynchronousQueue()) {
         Thread(it, "flux-lan").apply { isDaemon = true }
+    }
+
+    /**
+     * Runs the connects that UDP identities start. A full pool skips a new
+     * connect. A UDP identity can come from a forged address that does not
+     * answer, so these connects take no slot of [handshakes] and no slot of
+     * an address in [perSource].
+     */
+    private val udpConnects = ThreadPoolExecutor(0, MAX_UDP_CONNECTS, 30, TimeUnit.SECONDS, SynchronousQueue()) {
+        Thread(it, "flux-lan-connect").apply { isDaemon = true }
     }
 
     /** Sends the identity over UDP, apart from the handshakes, so that a flood cannot delay it. */
@@ -107,7 +120,7 @@ class LanBackend(
     /** The sockets of the handshakes that run, so that [stop] can close them. */
     private val pending = ConcurrentHashMap.newKeySet<Socket>()
 
-    /** The number of handshakes that run for each address. */
+    /** The number of handshakes of incoming connections that run for each address. */
     private val perSource = ConcurrentHashMap<InetAddress, Int>()
     @Volatile private var running = false
 
@@ -139,6 +152,7 @@ class LanBackend(
         udp = null
         pending.forEach { runCatching { it.close() } }
         handshakes.shutdown()
+        udpConnects.shutdown()
         announcer.shutdown()
         deadlines.shutdown()
     }
@@ -234,8 +248,9 @@ class LanBackend(
     /**
      * Connects to a device that sent its identity over UDP. The connect goes
      * only to a port of the link range, at most once a second for each
-     * device ID and each address. A device that is not paired gets a
-     * connect only while the phone takes new devices.
+     * device ID and each address, and at most [MAX_UDP_CONNECTS] run at a
+     * time. A device that is not paired gets a connect only while the phone
+     * takes new devices.
      */
     private fun onDatagram(dp: DatagramPacket, byDevice: HashMap<String, Long>, bySource: HashMap<InetAddress, Long>) {
         val line = String(dp.data, dp.offset, dp.length, Charsets.UTF_8)
@@ -252,8 +267,7 @@ class LanBackend(
         if (now - (bySource[address] ?: Long.MIN_VALUE / 2) < UDP_CONNECT_GAP_MS) return
         byDevice[id.deviceId] = now
         bySource[address] = now
-        if (!reserve(address)) return
-        submit(null, address) { connect(address, id.tcpPort, id) }
+        submit(udpConnects, null, address, slot = false) { connect(address, id.tcpPort, id) }
     }
 
     /** Keeps a map of the last connects small. */
@@ -279,7 +293,7 @@ class LanBackend(
                 runCatching { socket.close() }
                 continue
             }
-            submit(socket, source) { handleIncoming(socket) }
+            submit(handshakes, socket, source, slot = true) { handleIncoming(socket) }
         }
     }
 
@@ -290,7 +304,7 @@ class LanBackend(
         }
     }
 
-    /** Counts a handshake for [source]. It returns false when the address has too many. */
+    /** Counts a handshake of an incoming connection for [source]. It returns false when the address has too many. */
     private fun reserve(source: InetAddress): Boolean {
         var ok = false
         perSource.compute(source) { _, n ->
@@ -306,22 +320,24 @@ class LanBackend(
     }
 
     /**
-     * Runs a handshake on the pool. When the pool is full, or when no thread
-     * can start, the socket closes and the loop goes on.
+     * Runs a handshake on [pool]. When the pool is full, or when no thread
+     * can start, the socket closes and the loop goes on. With [slot], the
+     * handshake holds a slot of [reserve] for [source] and gives it back at
+     * the end.
      */
-    private fun submit(socket: Socket?, source: InetAddress, work: () -> Unit) {
+    private fun submit(pool: ThreadPoolExecutor, socket: Socket?, source: InetAddress, slot: Boolean, work: () -> Unit) {
         try {
-            handshakes.execute {
+            pool.execute {
                 try {
                     work()
                 } catch (e: Throwable) {
                     Log.i(TAG, "handshake with $source failed: $e")
                 } finally {
-                    release(source)
+                    if (slot) release(source)
                 }
             }
         } catch (e: Throwable) {
-            release(source)
+            if (slot) release(source)
             runCatching { socket?.close() }
         }
     }

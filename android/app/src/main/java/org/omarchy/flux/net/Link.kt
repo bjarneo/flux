@@ -26,6 +26,7 @@ const val MAX_LINE = 16 * 1024 * 1024
 /**
  * The largest packet line that Flux reads from a device that is not paired.
  * Only identity and pair packets come before pairing, and they are small.
+ * The link drops a longer line and stays open.
  */
 const val MAX_UNPAIRED_LINE = 64 * 1024
 
@@ -50,6 +51,10 @@ class Link(
     }
     private val closed = AtomicBoolean(false)
     private var onClose: (() -> Unit)? = null
+    private var onLongLine: () -> Unit = {}
+
+    // The reader thread uses it, so that the log shows the first dropped line of the link.
+    private var droppedLine = false
 
     /**
      * True while the device of the link is paired. Before pairing, the link
@@ -66,16 +71,19 @@ class Link(
      * Starts the read loop. [onPacket] runs on the reader thread. When an
      * unpaired link is silent for [UNPAIRED_IDLE_MS], the link closes if
      * [idleClose] returns true, for example when no pairing is open.
+     * [onLongLine] runs on the reader thread when the link drops a line
+     * that is longer than [MAX_UNPAIRED_LINE] before pairing.
      */
-    fun start(onPacket: (Packet) -> Unit, onClose: () -> Unit, idleClose: () -> Boolean = { true }) {
+    fun start(onPacket: (Packet) -> Unit, onClose: () -> Unit, idleClose: () -> Boolean = { true }, onLongLine: () -> Unit = {}) {
         this.onClose = onClose
+        this.onLongLine = onLongLine
         open += this
         Thread({
             try {
                 val reader = LineReader(socket.inputStream.buffered(65536))
                 while (!closed.get()) {
                     val line = try {
-                        reader.next { if (paired) MAX_LINE else MAX_UNPAIRED_LINE }
+                        reader.next(skip = ::dropLongLine) { if (paired) MAX_LINE else MAX_UNPAIRED_LINE }
                     } catch (e: SocketTimeoutException) {
                         // Only an unpaired link has a read timeout.
                         if (!paired && idleClose()) {
@@ -96,6 +104,21 @@ class Link(
                 close()
             }
         }, "flux-read-${identity.deviceName}").apply { isDaemon = true }.start()
+    }
+
+    /**
+     * Reports whether the reader drops a line that passed the limit. Before
+     * pairing, the link drops it and stays open. A computer that still
+     * trusts the phone sends paired packets, for example a long clipboard
+     * text, and the core must stay able to tell it to unpair. A paired link
+     * closes.
+     */
+    private fun dropLongLine(): Boolean {
+        if (paired) return false
+        if (!droppedLine) Log.i(TAG, "dropped a line of more than $MAX_UNPAIRED_LINE bytes from ${identity.deviceName}, which is not paired")
+        droppedLine = true
+        onLongLine()
+        return true
     }
 
     /** Sends a packet. The write happens on the writer thread. */
@@ -154,23 +177,34 @@ class Link(
 class LineReader(private val input: InputStream) {
     private val buf = ByteArrayOutputStream(256)
 
+    /** True while the reader drops the rest of a line that passed the limit. A read timeout keeps it. */
+    private var skipping = false
+
     /**
      * Returns the next line, or null at the end of the stream. [limit] gives
      * the longest line. The reader asks it again when a line passes the
-     * last value, because the limit can grow while the line comes.
+     * last value, because the limit can grow while the line comes. A longer
+     * line throws an IOException, unless [skip] returns true. Then the
+     * reader drops the line up to its end and returns an empty line.
      */
-    fun next(limit: () -> Int): String? {
+    fun next(skip: () -> Boolean = { false }, limit: () -> Int): String? {
         var max = limit()
         while (true) {
             val b = input.read()
             if (b < 0) return if (buf.size() == 0) null else take()
-            if (b == '\n'.code) return take()
+            if (b == '\n'.code) {
+                if (!skipping) return take()
+                skipping = false
+                return ""
+            }
+            if (skipping) continue
             buf.write(b)
             if (buf.size() > max) {
                 max = limit()
                 if (buf.size() > max) {
                     buf.reset()
-                    throw IOException("packet too large")
+                    if (!skip()) throw IOException("packet too large")
+                    skipping = true
                 }
             }
         }

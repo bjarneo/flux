@@ -46,6 +46,9 @@ class Device(private val core: FluxCore, var identity: Identity) {
     var pairKey = ""
     private var pairTimer: ScheduledFuture<*>? = null
 
+    /** The link on which the phone told the device that it is not paired. */
+    private var refusedLink: Link? = null
+
     var battery: Int? = null
     var charging = false
     var players: List<String> = emptyList()
@@ -183,6 +186,7 @@ class Device(private val core: FluxCore, var identity: Identity) {
     fun unpair() {
         val wasPaired = paired
         send(Packet(Types.PAIR, bodyOf("pair" to false)))
+        refusedLink = link
         core.trust.remove(id)
         resetPair()
         if (wasPaired) core.revoke(this)
@@ -270,6 +274,21 @@ class Device(private val core: FluxCore, var identity: Identity) {
         if (pairing) resetPair()
     }
 
+    /**
+     * Handles a packet other than a pair packet while the device is not
+     * paired. Such a device still trusts this phone, for example after an
+     * unpair on the phone while the computer was away. The phone answers
+     * pair false once for each link, so that the device drops its trust and
+     * the next link is unpaired on both sides. An open pairing gets no
+     * answer, so that the answer does not end it.
+     */
+    fun refuseUnpaired() {
+        val l = link ?: return
+        if (!refusesUnpaired(paired, pairing, refused = refusedLink === l)) return
+        refusedLink = l
+        send(Packet(Types.PAIR, bodyOf("pair" to false)))
+    }
+
     private fun resetPair() {
         pairTimer?.cancel(false)
         pairState = PairState.None
@@ -295,3 +314,12 @@ class Device(private val core: FluxCore, var identity: Identity) {
         return verificationKey(core.local.certificate, peer, pairTimestamp)
     }
 }
+
+/**
+ * Reports whether the phone answers pair false to a packet other than a
+ * pair packet. Only a device that is not paired and has no open pairing
+ * gets the answer. [refused] is true when the phone already sent pair false
+ * on the link, as an answer or as an unpair.
+ */
+internal fun refusesUnpaired(paired: Boolean, pairing: Boolean, refused: Boolean): Boolean =
+    !paired && !pairing && !refused

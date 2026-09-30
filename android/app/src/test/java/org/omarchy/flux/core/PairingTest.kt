@@ -9,7 +9,7 @@ import org.junit.Test
 import org.omarchy.flux.protocol.Packet
 import org.omarchy.flux.protocol.Types
 
-/** The certificate check of a new link, and the herdr parse gate. */
+/** The certificate check of a new link, the trust rules of a link, and the herdr parse gate. */
 class PairingTest {
     private val pinned = byteArrayOf(1, 2, 3)
     private val other = byteArrayOf(9, 9, 9)
@@ -36,6 +36,34 @@ class PairingTest {
         // Without trust and without an open pairing, a device that is not
         // paired cannot keep the device ID from another one.
         assertTrue(linkAllowed(other, trusted = false, pinned = null, pairing = null))
+    }
+
+    @Test
+    fun unpairedDeviceGetsPairFalseOncePerLink() {
+        // A device that still trusts the phone gets pair false, so that it
+        // drops its trust.
+        assertTrue(refusesUnpaired(paired = false, pairing = false, refused = false))
+        // The next packet on the same link gets no second answer. An unpair
+        // on the phone marks its link in the same way.
+        assertFalse(refusesUnpaired(paired = false, pairing = false, refused = true))
+    }
+
+    @Test
+    fun pairedOrPairingDeviceGetsNoPairFalse() {
+        assertFalse(refusesUnpaired(paired = true, pairing = false, refused = false))
+        assertFalse("the answer does not end an open pairing", refusesUnpaired(paired = false, pairing = true, refused = false))
+    }
+
+    @Test
+    fun newLinkEndsOpenPairing() {
+        assertTrue(endsPairing(pairing = true, hasOldLink = true, sameLink = false))
+    }
+
+    @Test
+    fun pairingStaysOnItsLink() {
+        assertFalse(endsPairing(pairing = true, hasOldLink = true, sameLink = true))
+        assertFalse("a first link ends nothing", endsPairing(pairing = true, hasOldLink = false, sameLink = false))
+        assertFalse(endsPairing(pairing = false, hasOldLink = true, sameLink = false))
     }
 
     private fun output(text: String) = Packet(

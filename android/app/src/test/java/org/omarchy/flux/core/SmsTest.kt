@@ -100,6 +100,15 @@ class SmsTest {
     }
 
     @Test
+    fun sendLimitCountsCharacters() {
+        assertFalse(SmsPackets.tooLong("a".repeat(SmsPackets.MAX_SEND)))
+        assertTrue(SmsPackets.tooLong("a".repeat(SmsPackets.MAX_SEND + 1)))
+        // An emoji takes 2 UTF-16 units, but it is 1 character, as in fluxd.
+        assertFalse(SmsPackets.tooLong("\uD83D\uDE00".repeat(SmsPackets.MAX_SEND)))
+        assertTrue(SmsPackets.tooLong("\uD83D\uDE00".repeat(SmsPackets.MAX_SEND + 1)))
+    }
+
+    @Test
     fun threadRequest() {
         val p = Packet(Types.SMS_REQUEST_CONVERSATION, bodyOf("threadID" to 4, "numberToRequest" to 100))
         assertEquals(ThreadRequest(4, 100), SmsPackets.thread(p))
@@ -228,5 +237,24 @@ class SmsTest {
         val empty = SmsPackets.messagePackets(emptyList(), threadId = 5)
         assertEquals(1, empty.size)
         assertEquals(0, empty.single().array("messages")!!.size)
+    }
+
+    @Test
+    fun onlyTheFirstPacketOfTheConversationsMarksIt() {
+        val list = (1L..10L).map { msg(it, thread = it, date = 100 - it).copy(body = "x".repeat(1000)) }
+        val packets = SmsPackets.messagePackets(list, budget = 3500, conversations = true)
+        assertTrue(packets.size > 1)
+        // The computer replaces its list with the first packet and adds the others.
+        assertEquals(true, packets.first().bool("conversations"))
+        assertTrue(packets.drop(1).none { it.has("conversations") })
+        assertFalse(packets.first().has("threadID"))
+
+        // An empty list still clears the list of the computer.
+        val none = SmsPackets.messagePackets(emptyList(), conversations = true).single()
+        assertEquals(true, none.bool("conversations"))
+        assertEquals(0, none.array("messages")!!.size)
+
+        // The new messages that the change watch sends have no mark.
+        assertTrue(SmsPackets.messagePackets(list.take(1)).none { it.has("conversations") })
     }
 }
