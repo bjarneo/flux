@@ -1,4 +1,5 @@
 import FluxKit
+import ServiceManagement
 import SwiftUI
 
 struct SettingsView: View {
@@ -24,6 +25,7 @@ struct SettingsView: View {
                 } footer: {
                     Text("Change the name in System Settings > General > Sharing.")
                 }
+                LoginItemSection()
                 Section {
                     Picker("Appearance", selection: $appearance) {
                         ForEach(AppAppearance.allCases) { Text($0.label).tag($0) }
@@ -42,5 +44,45 @@ struct SettingsView: View {
         }
         .frame(width: 520, height: 520)
         .onChange(of: appearance) { AppearanceController.shared.apply() }
+    }
+}
+
+/// Open at login, with the main app as the login item. macOS can ask the
+/// user to allow Flux in System Settings > General > Login Items.
+private struct LoginItemSection: View {
+    @State private var status = SMAppService.mainApp.status
+    @State private var error: String?
+
+    var body: some View {
+        Section {
+            Toggle("Open at login", isOn: Binding(get: { status == .enabled || status == .requiresApproval }, set: { setOpenAtLogin($0) }))
+            if status == .requiresApproval {
+                LabeledContent("Allow Flux in Login Items") {
+                    Button("Open Login Items…") { SMAppService.openSystemSettingsLoginItems() }
+                }
+            }
+            if let error {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+                    .font(.caption)
+            }
+        } footer: {
+            Text("Flux opens when you log in, so that the clipboard syncs without a click. After you close the window, Flux keeps running in the menu bar.")
+        }
+        .onAppear { status = SMAppService.mainApp.status }
+    }
+
+    private func setOpenAtLogin(_ on: Bool) {
+        do {
+            if on {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+            error = nil
+        } catch {
+            self.error = "macOS did not change the login item: \(error.localizedDescription)"
+        }
+        status = SMAppService.mainApp.status
     }
 }
