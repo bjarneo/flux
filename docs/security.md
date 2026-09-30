@@ -32,7 +32,7 @@ A pairing that the computer starts needs a confirmation on the computer too.
 After the device accepts, the Flux window, the notification, and `flux-cli pair` ask you to confirm the key.
 `fluxd` pins the device only after that step.
 So a device that copies the name of your phone cannot pair when you select it by mistake.
-Each accept and each confirm names the key that you compared, and `fluxd` refuses it when the open pairing has another key.
+Each accept, confirm, and reject names the key that you compared, and `fluxd` refuses it when the open pairing has another key.
 
 After the pairing, `fluxd` pins the certificate of the device.
 It refuses each link that does not show that certificate.
@@ -141,7 +141,7 @@ It keeps these limits for such devices:
 - `fluxd` keeps at most 8 such links, and 2 for each address. A new link closes the oldest one.
 - A link without a pair request closes after 2 minutes.
 - `fluxd` takes 1 pair request for each device in 2 seconds, shows 1 notification for each device, and keeps at most 4 open requests. At most 2 of them come from 1 address.
-- When a request of a device ends with a withdraw, a reject, or a timeout, `fluxd` refuses a new request of that device for 30 seconds.
+- When a request of a device ends with a withdraw, a reject, a timeout, or the end of its connection, `fluxd` refuses a new request of that device for 30 seconds.
 - When `fluxd` refuses a request because too many requests are open, the Flux window shows the name and the address of the device.
 - Dials to these devices share a limit of 16 at the same time. Dials to paired devices do not count, so these devices cannot keep a paired device offline.
 

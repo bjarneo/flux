@@ -67,7 +67,7 @@ To use the phone away from the local network, see [Connect through Tailscale](ta
 - When you unpair on either side, the other side gets the unpair message and `fluxd` closes the connection. `fluxd` also removes the notifications, messages, and battery state of the device, and closes the desktop notifications of the phone.
 - A device that is not paired can send packets of at most 64 KiB. `fluxd` closes its connection when it sends no pair request for 2 minutes.
 - `fluxd` shows at most 1 pair notification for each device and at most 4 open pair requests. At most 2 of them come from 1 address.
-- When a request of a device ends with a withdraw, a reject, or a timeout, `fluxd` refuses a new request of that device for 30 seconds.
+- When a request of a device ends with a withdraw, a reject, a timeout, or the end of its connection, `fluxd` refuses a new request of that device for 30 seconds.
 - When `fluxd` refuses a request because too many requests are open, the Flux window shows the name and the address of the device. Reject the other requests, or pair from the desktop.
 - The Flux window opens the sidebar for a request only once in 5 minutes for each device.
 

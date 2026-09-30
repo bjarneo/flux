@@ -227,6 +227,7 @@ A pairing that this computer starts has 2 steps:
 
 In state `confirm`, `pair.accept` pins the device and sends nothing to it.
 `pair.reject`, the timeout of 30 seconds, and a new link of the device send `pair: false`, so that the device removes its pin.
+When the link of the pairing closes, `fluxd` sends `pair: false` on the next link of the device with the same certificate.
 
 `pair.accept` and `pair.reject` take the `key` that the user compared.
 The key can have spaces and lower case letters.
