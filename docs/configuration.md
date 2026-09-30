@@ -135,7 +135,7 @@ The check needs no network to work correctly:
 
 - The first check runs 30 seconds after `fluxd` starts, so it does not slow the login.
 - Without a network, the check fails at once, and `fluxd` works as before.
-- `fluxd` tries again after 1 hour, or at the next network change.
+- `fluxd` tries again after 1 hour, or at the next network change. A network change less than 1 minute after the failed check starts the check 1 minute after the failure.
 - `fluxd` keeps the last answer in `~/.cache/flux/release.json`. A known update stays visible without a network.
 - `flux-cli doctor` shows the error of the last failed check.
 

@@ -138,6 +138,11 @@ type Daemon struct {
 	// ready closes when Run has started the network. fluxd serves the
 	// socket only after that, because requests use the network.
 	ready chan struct{}
+
+	// releaseWoken is true when a wake came after the last release check.
+	// After a failed check, the next check then runs releaseRetryGap after
+	// the failure and not after releaseRetry.
+	releaseWoken bool
 }
 
 // Options change how the daemon runs. The zero value is the normal mode.

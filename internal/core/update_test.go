@@ -264,21 +264,32 @@ func TestReleaseClock(t *testing.T) {
 }
 
 // TestReleaseRetryOnWake checks that a network change after a failed check
-// starts a check at once, but not within 1 minute of the failure.
+// starts a check at once, but not within 1 minute of the failure. A change
+// in that minute starts the check at the end of the minute.
 func TestReleaseRetryOnWake(t *testing.T) {
 	d := releaseDaemon(t, closedURL(t))
 	if err := d.checkRelease(context.Background()); err == nil {
 		t.Fatal("no error without a network")
 	}
-	if d.releaseRetryDue(time.Now()) {
-		t.Error("a retry is due at once after the failure")
+	now := time.Now()
+	if wait := d.releaseWait(now, 0); wait < releaseRetry-time.Minute {
+		t.Errorf("the retry without a wake is due in %v", wait)
 	}
-	if !d.releaseRetryDue(time.Now().Add(releaseRetryGap)) {
-		t.Error("no retry is due 1 minute after the failure")
+	// A wake 20 seconds after the failure makes the retry due 1 minute
+	// after the failure.
+	d.mu.Lock()
+	d.releaseTried, d.releaseWoken = now.Add(-20*time.Second), true
+	d.mu.Unlock()
+	if wait := d.releaseWait(now, 0); wait != releaseRetryGap-20*time.Second {
+		t.Errorf("the retry after a wake in the gap is due in %v", wait)
+	}
+	if wait := d.releaseWait(now.Add(releaseRetryGap), 0); wait != 0 {
+		t.Errorf("the retry after a wake is not due at the end of the gap: %v", wait)
 	}
 
+	// A wake in the gap starts the check at the end of the gap.
 	d.mu.Lock()
-	d.releaseTried = time.Now().Add(-2 * releaseRetryGap)
+	d.releaseTried, d.releaseWoken = time.Now().Add(-releaseRetryGap+300*time.Millisecond), false
 	d.mu.Unlock()
 	d.opts.ReleaseURL = releaseServer(t, "v0.7.0").URL
 	d.opts.ReleaseDelay = time.Hour
@@ -293,12 +304,26 @@ func TestReleaseRetryOnWake(t *testing.T) {
 		<-done
 	}()
 	d.wakeRelease()
+	waitRelease(t, d, "0.7.0")
+
+	// A wake after the gap starts the check at once.
+	d.mu.Lock()
+	d.releaseErr, d.releaseTried = "offline", time.Now().Add(-2*releaseRetryGap)
+	d.release.Version = ""
+	d.mu.Unlock()
+	d.wakeRelease()
+	waitRelease(t, d, "0.7.0")
+}
+
+// waitRelease waits up to 5 seconds for a check that finds the version.
+func waitRelease(t *testing.T, d *Daemon, want string) {
+	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		d.mu.Lock()
 		version, failed := d.release.Version, d.releaseErr
 		d.mu.Unlock()
-		if version == "0.7.0" && failed == "" {
+		if version == want && failed == "" {
 			return
 		}
 		if time.Now().After(deadline) {
