@@ -51,7 +51,14 @@ type contentQueue struct {
 }
 
 // clipFetch is the clipboard image that 1 device sends.
-type clipFetch struct{ cancel context.CancelFunc }
+type clipFetch struct {
+	cancel context.CancelFunc
+
+	// stale is true when a newer text or image of the device came. The
+	// image then does not go on the clipboard or into the history. d.mu
+	// guards it.
+	stale bool
+}
 
 // contentState is the state of the workers and the limits for shares, the
 // clipboard, notifications, media, calls, and Do Not Disturb. d.mu guards

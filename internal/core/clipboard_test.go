@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -102,7 +103,8 @@ func TestReceiveClipImage(t *testing.T) {
 	d, clip := clipDaemon(t, true)
 	dev := &Device{ID: "phone", Name: "Pixel 8", Paired: true}
 	jpeg := []byte("\xff\xd8\xff\xe0\x00\x10JFIF\x00")
-	d.receiveClipImage(dev, jpeg)
+	d.receiveClipImage(dev, &clipFetch{}, jpeg)
+	waitIdle(t, d, &d.content.clipQ)
 	if clip.mime != "image/jpeg" || !bytes.Equal(clip.image, jpeg) {
 		t.Errorf("clipboard has %q as %s", clip.image, clip.mime)
 	}
@@ -115,14 +117,16 @@ func TestReceiveClipImage(t *testing.T) {
 
 	// Data that is not an image stays off the clipboard.
 	clip.image, clip.mime = nil, ""
-	d.receiveClipImage(dev, []byte("#!/bin/sh\nrm -rf ~\n"))
+	d.receiveClipImage(dev, &clipFetch{}, []byte("#!/bin/sh\nrm -rf ~\n"))
+	waitIdle(t, d, &d.content.clipQ)
 	if clip.image != nil || len(d.clipboard) != 1 {
 		t.Errorf("clipboard has %q, history has %d entries", clip.image, len(d.clipboard))
 	}
 
 	// Without automatic sync, the image goes only into the history.
 	d.cfg.AutoClipboard = false
-	d.receiveClipImage(dev, testPNG(2))
+	d.receiveClipImage(dev, &clipFetch{}, testPNG(2))
+	waitIdle(t, d, &d.content.clipQ)
 	if clip.image != nil || len(d.clipboard) != 2 {
 		t.Errorf("clipboard has %q, history has %d entries", clip.image, len(d.clipboard))
 	}
@@ -130,9 +134,32 @@ func TestReceiveClipImage(t *testing.T) {
 	// An image that arrives after an unpair is dropped.
 	d.cfg.AutoClipboard = true
 	dev.Paired = false
-	d.receiveClipImage(dev, testPNG(3))
+	d.receiveClipImage(dev, &clipFetch{}, testPNG(3))
+	waitIdle(t, d, &d.content.clipQ)
 	if clip.image != nil || len(d.clipboard) != 2 {
 		t.Errorf("unpaired: clipboard has %q, history has %d entries", clip.image, len(d.clipboard))
+	}
+}
+
+// A text that a device copies after an image stays on the clipboard and at
+// the top of the history, also when the image arrives after the text.
+func TestClipTextStopsOlderImage(t *testing.T) {
+	d, clip := clipDaemon(t, true)
+	dev := &Device{ID: "phone", Name: "Pixel 8", Paired: true}
+	ctx, cancel := context.WithCancel(context.Background())
+	f := &clipFetch{cancel: cancel}
+	d.content.clipImages = map[string]*clipFetch{dev.ID: f}
+	d.handleClipboard(dev, proto.New(proto.TypeClipboard, map[string]any{"content": "newer text"}))
+	if ctx.Err() == nil {
+		t.Fatal("the text did not stop the image")
+	}
+	d.receiveClipImage(dev, f, testPNG(1))
+	waitIdle(t, d, &d.content.clipQ)
+	if clip.image != nil || clip.text != "newer text" {
+		t.Errorf("clipboard has the text %q and the image %q", clip.text, clip.image)
+	}
+	if len(d.clipboard) != 1 || d.clipboard[0].Text != "newer text" {
+		t.Errorf("history %+v", d.clipboard)
 	}
 }
 

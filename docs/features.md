@@ -168,7 +168,7 @@ The phone sends PNG, JPEG, GIF, and WebP images.
 Flux syncs images of up to 16 MiB.
 A copy that also has plain text syncs as text, for example cells from a spreadsheet.
 
-Each device sends 1 image at a time. A newer image stops the image that is on its way.
+Each device sends 1 image at a time. A newer image or text stops the image that is on its way.
 When you turn off `auto_clipboard` or unpair the phone, the desktop stops the image that it sends.
 An image that arrives after an unpair does not go into the history.
 
