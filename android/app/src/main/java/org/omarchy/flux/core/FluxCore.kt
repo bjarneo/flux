@@ -246,6 +246,12 @@ object FluxCore {
                 return@locked
             }
             val old = existing?.link
+            // A pairing stays on the link on which it started, as in fluxd,
+            // which ends the pairing when a new link comes.
+            if (existing != null && old != null && old !== link && existing.pairing) {
+                existing.dropPairing()
+                toast("Pairing with ${link.identity.deviceName} stopped: the connection changed. Pair again")
+            }
             val d = existing ?: Device(this, link.identity).also { devices[id] = it }
             d.identity = link.identity
             d.link = link
