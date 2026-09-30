@@ -350,4 +350,52 @@ Item {
       compare(sent[0].params.id, "hasOwnProperty")
     }
   }
+
+  TestCase {
+    name: "Errors"
+    when: mock.ready
+
+    function init() {
+      mock.state = mock.fixTimes(mock.fixture.state)
+      mock.failures = {}
+      mock.requests = []
+    }
+
+    function cleanup() {
+      mock.failures = {}
+    }
+
+    function test_smsSendErrorShowsAtField() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "messages"
+      tryVerify(function () { return !!page(view) && page(view).loaded })
+      var p = page(view)
+      var msg = "The message has 1700 characters. Send at most 1600"
+      mock.failures = { "sms.send": { code: "bad_params", message: msg } }
+      var draft = findBy(p, "placeholder", "Text message via Pixel 8")
+      draft.text = "A long message"
+      p.send()
+      tryCompare(p, "sendError", msg)
+      var line = findBy(p, "text", msg)
+      verify(!!line && line.visible)
+      // The draft stays for a change, and nothing shows as sent.
+      compare(draft.text, "A long message")
+      compare(p.outbox.length, 0)
+      draft.text = "A short message"
+      compare(p.sendError, "")
+      verify(!line.visible)
+    }
+
+    function test_clipboardErrorShowsInToast() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      tryVerify(function () { return view.devOnline })
+      var msg = "The text has 9437184 bytes. Flux shares at most 8 MiB of text"
+      mock.failures = { "clipboard.send": { code: "too_large", message: msg } }
+      view.sendClipboard()
+      compare(requestsOf("clipboard.send").length, 1)
+      tryVerify(function () { var t = findBy(view, "message", msg); return !!t && t.visible })
+    }
+  }
 }
