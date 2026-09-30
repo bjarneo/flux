@@ -47,6 +47,11 @@ Item {
   property bool pairMode: false
   property string justPaired: ""
   property var prevPairStates: ({})
+  // The device that the unpair confirm dialog acts on. Null when it is closed.
+  property var unpairTarget: null
+  // The scrim takes the keyboard while the dialog is open, so give it back to
+  // the shortcuts when it closes.
+  onUnpairTargetChanged: if (!unpairTarget) forceActiveFocus()
 
   readonly property bool daemonUp: !!backend && backend.connected
   readonly property var allDevices: backend ? (backend.devices || []) : []
@@ -141,6 +146,24 @@ Item {
     call("clipboard.send", { device: dev.id }, function () { toast("Clipboard sent to " + root.devName) })
   }
 
+  // Opens the confirm dialog for the selected device.
+  function unpair() {
+    if (!dev) return
+    unpairTarget = dev
+  }
+
+  // Removes the trust on this computer and tells the device, after the
+  // confirm dialog. The row disappears when fluxd sends the new state.
+  function confirmUnpair() {
+    var target = unpairTarget
+    unpairTarget = null
+    if (!target) return
+    call("pair.unpair", { device: target.id }, function () {
+      toast((target.name || "Device") + " unpaired")
+      if (selectedId === target.id) selectedId = ""
+    })
+  }
+
   property alias sidebarFlick: sideFlick
 
   // Scrolls the sidebar so that item is in view, for example the device
@@ -223,6 +246,8 @@ Item {
       sendClipboard(); event.accepted = true
     } else if (event.text === "p") {
       startPair(); event.accepted = true
+    } else if (event.text === "u") {
+      unpair(); event.accepted = true
     } else if (event.key === Qt.Key_Escape) {
       if (drawerOpen) drawerOpen = false
       else if (pairMode) pairMode = false
@@ -678,6 +703,14 @@ Item {
           anchors.verticalCenter: parent.verticalCenter
           onClicked: root.sendClipboard()
         }
+        OutlineButton {
+          icon: "unlink"
+          text: root.compactHeader ? "" : "Unpair"
+          textColor: Theme.err
+          iconColor: Theme.err
+          anchors.verticalCenter: parent.verticalCenter
+          onClicked: root.unpair()
+        }
       }
       Rectangle {
         anchors.bottom: parent.bottom
@@ -825,6 +858,76 @@ Item {
       message: "This window runs the earlier version. Restart it to use the new version."
       action: "Restart"
       onActivated: root.restartApp()
+    }
+  }
+
+  // The unpair confirm dialog. A full-window scrim blocks the page behind
+  // it, and the card holds the question and the actions. It is a plain item
+  // in this view so both hosts render it. The scrim takes the keyboard while
+  // it is open, so Escape closes the dialog.
+  Item {
+    id: unpairScrim
+    anchors.fill: parent
+    z: 30
+    visible: !!root.unpairTarget
+    focus: visible
+    Keys.onEscapePressed: root.unpairTarget = null
+
+    Rectangle {
+      anchors.fill: parent
+      color: Theme.alpha(Theme.bg, 0.6)
+      MouseArea {
+        anchors.fill: parent
+        onClicked: root.unpairTarget = null
+      }
+    }
+
+    Card {
+      anchors.centerIn: parent
+      width: Math.min(400, parent.width - 32)
+      height: unpairCol.implicitHeight + 40
+
+      // A click on the card does not reach the scrim behind it and close.
+      MouseArea { anchors.fill: parent }
+
+      Column {
+        id: unpairCol
+        x: 20
+        y: 20
+        width: parent.width - 40
+        spacing: 10
+
+        Txt {
+          width: parent.width
+          text: "Unpair " + (root.unpairTarget ? (root.unpairTarget.name || "device") : "device") + "?"
+          font.pixelSize: 16
+          font.weight: Font.DemiBold
+          wrapMode: Text.Wrap
+        }
+        Txt {
+          width: parent.width
+          text: "This removes the device from Flux on this computer and on the device. You can pair it again later."
+          color: Theme.dim
+          font.pixelSize: 12
+          wrapMode: Text.Wrap
+        }
+        Item { width: 1; height: 2 }
+        // RightToLeft puts Unpair on the right, the primary action.
+        Row {
+          width: parent.width
+          spacing: 8
+          layoutDirection: Qt.RightToLeft
+          OutlineButton {
+            text: "Unpair"
+            textColor: Theme.err
+            onClicked: root.confirmUnpair()
+          }
+          OutlineButton {
+            text: "Cancel"
+            onClicked: root.unpairTarget = null
+          }
+        }
+      }
     }
   }
 

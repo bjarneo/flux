@@ -236,6 +236,12 @@ Window {
       mock.call("desktop.stop", {}, null)
       remote().set("remoteDesktop", false)
       remote().set("remoteInput", false)
+    }],
+    // The confirm dialog of the Unpair button in the header.
+    ["49-unpair-confirm", function () {
+      view.selectedId = pixel
+      view.tab = "overview"
+      view.unpair()
     }]
   ]
 
