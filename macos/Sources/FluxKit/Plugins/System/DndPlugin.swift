@@ -135,8 +135,8 @@ public final class DndPlugin: FluxPlugin, @unchecked Sendable {
               backlog.report(on, paired: core.trust.all().map(\.id), keep: sync(core)) else { return }
         FluxLog.plugin.info("Do Not Disturb is \(on ? "on" : "off", privacy: .public) on \(FluxPlatform.current.deviceNoun, privacy: .public)")
         let packet = Packet(PacketType.fluxDnd, ["on": on])
-        let reached = core.connectedPaired().filter { $0.accepts(PacketType.fluxDnd) && core.send(packet, to: $0.id) }
-        backlog.reached(reached.map(\.id), on: on)
+        let reached = core.connectedPairedIds(accepting: PacketType.fluxDnd).filter { core.send(packet, to: $0) }
+        backlog.reached(reached, on: on)
     }
     #endif
 
