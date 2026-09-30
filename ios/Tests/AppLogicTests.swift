@@ -125,18 +125,6 @@ final class AppLogicTests: XCTestCase {
         XCTAssertEqual(reject.options, [.destructive], "a locked iPhone can reject")
     }
 
-    func testARejectedComputerWaits() {
-        var cooldown = PairCooldown()
-        XCTAssertFalse(cooldown.blocks(id: "a", ip: "10.0.0.2", at: 0))
-        cooldown.reject(id: "a", ip: "10.0.0.2", at: 100)
-        XCTAssertTrue(cooldown.blocks(id: "a", ip: "10.0.0.9", at: 150), "the same computer waits")
-        XCTAssertTrue(cooldown.blocks(id: "b", ip: "10.0.0.2", at: 150), "a new device ID from the same address waits")
-        XCTAssertFalse(cooldown.blocks(id: "b", ip: "10.0.0.3", at: 150), "other computers can ask")
-        XCTAssertFalse(cooldown.blocks(id: "a", ip: "10.0.0.2", at: 220), "the wait ends")
-        cooldown.reject(id: "c", ip: "", at: 300)
-        XCTAssertFalse(cooldown.blocks(id: "d", ip: "", at: 310), "an unknown address matches nothing")
-    }
-
     func testAppearanceStyles() {
         XCTAssertEqual(AppAppearance.automatic.style, .unspecified)
         XCTAssertEqual(AppAppearance.light.style, .light)

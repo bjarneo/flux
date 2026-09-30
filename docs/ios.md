@@ -95,8 +95,11 @@ A swipe down on the sheet rejects it.
 While Flux is in the background, a notification shows the request and the key.
 **Accept** in the notification needs an unlocked iPhone and opens Flux.
 **Reject** also works on the lock screen.
-After a reject, Flux ends new requests from the same computer or address for 2 minutes.
+Flux shows 1 request at a time.
+When a request ends without a pairing, for example after a reject or a timeout, Flux ends new requests from the same computer or address for 30 seconds.
 To pair in that time, start the pairing on the iPhone.
+A pairing is bound to its link.
+When the computer connects again while a pairing runs, the pairing stops, so pair again.
 Flux asks for permission to show notifications when you pair the first computer.
 The iPhone appears on the computer as `phone`, with the name from **Settings > This iPhone**.
 iOS gives apps only the generic name "iPhone", so set a name there.

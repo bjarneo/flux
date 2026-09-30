@@ -6,6 +6,32 @@ let outgoingPairTimeout: TimeInterval = 30
 let incomingPairTimeout: TimeInterval = 25
 /// The largest clock difference that a pairing request may have.
 let maxTimestampDifference: Int64 = 1800
+/// How long a host waits before its next pairing request counts, after its
+/// incoming request ended without a pairing.
+let pairCooldownSeconds: TimeInterval = 30
+
+/// The computers and addresses whose incoming pairing request ended without
+/// a pairing, for example after a reject or a timeout. Their next requests
+/// end at once for `seconds`, so that a host on the network cannot hold the
+/// only open request or show a new request each time.
+struct PairCooldown {
+    var seconds = pairCooldownSeconds
+    /// The time of each end, in `ProcessInfo.systemUptime`, by device ID and by address.
+    private var ended: [String: TimeInterval] = [:]
+
+    mutating func add(id: String, ip: String, at now: TimeInterval) {
+        ended = ended.filter { now - $0.value < seconds }
+        for key in Self.keys(id: id, ip: ip) { ended[key] = now }
+    }
+
+    func blocks(id: String, ip: String, at now: TimeInterval) -> Bool {
+        Self.keys(id: id, ip: ip).contains { key in ended[key].map { now - $0 < seconds } ?? false }
+    }
+
+    private static func keys(id: String, ip: String) -> [String] {
+        ip.isEmpty ? ["id " + id] : ["id " + id, "ip " + ip]
+    }
+}
 
 /// The pairing state of one device.
 public enum PairState: String, Sendable {
@@ -24,7 +50,12 @@ public final class Device: @unchecked Sendable {
     public internal(set) var lastIp = ""
 
     public internal(set) var pairState = PairState.none {
-        didSet { link?.setPaired(paired) }
+        didSet {
+            link?.setPaired(paired)
+            // An incoming request that ends without a pairing makes its
+            // host wait, see `PairCooldown`.
+            if oldValue == .incoming, pairState == .none { core.incomingPairEnded(self) }
+        }
     }
     var pairTimestamp: Int64 = 0
     public internal(set) var pairKey = ""
@@ -171,6 +202,13 @@ public final class Device: @unchecked Sendable {
     }
 
     private func incoming(_ p: Packet) {
+        // A host whose last request ended without a pairing waits. The
+        // refusal shows no notification.
+        guard !core.pairCooldownBlocks(self) else {
+            FluxLog.core.info("refused a pairing request from \(self.name, privacy: .public): a request from this computer or address ended less than \(Int(pairCooldownSeconds)) seconds ago")
+            send(Packet(PacketType.pair, ["pair": false]))
+            return
+        }
         let now = Int64(Date().timeIntervalSince1970)
         guard let ts = p.long("timestamp"), Self.timestampFresh(ts, now: now) else {
             send(Packet(PacketType.pair, ["pair": false]))
@@ -186,7 +224,7 @@ public final class Device: @unchecked Sendable {
         pairTimestamp = ts
         computeKey()
         pairState = .incoming
-        armTimer(incomingPairTimeout)
+        armTimer(core.incomingPairSeconds)
         core.notifyPairRequest(self)
     }
 
@@ -214,7 +252,8 @@ public final class Device: @unchecked Sendable {
         core.onPaired(self)
     }
 
-    private func resetPair() {
+    /// Ends an open pairing on this side and sends nothing.
+    func resetPair() {
         pairTimer?.cancel()
         pairState = .none
         pairKey = ""

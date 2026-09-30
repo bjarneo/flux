@@ -85,6 +85,11 @@ A request from the computer does not change the page that the window shows.
 The sidebar marks the computer, and a notification shows the key.
 Select the computer, compare the key, and select **Accept**.
 Return does not accept a request.
+Flux shows 1 request at a time.
+When a request ends without a pairing, for example after a reject or a timeout, Flux ends new requests from the same computer or address for 30 seconds.
+To pair in that time, start the pairing on the Mac.
+A pairing is bound to its link.
+When the computer connects again while a pairing runs, the pairing stops, so pair again.
 The Mac announces itself with UDP broadcasts on port 1716 and as `_flux._udp` through Bonjour, like the phone.
 It appears on the computer as `laptop` when it has a battery and `desktop` otherwise.
 

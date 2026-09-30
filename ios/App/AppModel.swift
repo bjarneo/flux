@@ -19,28 +19,6 @@ struct Toast: Equatable {
     let message: String
 }
 
-/// The computers and addresses whose pairing request the user rejected.
-/// Their next requests end at once for `seconds`, so that a device on the
-/// network cannot keep the pairing sheet over the app.
-struct PairCooldown {
-    var seconds: TimeInterval = 120
-    /// The time of each reject, in `ElapsedTime`, by device ID and by address.
-    private var rejected: [String: TimeInterval] = [:]
-
-    mutating func reject(id: String, ip: String, at now: TimeInterval) {
-        rejected = rejected.filter { now - $0.value < seconds }
-        for key in Self.keys(id: id, ip: ip) { rejected[key] = now }
-    }
-
-    func blocks(id: String, ip: String, at now: TimeInterval) -> Bool {
-        Self.keys(id: id, ip: ip).contains { key in rejected[key].map { now - $0 < seconds } ?? false }
-    }
-
-    private static func keys(id: String, ip: String) -> [String] {
-        ip.isEmpty ? ["id " + id] : ["id " + id, "ip " + ip]
-    }
-}
-
 /// The UI state of the app. It mirrors the core and holds the navigation.
 @MainActor
 @Observable
@@ -62,7 +40,6 @@ final class AppModel {
     private var backgroundTask = UIBackgroundTaskIdentifier.invalid
     /// The pairing sheet that shows now, see `pairSheetClosed`.
     @ObservationIgnored var shownPairSheet: String?
-    private var cooldown = PairCooldown()
 
     init(core: FluxCore, demo: Bool = false) {
         self.core = core
@@ -111,14 +88,12 @@ final class AppModel {
 
     /// The computer of the pairing sheet: one that asks to pair comes first.
     var pairSheetDevice: String? {
-        let now = ElapsedTime.now
-        return state.devices.first { $0.pairState == .incoming && !cooldown.blocks(id: $0.id, ip: $0.ip, at: now) }?.id ?? pairingSheet
+        state.devices.first { $0.pairState == .incoming }?.id ?? pairingSheet
     }
 
-    /// Rejects a pairing request. Requests from the same computer or address
-    /// then end at once for a while, see `PairCooldown`.
+    /// Rejects a pairing request. The core then ends the requests from the
+    /// same computer or address at once for 30 seconds.
     func rejectPair(_ d: DeviceSnapshot) {
-        cooldown.reject(id: d.id, ip: d.ip, at: ElapsedTime.now)
         core.cancelPair(d.id)
     }
 
@@ -174,13 +149,10 @@ final class AppModel {
     }
 
     /// The sheet shows the request while Flux is on the screen. Otherwise a
-    /// notification with Accept and Reject shows it. A request from a
-    /// computer or address that the user just rejected ends at once.
+    /// notification with Accept and Reject shows it. The core refuses a
+    /// request from a computer or address whose last request ended less
+    /// than 30 seconds ago, so such a request does not come here.
     private func pairRequested(_ d: DeviceSnapshot) {
-        if cooldown.blocks(id: d.id, ip: d.ip, at: ElapsedTime.now) {
-            core.cancelPair(d.id)
-            return
-        }
         guard !isActive else { return }
         Notifier.shared.post(id: "pair-\(d.id)", category: Self.pairCategory, title: "Pair with \(d.name)?",
                              body: "Check that \(d.name) shows the key \(KeyView.grouped(d.pairKey)).",

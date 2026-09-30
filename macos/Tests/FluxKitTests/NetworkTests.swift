@@ -142,6 +142,26 @@ private func connectLink(_ port: Int, as peer: LocalCertificate) async throws ->
     return ch
 }
 
+/// Keeps the packets that a test link receives from the core.
+private final class Replies: ChannelInboundHandler, @unchecked Sendable {
+    typealias InboundIn = ByteBuffer
+    private let lock = NSLock()
+    private var text = ""
+
+    /// The number of pair packets with pair false so far.
+    var refusals: Int {
+        lock.withLock { text }.split(separator: "\n")
+            .compactMap { Packet.parse(Data($0.utf8)) }
+            .filter { $0.type == PacketType.pair && $0.bool("pair") == false }
+            .count
+    }
+
+    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+        let buffer = unwrapInboundIn(data)
+        lock.withLock { text += String(buffer: buffer) }
+    }
+}
+
 /// Connections before their link must not outlive a stop, and a link must
 /// keep the certificate of its device.
 final class LinkHandshakeTests: XCTestCase {
@@ -231,6 +251,71 @@ final class LinkHandshakeTests: XCTestCase {
         try await assertCloses(after, "the core refuses another certificate after the pairing")
         XCTAssertTrue(link.isActive, "the paired link stays open")
         XCTAssertEqual(core.state.devices.first { $0.id == Self.desk }?.online, true)
+        try? await link.close()
+    }
+
+    /// A pairing is bound to the link on which it started. A new link with
+    /// the same certificate ends the incoming request, and Accept then does
+    /// nothing.
+    func testANewLinkEndsAnIncomingPairing() async throws {
+        let core = try makeCore()
+        let port = try await startNetwork(core)
+        let desk = try LocalCertificate.generate(deviceId: Self.desk)
+        let pairState = { core.state.devices.first { $0.id == Self.desk }?.pairState }
+
+        let first = try await connectLink(port, as: desk)
+        let request = Packet(PacketType.pair, ["pair": true, "timestamp": Int64(Date().timeIntervalSince1970)]).serialize()
+        try await first.writeAndFlush(ByteBuffer(bytes: request))
+        try await waitUntil("the request arrives") { pairState() == .incoming }
+
+        let second = try await connectLink(port, as: desk)
+        try await waitUntil("the new link ends the pairing") { pairState() == PairState.none }
+        core.acceptPair(Self.desk)
+        XCTAssertEqual(pairState(), PairState.none, "Accept does nothing after the pairing ended")
+        XCTAssertNil(core.trust.get(Self.desk))
+        try await assertCloses(first, "the new link replaces the old one")
+        try? await second.close()
+    }
+
+    /// A new link also ends a request that this side sent.
+    func testANewLinkEndsARequestThatThisSideSent() async throws {
+        let core = try makeCore()
+        let port = try await startNetwork(core)
+        let desk = try LocalCertificate.generate(deviceId: Self.desk)
+        let pairState = { core.state.devices.first { $0.id == Self.desk }?.pairState }
+
+        let first = try await connectLink(port, as: desk)
+        try await waitUntil("the link arrives") { core.state.devices.first { $0.id == Self.desk }?.online == true }
+        core.pair(Self.desk, timestamp: Int64(Date().timeIntervalSince1970))
+        XCTAssertEqual(pairState(), .requested)
+
+        let second = try await connectLink(port, as: desk)
+        try await waitUntil("the new link ends the pairing") { pairState() == PairState.none }
+        try await assertCloses(first, "the new link replaces the old one")
+        try? await second.close()
+    }
+
+    /// An incoming request that timed out does not hold the only open
+    /// request. The same computer that asks again at once gets pair false,
+    /// and no request opens.
+    func testARequestThatTimedOutWaitsBeforeItCountsAgain() async throws {
+        let core = try makeCore()
+        core.incomingPairSeconds = 1
+        let port = try await startNetwork(core)
+        let desk = try LocalCertificate.generate(deviceId: Self.desk)
+        let pairState = { core.state.devices.first { $0.id == Self.desk }?.pairState }
+        let request = { Packet(PacketType.pair, ["pair": true, "timestamp": Int64(Date().timeIntervalSince1970)]).serialize() }
+
+        let link = try await connectLink(port, as: desk)
+        let replies = Replies()
+        try await link.pipeline.addHandler(replies)
+        try await link.writeAndFlush(ByteBuffer(bytes: request()))
+        try await waitUntil("the request arrives") { pairState() == .incoming }
+        try await waitUntil("the request times out") { pairState() == PairState.none }
+
+        try await link.writeAndFlush(ByteBuffer(bytes: request()))
+        try await waitUntil("the core refuses the new request") { replies.refusals == 1 }
+        XCTAssertEqual(pairState(), PairState.none, "the refused request does not open, so it holds no slot")
         try? await link.close()
     }
 }
