@@ -149,7 +149,7 @@ object Plugins {
                 return false
             }
             core.settings.clipboardTimestamp = System.currentTimeMillis()
-            ClipImage.send(core, listOf(d), uri, mime) { sent ->
+            ClipImage.send(core, listOf(d), uri, mime, manual = true) { sent ->
                 core.toast(
                     when {
                         sent > 0 -> "Image sent to $name"
