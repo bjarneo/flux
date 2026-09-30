@@ -14,7 +14,8 @@ struct ContentView: View {
             if let device = model.device {
                 DeviceDetailView(device: device)
                     .id(device.id)
-            } else if model.state.localNetworkDenied {
+            } else if model.state.localNetworkDenied && !model.state.devices.contains(where: \.online) {
+                // A link that is open shows that Flux reaches a computer.
                 ContentUnavailableView {
                     Label("Local Network is off", systemImage: "wifi.exclamationmark")
                 } description: {
