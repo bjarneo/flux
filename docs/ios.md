@@ -100,6 +100,7 @@ When a request ends without a pairing, for example after a reject or a timeout, 
 To pair in that time, start the pairing on the iPhone.
 A pairing is bound to its link.
 When the computer connects again while a pairing runs, the pairing stops, so pair again.
+A request from the computer that stops this way also starts the wait of 30 seconds.
 Flux asks for permission to show notifications when you pair the first computer.
 The iPhone appears on the computer as `phone`, with the name from **Settings > This iPhone**.
 iOS gives apps only the generic name "iPhone", so set a name there.

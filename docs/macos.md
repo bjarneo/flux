@@ -90,6 +90,7 @@ When a request ends without a pairing, for example after a reject or a timeout, 
 To pair in that time, start the pairing on the Mac.
 A pairing is bound to its link.
 When the computer connects again while a pairing runs, the pairing stops, so pair again.
+A request from the computer that stops this way also starts the wait of 30 seconds.
 The Mac announces itself with UDP broadcasts on port 1716 and as `_flux._udp` through Bonjour, like the phone.
 It appears on the computer as `laptop` when it has a battery and `desktop` otherwise.
 

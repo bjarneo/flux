@@ -161,6 +161,15 @@ public final class Device: @unchecked Sendable {
         "\(computer) unpaired \(platform.deviceNoun)"
     }
 
+    /// The message after a new link ends a pairing. After an incoming
+    /// request, the computer waits `pairCooldownSeconds` before its next
+    /// request counts, so the message names the path that works.
+    static func pairStoppedText(computer: String, incoming: Bool, platform: FluxPlatform = .current) -> String {
+        incoming
+            ? "The pairing with \(computer) stopped. Pair again from \(platform.deviceNoun), or wait \(Int(pairCooldownSeconds)) seconds"
+            : "The pairing with \(computer) stopped. Try again"
+    }
+
     /// Handles a flux.pair packet.
     func onPairPacket(_ p: Packet) {
         let wants = p.bool("pair") ?? false

@@ -22,6 +22,9 @@ final class PlatformTextTests: XCTestCase {
     /// The Mac texts are the ones that Flux for macOS always showed.
     func testMacTextsStayTheSame() {
         XCTAssertEqual(Device.unpairedText(computer: "roger", platform: .mac), "roger unpaired this Mac")
+        XCTAssertEqual(Device.pairStoppedText(computer: "roger", incoming: false, platform: .mac), "The pairing with roger stopped. Try again")
+        XCTAssertEqual(Device.pairStoppedText(computer: "roger", incoming: true, platform: .mac),
+                       "The pairing with roger stopped. Pair again from this Mac, or wait 30 seconds")
         XCTAssertEqual(MicPlugin.updateText(computer: "roger", platform: .mac), "Update Flux on roger to use this Mac as a microphone")
         XCTAssertEqual(MicPlugin.noMicrophoneText(platform: .mac), "This Mac has no microphone")
         XCTAssertEqual(WebcamPlugin.updateText(computer: "roger", platform: .mac), "Update Flux on roger to use this Mac as a webcam")
@@ -42,6 +45,8 @@ final class PlatformTextTests: XCTestCase {
 
     func testPhoneTexts() {
         XCTAssertEqual(Device.unpairedText(computer: "roger", platform: .phone), "roger unpaired this iPhone")
+        XCTAssertEqual(Device.pairStoppedText(computer: "roger", incoming: true, platform: .phone),
+                       "The pairing with roger stopped. Pair again from this iPhone, or wait 30 seconds")
         XCTAssertEqual(MicPlugin.updateText(computer: "roger", platform: .phone), "Update Flux on roger to use this iPhone as a microphone")
         XCTAssertEqual(MicPlugin.noMicrophoneText(platform: .phone), "This iPhone has no microphone")
         XCTAssertEqual(WebcamPlugin.updateText(computer: "roger", platform: .phone), "Update Flux on roger to use this iPhone as a webcam")

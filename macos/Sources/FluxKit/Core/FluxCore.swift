@@ -400,8 +400,10 @@ public final class FluxCore: @unchecked Sendable {
             // too, before the new link can accept it.
             if let old, old !== link, d.pairState == .requested || d.pairState == .incoming {
                 FluxLog.core.info("ended the pairing with \(d.name, privacy: .public): a new link replaced its link")
+                // The reset of an incoming pairing makes its host wait.
+                let incoming = d.pairState == .incoming
                 d.resetPair()
-                toast("The pairing with \(d.name) stopped. Try again")
+                toast(Device.pairStoppedText(computer: d.name, incoming: incoming))
             }
             // Set the new link first, so that closing the old link does not
             // mark the device offline.
