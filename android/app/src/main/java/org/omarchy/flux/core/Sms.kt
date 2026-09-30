@@ -89,12 +89,17 @@ object SmsPackets {
      * each one. The computer takes only 1 answer to a thread request, so
      * that answer keeps the first messages of [list] that fit. [list] has
      * the newest messages first, so the oldest ones go.
+     *
+     * [conversations] marks the answer to a conversations request. Its
+     * first packet has "conversations": true, and the computer then replaces
+     * its list of conversations. The computer adds the other packets.
      */
     fun messagePackets(
         list: List<TextMessage>,
         names: Map<String, String> = emptyMap(),
         threadId: Long? = null,
         budget: Int = MAX_PACKET_BYTES,
+        conversations: Boolean = false,
     ): List<Packet> {
         val batches = ArrayList<List<JsonObject>>()
         var batch = ArrayList<JsonObject>()
@@ -114,14 +119,15 @@ object SmsPackets {
         if (batch.isNotEmpty() && (threadId == null || batches.isEmpty())) batches += batch
         // An empty answer still tells the computer that the request ended.
         if (batches.isEmpty()) batches += emptyList<JsonObject>()
-        return batches.map { packet(it, threadId) }
+        return batches.mapIndexed { i, b -> packet(b, threadId, conversations && i == 0) }
     }
 
-    private fun packet(messages: List<JsonObject>, threadId: Long?): Packet {
+    private fun packet(messages: List<JsonObject>, threadId: Long?, conversations: Boolean = false): Packet {
         val fields = buildList {
             add("version" to 2)
             add("messages" to messages)
             if (threadId != null) add("threadID" to threadId)
+            if (conversations) add("conversations" to true)
         }
         return Packet(Types.SMS_MESSAGES, bodyOf(*fields.toTypedArray()))
     }
