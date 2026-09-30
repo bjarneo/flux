@@ -47,6 +47,8 @@ The device already uses its new key, so each approval fails until you run `sudo 
 If the phone tells you to type `y`, type the code instead. The terminal needs all 16 characters.
 The terminal does not show the code, because a program that runs as your user can write to your terminal.
 It cannot change the screen of the phone.
+Such a program can type into your terminal, for example with `wtype`, so run the enrollment only in a session that you trust.
+See [the approval design](approve.md#enrollment-flow).
 
 The terminal shows `Approve on <phone> for terminal <tty>`, and the phone shows the request.
 Approve only a request that follows the command you just entered.
