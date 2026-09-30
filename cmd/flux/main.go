@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -677,8 +678,14 @@ func webcam(args []string) error {
 // ignores other keys, so the CLI refuses them.
 var webcamKeys = []string{"aspect", "resolution", "camera", "mirror", "zoom", "exposure", "whiteBalance", "brightness", "contrast", "saturation", "warmth"}
 
+// maxWebcamNumber is the largest size of a webcam setting number that
+// fluxd sends to the phone.
+const maxWebcamNumber = 1 << 16
+
 // webcamSettings turns KEY=VALUE arguments into a config object. true and
 // false become booleans, numbers become numbers, and the rest stays text.
+// A number must be finite and in the range that fluxd accepts. The
+// resolution must be a whole number that is not negative.
 func webcamSettings(args []string) (map[string]any, error) {
 	if len(args) == 0 {
 		return nil, errors.New("give at least 1 KEY=VALUE, for example: flux-cli webcam set aspect=16:9")
@@ -697,6 +704,9 @@ func webcamSettings(args []string) (map[string]any, error) {
 			cfg[k] = v == "true"
 		default:
 			if n, err := strconv.ParseFloat(v, 64); err == nil {
+				if math.IsNaN(n) || math.Abs(n) > maxWebcamNumber || (k == "resolution" && (n < 0 || n != math.Trunc(n))) {
+					return nil, fmt.Errorf("%s=%s is out of range", k, v)
+				}
 				cfg[k] = n
 			} else {
 				cfg[k] = v

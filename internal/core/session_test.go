@@ -3,12 +3,15 @@ package core
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -492,7 +495,7 @@ func TestCleanWebcamConfig(t *testing.T) {
 		many[i] = "a"
 	}
 	bad := []struct{ config, caps string }{
-		{`{"aspect":"` + strings.Repeat("x", 40) + `"}`, ``},
+		{`{"aspect":"` + strings.Repeat("x", maxWebcamText+1) + `"}`, ``},
 		{``, `{"aspects":` + mustString(many) + `}`},
 		{``, `{"resolutions":[` + strings.Repeat("720,", maxWebcamList) + `720]}`},
 		{`{"zoom":1e300}`, ``},
@@ -504,14 +507,54 @@ func TestCleanWebcamConfig(t *testing.T) {
 			t.Errorf("%s %s: no error", c.config, c.caps)
 		}
 	}
+	// The Mac names a camera by its device name, which can be long.
 	cfg, caps, err := cleanWebcamConfig(
-		rawOrNil(`{"aspect":"16:9","resolution":720,"camera":"back","mirror":false,"zoom":1,"exposure":0,"whiteBalance":"auto","brightness":0,"contrast":1,"saturation":1,"warmth":0}`),
-		rawOrNil(`{"zoomMax":8,"exposureMin":-2,"exposureMax":2,"exposureStep":0.5,"whiteBalance":["auto"],"cameras":["back"],"aspects":["16:9"],"resolutions":[720,1080]}`))
+		rawOrNil(`{"aspect":"16:9","resolution":720,"camera":"alexandra's iphone 15 pro max camera","mirror":false,"zoom":1,"exposure":0,"whiteBalance":"auto","brightness":0,"contrast":1,"saturation":1,"warmth":0}`),
+		rawOrNil(`{"zoomMax":8,"exposureMin":-2,"exposureMax":2,"exposureStep":0.5,"whiteBalance":["auto"],"cameras":["facetime hd camera","alexandra's iphone 15 pro max camera"],"aspects":["16:9"],"resolutions":[720,1080]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(cfg), `"contrast":1`) || !strings.Contains(string(cfg), `"mirror":false`) || !strings.Contains(string(caps), `"resolutions":[720,1080]`) {
 		t.Fatalf("settings %s %s", cfg, caps)
+	}
+	if !strings.Contains(string(caps), `"alexandra's iphone 15 pro max camera"]`) {
+		t.Fatalf("the long camera name is missing: %s", caps)
+	}
+}
+
+// fluxd sends only the known webcam settings, with the same limits as the
+// settings from the phone, so that a value cannot stop an older app.
+func TestConfigureWebcamChecksSettings(t *testing.T) {
+	d, dev := sessionDaemon(t, &config.Config{})
+	l := newFakeStreamLink()
+	if d.claimWebcam(dev, l, webcamStart{Port: 1740}) == nil {
+		t.Fatal("the webcam did not start")
+	}
+	for _, c := range []string{
+		`{"resolution":1e300}`, `{"resolution":-9.2e18}`, `{"resolution":-720}`, `{"resolution":720.5}`,
+		`{"zoom":1e300}`, `{"brightness":-1e9}`, `{"mirror":"yes"}`, `{"extra":1}`,
+		`{"camera":"` + strings.Repeat("x", maxWebcamText+1) + `"}`, `{}`, `[1]`, `null`,
+	} {
+		var e *Error
+		if err := d.ConfigureWebcam(json.RawMessage(c), false); !errors.As(err, &e) || e.Code != "bad_params" {
+			t.Errorf("%s: %v", c, err)
+		}
+	}
+	l.mu.Lock()
+	sent := len(l.sent)
+	l.mu.Unlock()
+	if sent != 0 {
+		t.Fatalf("fluxd sent %d packets for settings that are not valid", sent)
+	}
+	if err := d.ConfigureWebcam(json.RawMessage(`{"resolution":1080,"zoom":2.5,"mirror":true,"camera":"front"}`), false); err != nil {
+		t.Fatal(err)
+	}
+	l.mu.Lock()
+	got := l.sent[0]["config"]
+	l.mu.Unlock()
+	want := map[string]any{"resolution": 1080.0, "zoom": 2.5, "mirror": true, "camera": "front"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("sent %#v", got)
 	}
 }
 
