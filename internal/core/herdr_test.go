@@ -1343,3 +1343,53 @@ func TestHerdrViewControl(t *testing.T) {
 		t.Fatal("control needs herdr sync")
 	}
 }
+
+// TestHerdrRequestNumber checks that the answers sent, created, and closed
+// carry the request number of the packet from the phone, and that an
+// answer to a packet without a number has none.
+func TestHerdrRequestNumber(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	f := newFakeHerdr(t)
+	d := herdrDaemon(ctx, f.path)
+	d.cfg.HerdrControl = true
+	d.herdrAgents = []HerdrAgent{{Pane: "w1:p1", Agent: "claude"}}
+	desk, phone, _, _ := linkPair(t, ctx)
+	dev := &Device{ID: "phone1", Name: "Pixel 8", Paired: true}
+	answers := make(chan map[string]any, 16)
+	go phone.Receive(func(p *proto.Packet) {
+		if f := p.Fields(); p.Type == proto.TypeFluxHerdr && f["kind"] != "state" {
+			answers <- f
+		}
+	})
+	cases := []struct {
+		body map[string]any
+		kind string
+	}{
+		{map[string]any{"kind": "keys", "pane": "w1:p1", "keys": []string{"1"}, "request": 7}, "sent"},
+		{map[string]any{"kind": "prompt", "pane": "w1:p1", "text": "Run the tests", "request": 8}, "sent"},
+		{map[string]any{"kind": "input", "pane": "w1:p9", "text": "ls", "request": 9}, "sent"},
+		{map[string]any{"kind": "create", "what": "agent", "agent": "none", "request": 10}, "created"},
+		{map[string]any{"kind": "close", "pane": "w1:p1", "request": 11}, "closed"},
+		{map[string]any{"kind": "keys", "pane": "w1:p1", "keys": []string{"2"}}, "sent"},
+		{map[string]any{"kind": "keys", "pane": "w1:p1", "keys": []string{"3"}, "request": "12"}, "sent"},
+	}
+	for _, c := range cases {
+		d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, c.body))
+		var got map[string]any
+		select {
+		case got = <-answers:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%v: no answer within 5 seconds", c.body)
+		}
+		want, numbered := c.body["request"].(int)
+		switch {
+		case got["kind"] != c.kind:
+			t.Errorf("%v: answer %v", c.body, got)
+		case numbered && got["request"] != float64(want):
+			t.Errorf("%v: answer has the request %v", c.body, got["request"])
+		case !numbered && got["request"] != nil:
+			t.Errorf("%v: answer has the request %v, want none", c.body, got["request"])
+		}
+	}
+}
