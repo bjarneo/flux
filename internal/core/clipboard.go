@@ -194,10 +194,17 @@ func (d *Daemon) stopClipSend() {
 }
 
 // onLocalClipboard sends a local clipboard change to every paired device.
+// A text above maxSentText goes only to the clipboard history.
 func (d *Daemon) onLocalClipboard(text string) {
+	fits := len(text) <= maxSentText
 	d.mu.Lock()
 	d.lastLocalClip = time.Now()
-	d.content.lastClip = text
+	// A device that connects later gets no older text in place of a text
+	// that is too large.
+	d.content.lastClip = ""
+	if fits {
+		d.content.lastClip = text
+	}
 	auto := d.cfg.AutoClipboard
 	if auto {
 		d.addClipLocked(ClipEntry{Text: text, Dir: "out", DeviceName: "this pc", Time: time.Now().Unix()})
@@ -208,8 +215,15 @@ func (d *Daemon) onLocalClipboard(text string) {
 	}
 	// The text replaces an image that is still on its way.
 	d.stopClipSend()
-	for _, l := range d.pairedLinks() {
-		_ = l.Send(proto.New(proto.TypeClipboard, map[string]any{"content": text}))
+	links := d.pairedLinks()
+	switch {
+	case !fits && len(links) > 0:
+		d.logf("clipboard: did not sync a text of %d bytes", len(text))
+		d.toast("The copied text is larger than %d KiB. Flux did not sync it", maxSentText>>10)
+	case fits:
+		for _, l := range links {
+			_ = l.Send(proto.New(proto.TypeClipboard, map[string]any{"content": text}))
+		}
 	}
 	d.markDirty()
 }

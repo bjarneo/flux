@@ -766,9 +766,8 @@ func (d *Daemon) sendFile(l *lan.Link, t *Transfer, path string, info os.FileInf
 }
 
 // ShareText sends text or a URL to a device. The key is "text" or "url". A
-// text above desktop.MaxClipboardText returns an error, because the device
-// drops it. A URL must be an http or https URL with a host, because the
-// device opens only such a URL.
+// text above maxSentText returns an error. A URL must be an http or https
+// URL with a host, because the device opens only such a URL.
 func (d *Daemon) ShareText(dev *Device, key, value string) error {
 	if err := textLimit(value); err != nil {
 		return err
@@ -783,11 +782,17 @@ func (d *Daemon) ShareText(dev *Device, key, value string) error {
 	return d.send(dev, proto.New(proto.TypeShare, map[string]any{key: value}))
 }
 
-// textLimit returns an API error when text is too large to share or to
-// sync.
+// maxSentText is the largest clipboard text and shared text that fluxd
+// sends to a device. Flux for Android from before this limit stops when it
+// gets a text above the binder limit of Android, at about 500,000
+// characters. Text from a device keeps the limit desktop.MaxClipboardText.
+const maxSentText = 256 << 10
+
+// textLimit returns an API error when text is too large to send to a
+// device.
 func textLimit(text string) error {
-	if len(text) > desktop.MaxClipboardText {
-		return apiErr("too_large", "The text has %d bytes. Flux shares at most %d MiB of text", len(text), desktop.MaxClipboardText>>20)
+	if len(text) > maxSentText {
+		return apiErr("too_large", "The text has %d bytes. Flux sends at most %d KiB of text to a device", len(text), maxSentText>>10)
 	}
 	return nil
 }

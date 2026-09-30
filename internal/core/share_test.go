@@ -162,6 +162,28 @@ func TestShareTextURL(t *testing.T) {
 	}
 }
 
+// TestSentTextLimit checks that fluxd sends at most maxSentText of text
+// to a device. Flux for Android from before this limit stops on a larger
+// text.
+func TestSentTextLimit(t *testing.T) {
+	d := testDaemon()
+	dev := &Device{ID: "p1", Name: "Pixel 8", Paired: true}
+	var e *Error
+	for _, n := range []int{maxSentText, maxSentText + 1} {
+		want := "offline"
+		if n > maxSentText {
+			want = "too_large"
+		}
+		text := strings.Repeat("a", n)
+		if err := d.ShareText(dev, "text", text); !errors.As(err, &e) || e.Code != want {
+			t.Errorf("share %d bytes: %v, want %s", n, err, want)
+		}
+		if err := d.SendClipboard(dev, text); !errors.As(err, &e) || e.Code != want {
+			t.Errorf("clipboard %d bytes: %v, want %s", n, err, want)
+		}
+	}
+}
+
 // TestSharedTextLimit checks that a shared text above the limit changes
 // neither the clipboard nor the history.
 func TestSharedTextLimit(t *testing.T) {
