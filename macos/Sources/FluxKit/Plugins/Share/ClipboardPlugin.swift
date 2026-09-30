@@ -50,6 +50,9 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
     @MainActor private var changeCount = 0
     /// The change count of the last copy that went out, see `sentLatestCopy`.
     @MainActor private var sentCount: Int?
+    /// The computer of the last text from a computer, and the change count
+    /// after its write, see `sendsOnConnect`.
+    @MainActor private var remoteCopy: RemoteCopy?
     /// False while the app is off the screen. The Mac app is always active.
     /// The iOS app starts inactive, because iOS can start it in the
     /// background, for example for an App Intent. Its scene makes it active.
@@ -190,6 +193,31 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
         return platform == .mac && paired ? .note : .off
     }
 
+    /// Reports whether a change of the watch keeps the time of a copy that
+    /// the old watch did not handle yet. The note watch keeps the time of a
+    /// copy from its last seconds. A copy from the last poll before the last
+    /// link dropped did not go out, so it keeps its time for the next link.
+    static func notesOnChange(from old: Watch, to next: Watch) -> Bool {
+        old == .note || (old == .send && next == .note)
+    }
+
+    /// A text that a computer put on the clipboard, and the change count
+    /// after the write.
+    struct RemoteCopy: Equatable {
+        let device: String
+        let count: Int
+    }
+
+    /// Reports whether a new link to `device` gets the clipboard of the Mac.
+    /// Text that the same computer put there does not go back while the
+    /// clipboard did not change. Its time is the time that it arrived,
+    /// which is later than the copy on the computer, so the computer would
+    /// take its own text again.
+    static func sendsOnConnect(to device: String, count: Int, remote: RemoteCopy?) -> Bool {
+        guard let remote else { return true }
+        return remote.device != device || remote.count != count
+    }
+
     /// What the iPhone does with the clipboard when Flux becomes active or
     /// a computer connects.
     enum Unseen: Equatable {
@@ -231,8 +259,10 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
             // The Mac reads at each link. `timestamp` holds the time of its
             // last copy, also of a copy while no computer was connected, so
             // the newer copy wins on both sides.
-            plugin.markSeen(ClipboardText.changeCount)
-            guard let text = ClipboardText.text(includingPrivate: false) else { return }
+            let count = ClipboardText.changeCount
+            plugin.markSeen(count)
+            guard Self.sendsOnConnect(to: id, count: count, remote: plugin.remoteCopy),
+                  let text = ClipboardText.text(includingPrivate: false) else { return }
             core.send(Packet(PacketType.clipboardConnect, ["content": text, "timestamp": plugin.timestamp]), to: id)
         }
         #endif
@@ -258,8 +288,8 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
 
     public func handle(_ packet: Packet, from device: Device) {
         switch packet.type {
-        case PacketType.clipboard: receive(packet.string("content"), timestamp: nil)
-        case PacketType.clipboardConnect: receive(packet.string("content"), timestamp: packet.long("timestamp") ?? 0)
+        case PacketType.clipboard: receive(packet.string("content"), timestamp: nil, from: device.id)
+        case PacketType.clipboardConnect: receive(packet.string("content"), timestamp: packet.long("timestamp") ?? 0, from: device.id)
         #if os(iOS)
         case PacketType.fluxClipboardImage: receiveImage(packet, from: device)
         #endif
@@ -271,7 +301,7 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
     /// computer. It loses to a newer local change. The iPhone takes changes
     /// only while Flux is on the screen, as the docs say, also when the
     /// microphone stream keeps Flux running in the background.
-    private func receive(_ text: String?, timestamp: Int64?) {
+    private func receive(_ text: String?, timestamp: Int64?, from deviceId: String) {
         guard let text, !text.isEmpty, sync, active.withLockedValue({ $0 }) else { return }
         onMain { plugin in
             #if os(iOS)
@@ -281,11 +311,11 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
             if timestamp != nil, plugin.sendUnseenCopy(onOpen: false) { return }
             #endif
             // A Mac copy from the last seconds before the link keeps its time first.
-            if plugin.watching == .note { plugin.poll() }
+            if plugin.watching == .note { plugin.noteChange() }
             guard Self.takes(timestamp, last: plugin.timestamp) else { return }
             // The same text after a reconnect then changes nothing, like on Android.
             plugin.timestamp = Self.time(of: timestamp, now: Packet.now())
-            plugin.put(text)
+            plugin.put(text, from: deviceId)
         }
     }
 
@@ -305,16 +335,17 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
     }
 
     /// Puts text from a computer on the clipboard, so that it does not go back.
-    public func putFromComputer(_ text: String) {
-        onMain { $0.put(text) }
+    public func putFromComputer(_ text: String, from deviceId: String) {
+        onMain { $0.put(text, from: deviceId) }
     }
 
     @MainActor
-    private func put(_ text: String) {
+    private func put(_ text: String, from deviceId: String) {
         lastRemote.withLockedValue { $0 = text }
         if let digest = digest(text) { core?.defaults.set(digest, forKey: Self.remoteDigestKey) }
         ClipboardText.write(text)
         markSeen(ClipboardText.changeCount)
+        remoteCopy = RemoteCopy(device: deviceId, count: changeCount)
     }
 
     /// Notes that Flux saw the clipboard at `count`, so that neither the
@@ -456,8 +487,7 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
         let connected = !(core?.connectedPairedIds().isEmpty ?? true)
         let next = Self.watch(platform: .current, sync: sync, paired: paired, connected: connected, active: isActive)
         guard next != watching else { return }
-        // A copy from the last seconds before the link keeps its time too.
-        if watching == .note { poll() }
+        if Self.notesOnChange(from: watching, to: next) { noteChange() }
         timer?.invalidate()
         timer = nil
         watching = next
@@ -486,19 +516,27 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
 
     @MainActor
     private func poll() {
-        let count = ClipboardText.changeCount
-        guard count != changeCount else { return }
-        changeCount = count
         switch watching {
         case .send:
+            let count = ClipboardText.changeCount
+            guard count != changeCount else { return }
+            changeCount = count
             markSeen(count)
             if onLocalClipboard() { sentCount = count }
         case .note:
-            // The copy keeps its time without a read of its content.
-            timestamp = Packet.now()
+            noteChange()
         case .off:
             break
         }
+    }
+
+    /// Keeps the time of a new copy without a read of its content.
+    @MainActor
+    private func noteChange() {
+        let count = ClipboardText.changeCount
+        guard count != changeCount else { return }
+        changeCount = count
+        timestamp = Packet.now()
     }
 
     /// Sends a local clipboard change to every connected computer. It

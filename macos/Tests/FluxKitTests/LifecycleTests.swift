@@ -126,6 +126,23 @@ final class LifecycleTests: XCTestCase {
         XCTAssertFalse(ClipboardPlugin.isUnchanged(a, sent: nil, remote: nil))
     }
 
+    func testACopyBeforeTheLinkDropsKeepsItsTime() {
+        XCTAssertTrue(ClipboardPlugin.notesOnChange(from: .send, to: .note), "the last poll did not see the copy, so it did not go out")
+        XCTAssertTrue(ClipboardPlugin.notesOnChange(from: .note, to: .send), "a copy from the last seconds before the link")
+        XCTAssertTrue(ClipboardPlugin.notesOnChange(from: .note, to: .off))
+        XCTAssertFalse(ClipboardPlugin.notesOnChange(from: .off, to: .note), "a launch does not make the old clipboard new")
+        XCTAssertFalse(ClipboardPlugin.notesOnChange(from: .off, to: .send))
+        XCTAssertFalse(ClipboardPlugin.notesOnChange(from: .send, to: .off), "with sync off, no copy goes out")
+    }
+
+    func testTextFromAComputerDoesNotGoBackOnConnect() {
+        let remote = ClipboardPlugin.RemoteCopy(device: "desk", count: 5)
+        XCTAssertTrue(ClipboardPlugin.sendsOnConnect(to: "desk", count: 5, remote: nil))
+        XCTAssertFalse(ClipboardPlugin.sendsOnConnect(to: "desk", count: 5, remote: remote), "the computer has this text already")
+        XCTAssertTrue(ClipboardPlugin.sendsOnConnect(to: "laptop", count: 5, remote: remote), "another computer gets the text")
+        XCTAssertTrue(ClipboardPlugin.sendsOnConnect(to: "desk", count: 6, remote: remote), "a new copy on the Mac goes out")
+    }
+
     func testTheWaitForLinksEnds() {
         func ends(connected: Int, paired: Int, waited: Duration, sinceFirst: Duration?) -> Bool {
             FluxCore.linkWaitEnds(connected: connected, paired: paired, waited: waited, sinceFirst: sinceFirst,

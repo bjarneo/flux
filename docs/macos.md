@@ -150,10 +150,10 @@ Keep **Sync clipboard** on in **Settings > Features**, and keep `auto_clipboard 
 Both are on by default.
 
 - While a paired computer is connected, Flux checks the clipboard every 0.5 seconds and sends each new copy.
-- While no computer is connected, Flux reads only the change count every 2 seconds. It keeps the time of a new copy and does not read the copy.
+- While no computer is connected, Flux reads only the change count every 2 seconds. It keeps the time of a new copy and does not read the copy. A copy from the last 0.5 seconds before the last link drops also keeps its time.
 - When a computer connects, the Mac and the computer compare the times of their last copies. The newer copy goes on both clipboards.
 - Flux skips the copies that password managers mark as concealed, transient, or generated.
-- Text that a computer put on the clipboard does not go back to it.
+- Text that a computer put on the clipboard does not go back to that computer. This is also true when the computer connects again.
 
 The time of a copy can be up to 2 seconds late, and both clocks must be correct.
 When the clock of the Mac differs from the clock of the computer, 2 copies close in time can win in the wrong order.
