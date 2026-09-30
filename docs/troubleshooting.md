@@ -246,24 +246,26 @@ update, or an app kill.
 Android does not keep the log access, so the automatic sync ends.
 
 To resume it, open Flux and tap **Allow one-time access**.
-The **Sync clipboard** switch then shows **Automatic**.
-The service notification shows **Open Flux to resume clipboard sync** while the access is off.
+The status line under the switches of **Sync with all computers** then shows **Automatic**.
+Flux checks the log access when you leave the app.
+If the access is off, the status line shows **Open Flux to resume automatic sync**.
+The service notification then shows **Open Flux to resume clipboard sync**.
 
-If the switch stays on **Only while Flux is open. Set up automatic sync**,
-the app has no `READ_LOGS` permission.
-Grant it again, as in [set up the automatic clipboard](android-setup.md#automatic-clipboard-sync).
-
-If the automatic sync sends nothing while it shows **Automatic**, check the
-overlay permission.
-Open **Settings > Apps > Flux** and turn on **Appear on top**, or run:
+If the status line stays on **Only while Flux is open. Set up automatic sync**,
+Flux has no `READ_LOGS` permission or no overlay access.
+Tap the status line to open the setup sheet.
+If the sheet shows **Allow drawing over apps**, tap it.
+To give the overlay access with adb, run:
 
 ```sh
 adb shell appops set org.omarchy.flux SYSTEM_ALERT_WINDOW allow
 ```
 
-A copy in a banking app or a password app does not sync, because these apps
-mark the clip as sensitive or hide the overlay.
-Use a 1-tap path for such a copy.
+To give the log access again, follow [set up the automatic clipboard](android-setup.md#automatic-clipboard-sync).
+
+A copy that its app marks as sensitive, for example a password, does not sync by itself.
+The **Send clipboard** tile does not send it either.
+To send such a copy, open Flux and tap **Send clipboard** on the page of the computer.
 
 ## Media controls do not show on the phone
 

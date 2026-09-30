@@ -215,9 +215,11 @@ Flux offers 4 paths that need no setup:
 - **Send to computer** in the text selection menu of any app.
 - **Send with Flux** in the system share sheet.
 
-Each path sends the current clip to each connected paired computer.
-The paths skip a clip that its app marks as sensitive, for example a
-password, the same as the automatic sync.
+The tile and the notification action send the current clip to each connected paired computer.
+They skip a clip that its app marks as sensitive, for example a password, the same as the automatic sync.
+**Send to computer** and **Send with Flux** send the selected or shared text to the computer that you pick.
+A link opens in the browser of the desktop, and other text goes on the desktop clipboard.
+See [Files, clipboard, and links](#files-clipboard-and-links).
 
 ## Automatic clipboard sync on the phone
 
@@ -230,15 +232,18 @@ The automatic sync stops after each reboot, Flux update, or app kill.
 To resume it, open Flux and tap **Allow one-time access**.
 Android shows this dialog only while Flux is on the screen, so no computer or
 background task can turn the sync back on.
-The **Sync clipboard** switch shows the state:
+While **Sync clipboard** is on, a status line under the switches of **Sync with all computers** shows the state:
 
-- **Only while Flux is open. Set up automatic sync**: the automatic sync is off.
+- **Only while Flux is open. Set up automatic sync**: the automatic sync is not set up. Flux has no `READ_LOGS` permission or no overlay access.
 - **Automatic**: the automatic sync runs.
 - **Open Flux to resume automatic sync**: the log access ended. Open Flux to resume it.
 
-The automatic sync applies the same limits as the other paths.
-It skips a sensitive clip, it skips a clip that came from a computer, and it
-sends text of up to 1 MiB.
+A tap on the status line opens the setup sheet.
+Flux checks the log access when you leave the app.
+Until then, the status line shows **Automatic**.
+
+The automatic sync skips a sensitive clip and a clip that came from a computer.
+It sends text of up to 1 MiB.
 
 ## Notifications
 

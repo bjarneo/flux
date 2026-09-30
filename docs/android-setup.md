@@ -118,6 +118,7 @@ To add the tile:
 
 The Flux service notification also has a **Send clipboard** action while a computer is connected.
 The text selection menu of any app has a **Send to computer** action.
+It sends the selected text to the computer that you pick.
 These paths need no setup and no extra permission.
 
 ## Automatic clipboard sync
@@ -125,7 +126,7 @@ These paths need no setup and no extra permission.
 The automatic sync sends each phone copy to the computer without the Flux app open.
 It is opt in, because it needs 2 permissions that you grant with adb.
 
-Android 16 does not let a background app read the clipboard.
+Android 10 and later do not let a background app read the clipboard.
 Flux reads the copy signal from the system log with `READ_LOGS`.
 It then takes window focus for a moment with `SYSTEM_ALERT_WINDOW`, so it can read the new clip.
 
@@ -156,8 +157,13 @@ To set up the automatic sync:
 
 5. Open Flux and tap **Allow one-time access**.
 
-The **Sync clipboard** switch in Flux opens a sheet with the same commands and a copy button.
+While **Sync clipboard** is on, a status line under the switches of **Sync with all computers** shows the state of the automatic sync.
+A tap on the status line opens a sheet with the same commands and a copy button.
 The sheet also opens the overlay permission screen.
+
+After step 5, the status line shows **Automatic**.
+Flux checks the log access when you leave the app.
+If the access is off, the status line then shows **Open Flux to resume automatic sync**.
 
 Android does not keep the log access.
 It ends after each reboot, Flux update, or app kill.
