@@ -60,8 +60,9 @@ public struct WebcamConfig: Equatable, Sendable {
         var c = self
         c.aspect = caps.aspects.contains(aspect) ? aspect : caps.aspects.first ?? "16:9"
         // The distance in Double cannot overflow, also for a resolution
-        // that update gets from a caller.
-        let r = Double(resolution)
+        // that update gets from a caller. The small range keeps the Double
+        // exact, so a huge resolution gives the largest one in caps.
+        let r = Double(min(max(resolution, 0), 1 << 20))
         c.resolution = caps.resolutions.min { abs(Double($0) - r) < abs(Double($1) - r) } ?? 720
         c.camera = caps.cameras.contains(camera) ? camera : caps.cameras.first ?? "back"
         c.zoom = round(zoom.limited(1, max(1, caps.zoomMax)), 100)
