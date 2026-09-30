@@ -125,8 +125,18 @@ It also closes its approval request and removes its notifications.
 When you start the screen mirror to a second computer, the mirror to the first computer stops.
 
 The phone accepts clipboard text of at most 256 KiB from a computer. Larger text shows a message, and the clipboard does not change.
-The automatic clipboard sync skips a clip that its app marks as sensitive, for example a password.
+The automatic clipboard sync skips a clip that its app marks as sensitive, for example a password. It sends phone text of up to 1 MiB.
 A computer shows at most 10 notifications on the phone, and you can always remove them.
+
+## Clipboard from another app
+
+A copy on the phone reaches the computer while Flux is on the screen.
+For a copy in another app, use a 1-tap path or the automatic sync.
+See [send a copy from another app](features.md#send-a-copy-from-another-app) for the paths, and [set up the automatic clipboard](android-setup.md#automatic-clipboard-sync) for the automatic mode.
+
+The automatic mode needs `READ_LOGS` and `SYSTEM_ALERT_WINDOW`, which you grant with adb.
+Android asks for log access again after each reboot, Flux update, or app kill.
+Open Flux once and tap **Allow one-time access** to resume the sync.
 
 ## Build and install
 

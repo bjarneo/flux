@@ -186,8 +186,9 @@ Both are on by default.
 - Copy an image on the phone, open Flux, and tap **Send clipboard**. Then paste it on the desktop.
 
 Android lets only the app on the screen read the clipboard.
-Flux sends a phone copy by itself only while Flux is on the screen.
-For a copy in another app, use **Send clipboard**.
+Flux sends a phone copy by itself while Flux is on the screen.
+For a copy in another app, use a 1-tap path, or turn on the automatic sync.
+See [Send a copy from another app](#send-a-copy-from-another-app).
 
 The desktop sends PNG images.
 The phone sends PNG, JPEG, GIF, and WebP images.
@@ -202,6 +203,42 @@ The Clipboard page shows the last 10 images.
 Select **Copy** to put an image on the desktop clipboard again.
 `fluxd` keeps these images in `$XDG_RUNTIME_DIR/flux/clipboard`, which is in memory.
 It empties the folder when it starts and when it stops.
+
+## Send a copy from another app
+
+Android lets only the app on the screen read the clipboard, so a copy in
+another app does not reach the computer by itself.
+Flux offers 4 paths that need no setup:
+
+- **Send clipboard** tile. Add it to the Quick Settings panel, then tap it after a copy. See [add the tile](android-setup.md#send-clipboard-tile).
+- **Send clipboard** action on the Flux service notification, while a computer is connected.
+- **Send to computer** in the text selection menu of any app.
+- **Send with Flux** in the system share sheet.
+
+Each path sends the current clip to each connected paired computer.
+The paths skip a clip that its app marks as sensitive, for example a
+password, the same as the automatic sync.
+
+## Automatic clipboard sync on the phone
+
+Turn on the automatic sync, and each copy on the phone reaches the computer
+without the Flux app open.
+This mode is opt in, because it needs 2 permissions that you grant with adb.
+See [set up the automatic clipboard](android-setup.md#automatic-clipboard-sync).
+
+The automatic sync stops after each reboot, Flux update, or app kill.
+To resume it, open Flux and tap **Allow one-time access**.
+Android shows this dialog only while Flux is on the screen, so no computer or
+background task can turn the sync back on.
+The **Sync clipboard** switch shows the state:
+
+- **Only while Flux is open. Set up automatic sync**: the automatic sync is off.
+- **Automatic**: the automatic sync runs.
+- **Open Flux to resume automatic sync**: the log access ended. Open Flux to resume it.
+
+The automatic sync applies the same limits as the other paths.
+It skips a sensitive clip, it skips a clip that came from a computer, and it
+sends text of up to 1 MiB.
 
 ## Notifications
 

@@ -239,6 +239,32 @@ If a sent message shows **Not sent**, the phone could not send it.
 Check the signal and the SMS app on the phone.
 Flux does not send messages to a group. Reply to a group on the phone.
 
+## Automatic clipboard sync stopped
+
+A copy on the phone stops reaching the computer after a reboot, a Flux
+update, or an app kill.
+Android does not keep the log access, so the automatic sync ends.
+
+To resume it, open Flux and tap **Allow one-time access**.
+The **Sync clipboard** switch then shows **Automatic**.
+The service notification shows **Open Flux to resume clipboard sync** while the access is off.
+
+If the switch stays on **Only while Flux is open. Set up automatic sync**,
+the app has no `READ_LOGS` permission.
+Grant it again, as in [set up the automatic clipboard](android-setup.md#automatic-clipboard-sync).
+
+If the automatic sync sends nothing while it shows **Automatic**, check the
+overlay permission.
+Open **Settings > Apps > Flux** and turn on **Appear on top**, or run:
+
+```sh
+adb shell appops set org.omarchy.flux SYSTEM_ALERT_WINDOW allow
+```
+
+A copy in a banking app or a password app does not sync, because these apps
+mark the clip as sensitive or hide the overlay.
+Use a 1-tap path for such a copy.
+
 ## Media controls do not show on the phone
 
 The phone shows the controls of a desktop player that publishes its state over MPRIS.

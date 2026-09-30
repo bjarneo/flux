@@ -94,7 +94,7 @@ They are under **Sync with all computers** on the page of a computer:
 - **Text messages** lets each paired computer read your conversations and send text messages.
 - **Share notifications** sends the notifications of other apps. A notification whose visibility, or whose channel lock screen visibility, is `VISIBILITY_SECRET` stays on the phone. The lock screen setting of the whole phone does not change what Flux sends. A button that needs the phone unlock also stays on the phone.
 - **Send new screenshots** and **Send new photos** send new images of the camera app and the screenshot tool.
-- **Sync clipboard** sends the text and the images that you copy while Flux is on the screen.
+- **Sync clipboard** sends the text and the images that you copy while Flux is on the screen. A 1-tap path or the opt-in automatic sync sends a copy from another app. See [send a copy from another app](features.md#send-a-copy-from-another-app).
 - **Call alerts** sends the state of calls, and with more permissions the number and the name of the caller.
 
 Each switch applies to every paired computer, not only to the computer whose page shows it.
