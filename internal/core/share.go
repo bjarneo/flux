@@ -301,6 +301,7 @@ func (d *Daemon) receiveText(dev *Device, text string) {
 	d.setClipboard(dev, text, false)
 	d.mu.Lock()
 	name := dev.Name
+	d.lastClipAt = time.Now()
 	d.addClipLocked(ClipEntry{Text: text, Dir: "in", Device: dev.ID, DeviceName: name, Source: "share", Time: time.Now().Unix()})
 	d.mu.Unlock()
 	d.notifyAsync(desktop.Notification{AppName: "Flux", Title: "Text from " + name, Body: previewText(text, maxSharePreview)})

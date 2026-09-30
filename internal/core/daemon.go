@@ -147,6 +147,13 @@ type Daemon struct {
 	// The first window that connects shows it, with a desktop
 	// notification.
 	trustNote string
+
+	// lastClipAt is the time of the newest clipboard that fluxd took from
+	// any source: a desktop copy, or a copied text, a shared text, or an
+	// image from a device. For a flux.clipboard.connect packet, it is the
+	// time of the copy on the device. A flux.clipboard.connect packet that
+	// is not newer is stale.
+	lastClipAt time.Time
 }
 
 // Options change how the daemon runs. The zero value is the normal mode.
