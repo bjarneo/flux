@@ -25,6 +25,37 @@ class LinkTest {
     }
 
     @Test
+    fun skipDropsALongLine() {
+        val long = "x".repeat(MAX_UNPAIRED_LINE + 1)
+        var asked = 0
+        val reader = LineReader(stream("$long\n{\"a\":1}\n$long"))
+        assertEquals("", reader.next(skip = { asked++; true }) { MAX_UNPAIRED_LINE })
+        assertEquals(1, asked)
+        assertEquals("the next line is whole", "{\"a\":1}", reader.next(skip = { true }) { MAX_UNPAIRED_LINE })
+        assertNull("the stream ends in a dropped line", reader.next(skip = { true }) { MAX_UNPAIRED_LINE })
+    }
+
+    @Test
+    fun timeoutKeepsTheDrop() {
+        val data = ("x".repeat(MAX_UNPAIRED_LINE + 100) + "\nnext\n").toByteArray()
+        var at = 0
+        var timedOut = false
+        val input = object : InputStream() {
+            override fun read(): Int {
+                if (at == MAX_UNPAIRED_LINE + 50 && !timedOut) {
+                    timedOut = true
+                    throw SocketTimeoutException()
+                }
+                return if (at < data.size) data[at++].toInt() else -1
+            }
+        }
+        val reader = LineReader(input)
+        assertTrue(runCatching { reader.next(skip = { true }) { MAX_UNPAIRED_LINE } }.exceptionOrNull() is SocketTimeoutException)
+        assertEquals("the rest of the long line goes too", "", reader.next(skip = { true }) { MAX_UNPAIRED_LINE })
+        assertEquals("next", reader.next(skip = { true }) { MAX_UNPAIRED_LINE })
+    }
+
+    @Test
     fun limitGrowsDuringLine() {
         // The pairing ends while the line comes, so the paired limit applies.
         var paired = false

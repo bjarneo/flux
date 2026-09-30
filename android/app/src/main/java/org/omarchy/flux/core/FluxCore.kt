@@ -258,7 +258,13 @@ object FluxCore {
                 d.pairState = PairState.Paired
                 trust.update(id) { it.copy(name = link.identity.deviceName, lastIp = d.lastIp) }
             }
-            link.start(onPacket = { p -> receive(d, link, p) }, onClose = { detach(d, link) }, idleClose = { idleClose(d, link) })
+            link.start(
+                onPacket = { p -> receive(d, link, p) },
+                onClose = { detach(d, link) },
+                idleClose = { idleClose(d, link) },
+                // Only paired packets are that long, so the line counts as a packet from a device that still trusts the phone.
+                onLongLine = { synchronized(lock) { if (d.link === link) d.refuseUnpaired() } },
+            )
             if (d.paired) onConnected(d)
         }
     }
@@ -395,6 +401,7 @@ object FluxCore {
         }
         if (!d.paired) {
             Log.d(TAG, "ignored ${p.type} from unpaired ${d.identity.deviceName}")
+            d.refuseUnpaired()
             return
         }
         Plugins.handle(this, d, p)

@@ -46,6 +46,9 @@ class Device(private val core: FluxCore, var identity: Identity) {
     var pairKey = ""
     private var pairTimer: ScheduledFuture<*>? = null
 
+    /** The link on which the phone told the device that it is not paired. */
+    private var refusedLink: Link? = null
+
     var battery: Int? = null
     var charging = false
     var players: List<String> = emptyList()
@@ -183,6 +186,7 @@ class Device(private val core: FluxCore, var identity: Identity) {
     fun unpair() {
         val wasPaired = paired
         send(Packet(Types.PAIR, bodyOf("pair" to false)))
+        refusedLink = link
         core.trust.remove(id)
         resetPair()
         if (wasPaired) core.revoke(this)
@@ -268,6 +272,21 @@ class Device(private val core: FluxCore, var identity: Identity) {
     /** Ends an open pairing without a message, for example when its link closes. */
     fun dropPairing() {
         if (pairing) resetPair()
+    }
+
+    /**
+     * Handles a packet other than a pair packet while the device is not
+     * paired. Such a device still trusts this phone, for example after an
+     * unpair on the phone while the computer was away. The phone answers
+     * pair false once for each link, so that the device drops its trust and
+     * the next link is unpaired on both sides. An open pairing gets no
+     * answer, so that the answer does not end it.
+     */
+    fun refuseUnpaired() {
+        val l = link ?: return
+        if (paired || pairing || refusedLink === l) return
+        refusedLink = l
+        send(Packet(Types.PAIR, bodyOf("pair" to false)))
     }
 
     private fun resetPair() {
