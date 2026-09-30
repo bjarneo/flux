@@ -177,5 +177,5 @@ If the device can approve `sudo`, also remove its key:
 sudo flux-cli approve remove
 ```
 
-An unpair on the Android phone deletes its approval key for that computer.
+An unpair on the Android phone, the Mac, or the iPhone deletes its approval key for that computer.
 The key file on the computer stays until you run `sudo flux-cli approve remove`.
