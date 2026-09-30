@@ -362,7 +362,8 @@ func (d *Daemon) handlePair(dev *Device, l *lan.Link, p *proto.Packet) {
 	dev.pairLink, dev.pairCert = l, l.Cert
 	dev.pairKey = d.keyLocked(dev, body.Timestamp)
 	d.startPairTimerLocked(dev)
-	key, replaces := dev.pairKey, dev.pairNote
+	// Tests change pairTimeout, so it is read under d.mu.
+	key, replaces, timeout := dev.pairKey, dev.pairNote, pairTimeout
 	d.mu.Unlock()
 	d.closeNotes(notes...)
 	// A new request of the device replaces its old notification, so each
@@ -371,7 +372,7 @@ func (d *Daemon) handlePair(dev *Device, l *lan.Link, p *proto.Packet) {
 		AppName: "Flux", Title: name + " wants to pair",
 		Body:    "Check that the device shows " + proto.FormatKey(key) + ". Open Flux to accept.",
 		Actions: pairActions(dev.ID, key, "Accept"),
-		Urgency: 1, Timeout: pairTimeout, ReplacesID: replaces,
+		Urgency: 1, Timeout: timeout, ReplacesID: replaces,
 	})
 	d.markDirty()
 }
@@ -401,13 +402,13 @@ func (d *Daemon) peerAccepted(dev *Device, l *lan.Link) {
 	}
 	dev.pairState = "confirm"
 	d.startPairTimerLocked(dev)
-	key := dev.pairKey
+	key, timeout := dev.pairKey, pairTimeout
 	d.mu.Unlock()
 	d.notifyPairing(dev, "confirm", key, desktop.Notification{
 		AppName: "Flux", Title: "Confirm the pairing with " + name,
 		Body:    name + " accepted. Check that it shows " + proto.FormatKey(key) + ".",
 		Actions: pairActions(dev.ID, key, "Confirm"),
-		Urgency: 1, Timeout: pairTimeout,
+		Urgency: 1, Timeout: timeout,
 	})
 	d.markDirty()
 }
