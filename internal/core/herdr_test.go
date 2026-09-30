@@ -469,6 +469,14 @@ func TestCleanPlain(t *testing.T) {
 	}
 }
 
+// The error of an agent that did not start has the last line of its pane,
+// with the characters that textRune removes or marks.
+func TestPaneLastLine(t *testing.T) {
+	if got := paneLastLine("$ claude\r\nok \u202eexe.sh\u202c \u0085done\t\x1b\r\n"); got != "ok \ufffdexe.sh\ufffd done" {
+		t.Errorf("paneLastLine: %q", got)
+	}
+}
+
 func TestTrimStyledEndSkipsBrokenSequences(t *testing.T) {
 	for in, want := range map[string]string{
 		"\x1bm":         "\x1bm",

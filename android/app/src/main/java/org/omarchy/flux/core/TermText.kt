@@ -48,8 +48,9 @@ const val TERM_MAX_COLUMNS = 2048
 
 /**
  * Parses text with ANSI SGR sequences into lines of styled spans. It drops
- * other escape sequences, carriage returns, and other control characters.
- * It expands tabs to the next multiple of 8 columns. It keeps the last
+ * other escape sequences, carriage returns, and the other C0 and C1 control
+ * characters. It shows U+FFFD in place of each character that [isBidiMark]
+ * finds. It expands tabs to the next multiple of 8 columns. It keeps the last
  * [maxLines] lines and the first [TERM_MAX_COLUMNS] columns of each line.
  * The time and the memory grow linearly with the length of the text.
  */
@@ -115,9 +116,9 @@ fun parseAnsi(text: String, maxLines: Int = Int.MAX_VALUE): List<TermLine> {
                     else -> i + 1
                 }
             }
-            c == '\r' || c.code < 0x20 || c.code == 0x7F -> i++
+            c == '\r' || c.code < 0x20 || c.code in 0x7F..0x9F -> i++
             else -> {
-                put(if (c == ' ') ' ' else c)
+                put(if (c == ' ') ' ' else if (isBidiMark(c)) '\uFFFD' else c)
                 i++
             }
         }
@@ -129,6 +130,17 @@ fun parseAnsi(text: String, maxLines: Int = Int.MAX_VALUE): List<TermLine> {
     }
     return lines.toList()
 }
+
+/**
+ * Reports whether [c] sets the direction of text, or is a line or paragraph
+ * separator. The phone shows text with the Unicode bidirectional algorithm,
+ * and a terminal does not. So such a character can show a command in
+ * another order. fluxd changes these characters too, but an older fluxd
+ * does not.
+ */
+internal fun isBidiMark(c: Char): Boolean =
+    c == '\u061C' || c == '\u200E' || c == '\u200F' || c in '\u202A'..'\u202E' || c in '\u2066'..'\u2069' ||
+        c == '\u2028' || c == '\u2029'
 
 /** Applies the SGR parameters, for example "1;38;5;6", to [start]. */
 internal fun applySgr(start: TermStyle, params: String): TermStyle {

@@ -370,11 +370,17 @@ func (d *Daemon) startHerdrAgent(ctx context.Context, kind, pane, cwd string) er
 	rctx, rcancel := context.WithTimeout(d.ctx, herdrCallTimeout)
 	defer rcancel()
 	if r, err := herdr.ReadPane(rctx, d.herdrPath, pane, 20, false); err == nil {
-		if line := strings.TrimSpace(lastLine(r.Text)); line != "" {
+		if line := paneLastLine(r.Text); line != "" {
 			msg += ": " + line
 		}
 	}
 	return herdrRefusal(msg)
+}
+
+// paneLastLine returns the last line of the plain text of a pane for an
+// error on the phone. It removes and marks characters as cleanLabel does.
+func paneLastLine(text string) string {
+	return strings.TrimSpace(cleanLabel(lastLine(text)))
 }
 
 // waitHerdrPane makes the herdr loop read the session, and waits until
