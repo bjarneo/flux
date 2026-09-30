@@ -81,31 +81,43 @@ func TestHerdrDown(t *testing.T) {
 	}
 }
 
-// TestFindPairing checks how flux-cli accept finds the key of a pairing.
+// TestFindPairing checks how flux-cli accept and flux-cli reject find the
+// key of a pairing.
 func TestFindPairing(t *testing.T) {
 	var s State
 	raw := `{"devices":[
 		{"id":"a1b2c3","name":"Pixel 8","pairState":"confirm","pairKey":"5EE6825F974ED59A"},
 		{"id":"d4e5f6","name":"Pixel 8","pairState":"paired"},
 		{"id":"f0f0f0","name":"Tab S9","pairState":"incoming","pairKey":"9B03E7D16A2FC048"},
-		{"id":"e1e1e1","name":"tab s9","pairState":"incoming","pairKey":"1111222233334444"}]}`
+		{"id":"e1e1e1","name":"tab s9","pairState":"incoming","pairKey":"1111222233334444"},
+		{"id":"c7c7c7","name":"Pixel 7","pairState":"requested","pairKey":"AAAABBBBCCCCDDDD"}]}`
 	if err := json.Unmarshal([]byte(raw), &s); err != nil {
 		t.Fatal(err)
 	}
-	if id, key, err := findPairing(&s, "pixel 8"); err != nil || id != "a1b2c3" || key != "5EE6825F974ED59A" {
+	if id, key, err := findPairing(&s, "pixel 8", false); err != nil || id != "a1b2c3" || key != "5EE6825F974ED59A" {
 		t.Fatalf("a name: %s %s %v", id, key, err)
 	}
-	if id, key, err := findPairing(&s, "f0f0f0"); err != nil || id != "f0f0f0" || key != "9B03E7D16A2FC048" {
+	if id, key, err := findPairing(&s, "f0f0f0", false); err != nil || id != "f0f0f0" || key != "9B03E7D16A2FC048" {
 		t.Fatalf("an ID: %s %s %v", id, key, err)
 	}
-	if _, _, err := findPairing(&s, "Tab S9"); err == nil || !strings.Contains(err.Error(), "e1e1e1, f0f0f0") {
+	if _, _, err := findPairing(&s, "Tab S9", false); err == nil || !strings.Contains(err.Error(), "e1e1e1, f0f0f0") {
 		t.Fatalf("2 requests with 1 name: %v", err)
 	}
-	if _, _, err := findPairing(&s, "d4e5f6"); err == nil {
+	if _, _, err := findPairing(&s, "d4e5f6", true); err == nil {
 		t.Fatal("a paired device has no open pairing")
 	}
-	if _, _, err := findPairing(&s, "Nothing"); err == nil {
+	if _, _, err := findPairing(&s, "Nothing", true); err == nil {
 		t.Fatal("an unknown name found a pairing")
+	}
+	// Only a reject finds a request of this computer, and only by its ID.
+	if _, _, err := findPairing(&s, "c7c7c7", false); err == nil {
+		t.Fatal("an accept found a request of this computer")
+	}
+	if id, key, err := findPairing(&s, "c7c7c7", true); err != nil || id != "c7c7c7" || key != "AAAABBBBCCCCDDDD" {
+		t.Fatalf("a reject of a request of this computer: %s %s %v", id, key, err)
+	}
+	if _, _, err := findPairing(&s, "Pixel 7", true); err == nil {
+		t.Fatal("a name found a request of this computer")
 	}
 }
 
@@ -122,6 +134,23 @@ func TestValidKey(t *testing.T) {
 		if got := validKey(key); got != want {
 			t.Errorf("validKey(%q) = %v, want %v", key, got, want)
 		}
+	}
+}
+
+// TestKeyArg checks the forms of the KEY argument of flux-cli accept.
+func TestKeyArg(t *testing.T) {
+	for _, args := range [][]string{
+		{"5EE6825F974ED59A"},
+		{"5EE6 825F 974E D59A"},
+		{"5ee6", "825f", "974e", "d59a"},
+		{" 5EE6 825F", "974E\tD59A "},
+	} {
+		if got := keyArg(args); got != "5EE6825F974ED59A" || !validKey(got) {
+			t.Errorf("keyArg(%q) = %q", args, got)
+		}
+	}
+	if got := keyArg(nil); got != "" {
+		t.Errorf("keyArg(nil) = %q", got)
 	}
 }
 

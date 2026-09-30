@@ -149,7 +149,11 @@ Run that command within 30 seconds, after you compare the key.
 It also confirms a pairing that this computer started and that the device accepted.
 It always sends a key to `fluxd`, and `fluxd` accepts only the pairing with that key.
 To accept only the key that you compared, give the key after the device.
+The key can have spaces, for example `flux-cli accept DEVICE_ID "5EE6 825F 974E D59A"`.
 Without a key, `flux-cli accept` sends the key of the open pairing in the state.
+
+`flux-cli reject` also sends a key, and it takes the same key argument.
+With the device ID, it also cancels a pair request of this computer that the device did not answer.
 
 Each command prints the device ID next to the name:
 

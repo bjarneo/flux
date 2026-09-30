@@ -39,7 +39,8 @@ Commands:
                          ask you to confirm it
   accept DEVICE [KEY]    Accept a pair request, or confirm a pairing that the
                          device accepted. With KEY, only the pairing with that key
-  reject DEVICE          Reject a pair request
+  reject DEVICE [KEY]    Reject a pair request or a pairing. With KEY, only the
+                         pairing with that key
   unpair DEVICE          Remove a paired device
   addresses              List the extra addresses of the paired devices
   addresses add HOST     Add a host name or IP address, for example the Tailscale
@@ -108,9 +109,11 @@ func main() {
 	case "pair":
 		err = pair(need(args, "DEVICE"))
 	case "accept":
-		err = accept(need(args, "DEVICE"), strings.Join(args[1:], ""))
+		name := need(args, "DEVICE")
+		err = accept(name, keyArg(args[1:]))
 	case "reject":
-		err = call("pair.reject", map[string]any{"device": need(args, "DEVICE")})
+		name := need(args, "DEVICE")
+		err = reject(name, keyArg(args[1:]))
 	case "unpair":
 		err = unpair(need(args, "DEVICE"))
 	case "addresses":
@@ -542,14 +545,9 @@ func isTerminal(f *os.File) bool {
 // the key, so fluxd accepts only the pairing with that key. Without key,
 // the key comes from the state.
 func accept(device, key string) error {
-	key = strings.ToUpper(key)
-	if key == "" {
-		var err error
-		if device, key, err = openPairing(device); err != nil {
-			return err
-		}
-	} else if !validKey(key) {
-		return fmt.Errorf("a key has 16 hex digits, for example: flux-cli accept %s 5EE6 825F 974E D59A", device)
+	device, key, err := pairingArgs("accept", device, key, false)
+	if err != nil {
+		return err
 	}
 	var res pairResult
 	if err := callInto("pair.accept", map[string]any{"device": device, "key": key}, &res); err != nil {
@@ -559,24 +557,57 @@ func accept(device, key string) error {
 	return nil
 }
 
+// reject rejects the pairing of a device: a pair request of the device, a
+// pairing in state "confirm", or a request of this computer that the ID
+// names. Like accept, it always sends the key.
+func reject(device, key string) error {
+	device, key, err := pairingArgs("reject", device, key, true)
+	if err != nil {
+		return err
+	}
+	return call("pair.reject", map[string]any{"device": device, "key": key})
+}
+
+// keyArg returns the KEY of flux-cli accept and flux-cli reject from the
+// arguments after the device. The key can come in 1 argument or in
+// groups, with or without spaces, and in lower case.
+func keyArg(args []string) string {
+	return strings.ToUpper(strings.Join(strings.Fields(strings.Join(args, " ")), ""))
+}
+
+// pairingArgs returns the device and the key that flux-cli cmd sends to
+// fluxd. Without key, both come from the open pairing in the state. See
+// openPairing for outgoing.
+func pairingArgs(cmd, device, key string, outgoing bool) (string, string, error) {
+	if key == "" {
+		return openPairing(device, outgoing)
+	}
+	if !validKey(key) {
+		return "", "", fmt.Errorf("a key has 16 hex digits, for example: flux-cli %s %s 5EE6 825F 974E D59A", cmd, device)
+	}
+	return device, key, nil
+}
+
 // openPairing returns the ID and the key of the open pairing of the
 // device that the argument names. An exact device ID wins. A name matches
-// without case, and only a device in state "incoming" or "confirm".
-func openPairing(device string) (id, key string, err error) {
+// without case, and only a device in state "incoming" or "confirm". When
+// outgoing is true, an exact ID also finds a request of this computer in
+// state "requested".
+func openPairing(device string, outgoing bool) (id, key string, err error) {
 	var s State
 	if err := callInto("state", nil, &s); err != nil {
 		return "", "", err
 	}
-	return findPairing(&s, device)
+	return findPairing(&s, device, outgoing)
 }
 
 // findPairing is openPairing for the state s.
-func findPairing(s *State, device string) (id, key string, err error) {
+func findPairing(s *State, device string, outgoing bool) (id, key string, err error) {
 	var ids, keys []string
 	for _, d := range s.Devices {
 		open := d.PairState == "incoming" || d.PairState == "confirm"
 		if d.ID == device {
-			if !open {
+			if !open && !(outgoing && d.PairState == "requested") {
 				return "", "", fmt.Errorf("%s has no open pair request", d.Name)
 			}
 			return d.ID, d.PairKey, nil
