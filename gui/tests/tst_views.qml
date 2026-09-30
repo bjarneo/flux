@@ -387,11 +387,43 @@ Item {
       verify(!line.visible)
     }
 
+    function test_smsSendErrorInOtherThreadShowsInToast() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "messages"
+      tryVerify(function () { return !!page(view) && page(view).loaded })
+      var p = page(view)
+      var msg = "The message has 1700 characters. Send at most 1600"
+      mock.failures = { "sms.send": { code: "bad_params", message: msg } }
+      findBy(p, "placeholder", "Text message via Pixel 8").text = "A long message"
+      var sent = p.selected.thread
+      p.send()
+      // The user opens a different thread before fluxd answers.
+      p.open(p.convos.filter(function (c) { return c.thread !== sent })[0])
+      tryVerify(function () { var t = findBy(view, "message", msg); return !!t && t.visible })
+      compare(p.sendError, "")
+    }
+
+    function test_smsSendErrorAfterPageShowsInToast() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "messages"
+      tryVerify(function () { return !!page(view) && page(view).loaded })
+      var p = page(view)
+      var msg = "The message has 1700 characters. Send at most 1600"
+      mock.failures = { "sms.send": { code: "bad_params", message: msg } }
+      findBy(p, "placeholder", "Text message via Pixel 8").text = "A long message"
+      p.send()
+      // The user opens a different tab before fluxd answers.
+      view.tab = "notifications"
+      tryVerify(function () { var t = findBy(view, "message", msg); return !!t && t.visible })
+    }
+
     function test_clipboardErrorShowsInToast() {
       var view = createTemporaryObject(viewComponent, top)
       view.selectedId = top.pixel
       tryVerify(function () { return view.devOnline })
-      var msg = "The text has 9437184 bytes. Flux shares at most 8 MiB of text"
+      var msg = "The text has 1048577 bytes. Flux shares at most 1 MiB of text"
       mock.failures = { "clipboard.send": { code: "too_large", message: msg } }
       view.sendClipboard()
       compare(requestsOf("clipboard.send").length, 1)
@@ -425,6 +457,12 @@ Item {
       verify(!!findBy(page(view), "text", "Action 7"))
       verify(!findBy(page(view), "text", "Action 8"))
       compare(findBy(page(view), "actionsText", JSON.stringify(actions.slice(0, 8))).actions.length, 8)
+      // Actions that are not a list give no buttons.
+      var card = findBy(page(view), "text", "Number actions")
+      while (card && !card.hasOwnProperty("actionsText")) card = card.parent
+      verify(!!card)
+      compare(card.actionsText, "[]")
+      compare(card.actions.length, 0)
     }
 
     function test_cameraShowsAtMost16Chips() {

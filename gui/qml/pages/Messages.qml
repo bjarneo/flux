@@ -193,18 +193,22 @@ Item {
     var list = c ? addresses(c) : [target]
     var entry = { device: devId, thread: c ? c.thread : -1, address: list[0], body: text, time: Math.floor(Date.now() / 1000), outgoing: true, pending: true, failed: false }
     var life = root.life
+    var v = view
     sendError = ""
-    view.call("sms.send", { device: devId, addresses: list, body: text }, function () {
+    v.call("sms.send", { device: devId, addresses: list, body: text }, function () {
       if (!life.alive || root.devId !== devId) return
       if (entry.thread < 0) root.sentTo = entry.address
       root.outbox = root.outbox.concat([entry])
       draft.clear()
       refreshTimer.restart()
     }, function (err) {
-      // The draft stays, so the user can change it and send it again.
-      if (!life.alive || root.devId !== devId) return
-      if (c ? !root.showing(devId, c) : !root.composing) return
-      root.sendError = err.message || err.code || "Error"
+      // The error shows above the message field while the page shows the
+      // thread or the form. The draft stays, so the user can change it and
+      // send it again. When the page is gone or shows a different thread,
+      // the error becomes a toast.
+      var msg = err.message || err.code || "Error"
+      if (life.alive && root.devId === devId && (c ? root.showing(devId, c) : root.composing)) root.sendError = msg
+      else v.toast(msg)
     })
   }
 
