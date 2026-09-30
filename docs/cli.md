@@ -150,9 +150,25 @@ It also confirms a pairing that this computer started and that the device accept
 It always sends a key to `fluxd`, and `fluxd` accepts only the pairing with that key.
 To accept only the key that you compared, give the key after the device.
 The key can have spaces, for example `flux-cli accept DEVICE_ID "5EE6 825F 974E D59A"`.
-Without a key, `flux-cli accept` sends the key of the open pairing in the state.
+Without a key, `flux-cli accept` shows the key of the open pairing and asks you to compare it:
+
+```text
+Does Pixel 8 show 5EE6 825F 974E D59A? [y/N] y
+✓ Pixel 8 (DEVICE_ID) paired with the key 5EE6 825F 974E D59A
+```
+
+`flux-cli accept` sends the key that it showed, so `fluxd` refuses the answer when another pairing opened after the question.
+Any answer other than `y` rejects the pairing.
+When stdin is not a terminal, `flux-cli accept` without a key accepts nothing.
+It prints the command with the key and exits with status 1:
+
+```text
+flux-cli: compare the key first. When Pixel 8 shows 5EE6 825F 974E D59A, run:
+  flux-cli accept DEVICE_ID 5EE6 825F 974E D59A
+```
 
 `flux-cli reject` also sends a key, and it takes the same key argument.
+Without a key, `flux-cli reject` rejects the pairing that is open when it runs.
 With the device ID, it also cancels a pair request of this computer that the device did not answer.
 
 Each command prints the device ID next to the name:
@@ -160,7 +176,7 @@ Each command prints the device ID next to the name:
 | Command | Output |
 | --- | --- |
 | `flux-cli pair` | `Confirm 5EE6 825F 974E D59A on Pixel 8 (DEVICE_ID)…`, then the question, then `✓ Pixel 8 (DEVICE_ID) paired with the key 5EE6 825F 974E D59A` |
-| `flux-cli accept` | `✓ Pixel 8 (DEVICE_ID) paired with the key 5EE6 825F 974E D59A` |
+| `flux-cli accept` | Without a key, the question. Then `✓ Pixel 8 (DEVICE_ID) paired with the key 5EE6 825F 974E D59A` |
 | `flux-cli unpair` | `Unpaired Pixel 8 (DEVICE_ID), certificate FINGERPRINT` |
 
 The fingerprint has 16 hex digits from the public key of the certificate of the device.

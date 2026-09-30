@@ -32,7 +32,11 @@ A pairing that the computer starts needs a confirmation on the computer too.
 After the device accepts, the Flux window, the notification, and `flux-cli pair` ask you to confirm the key.
 `fluxd` pins the device only after that step.
 So a device that copies the name of your phone cannot pair when you select it by mistake.
-Each accept, confirm, and reject names the key that you compared, and `fluxd` refuses it when the open pairing has another key.
+Each accept and confirm names the key that you compared, and `fluxd` refuses it when the open pairing has another key.
+Without a key, `flux-cli accept` shows the key of the open pairing and asks you to compare it before it sends the key.
+When stdin is not a terminal, it accepts nothing and prints the command with the key.
+The Flux window and the notification also send the key with a reject.
+Without a key, `flux-cli reject` rejects the pairing that is open when it runs.
 
 After the pairing, `fluxd` pins the certificate of the device.
 It refuses each link that does not show that certificate.

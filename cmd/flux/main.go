@@ -38,7 +38,8 @@ Commands:
   pair DEVICE            Ask a device to pair, show the verification key, and
                          ask you to confirm it
   accept DEVICE [KEY]    Accept a pair request, or confirm a pairing that the
-                         device accepted. With KEY, only the pairing with that key
+                         device accepted. With KEY, only the pairing with that key.
+                         Without KEY, show the key and ask you to compare it
   reject DEVICE [KEY]    Reject a pair request or a pairing. With KEY, only the
                          pairing with that key
   unpair DEVICE          Remove a paired device
@@ -543,8 +544,20 @@ func isTerminal(f *os.File) bool {
 // key that it accepted: a pair request of the device, or a pairing that
 // this computer started and the device accepted. flux-cli always sends
 // the key, so fluxd accepts only the pairing with that key. Without key,
-// the key comes from the state.
+// askAccept asks the user to compare the key of the open pairing first.
 func accept(device, key string) error {
+	if key == "" {
+		c, err := dial()
+		if err != nil {
+			return err
+		}
+		defer c.Close()
+		var in io.Reader
+		if isTerminal(os.Stdin) {
+			in = os.Stdin
+		}
+		return askAccept(c, in, os.Stdout, device)
+	}
 	device, key, err := pairingArgs("accept", device, key, false)
 	if err != nil {
 		return err
@@ -555,6 +568,34 @@ func accept(device, key string) error {
 	}
 	fmt.Printf("✓ %s (%s) paired with the key %s\n", res.Name, res.Device, proto.FormatKey(res.Key))
 	return nil
+}
+
+// askAccept shows the key of the open pairing of device from the state,
+// and asks on in whether the device shows it. It sends that key with the
+// answer: pair.accept on y, else pair.reject. So fluxd refuses the answer
+// when another pairing opened after the question. When in is nil,
+// askAccept accepts nothing and returns the command with the key.
+func askAccept(c pairClient, in io.Reader, out io.Writer, device string) error {
+	var s State
+	if err := c.Call("state", nil, &s); err != nil {
+		return cleanErr(err)
+	}
+	cleanAll(&s)
+	id, key, err := findPairing(&s, device, false)
+	if err != nil {
+		return err
+	}
+	res := pairResult{Device: id, Name: id, Key: key}
+	for _, d := range s.Devices {
+		if d.ID == id {
+			res.Name = d.Name
+		}
+	}
+	shown := proto.FormatKey(key)
+	if in == nil {
+		return fmt.Errorf("compare the key first. When %s shows %s, run:\n  flux-cli accept %s %s", res.Name, shown, id, shown)
+	}
+	return answerPair(c, out, res, <-ask(in, out, res.Name, shown))
 }
 
 // reject rejects the pairing of a device: a pair request of the device, a

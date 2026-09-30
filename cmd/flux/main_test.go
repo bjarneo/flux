@@ -154,14 +154,20 @@ func TestKeyArg(t *testing.T) {
 	}
 }
 
-// fakeFluxd plays fluxd for waitPair. It sends the events and records the
-// calls.
+// fakeFluxd plays fluxd for waitPair and askAccept. It sends the events,
+// answers the method state, and records the other calls.
 type fakeFluxd struct {
 	events chan ipc.Message
 	calls  chan string
+
+	// state is the answer to the method state.
+	state string
 }
 
-func (f *fakeFluxd) Call(method string, params, _ any) error {
+func (f *fakeFluxd) Call(method string, params, result any) error {
+	if method == "state" {
+		return json.Unmarshal([]byte(f.state), result)
+	}
 	b, _ := json.Marshal(params)
 	f.calls <- method + " " + string(b)
 	return nil
@@ -225,6 +231,53 @@ func TestWaitPair(t *testing.T) {
 		call := ""
 		select {
 		case call = <-tc.f.calls:
+		default:
+		}
+		if call != tc.call {
+			t.Errorf("%s: call %q, want %q", tc.name, call, tc.call)
+		}
+	}
+}
+
+// TestAskAccept checks flux-cli accept without a key. It shows the key of
+// the open pairing and sends that key with the answer. Without a
+// terminal, it accepts nothing and names the command with the key.
+func TestAskAccept(t *testing.T) {
+	const state = `{"devices":[
+		{"id":"a1b2c3","name":"Pixel 8","pairState":"confirm","pairKey":"5EE6825F974ED59A"},
+		{"id":"f0f0f0","name":"Tab S9","pairState":"incoming","pairKey":"9B03E7D16A2FC048"}]}`
+	const question = "Does Pixel 8 show 5EE6 825F 974E D59A? [y/N] "
+	for _, tc := range []struct {
+		name   string
+		device string
+		in     io.Reader
+		call   string
+		out    string
+		errMsg string
+	}{
+		{"y", "pixel 8", strings.NewReader("y\n"),
+			`pair.accept {"device":"a1b2c3","key":"5EE6825F974ED59A"}`, question + "✓ Pixel 8 (a1b2c3) paired with the key 5EE6 825F 974E D59A\n", ""},
+		{"a request of the device", "f0f0f0", strings.NewReader("y\n"),
+			`pair.accept {"device":"f0f0f0","key":"9B03E7D16A2FC048"}`, "Does Tab S9 show 9B03 E7D1 6A2F C048? [y/N] ✓ Tab S9 (f0f0f0) paired with the key 9B03 E7D1 6A2F C048\n", ""},
+		{"n", "Pixel 8", strings.NewReader("\n"),
+			`pair.reject {"device":"a1b2c3","key":"5EE6825F974ED59A"}`, question, "you rejected the pairing with Pixel 8"},
+		{"no terminal", "Pixel 8", nil,
+			"", "", "compare the key first. When Pixel 8 shows 5EE6 825F 974E D59A, run:\n  flux-cli accept a1b2c3 5EE6 825F 974E D59A"},
+		{"no pairing", "Nothing", strings.NewReader("y\n"),
+			"", "", `no device named "Nothing" has an open pair request`},
+	} {
+		f := &fakeFluxd{calls: make(chan string, 4), state: state}
+		var out strings.Builder
+		err := askAccept(f, tc.in, &out, tc.device)
+		if got := fmt.Sprint(err); (tc.errMsg == "" && err != nil) || (tc.errMsg != "" && got != tc.errMsg) {
+			t.Errorf("%s: error %v, want %q", tc.name, err, tc.errMsg)
+		}
+		if out.String() != tc.out {
+			t.Errorf("%s: output %q, want %q", tc.name, out.String(), tc.out)
+		}
+		call := ""
+		select {
+		case call = <-f.calls:
 		default:
 		}
 		if call != tc.call {

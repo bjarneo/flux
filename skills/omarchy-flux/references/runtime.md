@@ -58,6 +58,7 @@ The verification key has 16 uppercase hex digits in 4 groups of 4, for example `
 The user must compare all 16 characters before the user accepts a pair request.
 A pairing that this computer starts also needs a confirmation on this computer after the device accepts: **Confirm** in the Flux window or in the notification, `y` at the prompt of `flux-cli pair`, or `flux-cli accept DEVICE KEY`.
 `flux-cli accept` always sends the key, and `fluxd` refuses it when the open pairing has another key.
+Without a key and without a terminal, `flux-cli accept` accepts nothing. It prints a `flux-cli accept` command with the device ID and the key. Run that command only after the user says that the phone shows the same key.
 An earlier Flux app shows only 8 characters, so the user must update Flux on every device first.
 `flux-cli pair` and `flux-cli accept` print the name, the ID, and the key.
 `flux-cli unpair` prints the name, the ID, and the certificate fingerprint.
