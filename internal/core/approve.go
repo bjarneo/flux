@@ -198,7 +198,7 @@ func (d *Daemon) approveDevice(dev *Device) error {
 		return offline(dev)
 	}
 	if !dev.accepts(proto.TypeFluxApprove) {
-		return apiErr("unsupported", "Update Flux for Android on %s to approve with a fingerprint", dev.Name)
+		return apiErr("unsupported", "Update Flux on %s to approve sudo", dev.Name)
 	}
 	return nil
 }

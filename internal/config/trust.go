@@ -27,8 +27,6 @@ type TrustedDevice struct {
 	// example the Tailscale name of the phone. fluxd tries them after
 	// LastIP while the device is offline.
 	Addresses []string `json:"addresses,omitempty"`
-	// Disabled lists the plugins that the user turned off for this device.
-	Disabled []string `json:"disabledPlugins,omitempty"`
 }
 
 // TrustStore is the list of paired devices in devices.json.
