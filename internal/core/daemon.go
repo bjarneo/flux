@@ -121,6 +121,10 @@ type Daemon struct {
 
 	// herdrJobs keeps the herdr work that runs for the phones.
 	herdrJobs herdrJobs
+
+	// content holds the workers and the limits of shares, the clipboard,
+	// notifications, media, calls, and Do Not Disturb.
+	content contentState
 }
 
 // Options change how the daemon runs. The zero value is the normal mode.
@@ -973,18 +977,15 @@ func logType(t string) string {
 // connects.
 func (d *Daemon) onPairedLink(dev *Device, l *lan.Link) {
 	d.mu.Lock()
-	auto := d.cfg.AutoClipboard
 	notifications := dev.supports(proto.TypeNotification)
 	dnd, input := dev.accepts(proto.TypeFluxDnd), dev.accepts(proto.TypeFluxInput)
 	players, herdr := dev.supports(proto.TypeMprisRequest), dev.accepts(proto.TypeFluxHerdr)
 	d.mu.Unlock()
 	d.sendBattery(l)
 	d.sendCommandList(l)
-	if auto {
-		d.sendConnectClipboard(l)
-	}
+	d.sendConnectClipboard(l)
 	if notifications {
-		_ = l.Send(proto.New(proto.TypeNotificationRequest, map[string]any{"request": true}))
+		d.requestNotifications(dev, l)
 	}
 	if dnd {
 		d.wakeDnd()
@@ -993,31 +994,14 @@ func (d *Daemon) onPairedLink(dev *Device, l *lan.Link) {
 		d.sendInputState(l)
 	}
 	if d.media != nil && players {
-		d.sendPlayers(l)
+		// A player that does not answer must not delay the link.
+		d.runMedia(func() { d.sendPlayers(l) })
 	}
 	if herdr {
 		d.mu.Lock()
 		state := herdrStatePacket(d.herdrViewLocked())
 		d.mu.Unlock()
 		_ = l.Send(state)
-	}
-}
-
-// sendConnectClipboard sends the desktop clipboard to a device that
-// connects. Watch skips a copy that a password manager marks as sensitive,
-// so such a copy is not in the history. fluxd sends the clipboard only when
-// it holds the text of the newest history entry.
-func (d *Daemon) sendConnectClipboard(l *lan.Link) {
-	text, err := d.clip.Get()
-	if err != nil || text == "" {
-		return
-	}
-	d.mu.Lock()
-	ts := d.lastLocalClip.UnixMilli()
-	synced := len(d.clipboard) > 0 && d.clipboard[0].Image == "" && d.clipboard[0].Text == text
-	d.mu.Unlock()
-	if ts > 0 && synced {
-		_ = l.Send(proto.New(proto.TypeClipboardConnect, map[string]any{"content": text, "timestamp": ts}))
 	}
 }
 

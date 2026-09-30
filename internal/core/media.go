@@ -9,22 +9,47 @@ import (
 // Media goes one way. A paired device controls the players on this
 // computer. fluxd does not show or control the players of a device.
 
+// maxMediaJobs is the number of media requests and call events that can
+// wait for the media worker.
+const maxMediaJobs = 32
+
+// runMedia runs a media request or a call event on the media worker. The
+// worker runs the jobs in order. The D-Bus calls to the players then do
+// not stop the read loop of a device.
+func (d *Daemon) runMedia(job func()) {
+	if !d.runContent(&d.content.mediaQ, maxMediaJobs, job) {
+		d.logf("the media players are slow: dropped a media request")
+	}
+}
+
+// mediaRequest is the body of a flux.mpris.request packet.
+type mediaRequest struct {
+	RequestPlayerList bool   `json:"requestPlayerList"`
+	Player            string `json:"player"`
+	RequestNowPlaying bool   `json:"requestNowPlaying"`
+	RequestVolume     bool   `json:"requestVolume"`
+	Action            string `json:"action"`
+	SetPosition       *int64 `json:"SetPosition"`
+	SetVolume         *int   `json:"setVolume"`
+}
+
 // handleDesktopMediaRequest lets a phone control the players on this
 // computer.
 func (d *Daemon) handleDesktopMediaRequest(l *lan.Link, p *proto.Packet) {
 	if d.media == nil {
 		return
 	}
-	var b struct {
-		RequestPlayerList bool   `json:"requestPlayerList"`
-		Player            string `json:"player"`
-		RequestNowPlaying bool   `json:"requestNowPlaying"`
-		RequestVolume     bool   `json:"requestVolume"`
-		Action            string `json:"action"`
-		SetPosition       *int64 `json:"SetPosition"`
-		SetVolume         *int   `json:"setVolume"`
-	}
+	var b mediaRequest
 	if p.Decode(&b) != nil {
+		return
+	}
+	d.runMedia(func() { d.answerMedia(l, b) })
+}
+
+// answerMedia runs 1 media request of a phone. A request waits on the
+// worker, so it runs only while l is still the link of a paired device.
+func (d *Daemon) answerMedia(l *lan.Link, b mediaRequest) {
+	if !d.isPairedLink(l) {
 		return
 	}
 	if b.RequestPlayerList {
@@ -50,6 +75,21 @@ func (d *Daemon) handleDesktopMediaRequest(l *lan.Link, p *proto.Packet) {
 	} else if b.RequestNowPlaying || b.RequestVolume {
 		d.sendNowPlaying(l, b.Player)
 	}
+}
+
+// isPairedLink reports whether l is the current link of a paired device.
+func (d *Daemon) isPairedLink(l *lan.Link) bool {
+	if l == nil {
+		return false
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, dev := range d.devices {
+		if dev.link == l {
+			return dev.Paired
+		}
+	}
+	return false
 }
 
 // sendPlayers sends the player list and the state of each player to the
@@ -84,7 +124,12 @@ func nowPlaying(pl desktop.Player) *proto.Packet {
 		"player": pl.Name, "title": pl.Title, "artist": pl.Artist, "album": pl.Album,
 		"isPlaying": pl.Playing, "pos": pl.Position, "length": pl.Length,
 		"canGoNext": pl.CanGoNext, "canGoPrevious": pl.CanGoPrevious, "canSeek": pl.CanSeek,
-		"albumArtUrl": pl.ArtURL,
+		"albumArtUrl": "",
+	}
+	// A file: URL shows a local path and the user name to the device. Only
+	// a web URL goes out.
+	if art, ok := webURL(pl.ArtURL); ok {
+		body["albumArtUrl"] = art
 	}
 	// The phone shows a volume control only when the packet has a volume.
 	if pl.CanSetVolume {

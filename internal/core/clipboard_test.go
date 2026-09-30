@@ -7,11 +7,14 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"unicode/utf8"
 
 	"flux/internal/config"
+	"flux/internal/proto"
 )
 
 // testPNG returns the start of a PNG file with the byte b after it, so
@@ -97,7 +100,7 @@ func TestClipHistoryDropsOldImages(t *testing.T) {
 
 func TestReceiveClipImage(t *testing.T) {
 	d, clip := clipDaemon(t, true)
-	dev := &Device{ID: "phone", Name: "Pixel 8"}
+	dev := &Device{ID: "phone", Name: "Pixel 8", Paired: true}
 	jpeg := []byte("\xff\xd8\xff\xe0\x00\x10JFIF\x00")
 	d.receiveClipImage(dev, jpeg)
 	if clip.mime != "image/jpeg" || !bytes.Equal(clip.image, jpeg) {
@@ -122,6 +125,14 @@ func TestReceiveClipImage(t *testing.T) {
 	d.receiveClipImage(dev, testPNG(2))
 	if clip.image != nil || len(d.clipboard) != 2 {
 		t.Errorf("clipboard has %q, history has %d entries", clip.image, len(d.clipboard))
+	}
+
+	// An image that arrives after an unpair is dropped.
+	d.cfg.AutoClipboard = true
+	dev.Paired = false
+	d.receiveClipImage(dev, testPNG(3))
+	if clip.image != nil || len(d.clipboard) != 2 {
+		t.Errorf("unpaired: clipboard has %q, history has %d entries", clip.image, len(d.clipboard))
 	}
 }
 
@@ -189,5 +200,97 @@ func TestClipPreview(t *testing.T) {
 	}
 	if err := d.CopyClip("missing"); err == nil {
 		t.Error("CopyClip of a missing ID returned no error")
+	}
+}
+
+// slowClipboard is a clipboard whose first Set waits for release.
+type slowClipboard struct {
+	memClipboard
+	release chan struct{}
+	started chan struct{}
+	mu      sync.Mutex
+	sets    []string
+}
+
+func (s *slowClipboard) Set(text string) error {
+	s.mu.Lock()
+	first := len(s.sets) == 0
+	s.sets = append(s.sets, text)
+	s.mu.Unlock()
+	if first {
+		close(s.started)
+		<-s.release
+	}
+	return s.memClipboard.Set(text)
+}
+
+// TestClipboardWorkerKeepsNewest sends 3 texts while wl-copy runs. The
+// clipboard ends with the newest text, and the text between is dropped.
+func TestClipboardWorkerKeepsNewest(t *testing.T) {
+	d, _ := clipDaemon(t, true)
+	slow := &slowClipboard{release: make(chan struct{}), started: make(chan struct{})}
+	d.clip = slow
+	dev := &Device{ID: "phone", Name: "Pixel 8", Paired: true}
+	for _, text := range []string{"A", "B", "C"} {
+		d.handleClipboard(dev, proto.New(proto.TypeClipboard, map[string]any{"content": text}))
+		if text == "A" {
+			<-slow.started
+		}
+	}
+	close(slow.release)
+	waitIdle(t, d, &d.content.clipQ)
+	if !slices.Equal(slow.sets, []string{"A", "C"}) || slow.text != "C" {
+		t.Fatalf("sets %q, clipboard %q", slow.sets, slow.text)
+	}
+	if len(d.clipboard) != 3 || d.clipboard[0].Text != "C" {
+		t.Fatalf("history %+v", d.clipboard)
+	}
+}
+
+// TestClipboardWorkerChecksSwitch turns auto_clipboard off while a text
+// waits. The text stays off the clipboard.
+func TestClipboardWorkerChecksSwitch(t *testing.T) {
+	d, _ := clipDaemon(t, true)
+	slow := &slowClipboard{release: make(chan struct{}), started: make(chan struct{})}
+	d.clip = slow
+	dev := &Device{ID: "phone", Name: "Pixel 8", Paired: true}
+	d.handleClipboard(dev, proto.New(proto.TypeClipboard, map[string]any{"content": "A"}))
+	<-slow.started
+	d.handleClipboard(dev, proto.New(proto.TypeClipboard, map[string]any{"content": "B"}))
+	d.mu.Lock()
+	d.cfg.AutoClipboard = false
+	d.mu.Unlock()
+	close(slow.release)
+	waitIdle(t, d, &d.content.clipQ)
+	if !slices.Equal(slow.sets, []string{"A"}) {
+		t.Fatalf("sets %q", slow.sets)
+	}
+}
+
+func TestClipHistoryTextLimit(t *testing.T) {
+	d, _ := clipDaemon(t, true)
+	for i := range 40 {
+		d.addClipLocked(ClipEntry{Text: strings.Repeat(string(rune('a'+i%26)), 1<<20) + fmt.Sprint(i), Dir: "in"})
+	}
+	total := 0
+	for _, e := range d.clipboard {
+		total += len(e.Text)
+	}
+	if total > maxClipText || len(d.clipboard) == 0 || !strings.HasSuffix(d.clipboard[0].Text, "39") {
+		t.Fatalf("%d entries with %d bytes", len(d.clipboard), total)
+	}
+}
+
+// TestConnectClipboardText checks that a device that connects gets only
+// the text that Watch reported, and no text after an image copy.
+func TestConnectClipboardText(t *testing.T) {
+	d, _ := clipDaemon(t, false)
+	d.onLocalClipboard("normal text")
+	if d.content.lastClip != "normal text" {
+		t.Fatalf("last text %q", d.content.lastClip)
+	}
+	d.onLocalImage(testPNG(1), "image/png")
+	if d.content.lastClip != "" {
+		t.Fatalf("last text after an image %q", d.content.lastClip)
 	}
 }

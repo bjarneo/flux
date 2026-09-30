@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +16,9 @@ import (
 // makoMode is the mako mode that Omarchy and the mako docs use for Do Not
 // Disturb.
 const makoMode = "do-not-disturb"
+
+// dndTimeout limits each run of omarchy-shell and makoctl.
+const dndTimeout = 5 * time.Second
 
 // DND reads and sets Do Not Disturb of the desktop notification service.
 // It supports the notification service of the Omarchy shell, and mako.
@@ -45,6 +49,14 @@ func NewDND() *DND {
 	return d
 }
 
+// dndCommand returns a command that stops after the context ends. WaitDelay
+// makes Wait return also when a child keeps the output open.
+func dndCommand(ctx context.Context, name string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.WaitDelay = time.Second
+	return cmd
+}
+
 func onPath(name string) bool {
 	_, err := exec.LookPath(name)
 	return err == nil
@@ -60,7 +72,9 @@ func (d *DND) Get() (on, ok bool) {
 	case "omarchy-shell":
 		return d.getOmarchy()
 	case "mako":
-		out, err := exec.Command("makoctl", "mode").Output()
+		ctx, cancel := context.WithTimeout(context.Background(), dndTimeout)
+		defer cancel()
+		out, err := dndCommand(ctx, "makoctl", "mode").Output()
 		if err != nil {
 			return false, false
 		}
@@ -100,25 +114,27 @@ func (d *DND) getOmarchy() (on, ok bool) {
 
 // Set turns Do Not Disturb on or off.
 func (d *DND) Set(on bool) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dndTimeout)
+	defer cancel()
 	switch d.kind {
 	case "omarchy-shell":
 		value := "off"
 		if on {
 			value = "on"
 		}
-		if out, err := exec.Command("omarchy-shell", "notifications", "setDnd", value).CombinedOutput(); err != nil {
+		if out, err := dndCommand(ctx, "omarchy-shell", "notifications", "setDnd", value).CombinedOutput(); err != nil {
 			return fmt.Errorf("omarchy-shell: %w: %s", err, strings.TrimSpace(string(out)))
 		}
 		// The bar shows the state. omarchy-toggle-notification-silencing
 		// refreshes it the same way.
-		_ = exec.Command("omarchy-shell", "-q", "omarchy.indicators", "refresh").Run()
+		_ = dndCommand(ctx, "omarchy-shell", "-q", "omarchy.indicators", "refresh").Run()
 		return nil
 	case "mako":
 		flag := "-r"
 		if on {
 			flag = "-a"
 		}
-		if out, err := exec.Command("makoctl", "mode", flag, makoMode).CombinedOutput(); err != nil {
+		if out, err := dndCommand(ctx, "makoctl", "mode", flag, makoMode).CombinedOutput(); err != nil {
 			return fmt.Errorf("makoctl: %w: %s", err, strings.TrimSpace(string(out)))
 		}
 		return nil

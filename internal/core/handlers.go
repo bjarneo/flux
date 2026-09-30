@@ -124,7 +124,7 @@ func (d *Daemon) handlePing(dev *Device, p *proto.Packet) {
 	}
 	name := d.nameOf(dev)
 	d.toast("%s: %s", name, text)
-	d.notify(desktop.Notification{AppName: name, Title: "Ping from " + name, Body: body.Message})
+	d.notifyAsync(desktop.Notification{AppName: name, Title: "Ping from " + name, Body: body.Message})
 }
 
 func (d *Daemon) handleBattery(dev *Device, p *proto.Packet) {
@@ -142,7 +142,7 @@ func (d *Daemon) handleBattery(dev *Device, p *proto.Packet) {
 	name := dev.Name
 	d.mu.Unlock()
 	if alert {
-		d.notify(desktop.Notification{AppName: "Flux", Title: name + " battery is low", Body: strconv.Itoa(body.Charge) + "% left", Urgency: 2})
+		d.notifyAsync(desktop.Notification{AppName: "Flux", Title: name + " battery is low", Body: strconv.Itoa(body.Charge) + "% left", Urgency: 2})
 	}
 	d.markDirty()
 }

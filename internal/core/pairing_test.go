@@ -1015,16 +1015,17 @@ func TestCloseIdleLinks(t *testing.T) {
 }
 
 // TestConnectClipboardSkipsHiddenCopy checks that a device that connects
-// gets the clipboard only when it holds the newest copy that fluxd synced.
-// A password manager copy is not in the history.
+// gets only the last text that Watch reported. Watch does not report a
+// password manager copy, so that copy stays on the desktop.
 func TestConnectClipboardSkipsHiddenCopy(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	d, _, _, _, onDesk, _, fromDesk := phonePair(t, ctx)
 	clip := d.clip.(*memClipboard)
 	d.mu.Lock()
+	d.cfg.AutoClipboard = true
 	d.lastLocalClip = time.Now()
-	d.clipboard = []ClipEntry{{Text: "normal text", Dir: "out"}}
+	d.content.lastClip = ""
 	d.mu.Unlock()
 
 	next := func() *proto.Packet {
@@ -1048,12 +1049,18 @@ func TestConnectClipboardSkipsHiddenCopy(t *testing.T) {
 	_ = clip.Set("hunter2")
 	d.sendConnectClipboard(onDesk)
 	if p := next(); p != nil {
-		t.Fatalf("fluxd sent a copy that is not in the history: %s", p.Body)
+		t.Fatalf("fluxd sent a copy that Watch did not report: %s", p.Body)
 	}
-	_ = clip.Set("normal text")
+	d.mu.Lock()
+	d.content.lastClip = "normal text"
+	d.mu.Unlock()
 	d.sendConnectClipboard(onDesk)
-	if p := next(); p == nil || !strings.Contains(string(p.Body), "normal text") {
+	p := next()
+	if p == nil || !strings.Contains(string(p.Body), "normal text") {
 		t.Fatal("fluxd did not send the synced copy")
+	}
+	if strings.Contains(string(p.Body), "hunter2") {
+		t.Fatalf("fluxd sent the live clipboard: %s", p.Body)
 	}
 }
 
