@@ -20,7 +20,7 @@ define copy-plugin
 		while read -r f; do install -Dm644 "$$f" "$(1)/Flux/$$f"; done
 endef
 
-.PHONY: build build-go build-gui test vet install install-user install-plugin uninstall uninstall-user uninstall-plugin dev open snapshot android macos test-macos install-macos ios ios-release test-ios clean
+.PHONY: build build-go build-gui test test-gui vet install install-user install-plugin uninstall uninstall-user uninstall-plugin dev open snapshot android macos test-macos install-macos ios ios-release test-ios clean
 
 build: build-go build-gui
 
@@ -155,6 +155,12 @@ open: build
 snapshot: build-gui
 	mkdir -p snapshots
 	QT_QPA_PLATFORM=offscreen $(GUI_BUILD)/flux-gui --snapshot $(CURDIR)/snapshots
+
+# Run the QML view tests in gui/tests with the mock backend. They need no
+# display and no fluxd.
+QMLTESTRUNNER ?= /usr/lib/qt6/bin/qmltestrunner
+test-gui:
+	QT_QPA_PLATFORM=offscreen QML_XHR_ALLOW_FILE_READ=1 $(QMLTESTRUNNER) -input gui/tests
 
 android:
 	cd android && FLUX_VERSION=$(APP_VERSION) ./gradlew :app:assembleDebug

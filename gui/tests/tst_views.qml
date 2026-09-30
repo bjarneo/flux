@@ -6,7 +6,7 @@ import "../qml/tools"
 
 // Checks of the shared views with the mock backend. To run them from the
 // repository root:
-//   QT_QPA_PLATFORM=offscreen QML_XHR_ALLOW_FILE_READ=1 qmltestrunner -input gui/tests
+//   make test-gui
 Item {
   id: top
   width: 1180

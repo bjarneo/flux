@@ -78,10 +78,11 @@ Stop the daemon before you remove the temporary directory.
 ## UI checks
 
 ```sh
-make snapshot
+make snapshot test-gui
 ```
 
 The Qt host renders fixture screens into `snapshots/`.
+`make test-gui` runs the [QML view tests](qml.md#view-tests) with the mock backend.
 The [QML guide](qml.md#snapshot-harness) covers theme and screen filters.
 The [shell guide](omarchy.md#offscreen-test) covers an isolated plugin host.
 

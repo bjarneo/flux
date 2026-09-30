@@ -187,12 +187,25 @@ QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software QML_XHR_ALLOW_FILE_READ=1 \
 ## View tests
 
 `gui/tests/tst_views.qml` checks the views with the mock backend. It covers
-the device switch in Messages, the pair requests, the key format, and the
-text from a phone. To run the tests from the repository root:
+the device switch in Messages, the pair requests, the key format, the
+errors from fluxd, the list limits, and the text from a phone. To run the
+tests from the repository root:
+
+```sh
+make test-gui
+```
+
+The target runs this command:
 
 ```sh
 QT_QPA_PLATFORM=offscreen QML_XHR_ALLOW_FILE_READ=1 \
   /usr/lib/qt6/bin/qmltestrunner -input gui/tests
+```
+
+To use a `qmltestrunner` in another folder, set `QMLTESTRUNNER`:
+
+```sh
+make test-gui QMLTESTRUNNER=/usr/lib64/qt6/bin/qmltestrunner
 ```
 
 ## Qt app
