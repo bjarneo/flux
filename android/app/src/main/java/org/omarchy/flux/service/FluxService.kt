@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import org.omarchy.flux.R
 import org.omarchy.flux.core.Android
 import org.omarchy.flux.core.CaptureWatch
+import org.omarchy.flux.core.ClipWatch
 import org.omarchy.flux.core.DndSync
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.Plugins
@@ -36,6 +37,7 @@ import org.omarchy.flux.core.Ringer
 import org.omarchy.flux.core.SmsSync
 import org.omarchy.flux.protocol.PROTOCOL_VERSION
 import org.omarchy.flux.protocol.cleanName
+import org.omarchy.flux.ui.ClipboardSendActivity
 import org.omarchy.flux.ui.MainActivity
 
 /**
@@ -48,6 +50,9 @@ class FluxService : Service() {
     private var lastCharging = false
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var calls: CallMonitor? = null
+
+    /** The count of connected computers on the notification, so a clip-state change re-renders it. */
+    private var connectedCount = 0
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
@@ -206,6 +211,10 @@ class FluxService : Service() {
         scope.launch {
             FluxCore.state.map { s -> s.devices.count { it.paired && it.online } }.distinctUntilChanged().collect { startInForeground(it) }
         }
+        // The needs-consent state changes the notification text, so re-render it.
+        scope.launch {
+            FluxCore.state.map { it.clipAuto }.distinctUntilChanged().collect { startInForeground(connectedCount) }
+        }
         // The multicast lock makes the Wi-Fi chip wake the phone for each
         // broadcast on the network, which uses the battery. Flux needs it
         // only to find computers: during a scan, before the first pairing,
@@ -251,6 +260,8 @@ class FluxService : Service() {
                 FluxCore.rediscover()
                 // The device name can change in the system settings.
                 announce()
+                // Flux is on top now, so the log-access dialog can show.
+                ClipWatch.refresh(this)
             }
             ACTION_SCAN -> scan()
         }
@@ -267,6 +278,7 @@ class FluxService : Service() {
         runCatching { unregisterReceiver(batteryReceiver) }
         runCatching { unregisterReceiver(dndReceiver) }
         CaptureWatch.stop(this)
+        ClipWatch.stop()
         runCatching { multicast?.release() }
         FluxCore.stopNetwork()
         super.onDestroy()
@@ -275,31 +287,46 @@ class FluxService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun startInForeground(connected: Int) {
+        connectedCount = connected
         val open = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val text = when (connected) {
-            0 -> "Waiting for a computer on this network"
-            1 -> "1 computer connected"
+        val needsConsent = FluxCore.state.value.clipAuto == org.omarchy.flux.core.ClipAutoState.NeedsConsent
+        val text = when {
+            needsConsent -> "Open Flux to resume clipboard sync"
+            connected == 0 -> "Waiting for a computer on this network"
+            connected == 1 -> "1 computer connected"
             else -> "$connected computers connected"
         }
-        val n = NotificationCompat.Builder(this, Android.CHANNEL_SERVICE)
+        val b = NotificationCompat.Builder(this, Android.CHANNEL_SERVICE)
             .setSmallIcon(R.drawable.ic_stat_flux)
             .setContentTitle("Flux")
             .setContentText(text)
             .setContentIntent(open)
-            .addAction(
-                R.drawable.ic_power_settings_new,
-                "Turn off",
-                PendingIntent.getService(
-                    this, 1, Intent(this, FluxService::class.java).setAction(ACTION_TURN_OFF),
+        // A copy in another app reaches the computer with 1 tap.
+        if (connected > 0) {
+            b.addAction(
+                R.drawable.ic_content_paste_go,
+                "Send clipboard",
+                PendingIntent.getActivity(
+                    this, 2,
+                    Intent(this, ClipboardSendActivity::class.java)
+                        .putExtra(ClipboardSendActivity.EXTRA_MANUAL, true)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
                 ),
             )
-            .setOngoing(true)
-            .setSilent(true)
-            .build()
+        }
+        b.addAction(
+            R.drawable.ic_power_settings_new,
+            "Turn off",
+            PendingIntent.getService(
+                this, 1, Intent(this, FluxService::class.java).setAction(ACTION_TURN_OFF),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            ),
+        )
+        val n = b.setOngoing(true).setSilent(true).build()
         ServiceCompat.startForeground(this, Android.ID_SERVICE, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
     }
 

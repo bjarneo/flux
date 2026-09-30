@@ -2,4 +2,6 @@
 <resources>
     <string name="app_name">Flux</string>
     <string name="share_label">Send with Flux</string>
+    <string name="process_text_label">Send to computer</string>
+    <string name="clipboard_tile_label">Send clipboard</string>
 </resources>

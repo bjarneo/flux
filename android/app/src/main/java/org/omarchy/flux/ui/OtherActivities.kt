@@ -72,8 +72,11 @@ class ShareActivity : ComponentActivity() {
         FluxService.start(this)
         val all = streams(intent)
         val uris = all.filter { accepted(intent, it) }
-        // EXTRA_TEXT is a CharSequence, and an app can share styled text.
-        val text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()?.takeIf { it.isNotBlank() }
+        // EXTRA_TEXT is a CharSequence, and an app can share styled text. The
+        // text selection menu sends the selected text in EXTRA_PROCESS_TEXT.
+        val shared = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)
+            ?: intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)
+        val text = shared?.toString()?.takeIf { it.isNotBlank() }
         if (uris.size < all.size) Toast.makeText(this, "Flux cannot send ${all.size - uris.size} of the shared files", Toast.LENGTH_SHORT).show()
         if (uris.isEmpty() && text == null) {
             finish()

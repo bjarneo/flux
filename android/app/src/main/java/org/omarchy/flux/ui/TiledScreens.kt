@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.ComponentName
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
+import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
 import android.provider.Settings
@@ -42,10 +43,12 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -71,6 +74,7 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import org.omarchy.flux.core.CaptureKind
 import org.omarchy.flux.core.CaptureWatch
+import org.omarchy.flux.core.ClipAutoState
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.NotificationSync
@@ -532,7 +536,110 @@ fun TiledHomeScreen(
                 TileRow(84.dp) { for (s in row) SyncTile(s, Modifier.weight(1f).fillMaxHeight()) }
             }
         }
+        if (state.syncClipboard) ClipAutoStatus(state)
         Spacer(Modifier.height(96.dp))
+    }
+}
+
+/**
+ * The automatic clipboard state under the sync switches. Active needs no
+ * action. A reader that the self-test did not check yet also shows as
+ * automatic, and the self-test corrects it when Flux goes to the
+ * background. The other states open the setup sheet on a tap.
+ */
+@Composable
+private fun ClipAutoStatus(state: UiState) {
+    var showSheet by remember { mutableStateOf(false) }
+    val active = state.clipAuto == ClipAutoState.Active || state.clipAuto == ClipAutoState.Checking
+    val label = when (state.clipAuto) {
+        ClipAutoState.Active, ClipAutoState.Checking -> "Automatic"
+        ClipAutoState.NeedsConsent -> "Open Flux to resume automatic sync"
+        else -> "Only while Flux is open. Set up automatic sync"
+    }
+    Row(
+        Modifier.fillMaxWidth().padding(top = 8.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(enabled = !active) { showSheet = true }
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Sym(if (active) Ic.sync else Ic.paste, tint = if (active) Tn.green else Tn.sub, size = 18.dp)
+        T(label, Modifier.weight(1f), size = 12, color = if (active) Tn.green else Tn.sub)
+        if (!active) Sym(Ic.chevron, tint = Tn.dim, size = 18.dp)
+    }
+    if (showSheet) ClipAutoSheet(state) { showSheet = false }
+}
+
+/** The commands that set up the automatic clipboard sync. */
+private val CLIP_SETUP_COMMANDS = listOf(
+    "adb shell pm grant org.omarchy.flux android.permission.READ_LOGS",
+    "adb shell appops set org.omarchy.flux SYSTEM_ALERT_WINDOW allow",
+    "adb shell am force-stop org.omarchy.flux",
+)
+
+/**
+ * The setup sheet for the automatic clipboard sync. It opens the overlay
+ * permission screen and shows the adb commands with a copy button. After
+ * each reboot or update, the user opens Flux once.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ClipAutoSheet(state: UiState, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = Tn.bg) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = TiledGutter, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            TileLabel("Automatic clipboard sync")
+            T(
+                "Flux copies from other apps to the computer without the app open. Grant the access once with adb. " +
+                    "Open Flux once after each reboot or update.",
+                size = 13, color = Tn.sub, lineHeight = 1.3f,
+            )
+            if (!state.overlayAccess) {
+                Box(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Tn.blue)
+                        .clickable {
+                            val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            runCatching { context.startActivity(intent) }
+                                .onFailure { runCatching { context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)) } }
+                        }
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) { T("Allow drawing over apps", size = 14, color = Tn.onAccent, weight = FontWeight.SemiBold) }
+            }
+            T("Run these on a computer with adb:", size = 12, color = Tn.dim)
+            for (cmd in CLIP_SETUP_COMMANDS) ClipCommandRow(cmd)
+            T(
+                "The Appear on top switch in the Android app settings does the same as the second command.",
+                size = 12, color = Tn.dim, lineHeight = 1.3f,
+            )
+            Spacer(Modifier.height(16.dp))
+        }
+    }
+}
+
+/** One adb command with a copy button. */
+@Composable
+private fun ClipCommandRow(command: String) {
+    val context = LocalContext.current
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Tn.tile).padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        T(command, Modifier.weight(1f), size = 11, color = Tn.text, family = Mono, lineHeight = 1.3f)
+        Box(
+            Modifier.size(36.dp).clip(RoundedCornerShape(8.dp))
+                .clickable {
+                    if (org.omarchy.flux.core.Android.setClipboard(context, command)) FluxCore.toast("Copied")
+                },
+            contentAlignment = Alignment.Center,
+        ) { Sym(Ic.copy, "Copy", tint = Tn.blue, size = 18.dp) }
     }
 }
 

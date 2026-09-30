@@ -40,6 +40,15 @@
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <!-- Android 12 and later: the pair sheet and the approval screen hide the windows of other apps. -->
     <uses-permission android:name="android.permission.HIDE_OVERLAY_WINDOWS" />
+    <!--
+        Automatic clipboard sync, opt in. The user grants both with adb.
+        READ_LOGS finds the copy signal in the system log. SYSTEM_ALERT_WINDOW
+        takes window focus for a moment, so Flux reads the new clip.
+        See docs/android-setup.md.
+    -->
+    <uses-permission android:name="android.permission.READ_LOGS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
@@ -91,7 +100,27 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />
             </intent-filter>
+            <!-- The text selection menu of any app shows "Send to computer". -->
+            <intent-filter android:label="@string/process_text_label">
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
+
+        <!--
+            The clipboard sender: no UI. It takes window focus, reads the
+            clipboard, sends it to each connected paired computer, and finishes.
+            The Quick Settings tile, the service notification, and the automatic
+            reader start it.
+        -->
+        <activity
+            android:name=".ui.ClipboardSendActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity="org.omarchy.flux.clip"
+            android:theme="@style/Theme.Flux.Invisible" />
 
         <activity
             android:name=".ui.RingActivity"
@@ -122,6 +151,18 @@
             android:name=".screen.ScreenMirrorService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+
+        <!-- Quick Settings tile that sends the clipboard to the computers. -->
+        <service
+            android:name=".service.ClipboardTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_content_paste_go"
+            android:label="@string/clipboard_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <service
             android:name=".service.FluxNotificationListener"

@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.FileProvider
 import org.omarchy.flux.net.Payload
@@ -81,6 +82,8 @@ object ClipImage {
         dir.listFiles()?.filter { it != file }?.forEach { it.delete() }
         val uri = FileProvider.getUriForFile(core.app, authority(core.app), file)
         lastRemote = uri
+        // The write makes the clipboard denial line, so the reader ignores it.
+        Plugins.selfWriteAt = SystemClock.elapsedRealtime()
         main.post { Android.setClipboardImage(core.app, uri) }
     }
 

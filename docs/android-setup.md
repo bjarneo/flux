@@ -107,6 +107,70 @@ adb shell appops set org.omarchy.flux ACCESS_RESTRICTED_SETTINGS allow
 
 Then turn on the switch in Flux again.
 
+## Send clipboard tile
+
+The **Send clipboard** tile sends the current clip to each connected paired computer.
+To add the tile:
+
+1. Open the Quick Settings panel and open the edit screen.
+2. Drag **Send clipboard** into the panel.
+3. Copy in any app, then tap the tile.
+
+The Flux service notification also has a **Send clipboard** action while a computer is connected.
+The text selection menu of any app has a **Send to computer** action.
+It sends the selected text to the computer that you pick.
+These paths need no setup and no extra permission.
+
+## Automatic clipboard sync
+
+The automatic sync sends each phone copy to the computer without the Flux app open.
+It is opt in, because it needs 2 permissions that you grant with adb.
+
+Android 10 and later do not let a background app read the clipboard.
+Flux reads the copy signal from the system log with `READ_LOGS`.
+It then takes window focus for a moment with `SYSTEM_ALERT_WINDOW`, so it can read the new clip.
+
+CAUTION: `READ_LOGS` gives Flux read access to all device logs. Grant it only if you accept this.
+
+To set up the automatic sync:
+
+1. Turn on **USB debugging** or **Wireless debugging**, as in [Install with adb](#install-with-adb).
+2. Grant the log access:
+
+   ```sh
+   adb shell pm grant org.omarchy.flux android.permission.READ_LOGS
+   ```
+
+3. Grant the overlay access:
+
+   ```sh
+   adb shell appops set org.omarchy.flux SYSTEM_ALERT_WINDOW allow
+   ```
+
+   The **Appear on top** switch in **Settings > Apps > Flux** does the same.
+
+4. Stop Flux, so it reads the log with the new access:
+
+   ```sh
+   adb shell am force-stop org.omarchy.flux
+   ```
+
+5. Open Flux and tap **Allow one-time access**.
+
+While **Sync clipboard** is on, a status line under the switches of **Sync with all computers** shows the state of the automatic sync.
+A tap on the status line opens a sheet with the same commands and a copy button.
+The sheet also opens the overlay permission screen.
+
+After step 5, the status line shows **Automatic**.
+Flux checks the log access the first time that you leave the app after the automatic sync starts.
+If the access is off, the status line then shows **Open Flux to resume automatic sync**.
+
+Android does not keep the log access.
+It ends after each reboot, Flux update, or app kill.
+Open Flux once and tap **Allow one-time access** to resume the sync.
+When an update finishes, the installer offers **Open**, and that tap is enough.
+The service notification shows **Open Flux to resume clipboard sync** while the access is off.
+
 ## How Flux for Android is set up
 
 ### Distribution
@@ -165,6 +229,8 @@ The other permissions need no prompt.
 | `USE_BIOMETRIC` | [Fingerprint approval](approvals.md) of `sudo` and polkit | No prompt |
 | `HIDE_OVERLAY_WINDOWS` | The pair sheet and the approval screen hide the windows of other apps on Android 12 and later | No prompt |
 | `REQUEST_INSTALL_PACKAGES` | [Updates that the computer sends](android.md#update-the-app) | Android asks to allow **Install unknown apps** at the first update |
+| `READ_LOGS` | The [automatic clipboard sync](#automatic-clipboard-sync) finds the copy signal in the system log | You grant it with adb |
+| `SYSTEM_ALERT_WINDOW` | The [automatic clipboard sync](#automatic-clipboard-sync) takes window focus to read the new clip | You grant it with adb, or with **Appear on top** |
 
 `READ_EXTERNAL_STORAGE` applies only to Android 12 and earlier.
 The call log and the contacts are optional for **Call alerts**. They add the number and the name of the caller.

@@ -127,4 +127,9 @@ data class UiState(
     /** False while the user has turned Flux off. */
     val enabled: Boolean = true,
     val theme: ThemeMode = ThemeMode.System,
+
+    /** The state of the automatic clipboard sync. See [ClipWatch]. */
+    val clipAuto: ClipAutoState = ClipAutoState.Off,
+    /** Flux may draw over other apps, which the automatic clipboard reader needs. */
+    val overlayAccess: Boolean = false,
 )

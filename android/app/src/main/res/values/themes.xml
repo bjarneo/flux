@@ -19,4 +19,17 @@
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:backgroundDimEnabled">true</item>
     </style>
+
+    <!--
+        The clipboard sender window. It draws nothing, but it must take window
+        focus, so it is not Theme.NoDisplay. It adds no dim and no animation,
+        so the copy path shows no flicker.
+    -->
+    <style name="Theme.Flux.Invisible" parent="Theme.Flux">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
 </resources>
