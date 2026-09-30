@@ -264,7 +264,7 @@ object ClipWatch {
                     if (ClipGate.isDenial(line, pkg)) onDenialLine(app)
                 }
             }
-        }.onFailure { Log.w(TAG, "log read stopped", it) }
+        }.onFailure { Log.i(TAG, "log read stopped: ${it.message}") }
         synchronized(lock) { if (proc === p) proc = null }
         runCatching { p.destroy() }
         onReaderExit(me)

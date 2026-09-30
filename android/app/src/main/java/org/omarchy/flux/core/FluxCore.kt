@@ -403,6 +403,9 @@ object FluxCore {
 
     fun connectedPaired(): List<Device> = synchronized(lock) { devices.values.filter { it.paired && it.online } }
 
+    /** True when the phone is paired with at least 1 computer, online or not. */
+    fun hasPaired(): Boolean = synchronized(lock) { devices.values.any { it.paired } }
+
     // ---------------------------------------------------------------- events
 
     /** Handles one packet from a device. The core lock is held. */

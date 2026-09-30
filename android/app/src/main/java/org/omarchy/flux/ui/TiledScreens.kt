@@ -552,7 +552,8 @@ private fun ClipAutoStatus(state: UiState) {
     var showSheet by remember { mutableStateOf(false) }
     val active = state.clipAuto == ClipAutoState.Active || state.clipAuto == ClipAutoState.Checking
     val label = when (state.clipAuto) {
-        ClipAutoState.Active, ClipAutoState.Checking -> "Automatic"
+        ClipAutoState.Active -> "Automatic"
+        ClipAutoState.Checking -> "Automatic sync starts when you leave Flux"
         ClipAutoState.NeedsConsent -> "Open Flux to resume automatic sync"
         else -> "Only while Flux is open. Set up automatic sync"
     }

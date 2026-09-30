@@ -217,6 +217,7 @@ Flux offers 4 paths that need no setup:
 
 The tile and the notification action send the current clip to each connected paired computer.
 They skip a clip that its app marks as sensitive, for example a password, the same as the automatic sync.
+When no computer is connected yet, for example because the tile started a stopped Flux, the tile keeps the text for 15 seconds and sends it to the first computer that connects.
 **Send to computer** and **Send with Flux** send the selected or shared text to the computer that you pick.
 A link opens in the browser of the desktop, and other text goes on the desktop clipboard.
 See [Files, clipboard, and links](#files-clipboard-and-links).
@@ -235,15 +236,21 @@ background task can turn the sync back on.
 While **Sync clipboard** is on, a status line under the switches of **Sync with all computers** shows the state:
 
 - **Only while Flux is open. Set up automatic sync**: the automatic sync is not set up. Flux has no `READ_LOGS` permission or no overlay access.
+- **Automatic sync starts when you leave Flux**: Flux checks the log access when you leave the app.
 - **Automatic**: the automatic sync runs.
 - **Open Flux to resume automatic sync**: the log access ended. Open Flux to resume it.
 
 A tap on the status line opens the setup sheet.
-Flux checks the log access the first time that you leave the app after the automatic sync starts.
-Until then, the status line shows **Automatic**.
+If you tap **Don't allow**, Android refuses a new log request from Flux for about 1 minute.
+Open Flux again after that time.
 
-The automatic sync skips a sensitive clip and a clip that came from a computer.
+The automatic sync skips a sensitive clip and the echo of a text that a computer put on the clipboard.
+A later copy of the same text goes out.
 It sends text of up to 1 MiB.
+
+Android shows the message **Flux pasted from your clipboard** after each read.
+To hide it, turn off **Show clipboard access** in the privacy settings of Android.
+On a Samsung phone, the setting is **Alert when clipboard accessed**.
 
 ## Notifications
 
