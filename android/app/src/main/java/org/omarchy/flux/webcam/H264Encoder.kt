@@ -24,8 +24,8 @@ private const val QUEUE_FRAMES = 3
  * threads. When the network is slower than the encoder, the drain thread
  * drops frames until the next key frame. So the codec, the camera, and the
  * preview never wait for the network, and the delay stays short. When a
- * write fails, for example because the computer closed the connection,
- * [onError] runs once.
+ * write fails, for example because the computer closed the connection, or
+ * when the codec fails, [onError] runs once with a message for the user.
  */
 class H264Encoder(
     private val width: Int,
@@ -140,7 +140,7 @@ class H264Encoder(
                 if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) break
             }
         } catch (e: Exception) {
-            fail(e)
+            fail(e, "The video encoder of this phone stopped")
         }
     }
 
@@ -156,16 +156,20 @@ class H264Encoder(
                 }
             }
         } catch (e: Exception) {
-            fail(e)
+            fail(e, "The connection to the computer closed")
         }
     }
 
-    /** Ends the stream after an error while the encoder runs, and tells [onError] once. */
-    private fun fail(e: Exception) {
+    /**
+     * Ends the stream after an error while the encoder runs, and tells
+     * [onError] once. [message] tells the codec errors of the drain thread
+     * apart from the network errors of the writer thread.
+     */
+    private fun fail(e: Exception, message: String) {
         if (!running || !failed.compareAndSet(false, true)) return
         Log.i(TAG, "stream ended: ${e.message}")
         running = false
-        onError("The connection to the computer closed")
+        onError(message)
     }
 
     /**
