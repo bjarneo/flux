@@ -86,8 +86,9 @@ Signed builds need all four variables:
 
 `FLUX_VERSION` sets `versionName`.
 `FLUX_VERSION_CODE` sets a positive Android version code.
-The release workflow uses `github.run_number` for the code.
-Preserve the workflow's version-code sequence and the release key for upgrades.
+The release workflow sets the code to `(MAJOR * 1000000 + MINOR * 1000 + PATCH) * 100` from the tag.
+The release workflow builds the APK without a signature, then signs it with `apksigner` in a job without Gradle.
+Keep the release key for upgrades.
 
 Disable the Gradle configuration cache for builds that use release secrets:
 
@@ -103,7 +104,7 @@ Disable the Gradle configuration cache for builds that use release secrets:
 | `.github/workflows/release.yml` | Stable version tag or manual rebuild of an existing tag. Publishes the package, signed APK, AUR recipe, certificate details, and checksums. |
 | `.github/workflows/aur.yml` | Reusable call after a successful release. Pushes the tested recipe to AUR. |
 
-`flux-cli update` and `fluxd` find the release assets by name: `omarchy-flux-VERSION-PKGREL-ARCH.pkg.tar.zst`, `flux-android-VERSION.apk`, and `SHA256SUMS`.
+`flux-cli update` and `fluxd` find the release assets by name: `omarchy-flux-VERSION-PKGREL-ARCH.pkg.tar.zst`, `flux-android-VERSION.apk`, `SHA256SUMS`, and `SHA256SUMS.sig`.
 Keep these names when you change `release.yml`.
 Use the upgrade check in `docs/releasing.md` after each release.
 

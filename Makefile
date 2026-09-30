@@ -35,12 +35,13 @@ build-gui:
 	cmake -S gui/app -B $(GUI_BUILD) -G Ninja -DCMAKE_BUILD_TYPE=Release -DFLUX_VERSION="$(VERSION)"
 	cmake --build $(GUI_BUILD)
 
+# The release workflow runs scripts/signsums, so CI tests and vets it too.
 test:
-	$(GO) test -race ./cmd/... ./internal/...
+	$(GO) test -race ./cmd/... ./internal/... ./scripts/...
 
 vet:
-	$(GO) vet ./cmd/... ./internal/...
-	@out=$$(gofmt -l cmd internal); if [ -n "$$out" ]; then echo "Run gofmt -w on:"; echo "$$out"; exit 1; fi
+	$(GO) vet ./cmd/... ./internal/... ./scripts/...
+	@out=$$(gofmt -l cmd internal scripts); if [ -n "$$out" ]; then echo "Run gofmt -w on:"; echo "$$out"; exit 1; fi
 
 # install copies what `make build` made. It does not build, so that
 # `sudo make install` works without Go on the PATH of root. On a real
@@ -62,7 +63,10 @@ install:
 	@# after the user adds it to a PAM file.
 	install -Dm755 bin/flux-approve $(DESTDIR)$(PREFIX)/lib/flux/flux-approve
 	$(call copy-plugin,$(DESTDIR)$(PREFIX)/share/flux/omarchy-plugin)
-	install -Dm644 dist/fluxd.service $(DESTDIR)$(PREFIX)/lib/systemd/user/fluxd.service
+	@# The service runs the fluxd of this PREFIX.
+	install -dm755 $(DESTDIR)$(PREFIX)/lib/systemd/user
+	sed 's|@BINDIR@|$(PREFIX)/bin|' dist/fluxd.service >$(DESTDIR)$(PREFIX)/lib/systemd/user/fluxd.service
+	chmod 644 $(DESTDIR)$(PREFIX)/lib/systemd/user/fluxd.service
 	install -Dm644 dist/61-flux-v4l2loopback.rules $(DESTDIR)$(PREFIX)/lib/udev/rules.d/61-flux-v4l2loopback.rules
 	@# Earlier versions installed these 2 files for the phone touchpad.
 	rm -f $(DESTDIR)$(PREFIX)/lib/udev/rules.d/60-flux-uinput.rules $(DESTDIR)$(PREFIX)/lib/modules-load.d/flux-uinput.conf
@@ -148,11 +152,19 @@ snapshot: build-gui
 android:
 	cd android && FLUX_VERSION=$(APP_VERSION) ./gradlew :app:assembleDebug
 
+# PIN_SWIFT_PACKAGES copies macos/Package.resolved into the Xcode project
+# that xcodegen made in the current folder. With XCODEBUILD_PINNED, xcodebuild
+# then builds the package versions that swift test tests. A pin that does
+# not fit macos/Package.swift stops the build.
+PIN_SWIFT_PACKAGES = mkdir -p Flux.xcodeproj/project.xcworkspace/xcshareddata/swiftpm && \
+	cp "$(CURDIR)/macos/Package.resolved" Flux.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+XCODEBUILD_PINNED = -onlyUsePackageVersionsFromResolvedFile
+
 # The macOS app in macos/build. It needs Xcode and XcodeGen.
 macos:
-	cd macos && xcodegen generate --quiet && \
+	cd macos && xcodegen generate --quiet && $(PIN_SWIFT_PACKAGES) && \
 		xcodebuild -project Flux.xcodeproj -scheme Flux -configuration Debug -derivedDataPath build -destination 'platform=macOS' \
-			MARKETING_VERSION=$(APP_VERSION) build
+			$(XCODEBUILD_PINNED) MARKETING_VERSION=$(APP_VERSION) build
 
 test-macos:
 	cd macos && swift test
@@ -163,24 +175,24 @@ install-macos:
 
 # The iOS app for the simulator in ios/build. It needs Xcode and XcodeGen.
 ios:
-	cd ios && xcodegen generate --quiet && \
+	cd ios && xcodegen generate --quiet && $(PIN_SWIFT_PACKAGES) && \
 		xcodebuild -project Flux.xcodeproj -scheme Flux -configuration Debug -derivedDataPath build -destination 'generic/platform=iOS Simulator' \
-			MARKETING_VERSION=$(APP_VERSION) build
+			$(XCODEBUILD_PINNED) MARKETING_VERSION=$(APP_VERSION) build
 
 # The iOS app for iPhones in Release, without signing, in ios/build. It shows
 # the errors that only the optimized build has, as the App Store build would.
 ios-release:
-	cd ios && xcodegen generate --quiet && \
+	cd ios && xcodegen generate --quiet && $(PIN_SWIFT_PACKAGES) && \
 		xcodebuild -project Flux.xcodeproj -scheme Flux -configuration Release -derivedDataPath build -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO \
-			MARKETING_VERSION=$(APP_VERSION) build
+			$(XCODEBUILD_PINNED) MARKETING_VERSION=$(APP_VERSION) build
 
 # The app and FluxKit tests in an iPhone simulator with iOS 17 or later: the
 # booted one, else one of the newest runtime. IOS_SIMULATOR=<id> picks another.
 test-ios:
-	cd ios && xcodegen generate --quiet && \
+	cd ios && xcodegen generate --quiet && $(PIN_SWIFT_PACKAGES) && \
 		simulator=$$(../scripts/ios-simulator.sh) && \
 		xcodebuild test -project Flux.xcodeproj -scheme Flux -derivedDataPath build -destination "id=$$simulator" \
-			MARKETING_VERSION=$(APP_VERSION)
+			$(XCODEBUILD_PINNED) MARKETING_VERSION=$(APP_VERSION)
 
 clean:
 	rm -rf bin $(GUI_BUILD) snapshots macos/build ios/build

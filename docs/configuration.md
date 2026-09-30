@@ -94,7 +94,7 @@ Its replacement changes the desktop identity and requires new pairing.
 | `FLUX_SNAPSHOT` | Select the output directory for the QML snapshot harness. |
 | `FLUX_SNAPSHOT_ONLY` | Filter snapshot names by text. |
 | `HERDR_SOCKET_PATH` | Select the herdr session that `fluxd` follows. See [herdr agents](herdr.md#use-another-herdr-session). |
-| `FLUX_RELEASES_URL` | Replace the GitHub API address of the release check. Tests use it. |
+| `FLUX_RELEASES_URL` | Replace the GitHub API address of the release check in `fluxd` and `flux-cli update`. Tests use it. Flux uses only an `https` address, or an `http` address on the loopback interface. |
 | `FLUX_RELEASE_DELAY` | Change the wait before the first release check, such as `0s`. Tests use it. |
 | `FLUX_BINARY_POLL` | Change the interval of the check for a new `fluxd` binary, such as `100ms`. Tests use it. |
 

@@ -21,8 +21,10 @@ if modinfo v4l2loopback >/dev/null 2>&1; then
 	[ -e /dev/v4l2loopback ] && udevadm trigger --action=change /dev/v4l2loopback 2>/dev/null
 fi
 
-# Start fluxd in every graphical session.
-systemctl --global enable fluxd.service 2>/dev/null || true
+# The package does not enable fluxd for every account. `flux-cli setup`
+# enables it for the user who runs it, so another account does not announce
+# this computer on the network. An upgrade keeps the choice of the
+# administrator.
 
 # Restart a running fluxd of an earlier version, because it does not see
 # the new binary. A fluxd that restarts by itself after an update writes

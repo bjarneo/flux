@@ -1,7 +1,8 @@
 // Package release reads the latest Flux release from GitHub and compares
 // versions. fluxd checks once a day, and `flux-cli update` checks when the
 // user runs it. Without a network, a check returns an error and Flux works
-// as before.
+// as before. Fetch downloads a release file and checks it against the
+// SHA256SUMS file of the release and the signature of that file.
 package release
 
 import (
@@ -9,7 +10,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -19,12 +22,37 @@ import (
 // DefaultURL is the GitHub API address of the latest release.
 const DefaultURL = "https://api.github.com/repos/bjarneo/flux/releases/latest"
 
-// URL returns FLUX_RELEASES_URL, or DefaultURL. Tests set the variable.
+// downloadURL is the start of the address of each file of a release on
+// GitHub.
+const downloadURL = "https://github.com/bjarneo/flux/releases/download/"
+
+// URL returns FLUX_RELEASES_URL, or DefaultURL. Tests set the variable to
+// a local server. Flux uses the variable only with an https address, or
+// with an http address on the loopback interface. For another value, URL
+// returns DefaultURL.
 func URL() string {
-	if u := os.Getenv("FLUX_RELEASES_URL"); u != "" {
+	if u := os.Getenv("FLUX_RELEASES_URL"); u != "" && allowedURL(u) {
 		return u
 	}
 	return DefaultURL
+}
+
+// allowedURL reports whether u is an https address, or an http address on
+// the loopback interface.
+func allowedURL(u string) bool {
+	p, err := url.Parse(u)
+	if err != nil || p.Host == "" {
+		return false
+	}
+	switch p.Scheme {
+	case "https":
+		return true
+	case "http":
+		host := p.Hostname()
+		ip := net.ParseIP(host)
+		return host == "localhost" || ip != nil && ip.IsLoopback()
+	}
+	return false
 }
 
 // Asset is 1 file of a release.
@@ -39,6 +67,13 @@ type Release struct {
 	Tag    string  `json:"tag_name"`
 	Page   string  `json:"html_url"`
 	Assets []Asset `json:"assets"`
+
+	// Dropped has the names of the files that Latest removed from Assets,
+	// because GitHub gives them at an address outside the release of the
+	// tag in the Flux repository. A caller that does not find a file
+	// uses Dropped to tell a removed file from a file that the release
+	// does not have.
+	Dropped []string `json:"-"`
 }
 
 // Version returns the tag without the v.
@@ -80,7 +115,25 @@ func Latest(ctx context.Context, url, version string) (Release, error) {
 	if _, ok := parse(r.Tag); !ok {
 		return Release{}, fmt.Errorf("%s: the tag %q is not a version", url, r.Tag)
 	}
+	if url == DefaultURL {
+		r.Assets, r.Dropped = official(r)
+	}
 	return r, nil
+}
+
+// official returns the files of r that GitHub serves over https from the
+// release of the tag in the Flux repository, and the names of the other
+// files. Flux downloads no other file from a release that DefaultURL
+// gives.
+func official(r Release) (kept []Asset, dropped []string) {
+	for _, a := range r.Assets {
+		if a.URL == downloadURL+r.Tag+"/"+a.Name {
+			kept = append(kept, a)
+		} else {
+			dropped = append(dropped, a.Name)
+		}
+	}
+	return kept, dropped
 }
 
 // Newer reports whether version a is newer than version b. A version

@@ -35,6 +35,8 @@ make install-macos
 
 The target runs `scripts/install-macos.sh`.
 It quits a running Flux, replaces `/Applications/Flux.app`, and opens the new app.
+f.lux also installs as `/Applications/Flux.app`.
+If `/Applications/Flux.app` does not have the bundle ID `org.omarchy.flux.mac`, the script stops and changes nothing.
 Add `--no-open` when you run the script directly to skip the last step.
 
 The `macos` job in `.github/workflows/build.yml` runs `swift test` and builds a universal Release app for each push to `master` and each release.

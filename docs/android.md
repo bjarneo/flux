@@ -49,6 +49,9 @@ Verify the downloaded files:
 sha256sum --check --ignore-missing SHA256SUMS
 ```
 
+For a first install, also compare the certificate of the APK with the Flux release certificate.
+See [check a release](install.md#check-a-release).
+
 Open the APK on the phone and allow installation from that source.
 If Play Protect shows **App blocked to protect your device**, see [Android setup and Play Protect](android-setup.md).
 With USB debugging enabled and [`adb` installed](#requirements), you can also install through ADB:
