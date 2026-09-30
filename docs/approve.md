@@ -117,7 +117,8 @@ biometric check, even for code that runs in the Flux app.
   keys, the older key is the current key. When the command then writes no
   key file, for example after a wrong key code, each approval fails until
   the next enrollment.
-- An unpair on the phone deletes the keys of that computer.
+- An unpair on the phone deletes the keys of that computer. The key file
+  on the computer stays until `sudo flux-cli approve remove`.
 - On Android 12 and later, the approval screen hides the windows of other
   apps. The phone refuses **Approve** when the window of another app
   covered the screen during the tap.
@@ -160,8 +161,11 @@ biometric check, even for code that runs in the Flux app.
   fails, Flux deletes the new key, and the old key stays. When the command
   then writes no key file, for example after a wrong key code, each
   approval fails until the next enrollment.
-- An unpair does not delete the key. **Remove Key** on the page of the
-  computer deletes it.
+- An unpair on the Mac or the iPhone deletes the key of that computer.
+  **Remove Key** on the page of the computer also deletes it. The key
+  file on the computer stays until `sudo flux-cli approve remove`.
+- An enrollment that replaces the current key of the computer says so on
+  the prompt and in the notification.
 - On the iPhone, **Approve** in the notification needs an unlocked iPhone
   and opens Flux, because Face ID needs Flux on the screen. **Deny** works
   on the lock screen. On the Mac, **Approve** in the notification asks for
@@ -315,7 +319,8 @@ with a failure. PAM then asks for the password. `fluxd` also sends a
 cancel when the connection that started the request closes, and for
 `approve.cancel`. The phone closes the request at the end of the wait time
 in each case, also when no cancel comes. The phone takes a cancel only
-from the computer of the open request.
+from the computer of the open request. An unpair from either side closes
+the open request of that computer at once.
 
 ## Failure modes
 

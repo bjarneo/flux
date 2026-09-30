@@ -64,9 +64,9 @@ struct ComputersView: View {
             titleVisibility: .visible,
             presenting: unpairing
         ) { device in
-            Button("Unpair", role: .destructive) { model.core.unpair(device.id) }
+            Button("Unpair", role: .destructive) { model.unpair(device.id) }
         } message: { device in
-            Text("\(device.name) and this iPhone forget each other. Pair again to use it.")
+            Text(model.unpairMessage(device))
         }
     }
 

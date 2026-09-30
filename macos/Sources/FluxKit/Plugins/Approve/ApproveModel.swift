@@ -15,6 +15,8 @@ public enum ApproveOutcome: Sendable, Equatable {
     case cancelled
     /// The wait of the computer ended.
     case expired
+    /// This device or the computer ended the pairing.
+    case unpaired
 
     public var text: String {
         switch self {
@@ -26,6 +28,7 @@ public enum ApproveOutcome: Sendable, Equatable {
         case .refused(let m): return "Refused: \(m)"
         case .cancelled: return "Cancelled by the computer"
         case .expired: return "Timed out"
+        case .unpaired: return "Ended by the unpair"
         }
     }
 }

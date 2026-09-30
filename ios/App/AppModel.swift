@@ -97,6 +97,21 @@ final class AppModel {
         core.cancelPair(d.id)
     }
 
+    /// Unpairs the computer. This iPhone also deletes its approval key for
+    /// the computer, so that a new pairing needs a new enrollment.
+    func unpair(_ id: String) {
+        core.unpair(id)
+        core.plugin(ApprovePlugin.self)?.removeKey(id)
+    }
+
+    /// The text of the unpair dialog. It names the approval key when this
+    /// iPhone has one for the computer.
+    func unpairMessage(_ d: DeviceSnapshot) -> String {
+        let text = "\(d.name) and this iPhone forget each other. Pair again to use it."
+        guard core.plugin(ApprovePlugin.self)?.model.keys[d.id] != nil else { return text }
+        return text + " This iPhone deletes its approval key for \(d.name). The key file on the computer stays until you run: sudo flux-cli approve remove"
+    }
+
     /// The pairing sheet closed. A swipe on a request from a computer rejects
     /// it. A change of the sheet to another computer is no swipe, so only the
     /// sheet that still shows counts.

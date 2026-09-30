@@ -337,7 +337,8 @@ fun FluxRoot(activity: MainActivity, splash: Boolean = false) {
             else ConfirmDialog(
                 "Unpair ${d.name}?",
                 "This phone and ${d.name} stop connecting, and this phone deletes its fingerprint approval key for ${d.name}. " +
-                    "You can pair them again later.",
+                    "You can pair them again later. " +
+                    "The key file on the computer stays until you run: sudo flux-cli approve remove",
                 "Unpair",
                 onCancel = { unpairing = null },
                 onConfirm = {

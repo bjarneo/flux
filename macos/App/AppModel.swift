@@ -57,6 +57,21 @@ final class AppModel {
         for d in s.devices where d.pairState != .incoming { Notifier.shared.remove(id: "pair-\(d.id)") }
     }
 
+    /// Unpairs the computer. This Mac also deletes its approval key for the
+    /// computer, so that a new pairing needs a new enrollment.
+    func unpair(_ id: String) {
+        core.unpair(id)
+        core.plugin(ApprovePlugin.self)?.removeKey(id)
+    }
+
+    /// The text of the unpair dialog. It names the approval key when this
+    /// Mac has one for the computer.
+    func unpairMessage(_ d: DeviceSnapshot) -> String {
+        let text = "\(d.name) and this Mac forget each other. Pair again to use it."
+        guard core.plugin(ApprovePlugin.self)?.model.keys[d.id] != nil else { return text }
+        return text + " This Mac deletes its approval key for \(d.name). The key file on the computer stays until you run: sudo flux-cli approve remove"
+    }
+
     func show(_ message: String) {
         toast = message
         toastTask?.cancel()

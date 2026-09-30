@@ -212,7 +212,7 @@ private struct RecordRow: View {
         case .approved, .enrolled: return "checkmark.circle.fill"
         case .denied: return "xmark.circle.fill"
         case .failed, .refused: return "exclamationmark.triangle.fill"
-        case .cancelled, .expired: return "minus.circle"
+        case .cancelled, .expired, .unpaired: return "minus.circle"
         }
     }
 
@@ -221,7 +221,7 @@ private struct RecordRow: View {
         case .approved, .enrolled: return .green
         case .denied: return .red
         case .failed, .refused: return .orange
-        case .open, .cancelled, .expired: return .secondary
+        case .open, .cancelled, .expired, .unpaired: return .secondary
         }
     }
 }
