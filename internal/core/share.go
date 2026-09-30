@@ -692,13 +692,27 @@ func writeScan(dir, text string, now time.Time) (string, error) {
 	return path, nil
 }
 
-// SendFiles sends files to a device one after the other.
+// SendFiles sends files to a device one after the other. Each path must
+// be absolute, because the folder of fluxd is not the folder of the
+// client.
 func (d *Daemon) SendFiles(dev *Device, paths []string) ([]*Transfer, error) {
+	if len(paths) == 0 {
+		return nil, apiErr("bad_params", "Give at least 1 file")
+	}
+	for _, p := range paths {
+		if !filepath.IsAbs(p) {
+			return nil, apiErr("bad_params", "%s is not an absolute path. Give the full path of each file", p)
+		}
+	}
 	d.mu.Lock()
 	l := dev.link
-	d.mu.Unlock()
+	var err error
 	if l == nil {
-		return nil, offline(dev)
+		err = offline(dev)
+	}
+	d.mu.Unlock()
+	if err != nil {
+		return nil, err
 	}
 	type item struct {
 		path string

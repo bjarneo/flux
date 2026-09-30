@@ -522,3 +522,21 @@ func TestSpaceWriterStops(t *testing.T) {
 		t.Fatal("the transfer went on with a nearly full disk")
 	}
 }
+
+// TestSendFilesNeedsAbsolutePaths checks that share.files refuses a path
+// that is not absolute, because the folder of fluxd is not the folder of
+// the client.
+func TestSendFilesNeedsAbsolutePaths(t *testing.T) {
+	d, _ := approveDaemon()
+	for _, paths := range []string{`["photo.jpg"]`, `["/tmp/a.jpg","../b.jpg"]`, `[]`} {
+		_, err := d.Call(context.Background(), "share.files", []byte(`{"device":"phone1","paths":`+paths+`}`))
+		if errCode(err) != "bad_params" {
+			t.Errorf("%s: %v", paths, err)
+		}
+	}
+	// An absolute path passes the check and needs the link.
+	_, err := d.Call(context.Background(), "share.files", []byte(`{"device":"phone1","paths":["/tmp/a.jpg"]}`))
+	if errCode(err) != "offline" {
+		t.Errorf("an absolute path: %v", err)
+	}
+}
