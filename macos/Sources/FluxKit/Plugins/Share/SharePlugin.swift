@@ -147,7 +147,7 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
             // The link opens only after a click on the notification, like
             // in the Android app. The links count toward the delivered
             // notifications of the computer.
-            let id = "share-\(UUID().uuidString)"
+            let id = DeliveredNotifications.linkId(deviceId: device.id)
             DeliveredNotifications.post(id: id, deviceId: device.id)
             Notifier.shared.post(id: id, category: Self.linkCategory,
                                  title: "Link from \(from)", body: web.absoluteString, userInfo: ["url": web.absoluteString])
