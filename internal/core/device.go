@@ -80,6 +80,10 @@ type Device struct {
 	// ignored counts the packets of the current link that fluxd dropped,
 	// because the device is not paired.
 	ignored int
+
+	// smsAsked is true from a conversations request until the first packet
+	// of the answer.
+	smsAsked bool
 }
 
 // Battery is the battery state of a device.

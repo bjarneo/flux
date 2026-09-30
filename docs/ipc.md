@@ -288,6 +288,8 @@ The call copies the full text or the image of the entry.
 
 `sms.refresh` asks the phone for the latest message of each conversation.
 The conversations arrive in the `conversations` list of the device in the next state event.
+The answer of Flux for Android replaces the list, so a conversation that you delete on the phone goes.
+An older app only adds conversations.
 `sms.thread` returns the last 100 messages of 1 conversation, the oldest first:
 
 ```json
