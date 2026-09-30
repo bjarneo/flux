@@ -35,7 +35,8 @@ flux-cli status
 
 `flux-cli pair` and `flux-cli accept` print the name, the device ID, and the key of the pairing.
 `flux-cli unpair` prints the name, the device ID, and the fingerprint of the certificate that it removed.
-When 2 devices have the same name, `fluxd` refuses the name with the `ambiguous` error and lists the device IDs.
+When the name matches more than 1 device, `fluxd` refuses the name with the `ambiguous` error and lists the device IDs.
+See [pair and discover](cli.md#pair-and-discover) for the match rule of each command.
 Give the ID instead of the name:
 
 ```sh
@@ -182,7 +183,7 @@ Enable notification access on the phone to show its notifications on the desktop
 
 Some notifications stay on the phone:
 
-- A notification that the lock screen hides, because its app or its channel has the visibility `VISIBILITY_SECRET`.
+- A notification that the lock screen hides, because the notification or its channel has the visibility `VISIBILITY_SECRET`.
 - The notifications of Flux, ongoing notifications, the notifications of foreground services, and group summaries.
 
 A button that needs the phone unlock or text input also stays on the phone.

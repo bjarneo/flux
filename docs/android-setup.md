@@ -187,7 +187,7 @@ Flux does not send these notifications:
 - The notifications of Flux.
 - Ongoing notifications and the notifications of foreground services, for example a call or a VPN.
 - Group summaries.
-- Notifications that the lock screen hides, because the app or its channel marks them as secret.
+- Notifications whose visibility, or whose channel lock screen visibility, is `VISIBILITY_SECRET`. The lock screen setting of the whole phone does not change what Flux sends.
 
 A computer gets the reply field and the buttons of a notification.
 Flux keeps a button on the phone when it needs text input or the phone unlock.

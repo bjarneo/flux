@@ -149,9 +149,10 @@ biometric check, even for code that runs in the Flux app.
 - Flux stores `evaluatedPolicyDomainState` with the key. When the
   enrolled fingerprints or faces change, the Secure Enclave refuses the
   key, and Flux deletes it before it asks. The user then enrolls again.
-- A device without a Secure Enclave refuses each request. Flux never
-  makes a key outside the Secure Enclave. The iOS simulator counts as a
-  device without a Secure Enclave.
+- An iPhone without a Secure Enclave refuses each request. The iOS
+  simulator counts as such an iPhone. A Mac without a Secure Enclave has
+  no Touch ID, so **Approve** fails with an error. Flux never makes a key
+  outside the Secure Enclave.
 - An enrollment keeps the current key until the new key goes out to the
   computer. Flux stores the new key in `<computer device ID>.pending` in
   the same folder. When the send works, Flux renames the file to

@@ -110,7 +110,7 @@ A computer that is not paired finds the Mac through Bonjour, and `fluxd` then co
 | Browse | Opens the computer's shared folders read-only through SSH inside a `flux.tunnel`, and downloads files. |
 | Webcam | Streams a Mac camera, including Continuity Camera, to the computer as a virtual webcam in H.264. Zoom is digital, and exposure is a software gain, because macOS gives apps no camera zoom or exposure control. **Also send the microphone** starts the microphone with the webcam. |
 | Screen mirror | Streams a display to a window on the computer in H.264, with the long side at most 1080 pixels. |
-| Camera modes | Text, QR, Photo, Document, and Signature, like the phone. Text, QR, Document, and Signature also read an opened, pasted, or dropped image or a screen region: select **From Image**, then **Open Image…**, **Screen Region…**, or **Paste Image**. In Signature, **From Image** shows with the **Paper** source. Signature also accepts a drawn signature with the **Draw** source. |
+| Camera modes | Text, QR, Photo, Document, and Signature, like the phone. Text, QR, Document, and Signature also read an opened, pasted, or dropped image or a screen region. To read an image, select **From Image**, then **Open Image…**, **Screen Region…**, or **Paste Image**. In Signature, **From Image** shows with the **Paper** source. Signature also accepts a drawn signature with the **Draw** source. |
 | Microphone | Streams the Mac microphone as 48 kHz mono audio. |
 | Notifications | Shows notifications from `flux-cli notify`. Each computer can show 10 notifications at once, then 1 more each second. Received links count toward this limit. |
 | Battery | A Mac with a battery reports it. The page shows the computer's battery. |

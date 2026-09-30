@@ -50,8 +50,8 @@ flux-cli --device "Pixel 8" url https://omarchy.org
 ```
 
 Replace the example device with a name or ID from `flux-cli status --json`.
-Names match without case, and only a paired or connected device.
-When 2 devices have the same name, the command returns the `ambiguous` error with the device IDs. Use the ID then.
+Names match without case, and only a paired or connected device. A paired device comes first.
+When the name still matches more than 1 device, the command returns the `ambiguous` error with the device IDs. Use the ID then. `docs/cli.md#pair-and-discover` has the match rule of each command.
 `flux-cli status` shows the ID and the certificate fingerprint under each device.
 
 The verification key has 16 uppercase hex digits in 4 groups of 4, for example `5EE6 825F 974E D59A`.
@@ -157,7 +157,7 @@ Key settings:
 | `approve_timeout` | Wait 20 seconds for fingerprint approval |
 
 Each setting applies to every paired device. Flux has no setting for 1 device.
-`docs/security.md` lists what a paired device can do and the setting that turns each feature off.
+`docs/security.md` lists what a paired device can do and which settings limit it.
 
 `download_dir`, `scan_dir`, and `photo_dir` select destination folders.
 The identity and paired-device certificates live in `~/.local/share/flux/`.

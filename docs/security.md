@@ -2,7 +2,8 @@
 
 [Documentation index](README.md)
 
-This page tells what a paired device can do on the computer, which setting turns each feature off, and what the network exposes.
+This page tells what a paired device can do on the computer and what the network exposes.
+It also tells which setting turns a feature off, when one exists.
 A paired device is an Android phone, an iPhone, or a Mac that you paired with `fluxd`.
 
 `fluxd` treats each paired device the same.
@@ -38,11 +39,12 @@ See [pairing security](features.md#pairing-security) and [pairing and trust](arc
 
 ## What a paired device can do
 
-The table lists what a paired device can do on the computer with the default settings, and how to turn each feature off.
+The table lists what a paired device can do on the computer with the default settings.
+It also tells which setting turns a feature off, when one exists.
 
 | Feature | Default | What a paired device can do | Turn it off |
 | --- | --- | --- | --- |
-| Files | On | Send files into `download_dir`, and photos and screenshots into `photo_dir`. `fluxd` makes each name safe and never replaces a file. See [files, clipboard, and links](features.md#files-clipboard-and-links). | No setting. Unpair the device. |
+| Files | On | Send files into `download_dir`, scans into `scan_dir`, and photos, screenshots, and signatures into `photo_dir`. `fluxd` also puts a signature on the clipboard. `fluxd` makes each name safe and never replaces a file. See [files, clipboard, and links](features.md#files-clipboard-and-links). | No setting. Unpair the device. |
 | Links and text | On | Open an `http` or `https` URL with a host in the browser. Each other value goes on the clipboard as text. | No setting. Unpair the device. |
 | Clipboard sync | `auto_clipboard = true` | Get each text and image that you copy on the computer, and put text and images on the clipboard of the computer. | `auto_clipboard = false` |
 | Browse PC | `share_home = true` | Read the home folder, `download_dir`, and `~/Documents`, `~/Pictures`, `~/Music`, and `~/Videos`. `fluxd` hides each name that starts with a dot, such as `~/.ssh`, and the Flux folders. The device cannot change a file. See [Browse PC](features.md#browse-pc). | `share_home = false`. It ends each session at once. |
@@ -76,11 +78,11 @@ So turn on `remote_input`, `remote_desktop`, `herdr_control`, and `herdr_termina
 
 ## What a device sends to the computer
 
-Some features share data of the device with the computers.
-Flux for Android has a switch on the device for each of them, under **Sync with all computers** on the page of a computer:
+Flux for Android has 6 switches that share data of the device with the computers.
+They are under **Sync with all computers** on the page of a computer:
 
 - **Text messages** lets each paired computer read your conversations and send text messages.
-- **Share notifications** sends the notifications of other apps. A notification that the lock screen hides stays on the phone. A button that needs the phone unlock also stays on the phone.
+- **Share notifications** sends the notifications of other apps. A notification whose visibility, or whose channel lock screen visibility, is `VISIBILITY_SECRET` stays on the phone. The lock screen setting of the whole phone does not change what Flux sends. A button that needs the phone unlock also stays on the phone.
 - **Send new screenshots** and **Send new photos** send new images of the camera app and the screenshot tool.
 - **Sync clipboard** sends the text and the images that you copy while Flux is on the screen.
 - **Call alerts** sends the state of calls, and with more permissions the number and the name of the caller.
@@ -106,10 +108,10 @@ Flux for Android installs no app that the computer sends, except a newer Flux wi
 `flux-cli status` shows the TCP port in its first line.
 `fluxd` also publishes the `_flux._udp` service through Avahi, and it sends its identity to UDP port 1716 of the local networks.
 
-`fluxd` opens the links to the devices itself.
-It finds them through mDNS, UDP broadcasts, and the [extra addresses](tailscale.md).
-So Flux needs no inbound firewall rule.
+`fluxd` opens the links to the devices itself, so Flux needs no inbound firewall rule.
 The default Omarchy firewall blocks inbound traffic to the Flux ports, and it lets mDNS in.
+With this firewall, `fluxd` finds the devices through mDNS and the [extra addresses](tailscale.md).
+The UDP broadcasts of the devices reach `fluxd` only without such a firewall.
 To see the rules, run:
 
 ```sh
@@ -120,7 +122,7 @@ Without such a firewall, each host that reaches the computer can open a link to 
 The same is true for a rule that lets in the traffic of an interface, for example `ufw allow in on tailscale0`.
 The [limits below](#devices-that-are-not-paired) apply to such hosts.
 
-The phone and the Mac also listen on TCP ports 1716 to 1764.
+The Android phone, the iPhone, and the Mac also listen on TCP ports 1716 to 1764.
 Flux for Android takes a link from a computer that is not paired only while Flux is on the screen or while it scans.
 
 ## Devices that are not paired
@@ -144,7 +146,9 @@ To unpair a device from the computer, run:
 flux-cli unpair "Pixel 8"
 ```
 
-When 2 devices have the same name, the command returns the `ambiguous` error with the device IDs.
+A name matches only a device that is paired or connected, and a paired device comes first.
+When the name still matches more than 1 device, the command returns the `ambiguous` error with the device IDs.
+See [pair and discover](cli.md#pair-and-discover) for the match rule of each command.
 Give the device ID in place of the name.
 
 An unpair from either side ends every session of the device:

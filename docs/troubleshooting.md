@@ -51,7 +51,15 @@ See [isolated development](development.md#isolated-daemon).
 
 `flux-cli version` shows the version of the running `fluxd`.
 `fluxd.service` restarts by itself after an update.
-It waits while 1 of these runs: a file transfer, a stream, the remote desktop, a Browse PC session, the send of the Android app, or a fingerprint approval.
+It waits while 1 of these runs:
+
+- A file transfer
+- A webcam, microphone, or screen mirror stream
+- The remote desktop
+- A Browse PC session
+- The send of the Android app
+- A fingerprint approval
+
 The journal then shows a line such as `the restart waits for Browse PC`.
 To end a Browse PC session, select **Stop** in its desktop notification.
 
@@ -158,7 +166,9 @@ If 1 screen shows 8 characters, reject the request, update Flux on that device, 
 If the 16 characters differ, reject the request.
 Another device can be between the phone and the computer.
 
-When 2 devices have the same name, `flux-cli pair` returns the `ambiguous` error with the device IDs.
+`flux-cli pair` finds a name only among the devices that are connected and not paired.
+When the name still matches more than 1 device, `flux-cli pair` returns the `ambiguous` error with the device IDs.
+See [pair and discover](cli.md#pair-and-discover) for the match rule of each command.
 Give the device ID in place of the name.
 
 ## The phone does not connect away from home

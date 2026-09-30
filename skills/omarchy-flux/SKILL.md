@@ -88,7 +88,7 @@ Use an explicit command for diagnostics.
 The verification key has 16 uppercase hex digits in 4 groups of 4, for example `5EE6 825F 974E D59A`.
 An earlier Flux app shows only 8 characters. Tell the user to update Flux on every device before the pairing.
 `flux-cli pair` prints the device ID and the key. `flux-cli status` shows the ID and the certificate fingerprint of each device.
-When 2 devices have the same name, the command returns the `ambiguous` error with the IDs. Give the ID then.
+A name matches only a paired or connected device, and a paired device comes first. When the name still matches more than 1 device, the command returns the `ambiguous` error with the IDs. Give the ID then. `docs/cli.md#pair-and-discover` has the match rule of each command.
 
 The desktop discovers phones through Avahi and mDNS.
 The desktop opens connections to the phone, including reverse payload tunnels.

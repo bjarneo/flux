@@ -11,7 +11,9 @@ The root helper verifies the signature against a root-owned public key.
 If approval fails or times out, PAM continues to the password prompt.
 
 The iPhone gets requests only while Flux is open on it.
-The Mac and the iPhone need a Secure Enclave. They refuse each request without one.
+The Mac and the iPhone need a Secure Enclave.
+An iPhone without one, such as the iOS simulator, refuses each request.
+A Mac without one has no Touch ID, so **Approve** fails with an error.
 
 Read the [security design](approve.md) before you change the implementation.
 
@@ -41,6 +43,7 @@ Installation alone does not enable approval.
 
 `flux-cli` compares the typed code with the code of the key that `fluxd` sent.
 If the codes differ, it writes no key.
+The device already uses its new key, so each approval fails until you run `sudo flux-cli approve enroll` again.
 If the phone tells you to type `y`, type the code instead. The terminal needs all 16 characters.
 The terminal does not show the code, because a program that runs as your user can write to your terminal.
 It cannot change the screen of the phone.

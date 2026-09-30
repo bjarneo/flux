@@ -141,6 +141,8 @@ The fingerprint has 16 hex digits from the public key of the certificate of the 
 The `fingerprint` field of each device in `flux-cli status --json` has the same value, without spaces.
 
 A name matches only a device that is paired or connected, and a paired device comes first.
+`flux-cli pair` finds a name only among the devices that are connected and not paired.
+`flux-cli accept` and `flux-cli reject` find a name only among the devices with an open pair request.
 When the name still matches more than 1 device, the command returns the `ambiguous` error with the device IDs:
 
 ```text

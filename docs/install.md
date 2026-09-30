@@ -251,7 +251,7 @@ Flux then moves the running parts to the new version:
 
 | Part | After the update |
 | --- | --- |
-| `fluxd` | The service restarts into the new binary about 10 seconds after the install. It waits while a file transfer, a stream, the remote desktop, a Browse PC session, the send of the Android app, or a fingerprint approval runs. |
+| `fluxd` | The service restarts into the new binary about 10 seconds after the install. It waits while a file transfer, a stream, or the remote desktop runs. It also waits for a Browse PC session, the send of the Android app, and a fingerprint approval. |
 | Omarchy plugin | `fluxd` copies the new plugin files into `~/.config/omarchy/plugins/flux` when it starts. omarchy-shell then reloads the plugin. |
 | Qt window | An open window shows **Flux was updated**. Select **Restart** to open the new version. |
 | Phones | The phones connect again about 2 seconds after the restart. |
