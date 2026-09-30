@@ -1393,3 +1393,24 @@ func TestHerdrRequestNumber(t *testing.T) {
 		}
 	}
 }
+
+// TestUnsavedHerdrSettings checks that herdr_control and herdr_terminals
+// do not turn on when config.toml cannot keep them, because each lets a
+// paired device run commands on this computer.
+func TestUnsavedHerdrSettings(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	// config.toml cannot be written, because the flux folder is a file.
+	if err := os.WriteFile(filepath.Join(dir, "flux"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	d := herdrDaemon(context.Background(), "")
+	for _, key := range []string{"herdrControl", "herdrTerminals"} {
+		if err := d.setSetting(key, true); err == nil || !strings.Contains(err.Error(), "did not change") {
+			t.Errorf("%s: error %v", key, err)
+		}
+	}
+	if d.cfg.HerdrControl || d.cfg.HerdrTerminals {
+		t.Fatalf("a herdr switch is on after the error: %+v", d.cfg)
+	}
+}
