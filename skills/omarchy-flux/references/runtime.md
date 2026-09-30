@@ -31,7 +31,7 @@ FLUX_GUI=plugin flux-cli open notifications
 `flux-cli on` removes the marker and starts the daemon.
 Prefer these commands when the user asks to turn Flux off or on.
 
-Pages: `overview`, `clipboard`, `files`, `notifications`, `messages`, `browse`, and `commands`.
+Pages: `overview`, `clipboard`, `files`, `notifications`, `messages`, and `commands`.
 
 ## Devices and transfers
 
@@ -50,9 +50,17 @@ flux-cli --device "Pixel 8" url https://omarchy.org
 ```
 
 Replace the example device with a name or ID from `flux-cli status --json`.
-Names match without case.
-Use the ID when devices have the same name.
-Compare the key before the user accepts a pair request.
+Names match without case, and only a paired or connected device. A paired device comes first.
+When the name still matches more than 1 device, the command returns the `ambiguous` error with the device IDs. Use the ID then. `docs/cli.md#pair-and-discover` has the match rule of each command.
+`flux-cli status` shows the ID and the certificate fingerprint under each device.
+
+The verification key has 16 uppercase hex digits in 4 groups of 4, for example `5EE6 825F 974E D59A`.
+The user must compare all 16 characters before the user accepts a pair request.
+An earlier Flux app shows only 8 characters, so the user must update Flux on every device first.
+`flux-cli pair` and `flux-cli accept` print the name, the ID, and the key.
+`flux-cli unpair` prints the name, the ID, and the certificate fingerprint.
+An unpair from either side ends every session of the device and closes its link.
+Flux for Android takes a new computer only while Flux is on the screen or while it scans.
 
 ## Extra addresses and Tailscale
 
@@ -137,21 +145,32 @@ Key settings:
 | --- | --- |
 | `auto_clipboard` | Sync clipboard text and images in both directions |
 | `notifications` | Show phone notifications on the desktop |
-| `share_home` | Share the desktop home folder read-only |
+| `share_home` | Browse PC: share the home folder, `download_dir`, and the Documents, Pictures, Music, and Videos folders read-only. Names that start with a dot, such as `~/.ssh`, and the Flux folders stay hidden |
 | `pause_media_on_call` | Pause desktop media during a phone call |
 | `sync_dnd` | Sync Do Not Disturb |
 | `herdr` | Show the herdr agents of the computer on the phone |
-| `herdr_control` | Let the phone send keys and prompts to herdr agents, start agents, and close them. Off by default |
+| `herdr_control` | Let the phone send keys and prompts to herdr agents, start agents, and close them. A paired device can then run any command as the user through an agent. Off by default |
 | `herdr_terminals` | Let the phone open herdr terminals and type commands in them. Needs `herdr_control`. Off by default |
 | `remote_input` | Let the phone move the pointer and type on the desktop. Off by default |
 | `remote_desktop` | Let the phone show the desktop screen. Off by default |
 | `gui` | Select the enabled plugin, otherwise the Qt app |
 | `approve_timeout` | Wait 20 seconds for fingerprint approval |
 
+Each setting applies to every paired device. Flux has no setting for 1 device.
+`docs/security.md` lists what a paired device can do and which settings limit it.
+
 `download_dir`, `scan_dir`, and `photo_dir` select destination folders.
 The identity and paired-device certificates live in `~/.local/share/flux/`.
-The socket is `$XDG_RUNTIME_DIR/flux/fluxd.sock`, with `FLUX_SOCKET` as an override.
-Without `XDG_RUNTIME_DIR`, Flux uses `/run/user/<uid>/flux/fluxd.sock`. It never uses the system temporary directory.
+`fluxd`, `flux-cli`, and both desktop hosts find the socket with the same rule:
+
+1. `$FLUX_SOCKET`, when it is set.
+2. Else `$XDG_RUNTIME_DIR/flux/fluxd.sock`.
+3. Else `/run/user/<uid>/flux/fluxd.sock`.
+
+Flux never uses the system temporary directory for the socket.
+The approval helper uses only `/run/user/<uid>/flux/fluxd.sock`.
+`fluxd` refuses a socket folder that is a symbolic link, that another user owns, or that other users can write to.
+In a shell without a login session, for example after `su`, set `XDG_RUNTIME_DIR` to a private folder of the user.
 
 Do not delete the identity or trust store to diagnose a routine connection failure.
 Their removal changes pairing identity.
@@ -173,11 +192,16 @@ The `herdr` field of the state has `enabled`, `running`, `control`, `terminals`,
 `HERDR_SOCKET_PATH` selects a herdr session other than the default.
 
 Replies, new agents, and closes from the phone need `herdr_control = true`.
-A reply can make an agent run commands on the computer.
+A reply can make an agent run any command as the desktop user, also with `herdr_terminals = false`.
+The setting applies to every paired device.
 Do not turn on `herdr_control` unless the user asks for replies from the phone.
 
+`fluxd` refuses a prompt to an agent that waits for a choice, with the code `blocked`.
+The app then offers **Send as answer**, which sends the same text with `"answer": true`.
+
 Terminals from the phone need `herdr_terminals = true` as well.
-A terminal gives the phone a shell as the desktop user.
+A terminal gives the phone a shell as the desktop user in each herdr pane without an agent.
+These panes include a `sudo -i` shell or an SSH session that the user opened.
 Do not turn on `herdr_terminals` unless the user asks for terminals on the phone.
 
 ## Touchpad and keyboard
@@ -199,6 +223,7 @@ The stream needs `gpu-screen-recorder`.
 Read `docs/remote-desktop.md` for the gestures, the monitors, the lock screen, the Omarchy panel, and the stream format.
 The stream shows the lock screen. `fluxd` turns the displays on when they are off.
 The Omarchy panel runs Hyprland key bindings and workspace actions for the phone with `flux.shortcuts`. It needs `remote_input = true`.
+While the session is locked, `fluxd` refuses the bindings and the window actions with `Unlock the computer first`. Remote input and the remote desktop stay available on the lock screen.
 
 ```sh
 flux-cli desktop on
@@ -212,8 +237,10 @@ flux-cli input off
 ## Fingerprint approval
 
 Read `docs/approvals.md` for setup and `docs/approve.md` for the security design.
-The root helper validates a phone signature against `/etc/flux/approve/<user>.pub`.
+Flux for Android, Flux for iOS, and Flux for macOS can approve.
+The root helper validates a device signature against `/etc/flux/approve/<user>.pub`.
 The daemon carries approval messages but does not establish trust by itself.
+During enrollment, the user types the 16-character key code from the device screen. The terminal does not show it.
 
 ```sh
 flux-cli approve
@@ -223,7 +250,15 @@ sudo flux-cli approve disable
 sudo flux-cli approve remove
 ```
 
-`polkit-1` works only with a setuid `polkit-agent-helper-1`, so current Arch Linux cannot use it.
+polkit gives PAM no item for the user that asks.
+So `polkit-1` works only with a setuid `polkit-agent-helper-1`.
+polkit 126 and later on Arch Linux run the agent helper as the `polkit-agent-helper@.service` system service, which cannot reach the socket of `fluxd`.
+On such a system, `sudo flux-cli approve enable polkit-1` refuses the service, and `flux-cli approve` says why.
+Do not weaken the sandbox of the polkit service to make approvals work.
+
+The Omarchy lock screen runs in `omarchy-shell` with its own PAM services, `omarchy-lock-password` and `omarchy-lock-fingerprint`.
+Flux does not change them, so the phone cannot unlock the Omarchy lock screen.
+The `hyprlock` service applies only when `hyprlock` is the lock screen.
 
 Use root commands only for the requested setup or removal.
 Keep the password fallback.
@@ -235,7 +270,7 @@ Do not change `sshd` or `login` PAM services.
 2. Inspect the user service and its logs.
 3. Check `systemctl status avahi-daemon`.
 4. Check that Flux runs on the phone.
-5. Check that the network allows communication between clients.
+5. Check that the network allows communication between clients. `fluxd` opens the connections itself, so do not add an inbound firewall rule for the Flux ports.
 6. Run `flux-cli discover` and inspect the state again.
 7. For a phone away from the local network, check `flux-cli addresses`, `tailscale ping HOST`, and the `connect to` lines in the `fluxd` log.
 

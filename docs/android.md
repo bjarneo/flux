@@ -42,8 +42,9 @@ If the state is `unauthorized`, accept the **Allow USB debugging** prompt on the
 
 ## Install a release APK
 
-Download `flux-android-VERSION.apk` and `SHA256SUMS` from the same GitHub release.
-Verify the downloaded files:
+Download `flux-android-VERSION.apk`, `SHA256SUMS`, and `SHA256SUMS.sig` from the same GitHub release.
+When the release has a signature, check `SHA256SUMS.sig` first, as [check a release](install.md#check-a-release) shows.
+Then verify the downloaded files:
 
 ```sh
 sha256sum --check --ignore-missing SHA256SUMS
@@ -82,9 +83,13 @@ From the terminal, step 1 is:
 flux-cli --device "Pixel 8" update --phone
 ```
 
-The computer downloads the APK of the latest release and checks it against `SHA256SUMS` before it sends the file.
-The phone reads the package name of the APK. Only a build of Flux gets the update notification.
-The Android installer accepts the update only with the same signing key.
+The computer downloads the APK of the latest release before it sends the file.
+It checks `SHA256SUMS.sig` with the public release key when the build of `fluxd` has one, then it checks the APK against `SHA256SUMS`.
+The phone checks the received APK before it offers the installer.
+The installer shows only for a file `flux-android-VERSION.apk` with a newer Flux in it.
+The signing key must also be the key of the installed Flux.
+The phone saves each other app in **Downloads**, and its notification does not install it.
+The Android installer also accepts the update only with the same signing key.
 After the update, Android starts the Flux service again.
 
 The offer needs the [release check](configuration.md#release-check) and a phone app that reports its version.

@@ -24,8 +24,9 @@ A paired device can also connect through [Tailscale](tailscale.md) away from tha
 | [Tailscale](tailscale.md) | Extra addresses, links away from the local network, other VPNs, and connection checks |
 | [Camera and streams](camera.md) | Scans, photos, webcam settings, microphone, and screen mirror |
 | [Configuration](configuration.md) | TOML settings, data paths, environment variables, and service control |
+| [Security](security.md) | What a paired device can do, the settings that limit it, network ports, pairing checks, and unpair |
 | [Omarchy integration](omarchy.md) | Shell plugin, bar item, window host, theme, and desktop integration |
-| [Fingerprint approval](approvals.md) | Enrollment, PAM services, timeout, and removal |
+| [Fingerprint approval](approvals.md) | Enrollment on the phone, the iPhone, or the Mac, PAM services, lock screens, timeout, and removal |
 | [herdr agents](herdr.md) | Agent status, colored output, notifications, replies, new agents, and terminals on the phone and the Mac |
 | [Touchpad and keyboard](remote-input.md) | Remote input from the phone or the Mac, gestures, typing, slides, and the wire format |
 | [Remote desktop](remote-desktop.md) | The computer screen on the phone or the Mac, touches, the mouse, the Omarchy panel, dictation, monitors, and the stream format |

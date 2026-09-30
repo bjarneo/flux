@@ -2,21 +2,28 @@
 
 [Documentation index](README.md)
 
-Flux for Android can approve `sudo` and hyprlock requests with a fingerprint.
+Flux for Android, Flux for iOS, and Flux for macOS can approve `sudo` requests.
+The Android phone asks for a fingerprint. The iPhone asks for Face ID or Touch ID, and the Mac asks for Touch ID.
+The same device can approve the `hyprlock` lock screen, but not the Omarchy lock screen. See [lock screens](#lock-screens).
 It can approve polkit requests only on a system with a setuid `polkit-agent-helper-1`. See [polkit](#polkit).
-The phone signs the request with its hardware-backed key.
+The device signs the request with its hardware-backed key.
 The root helper verifies the signature against a root-owned public key.
 If approval fails or times out, PAM continues to the password prompt.
+
+The iPhone gets requests only while Flux is open on it.
+The Mac and the iPhone need a Secure Enclave.
+An iPhone without one, such as the iOS simulator, refuses each request.
+A Mac without one has no Touch ID, so **Approve** fails with an error.
 
 Read the [security design](approve.md) before you change the implementation.
 
 ## Enable sudo approval
 
 The complete desktop install provides `/usr/lib/flux/flux-approve`.
-The phone needs a configured fingerprint and an active Flux connection.
+The device needs a configured fingerprint, Face ID, or Touch ID, and an active Flux connection.
 Installation alone does not enable approval.
 
-1. Open Flux on the phone.
+1. Open Flux on the phone, the iPhone, or the Mac.
 2. Check that the desktop is connected.
 3. Start setup from your desktop account:
 
@@ -24,9 +31,9 @@ Installation alone does not enable approval.
    sudo flux-cli approve setup
    ```
 
-4. Select Enroll on the phone.
-5. Touch the fingerprint sensor.
-6. Type the key code that the phone shows, all 16 characters. Spaces, hyphens, and case do not matter. You have 3 tries.
+4. Select Enroll on the phone, the iPhone, or the Mac.
+5. Touch the fingerprint sensor, or confirm with Face ID or Touch ID.
+6. Type the key code that the device shows, all 16 characters. Spaces, hyphens, and case do not matter. You have 3 tries.
 7. Test in a new terminal:
 
    ```sh
@@ -36,6 +43,7 @@ Installation alone does not enable approval.
 
 `flux-cli` compares the typed code with the code of the key that `fluxd` sent.
 If the codes differ, it writes no key.
+The device already uses its new key, so each approval fails until you run `sudo flux-cli approve enroll` again.
 If the phone tells you to type `y`, type the code instead. The terminal needs all 16 characters.
 The terminal does not show the code, because a program that runs as your user can write to your terminal.
 It cannot change the screen of the phone.
@@ -61,14 +69,23 @@ It adds this line before the first authentication rule:
 auth sufficient pam_exec.so quiet stdout /usr/lib/flux/flux-approve
 ```
 
-To enable additional supported services:
+Flux does not enable `sshd` or `login`, and the helper refuses `sshd`.
+
+### Lock screens
+
+The Omarchy lock screen runs in `omarchy-shell`.
+It uses its own PAM services, `omarchy-lock-password` and `omarchy-lock-fingerprint`.
+Flux does not change them, so the phone cannot unlock the Omarchy lock screen.
+
+The `hyprlock` service applies only when `hyprlock` is your lock screen.
+To let the phone approve `hyprlock`, run:
 
 ```sh
 sudo flux-cli approve enable hyprlock
 ```
 
-Flux does not change the separate PAM services used by the Omarchy lock screen.
-It does not enable `sshd` or `login`, and the helper refuses `sshd`.
+When `hyprlock` is not installed, the command stops with an error.
+When `hyprlock` is installed but another program locks the screen, the command changes nothing that you see.
 
 ### polkit
 

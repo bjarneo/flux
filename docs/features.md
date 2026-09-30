@@ -5,6 +5,11 @@
 This page describes Flux for Android.
 For the Mac app, see [Flux for macOS](macos.md#features). For the iPhone, see [Flux for iOS](ios.md#features).
 
+The switches under **Sync with all computers** on the page of a computer are settings of the phone.
+Each switch applies to every paired computer, not only to the computer whose page shows it.
+For example, **Text messages** lets each paired computer read your conversations.
+See [sync switches](android-setup.md#sync-switches) and [security](security.md).
+
 ## Pair a phone
 
 1. Install [Flux for Android](android.md).
@@ -28,9 +33,10 @@ flux-cli pair "Pixel 8"
 flux-cli status
 ```
 
-`flux-cli pair` and `flux-cli accept` print the device ID and the key of the pairing.
-`flux-cli unpair` prints the device ID and the fingerprint of the certificate that it removed.
-When 2 devices have the same name, `fluxd` refuses the name and lists the device IDs.
+`flux-cli pair` and `flux-cli accept` print the name, the device ID, and the key of the pairing.
+`flux-cli unpair` prints the name, the device ID, and the fingerprint of the certificate that it removed.
+When the name matches more than 1 device, `fluxd` refuses the name with the `ambiguous` error and lists the device IDs.
+See [pair and discover](cli.md#pair-and-discover) for the match rule of each command.
 Give the ID instead of the name:
 
 ```sh
@@ -40,6 +46,8 @@ flux-cli pair 9f1c0e5b7a2d4c3e8b6a1f0d2c4e6a8b
 Flux uses TLS with pinned device certificates after pairing.
 The desktop discovers phones through mDNS and opens the connections itself.
 The phone scans for computers for 10 seconds when the app opens.
+The phone takes a connection from a computer that is not paired only while Flux is on the screen or while it scans.
+So keep Flux open on the phone while you pair.
 If the desktop is not in the list, tap **Scan again** on the phone.
 To use the phone away from the local network, see [Connect through Tailscale](tailscale.md).
 
@@ -48,7 +56,7 @@ To use the phone away from the local network, see [Connect through Tailscale](ta
 - The key comes from the certificates of both devices and the time of the request. It has 64 bits, so a device between the phone and the computer cannot find a certificate with the same key while the request is open.
 - A pairing stays on the connection and the certificate on which it started. While a pairing is open, `fluxd` refuses a second connection with another certificate for the same device ID. When the connection of the pairing closes, the pairing stops.
 - After the pairing, `fluxd` refuses each connection that does not show the pinned certificate.
-- The state from `flux-cli status --json` has the `fingerprint` of each device: 16 hex digits from its certificate. Use it to tell 2 devices with the same name apart.
+- The state from `flux-cli status --json` has the `fingerprint` of each device: 16 hex digits from its certificate. `flux-cli status` shows the device ID and the fingerprint under each device. Use them to tell 2 devices with the same name apart.
 - When you unpair on either side, the other side gets the unpair message and `fluxd` closes the connection. `fluxd` also removes the notifications, messages, and battery state of the device.
 - A device that is not paired can send packets of at most 64 KiB. `fluxd` closes its connection when it sends no pair request for 2 minutes.
 - `fluxd` shows at most 1 pair notification for each device and at most 4 open pair requests.
@@ -172,6 +180,17 @@ It empties the folder when it starts and when it stops.
 ## Notifications
 
 Enable notification access on the phone to show its notifications on the desktop.
+**Share notifications** on the phone sends them to each connected paired computer.
+
+Some notifications stay on the phone:
+
+- A notification that the lock screen hides, because the notification or its channel has the visibility `VISIBILITY_SECRET`.
+- The notifications of Flux, ongoing notifications, the notifications of foreground services, and group summaries.
+
+A button that needs the phone unlock or text input also stays on the phone.
+The computer gets the reply field only when the reply does not need the phone unlock.
+See [shared notifications](android-setup.md#shared-notifications).
+
 To dismiss all of them, select **Clear all** on the Notifications page, or run:
 
 ```sh
@@ -201,6 +220,7 @@ The desktop name identifies the sender.
 ## Text messages
 
 Turn on **Text messages** on the phone's device screen.
+The switch applies to every paired computer: each of them can then read your conversations and send text messages.
 The phone asks for SMS access and contacts access.
 Flux needs SMS access. Contacts access adds names to the conversations.
 A tablet without a SIM slot does not show the switch.
@@ -303,9 +323,20 @@ Selected-photo access does not expose new captures.
 | `DCIM/Camera` | `<photo_dir>` |
 
 Flux sends each completed image to every connected computer once.
+The switches apply to every paired computer.
 Images from before the option was enabled stay on the phone.
 An image that no computer received waits for a computer to connect.
 The desktop notification includes an Open action.
+
+Any app can put an image in a camera folder.
+So Flux sends only the images of the default camera app and of the system apps, such as the camera and the screenshot tool.
+It also sends an image without an owner app, which the media scanner found.
+It skips the images of other apps and logs `not a camera or screenshot app`.
+
+When a connected computer does not take an image, Flux tries again after 1 minute.
+Each new wait is 2 times longer, up to 1 hour.
+After 8 failed tries, Flux stops and shows the notification **Flux did not send** with the file name.
+Only a try with a connected computer counts.
 
 See [camera and streams](camera.md) for direct capture and live media.
 

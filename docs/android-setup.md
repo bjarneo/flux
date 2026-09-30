@@ -112,6 +112,8 @@ Then turn on the switch in Flux again.
 ### Distribution
 
 Each GitHub release has `flux-android-VERSION.apk` and `SHA256SUMS`.
+When the release signing key is set, the release also has `SHA256SUMS.sig`, the signature of `SHA256SUMS`.
+Check the signature before you check the APK against `SHA256SUMS`.
 All release APKs use one persistent release key.
 Flux is not on Google Play.
 See [Install a release APK](android.md#install-a-release-apk) to check the download.
@@ -185,7 +187,7 @@ Flux does not send these notifications:
 - The notifications of Flux.
 - Ongoing notifications and the notifications of foreground services, for example a call or a VPN.
 - Group summaries.
-- Notifications that the lock screen hides, because the app or its channel marks them as secret.
+- Notifications whose visibility, or whose channel lock screen visibility, is `VISIBILITY_SECRET`. The lock screen setting of the whole phone does not change what Flux sends.
 
 A computer gets the reply field and the buttons of a notification.
 Flux keeps a button on the phone when it needs text input or the phone unlock.
@@ -212,7 +214,8 @@ Flux does not send `file:` paths or its own files from the share sheet.
 
 ### Automatic screenshots and photos
 
-**Send new screenshots** and **Send new photos** send only the images that a camera app or the screenshot tool of the phone saved.
+**Send new screenshots** and **Send new photos** send only the images of the default camera app and of the system apps.
+The camera and the screenshot tool of the phone are such apps.
 Flux does not send an image that another app puts in the camera or screenshot folder.
 When you turn off a switch, Flux stops the images of that switch that did not go out yet.
 

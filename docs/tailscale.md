@@ -125,8 +125,16 @@ Each link uses TLS with the certificates that you pinned at pairing, as on the l
 Tailscale adds a second layer of encryption.
 
 Other devices in your tailnet can reach the Flux ports of the phone.
-They can send a pair request, as a device on the local network can.
-To stop this, use Tailscale access controls to limit TCP ports 1716 to 1764 on the phone to the desktop.
+Flux for Android takes a connection from a device that is not paired only while Flux is on the screen or while it scans.
+In that time, another device in the tailnet can send a pair request, as a device on the local network can.
+A paired computer connects at any time.
+To stop the other devices, use Tailscale access controls to limit TCP ports 1716 to 1764 on the phone to the desktop.
+
+`fluxd` also listens on 1 TCP port from 1716 to 1764 and on UDP port 1716 on all interfaces, also `tailscale0`.
+The default Omarchy firewall blocks this inbound traffic, and Flux does not need it.
+Do not add a rule such as `ufw allow in on tailscale0` for Flux.
+With such a rule, each device in the tailnet can open a link to `fluxd` and send a pair request.
+See [network ports](security.md#network-ports).
 
 ## Limits
 

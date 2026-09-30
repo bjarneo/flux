@@ -157,12 +157,12 @@ The [release guide](releasing.md) covers the archive-based AUR recipe.
 | Change | Required check |
 | --- | --- |
 | Go CLI or daemon | `make test vet` and the relevant package tests |
-| Shared QML or host | `make build-gui snapshot` and both host contracts |
+| Shared QML or host | `make build-gui snapshot test-gui` and both host contracts |
 | Android | JVM tests, lint, debug build, and release build |
 | macOS | `make test-macos macos`, then a run against `fluxd` |
 | iOS | `make ios test-ios ios-release`, then a run in the simulator against `fluxd` |
 | Protocol | Go, Kotlin, and Swift tests, plus the two-daemon end-to-end test |
-| Approval | Read `docs/approve.md`, then run Go and Android approval tests |
+| Approval | Read `docs/approve.md`, then run the Go and Android approval tests. For a change in FluxKit or the Apple apps, also run the Swift approval tests `ApproveMessageTests`, `ApprovePluginLogicTests`, `ApproveKeysBackupTests`, and the iOS `ApproveLogicTests` with `make test-macos test-ios`. They run only on a Mac or in the `macos` and `ios` jobs of CI. |
 | Package or workflow | Shell syntax, `actionlint`, package build, and release-generator tests |
 
 The repository currently has no selected license.

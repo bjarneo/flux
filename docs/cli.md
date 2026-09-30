@@ -86,7 +86,10 @@ When the [release check](configuration.md#release-check) found a newer release, 
 
 `flux-cli update --check` asks GitHub for the latest release and prints it.
 `flux-cli update` also installs it.
-For a pacman package, it downloads the release package, checks it against `SHA256SUMS`, and runs `sudo pacman -U`.
+For a pacman package, it checks `SHA256SUMS.sig` with the public release key when the build has one.
+Then it downloads the release package, checks it against `SHA256SUMS`, and runs `sudo pacman -U`.
+When the signature is missing or does not match, it installs nothing.
+See [update with flux-cli](install.md#update-with-flux-cli).
 For a source install, it prints the commands for the checkout.
 Without a network, it prints the error and returns 1.
 
@@ -115,8 +118,44 @@ flux-cli reject "Pixel 8"
 flux-cli unpair "Pixel 8"
 ```
 
-Compare the verification key on both devices before you accept.
-See [phone pairing](features.md#pair-a-phone).
+The verification key has 16 uppercase hex digits in 4 groups of 4, for example `5EE6 825F 974E D59A`.
+Compare all 16 characters on both devices before you accept.
+An earlier Flux app shows only 8 characters, so update Flux on each device before you pair.
+
+Each command prints the device ID next to the name:
+
+| Command | Output |
+| --- | --- |
+| `flux-cli pair` | `Confirm 5EE6 825F 974E D59A on Pixel 8 (DEVICE_ID)…`, then `✓ Pixel 8 (DEVICE_ID) paired with the key 5EE6 825F 974E D59A` |
+| `flux-cli accept` | `✓ Pixel 8 (DEVICE_ID) paired with the key 5EE6 825F 974E D59A` |
+| `flux-cli unpair` | `Unpaired Pixel 8 (DEVICE_ID), certificate FINGERPRINT` |
+
+The fingerprint has 16 hex digits from the public key of the certificate of the device.
+`flux-cli status` shows the ID and the fingerprint on the line under each device:
+
+```text
+  Pixel 8                phone   connected  78%    192.168.1.20    paired
+                         ID DEVICE_ID · certificate 0A1B 2C3D 4E5F 6071
+```
+
+The `fingerprint` field of each device in `flux-cli status --json` has the same value, without spaces.
+
+A name matches only a device that is paired or connected, and a paired device comes first.
+`flux-cli pair` finds a name only among the devices that are connected and not paired.
+`flux-cli accept` and `flux-cli reject` find a name only among the devices with an open pair request.
+When the name still matches more than 1 device, the command returns the `ambiguous` error with the device IDs:
+
+```text
+flux-cli: 2 devices are named "Pixel 8": DEVICE_ID_1, DEVICE_ID_2. Give the device ID
+```
+
+Give the device ID in place of the name:
+
+```sh
+flux-cli pair 9f1c0e5b7a2d4c3e8b6a1f0d2c4e6a8b
+```
+
+See [phone pairing](features.md#pair-a-phone) and [security](security.md).
 
 ## Reach a device away from the local network
 
@@ -147,6 +186,7 @@ flux-cli notify "Backup done" "412 files, 2.1 GB"
 ```
 
 `flux-cli ring` rings only a phone or a tablet.
+`flux-cli url` sends only an `http` or `https` URL with a host. The device shows the link in a notification and opens it after a tap.
 `flux-cli send` starts transfers and returns their count.
 Inspect `transfers` in `flux-cli status --json` for completion.
 `flux-cli clip` without text sends the desktop clipboard.

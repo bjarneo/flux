@@ -43,9 +43,24 @@ See [IPC](ipc.md) for the socket.
 On the phone, open the computer and select **Touchpad and keyboard**.
 The phone asks for its screen lock first. The unlock stays valid for 5 minutes.
 A phone without a screen lock cannot open the touchpad.
+The phone also asks when the switch on the computer is off or not known yet.
+The computer can turn the switch on while the page shows.
+
+After the 5 minutes, the open page asks for the screen lock again in these cases:
+
+- Flux comes back to the front.
+- The computer connects again, or it turns its switch on.
+
+If you cancel, the page closes.
+See [remote control and the phone lock](android-setup.md#remote-control-and-the-phone-lock).
+
+The iPhone asks for Face ID, Touch ID, or the passcode.
+Its unlock also ends when the iPhone locks, and the open page asks again when Flux comes back after the unlock ended.
+
 This check protects the phone app only.
 The computer takes the input of each paired device while `remote_input` is on, also on its lock screen.
 The `faillock` setting of PAM on the computer limits the password tries on the lock screen.
+On the lock screen, the touchpad and the remote desktop keep working, but the [Omarchy panel](remote-desktop.md#move-around-omarchy) runs no shortcut and no window action.
 
 | Gesture | Result |
 | --- | --- |
@@ -96,6 +111,7 @@ The trackpad, the mouse, and the keyboard of the Mac can control the pointer and
    The menu bar item also has **Touchpad and Keyboard…**.
 3. Confirm with Touch ID or the password of the Mac.
    The unlock stays valid for 5 minutes, until the Mac sleeps or locks.
+   After that, the Mac asks again before it opens the touchpad. See [Touch ID lock](macos.md#touch-id-lock).
 
 The card shows **Off** and the steps above when `remote_input` is off on the computer.
 

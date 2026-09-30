@@ -64,6 +64,10 @@ This method gives pacman ownership of all desktop files.
 Select a Nerd Font provider if pacman asks for one.
 The package builds the CLI, daemon, approval helper, Qt app, and shell plugin assets.
 
+The package does not start `fluxd` for the accounts on the computer.
+Each desktop user who wants Flux runs `flux-cli setup` once.
+So another account does not announce this computer on the network.
+
 The package recipe supports `x86_64` and `aarch64` source builds.
 GitHub Actions currently produces an `x86_64` binary package.
 
@@ -212,16 +216,27 @@ rm ~/.local/bin/flux
 | --- | --- |
 | Package install or `sudo make install` | Installs the service, udev rule, desktop files, binaries, helper, plugin assets, and the [short name](#the-command-name) `flux`. |
 | `dist/post-install.sh` | Reloads udev. Loads the optional webcam module when no existing configuration controls it. Restarts a running `fluxd` of an earlier version, which does not restart by itself. It does not enable the user service for the accounts on the computer. |
-| `flux-cli setup` | Enables and starts the user service. Copies and enables the shell plugin when the shell is available. |
+| `flux-cli setup` | Enables and starts the user service for the user who runs it. Removes a user unit that an earlier `flux-cli setup` of a checkout wrote, when a package unit exists. Copies and enables the shell plugin when the shell is available. |
 | `flux-cli setup --dry-run` | Prints the user setup actions without applying them. |
 | Each start of `fluxd` | Updates the files of an added plugin to the plugin of the same install. |
 | `flux-cli open` | Starts the user service when no `fluxd` answers, except after `flux-cli off`. |
 
 Setup reports missing system parts and their install commands.
-Inspect the output because setup can report an error without a nonzero exit code.
+It returns 1 when the service step or the plugin step fails.
+A missing system part does not change the exit code, so read the output.
 Use `flux-cli doctor` to verify the result.
 
+An earlier package enabled `fluxd` for every account on the computer, and an upgrade keeps that.
+To start `fluxd` only for the users who ran `flux-cli setup`, remove the global link once:
+
+```sh
+sudo systemctl --global disable fluxd.service
+```
+
+Then run `flux-cli setup` as each desktop user who wants Flux.
+
 Flux does not add a firewall rule or enable fingerprint approval during installation.
+`fluxd` needs no inbound firewall rule. See [network ports](security.md#network-ports).
 
 If Avahi is inactive, start it:
 
@@ -236,7 +251,7 @@ Flux then moves the running parts to the new version:
 
 | Part | After the update |
 | --- | --- |
-| `fluxd` | The service restarts into the new binary about 10 seconds after the install. It waits while a file transfer, a stream, or a fingerprint approval runs. |
+| `fluxd` | The service restarts into the new binary about 10 seconds after the install. It waits while a file transfer, a stream, or the remote desktop runs. It also waits for a Browse PC session, the send of the Android app, and a fingerprint approval. |
 | Omarchy plugin | `fluxd` copies the new plugin files into `~/.config/omarchy/plugins/flux` when it starts. omarchy-shell then reloads the plugin. |
 | Qt window | An open window shows **Flux was updated**. Select **Restart** to open the new version. |
 | Phones | The phones connect again about 2 seconds after the restart. |

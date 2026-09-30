@@ -51,6 +51,20 @@ See [IPC](ipc.md) for the socket.
 On the phone, open the computer and select **Remote desktop**.
 The phone asks for its screen lock first. The unlock stays valid for 5 minutes.
 A phone without a screen lock cannot open the remote desktop.
+The phone also asks when the switch on the computer is off or not known yet.
+The computer can turn the switch on while the page shows.
+
+After the 5 minutes, the open page asks for the screen lock again in these cases:
+
+- Flux comes back to the front.
+- The computer connects again, or it turns its switch on.
+
+If you cancel, the page closes.
+See [remote control and the phone lock](android-setup.md#remote-control-and-the-phone-lock).
+
+The iPhone asks for Face ID, Touch ID, or the passcode.
+Its unlock also ends when the iPhone locks, and the open page asks again when Flux comes back after the unlock ended.
+
 This check protects the phone app only.
 The computer shows its screen to each paired device while `remote_desktop` is on.
 
@@ -133,7 +147,7 @@ Unlock the computer on the remote desktop, then open the panel again.
 ## Type
 
 Select the keyboard button to show the keys.
-The keys and the text field work as on the [touchpad](remote-input.md#type).
+The keys and the text field work as on the [touchpad](remote-input.md#type-on-the-phone).
 In landscape, the keys show at the right of the video.
 
 To use a Super shortcut, select **super**, then type the key in the text field.
@@ -152,6 +166,7 @@ On the Mac, open the computer in Flux.
 In the **Remote Desktop** card, select **Open Remote Desktop…**.
 The menu bar item also has **Remote Desktop…**.
 The Mac asks for Touch ID or its password first. The unlock stays valid for 5 minutes, until the Mac sleeps or locks.
+After that, the Mac asks again before it opens the remote desktop. See [Touch ID lock](macos.md#touch-id-lock).
 
 The card shows **Off** and the steps to turn it on when the remote desktop is off on the computer.
 Without remote input, the window shows **View only**, and the mouse and the keys do nothing on the computer.
