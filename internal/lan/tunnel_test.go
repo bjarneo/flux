@@ -6,6 +6,7 @@ import (
 	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"flux/internal/proto"
 )
@@ -89,11 +90,19 @@ func TestDialFromLinkAddress(t *testing.T) {
 			// source address.
 			conn.Close()
 		}()
-		_ = dial(port)
-		a, _ := (<-from).(*net.TCPAddr)
+		err = dial(port)
+		// A dial that fails before the connect leaves Accept waiting.
+		// Close peer only after the read, because a close resets a
+		// connection that waits in the backlog.
+		var a *net.TCPAddr
+		select {
+		case addr := <-from:
+			a, _ = addr.(*net.TCPAddr)
+		case <-time.After(5 * time.Second):
+		}
 		peer.Close()
 		if a == nil || !a.IP.Equal(local) {
-			t.Errorf("%s connected from %v, want %v", name, a, local)
+			t.Errorf("%s connected from %v, want %v. The dial returned %v", name, a, local, err)
 		}
 	}
 }
