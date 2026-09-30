@@ -93,6 +93,13 @@ type Device struct {
 	pairEnded  time.Time
 	unpairPeer bool
 	unpairCert *x509.Certificate
+
+	// confirmQueue holds the packets that the device sent on the link of a
+	// pairing in state "confirm". The device counts itself as paired when
+	// it answers, so it sends its first packets, such as the battery, at
+	// once. fluxd handles them after the user confirms the pairing, and
+	// drops them when the pairing ends in another way.
+	confirmQueue []*proto.Packet
 }
 
 // Battery is the battery state of a device.
