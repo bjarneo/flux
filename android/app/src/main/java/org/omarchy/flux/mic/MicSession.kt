@@ -23,6 +23,13 @@ private const val TAG = "FluxMic"
 private const val CONNECT_TIMEOUT_MS = 10_000
 
 /**
+ * The send buffer of the stream, in bytes. 16 KB is about 170 ms of audio.
+ * The kernel can grow a default buffer to hold many seconds of audio. After
+ * a network stall, the computer then plays all that audio late.
+ */
+private const val SEND_BUFFER_BYTES = 16 * 1024
+
+/**
  * The phone as microphone: 1 stream at a time. The phone records 48 kHz
  * mono PCM and writes it to the computer, which plays it into the source
  * Flux Microphone. The stream runs while a screen that uses it is open.
@@ -79,6 +86,7 @@ object MicSession {
                     runCatching { ssl.close() }
                     return@execute
                 }
+                runCatching { ssl.sendBufferSize = SEND_BUFFER_BYTES }
                 _status.value = Status(Phase.Starting, "Starting Flux Microphone on $name…", deviceId)
                 record(d, ssl, id)
             } catch (e: Exception) {

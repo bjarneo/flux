@@ -12,6 +12,8 @@ import org.omarchy.flux.protocol.INCOMING
 import org.omarchy.flux.protocol.OUTGOING
 import org.omarchy.flux.protocol.Packet
 import org.omarchy.flux.protocol.Types
+import org.omarchy.flux.protocol.bool
+import org.omarchy.flux.protocol.str
 
 class HerdrTest {
     private fun body(line: String) = Packet.parse("""{"id":1,"type":"flux.herdr","body":$line}""")!!.body
@@ -99,6 +101,50 @@ class HerdrTest {
             body("""{"kind":"sent","pane":"w1:p1","action":"prompt","code":"blocked","error":"The agent waits for a choice. Pick a choice first."}"""),
         )
         assertEquals("The agent waits for a choice. Pick a choice first.", sent!!.error)
+        assertEquals(HERDR_BLOCKED, sent.code)
+        assertNull("an answer without a code has none", parseHerdrSent(body("""{"kind":"sent","pane":"w1:p1","action":"prompt","error":"x"}"""))!!.code)
+    }
+
+    @Test
+    fun onlySendAsAnswerSetsTheAnswerFlag() {
+        val prompt = herdrPromptBody("w1:p1", "Use Postgres", answer = false)
+        assertEquals("prompt", prompt.str("kind"))
+        assertEquals("Use Postgres", prompt.str("text"))
+        assertNull("a normal Send has no answer field", prompt["answer"])
+        val answer = herdrPromptBody("w1:p1", "Use Postgres", answer = true)
+        assertEquals(true, answer.bool("answer"))
+        assertEquals("the same text goes again", "Use Postgres", answer.str("text"))
+    }
+
+    @Test
+    fun anAnswerWithARequestNumberMatchesOnlyThatReply() {
+        val reply = HerdrReply("w1:p1", "prompt", seq = 5)
+        assertTrue(HerdrSent("w1:p1", "prompt", null, request = 5).answers(reply))
+        assertFalse("a late answer to an earlier reply", HerdrSent("w1:p1", "prompt", null, request = 4).answers(reply))
+        assertFalse("a reply that got its answer", HerdrSent("w1:p1", "prompt", null, request = 5).answers(reply.copy(sending = false)))
+        assertFalse("another pane", HerdrSent("w2:p1", "prompt", null, request = 5).answers(reply))
+
+        val create = HerdrAction("create", seq = 3, what = "agent")
+        assertTrue(HerdrDone("create", "w4:p1", null, "agent", request = 3).answers(create))
+        assertFalse("a late answer to an earlier create", HerdrDone("create", "w4:p1", null, "agent", request = 2).answers(create))
+    }
+
+    @Test
+    fun anAnswerWithoutARequestNumberMatchesThePaneAndTheAction() {
+        // An older fluxd sends no number back.
+        val reply = HerdrReply("w1:p1", "prompt", seq = 5)
+        assertTrue(HerdrSent("w1:p1", "prompt", null).answers(reply))
+        assertTrue("an answer without an action", HerdrSent("w1:p1", "", null).answers(reply))
+        assertFalse("an answer to keys", HerdrSent("w1:p1", "keys", null).answers(reply))
+        assertFalse("another pane", HerdrSent("w2:p1", "prompt", null).answers(reply))
+
+        val close = HerdrAction("close", seq = 3, pane = "w4:p1")
+        assertTrue(HerdrDone("close", "w4:p1", null).answers(close))
+        assertFalse("another pane", HerdrDone("close", "w5:p1", null).answers(close))
+        val create = HerdrAction("create", seq = 4, what = "terminal")
+        assertTrue(HerdrDone("create", "w4:p2", null, "terminal").answers(create))
+        assertFalse("a late answer to a new agent", HerdrDone("create", "w4:p2", null, "agent").answers(create))
+        assertFalse("a close is not a create", HerdrDone("close", "w4:p2", null).answers(create))
     }
 
     @Test

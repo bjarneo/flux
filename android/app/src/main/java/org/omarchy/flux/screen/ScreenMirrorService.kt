@@ -196,10 +196,16 @@ class ScreenMirrorService : Service() {
         }
     }
 
+    /**
+     * Makes an encoder that writes to [ssl]. When the encoder fails, the
+     * mirror stops, and the computer gets "stop" when the link is still up.
+     * A codec error leaves the link up, and the stream socket can close
+     * while the link stays.
+     */
     private fun newEncoder(ssl: SSLSocket, w: Int, h: Int): H264Encoder {
         val gen = generation
-        return H264Encoder(w, h, MirrorSize.bitrate(w, h), ssl.outputStream) {
-            main.post { if (gen == generation) finish(notify = false, ScreenSession.Status(ScreenSession.Phase.Error, "The connection to the computer closed", deviceId)) }
+        return H264Encoder(w, h, MirrorSize.bitrate(w, h), ssl.outputStream) { message ->
+            main.post { if (gen == generation) finish(notify = true, ScreenSession.Status(ScreenSession.Phase.Error, message, deviceId)) }
         }
     }
 

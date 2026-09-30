@@ -78,13 +78,10 @@ object HerdrSync {
             "sent" -> {
                 val sent = parseHerdrSent(p.body) ?: return
                 val reply = d.herdrReply
-                if (reply == null || reply.pane != sent.pane || !reply.sending) return
-                // A late answer to an earlier reply does not end this reply.
-                if (sent.action.isNotEmpty() && sent.action != reply.action) return
-                if (sent.request != null && sent.request != reply.seq) return
+                if (reply == null || !sent.answers(reply)) return
                 // The error text of fluxd goes to the screen as it is, for
                 // example when the agent waits for a choice.
-                d.herdrReply = reply.copy(sending = false, error = sent.error)
+                d.herdrReply = reply.copy(sending = false, error = sent.error, code = sent.code)
                 if (sent.error == null) {
                     val id = d.id
                     core.scheduler.schedule({ read(core, id, sent.pane) }, REREAD_DELAY_MS, TimeUnit.MILLISECONDS)
@@ -93,11 +90,7 @@ object HerdrSync {
             "created", "closed" -> {
                 val done = parseHerdrDone(p.body) ?: return
                 val action = d.herdrAction
-                if (action == null || action.action != done.action || !action.sending) return
-                if (done.action == "close" && action.pane != done.pane) return
-                // A late answer to an earlier create does not end this one.
-                if (done.action == "create" && done.what.isNotEmpty() && action.what.isNotEmpty() && done.what != action.what) return
-                if (done.request != null && done.request != action.seq) return
+                if (action == null || !done.answers(action)) return
                 d.herdrAction = action.copy(sending = false, pane = done.pane ?: action.pane, error = done.error)
             }
             else -> Log.d(TAG, "ignored flux.herdr kind ${p.string("kind")}")
@@ -248,8 +241,7 @@ object HerdrSync {
             }
             return
         }
-        val fields = listOf<Pair<String, Any?>>("kind" to "prompt", "pane" to pane, "text" to t) + if (answer) listOf("answer" to true) else emptyList()
-        reply(core, id, pane, "prompt", bodyOf(*fields.toTypedArray()))
+        reply(core, id, pane, "prompt", herdrPromptBody(pane, t, answer))
     }
 
     /**

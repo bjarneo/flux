@@ -41,6 +41,14 @@ class ShareTest {
     }
 
     @Test
+    fun onlyAFluxUpdateNameGetsTheFullCheck() {
+        assertEquals("1.2.0", ApkCheck.updateVersion("flux-android-1.2.0.apk", 30L shl 20))
+        assertNull("another app", ApkCheck.updateVersion("app-release.apk", 30L shl 20))
+        assertNull("an empty file", ApkCheck.updateVersion("flux-android-1.2.0.apk", 0))
+        assertNull("a file above 200 MB", ApkCheck.updateVersion("flux-android-1.2.0.apk", (200L shl 20) + 1))
+    }
+
+    @Test
     fun apkByNameOrType() {
         assertTrue(ApkCheck.isApk("flux-android-1.2.0.apk", null))
         assertTrue(ApkCheck.isApk("Invoice.APK", "application/octet-stream"))
