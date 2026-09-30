@@ -21,6 +21,9 @@ private const val APK_MIME = "application/vnd.android.package-archive"
 /** The largest received app that Flux checks as an update, in bytes. */
 private const val MAX_UPDATE_BYTES = 200L shl 20
 
+/** The start of the file name of a Flux update: flux-android-VERSION.apk. */
+private const val UPDATE_PREFIX = "flux-android-"
+
 /** How old a temporary file in the cache must be before Flux deletes it at start, in milliseconds. */
 private const val STALE_CACHE_MS = 24 * 60 * 60_000L
 
@@ -52,6 +55,17 @@ object WebUrl {
 object ApkCheck {
     /** True when a file with [name] and [mime] is an Android app. */
     fun isApk(name: String, mime: String?): Boolean = mime == APK_MIME || name.lowercase().endsWith(".apk")
+
+    /**
+     * Returns the version in the name of a Flux update, flux-android-VERSION.apk,
+     * or null for another name. An empty file and a file above
+     * [MAX_UPDATE_BYTES] give null too. Only a file with a version gets the
+     * full check of [isUpdate].
+     */
+    fun updateVersion(name: String, size: Long): String? {
+        if (!name.startsWith(UPDATE_PREFIX) || size !in 1..MAX_UPDATE_BYTES) return null
+        return name.removePrefix(UPDATE_PREFIX).removeSuffix(".apk")
+    }
 
     /**
      * Reports whether an app archive is a newer build of the installed app:
@@ -121,19 +135,14 @@ object Share {
             core.toast("Receiving $name failed")
             return
         }
-        // A file of an unknown type opens Downloads. The type */* matches every app, the Android installer too.
-        val open = if (mime == null) {
-            Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)
-        } else {
-            Intent(Intent.ACTION_VIEW).setDataAndType(dl.uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
+        val open = viewIntent(dl.uri, mime)
         // The computer sends a Flux update as flux-android-VERSION.apk. Its
         // notification opens the Android installer only for a newer Flux with
         // the signing key of this app. Any other app only shows in Downloads,
         // so that a computer cannot offer an app to install.
         if (ApkCheck.isApk(name, mime)) {
-            if (name.startsWith("flux-android-") && p.payloadSize in 1..MAX_UPDATE_BYTES && isFluxUpdate(core.app, dl.uri)) {
-                val version = name.removePrefix("flux-android-").removeSuffix(".apk")
+            val version = updateVersion(core.app, name, p.payloadSize, dl.uri)
+            if (version != null) {
                 Android.showEvent(core.app, "Flux $version from $from", "Tap to install the update", open)
                 core.toast("Flux $version is in Downloads. Open its notification to install it")
                 return
@@ -316,6 +325,26 @@ object Share {
     }
 
     private fun currentTls(): org.omarchy.flux.net.Tls? = FluxCore.tls
+
+    /**
+     * Returns the intent that opens a saved file at [uri] of the type [mime].
+     * A file of an unknown type opens Downloads, because a view of any type
+     * matches every app, the Android installer too.
+     */
+    internal fun viewIntent(uri: Uri, mime: String?): Intent = if (mime == null) {
+        Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)
+    } else {
+        Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+
+    /**
+     * Returns the version of a Flux update at [uri], or null for any other
+     * app. The name and the size must fit [ApkCheck.updateVersion], and the
+     * app must be a newer Flux with the signing key of this app. Browse PC
+     * uses the same rule. It reads the file, so it runs on an IO thread.
+     */
+    internal fun updateVersion(context: android.content.Context, name: String, size: Long, uri: Uri): String? =
+        ApkCheck.updateVersion(name, size)?.takeIf { isFluxUpdate(context, uri) }
 
     /** Reports whether the APK at [uri] is a newer build of this app, signed with its key. */
     private fun isFluxUpdate(context: android.content.Context, uri: Uri): Boolean {

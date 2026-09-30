@@ -1,5 +1,6 @@
 package org.omarchy.flux.core
 
+import android.app.DownloadManager
 import android.content.Intent
 import android.util.Log
 import net.schmizz.sshj.DefaultConfig
@@ -128,28 +129,46 @@ object Browse {
         }
     }
 
+    /**
+     * Saves [entry] in Downloads, with the safe name of a received file. The
+     * rule for apps is the same as in [Share]: the notification opens the
+     * Android installer only for a newer Flux with the signing key of this
+     * app. Any other app only shows in Downloads.
+     */
     fun download(core: FluxCore, entry: BrowseEntry) {
         val client = sftp ?: return
-        core.toast("Downloading ${entry.name}")
+        val name = Share.sanitize(entry.name)
+        core.toast("Downloading $name")
         core.io.execute {
-            val mime = Android.mimeType(entry.name)
-            val dl = runCatching { Android.createDownload(core.app, entry.name, mime) }.getOrElse {
-                core.toast("Cannot save ${entry.name}")
+            val mime = Android.mimeType(name)
+            val dl = runCatching { Android.createDownload(core.app, name, mime) }.getOrElse {
+                core.toast("Cannot save $name")
                 return@execute
             }
-            val ok = runCatching {
+            val size = runCatching {
                 client.open(entry.path).use { remote ->
                     remote.RemoteFileInputStream().use { it.copyTo(dl.stream, 64 * 1024) }
                 }
-            }.onFailure { Log.w(TAG, "download failed", it) }.isSuccess
-            Android.finishDownload(core.app, dl, ok)
-            if (ok) {
-                val open = Intent(Intent.ACTION_VIEW).setDataAndType(dl.uri, mime ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                Android.showEvent(core.app, "Downloaded ${entry.name}", "Saved in Downloads", open)
-                core.toast("Saved ${entry.name} in Downloads")
-            } else {
-                core.toast("Downloading ${entry.name} failed")
+            }.onFailure { Log.w(TAG, "download failed", it) }.getOrNull()
+            Android.finishDownload(core.app, dl, size != null)
+            if (size == null) {
+                core.toast("Downloading $name failed")
+                return@execute
             }
+            val open = Share.viewIntent(dl.uri, mime)
+            if (ApkCheck.isApk(name, mime)) {
+                val version = Share.updateVersion(core.app, name, size, dl.uri)
+                if (version != null) {
+                    Android.showEvent(core.app, "Downloaded Flux $version", "Tap to install the update", open)
+                    core.toast("Flux $version is in Downloads. Open its notification to install it")
+                    return@execute
+                }
+                Android.showEvent(core.app, "Downloaded $name", "Saved in Downloads. Flux does not install it.", Intent(DownloadManager.ACTION_VIEW_DOWNLOADS))
+                core.toast("Saved $name in Downloads")
+                return@execute
+            }
+            Android.showEvent(core.app, "Downloaded $name", "Saved in Downloads", open)
+            core.toast("Saved $name in Downloads")
         }
     }
 
