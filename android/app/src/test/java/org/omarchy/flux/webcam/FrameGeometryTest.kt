@@ -130,10 +130,12 @@ class FrameGeometryTest {
     @Test
     fun theMirrorOfTheFrontCameraBeforeAndroid13GoesAway() {
         // CameraUtils gives a back camera the rotation of its sensor. It
-        // gives a front camera FLIP_H XOR that rotation, and a flip comes
-        // before a rotation. Android 13 and later with MIRROR_MODE_NONE give
-        // the front camera the rotation only. For each sensor orientation:
-        // the flags without the mirror, and the flags with it.
+        // gives a front camera FLIP_H XOR a rotation: the rotation of the
+        // sensor for 0 and 180, and the opposite rotation for 90 and 270. A
+        // flip comes before a rotation. Android 13 and later with
+        // MIRROR_MODE_NONE give the front camera the rotation only. For each
+        // sensor orientation: the flags without the mirror, and the flags
+        // with it.
         val cameras = mapOf(
             0 to (0 to FLIP_H),
             90 to (ROT_90 to (FLIP_H xor ROT_270)), // FLIP_V and ROT_90
