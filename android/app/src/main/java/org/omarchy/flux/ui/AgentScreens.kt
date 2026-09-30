@@ -69,6 +69,7 @@ import org.omarchy.flux.core.AgentChoice
 import org.omarchy.flux.core.AgentStatus
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
+import org.omarchy.flux.core.HERDR_BLOCKED
 import org.omarchy.flux.core.HerdrAgent
 import org.omarchy.flux.core.HerdrOutput
 import org.omarchy.flux.core.HerdrReply
@@ -448,6 +449,9 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
     val context = LocalContext.current
     var field by rememberSaveable(d.id, agent.pane, stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue()) }
     var lockError by remember { mutableStateOf<String?>(null) }
+    // The text of the last Send. When fluxd refuses it because the agent
+    // waits for a choice, Send as answer sends the same text again.
+    var lastPrompt by rememberSaveable(d.id, agent.pane) { mutableStateOf("") }
     // A prompt that the computer accepted leaves the field.
     LaunchedEffect(reply) {
         if (reply != null && reply.action == "prompt" && !reply.sending && reply.error == null) field = TextFieldValue()
@@ -558,6 +562,7 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
                     Modifier.size(56.dp).clip(TileShape).background(if (canSend) Tn.blue else Tn.tile)
                         .clickable(enabled = canSend, onClickLabel = "Send") {
                             val t = field.text
+                            lastPrompt = t
                             guarded { HerdrSync.sendPrompt(FluxCore, d.id, agent.pane, t) }
                         },
                     contentAlignment = Alignment.Center,
@@ -571,9 +576,24 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
             },
         )
         val problem = lockError ?: voiceError ?: dictation.error ?: reply?.error
+        // fluxd refused the text of the field as a prompt, because the agent
+        // waits for a choice. The agent can take the same text as the answer
+        // to its question, for example an answer that is not in the choices.
+        val canAnswer = reply != null && problem == reply.error && reply.code == HERDR_BLOCKED && reply.action == "prompt" &&
+            !reply.sending && lastPrompt.isNotBlank() && field.text == lastPrompt
         if (problem != null) {
             Row(Modifier.padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 T(problem, Modifier.weight(1f), size = 11, color = Tn.red)
+                if (canAnswer) {
+                    T(
+                        "Send as answer",
+                        Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = "Send the text as the answer") {
+                            val t = lastPrompt
+                            guarded { HerdrSync.sendPrompt(FluxCore, d.id, agent.pane, t, answer = true) }
+                        }.padding(horizontal = 6.dp, vertical = 4.dp),
+                        size = 12, color = Tn.blue, weight = FontWeight.SemiBold,
+                    )
+                }
                 if (problem == dictation.error && dictation.languageError) {
                     T(
                         "Choose a language",
