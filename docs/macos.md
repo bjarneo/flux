@@ -95,13 +95,14 @@ It ignores phones, tablets, and other Macs, and it removes old pairings with the
 Flux searches the network for 10 seconds when it starts.
 It does not search all the time.
 If the sidebar shows **No computer found**, select **Search again**.
-A computer that runs `fluxd` still finds the Mac after the search ends, because the Mac keeps its Bonjour service and its UDP port open.
+After the search ends, the Mac still connects to a paired computer when that computer announces itself.
+A computer that is not paired finds the Mac through Bonjour, and `fluxd` then connects to the Mac.
 
 ## Features
 
 | Feature | Mac behavior |
 | --- | --- |
-| Files, text, and links | Send from the device page, a drop on the window or Dock icon, **Open With**, or **Services > Send to Flux**. Received files go to `~/Downloads` or the folder in Settings. |
+| Files, text, and links | Send from the device page, a drop on the window or Dock icon, **Open With**, or **Services > Send to Flux**. Received files go to `~/Downloads` or the folder in Settings, with the quarantine mark of a download, so Gatekeeper checks them when you open them. Flux refuses a file that leaves less than 256 MB free. A received file or link shows in a notification, and it opens only after a click. Flux never opens a received file by itself. |
 | Clipboard | Syncs text both ways while a paired computer is connected. Password manager entries are not synced automatically. Images do not sync to or from the Mac. |
 | Screenshots and photos | **Send new screenshots** watches the macOS screenshot folder. **Send new photos** sends new photos from the Photos library and needs full Photos access. |
 | Media | Controls the computer's players. The computer does not control the players on the Mac. |
@@ -111,7 +112,7 @@ A computer that runs `fluxd` still finds the Mac after the search ends, because 
 | Screen mirror | Streams a display to a window on the computer in H.264, with the long side at most 1080 pixels. |
 | Camera modes | Text, QR, Photo, Document, and Signature, like the phone. Text, QR, and Document also read an opened, pasted, or dropped image or a screen region. Signature also accepts a drawn signature. |
 | Microphone | Streams the Mac microphone as 48 kHz mono audio. |
-| Notifications | Shows notifications from `flux-cli notify`. |
+| Notifications | Shows notifications from `flux-cli notify`. Each computer can show 10 notifications at once, then 1 more each second. Received links count toward this limit. |
 | Battery | A Mac with a battery reports it. The page shows the computer's battery. |
 | Do Not Disturb | See [Focus](#focus). |
 | Fingerprint approval | Approves `sudo` and polkit with Touch ID. See [approval](#approval). |
@@ -152,6 +153,20 @@ Only this Mac's Secure Enclave can use the blob, and only after Touch ID.
 The Mac shows requests only while it is unlocked.
 See the [approval design](approve.md) and [fingerprint approval](approvals.md) for the computer side.
 
+## Pairing data
+
+Flux keeps the identity of the Mac in `~/Library/Application Support/Flux/identity/`.
+The private key file has mode `0600`, but each program that runs as your user can read it.
+A program with the key and the certificate can act as this Mac from another host.
+To replace the identity after such a program ran, quit Flux, remove the `identity` folder, start Flux, and pair again.
+When the key or the certificate exists but does not read, Flux does not start, and it keeps the files.
+Flux makes a new identity only when a file is missing.
+
+The paired computers are in `~/Library/Application Support/Flux/trusted.json`.
+An entry that does not read is not paired, and Flux keeps a copy of the file in `trusted.json.bad`.
+A link that shows another certificate than the pinned one is refused, also while a pairing runs.
+Links of computers that are not paired read at most 64 KiB for each packet, close after 2 minutes without a pairing, and at most 8 of them stay open.
+
 ## Permissions
 
 macOS asks for each permission on first use:
@@ -180,7 +195,7 @@ FLUX_DATA_DIR=/tmp/flux-mac FLUX_UDP_PORT=28731 FLUX_PEER_UDP_PORT=28716 FLUX_LO
 
 | Variable | Effect |
 | --- | --- |
-| `FLUX_DATA_DIR` | Identity, trust store, and settings in a separate directory and defaults domain |
+| `FLUX_DATA_DIR` | Identity, trust store, and settings in a separate directory and defaults domain. Each launch with the same directory uses the same domain. |
 | `FLUX_UDP_PORT` | UDP port that receives identity broadcasts |
 | `FLUX_PEER_UDP_PORT` | UDP port of the computer that the Mac announces itself to |
 | `FLUX_LOOPBACK=1` | Announce only to 127.0.0.1 and skip Bonjour |

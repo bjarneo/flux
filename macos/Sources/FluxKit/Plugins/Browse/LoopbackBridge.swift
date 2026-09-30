@@ -1,4 +1,5 @@
 import Foundation
+import NIOConcurrencyHelpers
 import NIOCore
 import NIOPosix
 
@@ -20,12 +21,23 @@ final class LoopbackBridge: Sendable {
     /// Opens the listener and starts to wait for the 1 local connection.
     static func open(_ remote: TLSStream, acceptTimeout: TimeAmount = .seconds(10)) async throws -> LoopbackBridge {
         let listener: NIOAsyncChannel<NIOAsyncChannel<ByteBuffer, ByteBuffer>, Never>
+        // Only the first connection becomes an async channel. A later one
+        // closes at once, so that no unused async channel stays behind when
+        // the listener closes.
+        let taken = NIOLockedValueBox(false)
         do {
             listener = try await ServerBootstrap(group: MultiThreadedEventLoopGroup.singleton)
                 .serverChannelOption(.backlog, value: 1)
                 .childChannelOption(.socketOption(.tcp_nodelay), value: 1)
                 .bind(host: "127.0.0.1", port: 0) { ch in
-                    ch.eventLoop.makeCompletedFuture { try NIOAsyncChannel<ByteBuffer, ByteBuffer>(wrappingChannelSynchronously: ch) }
+                    ch.eventLoop.makeCompletedFuture {
+                        let first = taken.withLockedValue { t -> Bool in
+                            defer { t = true }
+                            return !t
+                        }
+                        guard first else { throw FluxError("the bridge takes 1 connection") }
+                        return try NIOAsyncChannel<ByteBuffer, ByteBuffer>(wrappingChannelSynchronously: ch)
+                    }
                 }
         } catch {
             remote.channel.channel.close(promise: nil)

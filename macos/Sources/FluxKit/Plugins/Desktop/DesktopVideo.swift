@@ -4,7 +4,9 @@ import CoreMedia
 /// Shows the H.264 frames of the remote desktop on a display layer. The
 /// layer decodes with VideoToolbox and shows each frame at once, with no
 /// clock, for a short delay. The frames arrive on a network thread, and the
-/// layer can change on the main thread, so a lock guards the state.
+/// layer can change on the main thread, so a lock guards the state. When the
+/// decoder falls behind, the frames wait in no queue: the picture skips to
+/// the next key frame.
 public final class DesktopVideo: @unchecked Sendable {
     private let lock = NSLock()
     private var renderer: AVSampleBufferVideoRenderer?
@@ -12,6 +14,9 @@ public final class DesktopVideo: @unchecked Sendable {
     private var parameterSets: [[UInt8]] = []
     /// True until a key frame starts the picture on the renderer.
     private var needKey = true
+
+    /// The frames that the renderer had no room for since the last key frame.
+    private var dropped = 0
 
     public init() {}
 
@@ -76,10 +81,27 @@ public final class DesktopVideo: @unchecked Sendable {
             renderer.flush()
             needKey = true
         }
+        if !renderer.isReadyForMoreMediaData {
+            // The decoder is behind. A frame that is not a key frame waits
+            // for none: the picture starts again at the next key frame. A
+            // key frame replaces the frames in the queue.
+            guard key else {
+                dropped += 1
+                needKey = true
+                return
+            }
+            renderer.flush()
+        }
         if needKey && !key { return }
         guard let sample = Self.sample(DesktopH264.avcc(annexB), format: format, key: key) else { return }
         renderer.enqueue(sample)
-        if key { needKey = false }
+        if key {
+            needKey = false
+            if dropped > 0 {
+                FluxLog.plugin.info("remote desktop: dropped \(self.dropped) frames while the decoder was behind")
+                dropped = 0
+            }
+        }
     }
 
     /// The format description of an H.264 stream with 4-byte NAL unit lengths.

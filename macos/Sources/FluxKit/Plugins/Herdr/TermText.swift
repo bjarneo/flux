@@ -80,7 +80,8 @@ public enum TermText {
 
         func flush() {
             guard !run.isEmpty else { return }
-            if let last = spans.last, last.style == style {
+            // No copy of the last span, so that the append can grow its text in place.
+            if !spans.isEmpty, spans[spans.count - 1].style == style {
                 spans[spans.count - 1].text += String(run)
             } else {
                 spans.append(TermSpan(String(run), style))

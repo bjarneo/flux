@@ -145,8 +145,8 @@ public final class DndPlugin: FluxPlugin, @unchecked Sendable {
     /// Sends the state to each connected computer that accepts flux.dnd, except `except`.
     private func send(_ on: Bool, except: String?) {
         guard let core else { return }
-        for d in core.connectedPaired() where d.id != except && d.accepts(PacketType.fluxDnd) {
-            _ = d.send(Packet(PacketType.fluxDnd, ["on": on]))
+        for id in core.connectedPairedIds(accepting: PacketType.fluxDnd) where id != except {
+            core.send(Packet(PacketType.fluxDnd, ["on": on]), to: id)
         }
     }
 

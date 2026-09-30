@@ -66,6 +66,28 @@ final class ComputerNotificationTests: XCTestCase {
         XCTAssertNil(ComputerNotification(packet(["id": "10", "title": "  "]), deviceId: "pc1", computer: "pc"), "a blank title")
         XCTAssertNil(ComputerNotification(packet(["title": "no id"]), deviceId: "pc1", computer: "omarchy-xps"))
     }
+
+    /// A computer that sends many notifications cannot bury the others.
+    func testNotificationLimitPerComputer() {
+        var limit = NotificationLimit()
+        let burst = Int(NotificationLimit.burst)
+        for i in 0..<burst { XCTAssertTrue(limit.allow("pc1", now: 100), "\(i)") }
+        XCTAssertFalse(limit.allow("pc1", now: 100), "the burst is used up")
+        XCTAssertTrue(limit.allow("pc2", now: 100), "another computer has its own limit")
+        XCTAssertFalse(limit.allow("pc1", now: 100.5))
+        XCTAssertTrue(limit.allow("pc1", now: 101.1), "1 more each second")
+        XCTAssertFalse(limit.allow("pc1", now: 101.2))
+        for _ in 0..<burst { XCTAssertTrue(limit.allow("pc1", now: 1000)) }
+        XCTAssertFalse(limit.allow("pc1", now: 1000), "a long pause gives the burst again, not more")
+    }
+
+    /// Notifications and received links of a computer take tokens from 1 shared limit.
+    func testSharedLimitPerComputer() {
+        let pc = UUID().uuidString
+        for i in 0..<Int(NotificationLimit.burst) { XCTAssertTrue(NotificationLimit.allowsNow(pc), "\(i)") }
+        XCTAssertFalse(NotificationLimit.allowsNow(pc), "the burst is used up")
+        XCTAssertTrue(NotificationLimit.allowsNow(UUID().uuidString), "another computer has its own limit")
+    }
 }
 
 final class BatteryStateTests: XCTestCase {

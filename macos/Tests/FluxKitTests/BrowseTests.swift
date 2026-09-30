@@ -92,6 +92,9 @@ final class BrowseTests: XCTestCase {
         XCTAssertEqual(BrowseDownload.safeName("a\\b.txt"), "b.txt")
         XCTAssertEqual(BrowseDownload.safeName(".."), "download")
         XCTAssertEqual(BrowseDownload.safeName(""), "download")
+        XCTAssertEqual(BrowseDownload.safeName("photo\u{202E}gpj.exe"), "photogpj.exe", "no bidirectional control")
+        XCTAssertEqual(BrowseDownload.safeName("a\nb\u{0}.txt"), "ab.txt", "no control character")
+        XCTAssertEqual(BrowseDownload.safeName("\u{202E}\u{2066}"), "download")
 
         let folder = URL(fileURLWithPath: "/tmp/dl")
         let taken: Set<String> = ["/tmp/dl/a.txt", "/tmp/dl/a (2).txt", "/tmp/dl/notes"]

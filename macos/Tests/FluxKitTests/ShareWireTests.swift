@@ -6,7 +6,21 @@ final class ShareWireTests: XCTestCase {
         let link = ShareWire.text("  https://omarchy.org/docs?a=1 \n")
         XCTAssertEqual(link.string("url"), "https://omarchy.org/docs?a=1")
         XCTAssertFalse(link.has("text"))
-        XCTAssertEqual(ShareWire.text("ssh+git://host/repo").string("url"), "ssh+git://host/repo")
+        XCTAssertEqual(ShareWire.text("HTTP://Omarchy.org").string("url"), "HTTP://Omarchy.org")
+    }
+
+    /// Only http and https with a host are links, like in fluxd and Flux for
+    /// Android. Another scheme can start an app, so it goes as text.
+    func testOnlyWebLinksAreLinks() {
+        for link in ["https://omarchy.org", "http://192.168.1.5:8080/a?b=c", "HTTPS://X.ORG/"] {
+            XCTAssertTrue(ShareWire.isURL(link), link)
+            XCTAssertNotNil(ShareWire.webURL(link), link)
+        }
+        for text in ["file:///etc/passwd", "ftp://omarchy.org", "ssh+git://host/repo", "smb://host/share", "javascript:alert(1)",
+                     "https://", "http:///path", "/home/me/a.txt", "~/a.txt", "omarchy.org", "https://a.org b"] {
+            XCTAssertFalse(ShareWire.isURL(text), text)
+            XCTAssertEqual(ShareWire.text(text).string("text"), text, text)
+        }
     }
 
     func testOtherTextGoesAsText() {
@@ -52,15 +66,32 @@ final class ShareWireTests: XCTestCase {
         let both = Packet(PacketType.share, ["text": "hi", "url": "https://x.org", "filename": "a"], payloadSize: 3, payloadPort: 1739)
         XCTAssertEqual(ShareRequest(both), .text("hi"))
         let url = Packet(PacketType.share, ["url": "https://x.org", "filename": "a"], payloadSize: 3, payloadPort: 1739)
-        XCTAssertEqual(ShareRequest(url), .url("https://x.org"))
+        XCTAssertEqual(ShareRequest(url), .url(URL(string: "https://x.org")!))
         let file = Packet.parse(#"{"id":1,"type":"flux.share.request","body":{"filename":"r.txt","open":false,"lastModified":1700000000123},"payloadSize":3,"payloadTransferInfo":{"tunnel":"t1"}}"#)!
-        XCTAssertEqual(ShareRequest(file), .file(name: "r.txt", open: false, lastModified: 1_700_000_000_123))
+        XCTAssertEqual(ShareRequest(file), .file(name: "r.txt", lastModified: 1_700_000_000_123))
         XCTAssertNil(ShareRequest(Packet(PacketType.share, ["filename": "a"])), "a file needs a payload")
     }
 
     func testRequestNamesAFileWithoutName() {
         let p = Packet(PacketType.share, [:], payloadSize: 3, payloadPort: 1739)
-        XCTAssertEqual(ShareRequest(p, now: 42), .file(name: "file-42", open: false, lastModified: nil))
+        XCTAssertEqual(ShareRequest(p, now: 42), .file(name: "file-42", lastModified: nil))
+    }
+
+    /// A computer cannot make this device open a file or a link by itself.
+    func testRequestIgnoresTheOpenFlagAndOtherSchemes() {
+        let file = Packet.parse(#"{"id":1,"type":"flux.share.request","body":{"filename":"setup.terminal","open":true},"payloadSize":3,"payloadTransferInfo":{"tunnel":"t1"}}"#)!
+        XCTAssertEqual(ShareRequest(file), .file(name: "setup.terminal", lastModified: nil))
+        for link in ["file:///Applications/Calculator.app", "x-apple.systempreferences:com.apple.preference.security", "/etc/passwd"] {
+            XCTAssertEqual(ShareRequest(Packet(PacketType.share, ["url": link])), .text(link), link)
+        }
+    }
+
+    func testReceivedFileNeedsFreeSpace() {
+        let gib: Int64 = 1 << 30
+        XCTAssertTrue(SharePlugin.fits(100, free: gib))
+        XCTAssertFalse(SharePlugin.fits(gib, free: gib), "a file leaves a reserve free")
+        XCTAssertFalse(SharePlugin.fits(-1, free: gib), "a file has a size")
+        XCTAssertFalse(SharePlugin.fits(Int64.max, free: gib))
     }
 
     func testSafeNameStaysInTheFolder() {
@@ -71,6 +102,16 @@ final class ShareWireTests: XCTestCase {
         XCTAssertEqual(ShareWire.safeName("dir/"), "file")
         XCTAssertEqual(ShareWire.safeName("   "), "file")
         XCTAssertEqual(ShareWire.safeName("Screenshot at 10.00\u{202F}AM.png"), "Screenshot at 10.00\u{202F}AM.png")
+    }
+
+    /// A bidirectional control can show "invoice.pdf" for a name that ends in ".exe".
+    func testSafeNameDropsBidirectionalControls() {
+        XCTAssertEqual(ShareWire.safeName("invoice\u{202E}fdp.exe"), "invoicefdp.exe")
+        XCTAssertEqual(ShareWire.safeName("\u{2066}a\u{2069}.txt"), "a.txt")
+        XCTAssertEqual(ShareWire.safeName("\u{200E}\u{200F}\u{061C}\u{202A}\u{202B}\u{202C}\u{202D}b.txt"), "b.txt")
+        XCTAssertEqual(ShareWire.safeName("c\u{0085}\u{009B}.txt"), "c.txt", "C1 controls go too")
+        XCTAssertEqual(ShareWire.safeName("\u{202E}"), "file")
+        XCTAssertEqual(ShareWire.safeName("Ünïcødé 名前.txt"), "Ünïcødé 名前.txt")
     }
 
     func testUniqueURLNeverReusesAName() {

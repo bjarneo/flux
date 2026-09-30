@@ -162,8 +162,8 @@ public final class BatteryPlugin: FluxPlugin, @unchecked Sendable {
             return last != state
         }
         guard changed else { return }
-        for d in core.connectedPaired() where d.accepts(PacketType.battery) {
-            _ = d.send(state.packet)
+        for id in core.connectedPairedIds(accepting: PacketType.battery) {
+            core.send(state.packet, to: id)
         }
     }
 }

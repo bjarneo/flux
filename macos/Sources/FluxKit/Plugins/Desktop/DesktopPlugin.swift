@@ -2,8 +2,9 @@ import Foundation
 import NIOCore
 import Observation
 
-/// How long this Mac waits for the computer to connect.
-private let connectTimeout: TimeAmount = .seconds(15)
+/// How long this Mac waits for the computer to connect, in seconds.
+private let connectSeconds: Int64 = 15
+private let connectTimeout: TimeAmount = .seconds(connectSeconds)
 
 /// The UI state of the remote desktop and the Omarchy panel.
 @MainActor
@@ -204,7 +205,7 @@ public final class DesktopPlugin: FluxPlugin, @unchecked Sendable {
                 return true
             }
             guard keep else {
-                stream.channel.channel.close(promise: nil)
+                await stream.discard()
                 return
             }
             try await read(stream, id)
@@ -219,10 +220,11 @@ public final class DesktopPlugin: FluxPlugin, @unchecked Sendable {
 
     /// Opens a listener, sends flux.desktop "start" with its port, and waits
     /// for the computer. The computer connects out, as for the webcam, and
-    /// must use the certificate of the paired computer.
+    /// must use the certificate of the paired computer. The listener closes
+    /// a connection with another certificate and waits on.
     private func connect(_ core: FluxCore, _ deviceId: String, _ name: String, _ monitor: String?, _ maxSize: Int,
                          _ certificate: [UInt8], _ id: Int) async throws -> TLSStream {
-        let server = try await PayloadServer.open(tls: core.tls, expected: nil)
+        let server = try await PayloadServer.open(tls: core.tls, expected: certificate)
         let keep = lock.withLock {
             guard attempt == id else { return false }
             self.server = server
@@ -236,18 +238,13 @@ public final class DesktopPlugin: FluxPlugin, @unchecked Sendable {
             server.close()
             throw FluxError("Not connected to \(name)")
         }
-        let stream: TLSStream
+        let waited = ContinuousClock.now
         do {
-            stream = try await server.accept(timeout: connectTimeout)
-        } catch {
+            return try await server.accept(timeout: connectTimeout)
+        } catch where ContinuousClock.now - waited >= .seconds(connectSeconds) {
             // An error packet from the computer ends the attempt first, with its message.
             throw FluxError("\(name) did not connect. Update Flux on the computer.")
         }
-        guard stream.peerCertificate == certificate else {
-            stream.channel.channel.close(promise: nil)
-            throw FluxError("The connection did not come from \(name)")
-        }
-        return stream
     }
 
     /// Reads the frames until the computer closes the stream, and shows them.

@@ -1,8 +1,9 @@
 import AVFoundation
 import NIOCore
 
-/// How long this Mac waits for the computer to connect.
-private let connectTimeout: TimeAmount = .seconds(10)
+/// How long this Mac waits for the computer to connect, in seconds.
+private let connectSeconds: Int64 = 10
+private let connectTimeout: TimeAmount = .seconds(connectSeconds)
 /// The time between 2 level updates, about 15 per second, in nanoseconds.
 private let levelInterval: UInt64 = 66_000_000
 /// The audio chunks that wait for the network. A chunk holds 10 to 35 ms, so
@@ -186,9 +187,10 @@ public final class MicPlugin: FluxPlugin, @unchecked Sendable {
     /// Opens a listener, sends flux.mic "start" with its port, and waits for
     /// the computer. The computer connects out, so the stream passes a
     /// firewall that blocks incoming traffic on the computer. The connection
-    /// must use the certificate of the paired computer.
+    /// must use the certificate of the paired computer. The listener closes
+    /// a connection with another certificate and waits on.
     private func connect(_ core: FluxCore, _ deviceId: String, _ name: String, _ certificate: [UInt8], _ id: Int) async throws -> TLSStream {
-        let server = try await PayloadServer.open(tls: core.tls, expected: nil)
+        let server = try await PayloadServer.open(tls: core.tls, expected: certificate)
         let keep = lock.withLock {
             guard attempt == id else { return false }
             self.server = server
@@ -202,17 +204,12 @@ public final class MicPlugin: FluxPlugin, @unchecked Sendable {
             server.close()
             throw FluxError("Not connected to \(name)")
         }
-        let stream: TLSStream
+        let waited = ContinuousClock.now
         do {
-            stream = try await server.accept(timeout: connectTimeout)
-        } catch {
+            return try await server.accept(timeout: connectTimeout)
+        } catch where ContinuousClock.now - waited >= .seconds(connectSeconds) {
             throw FluxError("\(name) did not connect. Update Flux on the computer.")
         }
-        guard stream.peerCertificate == certificate else {
-            await stream.discard()
-            throw FluxError("The connection did not come from \(name)")
-        }
-        return stream
     }
 
     /// Records and writes the audio until the stream ends. It throws when the

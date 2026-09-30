@@ -92,7 +92,7 @@ public enum ApproveMessage {
         }
         guard let id = p.string("id"), !id.isEmpty, id.utf16.count <= 64, validField(id),
               let host = p.string("host"), let user = p.string("user"),
-              let time = p.long("time"), let nonce = p.string("nonce") else { return nil }
+              let time = p.long("time"), validTime(time), let nonce = p.string("nonce") else { return nil }
         let service: String
         if kind == .approve {
             guard let s = p.string("service") else { return nil }
@@ -121,8 +121,16 @@ public enum ApproveMessage {
     }
 
     /// Reports whether the time of the request is within 10 minutes of the
-    /// clock of this Mac.
-    public static func fresh(_ r: ApproveRequest, now: Int64) -> Bool { abs(now - r.time) <= maxSkewSeconds }
+    /// clock of this Mac. The subtraction reports an overflow instead of a
+    /// trap, and a time that overflows is not fresh.
+    public static func fresh(_ r: ApproveRequest, now: Int64) -> Bool {
+        let (d, overflow) = now.subtractingReportingOverflow(r.time)
+        return !overflow && d.magnitude <= UInt64(maxSkewSeconds)
+    }
+
+    /// Reports whether a request time in seconds is possible: above 0 and
+    /// at most 2^40, about the year 36812. The helper sends the time of now.
+    static func validTime(_ t: Int64) -> Bool { t > 0 && t <= 1 << 40 }
 
     /// The question, for example "Approve sudo for user alice on host omarchy-xps?".
     public static func question(_ r: ApproveRequest) -> String {
