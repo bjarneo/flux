@@ -238,7 +238,8 @@ func TestSetRemoteSettings(t *testing.T) {
 }
 
 // A switch that config.toml cannot keep does not turn on. A switch that
-// turns off stops the sessions, also when config.toml cannot keep it.
+// turns off stops the sessions, also when config.toml cannot keep it. Each
+// other setting that config.toml cannot keep does not change.
 func TestUnsavedRemoteSettings(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
@@ -265,6 +266,48 @@ func TestUnsavedRemoteSettings(t *testing.T) {
 	}
 	if d.cfg.RemoteDesktop || s.ctx.Err() == nil {
 		t.Fatal("the remote desktop runs after the switch turned off")
+	}
+
+	// Each other setting keeps its old value, and the window gets the
+	// state again.
+	d.mu.Lock()
+	d.cfg.AutoClipboard, d.cfg.Notifications, d.cfg.PauseMediaOnCall, d.cfg.SyncDnd = true, true, true, true
+	d.cfg.Herdr, d.cfg.CheckUpdates, d.cfg.Name, d.cfg.DownloadDir = true, true, "desk", "/home/alice/Downloads"
+	d.mu.Unlock()
+	for _, c := range []struct {
+		key   string
+		value any
+		get   func(*config.Config) any
+	}{
+		{"autoClipboard", false, func(c *config.Config) any { return c.AutoClipboard }},
+		{"notifications", false, func(c *config.Config) any { return c.Notifications }},
+		{"pauseMediaOnCall", false, func(c *config.Config) any { return c.PauseMediaOnCall }},
+		{"syncDnd", false, func(c *config.Config) any { return c.SyncDnd }},
+		{"herdr", false, func(c *config.Config) any { return c.Herdr }},
+		{"checkUpdates", false, func(c *config.Config) any { return c.CheckUpdates }},
+		{"name", "laptop", func(c *config.Config) any { return c.Name }},
+		{"downloadDir", "/tmp/elsewhere", func(c *config.Config) any { return c.DownloadDir }},
+	} {
+		d.mu.Lock()
+		old := c.get(d.cfg)
+		d.mu.Unlock()
+		select {
+		case <-d.dirty:
+		default:
+		}
+		err := d.setSetting(c.key, c.value)
+		if err == nil || !strings.Contains(err.Error(), c.key+" did not change") {
+			t.Errorf("%s: error %v", c.key, err)
+		}
+		d.mu.Lock()
+		now := c.get(d.cfg)
+		d.mu.Unlock()
+		if now != old {
+			t.Errorf("%s is %v after the error, want %v", c.key, now, old)
+		}
+		if len(d.dirty) == 0 {
+			t.Errorf("%s: the window does not get the old value", c.key)
+		}
 	}
 }
 

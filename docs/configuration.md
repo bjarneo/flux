@@ -67,6 +67,7 @@ The destination paths expand `~`.
 When `fluxd` cannot save `config.toml`, `settings.set` returns an error.
 Then `remote_input`, `remote_desktop`, `share_home`, `herdr_control`, and `herdr_terminals` do not turn on.
 When 1 of them turns off, it is off at once, until `fluxd` restarts.
+Each other setting keeps its old value.
 
 A command without `id` gets an ID from its name and its command.
 The ID stays the same after each reload and restart, so `flux-cli run ID` keeps working.
