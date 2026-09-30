@@ -34,6 +34,12 @@ const pairCooldown = 2 * time.Second
 // computer sent it.
 const pairRetry = 30 * time.Second
 
+// maxConfirmQueue is the largest number of packets that fluxd keeps from a
+// device while a pairing waits in state "confirm". The link of a device
+// that is not paired reads at most 64 KiB per line, so the queue holds at
+// most 2 MiB. fluxd drops the packets after the limit.
+const maxConfirmQueue = 32
+
 // maxIncoming is the number of incoming pair requests that can be open at
 // the same time. fluxd refuses more, so that devices on the network cannot
 // fill the desktop with pair notifications. maxIncomingPerIP is the part of
@@ -122,6 +128,7 @@ func (d *Daemon) acceptPair(dev *Device, want string) (string, error) {
 		return "", apiErr("no_request", "%s has no open pair request with the key %s", name, proto.FormatKey(want))
 	}
 	key, cert := dev.pairKey, dev.pairCert
+	queued := dev.confirmQueue
 	note, err := d.pinLocked(dev, l)
 	name := dev.Name
 	d.mu.Unlock()
@@ -131,6 +138,11 @@ func (d *Daemon) acceptPair(dev *Device, want string) (string, error) {
 	}
 	if state == "confirm" {
 		d.pairedLink(dev, l, name)
+		// The device sent these packets after its answer, while this
+		// computer waited for the user.
+		for _, p := range queued {
+			d.handlePacket(dev, l, p)
+		}
 		return key, nil
 	}
 	if err := l.Send(proto.New(proto.TypePair, map[string]any{"pair": true})); err != nil {
@@ -285,6 +297,7 @@ func (d *Daemon) handlePair(dev *Device, l *lan.Link, p *proto.Packet) {
 			// The device unpaired. The link ends, so no session of the
 			// device outlives the pairing.
 			l.Close()
+			d.logf("%s unpaired this computer", name)
 			d.toast("%s unpaired", name)
 		case state == "requested":
 			d.toast("%s rejected the pair request", name)
@@ -598,5 +611,6 @@ func (dev *Device) clearPairingLocked() uint32 {
 	note := dev.pairNote
 	dev.pairState, dev.pairKey, dev.pairTime = "", "", 0
 	dev.pairLink, dev.pairCert, dev.pairNote = nil, nil, 0
+	dev.confirmQueue = nil
 	return note
 }

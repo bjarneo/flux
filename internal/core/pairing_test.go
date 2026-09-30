@@ -1232,6 +1232,68 @@ func TestConfirmNeedsLocalAccept(t *testing.T) {
 	noPairBefore(t, onDesk, fromDesk)
 }
 
+// TestConfirmKeepsFirstPackets checks the packets that the phone sends
+// after its answer, while the pairing waits in state "confirm". fluxd acts
+// on them only after the accept on this computer, and a reject drops them.
+func TestConfirmKeepsFirstPackets(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d, _, _, dev, onDesk, onPhone, fromDesk := phonePair(t, ctx)
+	battery := func(charge int) {
+		t.Helper()
+		if err := onPhone.Send(proto.New(proto.TypeBattery, map[string]any{"currentCharge": charge, "isCharging": true})); err != nil {
+			t.Fatal(err)
+		}
+	}
+	queued := func() int { return field(d, func() int { return len(dev.confirmQueue) }) }
+
+	key := confirmState(t, d, dev, onPhone, fromDesk)
+	battery(42)
+	waitFor(t, "the queued battery", func() bool { return queued() == 1 })
+	if field(d, func() *Battery { return dev.battery }) != nil {
+		t.Fatal("fluxd used the battery before the accept")
+	}
+	if err := d.AcceptPair(dev, key); err != nil {
+		t.Fatal(err)
+	}
+	if b := field(d, func() *Battery { return dev.battery }); b == nil || b.Charge != 42 || !b.Charging {
+		t.Fatalf("battery after the accept: %+v", b)
+	}
+	if queued() != 0 {
+		t.Fatal("the queue is not empty after the accept")
+	}
+	noPairBefore(t, onDesk, fromDesk)
+}
+
+// TestConfirmQueueLimit checks that a reject drops the queued packets, and
+// that the queue keeps at most maxConfirmQueue packets.
+func TestConfirmQueueLimit(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d, _, _, dev, _, onPhone, fromDesk := phonePair(t, ctx)
+	queued := func() int { return field(d, func() int { return len(dev.confirmQueue) }) }
+
+	key := confirmState(t, d, dev, onPhone, fromDesk)
+	for range maxConfirmQueue + 8 {
+		if err := onPhone.Send(proto.New(proto.TypePing, nil)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	waitFor(t, "a full queue", func() bool { return queued() == maxConfirmQueue })
+	// The rest of the pings must not grow the queue.
+	for end := time.Now().Add(300 * time.Millisecond); time.Now().Before(end); time.Sleep(10 * time.Millisecond) {
+		if n := queued(); n > maxConfirmQueue {
+			t.Fatalf("the queue holds %d packets", n)
+		}
+	}
+	if err := d.RejectPair(dev, key); err != nil {
+		t.Fatal(err)
+	}
+	if queued() != 0 {
+		t.Fatal("the reject kept the queued packets")
+	}
+}
+
 // TestConfirmRejectAndTimeout checks that a reject and a timeout in state
 // "confirm" send pair false, so that the phone removes its pin, and pin
 // nothing.

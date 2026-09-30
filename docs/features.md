@@ -22,6 +22,10 @@ See [sync switches](android-setup.md#sync-switches) and [security](security.md).
 8. Accept the matching request on the phone.
 9. Select **Confirm** on the desktop, in the Flux window or in the notification. The desktop pins the phone only after this step.
 
+The phone shows the desktop as paired after step 8.
+The desktop keeps the first packets of the phone, for example the battery level, and uses them after step 9.
+When you reject the pairing on the desktop, the phone removes the pairing.
+
 Compare all 16 characters.
 An earlier Flux app shows only 8 characters. Update Flux on each phone, iPhone, and Mac before you pair.
 If the keys differ, reject the request and pair again.

@@ -35,6 +35,13 @@ func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 	}
 	if !paired {
 		d.mu.Lock()
+		if dev.pairState == "confirm" && dev.pairLink == l {
+			if len(dev.confirmQueue) < maxConfirmQueue {
+				dev.confirmQueue = append(dev.confirmQueue, p)
+			}
+			d.mu.Unlock()
+			return
+		}
 		dev.ignored++
 		first := dev.ignored == 1
 		d.mu.Unlock()
