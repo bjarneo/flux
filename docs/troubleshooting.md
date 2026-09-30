@@ -171,6 +171,25 @@ When the name still matches more than 1 device, `flux-cli pair` returns the `amb
 See [pair and discover](cli.md#pair-and-discover) for the match rule of each command.
 Give the device ID in place of the name.
 
+## A pairing from the computer stops after the phone accepts
+
+A pairing that you start on the computer can stop right after you accept on the phone.
+The Flux window then shows `Pairing with Pixel 8 stopped, because the connection closed`.
+A large phone clipboard can be the cause, because Flux for Android sends its clipboard when it accepts.
+Until you confirm on the computer, `fluxd` reads at most 64 KiB in 1 packet from the phone.
+It closes the connection for a larger packet, and the pairing stops.
+
+To find the cause, run:
+
+```sh
+journalctl --user -u fluxd -n 50 --no-pager | grep "packet too large"
+```
+
+To pair, do 1 of these steps:
+
+- Clear the phone clipboard, or copy a short text on the phone, and pair again.
+- Start the pairing on the phone, and accept it on the computer.
+
 ## The phone does not connect away from home
 
 Flux reaches a phone outside the local network only through an extra address, for example its Tailscale name.
