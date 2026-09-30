@@ -533,7 +533,7 @@ func findPairing(s *State, device string) (id, key string, err error) {
 		return ids[0], keys[0], nil
 	}
 	sort.Strings(ids)
-	return "", "", fmt.Errorf("%d devices named %q ask to pair: %s. Give the device ID", len(ids), device, strings.Join(ids, ", "))
+	return "", "", fmt.Errorf("%d devices are named %q: %s. Give the device ID", len(ids), device, strings.Join(ids, ", "))
 }
 
 // validKey reports whether key has 16 uppercase hex digits.
