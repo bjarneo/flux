@@ -416,16 +416,9 @@ The `kind` field selects the message.
 
 When `fluxd` cannot finish an answer because of an internal error, it sends the answer with an `error`, for example `fluxd could not read the pane`.
 
-The apps add a `request` number to each `keys`, `prompt`, `input`, `create`, and `close` packet.
-`fluxd` copies the number into the answer: `sent`, `created`, or `closed`.
-So an app matches each answer to its request, also when 2 requests for 1 pane wait.
-`fluxd` copies only a number. An answer to a packet without a number has no `request`, and an app then matches the answer by the pane and the action.
-The `request` field is not the `request` kind of the table.
-
-```json
-{"kind":"prompt","pane":"w5:p1","text":"Run the tests","request":8}
-{"kind":"sent","pane":"w5:p1","action":"prompt","request":8}
-```
+A `keys`, `prompt`, `input`, `create`, or `close` packet can have `request`, a number.
+The answer `sent`, `created`, or `closed` has the same `request`, so the phone can match a late answer to its packet.
+An answer to a packet without `request` has no `request` field.
 
 The computer sends `state` when the phone connects, after each change, and as the answer to `request`.
 Each agent has `pane`, `agent`, `status`, `title`, `project`, and `workspace`:
@@ -479,8 +472,8 @@ In these fields, `fluxd` also changes line breaks and tabs to spaces.
 A reply and its answer look like this:
 
 ```json
-{"kind":"keys","pane":"w5:p1","keys":["2"]}
-{"kind":"sent","pane":"w5:p1","action":"keys"}
+{"kind":"keys","pane":"w5:p1","keys":["2"],"request":7}
+{"kind":"sent","pane":"w5:p1","action":"keys","request":7}
 ```
 
 When the agent waits for a choice, the computer refuses a `prompt` with the code `blocked`:

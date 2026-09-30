@@ -133,40 +133,63 @@ Each device in `devices` has these fields:
 
 A device that is not paired shows only while it has a link.
 
-## Methods
+## Method groups
+
+| Group | Methods |
+| --- | --- |
+| State | `state`, `subscribe`, `discover` |
+| Pairing | `pair.request`, `pair.accept`, `pair.reject`, `pair.unpair` |
+| Addresses | `addresses.add`, `addresses.remove` |
+| Device | `ring`, `ping` |
+| Sharing | `clipboard.send`, `clipboard.copy`, `share.files`, `share.text`, `share.url`, `transfer.cancel` |
+| Commands | `commands.add`, `commands.remove`, `commands.run` |
+| Notifications | `notification.dismiss`, `notification.dismissAll`, `notification.reply`, `notification.action`, `notify.send` |
+| Text messages | `sms.refresh`, `sms.thread`, `sms.send` |
+| Streams | `webcam.config`, `webcam.stop`, `mic.stop`, `screen.stop`, `desktop.stop` |
+| Approval | `approve.request`, `approve.wait`, `approve.enroll`, `approve.cancel` |
+| Settings and updates | `settings.set`, `update.install`, `update.sendApp` |
+
+`update.install` opens a terminal that runs `flux-cli update`.
+`update.sendApp` with a `device` downloads the Android app of the latest release, checks it, and sends it to that phone.
+It first checks `SHA256SUMS.sig` with the public release key when the build of `fluxd` has one.
+Then it checks the APK against `SHA256SUMS`.
+When the build has a key and the release has no `SHA256SUMS.sig`, the phone gets no offer.
+
+### Parameters
 
 The `device` parameter takes a device ID or a name.
 A name matches only a device that is paired or connected, and a paired device comes first.
 Without `device`, a method uses the only connected paired device.
 
-| Group | Method | Parameters |
-| --- | --- | --- |
-| State | `state`, `subscribe`, `discover` | None |
-| Pairing | `pair.request`, `pair.accept`, `pair.reject`, `pair.unpair` | `device` |
-| Addresses | `addresses.add`, `addresses.remove` | `device`, `address` |
-| Device | `ring`, `ping` | `device`, and `message` for `ping` |
-| Clipboard | `clipboard.send` | `device`, and `text`. Without `text`, the clipboard of the computer. |
-| Clipboard | `clipboard.copy` | `id` of an entry, or `text`, or `path` of an image in the history |
-| Sharing | `share.files` | `device`, `paths`. The result has the IDs of the new `transfers`. |
-| Sharing | `share.text`, `share.url` | `device`, and `text` or `url` |
-| Transfers | `transfer.cancel` | `id` of a transfer |
-| Commands | `commands.add` | `name`, `command`. The result has the new `id`. |
-| Commands | `commands.remove`, `commands.run` | `id` |
-| Notifications | `notification.dismiss` | `device`, `id` |
-| Notifications | `notification.dismissAll` | `device`. The result has the number that it `dismissed`. |
-| Notifications | `notification.reply` | `device`, `id`, `message` |
-| Notifications | `notification.action` | `device`, `id`, `action` |
-| Notifications | `notify.send` | `device`, `title`, `body`. It shows a notification on the device. |
-| Text messages | `sms.refresh`, `sms.thread`, `sms.send` | See [text messages](#text-messages). |
-| Streams | `webcam.config` | `config`, or `reset` set to `true` |
-| Streams | `webcam.stop`, `mic.stop`, `screen.stop`, `desktop.stop` | None |
-| Approval | `approve.request`, `approve.enroll`, `approve.wait`, `approve.cancel` | For the approval helper and `flux-cli approve`. See [approval](#approval). |
-| Settings | `settings.set` | `key`, `value` |
-| Updates | `update.install` | None. It opens a terminal that runs `flux-cli update`. |
-| Updates | `update.sendApp` | `device` |
+| Method | Parameters |
+| --- | --- |
+| `state`, `subscribe`, `discover` | None |
+| `pair.request`, `pair.accept`, `pair.reject`, `pair.unpair` | `device` |
+| `addresses.add`, `addresses.remove` | `device`, `address` |
+| `ring` | `device` |
+| `ping` | `device`, and an optional `message` |
+| `clipboard.send` | `device`, and `text`. Without `text`, the clipboard of the computer. |
+| `clipboard.copy` | `id` of an entry, or `text`, or `path` of an image in the history |
+| `share.files` | `device`, and `paths`, a list of absolute paths. The result has the IDs of the new `transfers`. |
+| `share.text`, `share.url` | `device`, and `text` or `url` |
+| `transfer.cancel` | `id` of a transfer |
+| `commands.add` | `name`, `command`. The result has the new `id`. |
+| `commands.remove`, `commands.run` | `id` |
+| `notification.dismiss` | `device`, `id` |
+| `notification.dismissAll` | `device`. The result has the number that it `dismissed`. |
+| `notification.reply` | `device`, `id`, `message` |
+| `notification.action` | `device`, `id`, `action` |
+| `notify.send` | `device`, `title`, `body`. It shows a notification on the device. |
+| `sms.refresh`, `sms.thread`, `sms.send` | See [text messages](#text-messages). |
+| `webcam.config` | `config`, or `reset` set to `true` |
+| `webcam.stop`, `mic.stop`, `screen.stop`, `desktop.stop` | None |
+| `approve.request`, `approve.enroll`, `approve.wait`, `approve.cancel` | For the approval helper and `flux-cli approve`. See [approval](#approval). |
+| `settings.set` | `key`, `value` |
+| `update.install` | None |
+| `update.sendApp` | `device` |
 
 `share.url` takes only an `http` or `https` URL with a host.
-`share.text`, `share.url`, and `clipboard.send` refuse a text of more than 1 MiB with `too_large`.
+`share.text`, `share.url`, and `clipboard.send` refuse a text of more than 256 KiB with `too_large`.
 
 `settings.set` takes these keys with a boolean `value`: `autoClipboard`, `notifications`, `shareHome`, `pauseMediaOnCall`, `syncDnd`, `herdr`, `herdrControl`, `herdrTerminals`, `remoteInput`, `remoteDesktop`, and `checkUpdates`.
 `name` and `downloadDir` take a string.
@@ -175,11 +198,6 @@ To turn the release check off or on over IPC, send:
 ```json
 {"id":4,"method":"settings.set","params":{"key":"checkUpdates","value":false}}
 ```
-
-`update.sendApp` downloads the Android app of the latest release and sends it to the phone.
-It first checks `SHA256SUMS.sig` with the public release key when the build of `fluxd` has one.
-Then it checks the APK against `SHA256SUMS`.
-When the build has a key and the release has no `SHA256SUMS.sig`, the phone gets no offer.
 
 ### Pairing
 
@@ -216,7 +234,7 @@ These codes need a step from the client:
 | `not_paired`, `offline` | The device is not paired, or it has no link now. |
 | `no_request` | No device with the name has an open pair request. |
 | `not_saved` | `pair.unpair` could not save `devices.json`. The device is unpaired only until fluxd restarts. |
-| `too_large` | The text has more than 1 MiB. |
+| `too_large` | The text has more than 256 KiB, the most that fluxd sends to a device. |
 | `bad_params`, `bad_setting` | A parameter or a setting is missing or has the wrong type. |
 
 The [herdr wire format](herdr.md#wire-format) uses the code `blocked` for a prompt to an agent that waits for a choice.
