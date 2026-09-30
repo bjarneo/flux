@@ -221,21 +221,30 @@ struct StatusPill: View {
     }
 }
 
-/// The 8-character key that both sides show while they pair.
+/// The 16-character key that both sides show while they pair, in groups
+/// of 4 characters.
 struct KeyView: View {
     let key: String
 
     var body: some View {
-        Text(key.isEmpty ? "--------" : key)
-            .font(.system(.largeTitle, design: .monospaced, weight: .semibold))
-            .kerning(4)
-            .minimumScaleFactor(0.6)
+        Text(key.isEmpty ? "---- ---- ---- ----" : Self.grouped(key))
+            .font(.system(.title, design: .monospaced, weight: .semibold))
+            .kerning(1)
+            .minimumScaleFactor(0.5)
             .lineLimit(1)
             .textSelection(.enabled)
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
             .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .accessibilityLabel(key.isEmpty ? "No key yet" : "Key \(key.map(String.init).joined(separator: " "))")
+    }
+
+    /// The key in groups of 4 characters, for example "5EE6 825F 974E D59A".
+    nonisolated static func grouped(_ key: String) -> String {
+        stride(from: 0, to: key.count, by: 4).map { start in
+            String(key.dropFirst(start).prefix(4))
+        }
+        .joined(separator: " ")
     }
 }
 

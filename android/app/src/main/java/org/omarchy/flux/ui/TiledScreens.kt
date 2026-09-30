@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.SystemClock
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
@@ -58,6 +59,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -70,6 +73,7 @@ import org.omarchy.flux.core.CaptureKind
 import org.omarchy.flux.core.CaptureWatch
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
+import org.omarchy.flux.core.NotificationSync
 import org.omarchy.flux.core.Plugins
 import org.omarchy.flux.core.Share
 import org.omarchy.flux.core.SmsSync
@@ -256,10 +260,23 @@ private fun AvailableTile(d: DeviceUi, modifier: Modifier, onPair: () -> Unit) {
 
 // ───────────────────────── Pairing ─────────────────────────
 
-/** The pairing sheet: the verification key, 1 box per character. Back and a tap on the scrim cancel. */
+/**
+ * The pairing sheet: the verification key, 1 box for each group of 4
+ * digits. Back and a tap on the scrim cancel. Windows of other apps hide
+ * while the sheet shows, and a tap that such a window covered does not pair.
+ */
 @Composable
 fun TiledPairSheet(name: String, key: String, waiting: Boolean, onCancel: () -> Unit, onPair: () -> Unit) {
     BackHandler(onBack = onCancel)
+    HideOverlays()
+    val activity = LocalActivity.current as? MainActivity
+    val pair = {
+        if (activity?.touchObscured == true) {
+            FluxCore.toast("Another app draws over Flux. Close that app, then pair.")
+        } else {
+            onPair()
+        }
+    }
     Box(
         Modifier.fillMaxSize().background(Color(0x990A0A0F))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onCancel),
@@ -279,15 +296,21 @@ fun TiledPairSheet(name: String, key: String, waiting: Boolean, onCancel: () -> 
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     TileLabel("Pair", color = Tn.yellow)
                     T(name, size = 22, weight = FontWeight.SemiBold, letterSpacing = -0.4f, maxLines = 1)
-                    T(if (waiting) "Confirm the same code on $name." else "Check that $name shows the same code.", size = 13, color = Tn.sub)
+                    T(
+                        if (waiting) "Confirm the same code on $name. Compare all 16 characters." else "Check that $name shows the same code. Compare all 16 characters.",
+                        size = 13, color = Tn.sub,
+                    )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    for (c in key.padEnd(8, '…')) {
+                Row(
+                    Modifier.semantics(mergeDescendants = true) { contentDescription = "Code ${PairKey.display(key)}" },
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    for (group in PairKey.groups(key)) {
                         Box(
                             Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(6.dp)).background(Tn.bg)
                                 .border(1.dp, Tn.lineHi, RoundedCornerShape(6.dp)),
                             contentAlignment = Alignment.Center,
-                        ) { T(c.toString(), size = 20, color = Tn.yellow, weight = FontWeight.Medium, family = Mono) }
+                        ) { T(group, size = 18, color = Tn.yellow, weight = FontWeight.Medium, family = Mono, maxLines = 1) }
                     }
                 }
                 Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(TileGap)) {
@@ -297,7 +320,7 @@ fun TiledPairSheet(name: String, key: String, waiting: Boolean, onCancel: () -> 
                     ) { T("Cancel", size = 14, weight = FontWeight.SemiBold) }
                     Box(
                         Modifier.weight(2f).height(48.dp).clip(RoundedCornerShape(10.dp)).background(Tn.yellow)
-                            .clickable(enabled = !waiting, onClick = onPair),
+                            .clickable(enabled = !waiting, onClick = pair),
                         contentAlignment = Alignment.Center,
                     ) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -396,6 +419,8 @@ fun TiledHomeScreen(
                 runCatching { context.startActivity(intent) }
                     .onFailure { runCatching { context.startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")) } }
             } else {
+                // The computers drop the shared notifications, and their replies and buttons stop working.
+                if (state.shareNotifications) NotificationSync.stop()
                 FluxCore.setShareNotifications(!state.shareNotifications)
             }
         })
@@ -467,15 +492,12 @@ fun TiledHomeScreen(
             }
             LineTile(Ic.folderOpen, "Browse PC", Tn.magenta, guarded { onNavigate("browse") }, Modifier.fillMaxWidth().height(TileUnit), on, trailing = "~/ read-only")
             // Remote input can type in any window of the computer, so it asks for the phone lock first.
+            // The switch on the computer can turn on later, so the tile asks whatever the switch is.
             if (d.inputSupported) {
                 LineTile(
                     Ic.touchpad, "Touchpad and keyboard", Tn.green,
                     guarded {
-                        if (d.remoteInput == true) {
-                            ReplyLock.run(context, { onNavigate("touchpad") }, "Use the touchpad", "use the touchpad") { FluxCore.toast(it) }
-                        } else {
-                            onNavigate("touchpad")
-                        }
+                        ReplyLock.run(context, { onNavigate("touchpad") }, "Use the touchpad", "use the touchpad") { FluxCore.toast(it) }
                     },
                     Modifier.fillMaxWidth().height(TileUnit), on, trailing = if (d.remoteInput == true) null else "off",
                 )
@@ -485,11 +507,7 @@ fun TiledHomeScreen(
                 LineTile(
                     Ic.desktop, "Remote desktop", Tn.blue,
                     guarded {
-                        if (d.remoteDesktop == true) {
-                            ReplyLock.run(context, { onNavigate("desktop") }, "Show the computer screen", "show the computer screen") { FluxCore.toast(it) }
-                        } else {
-                            onNavigate("desktop")
-                        }
+                        ReplyLock.run(context, { onNavigate("desktop") }, "Show the computer screen", "show the computer screen") { FluxCore.toast(it) }
                     },
                     Modifier.fillMaxWidth().height(TileUnit), on,
                     trailing = when {
@@ -501,7 +519,14 @@ fun TiledHomeScreen(
             }
         }
 
-        SectionLabel("Sync")
+        // The sync switches are settings of the phone, not of this computer. Each paired computer gets the data.
+        SectionLabel("Sync with all computers")
+        val computers = state.devices.filter { it.paired }.map { it.name }.distinct()
+        T(
+            "These switches apply to every paired computer: ${computers.joinToString(", ").ifEmpty { d.name }}.",
+            Modifier.padding(start = 4.dp, bottom = 8.dp),
+            size = 13, color = Tn.sub,
+        )
         Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
             for (row in sync.chunked(2)) {
                 TileRow(84.dp) { for (s in row) SyncTile(s, Modifier.weight(1f).fillMaxHeight()) }

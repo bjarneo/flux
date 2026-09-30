@@ -6,15 +6,18 @@ on:
       tag:
         type: string
         required: true
+    # The caller passes the repository secrets. The secrets of the
+    # release environment replace them, so both places work. The job below
+    # stops when a value is missing.
     secrets:
       AUR_SSH_PRIVATE_KEY:
-        required: true
+        required: false
       AUR_USERNAME:
-        required: true
+        required: false
       AUR_EMAIL:
-        required: true
+        required: false
       AUR_KNOWN_HOSTS:
-        required: true
+        required: false
 
 permissions:
   contents: read
@@ -26,8 +29,9 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment: release
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: aur-package
           path: package

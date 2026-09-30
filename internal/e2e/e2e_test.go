@@ -64,6 +64,8 @@ type state struct {
 		Paired     bool     `json:"paired"`
 		PairState  string   `json:"pairState"`
 		PairKey    string   `json:"pairKey"`
+		// Fingerprint identifies the certificate of the device.
+		Fingerprint string `json:"fingerprint"`
 		// Notifications are the notifications that the device sent.
 		Notifications []struct {
 			App   string `json:"app"`
@@ -282,18 +284,35 @@ func TestTwoDaemons(t *testing.T) {
 	}
 	beta.wait(t, "alpha online", func(s state) bool { _, on, _, _, _ := device(s, "alpha"); return on })
 
-	// Pairing: both sides must show the same verification key.
-	alpha.call(t, "pair.request", map[string]any{"device": "beta"}, nil)
+	// Pairing: both sides must show the same verification key of 16 hex
+	// digits. The answer of pair.request names the device and the key.
+	var req struct {
+		Device string `json:"device"`
+		Key    string `json:"key"`
+	}
+	alpha.call(t, "pair.request", map[string]any{"device": "beta"}, &req)
 	sa := alpha.wait(t, "request state", func(s state) bool { _, _, _, ps, _ := device(s, "beta"); return ps == "requested" })
 	sb := beta.wait(t, "incoming request", func(s state) bool { _, _, _, ps, _ := device(s, "alpha"); return ps == "incoming" })
-	_, _, _, _, keyA := device(sa, "beta")
+	betaID, _, _, _, keyA := device(sa, "beta")
 	_, _, _, _, keyB := device(sb, "alpha")
-	if keyA == "" || keyA != keyB {
-		t.Fatalf("verification keys differ: %q and %q", keyA, keyB)
+	if len(keyA) != 16 || strings.ToUpper(keyA) != keyA || keyA != keyB {
+		t.Fatalf("verification keys: %q and %q", keyA, keyB)
 	}
-	beta.call(t, "pair.accept", map[string]any{"device": "alpha"}, nil)
-	alpha.wait(t, "paired", func(s state) bool { _, _, p, _, _ := device(s, "beta"); return p })
+	if req.Device != betaID || req.Key != keyA {
+		t.Fatalf("pair.request returned %+v", req)
+	}
+	beta.call(t, "pair.accept", map[string]any{"device": "alpha", "key": keyB}, nil)
+	// alpha started the pairing, so its user confirms the key too. The
+	// answer of beta pins nothing on alpha.
+	alpha.wait(t, "confirm state", func(s state) bool { _, _, p, ps, k := device(s, "beta"); return !p && ps == "confirm" && k == keyA })
+	alpha.call(t, "pair.accept", map[string]any{"device": "beta", "key": keyA}, nil)
+	sa = alpha.wait(t, "paired", func(s state) bool { _, _, p, _, _ := device(s, "beta"); return p })
 	beta.wait(t, "paired", func(s state) bool { _, _, p, _, _ := device(s, "alpha"); return p })
+	for _, d := range sa.Devices {
+		if d.Name == "beta" && len(d.Fingerprint) != 16 {
+			t.Fatalf("beta has fingerprint %q", d.Fingerprint)
+		}
+	}
 
 	// Clipboard.
 	alpha.call(t, "clipboard.send", map[string]any{"device": "beta", "text": "yay -S flux-git"}, nil)
@@ -383,9 +402,16 @@ func TestTwoDaemons(t *testing.T) {
 		t.Fatalf("addresses.remove left %v", res.Addresses)
 	}
 
-	// Unpair.
+	// Unpair. alpha closes the link, and both sides forget the trust, also
+	// after a restart. The same UDP port lets the daemons find each other
+	// again.
 	alpha.call(t, "pair.unpair", map[string]any{"device": "beta"}, nil)
 	beta.wait(t, "unpaired", func(s state) bool { _, _, p, _, _ := device(s, "alpha"); return !p })
+	beta.stop()
+	beta.udpPort = alpha.udpPort
+	beta.launch(t, bin, tcpB)
+	alpha.wait(t, "beta online and not paired", func(s state) bool { _, on, p, _, _ := device(s, "beta"); return on && !p })
+	beta.wait(t, "alpha online and not paired", func(s state) bool { _, on, p, _, _ := device(s, "alpha"); return on && !p })
 	if strings.Contains(alpha.log.String(), "panic") || strings.Contains(beta.log.String(), "panic") {
 		t.Fatalf("a daemon panicked:\n%s\n%s", alpha.log, beta.log)
 	}

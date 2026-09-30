@@ -13,6 +13,8 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime/debug"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -108,7 +110,7 @@ type Daemon struct {
 	herdrTerms   []HerdrTerminal
 	herdrPlaces  []HerdrWorkspace
 	herdrKinds   []string
-	herdrHistory map[string][]string
+	herdrHistory map[string]agentHistory
 	herdrWake    chan struct{}
 
 	subs   map[int]func(event string, data any)
@@ -116,6 +118,35 @@ type Daemon struct {
 	dirty  chan struct{}
 	ctx    context.Context
 	logger *log.Logger
+
+	// herdrJobs keeps the herdr work that runs for the phones.
+	herdrJobs herdrJobs
+
+	// content holds the workers and the limits of shares, the clipboard,
+	// notifications, media, calls, and Do Not Disturb.
+	content contentState
+
+	// appSending is the name of the phone that gets the Android app from
+	// sendAppUpdate, or "". Only 1 app update runs at a time, and Busy
+	// counts it.
+	appSending string
+
+	// sessions is the state of the remote sessions: the input queue, the
+	// streams, Browse PC, and the shortcut requests.
+	sessions sessionState
+
+	// ready closes when Run has started the network. fluxd serves the
+	// socket only after that, because requests use the network.
+	ready chan struct{}
+
+	// releaseWoken is true when a wake came after the last release check.
+	// After a failed check, the next check then runs releaseRetryGap after
+	// the failure and not after releaseRetry.
+	releaseWoken bool
+	// trustNote tells the user that devices.json did not parse, or is "".
+	// The first window that connects shows it, with a desktop
+	// notification.
+	trustNote string
 }
 
 // Options change how the daemon runs. The zero value is the normal mode.
@@ -210,6 +241,7 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 		dndWake:     make(chan struct{}, 1),
 		releaseWake: make(chan struct{}, 1),
 	}
+	d.ready = make(chan struct{})
 	if exe, err := os.Executable(); err == nil {
 		d.binDir = filepath.Dir(exe)
 	}
@@ -220,14 +252,40 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 		d.clipDir = filepath.Join(os.TempDir(), "fluxd-clipboard-"+config.NewID(6))
 		d.input = nil
 	}
+	if trust.Broken != "" {
+		d.logf("%v. fluxd moved the file to %s and starts without paired devices", trust.BrokenErr, trust.Broken)
+		d.trustNote = fmt.Sprintf("devices.json was damaged, so Flux starts without paired devices. Pair your devices again. The old file is %s", trust.Broken)
+	}
 	for _, t := range trust.All() {
 		dev := d.deviceLocked(t.ID)
-		dev.applyTrust(t)
+		if err := dev.applyTrust(t); err != nil {
+			d.logf("devices.json: the certificate of %s (%s) does not parse: %v. fluxd refuses its links. To pair it again, run: flux-cli unpair %s", dev.Name, t.ID, err, t.ID)
+		}
+	}
+	// The link handlers and the API read these fields without the lock, so
+	// they are set before any link or request can come.
+	if !opts.Headless {
+		if n, err := desktop.NewNotifier(); err == nil {
+			d.notifier = n
+			n.OnAction(d.onNotificationAction)
+		} else {
+			d.logf("notifications off: %v", err)
+		}
+		if m, err := desktop.NewMedia(); err == nil {
+			d.media = m
+			d.callPlayers = m
+			m.OnChange(d.onDesktopMediaChange)
+		} else {
+			d.logf("media control off: %v", err)
+		}
 	}
 	return d, nil
 }
 
 func (d *Daemon) logf(format string, args ...any) { d.logger.Printf(format, args...) }
+
+// Ready returns a channel that closes when Run has started the network.
+func (d *Daemon) Ready() <-chan struct{} { return d.ready }
 
 // SetPendingVersion records the version of a new fluxd binary on disk.
 func (d *Daemon) SetPendingVersion(v string) {
@@ -257,6 +315,10 @@ func (d *Daemon) Busy() string {
 		what = "the screen mirror"
 	case d.desktop != nil:
 		what = "the remote desktop"
+	case len(d.sessions.browse) > 0:
+		what = "Browse PC"
+	case d.appSending != "":
+		what = "the app update for " + d.appSending
 	}
 	d.mu.Unlock()
 	if what == "" && d.approvals.pending() > 0 {
@@ -286,21 +348,14 @@ func (d *Daemon) nameLocked() string {
 // context of New ends.
 func (d *Daemon) Run() error {
 	ctx := d.ctx
-	d.lan = lan.New(lan.Config{
+	p := lan.New(lan.Config{
 		Cert: d.cert,
 		Identity: func() proto.Identity {
 			id := proto.NewIdentity(d.selfID, d.Name(), 0)
 			id.App, id.AppVersion = "fluxd", d.opts.Version
 			return id
 		},
-		Trusted: func(id string) (*x509.Certificate, bool) {
-			t, ok := d.trust.Get(id)
-			if !ok {
-				return nil, false
-			}
-			c, err := proto.ParseCertPEM(t.CertPEM)
-			return c, err == nil
-		},
+		Trusted: d.pinFor,
 		HasLink: func(id string) bool {
 			d.mu.Lock()
 			defer d.mu.Unlock()
@@ -314,10 +369,14 @@ func (d *Daemon) Run() error {
 		FirstTCPPort: d.opts.FirstTCPPort,
 		LoopbackOnly: d.opts.Headless,
 	})
-	if err := d.lan.Start(ctx); err != nil {
+	if err := p.Start(ctx); err != nil {
 		return err
 	}
-	d.logf("fluxd %s listening on TCP %d as %q", d.selfID, d.lan.TCPPort(), d.Name())
+	d.mu.Lock()
+	d.lan = p
+	d.mu.Unlock()
+	close(d.ready)
+	d.logf("fluxd %s listening on TCP %d as %q", d.selfID, p.TCPPort(), d.Name())
 	go d.releaseLoop(ctx)
 	if d.opts.Headless {
 		go d.publishLoop(ctx)
@@ -326,7 +385,7 @@ func (d *Daemon) Run() error {
 		d.closeLinks()
 		return nil
 	}
-	mdns := lan.MDNSInfo{DeviceID: d.selfID, Name: d.Name(), Type: proto.DeviceType(), Protocol: proto.ProtocolVersion, Port: d.lan.TCPPort(), Logf: d.logf}
+	mdns := lan.MDNSInfo{DeviceID: d.selfID, Name: d.Name(), Type: proto.DeviceType(), Protocol: proto.ProtocolVersion, Port: p.TCPPort(), Logf: d.logf}
 	if m, err := lan.StartMDNS(ctx, mdns, d.onMDNS); err != nil {
 		d.logf("mDNS off, UDP discovery only: %v", err)
 	} else {
@@ -344,20 +403,6 @@ func (d *Daemon) Run() error {
 		for _, id := range paired {
 			m.Refresh(id)
 		}
-	}
-
-	if n, err := desktop.NewNotifier(); err == nil {
-		d.notifier = n
-		n.OnAction(d.onNotificationAction)
-	} else {
-		d.logf("notifications off: %v", err)
-	}
-	if m, err := desktop.NewMedia(); err == nil {
-		d.media = m
-		d.callPlayers = m
-		m.OnChange(d.onDesktopMediaChange)
-	} else {
-		d.logf("media control off: %v", err)
 	}
 
 	if dnd := desktop.NewDND(); dnd.Kind() != "" {
@@ -436,6 +481,7 @@ func (d *Daemon) discoveryLoop(ctx context.Context) {
 			d.wakeRelease()
 			continue
 		}
+		d.closeIdleLinks(time.Now())
 		if n%3 == 0 {
 			d.dialKnown()
 		}
@@ -445,10 +491,21 @@ func (d *Daemon) discoveryLoop(ctx context.Context) {
 	}
 }
 
+// provider returns the LAN provider, or nil before Run starts it.
+func (d *Daemon) provider() *lan.Provider {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.lan
+}
+
 // announce broadcasts the identity and sends it to the last address of
 // each paired device that is offline.
 func (d *Daemon) announce() {
-	d.lan.Broadcast()
+	p := d.provider()
+	if p == nil {
+		return
+	}
+	p.Broadcast()
 	d.mu.Lock()
 	var ips []string
 	for _, dev := range d.devices {
@@ -458,7 +515,7 @@ func (d *Daemon) announce() {
 	}
 	d.mu.Unlock()
 	for _, ip := range ips {
-		d.lan.Announce(ip)
+		p.Announce(ip)
 	}
 }
 
@@ -499,6 +556,69 @@ func (d *Daemon) deviceLocked(id string) *Device {
 	return dev
 }
 
+// maxDiscovered is the number of devices from discovery that fluxd keeps
+// while they are not paired, not connected, and have no pairing.
+const maxDiscovered = 64
+
+// discoveredLocked returns the device with the ID for a discovery packet.
+// A new device replaces the oldest discovered device when fluxd keeps
+// maxDiscovered of them, so that packets with new IDs cannot fill the
+// memory. The caller holds d.mu.
+func (d *Daemon) discoveredLocked(id string) *Device {
+	if dev, ok := d.devices[id]; ok {
+		return dev
+	}
+	var oldest *Device
+	n := 0
+	for _, dev := range d.devices {
+		if !dev.forgettable() {
+			continue
+		}
+		n++
+		if oldest == nil || dev.lastHeard().Before(oldest.lastHeard()) {
+			oldest = dev
+		}
+	}
+	if n >= maxDiscovered && oldest != nil {
+		delete(d.devices, oldest.ID)
+	}
+	return d.deviceLocked(id)
+}
+
+// forgettable reports whether fluxd can remove the device from its list:
+// it is not paired, not connected, has no pairing, and gets no pair false
+// on its next link.
+func (dev *Device) forgettable() bool {
+	return !dev.Paired && !dev.badTrust && dev.link == nil && dev.pairState == "" && !dev.unpairPeer
+}
+
+// lastHeard returns the last time that UDP or mDNS reported the device.
+func (dev *Device) lastHeard() time.Time {
+	if dev.mdnsSeen.After(dev.LastSeen) {
+		return dev.mdnsSeen
+	}
+	return dev.LastSeen
+}
+
+// seenLocked records an address that UDP or mDNS reported. It changes the
+// address of a device that is not paired. For a paired device, the address
+// is only a dial candidate, because anyone on the network can send it. A
+// connected device keeps the address of its link. The caller holds d.mu.
+func (dev *Device) seenLocked(name, typ, ip string, port int, now time.Time) {
+	dev.dialTries = 0
+	switch {
+	case dev.link != nil:
+	case dev.Paired || dev.badTrust:
+		dev.seenIP, dev.seenPort, dev.seenAt = ip, port, now
+	default:
+		dev.Name, dev.Type = proto.CleanName(name), proto.CleanType(typ)
+		dev.IP = ip
+		if port > 0 {
+			dev.Port = port
+		}
+	}
+}
+
 // onMDNS records a device that mDNS found and connects to it. fluxd opens
 // the connection, so it works with a firewall that blocks incoming
 // traffic.
@@ -506,20 +626,24 @@ func (d *Daemon) onMDNS(peer lan.MDNSPeer) {
 	if !proto.ValidDeviceID(peer.DeviceID) || peer.DeviceID == d.selfID {
 		return
 	}
+	now := time.Now()
 	d.mu.Lock()
-	dev := d.deviceLocked(peer.DeviceID)
-	if !dev.Paired {
-		dev.Name, dev.Type = proto.CleanName(peer.Name), peer.Type
-	}
-	dev.IP, dev.Port, dev.LastSeen = peer.IP, peer.Port, time.Now()
-	dev.mdnsSeen = time.Now()
-	dev.dialTries = 0
+	dev := d.discoveredLocked(peer.DeviceID)
+	dev.LastSeen, dev.mdnsSeen = now, now
+	dev.seenLocked(peer.Name, peer.Type, peer.IP, peer.Port, now)
 	// Avahi can answer from its cache with an address that the device left.
 	// Dial the extra addresses too, because this dial blocks other dials to
 	// the device for 1 second.
-	hosts := dev.dialHosts()
+	var addrs []string
+	if dev.link == nil && !dev.badTrust {
+		addrs = dev.dialAddrs(now)
+	}
+	target := proto.Identity{DeviceID: dev.ID, DeviceName: dev.Name, ProtocolVersion: peer.Protocol}
+	p := d.lan
 	d.mu.Unlock()
-	d.lan.DialAny(d.ctx, hosts, peer.Port, proto.Identity{DeviceID: peer.DeviceID, DeviceName: peer.Name, ProtocolVersion: peer.Protocol})
+	if p != nil && len(addrs) > 0 {
+		p.DialAddrs(d.ctx, addrs, target)
+	}
 }
 
 // redialDelay is how long fluxd waits after a link drops before it dials
@@ -539,6 +663,17 @@ const slowDial = 2 * time.Minute
 // paired, not connected, and not seen.
 const forgetAfter = 10 * time.Minute
 
+// unpairedIdle is how long a device that is not paired can keep its link
+// without a pair request.
+const unpairedIdle = 2 * time.Minute
+
+// Limits for the links of devices that are not paired. When a new link
+// passes a limit, fluxd closes the oldest link that has no pairing.
+const (
+	maxUnpairedLinks      = 8
+	maxUnpairedLinksPerIP = 2
+)
+
 // resetDials gives each device the normal dial interval again.
 func (d *Daemon) resetDials() {
 	d.mu.Lock()
@@ -551,28 +686,28 @@ func (d *Daemon) resetDials() {
 // dialKnown connects to each device that is offline and has a known
 // address: paired devices, and devices that mDNS found in the last 10
 // minutes. A paired device can also have extra addresses, for example a
-// Tailscale name. dialKnown tries the last address first, then the extra
-// addresses. It also sends a unicast UDP identity from port 1716 to the
-// last address. A device that answers from its port 1716 passes the
-// firewall as a reply. It also removes the devices that it no longer
-// needs.
+// Tailscale name. dialKnown tries the last address first, then the address
+// that discovery reported, then the extra addresses. It also sends a
+// unicast UDP identity from port 1716 to the last address of each paired
+// device. A device that answers from its port 1716 passes the firewall as
+// a reply. It also removes the devices that it no longer needs.
 func (d *Daemon) dialKnown() {
 	type target struct {
 		ip    string
-		hosts []string
-		port  int
+		addrs []string
 		id    proto.Identity
 	}
 	var targets []target
 	var refresh []string
 	d.mu.Lock()
 	m := d.mdns
+	p := d.lan
 	now := time.Now()
 	for id, dev := range d.devices {
-		if dev.link != nil {
+		if dev.link != nil || dev.badTrust {
 			continue
 		}
-		if !dev.Paired && dev.pairState == "" && now.Sub(dev.LastSeen) > forgetAfter && now.Sub(dev.mdnsSeen) > forgetAfter {
+		if dev.forgettable() && now.Sub(dev.LastSeen) > forgetAfter && now.Sub(dev.mdnsSeen) > forgetAfter {
 			delete(d.devices, id)
 			continue
 		}
@@ -587,138 +722,339 @@ func (d *Daemon) dialKnown() {
 			// gives it, and onMDNS then dials it.
 			refresh = append(refresh, dev.ID)
 		}
-		hosts := dev.dialHosts()
-		if len(hosts) == 0 {
+		addrs := dev.dialAddrs(now)
+		if len(addrs) == 0 {
 			continue
 		}
 		if !dev.Paired && now.Sub(dev.mdnsSeen) > 10*time.Minute {
 			continue
 		}
-		targets = append(targets, target{dev.IP, hosts, dev.dialPort(), proto.Identity{DeviceID: dev.ID, DeviceName: dev.Name, ProtocolVersion: dev.Version}})
+		// The unicast identity goes only to paired devices. It opens a way
+		// through the firewall for the answer of the device.
+		ip := ""
+		if dev.Paired {
+			ip = dev.IP
+		}
+		targets = append(targets, target{ip, addrs, proto.Identity{DeviceID: dev.ID, DeviceName: dev.Name, ProtocolVersion: dev.Version}})
 	}
 	d.mu.Unlock()
 	for _, id := range refresh {
 		m.Refresh(id)
 	}
+	if p == nil {
+		return
+	}
 	for _, t := range targets {
 		if t.ip != "" {
-			d.lan.Announce(t.ip)
+			p.Announce(t.ip)
 		}
-		if t.port > 0 {
-			d.lan.DialAny(d.ctx, t.hosts, t.port, t.id)
-		}
+		p.DialAddrs(d.ctx, t.addrs, t.id)
 	}
 }
 
 // onIdentity records a device seen by UDP.
 func (d *Daemon) onIdentity(id proto.Identity, ip string) {
+	now := time.Now()
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	dev := d.deviceLocked(id.DeviceID)
-	if dev.Name == "" || !dev.Paired {
-		dev.Name = proto.CleanName(id.DeviceName)
-		dev.Type = id.DeviceType
+	dev := d.discoveredLocked(id.DeviceID)
+	dev.LastSeen = now
+	dev.seenLocked(id.DeviceName, id.DeviceType, ip, id.TCPPort, now)
+}
+
+// pinFor returns the certificate that a new link of the device must
+// present. The lan provider checks it before the identity exchange, and
+// onLink checks it again under d.mu.
+func (d *Daemon) pinFor(id string) (*x509.Certificate, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if dev, ok := d.devices[id]; ok {
+		return dev.pinLocked()
 	}
-	dev.IP = ip
-	if id.TCPPort > 0 {
-		dev.Port = id.TCPPort
-	}
-	dev.LastSeen = time.Now()
-	dev.dialTries = 0
+	return nil, false
 }
 
 // onLink takes over a new authenticated link.
 func (d *Daemon) onLink(l *lan.Link) {
 	d.mu.Lock()
-	dev := d.deviceLocked(l.DeviceID())
+	// A link of a new device counts as a discovery, so that links with new
+	// IDs cannot fill the device list.
+	dev := d.discoveredLocked(l.DeviceID())
+	// A pairing can finish between the check of the provider and this
+	// point, so the pin is checked again under the lock.
+	if why := dev.refuseLocked(l); why != "" {
+		name := dev.Name
+		d.mu.Unlock()
+		d.logf("%s (%s): %s, link refused", name, l.IP(), why)
+		l.Close()
+		return
+	}
 	old := dev.link
 	if old != nil && lan.Preferred(old, l, d.selfID) == old {
 		d.mu.Unlock()
 		l.Close()
 		return
 	}
+	// A pairing ends with its link. The device can pair again on the new
+	// link, after pairRetry when it had an incoming request.
+	stopped := dev.pairState != "" && dev.pairLink != l
+	var note uint32
+	if stopped {
+		note = dev.pairLinkEndedLocked()
+	}
 	dev.link = l
+	dev.ignored = 0
 	dev.setIdentity(l.Identity)
 	dev.IP = l.IP()
 	if l.PeerPort > 0 {
 		dev.Port = l.PeerPort
 	}
+	dev.seenIP, dev.seenPort = "", 0
 	dev.LastSeen = time.Now()
 	dev.dialTries = 0
 	dev.Cert = l.Cert
-	_, trusted := d.trust.Get(dev.ID)
-	dev.Paired = trusted
+	paired := dev.Paired
+	l.SetPaired(paired)
+	if paired && dev.supports(proto.TypeNotification) {
+		// onPairedLink asks for every active notification again. The list
+		// then drops the notifications that the device removed while it was
+		// away. The clear comes before the first packet of the link.
+		dev.notifications = nil
+	}
+	var evict []*lan.Link
+	if !paired {
+		evict = d.unpairedOverflowLocked(l)
+	}
+	// The device pinned this computer in a pairing that ended before the
+	// user of this computer confirmed it. Only a link with the certificate
+	// of that pairing clears the flag, so that another host with the device
+	// ID cannot take the pair false of the device.
+	unpair := dev.unpairPeer && !paired && l.Cert != nil && dev.unpairCert.Equal(l.Cert)
+	if unpair {
+		dev.unpairPeer, dev.unpairCert = false, nil
+	}
+	name, typ, ip, port := dev.Name, dev.Type, dev.IP, dev.Port
 	d.mu.Unlock()
-	if old != nil {
+	d.closeNotes(note)
+	for _, e := range evict {
+		d.logf("%s: too many links of devices that are not paired, closing the oldest", e.Identity.DeviceName)
+		e.Close()
+	}
+	if old != nil && old != l {
 		old.Close()
 	}
-	d.logf("link up: %s (%s) paired=%v", dev.Name, dev.IP, trusted)
-	if trusted {
-		d.mu.Lock()
-		port := dev.Port
-		d.mu.Unlock()
+	d.logf("link up: %s (%s) paired=%v", name, ip, paired)
+	if unpair {
+		_ = l.Send(proto.New(proto.TypePair, map[string]any{"pair": false}))
+	}
+	if stopped {
+		d.toast("Pairing with %s stopped, because the connection changed. Pair again", name)
+	}
+	if paired {
 		_ = d.trust.Update(dev.ID, func(t *config.TrustedDevice) {
-			t.Name, t.Type, t.LastIP = dev.Name, dev.Type, dev.IP
+			t.Name, t.Type, t.LastIP = name, typ, ip
 			if port > 0 {
 				t.LastPort = port
 			}
 		})
-		d.onPairedLink(dev, l)
 	}
 	d.markDirty()
+	go d.receive(dev, l)
+	// The desktop calls of onPairedLink can be slow, so they do not delay
+	// the packets of the device.
+	if paired {
+		go d.onPairedLink(dev, l)
+	}
+}
 
-	go func() {
-		err := l.Receive(func(p *proto.Packet) { d.handlePacket(dev, l, p) })
-		d.mu.Lock()
-		current := dev.link == l
-		if current {
-			dev.link = nil
-			dev.LastSeen = time.Now()
-			dev.clearPairingLocked()
+// unpairedOverflowLocked returns the links to close after l joined: the
+// oldest links of devices that are not paired, when there are more than
+// maxUnpairedLinks, or more than maxUnpairedLinksPerIP from the address of
+// l. A link with an open pairing stays. The caller holds d.mu.
+func (d *Daemon) unpairedOverflowLocked(l *lan.Link) []*lan.Link {
+	var all, sameIP []*lan.Link
+	candidates := map[*lan.Link]bool{}
+	for _, dev := range d.devices {
+		o := dev.link
+		if o == nil || dev.Paired {
+			continue
 		}
-		d.mu.Unlock()
-		d.logf("link down: %s: %v", dev.Name, err)
-		d.markDirty()
-		// The device can be back at once on another address, for example
-		// through Tailscale after it left the Wi-Fi. Do not wait for the next
-		// round of dialKnown.
-		if current && d.ctx.Err() == nil {
-			time.AfterFunc(redialDelay, d.dialKnown)
+		all = append(all, o)
+		if o.IP() == l.IP() {
+			sameIP = append(sameIP, o)
 		}
-	}()
+		if o != l && dev.pairState == "" {
+			candidates[o] = true
+		}
+	}
+	var out []*lan.Link
+	trim := func(links []*lan.Link, limit int) {
+		sort.Slice(links, func(i, j int) bool { return links[i].Started.Before(links[j].Started) })
+		extra := len(links) - limit
+		for _, o := range links {
+			if extra <= 0 {
+				return
+			}
+			if candidates[o] {
+				delete(candidates, o)
+				out = append(out, o)
+				extra--
+			}
+		}
+	}
+	trim(sameIP, maxUnpairedLinksPerIP)
+	var rest []*lan.Link
+	for _, o := range all {
+		if !slices.Contains(out, o) {
+			rest = append(rest, o)
+		}
+	}
+	trim(rest, maxUnpairedLinks)
+	return out
+}
+
+// closeIdleLinks closes the links of devices that are not paired and sent
+// no pair request for unpairedIdle. fluxd then does not dial the device
+// again until the device shows again.
+func (d *Daemon) closeIdleLinks(now time.Time) {
+	var idle []*lan.Link
+	d.mu.Lock()
+	for _, dev := range d.devices {
+		l := dev.link
+		if l == nil || dev.Paired || dev.pairState != "" {
+			continue
+		}
+		if now.Sub(l.Started) > unpairedIdle && now.Sub(dev.pairAt) > unpairedIdle {
+			idle = append(idle, l)
+			dev.mdnsSeen = time.Time{}
+		}
+	}
+	d.mu.Unlock()
+	for _, l := range idle {
+		d.logf("%s: not paired and no pair request for %v, closing the link", l.Identity.DeviceName, unpairedIdle)
+		l.Close()
+	}
+}
+
+// receive reads the packets of a link until it closes.
+func (d *Daemon) receive(dev *Device, l *lan.Link) {
+	err := l.Receive(func(p *proto.Packet) { d.dispatch(dev, l, p) })
+	d.mu.Lock()
+	current := dev.link == l
+	if current {
+		dev.link = nil
+		dev.LastSeen = time.Now()
+	}
+	var note uint32
+	stopped := false
+	if current || dev.pairLink == l {
+		state := dev.pairState
+		stopped = state == "requested" || state == "confirm"
+		note = dev.pairLinkEndedLocked()
+	}
+	name := dev.Name
+	d.mu.Unlock()
+	d.closeNotes(note)
+	d.logf("link down: %s: %v", name, err)
+	if stopped {
+		d.toast("Pairing with %s stopped, because the connection closed", name)
+	}
+	d.markDirty()
+	// The device can be back at once on another address, for example
+	// through Tailscale after it left the Wi-Fi. Do not wait for the next
+	// round of dialKnown.
+	if current && d.ctx.Err() == nil {
+		time.AfterFunc(redialDelay, d.dialKnown)
+	}
+}
+
+// dispatch handles 1 packet of a link. A panic in a handler drops the
+// packet, logs the stack, and keeps the link and fluxd running. When the
+// handler left d.mu locked, fluxd stops instead.
+func (d *Daemon) dispatch(dev *Device, l *lan.Link, p *proto.Packet) {
+	defer d.recoverPacket(l, p)
+	d.handlePacket(dev, l, p)
+}
+
+// muWait is how long recoverPacket waits for d.mu after a panic. Tests
+// make it shorter.
+var muWait = 2 * time.Second
+
+// exitProcess stops fluxd. Tests replace it.
+var exitProcess = os.Exit
+
+// recoverPacket stops a panic of a packet handler and logs it with the
+// stack. Only a deferred call can stop the panic.
+func (d *Daemon) recoverPacket(l *lan.Link, p *proto.Packet) {
+	r := recover()
+	if r == nil {
+		return
+	}
+	// The handler can hold d.mu, so the name comes from the link.
+	name := ""
+	if l != nil {
+		name = l.Identity.DeviceName
+	}
+	d.logf("%s: the %s packet failed: %v\n%s", name, logType(p.Type), r, debug.Stack())
+	// A handler that panics between d.mu.Lock and d.mu.Unlock leaves d.mu
+	// locked, and then each link and each API call waits for ever. fluxd
+	// then stops with an error, and systemd starts it again.
+	if !d.muFree(muWait) {
+		d.logf("%s: the %s packet left the daemon locked, so fluxd stops", name, logType(p.Type))
+		exitProcess(1)
+	}
+}
+
+// muFree reports whether d.mu becomes free within wait. Another goroutine
+// can hold d.mu for a short time, so muFree tries again until wait ends.
+func (d *Daemon) muFree(wait time.Duration) bool {
+	end := time.Now().Add(wait)
+	for {
+		if d.mu.TryLock() {
+			d.mu.Unlock()
+			return true
+		}
+		if time.Now().After(end) {
+			return false
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// logType returns a packet type for a log line: quoted, and cut to 64
+// bytes, because the device chooses it.
+func logType(t string) string {
+	if len(t) > 64 {
+		t = t[:64] + "…"
+	}
+	return fmt.Sprintf("%q", t)
 }
 
 // onPairedLink sends the packets that a paired device expects after it
 // connects.
 func (d *Daemon) onPairedLink(dev *Device, l *lan.Link) {
+	d.mu.Lock()
+	notifications := dev.supports(proto.TypeNotification)
+	dnd, input := dev.accepts(proto.TypeFluxDnd), dev.accepts(proto.TypeFluxInput)
+	players, herdr := dev.supports(proto.TypeMprisRequest), dev.accepts(proto.TypeFluxHerdr)
+	d.mu.Unlock()
 	d.sendBattery(l)
 	d.sendCommandList(l)
-	d.mu.Lock()
-	auto := d.cfg.AutoClipboard
-	d.mu.Unlock()
-	if auto {
-		if text, err := d.clip.Get(); err == nil && text != "" {
-			d.mu.Lock()
-			ts := d.lastLocalClip.UnixMilli()
-			d.mu.Unlock()
-			if ts > 0 {
-				_ = l.Send(proto.New(proto.TypeClipboardConnect, map[string]any{"content": text, "timestamp": ts}))
-			}
-		}
+	d.sendConnectClipboard(l)
+	if notifications {
+		d.requestNotifications(dev, l)
 	}
-	if dev.supports(proto.TypeNotification) {
-		_ = l.Send(proto.New(proto.TypeNotificationRequest, map[string]any{"request": true}))
-	}
-	if dev.accepts(proto.TypeFluxDnd) {
+	if dnd {
 		d.wakeDnd()
 	}
-	if dev.accepts(proto.TypeFluxInput) {
+	if input {
 		d.sendInputState(l)
 	}
-	if d.media != nil && dev.supports(proto.TypeMprisRequest) {
-		d.sendPlayers(l)
+	if d.media != nil && players {
+		// A player that does not answer must not delay the link.
+		d.runMedia(func() { d.sendPlayers(l) })
 	}
-	if dev.accepts(proto.TypeFluxHerdr) {
+	if herdr {
 		d.mu.Lock()
 		state := herdrStatePacket(d.herdrViewLocked())
 		d.mu.Unlock()
@@ -767,14 +1103,21 @@ func (d *Daemon) publishLoop(ctx context.Context) {
 }
 
 // Subscribe registers a receiver for events. It sends the current state at
-// once. The returned function removes the receiver.
+// once. The first receiver also gets the note about a damaged
+// devices.json. The returned function removes the receiver.
 func (d *Daemon) Subscribe(send func(event string, data any)) func() {
 	d.mu.Lock()
 	d.nextID++
 	id := d.nextID
 	d.subs[id] = send
+	note := d.trustNote
+	d.trustNote = ""
 	d.mu.Unlock()
 	send("state", d.Snapshot())
+	if note != "" {
+		send("toast", map[string]string{"text": note})
+		d.notify(desktop.Notification{Title: "Flux lost the paired devices", Body: note, Timeout: -1})
+	}
 	return func() {
 		d.mu.Lock()
 		delete(d.subs, id)
@@ -812,14 +1155,21 @@ func (d *Daemon) notify(n desktop.Notification) uint32 {
 	return id
 }
 
-// send sends a packet to a device and returns an API error when the device
-// is offline.
+// send sends a feature packet to a device. It returns an API error when
+// the device is not paired or offline, so that no feature reaches a device
+// after an unpair. A button of an old desktop notification then also does
+// not reach an unpaired device. The pairing code sends pair packets on the
+// link directly.
 func (d *Daemon) send(dev *Device, p *proto.Packet) error {
 	d.mu.Lock()
-	l := dev.link
+	l, paired := dev.link, dev.Paired
+	err := offline(dev)
+	if l != nil && !paired {
+		err = apiErr("not_paired", "%s is not paired", dev.Name)
+	}
 	d.mu.Unlock()
-	if l == nil {
-		return offline(dev)
+	if l == nil || !paired {
+		return err
 	}
 	return l.Send(p)
 }

@@ -14,9 +14,11 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"flux/internal/config"
 	"flux/internal/herdr"
+	"flux/internal/lan"
 	"flux/internal/proto"
 )
 
@@ -24,20 +26,23 @@ func TestHerdrAgents(t *testing.T) {
 	snap := herdr.Snapshot{
 		Workspaces: []herdr.Workspace{
 			{ID: "wB", Label: "flux", Number: 1},
-			{ID: "wA", Label: "cliamp", Number: 2},
+			{ID: "wA", Label: "cli\u202eamp", Number: 2},
 		},
 		Agents: []herdr.Agent{
-			{PaneID: "wA:p1", WorkspaceID: "wA", Agent: "claude", Status: "idle", Cwd: "/home/u/Code/cliamp"},
+			{PaneID: "wA:p1", WorkspaceID: "wA", Agent: "claude", Status: "idle", Cwd: "/home/u/Code/cli\u2066amp"},
 			{PaneID: "wZ:p1", WorkspaceID: "wZ", Agent: "codex", Status: "", Cwd: "/"},
 			{PaneID: "", WorkspaceID: "wB", Agent: "claude", Status: "working"},
 			{PaneID: "wB:p2", WorkspaceID: "wB", Agent: "claude", Status: "blocked",
-				Cwd: "/home/u/Code/flux", ForegroundCwd: "/home/u/Code/flux/android", Title: "Agents screen"},
+				Cwd: "/home/u/Code/flux", ForegroundCwd: "/home/u/Code/flux/android", Title: "Agents\u202e\u009b screen\n"},
 		},
 	}
+	// A title, a project, and a label get the same filter as the output,
+	// so a bidirectional control character cannot change the order of a
+	// row on the phone.
 	got := herdrAgents(snap)
 	want := []HerdrAgent{
-		{Pane: "wB:p2", Agent: "claude", Status: "blocked", Title: "Agents screen", Project: "android", Workspace: "flux"},
-		{Pane: "wA:p1", Agent: "claude", Status: "idle", Project: "cliamp", Workspace: "cliamp"},
+		{Pane: "wB:p2", Agent: "claude", Status: "blocked", Title: "Agents\ufffd screen ", Project: "android", Workspace: "flux"},
+		{Pane: "wA:p1", Agent: "claude", Status: "idle", Project: "cli\ufffdamp", Workspace: "cli\ufffdamp"},
 		{Pane: "wZ:p1", Agent: "codex", Status: "unknown", Project: "/"},
 	}
 	if len(got) != len(want) {
@@ -102,6 +107,11 @@ type fakeHerdr struct {
 	calls    []string
 	subs     []net.Conn
 	subCalls []string
+
+	// hold, when it is set, keeps each agent.read until it closes. held
+	// counts the reads that wait for it.
+	hold chan struct{}
+	held int
 }
 
 func newFakeHerdr(t *testing.T) *fakeHerdr {
@@ -147,6 +157,15 @@ func (f *fakeHerdr) serve(conn net.Conn) {
 		return
 	}
 	f.mu.Lock()
+	hold := f.hold
+	if hold != nil && req.Method == "agent.read" {
+		f.held++
+	}
+	f.mu.Unlock()
+	if hold != nil && req.Method == "agent.read" {
+		<-hold
+	}
+	f.mu.Lock()
 	var result string
 	switch req.Method {
 	case "ping":
@@ -159,6 +178,12 @@ func (f *fakeHerdr) serve(conn net.Conn) {
 			result = f.readText
 		}
 		f.calls = append(f.calls, req.Method+" "+string(req.Params))
+	case "events.subscribe":
+		f.subs = append(f.subs, conn)
+		f.subCalls = append(f.subCalls, string(req.Params))
+		f.mu.Unlock()
+		_, _ = conn.Write([]byte(`{"id":"` + req.ID + `","result":{"type":"subscription_started"}}` + "\n"))
+		return
 	default:
 		result = `"result":{"type":"ok"}`
 		if r, ok := f.replies[req.Method]; ok {
@@ -168,12 +193,6 @@ func (f *fakeHerdr) serve(conn net.Conn) {
 			result, f.queue[req.Method] = q[0], q[1:]
 		}
 		f.calls = append(f.calls, req.Method+" "+string(req.Params))
-	case "events.subscribe":
-		f.subs = append(f.subs, conn)
-		f.subCalls = append(f.subCalls, string(req.Params))
-		f.mu.Unlock()
-		_, _ = conn.Write([]byte(`{"id":"` + req.ID + `","result":{"type":"subscription_started"}}` + "\n"))
-		return
 	}
 	f.mu.Unlock()
 	_, _ = conn.Write([]byte(`{"id":"` + req.ID + `",` + result + "}\n"))
@@ -192,6 +211,21 @@ func (f *fakeHerdr) push(event string) {
 	for _, c := range f.subs {
 		_, _ = c.Write([]byte(event + "\n"))
 	}
+}
+
+// holdReads makes the next agent.read calls wait until the returned
+// channel closes.
+func (f *fakeHerdr) holdReads() chan struct{} {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.hold, f.held = make(chan struct{}), 0
+	return f.hold
+}
+
+func (f *fakeHerdr) heldReads() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.held
 }
 
 func (f *fakeHerdr) takeCalls() []string {
@@ -263,7 +297,11 @@ func TestHerdrLoopFollowsEvents(t *testing.T) {
 		return len(agents) == 1 && agents[0].Status == "blocked"
 	})
 
-	// A new agent pane needs a new subscription for its status.
+	// A new agent pane needs a new subscription for its status. The
+	// event also removes the history of an earlier agent in the pane.
+	d.mu.Lock()
+	d.herdrHistory = map[string]agentHistory{"w1:p2": {lines: []string{"old"}, agent: "codex"}}
+	d.mu.Unlock()
 	f.set(`{"protocol":22,"workspaces":[{"workspace_id":"w1","label":"flux","number":1}],` +
 		`"agents":[{"pane_id":"w1:p1","workspace_id":"w1","agent":"claude","agent_status":"blocked","cwd":"/src/flux"},` +
 		`{"pane_id":"w1:p2","workspace_id":"w1","agent":"codex","agent_status":"idle","cwd":"/src/flux"}]}`)
@@ -276,6 +314,12 @@ func TestHerdrLoopFollowsEvents(t *testing.T) {
 		_, agents := d.herdrStatus()
 		return len(agents) == 2
 	})
+	d.mu.Lock()
+	_, kept := d.herdrHistory["w1:p2"]
+	d.mu.Unlock()
+	if kept {
+		t.Error("a new agent must not get the history of the pane")
+	}
 
 	// Turning the feature off clears the state.
 	d.mu.Lock()
@@ -399,12 +443,74 @@ func TestCleanANSI(t *testing.T) {
 		{"control characters go", "a\x07b\x08c\x7fd\te", "abcd\te"},
 		{"a cut sequence goes", "text\x1b[38;5", "text"},
 		{"UTF-8 stays", "\x1b[38;2;215;119;87m●\x1b[0m Løst ❯", "\x1b[38;2;215;119;87m●\x1b[0m Løst ❯"},
+		{"a line break ends a CSI", "\x1b[\n\x1bm", "\n"},
+		{"a CSI cut by a line break goes", "a\x1b[1\n2\x1bmb", "a\n2b"},
+		{"an ESC in a CSI ends it", "a\x1b[1\x1b[2mb", "a\x1b[2mb"},
+		{"a private CSI with m goes", "\x1b[>4;2mx\x1b[?25h", "x"},
+		{"an ESC keeps the line break after it", "a\x1b\nb", "a\nb"},
+		{"DCS and APC strings go", "a\x1bPq#0;2\x1b\\b\x1b_note\x07c", "abc"},
+		{"an ESC ends a string", "\x1b]0;title\x1b[1mRed", "\x1b[1mRed"},
+		{"C1 controls go", "a\u0085b\u009bc", "abc"},
+		{"direction controls show a mark", "ls \u202eexe.sh\u202c", "ls \ufffdexe.sh\ufffd"},
+		{"isolates and marks show a mark", "\u2066x\u2069\u200e\u200f\u061c", "\ufffdx\ufffd\ufffd\ufffd\ufffd"},
+		{"line separators show a mark", "a\u2028b\u2029", "a\ufffdb\ufffd"},
+		{"broken UTF-8 shows a mark", "a\xffb", "a\ufffdb"},
 	}
 	for _, c := range cases {
 		if got := cleanANSI(c.in); got != c.want {
 			t.Errorf("%s: %q, want %q", c.name, got, c.want)
 		}
 	}
+}
+
+func TestCleanPlain(t *testing.T) {
+	if got := cleanPlain("a\u202eb\u0085c  \r\n\x07d\x1b\te\u200f"); got != "a\ufffdbc\nd\te\ufffd" {
+		t.Errorf("cleanPlain: %q", got)
+	}
+}
+
+// The error of an agent that did not start has the last line of its pane,
+// with the characters that textRune removes or marks.
+func TestPaneLastLine(t *testing.T) {
+	if got := paneLastLine("$ claude\r\nok \u202eexe.sh\u202c \u0085done\t\x1b\r\n"); got != "ok \ufffdexe.sh\ufffd done" {
+		t.Errorf("paneLastLine: %q", got)
+	}
+}
+
+func TestTrimStyledEndSkipsBrokenSequences(t *testing.T) {
+	for in, want := range map[string]string{
+		"\x1bm":         "\x1bm",
+		"a\x1b[1\x1bm ": "a",
+		"a\x1b":         "a",
+		"\x1b[1mb  ":    "\x1b[1mb",
+	} {
+		if got := trimStyledEnd(in); got != want {
+			t.Errorf("trimStyledEnd(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// FuzzCleanANSI checks that cleanANSI does not panic and that its output
+// has only SGR sequences, line breaks, tabs, and printable characters.
+func FuzzCleanANSI(f *testing.F) {
+	for _, seed := range []string{
+		"\x1b[\n\x1bm", "a\x1b[1\n2\x1bmb", "\x1b[1m\x1b[48;5;2m x \x1b[0m  ", "\x1b]8;;u\x07l\x1b]8;;\x1b\\",
+		"\x1b[38:2::1:2:3m\u202e\u0085\x1bPq\x1b\\", "\x1b[>4;2m\x1b(B\x1b", "\xff\xfe\x1b[",
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, in string) {
+		out := cleanANSI(in)
+		if !utf8.ValidString(out) {
+			t.Fatalf("cleanANSI(%q) = %q is not UTF-8", in, out)
+		}
+		rest := sgr.ReplaceAllString(out, "")
+		for _, r := range rest {
+			if r != '\n' && r != '\t' && textRune(r) != r {
+				t.Fatalf("cleanANSI(%q) = %q keeps %U", in, out, r)
+			}
+		}
+	})
 }
 
 func TestReadHerdrANSI(t *testing.T) {
@@ -442,17 +548,36 @@ func TestReadHerdrHistory(t *testing.T) {
 	f.read = `"result":{"type":"pane_read","read":{"pane_id":"w1:p1","text":"\u001b[1m● Tests pass\u001b[0m\r\n❯ \u00a0\r\n  status","truncated":false}}`
 	f.readText = `"result":{"type":"pane_read","read":{"pane_id":"w1:p1","text":"● Old answer\n\n● Tests pass\n❯\n  status","truncated":false}}`
 	body := outputBody(t, d.readHerdr("w1:p1", 1000, true))
-	if want := "● Old answer\n\n\x1b[1m● Tests pass\x1b[0m\n❯ \u00a0\n  status"; body["text"] != want {
-		t.Errorf("idle: %q, want %q", body["text"], want)
+	idle := "● Old answer\n\n\x1b[1m● Tests pass\x1b[0m\n❯ \u00a0\n  status"
+	if body["text"] != idle {
+		t.Errorf("idle: %q, want %q", body["text"], idle)
+	}
+	if calls := f.takeCalls(); len(calls) != 2 {
+		t.Errorf("idle calls %v", calls)
 	}
 
-	// Working: herdr refuses the history, so the last history stays, and
-	// the newer screen replaces its end.
+	// A read soon after uses the same history, so herdr does not scroll
+	// the agent again.
+	body = outputBody(t, d.readHerdr("w1:p1", 1000, true))
+	if body["text"] != idle {
+		t.Errorf("second idle read: %q, want %q", body["text"], idle)
+	}
+	if calls := f.takeCalls(); len(calls) != 1 || !strings.Contains(calls[0], `"format":"ansi"`) {
+		t.Errorf("second idle read calls %v", calls)
+	}
+
+	// Working: the new status makes the history old. herdr refuses the
+	// history, so the last history stays, and the newer screen replaces
+	// its end.
+	d.setHerdr(true, herdrLive{Agents: []HerdrAgent{{Pane: "w1:p1", Agent: "claude", Status: "working"}}})
 	f.read = `"result":{"type":"pane_read","read":{"pane_id":"w1:p1","text":"● Tests pass\n● New step\n❯\n  status","truncated":false}}`
 	f.readText = `"error":{"code":"agent_not_idle","message":"cannot read 1000 lines while w1:p1 is working"}`
 	body = outputBody(t, d.readHerdr("w1:p1", 1000, true))
 	if want := "● Old answer\n\n● Tests pass\n● New step\n❯\n  status"; body["text"] != want || body["error"] != nil {
 		t.Errorf("working: %q, want %q", body["text"], want)
+	}
+	if calls := f.takeCalls(); len(calls) != 2 {
+		t.Errorf("working calls %v", calls)
 	}
 
 	// A gone agent loses its history.
@@ -462,6 +587,299 @@ func TestReadHerdrHistory(t *testing.T) {
 	d.mu.Unlock()
 	if n != 0 {
 		t.Errorf("the history of a gone agent stays: %d", n)
+	}
+}
+
+func TestHerdrHistoryOfANewAgent(t *testing.T) {
+	d := herdrDaemon(context.Background(), "")
+	d.herdrAgents = []HerdrAgent{{Pane: "w1:p1", Agent: "claude", Status: "idle"}, {Pane: "w1:p2", Agent: "codex", Status: "idle"}}
+	d.herdrHistory = map[string]agentHistory{
+		"w1:p1": {lines: []string{"old"}, agent: "claude", at: time.Now()},
+		"w1:p2": {lines: []string{"old"}, agent: "codex", at: time.Now()},
+	}
+	d.setHerdr(true, herdrLive{Agents: []HerdrAgent{{Pane: "w1:p1", Agent: "codex", Status: "idle"}, {Pane: "w1:p2", Agent: "codex", Status: "working"}}})
+	if _, ok := d.herdrHistory["w1:p1"]; ok {
+		t.Error("an agent of another kind must not get the history of the pane")
+	}
+	if h := d.herdrHistory["w1:p2"]; len(h.lines) != 1 || !h.at.IsZero() {
+		t.Errorf("a new status must keep the history and make it old: %+v", h)
+	}
+
+	ev := herdr.Event{Name: "pane_agent_detected", Data: json.RawMessage(`{"pane_id":"w1:p2","agent":"codex"}`)}
+	if p := detectedPane(ev); p != "w1:p2" {
+		t.Errorf("detected pane %q", p)
+	}
+	ev.Name = "pane_agent_status_changed"
+	if p := detectedPane(ev); p != "" {
+		t.Errorf("a status event names no new agent: %q", p)
+	}
+}
+
+func TestReadHerdrOnce(t *testing.T) {
+	f := newFakeHerdr(t)
+	d := herdrDaemon(context.Background(), f.path)
+	dev := &Device{ID: "phone1", Name: "Pixel 8", Paired: true}
+	d.herdrAgents = []HerdrAgent{{Pane: "w1:p1", Agent: "claude", Status: "working"}}
+	f.read = `"result":{"type":"pane_read","read":{"pane_id":"w1:p1","text":"step 1","truncated":false}}`
+	sent := make(chan *proto.Packet, 8)
+	send := func(p *proto.Packet) { sent <- p }
+	answers := func(n int) {
+		t.Helper()
+		for range n {
+			select {
+			case p := <-sent:
+				if body := outputBody(t, p); body["text"] != "step 1" {
+					t.Errorf("answer %v", body)
+				}
+			case <-time.After(3 * time.Second):
+				t.Fatal("a read got no answer")
+			}
+		}
+		select {
+		case p := <-sent:
+			t.Fatalf("an extra answer: %v", p)
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+
+	// 3 reads on one link make 1 herdr call and get 1 answer. A read on
+	// another link runs on its own.
+	link := &lan.Link{}
+	hold := f.holdReads()
+	for range 3 {
+		d.readHerdrOnce(dev, link, "w1:p1", 1, false, send)
+	}
+	d.readHerdrOnce(dev, &lan.Link{}, "w1:p1", 1, false, send)
+	waitFor(t, "2 reads", func() bool { return f.heldReads() == 2 })
+	close(hold)
+	answers(2)
+	if calls := f.takeCalls(); len(calls) != 2 {
+		t.Errorf("read calls %v", calls)
+	}
+
+	// Reads with other line counts and formats do not run at the same
+	// time. The reads that came during the read get 1 new read with the
+	// values of the newest read.
+	hold = f.holdReads()
+	d.readHerdrOnce(dev, link, "w1:p1", 1, false, send)
+	waitFor(t, "the read", func() bool { return f.heldReads() == 1 })
+	for lines := 2; lines <= 1000; lines++ {
+		d.readHerdrOnce(dev, link, "w1:p1", lines, lines%2 == 0, send)
+	}
+	d.readHerdrOnce(dev, link, "w1:p1", 7, true, send)
+	close(hold)
+	answers(2)
+	// An ANSI read of an agent also reads the plain history.
+	calls := f.takeCalls()
+	if len(calls) < 2 || !strings.Contains(calls[0], `"lines":1,`) || !strings.Contains(calls[1], `"format":"ansi"`) {
+		t.Errorf("read calls with other line counts %v", calls)
+	}
+	for _, c := range calls[1:] {
+		if !strings.Contains(c, `"lines":7,`) {
+			t.Errorf("a read call without the values of the newest read: %s", c)
+		}
+	}
+
+	// A pane that fluxd does not know gets its answer at once, with no
+	// herdr call and no read that runs.
+	var unknown *proto.Packet
+	d.readHerdrOnce(dev, link, "w9:p9", 1, false, func(p *proto.Packet) { unknown = p })
+	if unknown == nil || outputBody(t, unknown)["error"] != "No agent runs in w9:p9" {
+		t.Errorf("answer for an unknown pane: %v", unknown)
+	}
+	if calls := f.takeCalls(); len(calls) != 0 {
+		t.Errorf("herdr calls for an unknown pane: %v", calls)
+	}
+
+	// A new status during the read makes the answer old, so the reads
+	// that came get a new read.
+	hold = f.holdReads()
+	d.readHerdrOnce(dev, link, "w1:p1", 1, false, send)
+	waitFor(t, "the read", func() bool { return f.heldReads() == 1 })
+	d.readHerdrOnce(dev, link, "w1:p1", 1, false, send)
+	d.mu.Lock()
+	d.herdrAgents = []HerdrAgent{{Pane: "w1:p1", Agent: "claude", Status: "idle"}}
+	d.mu.Unlock()
+	close(hold)
+	answers(2)
+	if calls := f.takeCalls(); len(calls) != 2 {
+		t.Errorf("read calls after a new status %v", calls)
+	}
+
+	// A read that comes while fluxd sends the answer can be newer than
+	// the answer, so it gets a new read.
+	sending, release := make(chan struct{}), make(chan struct{})
+	first := true
+	slow := func(p *proto.Packet) {
+		if first {
+			first = false
+			close(sending)
+			<-release
+		}
+		sent <- p
+	}
+	d.readHerdrOnce(dev, link, "w1:p1", 1, false, slow)
+	<-sending
+	d.readHerdrOnce(dev, link, "w1:p1", 1, false, slow)
+	close(release)
+	answers(2)
+	if calls := f.takeCalls(); len(calls) != 2 {
+		t.Errorf("read calls after a read during the send %v", calls)
+	}
+	d.mu.Lock()
+	running := len(d.herdrJobs.reads)
+	d.mu.Unlock()
+	if running != 0 {
+		t.Errorf("%d reads stay", running)
+	}
+}
+
+// readCalls returns the number of agent.read calls in calls.
+func readCalls(calls []string) int {
+	n := 0
+	for _, c := range calls {
+		if strings.HasPrefix(c, "agent.read ") {
+			n++
+		}
+	}
+	return n
+}
+
+func TestReadHerdrOnceChecks(t *testing.T) {
+	f := newFakeHerdr(t)
+	d := herdrDaemon(context.Background(), f.path)
+	d.cfg.HerdrControl = true
+	dev := &Device{ID: "phone1", Name: "Pixel 8", Paired: true}
+	d.herdrAgents = []HerdrAgent{{Pane: "w1:p1", Agent: "claude", Status: "working"}}
+	f.read = `"result":{"type":"pane_read","read":{"pane_id":"w1:p1","text":"step 1","truncated":false}}`
+	sent := make(chan *proto.Packet, 8)
+	send := func(p *proto.Packet) { sent <- p }
+	link := &lan.Link{}
+	answer := func() map[string]any {
+		t.Helper()
+		select {
+		case p := <-sent:
+			return outputBody(t, p)
+		case <-time.After(3 * time.Second):
+			t.Fatal("a read got no answer")
+		}
+		return nil
+	}
+	noAnswer := func() {
+		t.Helper()
+		select {
+		case p := <-sent:
+			t.Fatalf("an extra answer: %v", p)
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	idle := func() bool {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		return len(d.herdrJobs.reads) == 0
+	}
+
+	// A reply during a read makes its answer old, also when the status
+	// does not change, as in a terminal. So the read that came during it
+	// gets a new read.
+	hold := f.holdReads()
+	d.readHerdrOnce(dev, link, "w1:p1", 1, false, send)
+	waitFor(t, "the read", func() bool { return f.heldReads() == 1 })
+	if body := sentBody(t, d.herdrKeys(dev, "w1:p1", []string{"esc"})); body["error"] != nil {
+		t.Fatalf("keys: %v", body)
+	}
+	d.readHerdrOnce(dev, link, "w1:p1", 1, false, send)
+	close(hold)
+	answer()
+	answer()
+	noAnswer()
+	if n := readCalls(f.takeCalls()); n != 2 {
+		t.Errorf("%d read calls after a reply, want 2", n)
+	}
+
+	// A reply without a read that waits makes no new read.
+	hold = f.holdReads()
+	d.readHerdrOnce(dev, link, "w1:p1", 1, false, send)
+	waitFor(t, "the read", func() bool { return f.heldReads() == 1 })
+	sentBody(t, d.herdrKeys(dev, "w1:p1", []string{"esc"}))
+	close(hold)
+	answer()
+	noAnswer()
+	if n := readCalls(f.takeCalls()); n != 1 {
+		t.Errorf("%d read calls after a reply with no read that waits, want 1", n)
+	}
+
+	// An unpair during the read stops the answer and the reads that wait.
+	hold = f.holdReads()
+	d.readHerdrOnce(dev, link, "w1:p1", 1, false, send)
+	waitFor(t, "the read", func() bool { return f.heldReads() == 1 })
+	d.readHerdrOnce(dev, link, "w1:p1", 1, false, send)
+	d.mu.Lock()
+	dev.Paired = false
+	d.mu.Unlock()
+	close(hold)
+	waitFor(t, "the end of the read", idle)
+	noAnswer()
+	if n := readCalls(f.takeCalls()); n != 1 {
+		t.Errorf("%d read calls after an unpair, want 1", n)
+	}
+
+	// When the user turns herdr off during the read, the text does not go
+	// out.
+	d.mu.Lock()
+	dev.Paired = true
+	d.mu.Unlock()
+	hold = f.holdReads()
+	d.readHerdrOnce(dev, link, "w1:p1", 1, false, send)
+	waitFor(t, "the read", func() bool { return f.heldReads() == 1 })
+	d.mu.Lock()
+	d.cfg.Herdr = false
+	d.mu.Unlock()
+	close(hold)
+	if body := answer(); body["error"] != errHerdrDisabled || body["text"] != nil {
+		t.Errorf("herdr off during the read: %v", body)
+	}
+	waitFor(t, "the end of the read", idle)
+
+	// A panic during the answer sends an error, so the phone does not
+	// wait. The next read of the pane runs.
+	d.mu.Lock()
+	d.cfg.Herdr = true
+	d.mu.Unlock()
+	panicked := false
+	d.readHerdrOnce(dev, link, "w1:p1", 1, true, func(p *proto.Packet) {
+		if !panicked {
+			panicked = true
+			panic("bad answer")
+		}
+		sent <- p
+	})
+	if body := answer(); body["error"] != "fluxd could not read the pane" || body["format"] != "ansi" || body["pane"] != "w1:p1" {
+		t.Errorf("answer after a panic: %v", body)
+	}
+	waitFor(t, "the end of the read", idle)
+	d.readHerdrOnce(dev, link, "w1:p1", 1, true, send)
+	if body := answer(); body["text"] != "step 1" {
+		t.Errorf("read after a panic: %v", body)
+	}
+}
+
+func TestHerdrRecover(t *testing.T) {
+	d := herdrDaemon(context.Background(), "")
+	failed := false
+	func() {
+		defer d.herdrRecover("keys", func() { failed = true })
+		panic("bad reply")
+	}()
+	if !failed {
+		t.Error("a panic must send an error")
+	}
+	failed = false
+	func() {
+		defer d.herdrRecover("keys", func() { failed = true })
+	}()
+	if failed {
+		t.Error("an answer without a panic must not send an error")
 	}
 }
 
@@ -499,25 +917,25 @@ func TestHerdrTerminalsAndWorkspaces(t *testing.T) {
 	snap := herdr.Snapshot{
 		Workspaces: []herdr.Workspace{
 			{ID: "wB", Label: "flux", Number: 2, ActiveTab: "wB:t2"},
-			{ID: "wA", Label: "web", Number: 1, ActiveTab: "wA:t1"},
+			{ID: "wA", Label: "web\u200f", Number: 1, ActiveTab: "wA:t1"},
 		},
 		Panes: []herdr.Pane{
 			{ID: "wB:p1", WorkspaceID: "wB", TabID: "wB:t1", Cwd: "/src/flux"},
-			{ID: "wB:p2", WorkspaceID: "wB", TabID: "wB:t2", Cwd: "/src/flux", ForegroundCwd: "/src/flux/android", Title: "gradle"},
+			{ID: "wB:p2", WorkspaceID: "wB", TabID: "wB:t2", Cwd: "/src/flux", ForegroundCwd: "/src/flux/android", Title: "gradle\u2067"},
 			{ID: "wA:p1", WorkspaceID: "wA", TabID: "wA:t1", Cwd: "/src/web", Title: "u@host:~/src/web"},
 		},
 		Agents: []herdr.Agent{{PaneID: "wB:p1", WorkspaceID: "wB", Agent: "claude"}},
 	}
 	terms := herdrTerminals(snap)
 	want := []HerdrTerminal{
-		{Pane: "wA:p1", Title: "u@host:~/src/web", Project: "web", Workspace: "web"},
-		{Pane: "wB:p2", Title: "gradle", Project: "android", Workspace: "flux"},
+		{Pane: "wA:p1", Title: "u@host:~/src/web", Project: "web", Workspace: "web\ufffd"},
+		{Pane: "wB:p2", Title: "gradle\ufffd", Project: "android", Workspace: "flux"},
 	}
 	if !slices.Equal(terms, want) {
 		t.Errorf("terminals %+v", terms)
 	}
 	places := herdrWorkspaces(snap)
-	wantPlaces := []HerdrWorkspace{{ID: "wA", Label: "web", Cwd: "/src/web"}, {ID: "wB", Label: "flux", Cwd: "/src/flux/android"}}
+	wantPlaces := []HerdrWorkspace{{ID: "wA", Label: "web\ufffd", Cwd: "/src/web"}, {ID: "wB", Label: "flux", Cwd: "/src/flux/android"}}
 	if !slices.Equal(places, wantPlaces) {
 		t.Errorf("workspaces %+v", places)
 	}
@@ -640,6 +1058,19 @@ func TestHerdrCreate(t *testing.T) {
 	if calls := f.takeCalls(); len(calls) != 0 {
 		t.Fatalf("a refused create must not reach herdr: %v", calls)
 	}
+	if len(d.herdrJobs.creating) != 0 {
+		t.Fatalf("a refused create must end: %v", d.herdrJobs.creating)
+	}
+
+	// One start runs at a time for each device.
+	d.herdrJobs.creating[dev.ID] = true
+	if body := createdBody(t, d.herdrCreate(dev, "agent", "claude", dir, ""), "created"); body["error"] != errHerdrCreateBusy {
+		t.Errorf("second start: %v", body)
+	}
+	if !d.herdrJobs.creating[dev.ID] {
+		t.Error("a refused second start must not end the first start")
+	}
+	delete(d.herdrJobs.creating, dev.ID)
 
 	// The loop must see the new pane before the answer. It reads the
 	// agent kinds too, so claude must be on PATH.
@@ -861,8 +1292,9 @@ func TestHerdrReplies(t *testing.T) {
 		{"key not allowed", d.herdrKeys(dev, "w1:p1", []string{"ctrl+c"}), `The key "ctrl+c" is not allowed`},
 		{"no keys", d.herdrKeys(dev, "w1:p1", nil), "Send 1 to 8 keys"},
 		{"too many keys", d.herdrKeys(dev, "w1:p1", strings.Split("1 2 3 4 5 6 7 8 9", " ")), "Send 1 to 8 keys"},
-		{"empty text", d.herdrPrompt(dev, "w1:p1", " \x1b\x07 \n"), "The text is empty"},
-		{"long text", d.herdrPrompt(dev, "w1:p1", strings.Repeat("x", herdrMaxPrompt+1)), "The text is longer than 16 KB"},
+		{"not paired", d.herdrKeys(&Device{ID: "phone2"}, "w1:p1", []string{"1"}), errHerdrNotPaired},
+		{"empty text", d.herdrPrompt(dev, "w1:p1", " \x1b\x07 \n", false), "The text is empty"},
+		{"long text", d.herdrPrompt(dev, "w1:p1", strings.Repeat("x", herdrMaxPrompt+1), false), "The text is longer than 16 KB"},
 	}
 	for _, c := range refused {
 		if body := sentBody(t, c.p); body["error"] != c.want {
@@ -881,7 +1313,7 @@ func TestHerdrReplies(t *testing.T) {
 		t.Errorf("keys calls %v", calls)
 	}
 
-	body = sentBody(t, d.herdrPrompt(dev, "w1:p1", "  Run the tests\r\nagain\x1b[A  "))
+	body = sentBody(t, d.herdrPrompt(dev, "w1:p1", "  Run the tests\r\nagain\x1b[A  ", false))
 	if body["error"] != nil || body["action"] != "prompt" {
 		t.Errorf("prompt: %v", body)
 	}
@@ -889,17 +1321,43 @@ func TestHerdrReplies(t *testing.T) {
 		t.Errorf("prompt calls %v", calls)
 	}
 
-	// A blocked agent gets the text as typed input and Enter.
+	// A blocked agent refuses a prompt, and fluxd does not type the text
+	// in its dialog. A digit or Enter in the text can select a choice.
 	f.mu.Lock()
-	f.replies = map[string]string{"agent.prompt": `"error":{"code":"agent_blocked","message":"agent w1:p1 is blocked"}`}
+	f.replies = map[string]string{
+		"agent.prompt": `"error":{"code":"agent_blocked","message":"agent w1:p1 is blocked"}`,
+		"agent.get":    `"result":{"type":"agent_info","agent":{"pane_id":"w1:p1","agent":"claude","agent_status":"blocked"}}`,
+	}
 	f.mu.Unlock()
-	body = sentBody(t, d.herdrPrompt(dev, "w1:p1", "Use port\n8080"))
-	if body["error"] != nil {
+	body = sentBody(t, d.herdrPrompt(dev, "w1:p1", "1 no, use git clean", false))
+	if body["error"] != string(errHerdrBlocked) || body["code"] != "blocked" {
 		t.Errorf("blocked prompt: %v", body)
 	}
-	calls := f.takeCalls()
-	if len(calls) != 2 || calls[1] != `pane.send_input {"keys":["enter"],"pane_id":"w1:p1","text":"Use port 8080"}` {
+	if calls := f.takeCalls(); len(calls) != 1 || !strings.HasPrefix(calls[0], "agent.prompt ") {
 		t.Errorf("blocked prompt calls %v", calls)
+	}
+
+	// An answer goes to a blocked agent as typed input and Enter.
+	body = sentBody(t, d.herdrPrompt(dev, "w1:p1", "Use port\n8080", true))
+	if body["error"] != nil || body["code"] != nil {
+		t.Errorf("answer: %v", body)
+	}
+	calls := f.takeCalls()
+	if len(calls) != 3 || calls[1] != `agent.get {"target":"w1:p1"}` ||
+		calls[2] != `pane.send_input {"keys":["enter"],"pane_id":"w1:p1","text":"Use port 8080"}` {
+		t.Errorf("answer calls %v", calls)
+	}
+
+	// An agent that does not wait now gets no typed input.
+	f.mu.Lock()
+	f.replies["agent.get"] = `"result":{"type":"agent_info","agent":{"pane_id":"w1:p1","agent":"claude","agent_status":"idle"}}`
+	f.mu.Unlock()
+	body = sentBody(t, d.herdrPrompt(dev, "w1:p1", "Use port 8080", true))
+	if body["error"] != "The agent does not wait for an answer now. Send the text again." {
+		t.Errorf("answer to an agent that does not wait: %v", body)
+	}
+	if calls := f.takeCalls(); len(calls) != 2 {
+		t.Errorf("answer calls to an agent that does not wait %v", calls)
 	}
 
 	f.mu.Lock()
@@ -922,5 +1380,148 @@ func TestHerdrViewControl(t *testing.T) {
 	d.cfg.Herdr = false
 	if d.herdrViewLocked().Control {
 		t.Fatal("control needs herdr sync")
+	}
+}
+
+// TestHerdrRequestNumber checks that the answers sent, created, and closed
+// carry the request number of the packet from the phone, and that an
+// answer to a packet without a number has none.
+func TestHerdrRequestNumber(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	f := newFakeHerdr(t)
+	d := herdrDaemon(ctx, f.path)
+	d.cfg.HerdrControl = true
+	d.herdrAgents = []HerdrAgent{{Pane: "w1:p1", Agent: "claude"}}
+	desk, phone, _, _ := linkPair(t, ctx)
+	dev := &Device{ID: "phone1", Name: "Pixel 8", Paired: true}
+	answers := make(chan map[string]any, 16)
+	go phone.Receive(func(p *proto.Packet) {
+		if f := p.Fields(); p.Type == proto.TypeFluxHerdr && f["kind"] != "state" {
+			answers <- f
+		}
+	})
+	cases := []struct {
+		body map[string]any
+		kind string
+	}{
+		{map[string]any{"kind": "keys", "pane": "w1:p1", "keys": []string{"1"}, "request": 7}, "sent"},
+		{map[string]any{"kind": "prompt", "pane": "w1:p1", "text": "Run the tests", "request": 8}, "sent"},
+		{map[string]any{"kind": "input", "pane": "w1:p9", "text": "ls", "request": 9}, "sent"},
+		{map[string]any{"kind": "create", "what": "agent", "agent": "none", "request": 10}, "created"},
+		{map[string]any{"kind": "close", "pane": "w1:p1", "request": 11}, "closed"},
+		{map[string]any{"kind": "keys", "pane": "w1:p1", "keys": []string{"2"}}, "sent"},
+		{map[string]any{"kind": "keys", "pane": "w1:p1", "keys": []string{"3"}, "request": "12"}, "sent"},
+	}
+	for _, c := range cases {
+		d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, c.body))
+		var got map[string]any
+		select {
+		case got = <-answers:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%v: no answer within 5 seconds", c.body)
+		}
+		want, numbered := c.body["request"].(int)
+		switch {
+		case got["kind"] != c.kind:
+			t.Errorf("%v: answer %v", c.body, got)
+		case numbered && got["request"] != float64(want):
+			t.Errorf("%v: answer has the request %v", c.body, got["request"])
+		case !numbered && got["request"] != nil:
+			t.Errorf("%v: answer has the request %v, want none", c.body, got["request"])
+		}
+	}
+}
+
+// TestHerdrSendLimit checks that at most herdrMaxSends keys, prompt,
+// input, and close jobs run for each device, and that a pane that fluxd
+// does not know takes no job.
+func TestHerdrSendLimit(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	f := newFakeHerdr(t)
+	d := herdrDaemon(ctx, f.path)
+	d.cfg.HerdrControl = true
+	d.herdrAgents = []HerdrAgent{{Pane: "w1:p1", Agent: "claude"}}
+	dev, tablet := &Device{ID: "phone1", Name: "Pixel 8", Paired: true}, &Device{ID: "tablet", Paired: true}
+	for range herdrMaxSends {
+		if got := d.startHerdrSend(dev, "w1:p1"); got != herdrSendStarted {
+			t.Fatalf("a job under the limit: %d", got)
+		}
+	}
+	if got := d.startHerdrSend(dev, "w1:p1"); got != herdrSendBusy {
+		t.Fatalf("a job over the limit: %d", got)
+	}
+	if got := d.startHerdrSend(tablet, "w1:p1"); got != herdrSendStarted {
+		t.Fatalf("a job of another device: %d", got)
+	}
+	d.endHerdrSend(tablet)
+	if got := d.startHerdrSend(dev, "w9:p9"); got != herdrSendUnknown {
+		t.Fatalf("a job for an unknown pane: %d", got)
+	}
+
+	desk, phone, _, _ := linkPair(t, ctx)
+	answers := make(chan map[string]any, 16)
+	go phone.Receive(func(p *proto.Packet) {
+		if f := p.Fields(); p.Type == proto.TypeFluxHerdr && f["kind"] != "state" {
+			answers <- f
+		}
+	})
+	answer := func(body map[string]any) map[string]any {
+		t.Helper()
+		d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, body))
+		select {
+		case got := <-answers:
+			return got
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%v: no answer within 5 seconds", body)
+		}
+		return nil
+	}
+	// A device with herdrMaxSends jobs gets the busy answer at once.
+	if got := answer(map[string]any{"kind": "keys", "pane": "w1:p1", "keys": []string{"1"}, "request": 5}); got["kind"] != "sent" || got["error"] != errHerdrBusy || got["request"] != 5.0 {
+		t.Errorf("keys while busy: %v", got)
+	}
+	if got := answer(map[string]any{"kind": "close", "pane": "w1:p1", "request": 6}); got["kind"] != "closed" || got["error"] != errHerdrBusy || got["request"] != 6.0 {
+		t.Errorf("close while busy: %v", got)
+	}
+	// A pane that fluxd does not know gets its answer also while busy.
+	if got := answer(map[string]any{"kind": "prompt", "pane": "w9:p9", "text": "hi", "request": 7}); got["error"] != "No agent runs in w9:p9" || got["request"] != 7.0 {
+		t.Errorf("prompt to an unknown pane: %v", got)
+	}
+	if calls := f.takeCalls(); len(calls) != 0 {
+		t.Errorf("herdr calls while busy: %v", calls)
+	}
+	for range herdrMaxSends {
+		d.endHerdrSend(dev)
+	}
+	if got := answer(map[string]any{"kind": "keys", "pane": "w1:p1", "keys": []string{"1"}, "request": 8}); got["error"] != nil {
+		t.Errorf("keys after the jobs ended: %v", got)
+	}
+	waitFor(t, "the end of the job", func() bool {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		return len(d.herdrJobs.sending) == 0
+	})
+}
+
+// TestUnsavedHerdrSettings checks that herdr_control and herdr_terminals
+// do not turn on when config.toml cannot keep them, because each lets a
+// paired device run commands on this computer.
+func TestUnsavedHerdrSettings(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	// config.toml cannot be written, because the flux folder is a file.
+	if err := os.WriteFile(filepath.Join(dir, "flux"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	d := herdrDaemon(context.Background(), "")
+	for _, key := range []string{"herdrControl", "herdrTerminals"} {
+		if err := d.setSetting(key, true); err == nil || !strings.Contains(err.Error(), "did not change") {
+			t.Errorf("%s: error %v", key, err)
+		}
+	}
+	if d.cfg.HerdrControl || d.cfg.HerdrTerminals {
+		t.Fatalf("a herdr switch is on after the error: %+v", d.cfg)
 	}
 }

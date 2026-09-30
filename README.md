@@ -4,7 +4,9 @@ Connect your Omarchy desktop to an Android phone, an iPhone, or a Mac over your 
 Share files, clipboard text, and clipboard images, read phone notifications, control media, and use your phone as a camera or microphone.
 
 Flux includes a CLI, a background daemon, a native Qt window, an Omarchy shell plugin, a native Android app, a native iOS app, and a native macOS app.
-The desktop opens the network connections, so the default Omarchy firewall needs no new inbound rule.
+`fluxd` listens on 1 TCP port from 1716 to 1764 and on UDP port 1716, and it also opens the connections to the devices itself.
+So Flux works with the default Omarchy firewall, which blocks inbound traffic, and needs no new inbound rule.
+See [security](docs/security.md) for what a paired device can do and which settings limit it.
 
 
 https://github.com/user-attachments/assets/4b8445fe-6734-4100-b200-92f57e1b353a
@@ -71,14 +73,22 @@ Flux checks for a new release once a day. To install it, run `flux-cli update`.
 2. Connect the phone and desktop to the same local network.
 3. Open the desktop window with `flux-cli open`.
 4. Select **+ Pair new device**.
-5. Compare the 8-character verification key on both screens.
+5. Compare the 16-character verification key on both screens, for example `5EE6 825F 974E D59A`.
 6. Accept the matching request on the phone.
+7. Select **Confirm** in the Flux window or in the notification on the desktop. The desktop pins the phone only after this step.
+
+Each step waits at most 30 seconds.
+Compare all 16 characters.
+Earlier Flux apps show only 8 characters, so update Flux on each phone, iPhone, and Mac before you pair.
 
 You can also start the pair request from a terminal:
 
 ```sh
 flux-cli pair "Pixel 8"
 ```
+
+After the phone accepts, `flux-cli pair` asks whether the phone shows the same key.
+Type `y` to confirm.
 
 To connect an iPhone, install the app with Xcode and follow [Pair an iPhone](docs/ios.md#pair-an-iphone).
 To connect a Mac, build the app and follow [Pair a Mac](docs/macos.md#pair-a-mac).
@@ -109,7 +119,7 @@ make build test vet
 make android
 ```
 
-GitHub Actions builds the complete Arch package and Android APKs for pull requests and the `main` branch.
+GitHub Actions builds the complete Arch package and Android APKs for pull requests and the `master` branch.
 Stable version tags produce a signed APK, an Arch package, an AUR recipe, an ad hoc signed macOS app, an unsigned iOS app for sideload tools, and checksums.
 The optional AUR job publishes the tested recipe after the GitHub release succeeds.
 
@@ -138,6 +148,7 @@ See [development](docs/development.md) for local checks and [releases](docs/rele
 - [macOS build and setup](docs/macos.md)
 - [CLI reference](docs/cli.md)
 - [Configuration and data paths](docs/configuration.md)
+- [Security and paired devices](docs/security.md)
 - [Everyday use](docs/features.md)
 - [Camera, microphone, and screen](docs/camera.md)
 - [Omarchy shell integration](docs/omarchy.md)

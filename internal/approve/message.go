@@ -6,6 +6,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/sha256"
+	"crypto/subtle"
 	"crypto/x509"
 	"encoding/hex"
 	"errors"
@@ -13,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -28,6 +30,11 @@ const maxField = 256
 
 // maxFuture is how far in the future a signed time can be.
 const maxFuture = 5 * time.Second
+
+// maxTime is the largest time in seconds that a message can have: 2^40,
+// about the year 36812. The apps refuse a larger time, and an older app
+// can stop on it.
+const maxTime = 1 << 40
 
 var (
 	// ErrBadSignature means that the signature does not match the key and
@@ -59,6 +66,9 @@ func (r Request) Message() ([]byte, error) {
 	if err := checkFields(map[string]string{"tty": r.TTY, "rhost": r.RHost}, false); err != nil {
 		return nil, err
 	}
+	if err := checkTimeRange(r.Time); err != nil {
+		return nil, err
+	}
 	if err := checkNonce(r.Nonce); err != nil {
 		return nil, err
 	}
@@ -86,6 +96,9 @@ type Enrollment struct {
 // spki, the public key in DER.
 func (e Enrollment) Message(spki []byte) ([]byte, error) {
 	if err := checkFields(map[string]string{"host": e.Host, "user": e.User}, true); err != nil {
+		return nil, err
+	}
+	if err := checkTimeRange(e.Time); err != nil {
 		return nil, err
 	}
 	if err := checkNonce(e.Nonce); err != nil {
@@ -131,6 +144,13 @@ func checkFields(fields map[string]string, required bool) error {
 	return nil
 }
 
+func checkTimeRange(t int64) error {
+	if t <= 0 || t > maxTime {
+		return ErrStale
+	}
+	return nil
+}
+
 func checkNonce(n string) error {
 	if len(n) != 64 {
 		return errors.New("the nonce must have 64 hex digits")
@@ -163,6 +183,21 @@ func Fingerprint(spki []byte) string {
 	sum := sha256.Sum256(spki)
 	h := strings.ToUpper(hex.EncodeToString(sum[:8]))
 	return h[0:4] + " " + h[4:8] + " " + h[8:12] + " " + h[12:16]
+}
+
+// SameCode reports whether typed is the key code code. It ignores white
+// space, hyphens, and case, and it needs all 16 hex digits.
+func SameCode(typed, code string) bool {
+	norm := func(s string) string {
+		return strings.ToUpper(strings.Map(func(r rune) rune {
+			if unicode.IsSpace(r) || r == '-' {
+				return -1
+			}
+			return r
+		}, s))
+	}
+	a, b := norm(typed), norm(code)
+	return len(b) == 16 && subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
 // verify checks an ASN.1 DER ECDSA signature over the SHA-256 of msg.

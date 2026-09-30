@@ -30,13 +30,15 @@ struct PairSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .interactiveDismissDisabled(isWaiting)
+        .interactiveDismissDisabled(isRequested)
+        .onAppear { model.shownPairSheet = deviceId }
     }
 
-    /// A request in either direction ends with a button, not a swipe.
-    private var isWaiting: Bool {
-        guard let state = model.device(deviceId)?.pairState else { return false }
-        return state == .incoming || state == .requested
+    /// A request that this iPhone sent ends with Cancel, not a swipe. A
+    /// swipe on a request from a computer rejects it, see
+    /// `AppModel.pairSheetClosed`.
+    private var isRequested: Bool {
+        model.device(deviceId)?.pairState == .requested
     }
 
     @ViewBuilder
@@ -48,9 +50,9 @@ struct PairSheet: View {
                 case .incoming:
                     title("\(device.name) wants to pair")
                     KeyView(key: device.pairKey)
-                    explanation("Accept only when \(device.name) shows the same key.")
+                    explanation("Accept only when \(device.name) shows the same key. Compare all 16 characters.")
                     HStack(spacing: 12) {
-                        Button(role: .destructive) { model.core.cancelPair(device.id) } label: {
+                        Button(role: .destructive) { model.rejectPair(device) } label: {
                             Text("Reject").frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.bordered)

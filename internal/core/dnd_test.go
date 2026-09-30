@@ -2,11 +2,16 @@ package core
 
 import (
 	"context"
+	"io"
+	"log"
+	"slices"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"flux/internal/config"
+	"flux/internal/proto"
 )
 
 func TestDndGuardLocalChanges(t *testing.T) {
@@ -100,5 +105,75 @@ func TestDndLoopIdleWithoutPhone(t *testing.T) {
 	<-done
 	if n := dnd.gets.Load(); n != 0 {
 		t.Errorf("the loop read the desktop state %d times", n)
+	}
+}
+
+// slowDnd records each state and holds the first Set until release.
+type slowDnd struct {
+	release chan struct{}
+	started chan struct{}
+	mu      sync.Mutex
+	sets    []bool
+}
+
+func (s *slowDnd) Get() (bool, bool) { return false, true }
+
+func (s *slowDnd) Set(on bool) error {
+	s.mu.Lock()
+	first := len(s.sets) == 0
+	s.sets = append(s.sets, on)
+	s.mu.Unlock()
+	if first {
+		close(s.started)
+		<-s.release
+	}
+	return nil
+}
+
+// TestHandleDndAppliesNewest sends 3 fast changes from a phone. The
+// changes apply 1 at a time, and the last one wins.
+func TestHandleDndAppliesNewest(t *testing.T) {
+	dnd := &slowDnd{release: make(chan struct{}), started: make(chan struct{})}
+	d := &Daemon{
+		cfg:     &config.Config{SyncDnd: true},
+		devices: map[string]*Device{},
+		dnd:     dnd,
+		logger:  log.New(io.Discard, "", 0),
+	}
+	dev := &Device{ID: "p1", Name: "Pixel 8", Paired: true}
+	for i, on := range []bool{true, false, true} {
+		d.handleDnd(dev, proto.New(proto.TypeFluxDnd, map[string]any{"on": on}))
+		if i == 0 {
+			<-dnd.started
+		}
+	}
+	close(dnd.release)
+	waitIdle(t, d, &d.content.dndQ)
+	if !slices.Equal(dnd.sets, []bool{true, true}) {
+		t.Fatalf("sets %v", dnd.sets)
+	}
+}
+
+// TestHandleDndAfterUnpair checks that a state that waits on the worker
+// does not apply after the phone is unpaired.
+func TestHandleDndAfterUnpair(t *testing.T) {
+	dnd := &slowDnd{release: make(chan struct{}), started: make(chan struct{})}
+	d := &Daemon{
+		cfg:     &config.Config{SyncDnd: true},
+		devices: map[string]*Device{},
+		dnd:     dnd,
+		logger:  log.New(io.Discard, "", 0),
+	}
+	dev := &Device{ID: "p1", Name: "Pixel 8", Paired: true}
+	d.handleDnd(dev, proto.New(proto.TypeFluxDnd, map[string]any{"on": true}))
+	<-dnd.started
+	d.handleDnd(dev, proto.New(proto.TypeFluxDnd, map[string]any{"on": false}))
+	d.mu.Lock()
+	dev.Paired = false
+	d.mu.Unlock()
+	close(dnd.release)
+	waitIdle(t, d, &d.content.dndQ)
+	if !slices.Equal(dnd.sets, []bool{true}) {
+		t.Fatalf("sets %v", dnd.sets)
 	}
 }

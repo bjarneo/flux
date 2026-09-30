@@ -16,16 +16,19 @@ import (
 // first, sends how the command ended, and exits with its exit code.
 func notify(device string, args []string) error {
 	if len(args) > 0 && args[0] == "--run" {
-		cmd := args[1:]
+		cmd, show := args[1:], false
+		if len(cmd) > 0 && cmd[0] == "--show-command" {
+			cmd, show = cmd[1:], true
+		}
 		if len(cmd) > 0 && cmd[0] == "--" {
 			cmd = cmd[1:]
 		}
 		if len(cmd) == 0 {
-			fail("Usage: flux-cli notify --run -- CMD [ARGS...]")
+			fail("Usage: flux-cli notify --run [--show-command] -- CMD [ARGS...]")
 		}
 		start := time.Now()
 		runErr := runForeground(cmd)
-		code, title, body := commandResult(cmd, runErr, time.Since(start))
+		code, title, body := commandResult(cmd, show, runErr, time.Since(start))
 		if err := call("notify.send", map[string]any{"device": device, "title": title, "body": body}); err != nil {
 			fmt.Fprintln(os.Stderr, "flux-cli:", err)
 		}
@@ -59,11 +62,24 @@ func runForeground(args []string) error {
 	return c.Wait()
 }
 
+// maxShown is the longest command line that --show-command sends.
+const maxShown = 200
+
 // commandResult returns the exit code, the title, and the body of the
-// notification for a command that ran for took.
-func commandResult(args []string, err error, took time.Duration) (code int, title, body string) {
+// notification for a command that ran for took. The phone can show the
+// body on its lock screen, so the body has only the program name. The
+// arguments can hold a password or a token. With show, the body has the
+// command line, at most maxShown bytes of it.
+func commandResult(args []string, show bool, err error, took time.Duration) (code int, title, body string) {
 	name := filepath.Base(args[0])
-	body = strings.Join(args, " ") + " · " + duration(took)
+	what := name
+	if show {
+		what = strings.Join(args, " ")
+		if len(what) > maxShown {
+			what = strings.ToValidUTF8(what[:maxShown], "") + "…"
+		}
+	}
+	body = what + " · " + duration(took)
 	var exit *exec.ExitError
 	switch {
 	case err == nil:
@@ -75,9 +91,9 @@ func commandResult(args []string, err error, took time.Duration) (code int, titl
 		code = exit.ExitCode()
 		return code, fmt.Sprintf("%s failed (exit %d)", name, code), body
 	case errors.Is(err, exec.ErrNotFound):
-		return 127, name + " failed (not found)", strings.Join(args, " ")
+		return 127, name + " failed (not found)", what
 	default:
-		return 126, name + " failed (" + err.Error() + ")", strings.Join(args, " ")
+		return 126, name + " failed (" + err.Error() + ")", what
 	}
 }
 

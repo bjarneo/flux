@@ -103,3 +103,44 @@ func TestSystemProcsReadsThisProcess(t *testing.T) {
 		t.Fatalf("ppid=%d comm=%q args=%v ok=%v", ppid, comm, args, ok)
 	}
 }
+
+// An Xwayland that exits during the scan has no arguments. The scan skips
+// it and does not panic.
+func TestHyprlandSessionSkipsAnXwaylandThatExits(t *testing.T) {
+	dir := t.TempDir()
+	writeLock(t, dir, "abc", 1704, "wayland-1")
+	procs := fakeProcs{
+		1704: {1, "Hyprland", []string{"Hyprland"}},
+		1843: {1704, "Xwayland", nil},
+		1844: {1704, "Xwayland", []string{}},
+	}
+	s, ok := HyprlandSession(dir, procs)
+	if !ok || s.X11 != "" {
+		t.Fatalf("session = %+v, %v", s, ok)
+	}
+}
+
+func TestMonitorsLocked(t *testing.T) {
+	cases := []struct {
+		out  string
+		want bool
+	}{
+		{`[{"name":"eDP-1","solitaryBlockedBy":["LOCK"]}]`, true},
+		{`[{"name":"eDP-1","solitaryBlockedBy":["WINDOWS"]},{"name":"DP-1","solitaryBlockedBy":["WORKSPACE","LOCK"]}]`, true},
+		{`[{"name":"eDP-1","solitaryBlockedBy":["WINDOWS","CANDIDATE"]}]`, false},
+		{`[{"name":"eDP-1"}]`, false},
+		{`not json`, false},
+	}
+	for _, c := range cases {
+		if got := monitorsLocked([]byte(c.out)); got != c.want {
+			t.Errorf("%s: locked = %v, want %v", c.out, got, c.want)
+		}
+	}
+}
+
+func TestProcRuns(t *testing.T) {
+	procs := fakeProcs{10: {1, "hyprlock", nil}, 11: {1, "bash", nil}}
+	if !procRuns(procs, "hyprlock") || procRuns(procs, "swaylock") {
+		t.Fatal("procRuns does not match the process name")
+	}
+}

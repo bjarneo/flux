@@ -114,8 +114,7 @@ func (l *Link) DialPeer(ctx context.Context, port int) (*tls.Conn, error) {
 	if port < MinPayloadPort || port > MaxPayloadPort {
 		return nil, fmt.Errorf("the device sent port %d, outside %d to %d", port, MinPayloadPort, MaxPayloadPort)
 	}
-	d := net.Dialer{Timeout: 10 * time.Second}
-	conn, err := d.DialContext(ctx, "tcp", net.JoinHostPort(l.IP(), fmt.Sprint(port)))
+	conn, err := l.dialPort(ctx, port)
 	if err != nil {
 		return nil, err
 	}
@@ -132,6 +131,25 @@ func (l *Link) DialPeer(ctx context.Context, port int) (*tls.Conn, error) {
 	}
 	_ = tc.SetDeadline(time.Time{})
 	return tc, nil
+}
+
+// dialPort opens a TCP connection to port on the peer, from the local IP of
+// the link. Flux for Android takes a payload, tunnel, or stream connection
+// only from the address of the link. Without the local IP, the kernel can
+// choose another source address, for example on a computer with 2
+// addresses on the network.
+func (l *Link) dialPort(ctx context.Context, port int) (net.Conn, error) {
+	d := net.Dialer{Timeout: 10 * time.Second}
+	if l.conn != nil {
+		if a, ok := l.conn.LocalAddr().(*net.TCPAddr); ok {
+			d.LocalAddr = &net.TCPAddr{IP: a.IP, Zone: a.Zone}
+		}
+	}
+	host := ""
+	if l.Addr != nil {
+		host = (&net.IPAddr{IP: l.Addr.IP, Zone: l.Addr.Zone}).String()
+	}
+	return d.DialContext(ctx, "tcp", net.JoinHostPort(host, fmt.Sprint(port)))
 }
 
 // pushPayload sends a packet with a payload through a tunnel.

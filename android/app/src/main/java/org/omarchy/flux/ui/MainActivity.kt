@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
@@ -27,6 +28,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.collectLatest
+import org.omarchy.flux.core.ApproveKeys
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.PairState
 import org.omarchy.flux.core.RemoteInput
@@ -50,6 +54,14 @@ class MainActivity : ComponentActivity() {
     val openAgent = kotlinx.coroutines.flow.MutableStateFlow<Pair<String, String>?>(null)
 
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    /**
+     * True when a window of another app covered this window during the last
+     * touch. The pair sheet then refuses the tap, because an overlay can
+     * show a false code over the real one.
+     */
+    @Volatile var touchObscured = false
+        private set
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // The system bars are transparent. TiledTheme sets the color of their icons.
@@ -79,13 +91,26 @@ class MainActivity : ComponentActivity() {
         takeOpenAgent(intent)
     }
 
-    /** Reads the agent that a notification opens. The extras go, so that a new activity does not open it again. */
+    /**
+     * Reads the agent that a notification opens. The extras go, so that a
+     * new activity does not open it again. Another app can start this
+     * activity too, so a pane that is not a herdr pane ID is ignored.
+     */
     private fun takeOpenAgent(intent: android.content.Intent?) {
         val device = intent?.getStringExtra(EXTRA_DEVICE) ?: return
         val pane = intent.getStringExtra(EXTRA_PANE) ?: return
         intent.removeExtra(EXTRA_DEVICE)
         intent.removeExtra(EXTRA_PANE)
+        if (!PANE_ID.matches(pane)) return
         openAgent.value = device to pane
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> touchObscured = Overlays.obscured(ev)
+            MotionEvent.ACTION_UP -> touchObscured = touchObscured || Overlays.obscured(ev)
+        }
+        return super.dispatchTouchEvent(ev)
     }
 
     companion object {
@@ -94,6 +119,9 @@ class MainActivity : ComponentActivity() {
 
         /** The herdr pane of the agent that a notification opens. */
         const val EXTRA_PANE = "flux.open.pane"
+
+        /** The form of a herdr pane ID, such as w1:p2. */
+        private val PANE_ID = Regex("^[A-Za-z0-9_.:-]{1,64}$")
     }
 
     /**
@@ -133,6 +161,15 @@ class MainActivity : ComponentActivity() {
         (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) && RemoteInput.volumeKeysDevice != null
 }
 
+/**
+ * Debug builds only: true for a sample computer of [org.omarchy.flux.core.DebugDemo].
+ * A real computer can use a device ID that starts with demo-, so a release
+ * build never treats a computer as a sample.
+ */
+internal fun isDemo(id: String?): Boolean =
+    org.omarchy.flux.BuildConfig.DEBUG && org.omarchy.flux.core.DebugDemo.on && org.omarchy.flux.core.DebugDemo.isDemo(id) &&
+        id in setOf(org.omarchy.flux.core.DebugDemo.PC, org.omarchy.flux.core.DebugDemo.OFFLINE, org.omarchy.flux.core.DebugDemo.NEW)
+
 /** The page prefix of the screen of one agent. The herdr pane ID follows it. */
 private const val AGENT_PAGE = "agent:"
 
@@ -145,6 +182,12 @@ private const val NEW_PANE_PAGE = "newpane"
 /** One entry of the screen stack. [page] is empty for the device home screen. */
 private data class Route(val deviceId: String? = null, val page: String = "")
 
+/** Keeps the screen stack across a recreation of the activity, as pairs of the device ID and the page. */
+private val RouteStackSaver = listSaver<List<Route>, String>(
+    save = { stack -> stack.flatMap { listOf(it.deviceId.orEmpty(), it.page) } },
+    restore = { saved -> saved.chunked(2).map { (id, page) -> Route(id.ifEmpty { null }, page) }.ifEmpty { listOf(Route()) } },
+)
+
 /** A pairing that this phone starts. The dialog shows the key before the request goes out. */
 private data class Outgoing(val deviceId: String, val timestamp: Long, val key: String, val sent: Boolean = false)
 
@@ -152,7 +195,7 @@ private data class Outgoing(val deviceId: String, val timestamp: Long, val key: 
 fun FluxRoot(activity: MainActivity, splash: Boolean = false) {
     val state by FluxCore.state.collectAsStateWithLifecycle()
     var splashing by remember { mutableStateOf(splash) }
-    var stack by remember { mutableStateOf(listOf(Route())) }
+    var stack by rememberSaveable(stateSaver = RouteStackSaver) { mutableStateOf(listOf(Route())) }
     val snacks = remember { SnackbarHostState() }
     var outgoing by remember { mutableStateOf<Outgoing?>(null) }
     var unpairing by remember { mutableStateOf<String?>(null) }
@@ -208,7 +251,7 @@ fun FluxRoot(activity: MainActivity, splash: Boolean = false) {
         if (page == "ring") FluxCore.setRinging(d.name)
         // The pair and unpair pages show their dialogs over the device list.
         if (page == "pair") {
-            state.devices.firstOrNull { !it.paired && it.online }?.let { outgoing = Outgoing(it.id, 0, "4F21A9C3") }
+            state.devices.firstOrNull { !it.paired && it.online }?.let { outgoing = Outgoing(it.id, 0, "5EE6825F974ED59A") }
         }
         if (page == "unpair") unpairing = d.id
         stack = when (page) {
@@ -293,11 +336,15 @@ fun FluxRoot(activity: MainActivity, splash: Boolean = false) {
             if (d == null) unpairing = null
             else ConfirmDialog(
                 "Unpair ${d.name}?",
-                "This phone and ${d.name} stop connecting. You can pair them again later.",
+                "This phone and ${d.name} stop connecting, and this phone deletes its fingerprint approval key for ${d.name}. " +
+                    "You can pair them again later. " +
+                    "The key file on the computer stays until you run: sudo flux-cli approve remove",
                 "Unpair",
                 onCancel = { unpairing = null },
                 onConfirm = {
                     FluxCore.unpair(id)
+                    // A new pairing needs a new enrollment. The key file on the computer stays until: sudo flux-cli approve remove
+                    ApproveKeys.delete(id)
                     unpairing = null
                 },
                 icon = Ic.unlink,

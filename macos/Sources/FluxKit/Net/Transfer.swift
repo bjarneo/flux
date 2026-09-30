@@ -1,7 +1,9 @@
 import Foundation
+import NIOConcurrencyHelpers
 import NIOCore
 import NIOPosix
 import NIOSSL
+import NIOTLS
 
 /// The TCP port range for payload servers and tunnels.
 public let payloadPorts: ClosedRange<Int> = 1739...1764
@@ -99,71 +101,200 @@ public final class TLSStream: Sendable {
 
 /// A listener that accepts 1 TLS connection. This side is the TLS server, and
 /// the peer must present the expected certificate.
+///
+/// A connection that fails its handshake, that shows another certificate,
+/// or that comes after the peer closes alone. The listener waits for the
+/// peer until the timeout, so a port scan or a stranger cannot take the
+/// transfer. A connection becomes an async channel only after the
+/// certificate check, so a closed connection never leaves a writer that
+/// NIO requires to finish.
 public final class PayloadServer: Sendable {
     public let port: Int
     private let server: Channel
-    private let accepted: EventLoopPromise<TLSStream>
+    private let waiter: PayloadWaiter
 
-    private init(server: Channel, port: Int, accepted: EventLoopPromise<TLSStream>) {
+    /// How long a connection may take for its TLS handshake.
+    static let handshakeTimeout: TimeAmount = .seconds(10)
+    /// The most connections in their handshake. A new one closes the oldest.
+    static let maxPending = 8
+
+    private init(server: Channel, port: Int, waiter: PayloadWaiter) {
         self.server = server
         self.port = port
-        self.accepted = accepted
+        self.waiter = waiter
     }
 
     /// Opens a listener on the first free port in the payload range.
-    public static func open(tls: FluxTLS, expected: [UInt8]?, ports: ClosedRange<Int> = payloadPorts) async throws -> PayloadServer {
+    public static func open(tls: FluxTLS, expected: [UInt8], ports: ClosedRange<Int> = payloadPorts) async throws -> PayloadServer {
         let group = MultiThreadedEventLoopGroup.singleton
-        let accepted = group.next().makePromise(of: TLSStream.self)
+        let waiter = PayloadWaiter(promise: group.next().makePromise(of: TLSStream.self))
         let bootstrap = ServerBootstrap(group: group)
             .serverChannelOption(.socketOption(.so_reuseaddr), value: 1)
             .childChannelOption(.socketOption(.tcp_nodelay), value: 1)
             .childChannelInitializer { ch in
                 ch.eventLoop.makeCompletedFuture {
-                    let handshake = ch.eventLoop.makePromise(of: Void.self)
+                    guard waiter.track(ch) else { throw FluxError("the payload listener is closed") }
                     try ch.pipeline.syncOperations.addHandler(tls.serverHandler())
-                    try ch.pipeline.syncOperations.addHandler(HandshakeWaiter(promise: handshake))
-                    let stream = try NIOAsyncChannel<ByteBuffer, ByteBuffer>(wrappingChannelSynchronously: ch)
-                    handshake.futureResult.whenComplete { result in
-                        switch result {
-                        case .success:
-                            let cert = ch.peerCertificateDER()
-                            if let expected, cert != expected {
-                                ch.close(promise: nil)
-                                accepted.fail(FluxError("payload peer is not the paired device"))
-                            } else {
-                                accepted.succeed(TLSStream(channel: stream, peerCertificate: cert))
-                            }
-                        case .failure(let error):
-                            ch.close(promise: nil)
-                            accepted.fail(error)
-                        }
-                    }
+                    try ch.pipeline.syncOperations.addHandler(PayloadGate(expected: expected, waiter: waiter))
                 }
             }
         for port in ports {
             if let server = try? await bootstrap.bind(host: "0.0.0.0", port: port).get() {
-                return PayloadServer(server: server, port: port, accepted: accepted)
+                return PayloadServer(server: server, port: port, waiter: waiter)
             }
         }
-        accepted.fail(FluxError("no free payload port"))
+        waiter.end(FluxError("no free payload port"))
         throw FluxError("no free payload port in \(ports)")
     }
 
-    /// Waits for the peer, then closes the listener.
+    /// Waits for the peer, then closes the listener and the other connections.
     public func accept(timeout: TimeAmount = .seconds(60)) async throws -> TLSStream {
-        let timer = server.eventLoop.scheduleTask(in: timeout) { [accepted] in
-            accepted.fail(FluxError("the computer did not connect in time"))
+        let timer = server.eventLoop.scheduleTask(in: timeout) { [waiter] in
+            waiter.end(FluxError("the computer did not connect in time"))
         }
         defer {
             timer.cancel()
             server.close(promise: nil)
+            waiter.end(FluxError("the payload listener is closed"))
         }
-        return try await accepted.futureResult.get()
+        return try await waiter.future.get()
     }
 
     public func close() {
-        accepted.fail(FluxError("canceled"))
         server.close(promise: nil)
+        waiter.end(FluxError("canceled"))
+    }
+}
+
+/// The state of 1 payload listener: the connections in their handshake and
+/// the 1 stream that it delivers.
+private final class PayloadWaiter: @unchecked Sendable {
+    private let promise: EventLoopPromise<TLSStream>
+    private let lock = NIOLock()
+    // Guarded by lock.
+    private var done = false
+    private var pending: [(id: ObjectIdentifier, channel: Channel)] = []
+
+    init(promise: EventLoopPromise<TLSStream>) { self.promise = promise }
+
+    var future: EventLoopFuture<TLSStream> { promise.futureResult }
+
+    /// Tracks a new connection. It returns false after the listener ended.
+    /// With too many connections in their handshake, the oldest closes.
+    func track(_ ch: Channel) -> Bool {
+        let id = ObjectIdentifier(ch)
+        let (kept, evicted) = lock.withLock { () -> (Bool, Channel?) in
+            guard !done else { return (false, nil) }
+            pending.append((id, ch))
+            guard pending.count > PayloadServer.maxPending else { return (true, nil) }
+            return (true, pending.removeFirst().channel)
+        }
+        evicted?.close(promise: nil)
+        guard kept else { return false }
+        ch.closeFuture.whenComplete { [weak self] _ in self?.untrack(ch) }
+        return true
+    }
+
+    private func untrack(_ ch: Channel) {
+        let id = ObjectIdentifier(ch)
+        lock.withLock { pending.removeAll { $0.id == id } }
+    }
+
+    /// Delivers the connection of the peer. It runs on the event loop of the
+    /// connection, right after the handshake, before any data. A connection
+    /// after the first, or after the end, closes.
+    func deliver(_ ch: Channel, certificate: [UInt8]) {
+        let id = ObjectIdentifier(ch)
+        let first = lock.withLock { () -> Bool in
+            guard !done else { return false }
+            done = true
+            pending.removeAll { $0.id == id }
+            return true
+        }
+        guard first else {
+            ch.close(promise: nil)
+            return
+        }
+        do {
+            let stream = try NIOAsyncChannel<ByteBuffer, ByteBuffer>(wrappingChannelSynchronously: ch)
+            promise.succeed(TLSStream(channel: stream, peerCertificate: certificate))
+        } catch {
+            ch.close(promise: nil)
+            promise.fail(error)
+        }
+        closePending()
+    }
+
+    /// Ends the wait with the error, unless a stream went out, and closes
+    /// the connections in their handshake.
+    func end(_ error: Error) {
+        let first = lock.withLock { () -> Bool in
+            defer { done = true }
+            return !done
+        }
+        if first { promise.fail(error) }
+        closePending()
+    }
+
+    private func closePending() {
+        let open = lock.withLock { () -> [Channel] in
+            defer { pending = [] }
+            return pending.map { $0.channel }
+        }
+        open.forEach { $0.close(promise: nil) }
+    }
+}
+
+/// Checks the certificate of 1 payload connection after its TLS handshake.
+/// A connection that shows the expected certificate goes to the waiter.
+/// Any other connection closes alone.
+private final class PayloadGate: ChannelInboundHandler {
+    typealias InboundIn = NIOAny
+    let expected: [UInt8]
+    let waiter: PayloadWaiter
+    private var timeout: Scheduled<Void>?
+    /// True after the connection went to the waiter as a stream.
+    private var delivered = false
+
+    init(expected: [UInt8], waiter: PayloadWaiter) {
+        self.expected = expected
+        self.waiter = waiter
+    }
+
+    func handlerAdded(context: ChannelHandlerContext) {
+        let channel = context.channel
+        timeout = context.eventLoop.scheduleTask(in: PayloadServer.handshakeTimeout) { channel.close(promise: nil) }
+    }
+
+    func handlerRemoved(context: ChannelHandlerContext) {
+        timeout?.cancel()
+    }
+
+    func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
+        if let tlsEvent = event as? TLSUserEvent, case .handshakeCompleted = tlsEvent {
+            timeout?.cancel()
+            timeout = nil
+            guard let certificate = context.channel.peerCertificateDER(), certificate == expected else {
+                FluxLog.net.info("closed a payload connection from \(context.remoteAddress?.ipAddress ?? "?", privacy: .public) with another certificate")
+                context.close(promise: nil)
+                return
+            }
+            // The wrap adds the async handlers now. NIOSSL decodes the data
+            // after this event, so no byte is lost.
+            delivered = true
+            waiter.deliver(context.channel, certificate: certificate)
+        }
+        context.fireUserInboundEventTriggered(event)
+    }
+
+    func errorCaught(context: ChannelHandlerContext, error: Error) {
+        // The stream reports an error after the delivery. Before it, the
+        // connection closes alone.
+        if delivered {
+            context.fireErrorCaught(error)
+        } else {
+            context.close(promise: nil)
+        }
     }
 }
 

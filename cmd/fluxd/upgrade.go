@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"os"
 	"os/exec"
@@ -111,38 +112,48 @@ func releaseCheck(headless bool) (string, time.Duration) {
 
 // refreshPlugin updates the omarchy-shell plugin of the user to the plugin
 // that was installed with this fluxd. It changes only a plugin that the
-// user added. It does not change a symlink to a checkout.
+// user added. It does not change a symlink to a checkout, and it does not
+// write through a symlink in the plugin folder.
 func refreshPlugin(logger *log.Logger) {
 	exe, err := os.Executable()
 	if err != nil {
 		return
 	}
-	src := plugin.Installed(exe)
-	if src == "" {
+	if !updatePlugin(logger, plugin.Installed(exe), plugin.UserDir()) {
 		return
 	}
-	dest := plugin.UserDir()
-	if fi, err := os.Lstat(dest); err != nil || !fi.IsDir() {
-		return
-	}
-	files, err := plugin.Files(src, "")
-	if err != nil {
-		logger.Printf("plugin: %v", err)
-		return
-	}
-	changed, err := plugin.Sync(files, dest)
-	if err != nil {
-		logger.Printf("plugin: %v", err)
-		return
-	}
-	if !changed {
-		return
-	}
-	logger.Printf("updated the omarchy-shell plugin in %s from %s", dest, src)
 	// The file watcher of omarchy-shell reloads the plugin. A rescan also
 	// covers a shell that does not watch. The shell can still be down at
 	// login, and then it loads the new files when it starts.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = exec.CommandContext(ctx, "omarchy-shell", "shell", "rescanPlugins").Run()
+}
+
+// updatePlugin copies the plugin src into the plugin folder dest. It
+// reports whether it changed a file.
+func updatePlugin(logger *log.Logger, src, dest string) bool {
+	if src == "" {
+		return false
+	}
+	if fi, err := os.Lstat(dest); err != nil || !fi.IsDir() {
+		return false
+	}
+	files, err := plugin.Files(src, "")
+	if err != nil {
+		logger.Printf("plugin: %v", err)
+		return false
+	}
+	changed, err := plugin.Sync(files, dest)
+	switch {
+	case errors.Is(err, plugin.ErrLinked):
+		logger.Printf("plugin: %v. fluxd does not update it", err)
+		return false
+	case err != nil:
+		logger.Printf("plugin: %v", err)
+		return false
+	case changed:
+		logger.Printf("updated the omarchy-shell plugin in %s from %s", dest, src)
+	}
+	return changed
 }

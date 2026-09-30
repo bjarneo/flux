@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
+	"sync"
 	"testing"
 
 	"flux/internal/proto"
@@ -102,6 +104,47 @@ func TestHandleSmsConversations(t *testing.T) {
 	}
 }
 
+func TestHandleSmsConversationsAnswer(t *testing.T) {
+	d := &Daemon{}
+	dev := newDevice("p1")
+	threads := func() []int64 {
+		var out []int64
+		for _, c := range sortedConversations(dev.conversations) {
+			out = append(out, c.Thread)
+		}
+		slices.Sort(out)
+		return out
+	}
+	d.handleSms(dev, smsPacket(map[string]any{"messages": []any{
+		wireMessage(1, 1, 1790000000000, 1, 1), wireMessage(2, 2, 1790000001000, 1, 1), wireMessage(3, 3, 1790000002000, 1, 1),
+	}}))
+
+	// An answer without the marker comes from an older app. It only adds.
+	d.handleSms(dev, smsPacket(map[string]any{"messages": []any{wireMessage(1, 1, 1790000000000, 1, 1)}}))
+	if got := threads(); !slices.Equal(got, []int64{1, 2, 3}) {
+		t.Fatalf("an answer without the marker removed threads: %v", got)
+	}
+	// The marker in the answer to a thread request changes nothing.
+	d.handleSms(dev, smsPacket(map[string]any{"conversations": true, "threadID": 1, "messages": []any{wireMessage(1, 1, 1790000000000, 1, 1)}}))
+	if got := threads(); !slices.Equal(got, []int64{1, 2, 3}) {
+		t.Fatalf("a thread answer removed threads: %v", got)
+	}
+
+	// The user deleted thread 2 on the phone. The phone splits its answer
+	// into 2 packets. The first packet has the marker and replaces the
+	// list, and the second packet adds to it.
+	d.handleSms(dev, smsPacket(map[string]any{"conversations": true, "messages": []any{wireMessage(3, 3, 1790000002000, 1, 1)}}))
+	d.handleSms(dev, smsPacket(map[string]any{"messages": []any{wireMessage(1, 1, 1790000000000, 1, 1)}}))
+	if got := threads(); !slices.Equal(got, []int64{1, 3}) {
+		t.Fatalf("threads after the answer: %v", got)
+	}
+	// A new message after the answer adds its thread.
+	d.handleSms(dev, smsPacket(map[string]any{"messages": []any{wireMessage(4, 4, 1790000003000, 1, 0)}}))
+	if got := threads(); !slices.Equal(got, []int64{1, 3, 4}) {
+		t.Fatalf("threads after a new message: %v", got)
+	}
+}
+
 func TestHandleSmsThreadAnswer(t *testing.T) {
 	d := &Daemon{}
 	wait := func(dev *Device, thread int64) chan []SmsMessage {
@@ -173,5 +216,86 @@ func TestConversationSim(t *testing.T) {
 		if got := conversationSim(convos, c.addresses); got != c.want {
 			t.Errorf("%v: SIM %d, want %d", c.addresses, got, c.want)
 		}
+	}
+}
+
+// TestSmsThreadWaitersShareSortedAnswer gives 1 answer to 2 callers that
+// wait for the same thread. Each caller only reads the answer, so the race
+// detector finds no race, and both get the messages oldest first.
+func TestSmsThreadWaitersShareSortedAnswer(t *testing.T) {
+	d := &Daemon{}
+	dev := newDevice("flux")
+	chans := []chan []SmsMessage{make(chan []SmsMessage, 1), make(chan []SmsMessage, 1)}
+	dev.threadWait[1] = chans
+	var wg sync.WaitGroup
+	results := make([][]int64, len(chans))
+	for i, ch := range chans {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for _, m := range <-ch {
+				results[i] = append(results[i], m.ID)
+			}
+		}()
+	}
+	// A phone sends the newest message first.
+	d.handleSms(dev, smsPacket(map[string]any{"threadID": 1, "messages": []any{
+		wireMessage(3, 1, 1790000000300, 1, 0), wireMessage(2, 1, 1790000000200, 2, 1), wireMessage(1, 1, 1790000000100, 1, 1),
+	}}))
+	wg.Wait()
+	for i, ids := range results {
+		if !slices.Equal(ids, []int64{1, 2, 3}) {
+			t.Errorf("caller %d got %v", i, ids)
+		}
+	}
+}
+
+// TestHandleSmsLimits checks that fluxd keeps the newest conversations
+// only, cuts the last message and the name of each one, and keeps a
+// limited number of short addresses.
+func TestHandleSmsLimits(t *testing.T) {
+	d := &Daemon{}
+	dev := newDevice("p1")
+	var msgs []any
+	for i := range maxConversations + 100 {
+		msgs = append(msgs, wireMessage(int64(i), int64(i), 1790000000000+int64(i), 1, 0))
+	}
+	// A long address is dropped, not cut.
+	many := []map[string]any{addr(strings.Repeat("8", maxSmsAddress+1), "")}
+	for range maxSmsAddresses + 10 {
+		many = append(many, addr(strings.Repeat("9", maxSmsAddress), strings.Repeat("N", maxSmsName+10)))
+	}
+	long := wireMessage(99999, 99999, 1800000000000, 1, 0, many...)
+	long["body"] = strings.Repeat("x", 100<<10)
+	msgs = append(msgs, long)
+	d.handleSms(dev, smsPacket(map[string]any{"messages": msgs}))
+	if len(dev.conversations) != maxConversations {
+		t.Fatalf("%d conversations", len(dev.conversations))
+	}
+	if _, ok := dev.conversations[0]; ok {
+		t.Error("the oldest conversation stays")
+	}
+	c := dev.conversations[99999]
+	if c == nil {
+		t.Fatal("the newest conversation is gone")
+	}
+	if len(c.Last) != maxSmsLast || len(c.Addresses) != maxSmsAddresses || c.Address != strings.Repeat("9", maxSmsAddress) {
+		t.Errorf("last %d bytes, %d addresses, address %q", len(c.Last), len(c.Addresses), c.Address)
+	}
+	if len(c.Name) != maxSmsName {
+		t.Errorf("name %d bytes", len(c.Name))
+	}
+}
+
+func TestSendSmsLength(t *testing.T) {
+	d := &Daemon{}
+	dev := newDevice("flux")
+	dev.Name = "Pixel 8"
+	var e *Error
+	if err := d.SendSms(dev, []string{"+4791234567"}, strings.Repeat("é", maxSmsSend+1)); !errors.As(err, &e) || e.Code != "bad_params" {
+		t.Fatalf("long message: %v", err)
+	}
+	if err := d.SendSms(dev, []string{"+4791234567"}, strings.Repeat("é", maxSmsSend)); !errors.As(err, &e) || e.Code != "offline" {
+		t.Fatalf("message at the limit: %v", err)
 	}
 }

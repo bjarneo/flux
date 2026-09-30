@@ -44,20 +44,35 @@ command = "omarchy-system-lock"
 | `photo_dir` | Destination for camera photos. Defaults to `flux` inside the XDG Pictures directory. Screenshots and signatures use its `screenshots` and `signatures` folders. |
 | `auto_clipboard` | Sync clipboard text and images in both directions. Defaults to `true`. |
 | `notifications` | Show phone notifications on the desktop. Defaults to `true`. |
-| `share_home` | Let the phone browse the desktop home folder read-only. Defaults to `true`. |
+| `share_home` | Let each paired device read the home folder, `download_dir`, and the Documents, Pictures, Music, and Videos folders. Names that start with a dot, such as `~/.ssh`, and the Flux folders stay hidden. Defaults to `true`. Turning it off ends each session at once. See [Browse PC](features.md#browse-pc). |
 | `pause_media_on_call` | Pause desktop media during calls. Defaults to `true`. |
 | `sync_dnd` | Sync Do Not Disturb. Defaults to `true`. |
 | `herdr` | Show the [herdr agents](herdr.md) of this computer on the phone. Defaults to `true`. |
-| `herdr_control` | Let the phone send keys and prompts to the herdr agents, start agents, and close them. Defaults to `false`. See [Answer an agent](herdr.md#answer-an-agent). |
-| `herdr_terminals` | Let the phone open herdr terminals, read them, and type commands in them. Needs `herdr_control`. Defaults to `false`. See [Use terminals](herdr.md#use-terminals). |
-| `remote_input` | Let the phone or the Mac move the pointer and type on this computer. Defaults to `false`. `flux-cli input on` and `flux-cli input off` change it. See [Touchpad and keyboard](remote-input.md). |
-| `remote_desktop` | Let the phone or the Mac show the screen of this computer. Defaults to `false`. The touches and the mouse on the screen also need `remote_input`. `flux-cli desktop on` and `flux-cli desktop off` change it. See [Remote desktop](remote-desktop.md). |
+| `herdr_control` | Let each paired device send keys and prompts to the herdr agents, start agents, and close them. An agent runs commands, so a paired device can then run any command as your user through an agent, also with `herdr_terminals = false`. Defaults to `false`. See [Answer an agent](herdr.md#answer-an-agent). |
+| `herdr_terminals` | Let each paired device open herdr terminals, read them, and type commands in them. The terminals include the herdr panes that you opened, for example a `sudo -i` shell. Needs `herdr_control`. Defaults to `false`. See [Use terminals](herdr.md#use-terminals). |
+| `remote_input` | Let the phone or the Mac move the pointer and type on this computer. Defaults to `false`. `flux-cli input on` and `flux-cli input off` change it. Turning it off drops the input that waits and releases a held button. See [Touchpad and keyboard](remote-input.md). |
+| `remote_desktop` | Let the phone or the Mac show the screen of this computer. Defaults to `false`. The touches and the mouse on the screen also need `remote_input`. `flux-cli desktop on` and `flux-cli desktop off` change it. Turning it off stops each stream, also a stream that still starts. See [Remote desktop](remote-desktop.md). |
 | `check_updates` | Ask GitHub once a day for the latest release. Defaults to `true`. See [release check](#release-check). |
 | `gui` | Use `app`, `plugin`, or an empty value for automatic host selection. |
 | `approve_timeout` | Wait 5 to 120 seconds for approval. Zero or an omitted value uses 20 seconds. |
 | `commands` | Desktop commands available to the phone. A new configuration has no commands. |
 
+Each setting applies to every paired device, for example a second phone, an iPhone, or a Mac.
+Flux has no setting for 1 device.
+The apps ask for the screen lock before replies and remote control, but `fluxd` cannot check that the app did.
+Turn on `herdr_control`, `herdr_terminals`, `remote_input`, and `remote_desktop` only when you trust each paired device.
+See [security](security.md) for what a paired device can do with the defaults.
+
 The destination paths expand `~`.
+When `fluxd` cannot save `config.toml`, `settings.set` returns an error.
+Then `remote_input`, `remote_desktop`, `share_home`, `herdr_control`, and `herdr_terminals` do not turn on.
+When 1 of them turns off, it is off at once, until `fluxd` restarts.
+Each other setting keeps its old value.
+
+A command without `id` gets an ID from its name and its command.
+The ID stays the same after each reload and restart, so `flux-cli run ID` keeps working.
+A change of the name or the command gives a new ID.
+To keep an ID, write it in the `id` field.
 Use the [CLI](cli.md#desktop-commands) or the Phone commands page to add commands without editing TOML.
 
 ## Data paths
@@ -75,7 +90,7 @@ Use the [CLI](cli.md#desktop-commands) or the Phone commands page to add command
 | `~/Pictures/flux/signatures/` | Signatures from the camera by default |
 | `~/.cache/flux/release.json` | The last answer of the [release check](#release-check) |
 | `~/.cache/flux/update/` | The package that `flux-cli update` downloads, until pacman installs it |
-| `$XDG_RUNTIME_DIR/flux/fluxd.sock` | Local IPC socket |
+| `$XDG_RUNTIME_DIR/flux/fluxd.sock` | Local IPC socket. Without `XDG_RUNTIME_DIR`, `/run/user/<uid>/flux/fluxd.sock` |
 | `/etc/flux/approve/<user>.pub` | Root-owned phone approval public key |
 | `/etc/flux/approve/pam-backup/` | Original PAM files from approval setup |
 
@@ -87,18 +102,24 @@ Its replacement changes the desktop identity and requires new pairing.
 
 | Variable | Use |
 | --- | --- |
-| `FLUX_SOCKET` | Override the local IPC socket path. |
+| `FLUX_SOCKET` | Override the local IPC socket path. The folder of the socket must be a private folder of the user. The approval helper does not read this variable. |
 | `FLUX_GUI` | Select `app` or `plugin` for `flux-cli open`. |
 | `FLUX_QML_DIR` | Load shared views from disk in the Qt host during development. |
 | `FLUX_THEME_FILE` | Select a theme file for the snapshot harness. |
 | `FLUX_SNAPSHOT` | Select the output directory for the QML snapshot harness. |
 | `FLUX_SNAPSHOT_ONLY` | Filter snapshot names by text. |
 | `HERDR_SOCKET_PATH` | Select the herdr session that `fluxd` follows. See [herdr agents](herdr.md#use-another-herdr-session). |
-| `FLUX_RELEASES_URL` | Replace the GitHub API address of the release check. Tests use it. |
+| `FLUX_RELEASES_URL` | Replace the GitHub API address of the release check in `fluxd` and `flux-cli update`. Tests use it. Flux uses only an `https` address, or an `http` address on the loopback interface. |
 | `FLUX_RELEASE_DELAY` | Change the wait before the first release check, such as `0s`. Tests use it. |
 | `FLUX_BINARY_POLL` | Change the interval of the check for a new `fluxd` binary, such as `100ms`. Tests use it. |
 
-Without `XDG_RUNTIME_DIR`, the daemon uses `flux-<uid>` inside the system temporary directory.
+Without `XDG_RUNTIME_DIR`, `fluxd`, `flux-cli`, and the desktop hosts use `/run/user/<uid>/flux`.
+Flux does not use the system temporary folder for the socket or the clipboard images.
+`fluxd` makes the `flux` folder with mode `0700`.
+It does not start when another user owns the folder, when other users can write to it, or when it is a symbolic link.
+To fix the folder, remove it, or run `chmod 700` on it.
+A shell without a login session, for example after `su`, can have no `/run/user/<uid>`.
+In that shell, set `XDG_RUNTIME_DIR` to a folder of the user with mode `0700`.
 See [development](development.md) for an isolated test environment.
 
 ## Release check
@@ -115,7 +136,7 @@ The check needs no network to work correctly:
 
 - The first check runs 30 seconds after `fluxd` starts, so it does not slow the login.
 - Without a network, the check fails at once, and `fluxd` works as before.
-- `fluxd` tries again after 1 hour, or at the next network change.
+- `fluxd` tries again after 1 hour, or at the next network change. A network change less than 1 minute after the failed check starts the check 1 minute after the failure.
 - `fluxd` keeps the last answer in `~/.cache/flux/release.json`. A known update stays visible without a network.
 - `flux-cli doctor` shows the error of the last failed check.
 

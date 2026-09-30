@@ -66,6 +66,8 @@ final class HerdrControlTests: XCTestCase {
                        HerdrDone(action: "close", pane: "w4:p1", error: nil))
         XCTAssertEqual(HerdrWire.done(body(#"{"kind":"closed","pane":"w4:p1","error":""}"#))?.error, nil, "an empty error is no error")
         XCTAssertNil(HerdrWire.done(body(#"{"kind":"sent","pane":"w4:p1"}"#)))
+        XCTAssertEqual(HerdrWire.done(body(#"{"kind":"closed","pane":"w4:p1","request":5}"#))?.request, 5)
+        XCTAssertNil(HerdrWire.done(body(#"{"kind":"closed","pane":"w4:p1"}"#))?.request, "an older fluxd sends no number")
     }
 
     func testTerminalKeys() {
@@ -97,6 +99,8 @@ final class HerdrControlTests: XCTestCase {
                        wire(#"{"kind":"create","what":"terminal","agent":"","cwd":"","workspace":""}"#))
         XCTAssertEqual(HerdrWire.close(pane: "w4:p1").body, wire(#"{"kind":"close","pane":"w4:p1"}"#))
         XCTAssertEqual(HerdrWire.close(pane: "w4:p1").type, "flux.herdr")
+        XCTAssertEqual(HerdrWire.numbered(HerdrWire.close(pane: "w4:p1"), request: 5).body,
+                       wire(#"{"kind":"close","pane":"w4:p1","request":5}"#))
     }
 
     func testTimeoutsMatchAndroid() {
@@ -112,6 +116,23 @@ final class HerdrControlTests: XCTestCase {
 
     private func packet(_ json: String) -> Packet { Packet.parse(#"{"id":1,"type":"flux.herdr","body":\#(json)}"#)! }
 
+    /// A poll waits while the last read did not end, so that reads do not
+    /// pile up on a slow link. A manual read always goes out.
+    @MainActor
+    func testAPollWaitsForTheLastRead() {
+        let plugin = HerdrPlugin()
+        plugin.model.outputs["d"] = HerdrOutput(pane: "w1:p1", loading: true)
+        plugin.poll("d", pane: "w1:p1")
+        XCTAssertEqual(plugin.model.outputs["d"], HerdrOutput(pane: "w1:p1", loading: true), "the poll skips while the read loads")
+        plugin.read("d", pane: "w1:p1")
+        XCTAssertEqual(plugin.model.outputs["d"]?.error, "The computer is not reachable", "a manual read goes out")
+        plugin.poll("d", pane: "w1:p1")
+        XCTAssertEqual(plugin.model.outputs["d"]?.loading, false)
+        plugin.model.outputs["d"] = HerdrOutput(pane: "w1:p2", loading: true)
+        plugin.poll("d", pane: "w1:p1")
+        XCTAssertEqual(plugin.model.outputs["d"]?.pane, "w1:p1", "a read of another pane does not stop the poll")
+    }
+
     @MainActor
     func testCreatedAnswersTheCreate() {
         let plugin = HerdrPlugin()
@@ -126,6 +147,45 @@ final class HerdrControlTests: XCTestCase {
         XCTAssertNotNil(plugin.model.actions["d"], "only the answered action clears")
         plugin.clearAction("d", seq: 3)
         XCTAssertNil(plugin.model.actions["d"])
+    }
+
+    @MainActor
+    func testAnswersMatchTheNumberOfTheCreate() {
+        let plugin = HerdrPlugin()
+        plugin.model.actions["d"] = HerdrAction(action: "create", seq: 3, what: "agent")
+        plugin.receive(packet(#"{"kind":"created","what":"agent","pane":"w4:p1","request":2}"#), deviceId: "d", computer: "c")
+        XCTAssertEqual(plugin.model.actions["d"]?.sending, true, "the answer to an earlier create does not end this one")
+        plugin.receive(packet(#"{"kind":"created","what":"agent","pane":"w4:p2","request":3}"#), deviceId: "d", computer: "c")
+        XCTAssertEqual(plugin.model.actions["d"], HerdrAction(action: "create", seq: 3, sending: false, pane: "w4:p2", what: "agent"))
+    }
+
+    @MainActor
+    func testAnswersMatchTheNumberOfTheReply() {
+        let plugin = HerdrPlugin()
+        plugin.model.replies["d"] = HerdrReply(pane: "w1:p1", action: "prompt", seq: 4, text: "go on")
+        plugin.receive(packet(#"{"kind":"sent","pane":"w1:p1","action":"prompt","error":"late","request":3}"#), deviceId: "d", computer: "c")
+        XCTAssertEqual(plugin.model.replies["d"]?.sending, true, "the answer to an earlier reply does not end this reply")
+        plugin.receive(packet(#"""
+        {"kind":"sent","pane":"w1:p1","action":"prompt","error":"The agent waits for a choice. Pick a choice first.","code":"blocked","request":4}
+        """#), deviceId: "d", computer: "c")
+        XCTAssertEqual(plugin.model.replies["d"]?.sending, false)
+        XCTAssertEqual(plugin.model.replies["d"]?.error, "The agent waits for a choice. Pick a choice first.")
+        XCTAssertEqual(plugin.model.replies["d"]?.blocked, true, "the UI offers to send the text as an answer")
+        XCTAssertEqual(plugin.model.replies["d"]?.text, "go on")
+
+        plugin.model.replies["d"] = HerdrReply(pane: "w1:p1", action: "keys", seq: 5)
+        plugin.receive(packet(#"{"kind":"sent","pane":"w1:p1","action":"keys"}"#), deviceId: "d", computer: "c")
+        XCTAssertEqual(plugin.model.replies["d"]?.sending, false, "an answer from an older fluxd matches by the pane")
+        XCTAssertEqual(plugin.model.replies["d"]?.blocked, false)
+    }
+
+    @MainActor
+    func testAPromptKeepsItsText() {
+        let plugin = HerdrPlugin()
+        plugin.sendPrompt("d", pane: "w1:p1", " go on ", answer: true)
+        XCTAssertEqual(plugin.model.replies["d"]?.text, "go on", "the text can go again as an answer")
+        XCTAssertEqual(plugin.model.replies["d"]?.error, "The computer is not reachable")
+        XCTAssertEqual(plugin.model.replies["d"]?.blocked, false)
     }
 
     @MainActor

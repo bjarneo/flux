@@ -56,13 +56,35 @@ public final class ApprovePlugin: FluxPlugin, @unchecked Sendable {
         }
     }
 
+    /// An unpair from either side ends the open request of the computer. A
+    /// link that only drops leaves it, because the computer can connect
+    /// again before the request expires. The core lock is held.
+    public func onDisconnected(_ device: Device) {
+        guard !device.paired else { return }
+        let computerId = device.id
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated { self.unpaired(computerId) }
+        }
+    }
+
+    /// Ends the open request or enrollment of a computer that is no longer
+    /// paired. An enrollment also drops its new key.
+    @MainActor
+    func unpaired(_ computerId: String) {
+        guard let r = model.current, r.computerId == computerId else { return }
+        FluxLog.plugin.info("approve: the request of \(r.computerName, privacy: .public) ended with the unpair")
+        if r.kind == .enroll { keys.discard(computerId) }
+        end(r.id, .unpaired)
+    }
+
     // MARK: Requests
 
     @MainActor
     func receive(_ p: Packet, computerId: String, computerName: String) {
         switch p.string("kind") {
         case "cancel":
-            if let id = p.string("id") { end(id, .cancelled) }
+            // Only the computer of the open request can cancel it.
+            if let id = p.string("id"), model.current?.computerId == computerId { end(id, .cancelled) }
         case "request", "enroll":
             open(p, computerId: computerId, computerName: computerName)
         default:
@@ -109,7 +131,7 @@ public final class ApprovePlugin: FluxPlugin, @unchecked Sendable {
         }
         Notifier.shared.post(id: Self.notificationId, category: Self.notificationCategory,
                              title: r.kind == .approve ? "Approve \(r.service) on \(r.host)?" : texts.enrollTitle(host: r.host),
-                             body: ([ApproveMessage.question(r)] + Self.details(r)).joined(separator: "\n"),
+                             body: ([ApproveMessage.question(r)] + Self.details(r, replacesKey: replacesKey(r))).joined(separator: "\n"),
                              userInfo: ["id": r.id], interruptionLevel: Self.interruptionLevel)
         model.present?()
     }
@@ -162,8 +184,10 @@ public final class ApprovePlugin: FluxPlugin, @unchecked Sendable {
         }
     }
 
-    /// The lines under the question: the terminal, the remote host, and who asks.
-    public static func details(_ r: ApproveRequest) -> [String] {
+    /// The lines under the question: the terminal, the remote host, and who
+    /// asks. An enrollment that replaces the current key of the computer
+    /// says so.
+    public static func details(_ r: ApproveRequest, replacesKey: Bool = false) -> [String] {
         switch r.kind {
         case .approve:
             var lines: [String] = []
@@ -173,8 +197,16 @@ public final class ApprovePlugin: FluxPlugin, @unchecked Sendable {
             lines.append("Asked at \(time) by \(r.computerName)")
             return lines
         case .enroll:
-            return [ApproveTexts.current.enrollDetail(computer: r.computerName)]
+            let texts = ApproveTexts.current
+            let detail = texts.enrollDetail(computer: r.computerName)
+            return replacesKey ? [detail, texts.enrollReplaces(computer: r.computerName)] : [detail]
         }
+    }
+
+    /// True when the enrollment `r` replaces the current key of its computer.
+    @MainActor
+    public func replacesKey(_ r: ApproveRequest) -> Bool {
+        r.kind == .enroll && model.keys[r.computerId] != nil
     }
 
     // MARK: Actions
@@ -256,18 +288,30 @@ public final class ApprovePlugin: FluxPlugin, @unchecked Sendable {
         switch result {
         case .success(let s):
             if let key = s.newKey {
+                // The old key stays until the new key reached the computer,
+                // so that a failed enrollment keeps the approvals working.
                 do {
-                    try keys.save(blob: key.blob, publicKey: key.publicKey, computerId: r.computerId, host: r.host, user: r.user)
+                    try keys.stage(blob: key.blob, publicKey: key.publicKey, computerId: r.computerId, host: r.host, user: r.user)
                 } catch {
                     FluxLog.plugin.error("approve: saving the key failed: \(String(describing: error), privacy: .public)")
                     fail(r, ApproveTexts.current.saveFailed)
                     return
                 }
-                model.keys = keys.all()
                 guard core?.send(ApproveMessage.enrolled(r.id, spki: key.publicKey, signature: s.signature), to: r.computerId) == true else {
-                    fail(r, "The computer is not connected. Run the enrollment again.")
+                    keys.discard(r.computerId)
+                    let old = keys.has(r.computerId) ? " The old key stays." : ""
+                    fail(r, "The new key did not reach \(r.computerName).\(old)")
                     return
                 }
+                do {
+                    try keys.commit(r.computerId)
+                } catch {
+                    FluxLog.plugin.error("approve: saving the key failed: \(String(describing: error), privacy: .public)")
+                    keys.discard(r.computerId)
+                    fail(r, ApproveTexts.current.saveFailed)
+                    return
+                }
+                model.keys = keys.all()
                 model.phase = .enrolled(code: ApproveMessage.fingerprint(key.publicKey))
                 end(r.id, .enrolled)
             } else {

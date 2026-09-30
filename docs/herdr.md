@@ -22,7 +22,7 @@ The phone never connects to the herdr socket.
 ## Requirements
 
 - herdr with API protocol 22 or newer. herdr 0.9.1 uses protocol 22.
-- herdr and `fluxd` run as the same desktop user.
+- herdr and `fluxd` run as the same desktop user. `fluxd` refuses a herdr socket that belongs to another user.
 - A `fluxd` and a Flux for Android or Flux for macOS that both include this feature.
 
 To check the desktop side, run:
@@ -53,6 +53,8 @@ The output screen of the phone shows up to 1000 lines of recent output.
 The screen part of the output has the colors and styles of the terminal.
 The older lines above it are plain text.
 It reads the output again every 5 seconds while the agent works, and after each status change.
+A timed read waits while the last read still loads, so the reads do not pile up on a slow link.
+A new status reads at once.
 Select refresh to read it at once.
 
 When you scroll up to read older lines, the screen stays there when new output comes.
@@ -91,7 +93,13 @@ Android also lists the two types as the **Agents that need input** and **Agents 
 
 ## Answer an agent
 
-Replies are off by default, because an agent can run commands on the computer.
+Replies are off by default, because an agent runs commands on the computer.
+With replies on, a paired device can make an agent run any command as your user, also when `herdr_terminals` is `false`.
+For example, Claude Code runs a prompt that starts with `!` as a shell command, and a reply can approve each command that an agent asks to run.
+The setting applies to every paired device.
+Turn it on only when you trust each paired device.
+See [Access and privacy](#access-and-privacy).
+
 To let the phone send keys and text to the agents, set this key in `~/.config/flux/config.toml`:
 
 ```toml
@@ -108,7 +116,9 @@ The output screen then shows the reply controls:
 
 - When the agent is blocked, the phone shows the numbered choices of the dialog as buttons. A tap sends the number of the choice.
 - The key bar sends Esc, Tab, Up, Down, and Enter.
-- The text field sends a prompt to the agent. When the agent is blocked, the phone types the text and presses Enter, which answers a question that needs free text.
+- The text field sends a prompt to the agent.
+- When the agent waits for a choice, `fluxd` refuses the text with the message `The agent waits for a choice. Pick a choice first.` A digit or Enter in the text can select a choice of the dialog, for example an approval. Pick a choice with the buttons or the key bar first.
+- After this refusal, the message shows **Send as answer** next to it while the field holds the same text. Select it when the agent asks a question that needs free text, for example an answer that is not in the choices. The app sends the same text again with `"answer": true`. `fluxd` checks that the agent still waits, types the text on one line, and presses Enter. The iPhone and the Mac show the same action.
 
 Before the first reply, the phone asks for its fingerprint or screen lock.
 The unlock stays valid for 5 minutes.
@@ -143,6 +153,8 @@ The list shows only the agents that can run on the computer.
 A mise shim or an Omarchy launcher counts only when `mise which` finds the tool active in your home folder.
 `fluxd` never runs an agent command to check it, because an Omarchy launcher installs its tool on the first run.
 `fluxd` checks the agents again each minute, so a new install shows within a minute.
+The check runs in the background, so the agent list does not wait for it.
+One start from each device runs at a time. A second start from the same device gets an error until the first one ends.
 When the agent does not start, `fluxd` closes the new pane and the phone shows the last line of the shell, for example `command not found`.
 
 A new agent in a new folder can ask if you trust the folder.
@@ -157,7 +169,8 @@ When the tab is the last one of its workspace, herdr also closes the workspace.
 
 ## Use terminals
 
-Terminals give the phone a shell on the computer, so they are off by default.
+Terminals let the phone type commands in each herdr pane that has no agent, so they are off by default.
+`herdr_control` alone already lets an agent run commands for the phone.
 To let the phone open herdr terminals and type in them, set these keys in `~/.config/flux/config.toml`:
 
 ```toml
@@ -172,12 +185,14 @@ systemctl --user reload fluxd
 ```
 
 The **Agents** screen then lists each herdr pane that has no agent under **Terminals**.
+The list includes the panes that you opened on the computer, for example a `sudo -i` shell or an SSH session.
+The phone can read and type in each of them.
 Select a terminal to see its output and to type in it:
 
 - Type a command in the field, then select **Run**. The phone types the command and presses Enter.
 - To speak a command, select the mic key next to **Run**. The command goes in at the cursor without the capital and the period of a sentence. Read it, then select **Run**.
 - The key bar sends Esc, Tab, Ctrl-C, Ctrl-D, Up, Down, and Enter.
-- The screen reads the output again every 3 seconds.
+- The screen reads the output again every 3 seconds. A read waits while the last read still loads.
 - To close the terminal, select **Close**, then confirm.
 
 To open a new terminal, select the add button on the **Agents** screen, then select **terminal** under **Run**.
@@ -253,7 +268,7 @@ It does not start agents, close them, or open terminals.
 - The Mac does not yet fit the output of full-screen agents such as opencode, as the phone does.
 - Press Command-R to read the output again.
 - Return sends the text. Shift-Return adds a line break.
-- Before the first reply, the Mac asks for Touch ID or the Mac password. The unlock stays valid for 5 minutes while Flux runs.
+- Before the first reply, the Mac asks for Touch ID or the Mac password. The unlock stays valid for 5 minutes, until the Mac sleeps or locks.
 - The **Agent needs input** and **Agent finished** switches are in **Settings > Features**. They apply to all computers. A click on a notification opens the agent in the agents window.
 
 ### Dictate on a Mac
@@ -332,13 +347,21 @@ systemctl --user restart fluxd
 
 The phone can read the agent list and the recent output of an agent pane.
 With `herdr_control = true`, it can also send the keys in the list above and prompts to an agent, start agents, and close agent panes.
-An agent can run commands, so a reply has the same power as a prompt that you type on the computer.
+An agent runs commands, so a reply has the same power as a prompt that you type on the computer.
+`herdr_control` alone lets the phone run any command as your user, also when `herdr_terminals` is `false`.
+For example, the phone can start Claude Code in any folder and send a prompt that starts with `!`, which Claude Code runs as a shell command.
 `fluxd` reads and sends only to panes that hold an agent in the last agent list.
 herdr also checks that an agent is in the pane before it sends a key or a prompt.
 
 With `herdr_terminals = true` and `herdr_control = true`, the phone can also read, type in, open, and close each herdr pane that has no agent.
-A terminal is a shell, so the phone can then run any command as your user.
-Turn it on only for phones that you trust.
+These panes include the panes that you opened on the computer, for example a `sudo -i` shell or an SSH session.
+The phone can then run any command in them, also as root or on the remote host.
+
+`herdr_control` and `herdr_terminals` apply to every paired device, for example a second phone, a tablet, or a Mac.
+Flux has no setting for each device.
+The app asks you to unlock it before the first reply, but `fluxd` cannot check that the app did.
+Turn the settings on only when you trust each paired device.
+Unpair the devices that you do not use.
 
 `fluxd` logs each reply with the device name, the pane, and the keys.
 For a prompt and a terminal command, it logs the number of characters, not the text.
@@ -358,6 +381,21 @@ It also reads the snapshot every 10 seconds, which finds title changes.
 When herdr stops, `fluxd` tries to connect every 5 seconds.
 When the phone opens the agent list, `fluxd` tries at once.
 
+`fluxd` limits the work that one device can start:
+
+- One read of each pane runs at a time for each device. A read that comes during the herdr calls of that read gets the same answer. A read that comes while `fluxd` sends the answer gets a new read after it.
+- When the agent status changes or a reply goes to the pane during the herdr calls, the answer can be old. The reads that came during the herdr calls then get a new read.
+- A read that comes during the herdr calls with another line count or format also gets a new read. That read uses the line count and the format of the newest read.
+- A read, a reply, or a close for a pane that `fluxd` does not know gets its error at once.
+- Up to 4 keys, prompt, input, and close requests run at a time for each device. A 5th request gets the error `fluxd is busy with earlier replies from this device. Try again.`
+- `fluxd` keeps the plain history of an idle agent for 3 seconds, so a new read in that time does not make herdr scroll the agent again. A new status of the agent, a reply to it, and a new agent in the pane end this time.
+- One start of an agent or a terminal runs at a time for each device.
+
+A read, a reply, and a start can take seconds.
+When you unpair the device during that time, `fluxd` does not send the answer.
+When you set `herdr = false` during a read, the answer has an error and no text.
+When you set `herdr_terminals = false` during the read of a terminal, the answer has an error and no text.
+
 ### Wire format
 
 The packet type is `flux.herdr`.
@@ -368,16 +406,22 @@ The `kind` field selects the message.
 | --- | --- | --- |
 | `state` | Computer | `enabled`, `running`, `control`, `terminals`, `agents`, `panes`, `workspaces`, and `kinds` |
 | `output` | Computer | `pane` and `format`, then `text` and `truncated`, or `error` |
-| `sent` | Computer | `pane` and `action`, and `error` when the reply failed |
+| `sent` | Computer | `pane` and `action`. When the reply failed, also `error`, and `code` for some errors. |
 | `created` | Computer | `what`, then `pane` or `error` |
 | `closed` | Computer | `pane`, and `error` when the close failed |
 | `request` | Phone | No other fields. The computer answers with `state`. |
 | `read` | Phone | `pane`, `lines` from 1 to 1000, and `format`. Zero lines means 200. |
 | `keys` | Phone | `pane` and `keys`, 1 to 8 key names. The computer answers with `sent`. |
-| `prompt` | Phone | `pane` and `text`. The computer answers with `sent`. |
+| `prompt` | Phone | `pane`, `text`, and `answer`. The computer answers with `sent`. |
 | `input` | Phone | `pane` of a terminal, `text`, and 0 to 8 `keys`. The computer answers with `sent`. |
 | `create` | Phone | `what` is `agent` or `terminal`, then `agent`, `cwd`, and `workspace`. The computer answers with `created`. |
 | `close` | Phone | `pane`. The computer answers with `closed`. |
+
+When `fluxd` cannot finish an answer because of an internal error, it sends the answer with an `error`, for example `fluxd could not read the pane`.
+
+A `keys`, `prompt`, `input`, `create`, or `close` packet can have `request`, a number.
+The answer `sent`, `created`, or `closed` has the same `request`, so the phone can match a late answer to its packet.
+An answer to a packet without `request` has no `request` field.
 
 The computer sends `state` when the phone connects, after each change, and as the answer to `request`.
 Each agent has `pane`, `agent`, `status`, `title`, `project`, and `workspace`:
@@ -410,19 +454,41 @@ The computer sends `state` with the new pane before `created`:
 
 A `read` with `"format":"ansi"` gets an `output` with `"format":"ansi"`.
 Its `text` keeps the SGR sequences of colors and styles.
-`fluxd` removes all other escape sequences and control characters, changes CRLF to LF, and removes the blanks with the default background at the end of each line.
+`fluxd` removes all other escape sequences.
+It changes CRLF to LF and removes the blanks with the default background at the end of each line.
 Blanks with a background stay, because they draw the panels of full-screen agents such as opencode.
 Without `format`, `text` has no ANSI codes.
 For an agent, `fluxd` also reads the plain history and puts the ANSI screen under it, because herdr gets the history of an agent in the alternate screen only as plain text.
 `text` has at most 1 MB.
 When `fluxd` removes older lines to stay in that limit, `truncated` is `true`.
 
+In both formats, `fluxd` removes the C0 and C1 control characters except line breaks and tabs.
+It changes each bidirectional control character to U+FFFD: U+061C, U+200E, U+200F, U+202A to U+202E, and U+2066 to U+2069.
+It also changes the line and paragraph separators U+2028 and U+2029.
+The apps show text with the Unicode bidirectional algorithm, and a terminal does not.
+So such a character can show a command in a different order on the phone than on the computer.
+
+The `title`, `project`, and `workspace` of the agents and the terminals, and the `label` of the workspaces, get the same changes.
+A program sets the title of its pane, and an agent can make its title from the conversation.
+In these fields, `fluxd` also changes line breaks and tabs to spaces.
+
 A reply and its answer look like this:
 
 ```json
-{"kind":"keys","pane":"w5:p1","keys":["2"]}
-{"kind":"sent","pane":"w5:p1","action":"keys"}
+{"kind":"keys","pane":"w5:p1","keys":["2"],"request":7}
+{"kind":"sent","pane":"w5:p1","action":"keys","request":7}
 ```
+
+When the agent waits for a choice, the computer refuses a `prompt` with the code `blocked`:
+
+```json
+{"kind":"prompt","pane":"w5:p1","text":"No, use git clean"}
+{"kind":"sent","pane":"w5:p1","action":"prompt","error":"The agent waits for a choice. Pick a choice first.","code":"blocked"}
+```
+
+To answer a question that needs free text, the app sends the prompt with `"answer":true`.
+`fluxd` then checks that the agent still waits, changes the line breaks to spaces, types the text, and presses Enter.
+An app sends `answer` only after the user selects an action to type an answer.
 
 `flux-cli status --json` includes the same agent state in its `herdr` field.
 
@@ -441,6 +507,8 @@ A reply and its answer look like this:
 | A new agent says that it did not start | Read the last line in the error. Run the agent command in a terminal on the computer to see the problem. |
 | The output shows a dim line about more lines | The agent works, and more lines came than one screen. The phone reads them when the agent stops. |
 | A reply says that the agent is not ready for input | herdr accepts input only for an agent that it detected. Run `herdr agent get PANE` on the computer. |
+| A reply says that the agent waits for a choice | The agent shows a dialog. Pick a choice with the choice buttons or the key bar, then send the text again. |
+| The log says that the herdr socket belongs to another user | Another user listens on the herdr socket path. Set `HERDR_SOCKET_PATH` to a socket in a folder that only you can write to. |
 | The mic key is missing | The phone has no speech recognizer. Install Speech Recognition and Synthesis from Google, or another voice input app. |
 | The **Agents** card is missing on the Mac | Update `fluxd` and Flux for macOS. The card shows only when the computer accepts `flux.herdr`. |
 | Dictation on the Mac says to allow Speech Recognition or the microphone | Select **Open Privacy Settings**, allow Flux, then start the dictation again. |

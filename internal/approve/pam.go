@@ -100,7 +100,7 @@ func (p PAMFiles) Enable(service string) (bool, error) {
 		return false, err
 	}
 	path := filepath.Join(p.Dir, service)
-	text, mode, err := p.read(service)
+	text, mode, fromVendor, err := p.read(service)
 	if err != nil {
 		return false, err
 	}
@@ -113,6 +113,12 @@ func (p PAMFiles) Enable(service string) (bool, error) {
 	}
 	if err := p.backup(service, text); err != nil {
 		return false, err
+	}
+	if fromVendor {
+		// Disable removes this copy again.
+		if err := os.WriteFile(p.vendorMark(service), nil, 0o644); err != nil {
+			return false, err
+		}
 	}
 	return true, writeAtomic(path, next, mode)
 }
@@ -134,6 +140,15 @@ func (p PAMFiles) Disable(service string) (bool, error) {
 	next, changed := RemovePAMLine(string(b))
 	if !changed {
 		return false, nil
+	}
+	// Flux made this file from the vendor file. Without the file, PAM
+	// uses the vendor file again, also after an update of the vendor file.
+	if p.vendorCopy(service, next) {
+		if err := os.Remove(path); err != nil {
+			return false, err
+		}
+		_ = os.Remove(p.vendorMark(service))
+		return true, nil
 	}
 	st, err := os.Stat(path)
 	if err != nil {
@@ -157,25 +172,52 @@ func (p PAMFiles) Uses(service string) bool {
 }
 
 // read returns the text and the mode of the file of service. A service
-// with no file in Dir starts from its vendor file.
-func (p PAMFiles) read(service string) (string, os.FileMode, error) {
+// with no file in Dir starts from its vendor file, and fromVendor is then
+// true.
+func (p PAMFiles) read(service string) (text string, mode os.FileMode, fromVendor bool, err error) {
 	path := filepath.Join(p.Dir, service)
 	b, err := os.ReadFile(path)
 	if err == nil {
 		st, err := os.Stat(path)
 		if err != nil {
-			return "", 0, err
+			return "", 0, false, err
 		}
-		return string(b), st.Mode().Perm(), nil
+		return string(b), st.Mode().Perm(), false, nil
 	}
 	if !errors.Is(err, os.ErrNotExist) {
-		return "", 0, err
+		return "", 0, false, err
 	}
 	b, verr := os.ReadFile(filepath.Join(p.Vendor, service))
 	if verr != nil {
-		return "", 0, fmt.Errorf("%s does not exist, so %s is not installed", path, service)
+		return "", 0, false, fmt.Errorf("%s does not exist, so %s is not installed", path, service)
 	}
-	return string(b), 0o644, nil
+	return string(b), 0o644, true, nil
+}
+
+// vendorMark is the marker file that tells Disable that Flux made the file
+// of service from its vendor file.
+func (p PAMFiles) vendorMark(service string) string {
+	return filepath.Join(p.Backup, service+".vendor-copy")
+}
+
+// vendorCopy reports whether text, the file of service without the Flux
+// lines, is a copy of the vendor file that Flux made. The text is then
+// the vendor file, or the vendor file before an update, which the backup
+// holds. A copy that the administrator changed is not a copy.
+func (p PAMFiles) vendorCopy(service, text string) bool {
+	if _, err := os.Stat(p.vendorMark(service)); err != nil {
+		return false
+	}
+	vendor, err := os.ReadFile(filepath.Join(p.Vendor, service))
+	if err != nil {
+		// Without the vendor file, PAM needs this file.
+		return false
+	}
+	if text == string(vendor) {
+		return true
+	}
+	old, err := os.ReadFile(filepath.Join(p.Backup, service))
+	return err == nil && text == string(old)
 }
 
 // backup writes a copy of the file before its first change. A later

@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -38,8 +40,10 @@ func approveRaw(t *testing.T, fields map[string]any) json.RawMessage {
 	return b
 }
 
+// errCode returns the code of an API error, or "" for another error.
 func errCode(err error) string {
-	if e, ok := err.(*Error); ok {
+	var e *Error
+	if errors.As(err, &e) {
 		return e.Code
 	}
 	return ""
@@ -54,6 +58,7 @@ func TestApproveRequestChecks(t *testing.T) {
 	}{
 		{"a newline in a field", map[string]any{"user": "alice\nservice=sshd"}, "bad_params"},
 		{"a short nonce", map[string]any{"nonce": "abcd"}, "bad_params"},
+		{"a negative time", map[string]any{"time": int64(math.MinInt64)}, "bad_params"},
 		{"an unknown phone", map[string]any{"device": "other"}, "not_found"},
 		{"an offline phone", nil, "offline"},
 	}

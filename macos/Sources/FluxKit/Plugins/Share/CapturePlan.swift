@@ -88,19 +88,29 @@ public struct CaptureState: Codable, Sendable, Equatable {
 public struct CapturePlan: Sendable {
     public var send: [(item: CaptureItem, kind: CaptureKind)]
     public var state: CaptureState
+
+    /// The number of items that are due but wait for the next scan,
+    /// because 1 scan sends at most `maxCaptureSend` items.
+    public var waiting = 0
 }
 
 /// The most IDs that `CaptureState.sent` keeps.
 public let maxCaptureSent = 500
+
+/// The most items that 1 scan sends, so that no scan sends a large batch
+/// at once. The next scan sends the rest.
+public let maxCaptureSend = 50
 
 /// Plans a scan of the items after the baseline. An item goes out when it
 /// is complete, its kind is known, its switch is on, it is newer than the
 /// time that the switch turned on, and it did not go out before. The
 /// baseline moves up through the items that need no more work. A pending
 /// item or an item that did not go out yet stops it, so that the next scan
-/// looks at that item again. `now` is the time in seconds.
+/// looks at that item again. The oldest `maxCaptureSend` items go out, and
+/// the rest wait for the next scan. `now` is the time in seconds.
 public func planCapture(_ state: CaptureState, items: [CaptureItem], now: Int64) -> CapturePlan {
     var send: [(item: CaptureItem, kind: CaptureKind)] = []
+    var waiting = 0
     var baseline = state.baseline
     var blocked = false
     for item in items.filter({ $0.id > state.baseline }).sorted(by: { $0.id < $1.id }) {
@@ -110,7 +120,11 @@ public func planCapture(_ state: CaptureState, items: [CaptureItem], now: Int64)
         } else if item.pending {
             done = now - item.dateAdded > CaptureRules.pendingLimit
         } else if let kind = item.kind, let start = state.from[kind], item.id > start {
-            send.append((item, kind))
+            if send.count < maxCaptureSend {
+                send.append((item, kind))
+            } else {
+                waiting += 1
+            }
             done = false
         } else {
             done = true
@@ -121,7 +135,7 @@ public func planCapture(_ state: CaptureState, items: [CaptureItem], now: Int64)
     var next = state
     next.baseline = baseline
     next.sent = Set(state.sent.filter { $0 > baseline }.sorted().suffix(maxCaptureSent))
-    return CapturePlan(send: send, state: next)
+    return CapturePlan(send: send, state: next, waiting: waiting)
 }
 
 /// 1 asset that the photo library got, as the capture watch sees it.
@@ -129,25 +143,41 @@ struct LibraryAsset: Sendable, Equatable {
     var image: Bool
     var screenshot: Bool
     var created: Date?
+    /// True for an asset of the library of the user. A shared album and an
+    /// iTunes sync are other sources, and their assets stay home.
+    var userLibrary = true
 }
+
+/// How much older than the switch an image on iOS may be, in microseconds:
+/// 1 day. A photo from AirDrop, Messages, or an import keeps the date that
+/// it was taken. An older image is history that iCloud Photos synced.
+let libraryMargin: Int64 = 24 * 60 * 60 * 1_000_000
 
 /// The kind of an asset that the photo library got after the first switch
 /// turned on, or nil when it does not go out. `from` is `CaptureState.from`.
 ///
-/// On macOS screenshots come from the screenshot folder, so an asset is a
-/// photo: an image that is not a screenshot and was taken after the photo
-/// switch turned on. On iOS screenshots are the images with the screenshot
-/// subtype, and photos are the other images. Each image that the library
-/// got goes out, whatever its creation date, so that a photo from AirDrop,
-/// Messages, or an import goes out too. `planCapture` then sends only the
-/// assets that arrived after the switch of their kind turned on.
+/// Only assets of the library of the user go out. On macOS screenshots come
+/// from the screenshot folder, so an asset is a photo: an image that is not
+/// a screenshot and was taken after the photo switch turned on. On iOS
+/// screenshots are the images with the screenshot subtype, and photos are
+/// the other images. An image goes out when it was created at most 1 day
+/// before its switch turned on, so that a photo from AirDrop, Messages, or
+/// an import goes out too. `planCapture` then sends only the assets that
+/// arrived after the switch of their kind turned on.
+///
+/// PhotoKit does not tell which device took an asset or who added it to an
+/// iCloud Shared Library. So on iOS the export also needs the original on
+/// this iPhone, see `CaptureWatchPlugin.export`: an image from another
+/// device or from another person is only in iCloud until the user opens it.
 func libraryKind(_ asset: LibraryAsset?, from: [CaptureKind: Int64]) -> CaptureKind? {
-    guard let asset, asset.image else { return nil }
+    guard let asset, asset.image, asset.userLibrary, let created = asset.created else { return nil }
+    let micros = JSONValue.checkedInt64(created.timeIntervalSince1970 * 1_000_000) ?? 0
     #if os(macOS)
-    guard !asset.screenshot, let created = asset.created, let start = from[.photo],
-          Int64(created.timeIntervalSince1970 * 1_000_000) > start else { return nil }
+    guard !asset.screenshot, let start = from[.photo], micros > start else { return nil }
     return .photo
     #else
-    return asset.screenshot ? .screenshot : .photo
+    let kind: CaptureKind = asset.screenshot ? .screenshot : .photo
+    guard let start = from[kind], micros > start - libraryMargin else { return nil }
+    return kind
     #endif
 }

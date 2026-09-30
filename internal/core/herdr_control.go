@@ -63,16 +63,27 @@ const errHerdrControlOff = "Replies from the phone are off on this computer. Set
 // errHerdrTerminalsOff is the reply when herdr_terminals is off.
 const errHerdrTerminalsOff = "Terminals from the phone are off on this computer. Set herdr_terminals = true in ~/.config/flux/config.toml."
 
+// errHerdrNotPaired is the reply to a device that is not paired now.
+const errHerdrNotPaired = "This computer does not trust the device now. Pair it again."
+
+// errHerdrCreateBusy is the reply to a second start from one device while
+// the first one runs.
+const errHerdrCreateBusy = "Another start from this device runs. Wait until it ends."
+
 // herdrRefusal is a reply that fluxd refuses before it calls herdr. Its
 // text goes to the phone.
 type herdrRefusal string
 
 func (r herdrRefusal) Error() string { return string(r) }
 
+// errHerdrBlocked refuses a typed prompt to an agent that waits for a
+// choice. The sent packet has the code "blocked".
+const errHerdrBlocked herdrRefusal = "The agent waits for a choice. Pick a choice first."
+
 // herdrKeys sends key presses from a phone to an agent and returns the
 // sent packet for the phone.
 func (d *Daemon) herdrKeys(dev *Device, pane string, keys []string) *proto.Packet {
-	return d.herdrReply(pane, "keys", false, func(ctx context.Context) error {
+	return d.herdrReply(dev, pane, "keys", false, func(ctx context.Context) error {
 		if len(keys) == 0 || len(keys) > herdrMaxKeys {
 			return herdrRefusal(fmt.Sprintf("Send 1 to %d keys", herdrMaxKeys))
 		}
@@ -84,17 +95,20 @@ func (d *Daemon) herdrKeys(dev *Device, pane string, keys []string) *proto.Packe
 		if err := herdr.SendKeys(ctx, d.herdrPath, pane, keys); err != nil {
 			return err
 		}
-		d.logf("%s sent the keys %s to the herdr agent in %s", dev.Name, strings.Join(keys, " "), pane)
+		d.logf("%s sent the keys %s to the herdr agent in %s", d.nameOf(dev), strings.Join(keys, " "), pane)
 		return nil
 	})
 }
 
 // herdrPrompt sends text from a phone to an agent and returns the sent
-// packet for the phone. An agent that waits for an answer refuses a
-// prompt. Then fluxd types the text and presses Enter, which answers a
-// question that needs free text. The log gets the length, not the text.
-func (d *Daemon) herdrPrompt(dev *Device, pane, text string) *proto.Packet {
-	return d.herdrReply(pane, "prompt", false, func(ctx context.Context) error {
+// packet for the phone. herdr refuses a prompt to an agent that waits for
+// a choice, such as an approval. The text would go to the dialog, where a
+// digit or Enter can select a choice. So fluxd refuses the text too, with
+// errHerdrBlocked. With answer, the phone asks to answer a question that
+// needs free text. fluxd then checks that the agent still waits, types
+// the text, and presses Enter. The log gets the length, not the text.
+func (d *Daemon) herdrPrompt(dev *Device, pane, text string, answer bool) *proto.Packet {
+	return d.herdrReply(dev, pane, "prompt", false, func(ctx context.Context) error {
 		text = cleanPrompt(text)
 		switch {
 		case text == "":
@@ -102,17 +116,30 @@ func (d *Daemon) herdrPrompt(dev *Device, pane, text string) *proto.Packet {
 		case len(text) > herdrMaxPrompt:
 			return herdrRefusal(fmt.Sprintf("The text is longer than %d KB", herdrMaxPrompt>>10))
 		}
+		what := "a prompt"
 		err := herdr.Prompt(ctx, d.herdrPath, pane, text)
-		var he *herdr.Error
-		if errors.As(err, &he) && he.Code == "agent_blocked" {
+		if herdr.Code(err) == "agent_blocked" {
+			if !answer {
+				return errHerdrBlocked
+			}
+			// pane.send_input does not check for an agent. The agent can
+			// stop or end after herdr refused the prompt.
+			a, gerr := herdr.GetAgent(ctx, d.herdrPath, pane)
+			if gerr != nil {
+				return gerr
+			}
+			if a.Agent == "" || a.Status != herdr.StatusBlocked {
+				return herdrRefusal("The agent does not wait for an answer now. Send the text again.")
+			}
 			// A line break in typed text is an Enter key, so the answer
 			// goes on one line.
+			what = "an answer"
 			err = herdr.SendInput(ctx, d.herdrPath, pane, strings.ReplaceAll(text, "\n", " "), []string{"enter"})
 		}
 		if err != nil {
 			return err
 		}
-		d.logf("%s sent %d characters to the herdr agent in %s", dev.Name, len([]rune(text)), pane)
+		d.logf("%s sent %s of %d characters to the herdr agent in %s", d.nameOf(dev), what, len([]rune(text)), pane)
 		return nil
 	})
 }
@@ -121,7 +148,7 @@ func (d *Daemon) herdrPrompt(dev *Device, pane, text string) *proto.Packet {
 // the sent packet for the phone. The text goes on one line. The log gets
 // the length of the text, not the text.
 func (d *Daemon) herdrInput(dev *Device, pane, text string, keys []string) *proto.Packet {
-	return d.herdrReply(pane, "input", true, func(ctx context.Context) error {
+	return d.herdrReply(dev, pane, "input", true, func(ctx context.Context) error {
 		text = strings.Map(func(r rune) rune {
 			switch {
 			case r == '\n' || r == '\t':
@@ -147,7 +174,7 @@ func (d *Daemon) herdrInput(dev *Device, pane, text string, keys []string) *prot
 		if err := herdr.SendInput(ctx, d.herdrPath, pane, text, keys); err != nil {
 			return err
 		}
-		d.logf("%s sent %d characters and the keys %q to the herdr terminal %s", dev.Name, len([]rune(text)), strings.Join(keys, " "), pane)
+		d.logf("%s sent %d characters and the keys %q to the herdr terminal %s", d.nameOf(dev), len([]rune(text)), strings.Join(keys, " "), pane)
 		return nil
 	})
 }
@@ -155,19 +182,23 @@ func (d *Daemon) herdrInput(dev *Device, pane, text string, keys []string) *prot
 // herdrReply runs a reply from a phone after the checks that all replies
 // share. A reply to a terminal needs herdr_terminals and a pane without
 // an agent. Another reply needs a pane with an agent. send returns a
-// herdrRefusal, a herdr error, or a connection error.
-func (d *Daemon) herdrReply(pane, action string, terminal bool, send func(ctx context.Context) error) *proto.Packet {
+// herdrRefusal, a herdr error, or a connection error. A reply makes the
+// output of the pane old, because the agent or the shell then writes new
+// lines.
+func (d *Daemon) herdrReply(dev *Device, pane, action string, terminal bool, send func(ctx context.Context) error) *proto.Packet {
 	reply := map[string]any{"kind": "sent", "pane": pane, "action": action}
 	d.mu.Lock()
-	enabled, control, terminals := d.cfg.Herdr, d.cfg.HerdrControl, d.herdrTerminalsLocked()
+	enabled, control, terminals, paired := d.cfg.Herdr, d.cfg.HerdrControl, d.herdrTerminalsLocked(), dev.Paired
 	known := d.herdrAgentLocked(pane)
 	if terminal {
 		known = d.herdrTerminalLocked(pane)
 	}
 	d.mu.Unlock()
 	switch {
+	case !paired:
+		reply["error"] = errHerdrNotPaired
 	case !enabled:
-		reply["error"] = "herdr sync is off on this computer"
+		reply["error"] = errHerdrDisabled
 	case !control:
 		reply["error"] = errHerdrControlOff
 	case terminal && !terminals:
@@ -180,9 +211,14 @@ func (d *Daemon) herdrReply(pane, action string, terminal bool, send func(ctx co
 		ctx, cancel := context.WithTimeout(d.ctx, herdrCallTimeout)
 		err := send(ctx)
 		cancel()
+		if errors.Is(err, errHerdrBlocked) {
+			reply["code"] = "blocked"
+		}
 		if err != nil {
 			reply["error"] = herdrReplyError(pane, err)
+			break
 		}
+		d.staleHerdrOutput(pane)
 	}
 	return proto.New(proto.TypeFluxHerdr, reply)
 }
@@ -200,18 +236,35 @@ func herdrReplyError(pane string, err error) string {
 // the created packet for the phone. what is "agent" or "terminal". kind is
 // the agent kind, such as claude. The pane opens in a new tab of the
 // workspace, or in a new workspace when workspace is empty. cwd is the
-// folder. An empty cwd is the home folder.
+// folder. An empty cwd is the home folder. One start runs at a time for
+// each device.
 func (d *Daemon) herdrCreate(dev *Device, what, kind, cwd, workspace string) *proto.Packet {
 	reply := map[string]any{"kind": "created", "what": what}
 	d.mu.Lock()
-	enabled, control, terminals := d.cfg.Herdr, d.cfg.HerdrControl, d.herdrTerminalsLocked()
+	enabled, control, terminals, paired := d.cfg.Herdr, d.cfg.HerdrControl, d.herdrTerminalsLocked(), dev.Paired
 	kindKnown := slices.Contains(d.herdrKinds, kind)
 	placeKnown := workspace == "" || slices.ContainsFunc(d.herdrPlaces, func(w HerdrWorkspace) bool { return w.ID == workspace })
+	busy := d.herdrJobs.creating[dev.ID]
+	if !busy {
+		if d.herdrJobs.creating == nil {
+			d.herdrJobs.creating = map[string]bool{}
+		}
+		d.herdrJobs.creating[dev.ID] = true
+	}
 	d.mu.Unlock()
+	if !busy {
+		defer func() {
+			d.mu.Lock()
+			delete(d.herdrJobs.creating, dev.ID)
+			d.mu.Unlock()
+		}()
+	}
 	var err error
 	switch {
+	case !paired:
+		err = herdrRefusal(errHerdrNotPaired)
 	case !enabled:
-		err = herdrRefusal("herdr sync is off on this computer")
+		err = herdrRefusal(errHerdrDisabled)
 	case !control:
 		err = herdrRefusal(errHerdrControlOff)
 	case what == "terminal" && !terminals:
@@ -222,6 +275,8 @@ func (d *Daemon) herdrCreate(dev *Device, what, kind, cwd, workspace string) *pr
 		err = herdrRefusal(fmt.Sprintf("herdr cannot start the agent %q on this computer", kind))
 	case !placeKnown:
 		err = herdrRefusal(fmt.Sprintf("The workspace %s is gone", workspace))
+	case busy:
+		err = herdrRefusal(errHerdrCreateBusy)
 	}
 	if err == nil {
 		cwd, err = herdrDir(cwd)
@@ -237,9 +292,9 @@ func (d *Daemon) herdrCreate(dev *Device, what, kind, cwd, workspace string) *pr
 		return proto.New(proto.TypeFluxHerdr, reply)
 	}
 	if what == "agent" {
-		d.logf("%s started the herdr agent %s in %s (%s)", dev.Name, kind, pane, cwd)
+		d.logf("%s started the herdr agent %s in %s (%s)", d.nameOf(dev), kind, pane, cwd)
 	} else {
-		d.logf("%s opened the herdr terminal %s (%s)", dev.Name, pane, cwd)
+		d.logf("%s opened the herdr terminal %s (%s)", d.nameOf(dev), pane, cwd)
 	}
 	d.waitHerdrPane(pane)
 	reply["pane"] = pane
@@ -315,11 +370,17 @@ func (d *Daemon) startHerdrAgent(ctx context.Context, kind, pane, cwd string) er
 	rctx, rcancel := context.WithTimeout(d.ctx, herdrCallTimeout)
 	defer rcancel()
 	if r, err := herdr.ReadPane(rctx, d.herdrPath, pane, 20, false); err == nil {
-		if line := strings.TrimSpace(lastLine(r.Text)); line != "" {
+		if line := paneLastLine(r.Text); line != "" {
 			msg += ": " + line
 		}
 	}
 	return herdrRefusal(msg)
+}
+
+// paneLastLine returns the last line of the plain text of a pane for an
+// error on the phone. It removes and marks characters as cleanLabel does.
+func paneLastLine(text string) string {
+	return strings.TrimSpace(cleanLabel(lastLine(text)))
 }
 
 // waitHerdrPane makes the herdr loop read the session, and waits until
@@ -343,13 +404,15 @@ func (d *Daemon) waitHerdrPane(pane string) {
 func (d *Daemon) herdrClose(dev *Device, pane string) *proto.Packet {
 	reply := map[string]any{"kind": "closed", "pane": pane}
 	d.mu.Lock()
-	enabled, control, terminals := d.cfg.Herdr, d.cfg.HerdrControl, d.herdrTerminalsLocked()
+	enabled, control, terminals, paired := d.cfg.Herdr, d.cfg.HerdrControl, d.herdrTerminalsLocked(), dev.Paired
 	agent := d.herdrAgentLocked(pane)
 	terminal := terminals && d.herdrTerminalLocked(pane)
 	d.mu.Unlock()
 	switch {
+	case !paired:
+		reply["error"] = errHerdrNotPaired
 	case !enabled:
-		reply["error"] = "herdr sync is off on this computer"
+		reply["error"] = errHerdrDisabled
 	case !control:
 		reply["error"] = errHerdrControlOff
 	case !agent && !terminal:
@@ -362,7 +425,7 @@ func (d *Daemon) herdrClose(dev *Device, pane string) *proto.Packet {
 			reply["error"] = herdrError(pane, err)
 			break
 		}
-		d.logf("%s closed the herdr pane %s", dev.Name, pane)
+		d.logf("%s closed the herdr pane %s", d.nameOf(dev), pane)
 		d.wakeHerdr()
 	}
 	return proto.New(proto.TypeFluxHerdr, reply)

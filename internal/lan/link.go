@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"flux/internal/proto"
@@ -30,13 +31,44 @@ type Link struct {
 	once     sync.Once
 	done     chan struct{}
 	tun      tunnels
+
+	// maxLine is the longest line that Receive reads: maxUnpairedLine until
+	// the device is paired, then proto.MaxPacketSize. badLogged is true
+	// after Receive logged a line that is not a packet.
+	maxLine   atomic.Int64
+	badLogged atomic.Bool
+
+	// queued is the number of bytes of the packets in Send, which wait for
+	// wmu or which Send writes now.
+	queued atomic.Int64
 }
+
+// maxSendQueue is the largest number of bytes that can wait in Send on 1
+// link. Each Send waits while the peer does not read, so without a limit
+// the waiting packets can fill the memory. Send then closes the link. The
+// tests change it.
+var maxSendQueue int64 = 32 << 20
+
+var errSendQueueFull = errors.New("the peer does not read the packets")
 
 func newLink(p *Provider, conn *tls.Conn, reader *bufio.Reader, id proto.Identity, cert *x509.Certificate, outgoing bool) *Link {
 	addr, _ := conn.RemoteAddr().(*net.TCPAddr)
-	return &Link{
+	l := &Link{
 		Identity: id, Cert: cert, Addr: addr, Outgoing: outgoing, Started: time.Now(),
 		provider: p, conn: conn, reader: reader, done: make(chan struct{}),
+	}
+	l.maxLine.Store(maxUnpairedLine)
+	return l
+}
+
+// SetPaired sets the longest packet that the link reads. A device that is
+// not paired can send only lines of up to 64 KiB, so that it cannot fill
+// the memory before the user pairs it.
+func (l *Link) SetPaired(paired bool) {
+	if paired {
+		l.maxLine.Store(proto.MaxPacketSize)
+	} else {
+		l.maxLine.Store(maxUnpairedLine)
 	}
 }
 
@@ -83,11 +115,21 @@ func (l *Link) IP() string {
 func (l *Link) LocalAddr() net.Addr { return l.conn.LocalAddr() }
 
 // Send writes one packet. It is safe to call from more than one goroutine.
+// It closes the link when more than maxSendQueue bytes wait in Send. A
+// packet that nothing waits before always goes, also when it is larger.
 func (l *Link) Send(p *proto.Packet) error {
 	line, err := p.Marshal()
 	if err != nil {
 		return err
 	}
+	n := int64(len(line))
+	if q := l.queued.Add(n); q > maxSendQueue && q > n {
+		l.queued.Add(-n)
+		l.provider.logf("%s: closed the link, because %d bytes wait to be sent", l.Identity.DeviceName, q)
+		l.Close()
+		return errSendQueueFull
+	}
+	defer l.queued.Add(-n)
 	l.wmu.Lock()
 	defer l.wmu.Unlock()
 	select {
@@ -108,8 +150,16 @@ func (l *Link) Send(p *proto.Packet) error {
 func (l *Link) Receive(handle func(*proto.Packet)) error {
 	defer l.Close()
 	_ = l.conn.SetReadDeadline(time.Time{})
+	// The limit can rise while Receive waits for a line, when the user
+	// accepts a pairing, so readLine reads it for each part of the line.
+	limit := func() int {
+		if n := int(l.maxLine.Load()); n > 0 {
+			return n
+		}
+		return maxUnpairedLine
+	}
 	for {
-		line, err := readLine(l.reader, proto.MaxPacketSize)
+		line, err := readLineFunc(l.reader, limit)
 		if err != nil {
 			return err
 		}
@@ -118,7 +168,11 @@ func (l *Link) Receive(handle func(*proto.Packet)) error {
 		}
 		p, err := proto.Unmarshal(line)
 		if err != nil {
-			l.provider.logf("%s: bad packet: %v", l.Identity.DeviceName, err)
+			// A peer can send such lines in a loop, so the log shows the
+			// first one only.
+			if l.badLogged.CompareAndSwap(false, true) {
+				l.provider.logf("%s: bad packet: %v", l.Identity.DeviceName, err)
+			}
 			continue
 		}
 		handle(p)
@@ -140,11 +194,17 @@ var errLineTooLong = errors.New("packet too large")
 
 // readLine reads one newline-terminated line without the newline.
 func readLine(r *bufio.Reader, max int) ([]byte, error) {
+	return readLineFunc(r, func() int { return max })
+}
+
+// readLineFunc is readLine with a limit that max returns for each part of
+// the line.
+func readLineFunc(r *bufio.Reader, max func() int) ([]byte, error) {
 	var buf []byte
 	for {
 		chunk, err := r.ReadSlice('\n')
 		buf = append(buf, chunk...)
-		if len(buf) > max {
+		if len(buf) > max() {
 			return nil, errLineTooLong
 		}
 		if err == nil {

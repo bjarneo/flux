@@ -5,11 +5,13 @@ package config
 import (
 	"bufio"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -43,8 +45,10 @@ type Config struct {
 	SyncDnd bool `toml:"sync_dnd"`
 	// Herdr shows the herdr agents of this computer on the phone.
 	Herdr bool `toml:"herdr"`
-	// HerdrControl lets the phone send keys and prompts to the herdr
-	// agents. It is off by default, because an agent can run commands.
+	// HerdrControl lets every paired device send keys and prompts to the
+	// herdr agents, and start and close agents. An agent runs the commands
+	// that a prompt asks for, so each paired device can then run any
+	// command on this computer through an agent. It is off by default.
 	HerdrControl bool `toml:"herdr_control"`
 	// HerdrTerminals lets the phone open herdr terminals, read them, and
 	// type commands in them. It is off by default, because it gives the
@@ -90,15 +94,19 @@ func DataDir() string { return filepath.Join(xdg("XDG_DATA_HOME", ".local/share"
 // CacheDir returns ~/.cache/flux, or $XDG_CACHE_HOME/flux.
 func CacheDir() string { return filepath.Join(xdg("XDG_CACHE_HOME", ".cache"), "flux") }
 
-// RuntimeDir returns $XDG_RUNTIME_DIR/flux.
+// RuntimeDir returns $XDG_RUNTIME_DIR/flux, or /run/user/<uid>/flux when
+// XDG_RUNTIME_DIR is not set. The folder is in memory and private to the
+// user. Flux never uses the shared temporary folder for it.
 func RuntimeDir() string {
 	if d := os.Getenv("XDG_RUNTIME_DIR"); d != "" {
 		return filepath.Join(d, "flux")
 	}
-	return filepath.Join(os.TempDir(), fmt.Sprintf("flux-%d", os.Getuid()))
+	return filepath.Join("/run/user", strconv.Itoa(os.Getuid()), "flux")
 }
 
-// SocketPath returns the path of the fluxd IPC socket.
+// SocketPath returns the path of the fluxd IPC socket: $FLUX_SOCKET, else
+// fluxd.sock in RuntimeDir. fluxd, flux-cli, and the 2 desktop hosts use
+// the same rule.
 func SocketPath() string {
 	if p := os.Getenv("FLUX_SOCKET"); p != "" {
 		return p
@@ -135,12 +143,48 @@ func Load() (*Config, error) {
 	if _, err := toml.Decode(string(data), c); err != nil {
 		return nil, fmt.Errorf("%s: %w", Path(), err)
 	}
-	for i := range c.Commands {
-		if c.Commands[i].ID == "" {
-			c.Commands[i].ID = NewID(4)
+	setCommandIDs(c.Commands)
+	return c, nil
+}
+
+// setCommandIDs gives each command without an ID an ID from its name and
+// its command. So a command that the user added to config.toml by hand
+// keeps its ID after each reload and restart, and `flux-cli run ID` works.
+func setCommandIDs(cmds []Command) {
+	used := map[string]bool{}
+	for _, c := range cmds {
+		used[c.ID] = true
+	}
+	for i := range cmds {
+		if cmds[i].ID != "" {
+			continue
+		}
+		for n := 0; ; n++ {
+			sum := sha256.Sum256([]byte(fmt.Sprintf("%s\x00%s\x00%d", cmds[i].Name, cmds[i].Command, n)))
+			if id := hex.EncodeToString(sum[:4]); !used[id] {
+				cmds[i].ID = id
+				used[id] = true
+				break
+			}
 		}
 	}
-	return c, nil
+}
+
+// Check reads config.toml and returns its parse error. Unlike Load, it
+// writes no file. A missing file is not an error.
+func Check() error {
+	data, err := os.ReadFile(Path())
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var c Config
+	if _, err := toml.Decode(string(data), &c); err != nil {
+		return fmt.Errorf("%s: %w", Path(), err)
+	}
+	return nil
 }
 
 // Save writes config.toml.
@@ -241,10 +285,39 @@ func NewID(n int) string {
 	return hex.EncodeToString(b)
 }
 
+// writeAtomic replaces path with data in 1 step. It syncs the file and
+// the folder, so that a power loss leaves the old file or the new file,
+// never an empty file.
 func writeAtomic(path string, data []byte, mode os.FileMode) error {
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, mode); err != nil {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*.tmp")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	name := tmp.Name()
+	defer os.Remove(name)
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(mode); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(name, path); err != nil {
+		return err
+	}
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	return d.Sync()
 }

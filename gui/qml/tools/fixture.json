@@ -15,6 +15,7 @@
     "online": true,
     "pairState": "paired",
     "pairKey": "",
+    "fingerprint": "5EE6825F974ED59A",
     "pairedAt": "2026-03-14",
     "lastSeen": -2,
     "battery": {
@@ -136,6 +137,7 @@
     "online": true,
     "pairState": "paired",
     "pairKey": "",
+    "fingerprint": "A13F09C27B44E6D1",
     "pairedAt": "2026-08-02",
     "lastSeen": -5,
     "battery": {
@@ -162,6 +164,7 @@
     "online": false,
     "pairState": "paired",
     "pairKey": "",
+    "fingerprint": "3C9D71B0E2F48A65",
     "pairedAt": "2025-12-20",
     "lastSeen": 1789920000,
     "battery": null,
@@ -178,6 +181,7 @@
     "online": true,
     "pairState": "none",
     "pairKey": "",
+    "fingerprint": "D02B6E4F19A7C385",
     "pairedAt": "",
     "lastSeen": -1,
     "battery": null,
@@ -261,6 +265,16 @@
     "size": 1100000,
     "done": 1100000,
     "dir": "out",
+    "state": "done",
+    "rate": 0
+   },
+   {
+    "id": "t5",
+    "device": "3f8e2a1c9b7d4e6fa0c5b8d2e1f47a93",
+    "name": "invoice\u202Efdp.exe",
+    "size": 48000,
+    "done": 48000,
+    "dir": "in",
     "state": "done",
     "rate": 0
    }
@@ -413,5 +427,35 @@
     "failed": true
    }
   ]
+ },
+ "pairing": {
+  "incoming": {
+   "id": "c0ffee0000000000000000000000beef",
+   "name": "work-thinkpad",
+   "type": "laptop",
+   "ip": "192.168.1.70",
+   "paired": false,
+   "online": true,
+   "pairState": "incoming",
+   "pairKey": "9B03E7D16A2FC048",
+   "fingerprint": "71C0E5A93B2D8F46",
+   "plugins": [],
+   "notifications": [],
+   "conversations": []
+  },
+  "confirm": {
+   "id": "e4a1c8f2b9d3470a8c5e6f1d2b9a7c30",
+   "name": "OnePlus 12",
+   "type": "phone",
+   "ip": "192.168.1.61",
+   "paired": false,
+   "online": true,
+   "pairState": "confirm",
+   "pairKey": "4F21A9C3E08B7D52",
+   "fingerprint": "D02B6E4F19A7C385",
+   "plugins": [],
+   "notifications": [],
+   "conversations": []
+  }
  }
 }

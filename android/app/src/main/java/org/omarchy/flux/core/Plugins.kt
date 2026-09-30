@@ -23,6 +23,13 @@ object Plugins {
     /** The last text that a computer put on the clipboard. Flux does not send it back. */
     @Volatile var lastRemoteClip: String? = null
 
+    /**
+     * The longest text from a computer that Flux puts on the clipboard, in
+     * UTF-8 bytes. Android sends a clip through a binder call, and a much
+     * larger clip stops the app.
+     */
+    const val MAX_CLIPBOARD_TEXT = 256 * 1024
+
     fun onConnected(core: FluxCore, d: Device) {
         sendBattery(core, d)
         HerdrSync.onConnected(d)
@@ -30,7 +37,7 @@ object Plugins {
         CaptureWatch.poke()
         if (core.foreground && core.settings.syncClipboard) {
             main.post {
-                val text = Android.clipboardText(core.app) ?: return@post
+                val text = Android.clipboardText(core.app, automatic = true) ?: return@post
                 d.send(Packet(Types.CLIPBOARD_CONNECT, bodyOf("content" to text, "timestamp" to core.settings.clipboardTimestamp)))
             }
         }
@@ -46,25 +53,29 @@ object Plugins {
                 d.battery = p.int("currentCharge")?.takeIf { it >= 0 }
                 d.charging = p.bool("isCharging") ?: false
             }
-            Types.CLIPBOARD -> receiveClipboard(core, p.string("content"), null)
-            Types.CLIPBOARD_CONNECT -> receiveClipboard(core, p.string("content"), p.long("timestamp") ?: 0L)
+            Types.CLIPBOARD -> receiveClipboard(core, d, p.string("content"), null)
+            Types.CLIPBOARD_CONNECT -> receiveClipboard(core, d, p.string("content"), p.long("timestamp") ?: 0L)
             Types.SHARE -> Share.receive(core, d, p)
             Types.SHARE_UPDATE -> Unit
             Types.NOTIFICATION -> {
+                if (p.bool("isCancel") == true) {
+                    p.string("id")?.let { Android.cancelFromComputer(core.app, d.id, it) }
+                    return
+                }
                 val n = ComputerNotification.from(p, d.id, d.identity.deviceName, System.currentTimeMillis()) ?: return
-                Android.showFromComputer(core.app, n)
+                Android.showFromComputer(core.app, d.id, n)
             }
             Types.NOTIFICATION_REQUEST -> {
                 if (p.bool("request") == true) NotificationSync.sendAll(d)
-                p.string("cancel")?.let { NotificationSync.dismiss(it) }
+                p.string("cancel")?.let { NotificationSync.dismiss(d.id, it) }
             }
             Types.NOTIFICATION_REPLY -> {
                 val id = p.string("requestReplyId") ?: return
-                NotificationSync.reply(id, p.string("message") ?: "")
+                NotificationSync.reply(d.id, id, p.string("message") ?: "")
             }
             Types.NOTIFICATION_ACTION -> {
                 val key = p.string("key") ?: return
-                NotificationSync.action(key, p.string("action") ?: return)
+                NotificationSync.action(d.id, key, p.string("action") ?: return)
             }
             Types.FIND_MY_PHONE -> Ringer.start(core.app, d.identity.deviceName)
             Types.RUN_COMMAND -> {
@@ -100,11 +111,32 @@ object Plugins {
 
     // ------------------------------------------------------------- clipboard
 
-    private fun receiveClipboard(core: FluxCore, text: String?, timestamp: Long?) {
+    /**
+     * Takes the clipboard of a computer. The phone keeps the time of the
+     * clip, so that the same clip after a reconnect changes nothing, also
+     * when the phone refused it.
+     */
+    private fun receiveClipboard(core: FluxCore, d: Device, text: String?, timestamp: Long?) {
         if (text.isNullOrEmpty() || !core.settings.syncClipboard) return
         if (timestamp != null && timestamp in 1..core.settings.clipboardTimestamp) return
+        core.settings.clipboardTimestamp = if (timestamp != null && timestamp > 0) timestamp else System.currentTimeMillis()
+        putRemoteText(core, d.identity.deviceName, text)
+    }
+
+    /**
+     * Puts text from the computer [from] on the clipboard. It returns false
+     * and shows a message when the text is longer than [MAX_CLIPBOARD_TEXT].
+     */
+    fun putRemoteText(core: FluxCore, from: String, text: String): Boolean {
+        if (text.length > MAX_CLIPBOARD_TEXT || text.toByteArray(Charsets.UTF_8).size > MAX_CLIPBOARD_TEXT) {
+            core.toast("The text from $from is too large for the clipboard")
+            return false
+        }
         lastRemoteClip = text
-        main.post { Android.setClipboard(core.app, text) }
+        main.post {
+            if (!Android.setClipboard(core.app, text)) core.toast("Android did not take the text from $from")
+        }
+        return true
     }
 
     /** Sends the local clipboard. Call it from the main thread while the app has focus. */
@@ -117,7 +149,7 @@ object Plugins {
                 return false
             }
             core.settings.clipboardTimestamp = System.currentTimeMillis()
-            ClipImage.send(core, listOf(d), uri, mime) { sent ->
+            ClipImage.send(core, listOf(d), uri, mime, manual = true) { sent ->
                 core.toast(
                     when {
                         sent > 0 -> "Image sent to $name"
@@ -139,7 +171,11 @@ object Plugins {
         return true
     }
 
-    /** Called when the local clipboard changes while the app is on screen. */
+    /**
+     * Called when the local clipboard changes while the app is on screen.
+     * A clip that its app marks as sensitive, for example a password, stays
+     * on the phone.
+     */
     fun onLocalClipboard(core: FluxCore) {
         if (!core.settings.syncClipboard) return
         Android.clipboardImage(core.app)?.let { (uri, mime) ->
@@ -150,7 +186,7 @@ object Plugins {
             ClipImage.send(core, computers, uri, mime)
             return
         }
-        val text = Android.clipboardText(core.app) ?: return
+        val text = Android.clipboardText(core.app, automatic = true) ?: return
         if (text == lastRemoteClip) return
         core.settings.clipboardTimestamp = System.currentTimeMillis()
         core.connectedPaired().forEach { it.send(Packet(Types.CLIPBOARD, bodyOf("content" to text))) }

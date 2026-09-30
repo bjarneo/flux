@@ -133,7 +133,11 @@ final class QueuedShares {
                 sent[computer, default: []] += done.withLock { $0 }
             case .text(let computer, let id):
                 guard let item = byId[id], let text = item.text else { continue }
-                if share.send(text: text, to: computer) {
+                // The computer drops a line over its packet limit, so a large
+                // text from an older version never goes out.
+                if text.utf8.count > ShareQueue.maxTextBytes {
+                    try? queue.markFailed(id, message: ShareQueueError.textTooLarge.localizedDescription)
+                } else if share.send(text: text, to: computer) {
                     queue.remove(id)
                     sent[computer, default: []].append(item)
                 } else {

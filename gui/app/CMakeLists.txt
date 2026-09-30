@@ -4,8 +4,10 @@ project(flux-gui VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick Network)
-qt_standard_project_setup(REQUIRES 6.5)
+# The shared views use GridLayout.uniformCellWidths and Shape.CurveRenderer,
+# which came in Qt 6.6.
+find_package(Qt6 6.6 REQUIRED COMPONENTS Core Gui Qml Quick Network)
+qt_standard_project_setup(REQUIRES 6.6)
 
 qt_add_executable(flux-gui
     src/main.cpp

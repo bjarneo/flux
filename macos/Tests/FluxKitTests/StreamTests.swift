@@ -188,6 +188,29 @@ final class WebcamConfigTests: XCTestCase {
         XCTAssertEqual(c.clamped(caps), c)
     }
 
+    /// A number that does not fit an Int trapped in the rounding or in the
+    /// clamp. The resolution stays as it was.
+    func testHugeResolutionDoesNotStopTheApp() {
+        for value in ["1e300", "-1e300", "1e21", "9223372036854775807", "-9223372036854775808", #""1e300""#, #""-9.2233720368547748e18""#, "0", "-5"] {
+            let c = WebcamConfig().merged(obj(#"{"resolution": \#(value)}"#))
+            XCTAssertEqual(c.resolution, 720, value)
+            XCTAssertEqual(c.clamped(caps).resolution, 720, value)
+        }
+        XCTAssertEqual(config { $0.resolution = Int.min }.clamped(caps).resolution, 720)
+        XCTAssertEqual(config { $0.resolution = Int.max }.clamped(caps).resolution, 1080)
+    }
+
+    func testRoundingSaturates() {
+        XCTAssertEqual(roundHalfUp(1e300), Int.max)
+        XCTAssertEqual(roundHalfUp(-1e300), Int.min)
+        XCTAssertEqual(roundHalfUp(.nan), 0)
+        XCTAssertEqual(roundHalfUp(2.5), 3)
+        XCTAssertEqual(roundHalfUp(-2.5), -2)
+        let size = WebcamConfig.frameSize(aspect: "9223372036854775807:1", short: 720)
+        XCTAssertEqual(size.height, 720)
+        XCTAssertEqual(size.width % 2, 0)
+    }
+
     func testClampWithoutExposureSetsZero() {
         XCTAssertEqual(config { $0.exposure = 1.5 }.clamped(WebcamCaps()).exposure, 0)
     }

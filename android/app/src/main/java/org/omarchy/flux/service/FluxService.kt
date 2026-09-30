@@ -189,7 +189,6 @@ class FluxService : Service() {
         startInForeground(0)
         multicast = getSystemService(WifiManager::class.java)?.createMulticastLock("flux")?.apply {
             setReferenceCounted(false)
-            acquire()
         }
         getSystemService(ConnectivityManager::class.java)?.registerDefaultNetworkCallback(networkCallback)
         ContextCompat.registerReceiver(this, batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
@@ -206,6 +205,15 @@ class FluxService : Service() {
         scope.launch { FluxCore.listenPort.collect { announce() } }
         scope.launch {
             FluxCore.state.map { s -> s.devices.count { it.paired && it.online } }.distinctUntilChanged().collect { startInForeground(it) }
+        }
+        // The multicast lock makes the Wi-Fi chip wake the phone for each
+        // broadcast on the network, which uses the battery. Flux needs it
+        // only to find computers: during a scan, before the first pairing,
+        // and while a paired computer is away.
+        scope.launch {
+            FluxCore.state.map { s -> s.scanning || s.devices.none { it.paired } || s.devices.any { it.paired && !it.online } }
+                .distinctUntilChanged()
+                .collect { need -> runCatching { if (need) multicast?.acquire() else multicast?.release() } }
         }
         // Call alerts follow the switch on the device screen and the phone permission.
         scope.launch {
@@ -259,7 +267,7 @@ class FluxService : Service() {
         runCatching { unregisterReceiver(batteryReceiver) }
         runCatching { unregisterReceiver(dndReceiver) }
         CaptureWatch.stop(this)
-        multicast?.release()
+        runCatching { multicast?.release() }
         FluxCore.stopNetwork()
         super.onDestroy()
     }

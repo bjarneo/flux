@@ -26,6 +26,11 @@ final class H264Encoder: @unchecked Sendable {
     private var lastTime = CMTime.zero
     private var lastSubmit = DispatchTime.now()
     private var forceKey = true
+
+    /// Guards failed and released. VideoToolbox can call the output handler
+    /// inside VTCompressionSessionEncodeFrame, while `lock` is held, so the
+    /// handler takes only this lock.
+    private let stateLock = NSLock()
     private var failed = false
     private var released = false
 
@@ -93,11 +98,12 @@ final class H264Encoder: @unchecked Sendable {
 
     /// Writes the frames in flight and stops the encoder.
     func release() {
-        let first = lock.withLock { () -> Bool in
-            defer { released = true; last = nil }
+        let first = stateLock.withLock { () -> Bool in
+            defer { released = true }
             return !released
         }
         guard first else { return }
+        lock.withLock { last = nil }
         timer.cancel()
         VTCompressionSessionCompleteFrames(session, untilPresentationTimeStamp: .invalid)
         VTCompressionSessionInvalidate(session)
@@ -114,7 +120,7 @@ final class H264Encoder: @unchecked Sendable {
 
     /// Hands 1 frame to VideoToolbox. The lock is held.
     private func submit(_ buffer: CVPixelBuffer) {
-        guard !released, !failed else { return }
+        guard stateLock.withLock({ !released && !failed }) else { return }
         var pts = CMClockGetTime(CMClockGetHostTimeClock())
         if pts <= lastTime { pts = lastTime + CMTime(value: 1, timescale: 1000) }
         lastTime = pts
@@ -132,7 +138,8 @@ final class H264Encoder: @unchecked Sendable {
 
     private func encoded(_ status: OSStatus, _ sample: CMSampleBuffer?) {
         guard status == noErr else {
-            lock.withLock { fail("The video encoder failed (\(status))") }
+            // No `lock` here: this can run inside submit, which holds it.
+            fail("The video encoder failed (\(status))")
             return
         }
         guard let sample, let block = CMSampleBufferGetDataBuffer(sample),
@@ -150,12 +157,18 @@ final class H264Encoder: @unchecked Sendable {
         if let out { output(out) }
     }
 
-    /// Reports an error once. The lock is held.
+    /// Reports an error once. The report goes out on another queue, so that
+    /// its handler never runs inside VideoToolbox or under `lock`.
     private func fail(_ message: String) {
-        guard !failed, !released else { return }
-        failed = true
+        let first = stateLock.withLock { () -> Bool in
+            guard !failed, !released else { return false }
+            failed = true
+            return true
+        }
+        guard first else { return }
         FluxLog.plugin.error("\(message, privacy: .public)")
-        onError(message)
+        let onError = onError
+        DispatchQueue.global().async { onError(message) }
     }
 
     private static func isKeyFrame(_ sample: CMSampleBuffer) -> Bool {

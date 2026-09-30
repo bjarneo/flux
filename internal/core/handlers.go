@@ -13,18 +13,47 @@ import (
 	"flux/internal/proto"
 )
 
-// handlePacket routes one packet from a device to its plugin.
+// handlePacket routes one packet from a device to its plugin. Only
+// flux.pair passes before the paired check. A packet from a link that is
+// no longer the link of the device counts for nothing.
 func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 	d.mu.Lock()
-	dev.LastSeen = time.Now()
-	paired := dev.Paired
+	current := dev.link == l
+	paired := dev.Paired && current
+	if current {
+		dev.LastSeen = time.Now()
+	}
+	name := dev.Name
 	d.mu.Unlock()
 
-	if p.Type == proto.TypePair {
-		d.handlePair(dev, p)
+	if !current {
 		return
 	}
-	if p.Type == proto.TypeFluxTunnel {
+	if p.Type == proto.TypePair {
+		d.handlePair(dev, l, p)
+		return
+	}
+	if !paired {
+		d.mu.Lock()
+		if dev.pairState == "confirm" && dev.pairLink == l {
+			if len(dev.confirmQueue) < maxConfirmQueue {
+				dev.confirmQueue = append(dev.confirmQueue, p)
+			}
+			d.mu.Unlock()
+			return
+		}
+		dev.ignored++
+		first := dev.ignored == 1
+		d.mu.Unlock()
+		// A device can send such packets in a loop, so the log shows the
+		// first one of each link.
+		if first {
+			d.logf("%s: ignored %s from a device that is not paired", name, logType(p.Type))
+		}
+		return
+	}
+	switch p.Type {
+	case proto.TypeFluxTunnel:
 		var b struct {
 			ID    string `json:"id"`
 			Port  int    `json:"port"`
@@ -33,13 +62,6 @@ func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 		if p.Decode(&b) == nil {
 			l.TunnelReady(b.ID, b.Port, b.Error)
 		}
-		return
-	}
-	if !paired {
-		d.logf("%s: ignored %s from a device that is not paired", dev.Name, p.Type)
-		return
-	}
-	switch p.Type {
 	case proto.TypeIdentity:
 		var id proto.Identity
 		if p.Decode(&id) == nil && id.DeviceID == dev.ID {
@@ -94,7 +116,7 @@ func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 	case proto.TypeTelephony:
 		d.handleTelephony(dev, p)
 	default:
-		d.logf("%s: no handler for %s", dev.Name, p.Type)
+		d.logf("%s: no handler for %s", name, logType(p.Type))
 	}
 }
 
@@ -107,8 +129,9 @@ func (d *Daemon) handlePing(dev *Device, p *proto.Packet) {
 	if text == "" {
 		text = "Ping"
 	}
-	d.toast("%s: %s", dev.Name, text)
-	d.notify(desktop.Notification{AppName: dev.Name, Title: "Ping from " + dev.Name, Body: body.Message})
+	name := d.nameOf(dev)
+	d.toast("%s: %s", name, text)
+	d.notifyAsync(desktop.Notification{AppName: name, Title: "Ping from " + name, Body: body.Message})
 }
 
 func (d *Daemon) handleBattery(dev *Device, p *proto.Packet) {
@@ -123,9 +146,10 @@ func (d *Daemon) handleBattery(dev *Device, p *proto.Packet) {
 	d.mu.Lock()
 	dev.battery = &Battery{Charge: body.Charge, Charging: body.Charging}
 	alert := dev.lowBatteryAlert(body.Threshold == 1, body.Charge, body.Charging)
+	name := dev.Name
 	d.mu.Unlock()
 	if alert {
-		d.notify(desktop.Notification{AppName: "Flux", Title: dev.Name + " battery is low", Body: strconv.Itoa(body.Charge) + "% left", Urgency: 2})
+		d.notifyAsync(desktop.Notification{AppName: "Flux", Title: name + " battery is low", Body: strconv.Itoa(body.Charge) + "% left", Urgency: 2})
 	}
 	d.markDirty()
 }
@@ -200,22 +224,27 @@ func (d *Daemon) handleRunCommand(dev *Device, l *lan.Link, p *proto.Packet) {
 	if body.Key == "" {
 		return
 	}
+	name := d.nameOf(dev)
 	cmd, ok := d.command(body.Key)
 	if !ok {
-		d.logf("%s: no command with ID %q", dev.Name, body.Key)
+		d.logf("%s: no command with ID %q", name, body.Key)
 		return
 	}
-	d.logf("%s runs %s: %s", dev.Name, cmd.ID, cmd.Command)
+	d.logf("%s runs %s: %s", name, cmd.ID, cmd.Command)
 	if err := d.runLocal(cmd); err != nil {
-		d.toast("%s could not run %s: %v", dev.Name, cmd.Name, err)
+		d.toast("%s could not run %s: %v", name, cmd.Name, err)
 		return
 	}
-	d.toast("%s ran %s", dev.Name, cmd.Name)
+	d.toast("%s ran %s", name, cmd.Name)
 }
+
+// runDesktopCommand starts a shell command on the desktop. Tests replace
+// it.
+var runDesktopCommand = desktop.RunCommand
 
 // runLocal starts a command and logs a failure with its output.
 func (d *Daemon) runLocal(cmd config.Command) error {
-	return desktop.RunCommand(cmd.Command, func(err error, out []byte) {
+	return runDesktopCommand(cmd.Command, func(err error, out []byte) {
 		if err != nil {
 			d.logf("command %s failed: %v: %s", cmd.ID, err, strings.TrimSpace(string(out)))
 			d.toast("%s failed: %v", cmd.Name, err)

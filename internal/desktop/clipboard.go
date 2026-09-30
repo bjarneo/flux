@@ -14,14 +14,17 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
-// maxClipboardText is the largest clipboard text that Flux syncs.
-const maxClipboardText = 4 << 20
+// MaxClipboardText is the largest clipboard text that Flux takes from a
+// device or reads from the desktop clipboard. fluxd sends at most 256 KiB
+// to a device.
+const MaxClipboardText = 1 << 20
 
 // MaxClipboardImage is the largest clipboard image that Flux syncs.
 const MaxClipboardImage = 16 << 20
@@ -43,11 +46,24 @@ const watchScript = `printf '%s\n' "$CLIPBOARD_STATE"; head -c "$1" | base64 -w0
 // selection is the current content and not a change.
 const initialWindow = time.Second
 
+// clipTimeout limits each run of wl-paste and wl-copy. An application
+// that owns the clipboard and hangs then cannot stop fluxd.
+const clipTimeout = 5 * time.Second
+
+// maxWritten is the number of recent Set and SetImage contents that Watch
+// does not report.
+const maxWritten = 8
+
 // Clipboard reads and writes the Wayland clipboard with wl-clipboard.
 type Clipboard struct {
 	mu sync.Mutex
 	// lastSeen identifies the last content, from contentKey.
 	lastSeen string
+
+	// written identifies the contents that Set and SetImage put on the
+	// clipboard and that Watch did not see yet, the oldest first. 2 fast
+	// writes can come before Watch sees the first one.
+	written []string
 }
 
 // NewClipboard returns a clipboard that uses wl-paste and wl-copy.
@@ -146,19 +162,48 @@ func clipboardLimit(typ string) int {
 	if typ == ImageType {
 		return MaxClipboardImage
 	}
-	return maxClipboardText
+	return MaxClipboardText
 }
 
 // observe records key as the last content. It reports whether the content
-// is a new local change. Initial content is never a change.
+// is a new local change. Initial content is never a change, and content
+// that Set or SetImage wrote is not a change.
+//
+// wrote also sets lastSeen, so observe looks in written first. Otherwise
+// the key stays in written, and a later local copy of the same content
+// does not count as a change.
 func (c *Clipboard) observe(key string, initial bool) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if i := slices.Index(c.written, key); i >= 0 {
+		c.written = slices.Delete(c.written, 0, i+1)
+		c.lastSeen = key
+		return false
+	}
 	if key == c.lastSeen {
 		return false
 	}
 	c.lastSeen = key
 	return !initial
+}
+
+// wrote records key as content that Set or SetImage puts on the clipboard.
+func (c *Clipboard) wrote(key string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.lastSeen = key
+	c.written = append(c.written, key)
+	if len(c.written) > maxWritten {
+		c.written = slices.Delete(c.written, 0, len(c.written)-maxWritten)
+	}
+}
+
+// clipCommand returns a wl-clipboard command that stops after clipTimeout.
+// WaitDelay makes Wait return also when a child keeps the output open.
+func clipCommand(ctx context.Context, name string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.WaitDelay = time.Second
+	return cmd
 }
 
 // contentKey identifies clipboard content of the type typ, so that Watch
@@ -193,8 +238,10 @@ func isImage(types []string) bool {
 // Get returns the text on the clipboard. It returns an empty string when
 // the clipboard is empty or holds no text.
 func (c *Clipboard) Get() (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), clipTimeout)
+	defer cancel()
 	var stderr bytes.Buffer
-	cmd := exec.Command("wl-paste", "--no-newline", "--type", "text")
+	cmd := clipCommand(ctx, "wl-paste", "--no-newline", "--type", "text")
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
@@ -216,11 +263,13 @@ func (c *Clipboard) Get() (string, error) {
 // GetImage returns the PNG image on the clipboard. It returns nil when the
 // clipboard holds no image, as isImage defines it.
 func (c *Clipboard) GetImage() ([]byte, error) {
-	types, err := exec.Command("wl-paste", "--list-types").Output()
+	ctx, cancel := context.WithTimeout(context.Background(), clipTimeout)
+	defer cancel()
+	types, err := clipCommand(ctx, "wl-paste", "--list-types").Output()
 	if err != nil || !isImage(strings.Fields(string(types))) {
 		return nil, nil
 	}
-	cmd := exec.Command("wl-paste", "--type", ImageType)
+	cmd := clipCommand(ctx, "wl-paste", "--type", ImageType)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -245,14 +294,16 @@ func (c *Clipboard) GetImage() ([]byte, error) {
 
 // Set puts text on the clipboard. Watch does not report this change.
 func (c *Clipboard) Set(text string) error {
-	c.mu.Lock()
-	c.lastSeen = contentKey("text", []byte(text))
-	c.mu.Unlock()
+	c.wrote(contentKey("text", []byte(text)))
+	ctx, cancel := context.WithTimeout(context.Background(), clipTimeout)
+	defer cancel()
 	// wl-copy forks a background process that serves the clipboard until
 	// the clipboard changes. That process inherits stdout and stderr, so a
 	// pipe on either one makes Run wait until the clipboard changes. The
 	// output goes to /dev/null, so Run returns when the first process exits.
-	cmd := exec.Command("wl-copy")
+	// The background process is in the cgroup of fluxd, so a restart of
+	// fluxd clears the text that came from a device.
+	cmd := clipCommand(ctx, "wl-copy")
 	cmd.Stdin = strings.NewReader(text)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("wl-copy: %w", err)
@@ -264,12 +315,12 @@ func (c *Clipboard) Set(text string) error {
 // image/png. Watch does not report this change. The next text copy syncs,
 // also when it equals the last text.
 func (c *Clipboard) SetImage(data []byte, mime string) error {
-	c.mu.Lock()
-	c.lastSeen = contentKey(mime, data)
-	c.mu.Unlock()
+	c.wrote(contentKey(mime, data))
+	ctx, cancel := context.WithTimeout(context.Background(), clipTimeout)
+	defer cancel()
 	// As in Set, the output goes to /dev/null so that Run does not wait
 	// for the process that serves the clipboard.
-	cmd := exec.Command("wl-copy", "--type", mime)
+	cmd := clipCommand(ctx, "wl-copy", "--type", mime)
 	cmd.Stdin = bytes.NewReader(data)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("wl-copy: %w", err)

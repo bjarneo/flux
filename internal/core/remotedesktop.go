@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"flux/internal/desktop"
-	"flux/internal/lan"
 	"flux/internal/proto"
 )
 
@@ -57,12 +56,19 @@ type DesktopView struct {
 
 type desktopSession struct {
 	dev    *Device
-	link   *lan.Link
+	link   streamLink
 	cancel context.CancelFunc
 	view   DesktopView
 	// notice is the desktop notification that shows while the phone
 	// shows this screen.
 	notice uint32
+
+	// ctx ends with the session: at a stop, at a later start, when the
+	// switch turns off, or when the device is no longer paired. done
+	// closes when runDesktop returns, and prev is done of the session
+	// before, or nil.
+	ctx        context.Context
+	done, prev chan struct{}
 }
 
 type desktopStart struct {
@@ -338,62 +344,109 @@ func recorderError(name, out string) string {
 	return strings.TrimSpace(lines[len(lines)-1])
 }
 
-func (d *Daemon) handleDesktop(dev *Device, l *lan.Link, p *proto.Packet) {
+func (d *Daemon) handleDesktop(dev *Device, l streamLink, p *proto.Packet) {
 	var b desktopStart
 	if p.Decode(&b) != nil {
 		return
 	}
 	switch b.State {
 	case "start":
-		go d.runDesktop(dev, l, b)
+		if s := d.claimDesktop(dev, l); s != nil {
+			go d.runDesktop(s, b)
+		}
 	case "stop":
 		d.endDesktop(dev.ID)
 	case "error":
-		d.logf("%s: remote desktop: %s", dev.Name, b.Message)
+		d.logf("%s: remote desktop: %s", dev.Name, peerText(b.Message))
 	}
+}
+
+// desktopRefusal returns why the device cannot see this screen now, or
+// nil. d.mu must be held.
+func (d *Daemon) desktopRefusal(dev *Device) error {
+	switch {
+	case d.opts.Headless:
+		return errors.New("the remote desktop is off in headless mode")
+	case !d.cfg.RemoteDesktop:
+		return fmt.Errorf("the remote desktop is off on %s. Turn it on in the Flux window, or run: flux-cli desktop on", d.nameLocked())
+	case !dev.Paired:
+		return fmt.Errorf("%s is not paired with %s", dev.Name, d.nameLocked())
+	}
+	return nil
+}
+
+// failDesktop tells the phone why the remote desktop did not start, and
+// shows the error in the window.
+func (d *Daemon) failDesktop(s *desktopSession, dev *Device, l streamLink, err error) {
+	d.logf("%s: remote desktop: %v", dev.Name, err)
+	_ = l.Send(proto.New(proto.TypeFluxDesktop, map[string]any{"state": "error", "message": err.Error()}))
+	d.mu.Lock()
+	if d.desktop == nil || d.desktop == s {
+		d.desktopErr = err.Error()
+	}
+	d.mu.Unlock()
+	d.markDirty()
+}
+
+// claimDesktop makes a new session the remote desktop session before any
+// slow work, and stops the session that ran before. It returns nil when
+// the device cannot see this screen, and then it tells the phone.
+func (d *Daemon) claimDesktop(dev *Device, l streamLink) *desktopSession {
+	d.mu.Lock()
+	if err := d.desktopRefusal(dev); err != nil {
+		d.mu.Unlock()
+		d.failDesktop(nil, dev, l, err)
+		return nil
+	}
+	ctx, cancel := context.WithCancel(d.ctx)
+	s := &desktopSession{dev: dev, link: l, cancel: cancel, ctx: ctx, view: DesktopView{To: dev.ID, ToName: dev.Name}}
+	s.done, s.prev = d.sessions.desktopTurn.take()
+	old := d.desktop
+	d.desktop, d.desktopErr = s, ""
+	d.mu.Unlock()
+	if old != nil {
+		old.cancel()
+	}
+	d.watchSession(ctx, cancel, dev, l, func() bool { return d.cfg.RemoteDesktop })
+	d.markDirty()
+	return s
 }
 
 // runDesktop runs 1 remote desktop session until the phone stops, the link
 // drops, the recorder stops, or the user stops it on this computer.
-func (d *Daemon) runDesktop(dev *Device, l *lan.Link, b desktopStart) {
+func (d *Daemon) runDesktop(s *desktopSession, b desktopStart) {
+	dev, l, ctx := s.dev, s.link, s.ctx
+	defer endTurn(s.done, s.prev)
+	defer d.dropDesktop(s)
+	defer s.cancel()
+	// A stop, the switch, or a later start ends the setup without an error.
 	fail := func(err error) {
-		d.logf("%s: remote desktop: %v", dev.Name, err)
-		_ = l.Send(proto.New(proto.TypeFluxDesktop, map[string]any{"state": "error", "message": err.Error()}))
-		d.mu.Lock()
-		d.desktopErr = err.Error()
-		d.mu.Unlock()
-		d.markDirty()
+		if ctx.Err() == nil {
+			d.failDesktop(s, dev, l, err)
+		}
 	}
-	d.mu.Lock()
-	on := d.cfg.RemoteDesktop
-	self := d.nameLocked()
-	d.mu.Unlock()
-	switch {
-	case d.opts.Headless:
-		fail(errors.New("the remote desktop is off in headless mode"))
-		return
-	case !on:
-		fail(fmt.Errorf("the remote desktop is off on %s. Turn it on in the Flux window, or run: flux-cli desktop on", self))
+	// The recorder of the session before stops first.
+	if !waitTurn(ctx, s.prev) {
 		return
 	}
-	rec, err := pickRecorder(d.ctx, exec.LookPath)
+	rec, err := pickRecorder(ctx, exec.LookPath)
 	if err != nil {
 		fail(err)
 		return
 	}
-	ms, err := wakeMonitors(d.ctx,
-		func() ([]monitor, error) { return rec.list(d.ctx) },
-		func() error { return wakeDisplays(d.ctx) })
+	ms, err := wakeMonitors(ctx,
+		func() ([]monitor, error) { return rec.list(ctx) },
+		func() error { return wakeDisplays(ctx) })
 	if err != nil {
 		fail(err)
 		return
 	}
-	mon := pickMonitor(ms, b.Monitor, focusedMonitor(d.ctx))
+	mon := pickMonitor(ms, b.Monitor, focusedMonitor(ctx))
 	w, h := streamSize(mon.Width, mon.Height, desktopLimit(b.MaxSize))
+	d.mu.Lock()
+	s.view.Monitor, s.view.Width, s.view.Height = mon.Name, w, h
+	d.mu.Unlock()
 
-	d.endDesktop("")
-	ctx, cancel := context.WithCancel(d.ctx)
-	defer cancel()
 	tc, err := l.DialPeer(ctx, b.Port)
 	if err != nil {
 		fail(fmt.Errorf("connect to the phone: %w", err))
@@ -406,25 +459,25 @@ func (d *Daemon) runDesktop(dev *Device, l *lan.Link, b desktopStart) {
 	// A stop closes the stream, so that a blocked write ends.
 	defer context.AfterFunc(ctx, func() { tc.Close() })()
 
-	s := &desktopSession{dev: dev, link: l, cancel: cancel, view: DesktopView{
-		To: dev.ID, ToName: dev.Name, Monitor: mon.Name, Width: w, Height: h,
-	}}
+	// The switch or the pairing can change while fluxd dials the phone.
 	d.mu.Lock()
-	d.desktop, d.desktopErr = s, ""
+	err = d.desktopRefusal(dev)
+	current := d.desktop == s
 	d.mu.Unlock()
-	defer func() {
-		d.mu.Lock()
-		if d.desktop == s {
-			d.desktop = nil
-		}
-		notice := s.notice
-		d.mu.Unlock()
-		if notice != 0 && d.notifier != nil {
-			_ = d.notifier.Close(notice)
-		}
-		d.markDirty()
+	if !current || ctx.Err() != nil {
+		return
+	}
+	if err != nil {
+		fail(err)
+		return
+	}
+	// The phone sends nothing on the stream. A read that ends means that
+	// the phone closed it, also when the screen does not change and the
+	// recorder writes no frame.
+	go func() {
+		_, _ = io.Copy(io.Discard, tc)
+		s.cancel()
 	}()
-	cancelOnLinkDown(ctx, l, cancel)
 
 	cmd := childCommand(ctx, rec.path, rec.args(mon.Name, w, h)...)
 	// The recorder stops cleanly on SIGINT.
@@ -471,55 +524,71 @@ func (d *Daemon) runDesktop(dev *Device, l *lan.Link, b desktopStart) {
 		d.markDirty()
 	}
 	err = pumpDesktop(stdout, tc, w, h, func() { go live() })
-	// The recorder gets EPIPE on its next write, when it still runs.
+	stopped := ctx.Err() != nil
+	// The recorder gets SIGINT, and EPIPE on its next write.
+	s.cancel()
 	_ = stdout.Close()
 	_ = cmd.Wait()
 	var closed writeError
 	switch {
-	case ctx.Err() != nil:
+	case stopped:
 		d.logf("%s: remote desktop stopped", dev.Name)
 	case errors.As(err, &closed):
 		d.logf("%s: remote desktop closed: %v", dev.Name, closed.err)
 	case errors.Is(err, io.EOF):
-		fail(fmt.Errorf("the screen capture stopped: %s", recorderError(rec.name, stderr.String())))
+		d.failDesktop(s, dev, l, fmt.Errorf("the screen capture stopped: %s", recorderError(rec.name, stderr.String())))
 	default:
-		fail(fmt.Errorf("the screen capture failed: %w", err))
+		d.failDesktop(s, dev, l, fmt.Errorf("the screen capture failed: %w", err))
 	}
 }
 
-// endDesktop stops the session. An empty ID stops any session.
-func (d *Daemon) endDesktop(deviceID string) {
+// dropDesktop removes a session that ended and closes its notification.
+func (d *Daemon) dropDesktop(s *desktopSession) {
 	d.mu.Lock()
-	s := d.desktop
+	if d.desktop == s {
+		d.desktop = nil
+	}
+	notice := s.notice
 	d.mu.Unlock()
-	if s != nil && (deviceID == "" || s.dev.ID == deviceID) {
+	if notice != 0 && d.notifier != nil {
+		_ = d.notifier.Close(notice)
+	}
+	d.markDirty()
+}
+
+// takeDesktop removes the session from the slot and returns it, or nil.
+// An empty ID takes any session. The caller stops the session.
+func (d *Daemon) takeDesktop(deviceID string) *desktopSession {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	s := d.desktop
+	if s == nil || (deviceID != "" && s.dev.ID != deviceID) {
+		return nil
+	}
+	d.desktop = nil
+	return s
+}
+
+// endDesktop stops the session, also while fluxd still sets it up. An
+// empty ID stops any session.
+func (d *Daemon) endDesktop(deviceID string) {
+	if s := d.takeDesktop(deviceID); s != nil {
 		s.cancel()
+		d.markDirty()
 	}
 }
 
 // StopDesktop stops the remote desktop from this computer and tells the
-// phone.
+// phone. It also stops a session that fluxd still sets up.
 func (d *Daemon) StopDesktop() error {
-	d.mu.Lock()
-	s := d.desktop
-	d.mu.Unlock()
+	s := d.takeDesktop("")
 	if s == nil {
 		return apiErr("not_active", "No phone shows this screen")
 	}
 	_ = s.link.Send(proto.New(proto.TypeFluxDesktop, map[string]any{"state": "stop"}))
 	s.cancel()
+	d.markDirty()
 	return nil
-}
-
-// desktopMonitor returns the monitor that the device shows, or an empty
-// string when the device shows no remote desktop.
-func (d *Daemon) desktopMonitor(deviceID string) string {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if d.desktop != nil && d.desktop.dev.ID == deviceID {
-		return d.desktop.view.Monitor
-	}
-	return ""
 }
 
 func (d *Daemon) desktopViewLocked() *DesktopView {

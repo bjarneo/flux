@@ -34,6 +34,7 @@ func LoadOrCreateCert(dir string) (tls.Certificate, string, error) {
 	certPath, keyPath := filepath.Join(dir, certFile), filepath.Join(dir, keyFile)
 	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
 	if err == nil {
+		protect(dir, keyPath)
 		leaf, perr := x509.ParseCertificate(cert.Certificate[0])
 		if perr != nil {
 			return tls.Certificate{}, "", perr
@@ -44,6 +45,11 @@ func LoadOrCreateCert(dir string) (tls.Certificate, string, error) {
 	if !errors.Is(err, os.ErrNotExist) {
 		return tls.Certificate{}, "", fmt.Errorf("load certificate: %w", err)
 	}
+	// A new identity never replaces a private key. The paired devices
+	// pinned the certificate of that key, so the user decides.
+	if _, err := os.Lstat(keyPath); err == nil {
+		return tls.Certificate{}, "", fmt.Errorf("%s is missing, but %s exists. Restore the certificate, or remove the key to make a new identity that each device must pair with again", certPath, keyPath)
+	}
 	id := strings.ReplaceAll(newUUID(), "-", "")
 	certPEM, keyPEM, err := generateCert(id)
 	if err != nil {
@@ -52,13 +58,38 @@ func LoadOrCreateCert(dir string) (tls.Certificate, string, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return tls.Certificate{}, "", err
 	}
-	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
-		return tls.Certificate{}, "", err
-	}
+	// The certificate comes first. A stop between the 2 writes then leaves
+	// a certificate without its key, which the next start replaces.
 	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
 		return tls.Certificate{}, "", err
 	}
+	f, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return tls.Certificate{}, "", err
+	}
+	if _, err := f.Write(keyPEM); err != nil {
+		f.Close()
+		return tls.Certificate{}, "", err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return tls.Certificate{}, "", err
+	}
+	if err := f.Close(); err != nil {
+		return tls.Certificate{}, "", err
+	}
 	return LoadOrCreateCert(dir)
+}
+
+// protect removes the access of other users to the data directory and to
+// the private key. A restore from a backup or a copy can give them access,
+// and the key is the proof of this computer for every paired device.
+func protect(dir, keyPath string) {
+	for _, path := range []string{dir, keyPath} {
+		if info, err := os.Stat(path); err == nil && info.Mode().Perm()&0o077 != 0 {
+			_ = os.Chmod(path, info.Mode().Perm()&^0o077)
+		}
+	}
 }
 
 func generateCert(id string) (certPEM, keyPEM []byte, err error) {
@@ -114,11 +145,16 @@ func ParseCertPEM(s string) (*x509.Certificate, error) {
 	return x509.ParseCertificate(block.Bytes)
 }
 
-// VerificationKey returns the 8-character key that both devices show while
-// they pair. It hashes the 2 public keys, larger first, and the pairing
-// timestamp in seconds.
+// VerificationKey returns the 16-character key that both devices show
+// while they pair. It hashes the 2 public keys, larger first, and the
+// pairing timestamp in seconds as decimal text. The key is the first 8
+// bytes of the SHA-256 in uppercase hex. 64 bits keep a man in the middle
+// from finding a certificate with the same key in the pair time.
 func VerificationKey(own, peer *x509.Certificate, timestamp int64) string {
-	a, b := own.RawSubjectPublicKeyInfo, peer.RawSubjectPublicKeyInfo
+	return verificationKey(own.RawSubjectPublicKeyInfo, peer.RawSubjectPublicKeyInfo, timestamp)
+}
+
+func verificationKey(a, b []byte, timestamp int64) string {
 	if bytes.Compare(a, b) < 0 {
 		a, b = b, a
 	}
@@ -128,5 +164,28 @@ func VerificationKey(own, peer *x509.Certificate, timestamp int64) string {
 	if timestamp > 0 {
 		h.Write([]byte(strconv.FormatInt(timestamp, 10)))
 	}
-	return strings.ToUpper(hex.EncodeToString(h.Sum(nil))[:8])
+	return strings.ToUpper(hex.EncodeToString(h.Sum(nil)[:8]))
+}
+
+// Fingerprint returns 16 uppercase hex digits for a certificate: the first
+// 8 bytes of the SHA-256 of its public key. It returns "" for nil.
+func Fingerprint(c *x509.Certificate) string {
+	if c == nil {
+		return ""
+	}
+	sum := sha256.Sum256(c.RawSubjectPublicKeyInfo)
+	return strings.ToUpper(hex.EncodeToString(sum[:8]))
+}
+
+// FormatKey writes a key or a fingerprint in groups of 4 characters, for
+// example "5EE6 825F 974E D59A". Every UI shows the key in this form.
+func FormatKey(key string) string {
+	var b strings.Builder
+	for i, r := range []rune(key) {
+		if i > 0 && i%4 == 0 {
+			b.WriteByte(' ')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }

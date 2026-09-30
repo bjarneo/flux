@@ -122,6 +122,12 @@ int main(int argc, char *argv[])
     parser.addOption({QStringLiteral("snapshot"),
                       QStringLiteral("Render every screen with test data into PNG files in <dir>, then quit."),
                       QStringLiteral("dir")});
+    // --replace comes from the restart after an update. The new process
+    // waits for the earlier window to quit, and then takes its place.
+    QCommandLineOption replace(QStringLiteral("replace"),
+                               QStringLiteral("Wait for the running Flux window to quit, then take its place."));
+    replace.setFlags(QCommandLineOption::HiddenFromHelp);
+    parser.addOption(replace);
     parser.addPositionalArgument(QStringLiteral("page"),
                                  QStringLiteral("The page to open: overview, clipboard, files, notifications, "
                                                 "messages, or commands. With --snapshot: the screens to render."),
@@ -130,10 +136,8 @@ int main(int argc, char *argv[])
     const QString page = parser.positionalArguments().value(0);
 
     SingleInstance instance;
-    if (instance.forward(page))
+    if (!instance.claim(page, parser.isSet(replace)))
         return 0;
-    if (!instance.listen())
-        qWarning("flux-gui: cannot listen on %s", qPrintable(SingleInstance::socketPath()));
 
     QQmlApplicationEngine engine;
     FluxBackend *backend = expose(engine);

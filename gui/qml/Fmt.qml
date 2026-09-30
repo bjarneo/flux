@@ -90,7 +90,13 @@ QtObject {
   })
 
   function appIcon(app) {
-    return appIcons[(app || "").toLowerCase()] || "bell"
+    return lookup(appIcons, (app || "").toLowerCase()) || "bell"
+  }
+
+  // The value of key in table, or undefined. It ignores the members of
+  // Object.prototype, so an app name such as "constructor" finds nothing.
+  function lookup(table, key) {
+    return Object.prototype.hasOwnProperty.call(table, key) ? table[key] : undefined
   }
 
   function typeName(type) {
@@ -118,7 +124,7 @@ QtObject {
   })
 
   function appToken(app) {
-    var known = appTokens[(app || "").toLowerCase()]
+    var known = lookup(appTokens, (app || "").toLowerCase())
     if (known) return known
     var tokens = ["ok", "warn", "alt", "accent", "err"]
     var h = 0
@@ -146,7 +152,7 @@ QtObject {
     "paste": 0xF0192, "copy": 0xF018F, "send": 0xF048A, "upload": 0xF0552, "download": 0xF01DA,
     "tray-up": 0xF011D, "tray-down": 0xF0120, "arrow-in": 0xF0042, "arrow-out": 0xF005C,
     "arrow-down": 0xF0045, "arrow-up": 0xF005D, "reply": 0xF045A, "snooze": 0xF068E,
-    "open": 0xF03CC, "refresh": 0xF0450, "plus": 0xF0415, "close": 0xF0156, "check": 0xF012C,
+    "open": 0xF03CC, "folder": 0xF024B, "refresh": 0xF0450, "plus": 0xF0415, "close": 0xF0156, "check": 0xF012C,
     "check-circle": 0xF05E1, "error": 0xF015A, "alert": 0xF05D6, "info": 0xF02FD,
     "trash": 0xF0A7A, "tune": 0xF1542, "cog": 0xF08BB, "search": 0xF0349, "chevron": 0xF0142,
     "more": 0xF01D9, "menu": 0xF035C, "arrow-left": 0xF004D, "clock": 0xF0150, "power": 0xF0425, "play-circle": 0xF040D,
@@ -163,14 +169,56 @@ QtObject {
 
   // The text of an icon, or an empty string for an unknown name.
   function glyph(name) {
-    var code = icons[name]
+    var code = lookup(icons, name)
     return code !== undefined ? String.fromCodePoint(code) : ""
   }
 
-  // Converts a file:// URL to a local path.
+  // Converts a local file URL to a path. It returns "" for another scheme
+  // and for a URL with a host, for example trash:///a or file://server/a,
+  // because fluxd sends only files on this computer.
   function urlToPath(u) {
-    var s = u.toString()
-    if (s.indexOf("file://") === 0) s = s.slice(7)
-    try { return decodeURIComponent(s) } catch (e) { return s }
+    var m = /^file:(\/\/[^\/?#]*)?(\/[^?#]*)$/i.exec(String(u))
+    if (!m) return ""
+    var host = m[1] ? m[1].slice(2).toLowerCase() : ""
+    if (host !== "" && host !== "localhost") return ""
+    try {
+      var path = decodeURIComponent(m[2])
+      return path.indexOf("\u0000") < 0 ? path : ""
+    } catch (e) {
+      return ""
+    }
+  }
+
+  // A verification key or a fingerprint in groups of 4 digits, for example
+  // "5EE6 825F 974E D59A".
+  function hexGroups(key) {
+    var s = String(key || "").replace(/\s/g, "").toUpperCase()
+    var groups = []
+    for (var i = 0; i < s.length; i += 4) groups.push(s.slice(i, i + 4))
+    return groups.join(" ")
+  }
+
+  // A pattern for the control characters, the bidi controls, and the line
+  // separators. A name can use them to hide its real order, for example
+  // "invoice\u202Efdp.exe", which shows as "invoiceexe.pdf".
+  function controlChars() {
+    return /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u2028-\u202e\u2066-\u2069]/g
+  }
+
+  // Shows each control character of text as its code, for example
+  // "invoice[U+202E]fdp.exe". Use it for names from a phone.
+  function showControls(text) {
+    return String(text || "").replace(controlChars(), function (c) {
+      var hex = c.charCodeAt(0).toString(16).toUpperCase()
+      return "[U+" + "0000".slice(hex.length) + hex + "]"
+    })
+  }
+
+  // The form of a device name that the duplicate check compares: no
+  // control characters, no zero-width characters, 1 space between words,
+  // and no case.
+  function nameKey(name) {
+    return String(name || "").replace(controlChars(), "").replace(/[\u200b-\u200d\ufeff]/g, "")
+      .replace(/\s+/g, " ").trim().toLowerCase()
   }
 }

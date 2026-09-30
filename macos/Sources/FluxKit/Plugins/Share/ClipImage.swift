@@ -92,10 +92,11 @@ enum ClipboardImage {
         }
     }
 
-    /// Puts an image on the pasteboard in its own format.
+    /// Puts an image from a computer on the pasteboard in its own format.
+    /// It stays on this iPhone, like the text.
     @MainActor
     static func write(_ data: Data, mime: String) {
-        UIPasteboard.general.setData(data, forPasteboardType: ClipImage.pasteboardType(mime))
+        UIPasteboard.general.setItems([[ClipImage.pasteboardType(mime): data]], options: [.localOnly: true])
     }
 
     /// Identifies an image, so that an image from a computer does not go back.
@@ -105,7 +106,10 @@ enum ClipboardImage {
 /// Moves clipboard images between this device and a computer.
 enum ClipImageTransfer {
     /// Receives the image of the packet through the tunnel `token`.
-    static func receive(_ p: Packet, token: String, tls: FluxTLS, cert: [UInt8], announce: @escaping @Sendable (Packet) -> Void) async throws -> Data {
+    /// `register` keeps the stream, so that an unpair ends it. It returns
+    /// false when the computer is no longer paired.
+    static func receive(_ p: Packet, token: String, tls: FluxTLS, cert: [UInt8], register: (TLSStream) -> Bool,
+                        announce: @escaping @Sendable (Packet) -> Void) async throws -> Data {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("flux-clip-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -114,6 +118,10 @@ enum ClipImageTransfer {
         let handle = try FileHandle(forWritingTo: file)
         do {
             let stream = try await Tunnel.accept(tls: tls, expected: cert, token: token, announce: announce)
+            guard register(stream) else {
+                await stream.discard()
+                throw FluxError("the computer is not paired")
+            }
             try await stream.receive(into: handle, size: p.payloadSize)
             try handle.close()
         } catch {

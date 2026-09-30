@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,7 +19,8 @@ import (
 // setup does the per-user part of the install: the fluxd service and the
 // omarchy-shell plugin. The system part (the udev rule and the kernel
 // module for the webcam) is done by post-install.sh, which the package runs as root. setup reports any
-// system part that is missing and prints the command that adds it.
+// system part that is missing and prints the command that adds it. It
+// returns an error when a step fails, so that the exit code is 1.
 func setup(args []string) error {
 	dry, noPlugin := false, false
 	for _, a := range args {
@@ -42,9 +45,11 @@ func setup(args []string) error {
 		return nil
 	}
 
+	failed := 0
 	fmt.Println("1. The fluxd service")
 	if err := setupService(dry, run); err != nil {
 		fmt.Println("  ✗", err)
+		failed++
 	}
 
 	fmt.Println("2. The omarchy-shell plugin")
@@ -54,17 +59,136 @@ func setup(args []string) error {
 	default:
 		if err := setupPlugin(dry, run); err != nil {
 			fmt.Println("  ✗", err)
+			failed++
 		}
 	}
 
 	fmt.Println("3. System parts")
 	setupSystemReport()
-	return nil
+	switch failed {
+	case 0:
+		return nil
+	case 1:
+		return errors.New("1 step failed")
+	default:
+		return fmt.Errorf("%d steps failed", failed)
+	}
+}
+
+// systemUnit is the fluxd unit of the package and of `sudo make install`.
+var systemUnit = "/usr/lib/systemd/user/fluxd.service"
+
+// unitDescription is the description of the fluxd unit. setup finds its own
+// user unit by it.
+const unitDescription = "Flux daemon that connects this computer to your phone"
+
+// userUnit returns the path of the fluxd unit of the user. systemd uses it
+// before the unit of the package.
+func userUnit() string {
+	return filepath.Join(config.ConfigDir(), "..", "systemd", "user", "fluxd.service")
+}
+
+// serviceUnit returns the user unit that runs fluxd. systemd splits
+// ExecStart at spaces and replaces % specifiers, so the path is in quotes,
+// with each % doubled. systemd does not replace $ in the path of the
+// program. It refuses a path with a quote, a backslash, or a control
+// character, so serviceUnit refuses it too.
+func serviceUnit(fluxd string) (string, error) {
+	for _, r := range fluxd {
+		switch {
+		case r < 0x20 || r == 0x7f:
+			return "", fmt.Errorf("the path %q has a control character, so systemd cannot run it", fluxd)
+		case r == '"' || r == '\'' || r == '\\':
+			return "", fmt.Errorf("the path %q has a quote or a backslash, so systemd cannot run it. Move fluxd to a path without these characters", fluxd)
+		}
+	}
+	quoted := strings.ReplaceAll(fluxd, "%", "%%")
+	return "[Unit]\nDescription=" + unitDescription + "\nPartOf=graphical-session.target\nAfter=graphical-session.target\n\n" +
+		"[Service]\nType=exec\nExecStart=\"" + quoted + "\"\nExecReload=/bin/kill -HUP $MAINPID\nRestart=on-failure\nRestartSec=2\n" +
+		"# fluxd exits with 75 after an update replaced its binary.\nSuccessExitStatus=75\nRestartForceExitStatus=75\n\n" +
+		"[Install]\nWantedBy=graphical-session.target\n", nil
+}
+
+// oldUnits are the units that earlier versions of setup wrote. @FLUXD@ is
+// the path of fluxd, without quotes.
+var oldUnits = []string{
+	"[Unit]\nDescription=" + unitDescription + "\nPartOf=graphical-session.target\nAfter=graphical-session.target\n\n" +
+		"[Service]\nExecStart=@FLUXD@\nExecReload=/bin/kill -HUP $MAINPID\nRestart=on-failure\nRestartSec=2\n" +
+		"# fluxd exits with 75 after an update replaced its binary.\nSuccessExitStatus=75\nRestartForceExitStatus=75\n\n" +
+		"[Install]\nWantedBy=graphical-session.target\n",
+	"[Unit]\nDescription=" + unitDescription + "\nPartOf=graphical-session.target\nAfter=graphical-session.target\n\n" +
+		"[Service]\nExecStart=@FLUXD@\nExecReload=/bin/kill -HUP $MAINPID\nRestart=on-failure\nRestartSec=2\n\n" +
+		"[Install]\nWantedBy=graphical-session.target\n",
+}
+
+// setupWrote reports whether unit is a unit that this or an earlier setup
+// wrote, with no change. A unit that the user changed is not one.
+func setupWrote(unit string) bool {
+	exe := ""
+	for _, line := range strings.Split(unit, "\n") {
+		if v, ok := strings.CutPrefix(line, "ExecStart="); ok {
+			exe = v
+			break
+		}
+	}
+	if exe == "" {
+		return false
+	}
+	if inner, ok := strings.CutPrefix(exe, `"`); ok {
+		path := strings.ReplaceAll(strings.TrimSuffix(inner, `"`), "%%", "%")
+		want, err := serviceUnit(path)
+		return err == nil && want == unit
+	}
+	for _, old := range oldUnits {
+		if strings.Replace(old, "@FLUXD@", exe, 1) == unit {
+			return true
+		}
+	}
+	return false
+}
+
+// removeUserUnit removes a user unit that an earlier `flux-cli setup` of a
+// checkout or of `make install-user` wrote. That unit hides the unit of
+// the package, so the service would run the earlier fluxd. setup does not
+// remove a unit that the user wrote, and it prints the fix instead. It
+// reports whether it removed the unit.
+func removeUserUnit(path string, dry bool, run func(string, string, ...string) error) (bool, error) {
+	b, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if !setupWrote(string(b)) {
+		fmt.Printf("  - %s hides %s. To use the unit of the package, remove it. To change the service, use: systemctl --user edit fluxd\n", path, systemUnit)
+		return false, nil
+	}
+	if dry {
+		fmt.Println("  would remove:", path, "which hides", systemUnit)
+		return false, nil
+	}
+	// disable removes the links to the old unit, while the unit exists.
+	if err := run("disable the old user unit", "systemctl", "--user", "disable", "fluxd.service"); err != nil {
+		return false, err
+	}
+	if err := os.Remove(path); err != nil {
+		return false, err
+	}
+	fmt.Println("  ✓ removed", path, "which hid", systemUnit)
+	return true, nil
 }
 
 func setupService(dry bool, run func(string, string, ...string) error) error {
-	unitDir := filepath.Join(config.ConfigDir(), "..", "systemd", "user")
-	if _, err := os.Stat("/usr/lib/systemd/user/fluxd.service"); err != nil {
+	path := userUnit()
+	restart := false
+	if _, err := os.Stat(systemUnit); err == nil {
+		removed, err := removeUserUnit(path, dry, run)
+		if err != nil {
+			return err
+		}
+		restart = removed
+	} else {
 		// A checkout: write a user unit that runs the fluxd next to this flux.
 		exe, err := os.Executable()
 		if err != nil {
@@ -74,21 +198,24 @@ func setupService(dry bool, run func(string, string, ...string) error) error {
 		if _, err := os.Stat(fluxd); err != nil {
 			return fmt.Errorf("fluxd is not installed and not next to flux (%s). Run make first", fluxd)
 		}
-		unit := "[Unit]\nDescription=Flux daemon that connects this computer to your phone\nPartOf=graphical-session.target\nAfter=graphical-session.target\n\n" +
-			"[Service]\nExecStart=" + fluxd + "\nExecReload=/bin/kill -HUP $MAINPID\nRestart=on-failure\nRestartSec=2\n" +
-			"# fluxd exits with 75 after an update replaced its binary.\nSuccessExitStatus=75\nRestartForceExitStatus=75\n\n" +
-			"[Install]\nWantedBy=graphical-session.target\n"
-		path := filepath.Join(unitDir, "fluxd.service")
-		if dry {
+		unit, err := serviceUnit(fluxd)
+		if err != nil {
+			return err
+		}
+		old, _ := os.ReadFile(path)
+		switch {
+		case string(old) == unit:
+		case dry:
 			fmt.Println("  would write:", path, "for", fluxd)
-		} else {
-			if err := os.MkdirAll(unitDir, 0o755); err != nil {
+		default:
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 				return err
 			}
 			if err := os.WriteFile(path, []byte(unit), 0o644); err != nil {
 				return err
 			}
 			fmt.Println("  ✓ wrote", path)
+			restart = old != nil
 		}
 	}
 	if err := run("reload systemd", "systemctl", "--user", "daemon-reload"); err != nil {
@@ -103,23 +230,69 @@ func setupService(dry bool, run func(string, string, ...string) error) error {
 		fmt.Println("  would start fluxd.service when no other fluxd runs")
 		return nil
 	}
-	if exec.Command("systemctl", "--user", "is-active", "--quiet", "fluxd.service").Run() == nil {
+	if config.IsOff() {
+		fmt.Println("  - fluxd.service is enabled, but fluxd is off. To turn it on, run: flux-cli on")
+		return nil
+	}
+	active := exec.Command("systemctl", "--user", "is-active", "--quiet", "fluxd.service").Run() == nil
+	switch {
+	case active && !restart:
 		fmt.Println("  ✓ fluxd.service is enabled and runs")
 		return nil
+	case active:
+		// The service still runs the fluxd of the old unit.
+		if err := run("restart fluxd", "systemctl", "--user", "restart", "fluxd.service"); err != nil {
+			return err
+		}
+	default:
+		if c, err := dial(); err == nil {
+			c.Close()
+			fmt.Println("  ✓ fluxd.service is enabled. A fluxd outside systemd runs now, so the service starts at the next login.")
+			fmt.Println("    To switch now: pkill -x fluxd && systemctl --user start fluxd")
+			return nil
+		}
+		if err := run("start fluxd", "systemctl", "--user", "start", "fluxd.service"); err != nil {
+			return err
+		}
 	}
-	if c, err := dial(); err == nil {
-		c.Close()
-		fmt.Println("  ✓ fluxd.service is enabled. A fluxd outside systemd runs now, so the service starts at the next login.")
-		fmt.Println("    To switch now: pkill -x fluxd && systemctl --user start fluxd")
-		return nil
-	}
-	if err := run("start fluxd", "systemctl", "--user", "start", "fluxd.service"); err != nil {
+	if err := waitForFluxd(10 * time.Second); err != nil {
 		return err
 	}
-	if !dry {
-		fmt.Println("  ✓ fluxd.service is enabled and started")
-	}
+	fmt.Println("  ✓ fluxd.service is enabled and started")
 	return nil
+}
+
+// waitForFluxd waits until fluxd answers a request on its socket.
+// systemctl start returns before fluxd reads config.toml, so a fluxd that
+// stops at once looks like a success to it. fluxd makes the socket before
+// it starts the network, and it answers only after the network runs. So a
+// connection alone does not show that the start worked, but an answer does.
+func waitForFluxd(timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		if c, err := dial(); err == nil {
+			answer := make(chan error, 1)
+			go func() { answer <- c.Call("state", nil, nil) }()
+			select {
+			case err = <-answer:
+			case <-time.After(time.Until(deadline)):
+				err = errors.New("fluxd did not answer")
+			}
+			c.Close()
+			if err == nil {
+				return nil
+			}
+		}
+		if !time.Now().Before(deadline) || exec.Command("systemctl", "--user", "is-failed", "--quiet", "fluxd.service").Run() == nil {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	msg := "fluxd.service did not start"
+	if err := config.Check(); err != nil {
+		msg += ": " + err.Error()
+	}
+	return errors.New(msg + ". To see why, run: journalctl --user -u fluxd -e")
 }
 
 func setupPlugin(dry bool, run func(string, string, ...string) error) error {
@@ -151,6 +324,9 @@ func setupPlugin(dry bool, run func(string, string, ...string) error) error {
 			return err
 		}
 		changed, err := plugin.Sync(files, dest)
+		if errors.Is(err, plugin.ErrLinked) {
+			return fmt.Errorf("%w. For the installed plugin, remove the symlink, then run: flux-cli setup", err)
+		}
 		if err != nil {
 			return err
 		}

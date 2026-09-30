@@ -8,6 +8,9 @@ imports, so 2 hosts use it without changes:
 - The omarchy-shell plugin in `gui/omarchy/`.
 - The Qt 6 C++ app in `gui/app/`.
 
+The views need Qt 6.6 or later, because they use
+`GridLayout.uniformCellWidths` and `Shape.CurveRenderer`.
+
 A host creates `FluxView`, gives it a backend object, and gives it the text
 of the active Omarchy `colors.toml`.
 
@@ -42,7 +45,7 @@ The window follows its width:
 | Less than 680 px | No sidebar. The header has a menu button. |
 
 The rail and the narrow layout open the full sidebar as a drawer over the
-content. A pair request opens the drawer by itself. Below 760 px of content,
+content. A new pair request opens the drawer 1 time. Below 760 px of content,
 the header buttons show only their icons. Messages shows 1 pane below
 620 px. The smallest window is 360 × 480 px.
 
@@ -78,14 +81,24 @@ Every host implements these members.
 | `state` | `var` | The last `state` event from fluxd. |
 | `devices`, `clipboard`, `transfers`, `commands` | `var` | `state.devices`, `state.clipboard`, `state.transfers`, `state.commands`, or an empty list. |
 | `settings`, `selfDevice` | `var` | `state.settings` and `state.self`, or an empty object. |
-| `call(method, params, cb)` | function | Sends one IPC request. `cb(err, result)` runs once. `err` is `{code, message}` or `null`. |
-| `pickFiles(title, cb)` | function | Runs `omarchy file select --title <title> --multiple`. `cb(paths)` gets the absolute paths from the newline-separated output, or an empty list when the user cancels or the chooser fails. |
-| `startDaemon(cb)` | function | Runs `systemctl --user start fluxd`. `cb(ok, message)` runs when the command ends. |
+| `call(method, params, cb)` | function | Sends one IPC request. `cb(err, result)` runs once. `err` is `{code, message}` or `null`. When the connection closes, each waiting `cb` gets the error `{code: "offline", message: "fluxd is not running"}`. |
+| `pickFiles(title, cb)` | function | Runs `omarchy file select --title <title> --multiple`. `cb(paths)` gets the absolute paths from the output, or an empty list when the user cancels or the chooser fails. The host does not trim the lines. A line that does not start with `/` continues the path before it, because a file name can contain a newline. |
+| `startDaemon(cb)` | function | Removes the `flux-cli off` marker `~/.config/flux/off`, then runs `systemctl --user start fluxd`. This is the same as `flux-cli on`. `cb(ok, message)` runs when the command ends. |
 | `toast(text)` | signal | A message from fluxd or the host. The window shows it for 2.2 seconds. |
 
-The socket is `$XDG_RUNTIME_DIR/flux/fluxd.sock`, or `$FLUX_SOCKET` when it
-is set. After the connection opens, the host calls `subscribe`. The IPC
-protocol is in the [IPC guide](ipc.md).
+The host finds the socket in the same place as fluxd and flux-cli:
+
+1. `$FLUX_SOCKET`, when it is set.
+2. `$XDG_RUNTIME_DIR/flux/fluxd.sock`, when `XDG_RUNTIME_DIR` is set.
+3. `/run/user/<uid>/flux/fluxd.sock`.
+
+There is no `/tmp` fallback, because another user can make a folder there
+first. The Qt app also refuses a socket whose process runs as another user.
+After the connection opens, the host calls `subscribe`. The IPC protocol is
+in the [IPC guide](ipc.md).
+
+The host drops a line from fluxd that is longer than 32 MiB and keeps the
+connection open. A normal state event is much smaller.
 
 While the connection is down, the host tries to connect again. The wait
 starts at 2 seconds and doubles after each failed attempt, up to 60 seconds.
@@ -112,7 +125,42 @@ Repeater {
 ```
 
 Each row holds only the key. `keyField` names the key, and the default is
-`id`. The delegate reads the object from `byId`.
+`id`. The delegate reads the object from `byId`. `byId` has no prototype, so
+a key from a phone such as `__proto__` is an ordinary key. A new `scope`
+removes all rows first. Set it to the device ID when the rows keep state
+that belongs to 1 device, such as a reply that the user types:
+
+```qml
+KeyedModel { id: rows; values: root.notifs; scope: root.dev ? root.dev.id : "" }
+```
+
+## Text from a phone
+
+`Txt` shows plain text, so a name from a phone cannot add markup. A
+`ToolTip` detects rich text, so give it a plain `Text` as its
+`contentItem`. For a file name or a device name from a phone, use
+`Fmt.showControls(name)`. It shows each control character and bidi control
+as its code, so `invoice\u202Efdp.exe` shows as `invoice[U+202E]fdp.exe`, not
+as `invoiceexe.pdf`.
+
+A pair key and a certificate fingerprint show in groups of 4 digits, for
+example `5EE6 825F 974E D59A`. Use `Fmt.hexGroups(key)`.
+
+## Pair requests
+
+The sidebar shows 1 pair request card, for the oldest open request. The card
+shows the address of the device and the key on its own line, in 4 groups of
+4 digits. A line under the card gives the number of the other requests. Each new request
+opens the drawer and scrolls the sidebar to the top 1 time. A request that
+comes again does not.
+
+**Accept** works only after the card has shown the same request, at the same
+place, for 1 second. A new key or a move of the card starts the wait again.
+
+In pair mode, each device on the network shows its name, its address, and
+the fingerprint of its certificate. A row with the name of another device
+has a warning line. After the pairing, the Overview of the device shows the
+same fingerprint under **certificate**.
 
 ## Layout
 
@@ -120,6 +168,7 @@ Each row holds only the key. `keyField` names the key, and the default is
 - `components/` has the shared controls. `components/qmldir` lists them.
 - `pages/` has 1 file per screen. `FluxView` loads them by URL.
 - `tools/` has the snapshot harness, the mock backend, and the fixture.
+- `../tests/` has the view tests.
 
 ## Snapshot harness
 
@@ -135,3 +184,42 @@ QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software QML_XHR_ALLOW_FILE_READ=1 \
 - `FLUX_THEME_FILE=<colors.toml>` renders with that theme.
 - Arguments work too: `qml6 gui/qml/tools/Snapshot.qml -- <dir> [only] [theme=<colors.toml>]`.
 - To see the progress lines, also set `QT_FORCE_STDERR_LOGGING=1`.
+
+## View tests
+
+`gui/tests/tst_views.qml` checks the views with the mock backend. It covers
+the device switch in Messages, the pair requests, the key format, the
+errors from fluxd, the list limits, and the text from a phone. To run the
+tests from the repository root:
+
+```sh
+make test-gui
+```
+
+The target runs this command:
+
+```sh
+QT_QPA_PLATFORM=offscreen QML_XHR_ALLOW_FILE_READ=1 \
+  /usr/lib/qt6/bin/qmltestrunner -input gui/tests
+```
+
+To use a `qmltestrunner` in another folder, set `QMLTESTRUNNER`:
+
+```sh
+make test-gui QMLTESTRUNNER=/usr/lib64/qt6/bin/qmltestrunner
+```
+
+## Qt app
+
+`flux-gui` keeps 1 window for each user. The first `flux-gui` takes a lock on
+`gui.lock` and listens on `gui.sock`. Both files are in
+`$XDG_RUNTIME_DIR/flux`, or in `/run/user/<uid>/flux`. A later `flux-gui`
+sends its page to that socket and exits. Only the holder of the lock listens,
+so 2 `flux-gui` that start at the same time open 1 window. A `flux-gui` from
+before the lock listens without it. The holder of the lock first sends its
+page to `gui.sock`, and exits when such an instance answers. The folder must
+belong to the user. `flux-gui` sets its mode to `0700`.
+
+After an update, **Restart** starts the new `flux-gui` first. The old window
+keeps its lock and its socket until the new process runs. When the start
+fails, the old window stays open and keeps its socket.

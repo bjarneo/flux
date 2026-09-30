@@ -47,7 +47,7 @@ targets:
         NSMicrophoneUsageDescription: Flux listens while you dictate, and while you use this iPhone as a microphone for a computer.
         NSCameraUsageDescription: Flux uses the camera to scan text, codes, and pages, to take photos and signatures, and to stream as a webcam to a computer.
         NSSpeechRecognitionUsageDescription: Flux changes your speech to text for the computer to type. The iPhone recognizes it on the device when it has the language.
-        NSFaceIDUsageDescription: Flux checks that it is you before your iPhone types, replies, shows the screen on a computer, or approves sudo.
+        NSFaceIDUsageDescription: Flux checks that it is you before your iPhone types or replies on a computer, shows the screen of a computer, or approves sudo.
         UIFileSharingEnabled: true
         # The microphone stream keeps running while Flux is in the background
         # or the iPhone is locked, like a call or a voice recorder.

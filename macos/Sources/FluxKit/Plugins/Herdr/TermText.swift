@@ -68,8 +68,10 @@ public enum TermText {
     private static let tabWidth = 8
 
     /// Parses text with ANSI SGR sequences into lines of styled spans. It
-    /// drops other escape sequences, carriage returns, and other control
-    /// characters. It expands tabs to the next multiple of 8 columns.
+    /// drops other escape sequences, carriage returns, and the other C0 and
+    /// C1 control characters. It shows U+FFFD in place of each character
+    /// that `isBidiMark` finds. It expands tabs to the next multiple of 8
+    /// columns.
     public static func parse(_ text: String) -> [TermLine] {
         let s = Array(text.unicodeScalars)
         var lines: [TermLine] = []
@@ -80,7 +82,8 @@ public enum TermText {
 
         func flush() {
             guard !run.isEmpty else { return }
-            if let last = spans.last, last.style == style {
+            // No copy of the last span, so that the append can grow its text in place.
+            if !spans.isEmpty, spans[spans.count - 1].style == style {
                 spans[spans.count - 1].text += String(run)
             } else {
                 spans.append(TermSpan(String(run), style))
@@ -131,12 +134,18 @@ public enum TermText {
                     i += 1
                 }
             default:
-                if c == "\r" || c.value < 0x20 || c.value == 0x7F {
+                if c == "\r" || c.value < 0x20 || (0x7F...0x9F).contains(c.value) {
                     i += 1
                     continue
                 }
-                // A no-break space shows as a space.
-                run.append(c == "\u{A0}" ? " " : c)
+                var out = c
+                if c == "\u{A0}" {
+                    // A no-break space shows as a space.
+                    out = " "
+                } else if isBidiMark(c) {
+                    out = "\u{FFFD}"
+                }
+                run.append(out)
                 column += 1
                 i += 1
             }
@@ -144,6 +153,20 @@ public enum TermText {
         flush()
         if !spans.isEmpty { lines.append(TermLine(spans)) }
         return lines
+    }
+
+    /// Reports whether `c` sets the direction of text, or is a line or
+    /// paragraph separator. The app shows text with the Unicode
+    /// bidirectional algorithm, and a terminal does not. So such a character
+    /// can show a command in another order. fluxd changes these characters
+    /// too, but an older fluxd does not.
+    static func isBidiMark(_ c: Unicode.Scalar) -> Bool {
+        switch c.value {
+        case 0x061C, 0x200E, 0x200F, 0x202A...0x202E, 0x2066...0x2069, 0x2028, 0x2029:
+            return true
+        default:
+            return false
+        }
     }
 
     /// Applies the SGR parameters, for example "1;38;5;6", to `start`.

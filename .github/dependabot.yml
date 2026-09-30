@@ -1,0 +1,11 @@
+# Dependabot opens pull requests that update the commit SHAs of the actions
+# in .github/workflows. Each pin keeps its version in a comment.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']

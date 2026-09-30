@@ -38,6 +38,41 @@ final class ApprovePluginLogicTests: XCTestCase {
         XCTAssertEqual(refusal(nil, secureEnclave: false), "The request is not valid")
     }
 
+    /// Only the computer of the open request can cancel it, as in the
+    /// Android app.
+    @MainActor
+    func testOnlyTheComputerOfTheRequestCancelsIt() {
+        let plugin = ApprovePlugin()
+        plugin.model.current = request()
+        let cancel = Packet(PacketType.fluxApprove, ["kind": "cancel", "id": "req1"])
+        plugin.receive(cancel, computerId: "pc2", computerName: "other")
+        XCTAssertEqual(plugin.model.current?.id, "req1", "another computer cannot close the request")
+        plugin.receive(cancel, computerId: "pc1", computerName: "omarchy-xps")
+        XCTAssertNil(plugin.model.current)
+    }
+
+    /// An unpair ends the open request of the computer, so that it does not
+    /// stay on the screen or refuse the requests of other computers.
+    @MainActor
+    func testAnUnpairEndsTheRequestOfTheComputer() {
+        let plugin = ApprovePlugin()
+        plugin.model.current = request()
+        plugin.model.shown = request()
+        plugin.unpaired("pc2")
+        XCTAssertEqual(plugin.model.current?.id, "req1", "the unpair of another computer leaves the request")
+        plugin.unpaired("pc1")
+        XCTAssertNil(plugin.model.current)
+        XCTAssertNil(plugin.model.shown, "the prompt closes")
+    }
+
+    /// An enrollment that replaces the current key says so.
+    func testAnEnrollmentThatReplacesAKeySaysSo() {
+        let replaces = "This replaces the current approval key for omarchy-xps."
+        XCTAssertFalse(ApprovePlugin.details(request(.enroll)).contains(replaces))
+        XCTAssertEqual(ApprovePlugin.details(request(.enroll), replacesKey: true).last, replaces)
+        XCTAssertFalse(ApprovePlugin.details(request(), replacesKey: true).contains(replaces), "an approval has no such line")
+    }
+
     func testNotificationRoutes() {
         XCTAssertEqual(ApprovePlugin.notificationRoute("approve", platform: .mac), .approve, "the Mac asks for Touch ID at once, as before")
         XCTAssertEqual(ApprovePlugin.notificationRoute("approve", platform: .phone), .present,

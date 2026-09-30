@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"crypto/x509"
 	"slices"
 	"time"
@@ -43,7 +44,7 @@ type Device struct {
 	// ignored, so that it logs that once.
 	inputRefused bool
 
-	pairState string // "", "requested", or "incoming"
+	pairState string // "", "requested", "confirm", or "incoming"
 	pairTime  int64
 	pairKey   string
 	pairTimer *time.Timer
@@ -54,7 +55,51 @@ type Device struct {
 	notifDesktop  map[string]uint32
 	conversations map[int64]*Conversation
 	threadWait    map[int64][]chan []SmsMessage
-	theme         string
+
+	// pairLink and pairCert are the link and the certificate on which the
+	// open pairing started. pairKey comes from pairCert, and only pairCert
+	// can be pinned. pairAt is the time of the last pair request, and
+	// pairNote is the desktop notification of an incoming request.
+	pairLink *lan.Link
+	pairCert *x509.Certificate
+	pairAt   time.Time
+	pairNote uint32
+
+	// badTrust is true when devices.json has an entry for the device with a
+	// certificate that does not parse. The device then counts as not
+	// paired, and fluxd refuses every link of the device.
+	badTrust bool
+
+	// seenIP and seenPort are the address that discovery last reported for
+	// a paired device, at seenAt. fluxd dials it, but only a link that
+	// passes the pin check changes IP and Port.
+	seenIP   string
+	seenPort int
+	seenAt   time.Time
+
+	// ignored counts the packets of the current link that fluxd dropped,
+	// because the device is not paired.
+	ignored int
+
+	// pairEnded is the time of the last pair false, reject, or timeout of
+	// a pairing in state "incoming" or "confirm", or of the end of the link
+	// of an incoming request. A new pair request of the device counts only
+	// pairRetry after it.
+	//
+	// unpairPeer is true when a pairing in state "confirm" ended with its
+	// link. The device pinned this computer, so fluxd sends pair false on
+	// the next link that shows unpairCert, the certificate of that
+	// pairing. The device stays in the list of fluxd until then.
+	pairEnded  time.Time
+	unpairPeer bool
+	unpairCert *x509.Certificate
+
+	// confirmQueue holds the packets that the device sent on the link of a
+	// pairing in state "confirm". The device counts itself as paired when
+	// it answers, so it sends its first packets, such as the battery, at
+	// once. fluxd handles them after the user confirms the pairing, and
+	// drops them when the pairing ends in another way.
+	confirmQueue []*proto.Packet
 }
 
 // Battery is the battery state of a device.
@@ -72,22 +117,90 @@ func newDevice(id string) *Device {
 	}
 }
 
-func (dev *Device) applyTrust(t config.TrustedDevice) {
-	dev.Name, dev.Type, dev.IP, dev.Port = t.Name, t.Type, t.LastIP, t.LastPort
+// applyTrust copies a trust entry to the device. A certificate that does
+// not parse makes the device count as not paired, and fluxd then refuses
+// its links. applyTrust returns the parse error.
+func (dev *Device) applyTrust(t config.TrustedDevice) error {
+	dev.Name, dev.Type, dev.IP, dev.Port = proto.CleanName(t.Name), proto.CleanType(t.Type), t.LastIP, t.LastPort
+	c, err := proto.ParseCertPEM(t.CertPEM)
+	if err != nil {
+		dev.badTrust = true
+		return err
+	}
 	dev.Addresses = t.Addresses
 	dev.Paired, dev.PairedAt = true, t.PairedAt
-	if c, err := proto.ParseCertPEM(t.CertPEM); err == nil {
-		dev.Cert = c
-	}
+	dev.Cert = c
+	return nil
 }
+
+// maxAppText is the longest app name and app version that fluxd keeps.
+const maxAppText = 32
 
 func (dev *Device) setIdentity(id proto.Identity) {
 	dev.Name = proto.CleanName(id.DeviceName)
-	dev.Type = id.DeviceType
+	dev.Type = proto.CleanType(id.DeviceType)
 	dev.Version = id.ProtocolVersion
 	dev.Incoming = id.IncomingCapabilities
 	dev.Outgoing = id.OutgoingCapabilities
-	dev.App, dev.AppVersion = id.App, id.AppVersion
+	dev.App, dev.AppVersion = proto.CleanText(id.App, maxAppText), proto.CleanText(id.AppVersion, maxAppText)
+	// A device that stops sharing a feature keeps no old data of it.
+	if !dev.supports(proto.TypeNotification) {
+		dev.notifications = nil
+	}
+	if !dev.supports(proto.TypeSmsMessages) && len(dev.conversations) > 0 {
+		dev.conversations = map[int64]*Conversation{}
+	}
+}
+
+// pinLocked returns the certificate that a new link of the device must
+// present: the pinned certificate of a paired device, or the certificate of
+// an open pairing. ok is false when any certificate can link. A nil
+// certificate with ok true refuses every link. The caller holds d.mu.
+func (dev *Device) pinLocked() (cert *x509.Certificate, ok bool) {
+	switch {
+	case dev.badTrust:
+		return nil, true
+	case dev.Paired:
+		return dev.Cert, true
+	case dev.pairState != "" && dev.pairCert != nil:
+		return dev.pairCert, true
+	}
+	return nil, false
+}
+
+// refuseLocked returns why fluxd refuses the link l of the device, or ""
+// when the link can replace the current link. The caller holds d.mu.
+func (dev *Device) refuseLocked(l *lan.Link) string {
+	pin, ok := dev.pinLocked()
+	switch {
+	case !ok:
+		return ""
+	case pin == nil:
+		return "devices.json has no valid certificate for the device. To pair it again, run: flux-cli unpair " + dev.ID
+	case l.Cert == nil || !bytes.Equal(pin.Raw, l.Cert.Raw):
+		if dev.Paired {
+			return "the certificate differs from the certificate of the pairing"
+		}
+		return "a pairing with another certificate is open"
+	}
+	return ""
+}
+
+// nameOf returns the name of the device. An identity packet can change the
+// name at any time, so a handler reads it under d.mu.
+func (d *Daemon) nameOf(dev *Device) string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return dev.Name
+}
+
+// stillPaired reports whether dev is paired now. A transfer or a herdr
+// call can take seconds, and it must not act for the device after an
+// unpair.
+func (d *Daemon) stillPaired(dev *Device) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return dev.Paired
 }
 
 // supports reports whether the device sends packets of the type.
@@ -145,6 +258,11 @@ type DeviceView struct {
 	App        string `json:"app"`
 	AppVersion string `json:"appVersion"`
 	AppUpdate  string `json:"appUpdate"`
+
+	// Fingerprint is 16 hex digits from the certificate of the device, or
+	// "" when fluxd knows no certificate. It tells 2 devices with the same
+	// name apart.
+	Fingerprint string `json:"fingerprint"`
 }
 
 func (dev *Device) view() DeviceView {
@@ -161,6 +279,7 @@ func (dev *Device) view() DeviceView {
 		Battery: dev.battery,
 		Plugins: dev.plugins(), Notifications: dev.notifications,
 		App: dev.App, AppVersion: dev.AppVersion,
+		Fingerprint: proto.Fingerprint(dev.Cert),
 	}
 	if v.Type == "" {
 		v.Type = "phone"

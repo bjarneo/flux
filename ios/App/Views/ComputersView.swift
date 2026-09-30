@@ -1,5 +1,6 @@
 import FluxKit
 import SwiftUI
+import UIKit
 
 /// The paired and available Omarchy computers.
 struct ComputersView: View {
@@ -15,6 +16,15 @@ struct ComputersView: View {
                     Text("Flux uses no network while it is off, and computers do not see this iPhone.")
                 } actions: {
                     Button("Turn on") { model.core.enabled = true }
+                        .buttonStyle(.borderedProminent)
+                }
+            } else if model.state.localNetworkDenied && model.state.devices.isEmpty {
+                ContentUnavailableView {
+                    Label("Local Network is off", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(Self.localNetworkText)
+                } actions: {
+                    Button("Open Settings", action: openSettings)
                         .buttonStyle(.borderedProminent)
                 }
             } else if model.state.devices.isEmpty {
@@ -54,14 +64,31 @@ struct ComputersView: View {
             titleVisibility: .visible,
             presenting: unpairing
         ) { device in
-            Button("Unpair", role: .destructive) { model.core.unpair(device.id) }
+            Button("Unpair", role: .destructive) { model.unpair(device.id) }
         } message: { device in
-            Text("\(device.name) and this iPhone forget each other. Pair again to use it.")
+            Text(model.unpairMessage(device))
         }
+    }
+
+    private static let localNetworkText = "Flux needs Local Network access to find and reach computers. Turn on Local Network for Flux in Settings."
+
+    private func openSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
     }
 
     private var list: some View {
         List {
+            // The paired computers stay in reach, for example to unpair one.
+            if model.state.localNetworkDenied && !model.state.devices.contains(where: \.online) {
+                Section {
+                    Label("Local Network is off", systemImage: "wifi.exclamationmark")
+                        .font(.body.weight(.medium))
+                    Text(Self.localNetworkText)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Button("Open Settings", action: openSettings)
+                }
+            }
             if !model.paired.isEmpty {
                 Section("Paired") {
                     ForEach(model.paired) { device in

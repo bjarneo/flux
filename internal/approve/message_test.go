@@ -7,13 +7,15 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"errors"
+	"math"
 	"strings"
 	"testing"
 	"time"
 )
 
-// The same vectors are in the Android test ApproveMessageTest, so that
-// both sides build the same bytes.
+// The same vectors are in the Android test ApproveMessageTest.kt and in the
+// Apple test ApproveMessageTests.swift, so that every side builds the same
+// bytes.
 const testNonce = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
 
 var testRequest = Request{
@@ -66,6 +68,29 @@ func TestFieldRules(t *testing.T) {
 	for i, r := range bad {
 		if _, err := r.Message(); err == nil {
 			t.Errorf("request %d: want an error", i)
+		}
+	}
+}
+
+// The apps refuse a time that is not in 1 to 2^40, so fluxd does not send
+// one. An older app can stop on it.
+func TestTimeRange(t *testing.T) {
+	for _, tm := range []int64{math.MinInt64, -1, 0, 1 << 41, math.MaxInt64} {
+		r := testRequest
+		r.Time = tm
+		if _, err := r.Message(); err == nil {
+			t.Errorf("request time %d: want an error", tm)
+		}
+		e := Enrollment{Host: "omarchy-xps", User: "alice", Time: tm, Nonce: testNonce}
+		if _, err := e.Message(nil); err == nil {
+			t.Errorf("enrollment time %d: want an error", tm)
+		}
+	}
+	for _, tm := range []int64{1, 1 << 40} {
+		r := testRequest
+		r.Time = tm
+		if _, err := r.Message(); err != nil {
+			t.Errorf("request time %d: %v", tm, err)
 		}
 	}
 }
@@ -176,5 +201,22 @@ func TestParsePublicKeyRefusesOtherCurves(t *testing.T) {
 	spki, _ := x509.MarshalPKIXPublicKey(&priv.PublicKey)
 	if _, err := ParsePublicKey(spki); err == nil {
 		t.Fatal("a P-384 key must fail")
+	}
+}
+
+func TestSameCode(t *testing.T) {
+	code := "5EE6 825F 974E D59A"
+	for typed, want := range map[string]bool{
+		"5EE6 825F 974E D59A": true,
+		"5ee6825f974ed59a":    true,
+		"5ee6-825f-974e-d59a": true,
+		" 5EE6825F974ED59A ":  true,
+		"5EE6 825F":           false,
+		"5EE6 825F 974E D59B": false,
+		"":                    false,
+	} {
+		if got := SameCode(typed, code); got != want {
+			t.Errorf("%q: got %v, want %v", typed, got, want)
+		}
 	}
 }

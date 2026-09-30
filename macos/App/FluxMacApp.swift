@@ -20,8 +20,11 @@ struct FluxMacApp: App {
         }
 
         MenuBarExtra {
-            if case .ready(let model) = delegate.launch {
+            switch delegate.launch {
+            case .ready(let model):
                 MenuBarView().environment(model)
+            case .failed(let message):
+                LaunchErrorMenu(message: message)
             }
         } label: {
             MenuBarLabel(launch: delegate.launch)
@@ -29,7 +32,9 @@ struct FluxMacApp: App {
     }
 }
 
-/// The result of starting the core.
+/// The result of starting the core. The files of a Mac user are readable
+/// after the login, so a start that failed fails again. Flux does not start
+/// the core again. The window and the menu bar show the error until Flux quits.
 enum Launch {
     case ready(AppModel)
     case failed(String)
@@ -52,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppearanceController.shared.start()
+        ReplyLock.watch()
         guard case .ready(let model) = launch else { return }
         FeatureHooks.didLaunch(model: model)
         model.core.start()
@@ -82,6 +88,26 @@ struct RootView: View {
         case .failed(let message):
             ContentUnavailableView("Flux could not start", systemImage: "exclamationmark.triangle", description: Text(message))
         }
+    }
+}
+
+/// The menu bar menu when the core did not start: the error, the window
+/// that shows it, and Quit.
+struct LaunchErrorMenu: View {
+    let message: String
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Text("Flux could not start")
+        Text(message)
+        Divider()
+        Button("Open Flux") {
+            openWindow(id: "main")
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        Divider()
+        Button("Quit Flux") { NSApp.terminate(nil) }
+            .keyboardShortcut("q")
     }
 }
 

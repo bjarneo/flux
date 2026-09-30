@@ -9,10 +9,16 @@ Item {
   property var view
   property bool fillHeight: true
   readonly property var dev: view ? view.dev : null
+  // The page stays when the user selects another device. A new device ID
+  // resets the thread, the messages, and the outbox of the earlier device.
+  readonly property string devId: dev ? dev.id : ""
   readonly property bool online: !!dev && !!dev.online
   readonly property var convos: dev && dev.conversations ? dev.conversations : []
 
   property var selected: null
+  // The ID of the device of selected. send() refuses a thread of another
+  // device.
+  property string selectedDev: ""
   // A narrow page shows 1 pane: the conversations, or 1 thread with a back
   // button.
   readonly property bool single: width < 620
@@ -20,18 +26,26 @@ Item {
   property var messages: []
   property bool loading: false
   property string loadedFor: ""
+  // The error of the last load of the selected thread, or "".
+  property string loadError: ""
+  // The error of the last send, or "". It shows above the message field,
+  // for example for a message that is too long. A new draft clears it.
+  property string sendError: ""
+  // True when messages belong to the selected thread.
+  readonly property bool loaded: !!selected && loadedFor === selectedDev + ":" + selected.thread
   // The New message form shows in place of the thread. sentTo is the
   // number of its last message, until that conversation appears.
   property bool composing: false
   property string sentTo: ""
   // The sent messages that the phone has not reported yet:
-  // {thread, address, body, time, outgoing, pending, failed}. A new
-  // conversation has thread -1.
+  // {device, thread, address, body, time, outgoing, pending, failed}. A
+  // new conversation has thread -1.
   property var outbox: []
   // The phone sends a text message to 1 address, so a group gets no reply.
   readonly property bool group: !composing && addresses(selected).length > 1
   readonly property var shown: {
     var extra = outbox.filter(function (e) {
+      if (e.device !== devId) return false
       if (composing) return e.thread < 0 && samePhone(e.address, sentTo)
       return inThread(e, selected)
     })
@@ -87,26 +101,50 @@ Item {
 
   function load(c) {
     if (!c || !dev) return
-    selected = c
-    loading = loadedFor !== dev.id + ":" + c.thread
-    var life = root.life
     var devId = dev.id
+    var key = devId + ":" + c.thread
+    // Another thread shows no messages until its answer comes, so its name
+    // never shows over the messages of the earlier thread. loadedFor resets
+    // too, so a thread that opens again shows its load and its error.
+    if (loadedFor !== key) {
+      messages = []
+      loadedFor = ""
+    }
+    selected = c
+    selectedDev = devId
+    loading = loadedFor !== key
+    loadError = ""
+    var life = root.life
     view.call("sms.thread", { device: devId, thread: c.thread }, function (result) {
       if (!life.alive) return
       var msgs = result.messages || []
-      root.confirm(c, msgs)
+      root.confirm(devId, c, msgs)
       // The user can open another thread before the answer comes.
-      if (!root.dev || root.dev.id !== devId || !root.selected || root.selected.thread !== c.thread) return
+      if (!root.showing(devId, c)) return
       root.messages = msgs
       root.loading = false
-      root.loadedFor = devId + ":" + c.thread
+      root.loadedFor = key
+    }, function (err) {
+      if (!life.alive || !root.showing(devId, c)) return
+      root.loading = false
+      root.loadError = err.message || err.code || "Error"
     })
   }
 
+  // True while the page shows thread c of device devId.
+  function showing(devId, c) {
+    return root.devId === devId && root.selectedDev === devId && !!root.selected && root.selected.thread === c.thread
+  }
+
+  // Loads the first conversation when no thread is selected.
+  function loadFirst() {
+    if (!selected && !composing && convos.length > 0) load(convos[0])
+  }
+
   // Removes the sent messages that the phone now reports in the thread.
-  function confirm(c, msgs) {
+  function confirm(devId, c, msgs) {
     var keep = outbox.filter(function (e) {
-      if (!inThread(e, c)) return true
+      if (e.device !== devId || !inThread(e, c)) return true
       for (var i = 0; i < msgs.length; i++) {
         var m = msgs[i]
         // The clocks of the phone and the computer can differ a little.
@@ -121,12 +159,14 @@ Item {
     composing = true
     threadOpen = true
     sentTo = ""
+    sendError = ""
     to.clear()
     Qt.callLater(function () { to.input.forceActiveFocus() })
   }
 
   function open(c) {
     composing = false
+    sendError = ""
     load(c)
     threadOpen = true
   }
@@ -147,15 +187,28 @@ Item {
     if (composing && findConvo(target)) open(findConvo(target))
     var c = composing ? null : selected
     if (!composing && !c) return
+    // The addresses of a thread of another device never go to this device.
+    if (c && selectedDev !== dev.id) return
+    var devId = dev.id
     var list = c ? addresses(c) : [target]
-    var entry = { thread: c ? c.thread : -1, address: list[0], body: text, time: Math.floor(Date.now() / 1000), outgoing: true, pending: true, failed: false }
+    var entry = { device: devId, thread: c ? c.thread : -1, address: list[0], body: text, time: Math.floor(Date.now() / 1000), outgoing: true, pending: true, failed: false }
     var life = root.life
-    view.call("sms.send", { device: dev.id, addresses: list, body: text }, function () {
-      if (!life.alive) return
+    var v = view
+    sendError = ""
+    v.call("sms.send", { device: devId, addresses: list, body: text }, function () {
+      if (!life.alive || root.devId !== devId) return
       if (entry.thread < 0) root.sentTo = entry.address
       root.outbox = root.outbox.concat([entry])
       draft.clear()
       refreshTimer.restart()
+    }, function (err) {
+      // The error shows above the message field while the page shows the
+      // thread or the form. The draft stays, so the user can change it and
+      // send it again. When the page is gone or shows a different thread,
+      // the error becomes a toast.
+      var msg = err.message || err.code || "Error"
+      if (life.alive && root.devId === devId && (c ? root.showing(devId, c) : root.composing)) root.sendError = msg
+      else v.toast(msg)
     })
   }
 
@@ -167,7 +220,7 @@ Item {
     onTriggered: {
       if (!root.dev || !root.online) return
       if (root.composing) root.view.call("sms.refresh", { device: root.dev.id })
-      else root.load(root.selected)
+      else if (root.selectedDev === root.devId) root.load(root.selected)
     }
   }
 
@@ -189,9 +242,40 @@ Item {
     }
   }
 
-  onShownChanged: Qt.callLater(function () { thread.positionViewAtEnd() })
+  onShownChanged: {
+    var life = root.life
+    Qt.callLater(function () { if (life.alive) thread.positionViewAtEnd() })
+  }
+
+  // True after Component.onCompleted. The first device ID comes while the
+  // page is built, and it has nothing to reset.
+  property bool built: false
+
+  onDevIdChanged: {
+    if (!built) return
+    refreshTimer.stop()
+    selected = null
+    selectedDev = ""
+    messages = []
+    loading = false
+    loadError = ""
+    sendError = ""
+    loadedFor = ""
+    composing = false
+    sentTo = ""
+    threadOpen = false
+    outbox = []
+    draft.clear()
+    to.clear()
+    // The conversations of the new device can change after this handler,
+    // so load the first one when all bindings have their new values.
+    var life = root.life
+    Qt.callLater(function () { if (life.alive) root.loadFirst() })
+  }
 
   onConvosChanged: {
+    // The devId handler resets a thread of the earlier device.
+    if (selected && selectedDev !== devId) return
     if (composing) {
       // The first message to a new number makes a conversation.
       var made = sentTo !== "" ? findConvo(sentTo) : null
@@ -223,10 +307,11 @@ Item {
   onOnlineChanged: {
     if (!online || !dev) return
     view.call("sms.refresh", { device: dev.id })
-    if (selected && !composing) load(selected)
+    if (selected && !composing && selectedDev === devId) load(selected)
   }
 
   Component.onCompleted: {
+    built = true
     if (dev && online) view.call("sms.refresh", { device: dev.id })
     if (!selected && convos.length > 0) load(convos[0])
   }
@@ -247,6 +332,10 @@ Item {
       onClicked: root.compose()
     }
 
+    // The rows follow the conversations by thread, so a new message or a
+    // read state changes 1 row, and the list keeps its position.
+    KeyedModel { id: convoRows; values: root.convos; keyField: "thread"; scope: root.devId }
+
     ListView {
       id: convoList
       anchors.top: newButton.bottom
@@ -255,10 +344,11 @@ Item {
       width: parent.width
       spacing: 6
       clip: true
-      model: root.convos
+      model: convoRows
       boundsBehavior: Flickable.StopAtBounds
       delegate: Rectangle {
-        required property var modelData
+        required property string key
+        readonly property var modelData: convoRows.byId[key] || ({})
         readonly property bool sel: !root.composing && !!root.selected && root.selected.thread === modelData.thread
         readonly property bool unread: !!modelData.unread
         width: convoList.width
@@ -379,7 +469,7 @@ Item {
       anchors.left: parent.left
       anchors.right: parent.right
       anchors.top: root.composing ? to.bottom : threadName.bottom
-      anchors.bottom: inputRow.top
+      anchors.bottom: sendErrorLine.visible ? sendErrorLine.top : inputRow.top
       anchors.leftMargin: 19
       anchors.rightMargin: 19
       anchors.topMargin: 10
@@ -432,11 +522,44 @@ Item {
         }
       }
 
-      Txt {
-        visible: root.loading && !root.composing
-        text: "Loading messages…"
-        color: Theme.dim
+      // A thread with no messages to show yet: it loads, or its load
+      // failed.
+      Column {
+        visible: !root.composing && (root.loading || (root.loadError !== "" && !root.loaded))
+        width: thread.width
+        spacing: 10
+        Txt {
+          width: parent.width
+          text: root.loading ? "Loading messages…" : (root.online ? root.loadError : "Messages load when the phone connects.")
+          color: root.loading || !root.online ? Theme.dim : Theme.err
+          wrapMode: Text.Wrap
+        }
+        OutlineButton {
+          visible: !root.loading && root.online
+          icon: "refresh"
+          text: "Retry"
+          padX: 10
+          padY: 4
+          fontSize: 11
+          onClicked: root.load(root.selected)
+        }
       }
+    }
+
+    // The error of the last send from fluxd.
+    Txt {
+      id: sendErrorLine
+      visible: root.sendError !== ""
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.bottom: inputRow.top
+      anchors.leftMargin: 19
+      anchors.rightMargin: 19
+      anchors.bottomMargin: 8
+      text: root.sendError
+      color: Theme.err
+      font.pixelSize: 12
+      wrapMode: Text.Wrap
     }
 
     Row {
@@ -453,6 +576,7 @@ Item {
         opacity: enabled ? 1 : 0.6
         placeholder: root.group ? "Reply to group messages on the phone" : "Text message via " + (root.view ? root.view.devName : "")
         onAccepted: root.send()
+        onTextChanged: root.sendError = ""
       }
       AccentButton {
         id: sendButton
@@ -461,7 +585,7 @@ Item {
         text: "Send"
         padX: 16
         padY: 10
-        active: root.online && !root.group && (root.composing ? to.text.trim() !== "" : !!root.selected)
+        active: root.online && !root.group && (root.composing ? to.text.trim() !== "" : !!root.selected && root.selectedDev === root.devId)
         onClicked: root.send()
       }
     }

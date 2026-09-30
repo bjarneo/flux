@@ -1,9 +1,12 @@
 package core
 
 import (
+	"net"
 	"net/netip"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	"flux/internal/config"
 	"flux/internal/lan"
@@ -131,21 +134,6 @@ func (d *Daemon) syncAddresses(dev *Device) []string {
 	return t.Addresses
 }
 
-// dialHosts returns the hosts that fluxd dials for an offline device: the
-// last address first, then the extra addresses. The caller holds d.mu.
-func (dev *Device) dialHosts() []string {
-	hosts := make([]string, 0, 1+len(dev.Addresses))
-	if dev.IP != "" {
-		hosts = append(hosts, dev.IP)
-	}
-	for _, a := range dev.Addresses {
-		if !slices.Contains(hosts, a) {
-			hosts = append(hosts, a)
-		}
-	}
-	return hosts
-}
-
 // dialPort returns the TCP port that fluxd dials. A device with extra
 // addresses and no known port gets the default port. The caller holds
 // d.mu.
@@ -154,4 +142,34 @@ func (dev *Device) dialPort() int {
 		return lan.MinTCPPort
 	}
 	return dev.Port
+}
+
+// dialAddrs returns the addresses that fluxd dials for an offline device,
+// as host and port: the last address, then the address that discovery
+// reported in the last forgetAfter, then the extra addresses. The extra
+// addresses use the port of the last link, because discovery does not
+// change the port of a paired device. The caller holds d.mu.
+func (dev *Device) dialAddrs(now time.Time) []string {
+	var out []string
+	add := func(host string, port int) {
+		if host == "" || port <= 0 {
+			return
+		}
+		if a := net.JoinHostPort(host, strconv.Itoa(port)); !slices.Contains(out, a) {
+			out = append(out, a)
+		}
+	}
+	port := dev.dialPort()
+	add(dev.IP, port)
+	if dev.seenIP != "" && now.Sub(dev.seenAt) < forgetAfter {
+		seen := dev.seenPort
+		if seen == 0 {
+			seen = port
+		}
+		add(dev.seenIP, seen)
+	}
+	for _, a := range dev.Addresses {
+		add(a, port)
+	}
+	return out
 }

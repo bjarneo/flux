@@ -87,12 +87,39 @@ object ClipImage {
     private fun authority(context: Context) = "${context.packageName}.clipboard"
 
     /**
+     * True when [uri] is the address of a file in the clipboard folder, which
+     * holds only images from a computer. Another app cannot put this address
+     * on the clipboard, because Android makes the app that sets a clip prove
+     * that it can grant the address.
+     */
+    private fun received(context: Context, uri: Uri): Boolean {
+        if (uri.authority != authority(context)) return false
+        val files = File(context.cacheDir, DIR).listFiles() ?: return false
+        return files.any { it.isFile && runCatching { FileProvider.getUriForFile(context, authority(context), it) }.getOrNull() == uri }
+    }
+
+    /**
      * Sends the image at [uri] to each device in [devices]. [onDone] runs
      * on an IO thread with the number of devices that got the image, or -1
-     * when the image is larger than [MAX_BYTES].
+     * when the image is larger than [MAX_BYTES]. Only a content address of
+     * another app goes out, because a file address opens a path with the
+     * rights of Flux. Of the addresses of Flux, only [lastRemote] goes out,
+     * so that the user can send an image from 1 computer to another. The
+     * automatic sync does not send [lastRemote] back.
+     *
+     * [manual] is true for Send clipboard. It also sends an image from a
+     * computer that is still in the clipboard folder, because [lastRemote]
+     * is empty after Flux starts again.
      */
-    fun send(core: FluxCore, devices: List<Device>, uri: Uri, mime: String, onDone: (Int) -> Unit = {}) {
+    fun send(core: FluxCore, devices: List<Device>, uri: Uri, mime: String, manual: Boolean = false, onDone: (Int) -> Unit = {}) {
         core.io.execute {
+            // The clipboard gives the app that reads it a read grant for a content address.
+            val shared = Share.acceptShared(uri.scheme, uri.authority, core.app.packageName, granted = true)
+            if (uri != lastRemote && !shared && !(manual && received(core.app, uri))) {
+                Log.i(TAG, "ignored a clipboard image at ${uri.scheme}:")
+                onDone(0)
+                return@execute
+            }
             val read = runCatching { read(core.app, uri) }
             val data = read.getOrElse {
                 Log.w(TAG, "read $uri failed", it)

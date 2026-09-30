@@ -38,7 +38,9 @@ private const val CONNECT_TIMEOUT_MS = 10_000
  * Mirrors the phone screen to the computer. Android needs a foreground
  * service of type mediaProjection for screen capture. The service starts
  * after the user allows the capture, and it runs until a stop: from the
- * notification, from the computer, from the system, or when the link drops.
+ * notification, from the computer, from the system, when the link drops,
+ * or when the pairing ends. A start for another computer stops the mirror
+ * and starts a new one with the new consent.
  */
 class ScreenMirrorService : Service() {
     companion object {
@@ -67,6 +69,12 @@ class ScreenMirrorService : Service() {
     private var size = 0 to 0
     @Volatile private var finished = false
 
+    /**
+     * Counts the mirrors of this service. A callback of an earlier mirror
+     * does nothing, so that it cannot stop the next mirror.
+     */
+    @Volatile private var generation = 0
+
     private val displays by lazy { getSystemService(DisplayManager::class.java) }
 
     /** Follows rotation: a new frame size gives a new encoder on the same stream. */
@@ -79,11 +87,11 @@ class ScreenMirrorService : Service() {
         override fun onDisplayRemoved(displayId: Int) = Unit
     }
 
-    /** Checks the link every second and stops the mirror when it drops. */
+    /** Checks the link every second and stops the mirror when it drops or the pairing ends. */
     private val watch = object : Runnable {
         override fun run() {
             val d = deviceId?.let { FluxCore.device(it) }
-            if (d == null || !d.online) {
+            if (d == null || !d.online || !d.paired) {
                 finish(notify = false, ScreenSession.Status(ScreenSession.Phase.Error, "The connection to the computer closed", deviceId))
                 return
             }
@@ -103,8 +111,16 @@ class ScreenMirrorService : Service() {
             ScreenSession.stop(notify = true, ScreenSession.Status(ScreenSession.Phase.Idle, "Stopped on this phone", deviceId))
             return START_NOT_STICKY
         }
-        if (projection != null) return START_NOT_STICKY
         val id = intent?.getStringExtra(EXTRA_DEVICE)
+        if (projection != null) {
+            // The mirror goes on for the same computer.
+            if (id == null || id == deviceId) return START_NOT_STICKY
+            // Another computer: the current mirror stops, and the new consent starts a new one.
+            val old = deviceId?.let { FluxCore.device(it)?.identity?.deviceName } ?: "the computer"
+            finish(notify = true, ScreenSession.Status(ScreenSession.Phase.Idle, "Stopped the mirror to $old", deviceId), stopService = false)
+            finished = false
+        }
+        val gen = ++generation
         val code = intent?.getIntExtra(EXTRA_CODE, 0) ?: 0
         val data = if (Build.VERSION.SDK_INT >= 33) intent?.getParcelableExtra(EXTRA_DATA, Intent::class.java)
         else @Suppress("DEPRECATION") intent?.getParcelableExtra(EXTRA_DATA)
@@ -124,37 +140,40 @@ class ScreenMirrorService : Service() {
         // Android 14 and later need a callback before the virtual display.
         proj.registerCallback(object : MediaProjection.Callback() {
             override fun onStop() {
-                main.post { finish(notify = true, ScreenSession.Status(ScreenSession.Phase.Idle, "The screen mirror stopped", id)) }
+                main.post { if (projection === proj) finish(notify = true, ScreenSession.Status(ScreenSession.Phase.Idle, "The screen mirror stopped", id)) }
             }
         }, main)
         projection = proj
-        ScreenSession.attach { notify, status -> main.post { finish(notify, status) } }
+        ScreenSession.attach { notify, status -> main.post { if (gen == generation) finish(notify, status) } }
         ScreenSession.set(ScreenSession.Status(ScreenSession.Phase.Connecting, "Waiting for $name…", id))
-        FluxCore.io.execute { connect(id, name) }
+        FluxCore.io.execute { connect(id, name, gen) }
         return START_NOT_STICKY
     }
 
+    /** True while the mirror [gen] runs. */
+    private fun live(gen: Int) = !finished && gen == generation
+
     /** Waits for the computer, then starts the capture on the main thread. */
-    private fun connect(id: String, name: String) {
+    private fun connect(id: String, name: String, gen: Int) {
         try {
             val d = FluxCore.device(id) ?: error("$name is not known")
             if (Types.FLUX_SCREEN !in d.identity.incoming) error("Update Flux on $name to mirror this screen")
             val (w, h) = frameSize()
             val ssl = PinnedStream.accept(FluxCore, d, CONNECT_TIMEOUT_MS, { srv ->
-                if (finished) runCatching { srv.close() } else server = srv
+                if (live(gen)) server = srv else runCatching { srv.close() }
             }) { port -> ScreenPackets.start(port, w, h) }
             main.post {
-                server = null
-                if (finished) {
+                if (!live(gen)) {
                     runCatching { ssl.close() }
                     return@post
                 }
+                server = null
                 socket = ssl
                 begin(ssl, w, h)
             }
         } catch (e: Exception) {
             Log.i(TAG, "mirror did not start: ${e.message}")
-            main.post { finish(notify = true, ScreenSession.Status(ScreenSession.Phase.Error, e.message ?: "The screen mirror did not start", id)) }
+            main.post { if (gen == generation) finish(notify = true, ScreenSession.Status(ScreenSession.Phase.Error, e.message ?: "The screen mirror did not start", id)) }
         }
     }
 
@@ -177,8 +196,17 @@ class ScreenMirrorService : Service() {
         }
     }
 
-    private fun newEncoder(ssl: SSLSocket, w: Int, h: Int) = H264Encoder(w, h, MirrorSize.bitrate(w, h), ssl.outputStream) {
-        main.post { finish(notify = false, ScreenSession.Status(ScreenSession.Phase.Error, "The connection to the computer closed", deviceId)) }
+    /**
+     * Makes an encoder that writes to [ssl]. When the encoder fails, the
+     * mirror stops, and the computer gets "stop" when the link is still up.
+     * A codec error leaves the link up, and the stream socket can close
+     * while the link stays.
+     */
+    private fun newEncoder(ssl: SSLSocket, w: Int, h: Int): H264Encoder {
+        val gen = generation
+        return H264Encoder(w, h, MirrorSize.bitrate(w, h), ssl.outputStream) { message ->
+            main.post { if (gen == generation) finish(notify = true, ScreenSession.Status(ScreenSession.Phase.Error, message, deviceId)) }
+        }
     }
 
     /**
@@ -214,8 +242,12 @@ class ScreenMirrorService : Service() {
         return MirrorSize.fit(p.x, p.y)
     }
 
-    /** Stops everything once. With [notify], the computer gets "stop". */
-    private fun finish(notify: Boolean, status: ScreenSession.Status) {
+    /**
+     * Stops everything once. With [notify], the computer gets "stop". With
+     * [stopService], the service also ends. A start for another computer
+     * keeps the service.
+     */
+    private fun finish(notify: Boolean, status: ScreenSession.Status, stopService: Boolean = true) {
         if (finished) return
         finished = true
         main.removeCallbacks(watch)
@@ -235,6 +267,7 @@ class ScreenMirrorService : Service() {
         val id = deviceId
         if (notify && hadStream && id != null) FluxCore.io.execute { FluxCore.device(id)?.send(ScreenPackets.stop()) }
         ScreenSession.detach(status)
+        if (!stopService) return
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
     }

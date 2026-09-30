@@ -117,7 +117,7 @@ private struct PageThumb: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            Image(decorative: page.image, scale: 1)
+            Image(decorative: page.thumb, scale: 1)
                 .resizable()
                 .scaledToFit()
                 .frame(height: 76)

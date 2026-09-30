@@ -19,6 +19,9 @@ Item {
   readonly property var screen: view && view.backend && view.backend.state ? (view.backend.state.screen || null) : null
   // The remote desktop of this computer on a device. Null when not used.
   readonly property var desktop: view && view.backend && view.backend.state ? (view.backend.state.desktop || null) : null
+  // The Browse PC sessions of the devices on this computer. An earlier
+  // fluxd sends no list.
+  readonly property var browse: view && view.backend && view.backend.state ? (view.backend.state.browse || []) : []
 
   implicitHeight: grid.implicitHeight
 
@@ -104,6 +107,23 @@ Item {
           text: "● " + (root.online ? "connected" : "offline") + (root.online && b ? " · " + (b.charging ? "charging" : "discharging") : "")
           color: root.online ? Theme.ok : Theme.dim
           elide: Text.ElideRight
+        }
+        // The fingerprint of the certificate of the device, as the pair mode
+        // and flux-cli unpair show it. The groups go to the next line as 1
+        // part, so that no group is cut.
+        Flow {
+          objectName: "fingerprint"
+          width: parent.width
+          visible: fingerprintText.text !== ""
+          topPadding: 2
+          spacing: 6
+          Txt { text: "certificate"; color: Theme.dim; font.pixelSize: 11 }
+          Txt {
+            id: fingerprintText
+            text: Fmt.hexGroups(root.dev ? root.dev.fingerprint : "")
+            color: Theme.dim
+            font.pixelSize: 11
+          }
         }
       }
     }
@@ -232,6 +252,21 @@ Item {
       title: root.mic ? (root.mic.fromName || "The phone") + " is live as " + (root.mic.source || "Flux Microphone") : ""
       detail: root.mic ? Math.round((root.mic.rate || 48000) / 1000) + " kHz · " + (root.mic.channels === 2 ? "stereo" : "mono") : ""
       onStop: root.view.call("mic.stop", {})
+    }
+
+    // The devices that browse the files of this computer
+    StreamCard {
+      objectName: "browseCard"
+      visible: root.browse.length > 0
+      Layout.fillWidth: true
+      Layout.fillHeight: true
+      Layout.preferredWidth: 320
+      icon: "folder"
+      heading: "BROWSE PC"
+      stream: ({ active: true })
+      title: root.browse.map(function (b) { return b.name || "A device" }).join(", ") + (root.browse.length > 1 ? " browse" : " browses") + " this computer"
+      detail: root.browse.length > 0 ? "Since " + Qt.formatTime(new Date(root.browse[0].since * 1000), "hh:mm") + " · read-only" : ""
+      onStop: root.view.call("browse.stop", {})
     }
 
     // Phone screen mirror

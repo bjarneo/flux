@@ -16,8 +16,8 @@ import (
 )
 
 // update asks GitHub for the latest release and installs it. A pacman
-// package gets the release package after a SHA-256 check. A source
-// install gets the commands for its checkout.
+// package gets the release package after a check against SHA256SUMS and
+// its signature. A source install gets the commands for its checkout.
 func update(args []string, device string) error {
 	checkOnly := false
 	for _, a := range args {
@@ -35,18 +35,21 @@ func update(args []string, device string) error {
 		return fmt.Errorf("cannot reach GitHub: %v\nFlux works without the internet. To update, connect to a network and run flux-cli update again", err)
 	}
 	latest, current := r.Version(), strings.TrimPrefix(version, "v")
+	// The tag and the page come from GitHub, so safe cleans them for the
+	// terminal.
+	shown, page := safe(latest), safe(r.Page)
 	switch {
 	case !release.Valid(version):
-		fmt.Printf("flux-cli %s is a development build. The latest release is %s: %s\n", current, latest, r.Page)
+		fmt.Printf("flux-cli %s is a development build. The latest release is %s: %s\n", current, shown, page)
 		if checkOnly {
 			return nil
 		}
 		return sourceUpdate()
 	case !release.Newer(latest, version):
-		fmt.Printf("Flux %s is the latest release, and this computer has %s\n", latest, current)
+		fmt.Printf("Flux %s is the latest release, and this computer has %s\n", shown, current)
 		return nil
 	}
-	fmt.Printf("Flux %s is available. This computer has %s\n%s\n", latest, current, r.Page)
+	fmt.Printf("Flux %s is available. This computer has %s\n%s\n", shown, current, page)
 	if checkOnly {
 		return nil
 	}
@@ -66,7 +69,8 @@ func update(args []string, device string) error {
 }
 
 // updatePhone asks fluxd to send the Android app of the latest release to
-// the phone. fluxd downloads it and checks it against SHA256SUMS first.
+// the phone. fluxd downloads it and checks it against SHA256SUMS and its
+// signature first.
 func updatePhone(device string) error {
 	if err := call("update.sendApp", map[string]any{"device": device}); err != nil {
 		return err
@@ -94,11 +98,16 @@ func packageArch() string {
 }
 
 // installPackage installs the release package with pacman. Without a
-// package for this architecture, an AUR helper builds it.
+// package for this architecture, an AUR helper builds it. A release with
+// the package but without SHA256SUMS is an error, because the upload of the
+// release can be incomplete. A release with files that Latest removed is
+// also an error, because a removed file can be the package.
 func installPackage(r release.Release, pkg string) error {
 	asset, ok := packageAsset(r, pkg, packageArch())
-	sums, okSums := r.Find(func(n string) bool { return n == "SHA256SUMS" })
-	if !ok || !okSums {
+	if !ok && len(r.Dropped) > 0 {
+		return fmt.Errorf("GitHub gives %s of the release %s at an address outside the Flux repository, so flux-cli does not install this release. See %s", strings.Join(r.Dropped, ", "), r.Tag, r.Page)
+	}
+	if !ok {
 		for _, helper := range []string{"yay", "paru"} {
 			if _, err := exec.LookPath(helper); err == nil {
 				fmt.Printf("The release has no %s package. %s builds it from AUR\n", packageArch(), helper)
@@ -107,18 +116,55 @@ func installPackage(r release.Release, pkg string) error {
 		}
 		return fmt.Errorf("the release has no %s package. To build it, run: yay -S %s", packageArch(), pkg)
 	}
+	sums, ok := r.Find(func(n string) bool { return n == "SHA256SUMS" })
+	if !ok {
+		return fmt.Errorf("the release %s has %s but no SHA256SUMS, so flux-cli cannot check the package. The upload of the release can be incomplete. Try again later", r.Tag, asset.Name)
+	}
+	sig, _ := r.Find(func(n string) bool { return n == "SHA256SUMS.sig" })
 
-	fmt.Printf("Downloading %s (%.1f MB)\n", asset.Name, float64(asset.Size)/1e6)
-	path, err := release.Fetch(context.Background(), asset.URL, sums.URL, filepath.Join(config.CacheDir(), "update"), version)
+	fmt.Printf("Downloading %s (%.1f MB)\n", safe(asset.Name), float64(asset.Size)/1e6)
+	path, sum, err := release.Fetch(context.Background(), asset, sums.URL, sig.URL, filepath.Join(config.CacheDir(), "update"), version)
 	if err != nil {
 		return err
 	}
-	fmt.Println("✓ The SHA-256 checksum matches SHA256SUMS")
-	if err := run("sudo", "pacman", "-U", path); err != nil {
+	defer os.Remove(path)
+	if release.Signed() {
+		fmt.Println("✓ The release key signed SHA256SUMS, and the SHA-256 checksum of the package matches it")
+	} else {
+		fmt.Println("✓ The SHA-256 checksum matches SHA256SUMS. This flux-cli has no release key, so the check finds a damaged download but cannot show who made the release")
+	}
+	if err := run(sudoPath(), "/bin/sh", "-c", rootInstall, "flux-update", path, sum, asset.Name); err != nil {
 		return fmt.Errorf("pacman did not install %s: %w", asset.Name, err)
 	}
-	os.Remove(path)
 	return nil
+}
+
+// rootInstall runs as root with the arguments PATH SHA256 NAME. It copies
+// the package into a new folder that only root can read, checks the copy
+// against the checksum from SHA256SUMS, and gives the copy to pacman. So a
+// change of the downloaded file after the check does not reach pacman.
+// The script sets its own PATH, so the PATH of the user cannot give
+// another pacman.
+const rootInstall = `set -eu
+PATH=/usr/bin:/bin
+dir=$(mktemp -d /tmp/flux-update.XXXXXX)
+trap 'rm -rf "$dir"' EXIT
+pkg="$dir/$3"
+install -m 0600 -- "$1" "$pkg"
+if ! printf '%s  %s\n' "$2" "$pkg" | sha256sum --check --status -; then
+	echo "$3 changed after the check, so pacman does not install it" >&2
+	exit 1
+fi
+pacman -U "$pkg"
+`
+
+// sudoPath returns /usr/bin/sudo, or sudo from PATH when that file does
+// not exist.
+func sudoPath() string {
+	if _, err := os.Stat("/usr/bin/sudo"); err == nil {
+		return "/usr/bin/sudo"
+	}
+	return "sudo"
 }
 
 // packageAsset returns the package of pkg for arch in the release. The

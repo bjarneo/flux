@@ -97,6 +97,14 @@ struct ReplyControls: View {
                             .buttonStyle(.link)
                             .font(.caption)
                     }
+                    // fluxd refused the prompt because the agent waits for a
+                    // choice. The user can type the same text into the dialog.
+                    if problem == reply?.error, let r = reply, r.blocked, let text = r.text {
+                        Button("Send as answer") { answer(text) }
+                            .buttonStyle(.link)
+                            .font(.caption)
+                            .help("Type the text into the dialog of \(agent.agent)")
+                    }
                 }
             }
         }
@@ -138,22 +146,21 @@ struct ReplyControls: View {
         guarded { [plugin] in plugin.sendPrompt(deviceId, pane: pane, text) }
     }
 
+    /// Sends the text of a refused prompt again as the answer to the dialog of the agent.
+    private func answer(_ text: String) {
+        guard reply?.sending != true else { return }
+        let deviceId = model.deviceId
+        let pane = agent.pane
+        guarded { [plugin] in plugin.sendPrompt(deviceId, pane: pane, text, answer: true) }
+    }
+
     /// Starts a dictation into the field of this agent. The text waits in the
     /// field for Send, so a prompt still needs the lock.
     private func dictate() {
         voiceError = nil
         lockError = nil
         let hints = unique([agent.agent, agent.project, agent.workspace].filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty })
-        let pane = agent.pane
-        let language = plugin.model.dictationLanguage
-        let model = model
-        Task { @MainActor in
-            if let problem = await Dictation.authorize() {
-                voiceError = problem
-                return
-            }
-            model.dictation.start(language: language, hints: hints) { spoken in model.insert(spoken, pane: pane) }
-        }
+        model.dictate(pane: agent.pane, language: plugin.model.dictationLanguage, hints: hints) { voiceError = $0 }
     }
 
     private func unique(_ list: [String]) -> [String] {

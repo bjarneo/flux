@@ -142,6 +142,8 @@ class GlRenderer {
         makeCurrent(pbuffer)
         runCatching { st.updateTexImage() }.onFailure { return }
         st.getTransformMatrix(texMatrix)
+        // The computer gets the image as the camera sees it. Only the mirror setting mirrors it.
+        FrameGeometry.unmirror(texMatrix)
         val natural = FrameGeometry.swapsAxes(texMatrix)
         val contentAspect = if (natural) cameraSize.height.toFloat() / cameraSize.width else cameraSize.width.toFloat() / cameraSize.height
         val rotation = FrameGeometry.uprightRotation(deviceOrientation, sensorOrientation, front, natural) + extraRotation

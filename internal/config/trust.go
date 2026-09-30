@@ -3,9 +3,11 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 // TrustedDevice is a paired device. Flux pins the certificate of the device
@@ -26,8 +28,6 @@ type TrustedDevice struct {
 	// example the Tailscale name of the phone. fluxd tries them after
 	// LastIP while the device is offline.
 	Addresses []string `json:"addresses,omitempty"`
-	// Disabled lists the plugins that the user turned off for this device.
-	Disabled []string `json:"disabledPlugins,omitempty"`
 }
 
 // TrustStore is the list of paired devices in devices.json.
@@ -35,9 +35,18 @@ type TrustStore struct {
 	mu      sync.Mutex
 	path    string
 	devices map[string]TrustedDevice
+
+	// Broken is the new path of a devices.json that did not parse, or "".
+	// BrokenErr is the parse error.
+	Broken    string
+	BrokenErr error
 }
 
-// LoadTrust reads devices.json from the data directory.
+// LoadTrust reads devices.json from the data directory. A file that does
+// not parse moves to devices.json.broken-<Unix time>, and LoadTrust returns
+// an empty store with Broken set. fluxd then starts, and the user pairs
+// the devices again. LoadTrust returns an error when it cannot move the
+// file, so that a new pairing does not write over it.
 func LoadTrust() (*TrustStore, error) {
 	ts := &TrustStore{path: filepath.Join(DataDir(), "devices.json"), devices: map[string]TrustedDevice{}}
 	data, err := os.ReadFile(ts.path)
@@ -49,7 +58,14 @@ func LoadTrust() (*TrustStore, error) {
 	}
 	var list []TrustedDevice
 	if err := json.Unmarshal(data, &list); err != nil {
-		return nil, err
+		// The path tells the user which file to repair.
+		err = fmt.Errorf("%s: %w", ts.path, err)
+		broken := fmt.Sprintf("%s.broken-%d", ts.path, time.Now().Unix())
+		if rerr := os.Rename(ts.path, broken); rerr != nil {
+			return nil, fmt.Errorf("%w. It cannot move: %v", err, rerr)
+		}
+		ts.Broken, ts.BrokenErr = broken, err
+		return ts, nil
 	}
 	for _, d := range list {
 		ts.devices[d.ID] = d

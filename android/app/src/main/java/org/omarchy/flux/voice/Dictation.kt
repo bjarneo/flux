@@ -126,6 +126,8 @@ class Dictation(private val context: Context) {
         if (phase != Phase.Idle) return false
         error = null
         languageError = false
+        // Only a debug build has the sample dictation.
+        val demo = demo && org.omarchy.flux.BuildConfig.DEBUG
         this.demo = demo
         if (!demo && recognizer == null) {
             recognizer = create() ?: run {

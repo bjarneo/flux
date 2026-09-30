@@ -26,6 +26,11 @@ final class ShareComposer {
     var finish: ((Bool) -> Void)?
 
     private let providers: [NSItemProvider]
+    /// The copies into the queue, which Cancel stops.
+    @ObservationIgnored private var task: Task<Void, Never>?
+
+    /// The longest preview, in characters. The preview shows 4 lines.
+    static let previewLength = 2000
 
     init(providers: [NSItemProvider]) {
         self.providers = providers
@@ -45,9 +50,17 @@ final class ShareComposer {
         chosen = SharedComputers.defaultChoice(computers, lastUsed: ShareGroup.lastComputer)
         if items.count == 1, let item = items.first, !item.isFile {
             Task {
-                preview = try? await item.loadText()
+                preview = (try? await item.loadPreview()).map { String($0.prefix(Self.previewLength)) }
             }
         }
+    }
+
+    /// Stops the share and ends the extension. The share is not complete, so
+    /// the app never sends its items. The task removes the items that it
+    /// copied, and the app removes the rest of an unfinished share later.
+    func cancel() {
+        task?.cancel()
+        finish?(false)
     }
 
     /// Copies the items into the queue for the chosen computer. The items
@@ -58,7 +71,7 @@ final class ShareComposer {
               let computer = computers.first(where: { $0.id == id }) else { return }
         phase = .queueing
         let items = self.items
-        Task {
+        task = Task {
             let queue = ShareQueue(root: root)
             let created = Date()
             let share = UUID().uuidString
@@ -66,6 +79,7 @@ final class ShareComposer {
             do {
                 try queue.checkRoom(adding: items.count)
                 for (order, item) in items.enumerated() {
+                    try Task.checkCancellation()
                     if item.isFile {
                         added.append(try await item.queueFile(in: queue, computerId: id, created: created, order: order, share: share).id)
                     } else {
@@ -76,6 +90,9 @@ final class ShareComposer {
                 }
                 // The copies can take the queue over its size.
                 try queue.checkRoom(adding: 0)
+                // After a Cancel, the share never becomes complete. This
+                // task and `cancel` both run on the main actor.
+                try Task.checkCancellation()
                 try queue.complete(share)
                 ShareGroup.lastComputer = id
                 ShareGroup.postQueued()
@@ -83,7 +100,7 @@ final class ShareComposer {
             } catch {
                 // A share goes out whole or not at all.
                 for added in added { queue.remove(added) }
-                phase = .failed(error.localizedDescription)
+                if !Task.isCancelled { phase = .failed(error.localizedDescription) }
             }
         }
     }

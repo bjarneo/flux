@@ -1,10 +1,76 @@
 import AVFoundation
 import FluxKit
+import UIKit
 import UserNotifications
 import XCTest
 @testable import Flux
 
 final class AppLogicTests: XCTestCase {
+    /// Before the first unlock after a restart, the identity does not read.
+    /// The core starts again when iOS unlocks the files, and the features
+    /// start once.
+    @MainActor
+    func testTheCoreStartsAgainAfterTheUnlock() throws {
+        let center = NotificationCenter()
+        let app = try TestApp.model()
+        var makes = 0
+        var launches = 0
+        let starter = CoreStarter(center: center, make: {
+            makes += 1
+            if makes == 1 { return (.failed("locked"), true) }
+            return (.ready(app), false)
+        }, didLaunch: { _ in launches += 1 })
+        XCTAssertEqual(starter.observers.count, 2, "the unlock and the activation start the core again")
+        starter.didFinishLaunching()
+        XCTAssertEqual(launches, 0, "no core, so no features")
+        for name in [UIApplication.protectedDataDidBecomeAvailableNotification, UIApplication.protectedDataDidBecomeAvailableNotification,
+                     UIApplication.didBecomeActiveNotification] {
+            center.post(name: name, object: nil)
+        }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertEqual(makes, 2, "the core starts again once")
+        guard case .ready(let model) = starter.launch else { return XCTFail("the core did not start") }
+        XCTAssertTrue(model === app)
+        XCTAssertEqual(launches, 1, "the features start once")
+        XCTAssertTrue(starter.observers.isEmpty)
+    }
+
+    /// A core that starts before launch ends starts its features at the end of launch.
+    @MainActor
+    func testTheFeaturesStartAfterLaunch() throws {
+        let app = try TestApp.model()
+        var launches = 0
+        let starter = CoreStarter(center: NotificationCenter(), make: { (.ready(app), false) }, didLaunch: { _ in launches += 1 })
+        XCTAssertTrue(starter.observers.isEmpty)
+        XCTAssertEqual(launches, 0, "the features wait for the end of launch")
+        starter.didFinishLaunching()
+        XCTAssertEqual(launches, 1)
+        starter.didFinishLaunching()
+        XCTAssertEqual(launches, 1, "the features start once")
+    }
+
+    /// An identity that reads but does not parse does not become readable
+    /// later, so the core does not start again.
+    @MainActor
+    func testADamagedIdentityDoesNotStartAgain() {
+        let center = NotificationCenter()
+        var makes = 0
+        let starter = CoreStarter(center: center, make: {
+            makes += 1
+            return (.failed(makes == 1 ? "locked" : "damaged"), makes == 1)
+        }, didLaunch: { _ in XCTFail("no core, so no features") })
+        starter.didFinishLaunching()
+        for _ in 0..<3 {
+            center.post(name: UIApplication.protectedDataDidBecomeAvailableNotification, object: nil)
+            center.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+        }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertEqual(makes, 2, "a start that fails for another reason ends the tries")
+        XCTAssertTrue(starter.observers.isEmpty)
+        guard case .failed(let message) = starter.launch else { return XCTFail("the core started") }
+        XCTAssertEqual(message, "damaged")
+    }
+
     func testNewlyPaired() {
         let old = [(id: "a", paired: false), (id: "b", paired: true), (id: "c", paired: false)]
         let new = [(id: "a", paired: true), (id: "b", paired: true), (id: "c", paired: false), (id: "d", paired: true)]
@@ -25,12 +91,38 @@ final class AppLogicTests: XCTestCase {
     func testUnlockLastsFiveMinutes() {
         var window = UnlockWindow(validFor: 300)
         XCTAssertFalse(window.isUnlocked(at: 1000), "locked at start")
+        XCTAssertFalse(window.isUnlocked(at: -1), "locked at start, also before the start of the clock")
         window.unlock(at: 1000)
         XCTAssertTrue(window.isUnlocked(at: 1000))
         XCTAssertTrue(window.isUnlocked(at: 1299))
         XCTAssertFalse(window.isUnlocked(at: 1300), "the unlock ends after 5 minutes")
         window.unlock(at: 2000)
         XCTAssertTrue(window.isUnlocked(at: 2200), "a new unlock starts a new window")
+        window.lock()
+        XCTAssertFalse(window.isUnlocked(at: 2200), "a lock of the iPhone ends the unlock at once")
+        XCTAssertFalse(window.isUnlocked(at: -1), "a lock ends the unlock at every time")
+    }
+
+    func testTheUnlockClockKeepsCounting() {
+        let a = ElapsedTime.now
+        let b = ElapsedTime.now
+        XCTAssertGreaterThanOrEqual(a, 0)
+        XCTAssertGreaterThanOrEqual(b, a, "the clock never goes back")
+    }
+
+    func testPairKeyGroups() {
+        XCTAssertEqual(KeyView.grouped("5EE6825F974ED59A"), "5EE6 825F 974E D59A", "4 groups of 4, as on every device")
+        XCTAssertEqual(KeyView.grouped("5BB22DB1"), "5BB2 2DB1", "a key of an earlier app still groups")
+        XCTAssertEqual(KeyView.grouped(""), "")
+    }
+
+    func testThePairNotificationNeedsAnUnlockToAccept() throws {
+        let actions = AppModel.pairActions()
+        let accept = try XCTUnwrap(actions.first { $0.identifier == "accept" })
+        XCTAssertTrue(accept.options.contains(.authenticationRequired), "a locked iPhone cannot accept a pairing")
+        XCTAssertTrue(accept.options.contains(.foreground), "Accept opens Flux, which shows the key")
+        let reject = try XCTUnwrap(actions.first { $0.identifier == "reject" })
+        XCTAssertEqual(reject.options, [.destructive], "a locked iPhone can reject")
     }
 
     func testAppearanceStyles() {

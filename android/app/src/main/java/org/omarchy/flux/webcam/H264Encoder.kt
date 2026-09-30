@@ -8,13 +8,24 @@ import android.os.Bundle
 import android.util.Log
 import android.view.Surface
 import java.io.OutputStream
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 private const val TAG = "FluxWebcam"
 
+/** The most encoded frames that wait for the network. A slower network loses frames, not time. */
+private const val QUEUE_FRAMES = 3
+
 /**
- * A hardware H.264 encoder with a Surface input. A drain thread writes the
- * encoded stream in Annex-B form to [out]. When a write fails, for example
- * because the computer closed the connection, [onError] runs once.
+ * A hardware H.264 encoder with a Surface input. A drain thread takes the
+ * encoded frames from the codec, and a writer thread writes them in
+ * Annex-B form to [out]. At most [QUEUE_FRAMES] frames wait between the 2
+ * threads. When the network is slower than the encoder, the drain thread
+ * drops frames until the next key frame. So the codec, the camera, and the
+ * preview never wait for the network, and the delay stays short. When a
+ * write fails, for example because the computer closed the connection, or
+ * when the codec fails, [onError] runs once with a message for the user.
  */
 class H264Encoder(
     private val width: Int,
@@ -26,8 +37,17 @@ class H264Encoder(
     private val codec: MediaCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
     val inputSurface: Surface
     @Volatile private var running = true
+    private val failed = AtomicBoolean(false)
+
+    // Only the writer thread uses the framer.
     private val framer = AnnexBFramer()
+
+    /** 1 item for the writer: the codec config, or 1 encoded frame. */
+    private class Item(val data: ByteArray, val keyFrame: Boolean, val config: Boolean)
+
+    private val queue = ArrayBlockingQueue<Item>(QUEUE_FRAMES)
     private val drain: Thread
+    private val writer: Thread
 
     init {
         try {
@@ -51,7 +71,8 @@ class H264Encoder(
             setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 100_000L)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
         }
-        try {
+        var surface: Surface? = null
+        inputSurface = try {
             try {
                 codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
             } catch (e: Exception) {
@@ -62,13 +83,19 @@ class H264Encoder(
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) format.removeKey(MediaFormat.KEY_LOW_LATENCY)
                 codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
             }
-            inputSurface = codec.createInputSurface()
+            val s = codec.createInputSurface()
+            surface = s
             codec.start()
+            s
         } catch (e: Exception) {
+            // A start that fails frees the input surface at once, not at the next garbage collection.
+            runCatching { surface?.release() }
             codec.release()
             throw e
         }
         drain = Thread(::drainLoop, "flux-webcam-encoder").apply { isDaemon = true }
+        writer = Thread(::writeLoop, "flux-webcam-writer").apply { isDaemon = true }
+        writer.start()
         drain.start()
     }
 
@@ -79,41 +106,80 @@ class H264Encoder(
 
     private fun drainLoop() {
         val info = MediaCodec.BufferInfo()
-        // All frames use 1 array, which grows to the largest frame. The
-        // framer writes each frame before the next one comes.
-        var data = ByteArray(0)
+        // After a dropped frame, the next frames refer to it, so they drop
+        // too, until a key frame starts a new picture group.
+        var skipping = false
         try {
             while (running) {
                 val index = codec.dequeueOutputBuffer(info, 10_000)
                 if (index < 0) continue
                 val buffer = codec.getOutputBuffer(index)
                 if (buffer != null && info.size > 0) {
-                    if (data.size < info.size) data = ByteArray(info.size)
+                    // Each frame gets its own array, because the writer keeps it until the network takes it.
+                    val data = ByteArray(info.size)
                     buffer.position(info.offset)
                     buffer.get(data, 0, info.size)
                     if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) {
-                        // The framer keeps the config, so it gets its own copy.
-                        framer.onConfig(data.copyOf(info.size))
+                        // The config must reach the writer, so it takes the place of the frames that wait.
+                        val item = Item(data, keyFrame = false, config = true)
+                        if (!queue.offer(item)) {
+                            queue.clear()
+                            queue.offer(item)
+                            skipping = true
+                            requestKeyFrame()
+                        }
                     } else {
                         val key = info.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0
-                        framer.write(out, data, info.size, key)
+                        if (key || !skipping) {
+                            skipping = !queue.offer(Item(data, key, config = false))
+                            if (skipping) requestKeyFrame()
+                        }
                     }
                 }
                 codec.releaseOutputBuffer(index, false)
                 if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) break
             }
         } catch (e: Exception) {
-            if (running) {
-                Log.i(TAG, "stream ended: ${e.message}")
-                running = false
-                onError("The connection to the computer closed")
-            }
+            fail(e, "The video encoder of this phone stopped")
         }
     }
 
-    /** Stops the encoder and the drain thread. It does not close [out]. */
+    private fun writeLoop() {
+        try {
+            while (running) {
+                val item = queue.poll(100, TimeUnit.MILLISECONDS) ?: continue
+                // The lock keeps the frames of 2 encoders on 1 stream apart,
+                // for example when the screen mirror changes its size.
+                synchronized(out) {
+                    if (!running) return
+                    if (item.config) framer.onConfig(item.data) else framer.write(out, item.data, item.data.size, item.keyFrame)
+                }
+            }
+        } catch (e: Exception) {
+            fail(e, "The connection to the computer closed")
+        }
+    }
+
+    /**
+     * Ends the stream after an error while the encoder runs, and tells
+     * [onError] once. [message] tells the codec errors of the drain thread
+     * apart from the network errors of the writer thread.
+     */
+    private fun fail(e: Exception, message: String) {
+        if (!running || !failed.compareAndSet(false, true)) return
+        Log.i(TAG, "stream ended: ${e.message}")
+        running = false
+        onError(message)
+    }
+
+    /**
+     * Stops the encoder and the drain thread. It does not close [out], and
+     * it does not wait for a write that the network holds. The writer
+     * thread ends when that write ends or when [out] closes.
+     */
     fun release() {
         running = false
+        queue.clear()
         // The drain thread itself can end the stream. It must not wait for itself.
         if (Thread.currentThread() !== drain) runCatching { drain.join(500) }
         runCatching { codec.stop() }

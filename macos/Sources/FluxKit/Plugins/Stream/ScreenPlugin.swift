@@ -93,7 +93,7 @@ public final class ScreenPlugin: FluxPlugin, @unchecked Sendable {
             session = Session(deviceId: deviceId, display: target)
             return attempt
         }
-        let name = core.device(deviceId)?.name ?? "the computer"
+        let name = core.withDevice(deviceId) { $0.name } ?? "the computer"
         setStatus(StreamStatus(.connecting, "Waiting for \(name)…", deviceId: deviceId))
         Task { await self.run(core: core, deviceId: deviceId, name: name, display: target, id: id) }
     }
@@ -135,9 +135,11 @@ public final class ScreenPlugin: FluxPlugin, @unchecked Sendable {
 
     private func run(core: FluxCore, deviceId: String, name: String, display: CGDirectDisplayID, id: Int) async {
         do {
-            guard let d = core.device(deviceId) else { throw FluxError("\(name) is not known") }
-            guard d.accepts(PacketType.fluxScreen) else { throw FluxError("Update Flux on \(name) to mirror this screen") }
-            guard let certificate = d.certificate else { throw FluxError("\(name) is not connected") }
+            // The core lock guards the fields of the device.
+            let peer = core.withDevice(deviceId) { (accepts: $0.accepts(PacketType.fluxScreen), certificate: $0.certificate) }
+            guard let peer else { throw FluxError("\(name) is not known") }
+            guard peer.accepts else { throw FluxError("Update Flux on \(name) to mirror this screen") }
+            guard let certificate = peer.certificate else { throw FluxError("\(name) is not connected") }
             guard let pixels = ScreenCapture.pixelSize(display), let size = MirrorSize.fit(width: pixels.width, height: pixels.height) else {
                 throw FluxError("The display is not connected")
             }

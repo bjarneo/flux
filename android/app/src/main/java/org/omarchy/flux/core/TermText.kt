@@ -43,27 +43,38 @@ private const val ESC = '\u001b'
 private const val BEL = '\u0007'
 private const val TAB_WIDTH = 8
 
+/** The widest line that the parser keeps, in columns. A terminal is narrower. */
+const val TERM_MAX_COLUMNS = 2048
+
 /**
  * Parses text with ANSI SGR sequences into lines of styled spans. It drops
- * other escape sequences, carriage returns, and other control characters.
- * It expands tabs to the next multiple of 8 columns.
+ * other escape sequences, carriage returns, and the other C0 and C1 control
+ * characters. It shows U+FFFD in place of each character that [isBidiMark]
+ * finds. It expands tabs to the next multiple of 8 columns. It keeps the last
+ * [maxLines] lines and the first [TERM_MAX_COLUMNS] columns of each line.
+ * The time and the memory grow linearly with the length of the text.
  */
-fun parseAnsi(text: String): List<TermLine> {
-    val lines = ArrayList<TermLine>()
+fun parseAnsi(text: String, maxLines: Int = Int.MAX_VALUE): List<TermLine> {
+    val lines = ArrayDeque<TermLine>()
     var spans = ArrayList<TermSpan>()
-    val run = StringBuilder()
+    // The open span: text of 1 style that can still grow.
+    val open = StringBuilder()
+    var openStyle = TermStyle()
     var style = TermStyle()
     var column = 0
 
-    fun flush() {
-        if (run.isEmpty()) return
-        val last = spans.lastOrNull()
-        if (last != null && last.style == style) {
-            spans[spans.size - 1] = last.copy(text = last.text + run)
-        } else {
-            spans += TermSpan(run.toString(), style)
-        }
-        run.setLength(0)
+    fun close() {
+        if (open.isEmpty()) return
+        spans += TermSpan(open.toString(), openStyle)
+        open.setLength(0)
+    }
+
+    fun put(c: Char) {
+        if (column >= TERM_MAX_COLUMNS) return
+        if (open.isNotEmpty() && openStyle !== style && openStyle != style) close()
+        if (open.isEmpty()) openStyle = style
+        open.append(c)
+        column++
     }
 
     var i = 0
@@ -71,20 +82,18 @@ fun parseAnsi(text: String): List<TermLine> {
         val c = text[i]
         when {
             c == '\n' -> {
-                flush()
-                lines += TermLine(spans)
+                close()
+                lines.addLast(TermLine(spans))
+                if (lines.size > maxLines) lines.removeFirst()
                 spans = ArrayList()
                 column = 0
                 i++
             }
             c == '\t' -> {
-                val n = TAB_WIDTH - column % TAB_WIDTH
-                repeat(n) { run.append(' ') }
-                column += n
+                repeat(TAB_WIDTH - column % TAB_WIDTH) { put(' ') }
                 i++
             }
             c == ESC -> {
-                flush()
                 val next = text.getOrNull(i + 1)
                 i = when {
                     next == '[' -> {
@@ -107,18 +116,31 @@ fun parseAnsi(text: String): List<TermLine> {
                     else -> i + 1
                 }
             }
-            c == '\r' || c.code < 0x20 || c.code == 0x7F -> i++
+            c == '\r' || c.code < 0x20 || c.code in 0x7F..0x9F -> i++
             else -> {
-                run.append(if (c == ' ') ' ' else c)
-                column++
+                put(if (c == ' ') ' ' else if (isBidiMark(c)) '\uFFFD' else c)
                 i++
             }
         }
     }
-    flush()
-    if (spans.isNotEmpty()) lines += TermLine(spans)
-    return lines
+    close()
+    if (spans.isNotEmpty()) {
+        lines.addLast(TermLine(spans))
+        if (lines.size > maxLines) lines.removeFirst()
+    }
+    return lines.toList()
 }
+
+/**
+ * Reports whether [c] sets the direction of text, or is a line or paragraph
+ * separator. The phone shows text with the Unicode bidirectional algorithm,
+ * and a terminal does not. So such a character can show a command in
+ * another order. fluxd changes these characters too, but an older fluxd
+ * does not.
+ */
+internal fun isBidiMark(c: Char): Boolean =
+    c == '\u061C' || c == '\u200E' || c == '\u200F' || c in '\u202A'..'\u202E' || c in '\u2066'..'\u2069' ||
+        c == '\u2028' || c == '\u2029'
 
 /** Applies the SGR parameters, for example "1;38;5;6", to [start]. */
 internal fun applySgr(start: TermStyle, params: String): TermStyle {

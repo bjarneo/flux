@@ -2,8 +2,13 @@ import Foundation
 import NIOConcurrencyHelpers
 import NIOCore
 
-/// The largest packet line that Flux reads.
+/// The largest packet line that Flux reads from a paired device.
 public let maxLine = 16 * 1024 * 1024
+
+/// The largest packet line that Flux reads from a device that is not
+/// paired, also the identity inside TLS. Only pair packets are useful
+/// before a pairing, so a stranger cannot make this device hold 16 MiB.
+public let maxUnpairedLine = 64 * 1024
 
 /// An open TLS link to one device.
 public final class Link: @unchecked Sendable {
@@ -12,6 +17,8 @@ public final class Link: @unchecked Sendable {
     /// The IP address of the peer.
     public let address: String
     let channel: Channel
+    /// The line limit of the link. It grows when the device is paired.
+    let limit: LineLimit
     private struct State {
         var closed = false
         var started = false
@@ -21,11 +28,17 @@ public final class Link: @unchecked Sendable {
     }
     private let state = NIOLockedValueBox(State())
 
-    init(channel: Channel, identity: Identity, peerCertificate: [UInt8]) {
+    init(channel: Channel, identity: Identity, peerCertificate: [UInt8], limit: LineLimit) {
         self.channel = channel
         self.identity = identity
         self.peerCertificate = peerCertificate
+        self.limit = limit
         self.address = channel.remoteAddress?.ipAddress ?? ""
+    }
+
+    /// Sets the line limit for a paired or an unpaired device.
+    func setPaired(_ paired: Bool) {
+        limit.set(paired ? maxLine : maxUnpairedLine)
     }
 
     /// Starts delivering packets, first those that arrived before this call.
@@ -36,7 +49,11 @@ public final class Link: @unchecked Sendable {
             s.onPacket = onPacket
             s.onClose = onClose
             s.started = true
-            defer { s.pending = [] }
+            defer {
+                s.pending = []
+                // The callbacks can hold the link, so a closed link drops them.
+                if s.closed { s.onPacket = nil; s.onClose = nil }
+            }
             return (s.pending, s.closed)
         }
         queued.forEach(onPacket)
@@ -55,6 +72,8 @@ public final class Link: @unchecked Sendable {
         let callback = state.withLockedValue { s -> (() -> Void)? in
             if s.closed { return nil }
             s.closed = true
+            // The callbacks can hold the link, so a closed link drops them.
+            defer { s.onPacket = nil; s.onClose = nil }
             return s.started ? s.onClose : nil
         }
         callback?()

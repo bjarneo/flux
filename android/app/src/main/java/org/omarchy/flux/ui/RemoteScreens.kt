@@ -62,7 +62,7 @@ fun NotReachable(d: DeviceUi, what: String) {
 fun BrowseScreen(d: DeviceUi, browse: BrowseState?, onBack: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     fun open() {
-        if (DebugDemo.isDemo(d.id)) FluxCore.setBrowse(DebugDemo.browse()) else Browse.start(FluxCore, d.id)
+        if (isDemo(d.id)) FluxCore.setBrowse(DebugDemo.browse()) else Browse.start(FluxCore, d.id)
     }
     DisposableEffect(d.id) {
         open()

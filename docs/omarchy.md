@@ -7,7 +7,7 @@ This plugin runs the Flux window inside `omarchy-shell`. It has 3 kinds:
 | Kind | Entry point | Job |
 | --- | --- | --- |
 | `service` | `Service.qml` | Stays loaded. Owns the fluxd connection (`Backend.qml`) and reads the active `colors.toml`. |
-| `bar-widget` | `BarWidget.qml` | The Flux mark and the first connected device with its battery, for example `Pixel 8 78%`. The tooltip lists every paired device. A left click opens or closes the window. |
+| `bar-widget` | `BarWidget.qml` | The Flux mark. The mark has the accent color while a paired device is connected. The tooltip lists every paired device. A left click opens or closes the window. |
 | `panel` | `Panel.qml` | The Flux window, a `FloatingWindow` titled `Flux`, 1180 × 760, minimum 900 × 640. |
 
 The plugin ID is `flux`.
@@ -25,8 +25,10 @@ The payload is optional. `page` is one of `overview`, `clipboard`, `files`,
 To open or close the window, use `omarchy-shell shell toggle flux '{}'`.
 
 The panel loads the Flux view when the window opens and unloads it when the
-window closes. A closed window uses no time for state events, and its pages
-send no requests to the phone. The next open shows the last tab and device.
+window closes. The service keeps its connection to fluxd while the window is
+closed. It reads each state event for the bar widget. A closed window builds
+no views, and its pages send no requests to the phone. The next open shows
+the last tab and device.
 Each open also reads `colors.toml` again. When fluxd is down, each open
 connects at once.
 
@@ -74,9 +76,12 @@ omarchy plugin enable flux --section right
 
 `fluxd` keeps an added plugin at the version of its own install.
 At each start, it compares `~/.config/omarchy/plugins/flux` with `PREFIX/share/flux/omarchy-plugin` beside its binary.
-It writes only the changed files, removes the files of the earlier version, and runs `omarchy-shell shell rescanPlugins`.
+It writes only the changed files, removes the files that its earlier copy wrote and that the new version does not have, and runs `omarchy-shell shell rescanPlugins`.
+The list of the copied files is in `.flux-files` in the plugin folder.
+It keeps the files that you added.
 It does not add a plugin that you removed.
-It does not change a symlink to a checkout.
+It does not change a symlink to a checkout, or a plugin folder that holds a symlink, such as a `Flux` link to a checkout.
+The journal of `fluxd` then says that it did not update the plugin.
 
 ## Offscreen test
 
@@ -94,7 +99,10 @@ qs ipc --pid "$(pgrep -f '^qs -p /tmp/flux-shell/omarchy/shell')" call shell cal
 - `link` installs the plugin as a symlink to this checkout, unchanged.
 - `qs ipc` finds the test shell only by `--pid` or `--id`, because the test
   shell has no display.
-- To stop the test shell, run `pkill -f "qs -p /tmp/flux-shell/omarchy/shell"`.
+- With `copy`, `call shell call flux probe <method>` calls a fluxd method.
+  Each run of its callback writes `flux test: probe <method> <result>` to
+  `shell.log`. A call that waits when fluxd stops gets `offline` 1 time.
+- To stop the test shell, run `pkill -f '^qs -p /tmp/flux-shell/omarchy/shell'`.
 
 ## Select the desktop host
 

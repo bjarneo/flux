@@ -2,8 +2,10 @@ package upgrade
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -13,12 +15,20 @@ import (
 )
 
 // fakeBinary writes a script at path that prints out for -version, and
-// returns a Binary that runs the first file at path.
+// returns a Binary that runs the first file at path. The test keeps the
+// first file open, as the running fluxd keeps its binary. Otherwise the
+// file system can give its inode to a later install, and the watcher then
+// sees no change.
 func fakeBinary(t *testing.T, path, out string) *Binary {
 	t.Helper()
 	install(t, path, out)
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { f.Close() })
 	var st unix.Stat_t
-	if err := unix.Stat(path, &st); err != nil {
+	if err := unix.Fstat(int(f.Fd()), &st); err != nil {
 		t.Fatal(err)
 	}
 	return &Binary{Path: path, dev: uint64(st.Dev), ino: st.Ino}
@@ -39,6 +49,8 @@ func install(t *testing.T, path, out string) {
 type result struct {
 	mu    sync.Mutex
 	found []string
+	// logs gets each log line of the watcher.
+	logs chan string
 }
 
 func (r *result) add(v string) {
@@ -55,8 +67,16 @@ func (r *result) get() []string {
 
 func watch(t *testing.T, b *Binary, ready func() bool) (*result, chan string, context.CancelFunc) {
 	t.Helper()
-	r := &result{}
-	w := &Watcher{Binary: b, Interval: 10 * time.Millisecond, Found: r.add, Ready: ready, Logf: t.Logf}
+	r := &result{logs: make(chan string, 16)}
+	logf := func(format string, args ...any) {
+		line := fmt.Sprintf(format, args...)
+		t.Log(line)
+		select {
+		case r.logs <- line:
+		default:
+		}
+	}
+	w := &Watcher{Binary: b, Interval: 10 * time.Millisecond, Found: r.add, Ready: ready, Logf: logf}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan string, 1)
 	go func() { done <- w.Run(ctx) }()
@@ -105,7 +125,15 @@ func TestBrokenBinaryIsIgnored(t *testing.T) {
 	defer cancel()
 
 	install(t, path, "not fluxd")
-	time.Sleep(100 * time.Millisecond)
+	// The watcher logs a file that does not run after it ran the file.
+	select {
+	case line := <-r.logs:
+		if !strings.Contains(line, "does not run") {
+			t.Fatalf("log line %q", line)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the watcher did not check the file that is not fluxd")
+	}
 	if got := r.get(); len(got) != 0 {
 		t.Fatalf("found %v for a file that is not fluxd", got)
 	}

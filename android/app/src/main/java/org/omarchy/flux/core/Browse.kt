@@ -1,5 +1,6 @@
 package org.omarchy.flux.core
 
+import android.app.DownloadManager
 import android.content.Intent
 import android.util.Log
 import net.schmizz.sshj.DefaultConfig
@@ -8,7 +9,7 @@ import net.schmizz.sshj.sftp.FileMode
 import net.schmizz.sshj.sftp.SFTPClient
 import net.schmizz.sshj.transport.verification.PromiscuousVerifier
 import org.bouncycastle.jce.provider.BouncyCastleProvider
-import org.omarchy.flux.net.LoopbackBridge
+import org.omarchy.flux.net.ConnectedSocketFactory
 import org.omarchy.flux.net.Tunnel
 import org.omarchy.flux.protocol.Packet
 import org.omarchy.flux.protocol.SftpOffer
@@ -26,7 +27,6 @@ private const val TAG = "FluxBrowse"
 object Browse {
     private var ssh: SSHClient? = null
     private var sftp: SFTPClient? = null
-    private var bridge: LoopbackBridge? = null
 
     /**
      * Changes with each [start] and [close]. A connect that ends after a
@@ -61,32 +61,34 @@ object Browse {
         }
         val cert = d.certificate
         val tls = FluxCore.tls
+        val host = d.link?.address?.hostAddress ?: d.identity.deviceName
         val gen = generation
         core.io.execute {
             // The session until the browser keeps it. The finally block ends
             // a session that the browser did not keep, also on the computer.
             var client: SSHClient? = null
-            var b: LoopbackBridge? = null
+            var tunnel: java.net.Socket? = null
             try {
                 ensureBouncyCastle()
                 val c = SSHClient(DefaultConfig()).also { client = it }
+                // The pinned TLS tunnel checks the computer, so the SSH host key needs no check.
                 c.addHostKeyVerifier(PromiscuousVerifier())
                 c.connectTimeout = 8_000
                 // The computer connects to this phone, and the TLS stream
-                // carries the SSH session. sshj opens its own socket, so a
-                // loopback bridge feeds it.
+                // carries the SSH session. sshj takes the connected tunnel
+                // as its socket, so no other app can take the session.
                 if (cert == null || tls == null) error("the link is not ready")
-                val tunnel = Tunnel.accept(tls, cert, offer.tunnel, announce = { d.send(it) })
-                val loop = LoopbackBridge(tunnel).also { b = it }
+                val t = Tunnel.accept(tls, cert, offer.tunnel, announce = { d.send(it) }).also { tunnel = it }
                 if (generation != gen) return@execute
-                c.connect(loop.host, loop.port)
+                c.socketFactory = ConnectedSocketFactory(t)
+                c.connect(host, 22)
                 if (generation != gen) return@execute
                 c.authPassword(offer.user, offer.password)
                 if (generation != gen) return@execute
                 val s = c.newSFTPClient()
-                if (!keep(gen, c, s, b)) return@execute
+                if (!keep(gen, c, s)) return@execute
                 client = null
-                b = null
+                tunnel = null
                 core.setBrowse(state.copy(loading = false, roots = offer.roots))
                 list(core, offer.roots.first().second)
             } catch (e: Exception) {
@@ -96,18 +98,17 @@ object Browse {
                 }
             } finally {
                 client?.let { runCatching { it.disconnect() } }
-                b?.close()
+                tunnel?.let { runCatching { it.close() } }
             }
         }
     }
 
     /** Keeps a new session, unless a close or a new start came after [gen]. */
     @Synchronized
-    private fun keep(gen: Int, client: SSHClient, s: SFTPClient, b: LoopbackBridge?): Boolean {
+    private fun keep(gen: Int, client: SSHClient, s: SFTPClient): Boolean {
         if (generation != gen) return false
         ssh = client
         sftp = s
-        bridge = b
         return true
     }
 
@@ -128,28 +129,46 @@ object Browse {
         }
     }
 
+    /**
+     * Saves [entry] in Downloads, with the safe name of a received file. The
+     * rule for apps is the same as in [Share]: the notification opens the
+     * Android installer only for a newer Flux with the signing key of this
+     * app. Any other app only shows in Downloads.
+     */
     fun download(core: FluxCore, entry: BrowseEntry) {
         val client = sftp ?: return
-        core.toast("Downloading ${entry.name}")
+        val name = Share.sanitize(entry.name)
+        core.toast("Downloading $name")
         core.io.execute {
-            val mime = Android.mimeType(entry.name)
-            val dl = runCatching { Android.createDownload(core.app, entry.name, mime) }.getOrElse {
-                core.toast("Cannot save ${entry.name}")
+            val mime = Android.mimeType(name)
+            val dl = runCatching { Android.createDownload(core.app, name, mime) }.getOrElse {
+                core.toast("Cannot save $name")
                 return@execute
             }
-            val ok = runCatching {
+            val size = runCatching {
                 client.open(entry.path).use { remote ->
                     remote.RemoteFileInputStream().use { it.copyTo(dl.stream, 64 * 1024) }
                 }
-            }.onFailure { Log.w(TAG, "download failed", it) }.isSuccess
-            Android.finishDownload(core.app, dl, ok)
-            if (ok) {
-                val open = Intent(Intent.ACTION_VIEW).setDataAndType(dl.uri, mime ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                Android.showEvent(core.app, "Downloaded ${entry.name}", "Saved in Downloads", open)
-                core.toast("Saved ${entry.name} in Downloads")
-            } else {
-                core.toast("Downloading ${entry.name} failed")
+            }.onFailure { Log.w(TAG, "download failed", it) }.getOrNull()
+            Android.finishDownload(core.app, dl, size != null)
+            if (size == null) {
+                core.toast("Downloading $name failed")
+                return@execute
             }
+            val open = Share.viewIntent(dl.uri, mime)
+            if (ApkCheck.isApk(name, mime)) {
+                val version = Share.updateVersion(core.app, name, size, dl.uri)
+                if (version != null) {
+                    Android.showEvent(core.app, "Downloaded Flux $version", "Tap to install the update", open)
+                    core.toast("Flux $version is in Downloads. Open its notification to install it")
+                    return@execute
+                }
+                Android.showEvent(core.app, "Downloaded $name", "Saved in Downloads. Flux does not install it.", Intent(DownloadManager.ACTION_VIEW_DOWNLOADS))
+                core.toast("Saved $name in Downloads")
+                return@execute
+            }
+            Android.showEvent(core.app, "Downloaded $name", "Saved in Downloads", open)
+            core.toast("Saved $name in Downloads")
         }
     }
 
@@ -159,14 +178,12 @@ object Browse {
         generation++
         val s = sftp
         val c = ssh
-        val b = bridge
         sftp = null
         ssh = null
-        bridge = null
         FluxCore.io.execute {
             runCatching { s?.close() }
+            // The disconnect closes the socket, which is the tunnel.
             runCatching { c?.disconnect() }
-            b?.close()
         }
     }
 

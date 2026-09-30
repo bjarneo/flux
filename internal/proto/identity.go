@@ -3,9 +3,11 @@ package proto
 import (
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"unicode"
 )
 
 // Packet types that Flux uses.
@@ -148,8 +150,11 @@ var (
 func ValidDeviceID(id string) bool { return deviceIDRe.MatchString(id) }
 
 // CleanName removes the characters that Flux does not allow in a
-// device name and limits the name to 32 characters.
+// device name, control characters, and bidi controls. It limits the name to
+// 32 characters. A name then cannot move the cursor of a terminal, add a
+// line to a log, or change the order of the text around it.
 func CleanName(name string) string {
+	name = strings.Map(dropControl, name)
 	name = strings.TrimSpace(nameInvalidChars.ReplaceAllString(name, ""))
 	if r := []rune(name); len(r) > 32 {
 		name = strings.TrimSpace(string(r[:32]))
@@ -158,6 +163,52 @@ func CleanName(name string) string {
 		name = "omarchy"
 	}
 	return name
+}
+
+// IsControl reports whether r is a control character or a bidi control:
+// C0, DEL, C1, and the marks, embeddings, overrides, and isolates that
+// change the direction of text. A terminal or a text view does not show
+// them as text.
+func IsControl(r rune) bool {
+	switch {
+	case unicode.IsControl(r):
+		return true
+	case r == 0x061c, r == 0x200e, r == 0x200f:
+		return true
+	case r >= 0x202a && r <= 0x202e, r >= 0x2066 && r <= 0x2069:
+		return true
+	}
+	return false
+}
+
+func dropControl(r rune) rune {
+	if IsControl(r) {
+		return -1
+	}
+	return r
+}
+
+// CleanText removes control characters and bidi controls from s and
+// limits it to max characters. Flux uses it for short text from the
+// network, such as the app version of a device.
+func CleanText(s string, max int) string {
+	s = strings.TrimSpace(strings.Map(dropControl, s))
+	if r := []rune(s); len(r) > max {
+		s = string(r[:max])
+	}
+	return s
+}
+
+// deviceTypes are the device types that Flux knows.
+var deviceTypes = []string{"phone", "tablet", "desktop", "laptop", "tv"}
+
+// CleanType returns t when it is a device type that Flux knows, and ""
+// for any other value. The UI shows "" as a phone.
+func CleanType(t string) string {
+	if slices.Contains(deviceTypes, t) {
+		return t
+	}
+	return ""
 }
 
 // DeviceType returns "laptop" when the machine has a battery and "desktop"

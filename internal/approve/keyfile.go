@@ -170,7 +170,9 @@ func EncodeKey(spki []byte, deviceID, deviceName string, enrolled time.Time) ([]
 
 // WriteKey writes a key file atomically: a temporary file in the same
 // folder, mode 0644 and owner, a sync, and a rename. It makes the folder
-// with mode 0755 when it is missing.
+// and each missing folder above it with mode 0755 when they are missing.
+// For KeyDir, it also gives /etc/flux mode 0755 when other users cannot
+// pass through it.
 func WriteKey(path string, owner int, content []byte) error {
 	dir := filepath.Dir(path)
 	// Root gets the root group. Another owner keeps its group, because a
@@ -179,8 +181,15 @@ func WriteKey(path string, owner int, content []byte) error {
 	if owner == 0 {
 		group = 0
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := mkdirOpen(dir); err != nil {
 		return err
+	}
+	if dir == KeyDir {
+		// An earlier WriteKey under a strict umask made /etc/flux with
+		// mode 0700, and mkdirOpen does not change a folder that exists.
+		if err := openFolder(filepath.Dir(dir), owner); err != nil {
+			return err
+		}
 	}
 	if err := os.Chown(dir, owner, group); err != nil {
 		return err
@@ -222,6 +231,66 @@ func WriteKey(path string, owner int, content []byte) error {
 	}
 	defer d.Close()
 	return d.Sync()
+}
+
+// mkdirOpen makes dir and each missing folder above it with mode 0755. It
+// sets the mode after the umask, because sudo can give root a strict
+// umask, such as 077. The helper of a lock screen runs as the user, and it
+// must read the key.
+func mkdirOpen(dir string) error {
+	st, err := os.Stat(dir)
+	if err == nil {
+		if !st.IsDir() {
+			return fmt.Errorf("%s is not a folder", dir)
+		}
+		return nil
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	if err := mkdirOpen(filepath.Dir(dir)); err != nil {
+		return err
+	}
+	if err := os.Mkdir(dir, 0o755); err != nil && !errors.Is(err, fs.ErrExist) {
+		return err
+	}
+	return os.Chmod(dir, 0o755)
+}
+
+// openFolder gives dir mode 0755 when it belongs to owner and other users
+// cannot pass through it. The helper of a lock screen runs as the user,
+// and it must reach the key. openFolder does not change a symlink or a
+// folder of another owner.
+func openFolder(dir string, owner int) error {
+	st, err := os.Lstat(dir)
+	if err != nil {
+		return err
+	}
+	sys, ok := st.Sys().(*syscall.Stat_t)
+	if !ok || !st.IsDir() || int(sys.Uid) != owner || st.Mode().Perm()&0o001 != 0 {
+		return nil
+	}
+	return os.Chmod(dir, 0o755)
+}
+
+// OtherKeys returns the users other than user that have a key file in
+// dir.
+func OtherKeys(dir, user string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var users []string
+	for _, e := range entries {
+		name, ok := strings.CutSuffix(e.Name(), ".pub")
+		if ok && name != user && e.Type().IsRegular() && ValidUser(name) {
+			users = append(users, name)
+		}
+	}
+	return users, nil
 }
 
 // RemoveKey deletes a key file. A missing file is not an error.

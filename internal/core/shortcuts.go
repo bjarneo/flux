@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"flux/internal/lan"
+	"flux/internal/desktop"
 	"flux/internal/proto"
 )
 
@@ -19,7 +19,14 @@ import (
 // a fixed action such as "switch to workspace 3". fluxd runs a binding in
 // Hyprland itself, not as keys, because the virtual keyboard of wtype has
 // its own keymap: a binding such as SUPER + code:10 never matches it. Each
-// action needs remote_input, like the keys.
+// action needs remote_input, like the keys. While the screen is locked,
+// fluxd runs no binding and no action, as the keyboard of the computer
+// cannot either. The phone then gets the error "Unlock the computer first",
+// and only a request for the workspaces works.
+//
+// Each device has at most 1 request in flight. A request that comes during
+// it waits as the next request. A later request replaces it, and keeps its
+// request for the binding list.
 //
 // Hyprland 0.56 and later use a Lua configuration. Each binding then calls
 // a Lua function, and hyprctl binds shows the dispatcher "__lua" with the
@@ -158,14 +165,14 @@ func actionLua(b shortcutBody) (string, error) {
 		return fmt.Sprintf(`hl.dsp.window.move({ workspace = "%d" })`, b.Workspace), nil
 	case "focus", "swap":
 		if !directions[b.Direction] {
-			return "", fmt.Errorf("the direction %q is not l, r, u, or d", b.Direction)
+			return "", fmt.Errorf("the direction %s is not l, r, u, or d", peerText(b.Direction))
 		}
 		if b.Action == "focus" {
 			return fmt.Sprintf(`hl.dsp.focus({ direction = "%s" })`, b.Direction), nil
 		}
 		return fmt.Sprintf(`hl.dsp.window.swap({ direction = "%s" })`, b.Direction), nil
 	}
-	return "", fmt.Errorf("the action %q is not known", b.Action)
+	return "", fmt.Errorf("the action %s is not known", peerText(b.Action))
 }
 
 // hyprctl runs hyprctl with args and returns its output. hyprctl reports a
@@ -186,32 +193,107 @@ func hyprctl(ctx context.Context, args ...string) ([]byte, error) {
 	return out, nil
 }
 
-func (d *Daemon) handleShortcuts(dev *Device, l *lan.Link, p *proto.Packet) {
+// lockedText is the answer to a binding or an action while the screen is
+// locked.
+const lockedText = "Unlock the computer first"
+
+// screenLocked reports whether the screen is locked. Tests replace it.
+var screenLocked = desktop.Locked
+
+// shortcutJob is the next flux.shortcuts request of a device, and the link
+// for the answer.
+type shortcutJob struct {
+	body shortcutBody
+	link streamLink
+}
+
+func (d *Daemon) handleShortcuts(dev *Device, l streamLink, p *proto.Packet) {
 	var b shortcutBody
 	if p.Decode(&b) != nil {
 		return
 	}
-	d.mu.Lock()
-	on := d.cfg.RemoteInput && d.input != nil
-	d.mu.Unlock()
-	if !on {
-		_ = l.Send(proto.New(proto.TypeFluxShortcuts, map[string]any{"error": "Remote input is off. Turn it on in the Flux window, or run: flux-cli input on"}))
+	if msg := d.shortcutRefusal(dev); msg != "" {
+		_ = l.Send(proto.New(proto.TypeFluxShortcuts, map[string]any{"error": msg}))
 		return
 	}
+	d.mu.Lock()
+	if d.sessions.shortcuts == nil {
+		d.sessions.shortcuts = map[string]*shortcutJob{}
+	}
+	if next, busy := d.sessions.shortcuts[dev.ID]; busy {
+		// A request is in flight. Keep 1 next request.
+		switch {
+		case next == nil:
+			next = &shortcutJob{body: b, link: l}
+		case b.Run != "" || b.Action != "":
+			b.Request = b.Request || next.body.Request
+			next = &shortcutJob{body: b, link: l}
+		default:
+			next.body.Request = next.body.Request || b.Request
+			next.link = l
+		}
+		d.sessions.shortcuts[dev.ID] = next
+		d.mu.Unlock()
+		return
+	}
+	d.sessions.shortcuts[dev.ID] = nil
+	d.mu.Unlock()
 	// hyprctl can wait, so the link goes on reading.
 	go func() {
-		if err := d.runShortcut(b); err != nil {
-			d.logf("%s: shortcut: %v", dev.Name, err)
-			_ = l.Send(proto.New(proto.TypeFluxShortcuts, map[string]any{"error": err.Error()}))
-			return
+		job := &shortcutJob{body: b, link: l}
+		for job != nil {
+			d.answerShortcut(dev, job)
+			d.mu.Lock()
+			job = d.sessions.shortcuts[dev.ID]
+			if job == nil {
+				delete(d.sessions.shortcuts, dev.ID)
+			} else {
+				d.sessions.shortcuts[dev.ID] = nil
+			}
+			d.mu.Unlock()
 		}
-		body, err := d.shortcutState(b.Request)
-		if err != nil {
-			_ = l.Send(proto.New(proto.TypeFluxShortcuts, map[string]any{"error": err.Error()}))
-			return
-		}
-		_ = l.Send(proto.New(proto.TypeFluxShortcuts, body))
 	}()
+}
+
+// shortcutRefusal returns why the device cannot use the shortcuts now, or
+// an empty string.
+func (d *Daemon) shortcutRefusal(dev *Device) string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	switch {
+	case !d.cfg.RemoteInput || d.input == nil:
+		return "Remote input is off. Turn it on in the Flux window, or run: flux-cli input on"
+	case !dev.Paired:
+		return dev.Name + " is not paired with " + d.nameLocked()
+	}
+	return ""
+}
+
+// answerShortcut runs 1 request and sends the answer.
+func (d *Daemon) answerShortcut(dev *Device, job *shortcutJob) {
+	b, l := job.body, job.link
+	send := func(body map[string]any) { _ = l.Send(proto.New(proto.TypeFluxShortcuts, body)) }
+	// The switch or the pairing can change while the request waits.
+	if msg := d.shortcutRefusal(dev); msg != "" {
+		send(map[string]any{"error": msg})
+		return
+	}
+	// While the screen is locked, only the workspace list works.
+	if (b.Run != "" || b.Action != "" || b.Request) && screenLocked(d.ctx) {
+		send(map[string]any{"error": lockedText})
+		return
+	}
+	if err := d.runShortcut(b); err != nil {
+		d.logf("%s: shortcut: %v", dev.Name, err)
+		send(map[string]any{"error": err.Error()})
+		return
+	}
+	body, err := d.shortcutState(b.Request)
+	if err != nil {
+		send(map[string]any{"error": err.Error()})
+		return
+	}
+	send(body)
 }
 
 // runShortcut runs the binding or the action of b. A request only runs
@@ -221,7 +303,7 @@ func (d *Daemon) runShortcut(b shortcutBody) error {
 	switch {
 	case b.Run != "":
 		if !luaRef.MatchString(b.Run) {
-			return fmt.Errorf("the shortcut %q is not valid", b.Run)
+			return fmt.Errorf("the shortcut %s is not valid", peerText(b.Run))
 		}
 		data, err := hyprctl(ctx, "-j", "binds")
 		if err != nil {

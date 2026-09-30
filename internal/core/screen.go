@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"flux/internal/lan"
 	"flux/internal/proto"
 )
 
@@ -33,9 +32,14 @@ type ScreenView struct {
 
 type screenSession struct {
 	dev    *Device
-	link   *lan.Link
+	link   streamLink
 	cancel context.CancelFunc
 	view   ScreenView
+
+	// ctx ends with the session. done closes when runScreen returns, and
+	// prev is done of the session before, or nil.
+	ctx        context.Context
+	done, prev chan struct{}
 }
 
 type screenStart struct {
@@ -77,6 +81,8 @@ func findScreenPlayer(lookPath func(string) (string, error), title string) (scre
 			"-hide_banner", "-loglevel", "error",
 			"-window_title", title,
 			"-flags", "low_delay", "-framedrop", "-probesize", "32", "-analyzeduration", "0",
+			// ffplay closes its window at the end of the stream, as mpv does.
+			"-autoexit",
 			"-f", "h264", "-framerate", "30", "-i", "pipe:0",
 		}, Env: []string{
 			// SDL takes the Wayland app id from these variables.
@@ -88,41 +94,99 @@ func findScreenPlayer(lookPath func(string) (string, error), title string) (scre
 
 func screenTitle(name string) string { return "Flux · " + name + " screen" }
 
-func (d *Daemon) handleScreen(dev *Device, l *lan.Link, p *proto.Packet) {
+// screenStartGap is the shortest time between 2 screen mirror starts of 1
+// device. Each start opens a new window.
+const screenStartGap = 3 * time.Second
+
+func (d *Daemon) handleScreen(dev *Device, l streamLink, p *proto.Packet) {
 	var b screenStart
 	if p.Decode(&b) != nil {
 		return
 	}
 	switch b.State {
 	case "start":
-		go d.runScreen(dev, l, b)
+		if s := d.claimScreen(dev, l, b); s != nil {
+			go d.runScreen(s, b)
+		}
 	case "stop":
 		d.endScreen(dev.ID)
 	case "error":
-		d.logf("%s: screen mirror: %s", dev.Name, b.Message)
+		d.logf("%s: screen mirror: %s", dev.Name, peerText(b.Message))
 	}
+}
+
+// claimScreen makes a new session the screen mirror session before any
+// slow work, and stops the session that ran before. It returns nil when
+// the mirror cannot start, and then it tells the phone.
+func (d *Daemon) claimScreen(dev *Device, l streamLink, b screenStart) *screenSession {
+	var err error
+	now := time.Now()
+	d.mu.Lock()
+	last, started := d.sessions.screenStart[dev.ID]
+	switch {
+	case b.Codec != "" && b.Codec != "h264":
+		err = fmt.Errorf("the codec %s is not supported. Send h264", peerText(b.Codec))
+	case b.Port <= 0 || b.Port > 65535:
+		err = fmt.Errorf("the port %d is not valid", b.Port)
+	case d.opts.Headless:
+		err = errors.New("the screen mirror is off in headless mode")
+	case !dev.Paired:
+		err = fmt.Errorf("%s is not paired with %s", dev.Name, d.nameLocked())
+	case started && now.Sub(last) < screenStartGap:
+		err = fmt.Errorf("wait %d seconds, then start the screen mirror again", int(screenStartGap.Seconds()))
+	}
+	if err != nil {
+		d.mu.Unlock()
+		d.failScreen(nil, dev, l, err)
+		return nil
+	}
+	if d.sessions.screenStart == nil {
+		d.sessions.screenStart = map[string]time.Time{}
+	}
+	d.sessions.screenStart[dev.ID] = now
+	ctx, cancel := context.WithCancel(d.ctx)
+	s := &screenSession{dev: dev, link: l, cancel: cancel, ctx: ctx, view: ScreenView{
+		From: dev.ID, FromName: dev.Name, Width: b.Width, Height: b.Height,
+	}}
+	s.done, s.prev = d.sessions.screenTurn.take()
+	old := d.screen
+	d.screen, d.screenErr = s, ""
+	d.mu.Unlock()
+	if old != nil {
+		old.cancel()
+	}
+	d.watchSession(ctx, cancel, dev, l, nil)
+	d.markDirty()
+	return s
+}
+
+// failScreen tells the phone why the mirror stopped, and shows the error
+// in the window.
+func (d *Daemon) failScreen(s *screenSession, dev *Device, l streamLink, err error) {
+	d.logf("%s: screen mirror: %v", dev.Name, err)
+	_ = l.Send(proto.New(proto.TypeFluxScreen, map[string]any{"state": "error", "message": err.Error()}))
+	d.mu.Lock()
+	if d.screen == nil || d.screen == s {
+		d.screenErr = err.Error()
+	}
+	d.mu.Unlock()
+	d.markDirty()
 }
 
 // runScreen runs 1 mirror session until the phone stops, the link drops,
 // the user closes the window, or the user stops it on this computer.
-func (d *Daemon) runScreen(dev *Device, l *lan.Link, b screenStart) {
+func (d *Daemon) runScreen(s *screenSession, b screenStart) {
+	dev, l, ctx := s.dev, s.link, s.ctx
+	defer endTurn(s.done, s.prev)
+	defer d.dropScreen(s)
+	defer s.cancel()
 	fail := func(err error) {
-		d.logf("%s: screen mirror: %v", dev.Name, err)
-		_ = l.Send(proto.New(proto.TypeFluxScreen, map[string]any{"state": "error", "message": err.Error()}))
-		d.mu.Lock()
-		d.screenErr = err.Error()
-		d.mu.Unlock()
-		d.markDirty()
+		if ctx.Err() == nil {
+			d.failScreen(s, dev, l, err)
+		}
 	}
-	switch {
-	case b.Codec != "" && b.Codec != "h264":
-		fail(fmt.Errorf("the codec %q is not supported. Send h264", b.Codec))
-		return
-	case b.Port <= 0 || b.Port > 65535:
-		fail(fmt.Errorf("the port %d is not valid", b.Port))
-		return
-	case d.opts.Headless:
-		fail(errors.New("the screen mirror is off in headless mode"))
+	// The player of the session before stops first.
+	if !waitTurn(ctx, s.prev) {
 		return
 	}
 	player, err := findScreenPlayer(exec.LookPath, screenTitle(dev.Name))
@@ -130,9 +194,6 @@ func (d *Daemon) runScreen(dev *Device, l *lan.Link, b screenStart) {
 		fail(err)
 		return
 	}
-	d.endScreen("")
-	ctx, cancel := context.WithCancel(d.ctx)
-	defer cancel()
 	tc, err := l.DialPeer(ctx, b.Port)
 	if err != nil {
 		fail(fmt.Errorf("connect to the phone screen: %w", err))
@@ -142,21 +203,15 @@ func (d *Daemon) runScreen(dev *Device, l *lan.Link, b screenStart) {
 	// A stop or a dropped link closes the stream, so that the copy to the
 	// process ends at once.
 	defer context.AfterFunc(ctx, func() { tc.Close() })()
-	s := &screenSession{dev: dev, link: l, cancel: cancel, view: ScreenView{
-		From: dev.ID, FromName: dev.Name, Width: b.Width, Height: b.Height, Player: player.Name,
-	}}
+	// Only the current session opens a window.
 	d.mu.Lock()
-	d.screen, d.screenErr = s, ""
+	current := d.screen == s && dev.Paired
+	s.view.Player = player.Name
 	d.mu.Unlock()
-	defer func() {
-		d.mu.Lock()
-		if d.screen == s {
-			d.screen = nil
-		}
-		d.mu.Unlock()
-		d.markDirty()
-	}()
-	cancelOnLinkDown(ctx, l, cancel)
+	if !current || ctx.Err() != nil {
+		return
+	}
+	d.markDirty()
 
 	cmd := childCommand(ctx, player.Path, player.Args...)
 	cmd.Stdin = tc
@@ -200,26 +255,47 @@ func (d *Daemon) runScreen(dev *Device, l *lan.Link, b screenStart) {
 	d.logf("%s: screen mirror window closed", dev.Name)
 }
 
-// endScreen stops the session. An empty ID stops any session.
-func (d *Daemon) endScreen(deviceID string) {
+// dropScreen removes a session that ended.
+func (d *Daemon) dropScreen(s *screenSession) {
 	d.mu.Lock()
-	s := d.screen
+	if d.screen == s {
+		d.screen = nil
+	}
 	d.mu.Unlock()
-	if s != nil && (deviceID == "" || s.dev.ID == deviceID) {
+	d.markDirty()
+}
+
+// takeScreen removes the session from the slot and returns it, or nil. An
+// empty ID takes any session. The caller stops the session.
+func (d *Daemon) takeScreen(deviceID string) *screenSession {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	s := d.screen
+	if s == nil || (deviceID != "" && s.dev.ID != deviceID) {
+		return nil
+	}
+	d.screen = nil
+	return s
+}
+
+// endScreen stops the session, also while fluxd still sets it up. An empty
+// ID stops any session.
+func (d *Daemon) endScreen(deviceID string) {
+	if s := d.takeScreen(deviceID); s != nil {
 		s.cancel()
+		d.markDirty()
 	}
 }
 
 // StopScreen stops the screen mirror from this computer and tells the phone.
 func (d *Daemon) StopScreen() error {
-	d.mu.Lock()
-	s := d.screen
-	d.mu.Unlock()
+	s := d.takeScreen("")
 	if s == nil {
 		return apiErr("not_active", "No phone screen is mirrored")
 	}
 	_ = s.link.Send(proto.New(proto.TypeFluxScreen, map[string]any{"state": "stop"}))
 	s.cancel()
+	d.markDirty()
 	return nil
 }
 

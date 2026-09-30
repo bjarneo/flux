@@ -20,16 +20,32 @@ public struct RemotePlayer: Sendable, Equatable {
 
     public init(name: String) { self.name = name }
 
+    /// The longest position or length that Flux takes, in milliseconds: 7
+    /// days. A larger value from the computer is cut to it, so that the
+    /// sums below cannot overflow.
+    public static let maxMillis: Int64 = 7 * 24 * 60 * 60 * 1000
+
     /// The position at the time `now`. It moves forward while the player plays.
     public func position(at now: TimeInterval) -> Int64 {
         guard playing else { return position }
-        let moved = position + Int64(((now - updatedAt) * 1000).rounded())
+        let moved = Self.limited(position) + Self.elapsed(from: updatedAt, to: now)
         return min(max(moved, 0), max(length, 0))
     }
 
-    /// The album art URL when this Mac can load it.
+    /// The milliseconds from `start` to `now`, from 0 to `maxMillis`.
+    static func elapsed(from start: TimeInterval, to now: TimeInterval) -> Int64 {
+        let ms = ((now - start) * 1000).rounded()
+        guard ms.isFinite, ms > 0 else { return 0 }
+        return ms >= Double(maxMillis) ? maxMillis : Int64(ms)
+    }
+
+    /// The value from 0 to `maxMillis`.
+    static func limited(_ ms: Int64) -> Int64 { min(max(ms, 0), maxMillis) }
+
+    /// The album art URL when this device loads it: http or https with a
+    /// host. `AlbumArtLoader` loads it.
     public var artURL: URL? {
-        guard let url = URL(string: artUrl), url.scheme == "http" || url.scheme == "https" else { return nil }
+        guard let url = URL(string: artUrl), AlbumArtLoader.loads(url) else { return nil }
         return url
     }
 }
@@ -62,10 +78,10 @@ public struct RemoteMedia: Sendable, Equatable {
         s.artist = b["artist"]?.string ?? s.artist
         s.album = b["album"]?.string ?? s.album
         s.playing = b["isPlaying"]?.bool ?? s.playing
-        s.position = b["pos"]?.int64 ?? s.position
-        s.length = b["length"]?.int64 ?? s.length
+        s.position = b["pos"]?.int64.map(RemotePlayer.limited) ?? s.position
+        s.length = b["length"]?.int64.map(RemotePlayer.limited) ?? s.length
         s.canSeek = b["canSeek"]?.bool ?? s.canSeek
-        s.volume = b["volume"]?.int ?? s.volume
+        s.volume = b["volume"]?.int.map { min(max($0, 0), 100) } ?? s.volume
         s.artUrl = b["albumArtUrl"]?.string ?? s.artUrl
         s.updatedAt = now
         states[name] = s
@@ -77,7 +93,7 @@ public struct RemoteMedia: Sendable, Equatable {
     /// The optimistic state after a PlayPause action, until the computer answers.
     public mutating func togglePlaying(now: TimeInterval) {
         guard let name = current, var s = states[name] else { return }
-        if s.playing { s.position += Int64(((now - s.updatedAt) * 1000).rounded()) }
+        if s.playing { s.position = RemotePlayer.limited(RemotePlayer.limited(s.position) + RemotePlayer.elapsed(from: s.updatedAt, to: now)) }
         s.playing.toggle()
         s.updatedAt = now
         states[name] = s
@@ -86,7 +102,7 @@ public struct RemoteMedia: Sendable, Equatable {
     /// The optimistic state after a seek.
     public mutating func seek(to position: Int64, now: TimeInterval) {
         guard let name = current, var s = states[name] else { return }
-        s.position = position
+        s.position = RemotePlayer.limited(position)
         s.updatedAt = now
         states[name] = s
     }

@@ -58,6 +58,7 @@ public struct ApproveTexts: Sendable {
     func enrollDetail(computer: String) -> String {
         "Flux makes a key for \(computer) in the Secure Enclave of \(deviceNoun). Each approval then needs \(biometry)."
     }
+    func enrollReplaces(computer: String) -> String { "This replaces the current approval key for \(computer)." }
     func enrollQuestion(user: String, host: String) -> String { "Use \(deviceNoun) to approve sudo for user \(user) on host \(host)?" }
     func enrollReason(user: String, host: String) -> String { "enroll \(deviceNoun) to approve sudo for \(user) on \(host)" }
 

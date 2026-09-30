@@ -19,11 +19,13 @@ public struct BrowseDownload: Identifiable, Sendable, Equatable {
     /// The part done, or nil when the size is unknown.
     public var fraction: Double? { size > 0 ? min(1, Double(received) / Double(size)) : nil }
 
-    /// A remote name as a local file name: the last path component, or
-    /// "download" for a name without one.
+    /// A remote name as a local file name: the last path component without
+    /// control characters and bidirectional controls, or "download" for a
+    /// name without one.
     public static func safeName(_ name: String) -> String {
-        let base = name.replacingOccurrences(of: "\\", with: "/").split(separator: "/").last.map(String.init) ?? ""
-        return base.isEmpty || base == "." || base == ".." ? "download" : base
+        let last = name.replacingOccurrences(of: "\\", with: "/").split(separator: "/").last.map(String.init) ?? ""
+        let base = ShareWire.visibleName(last)
+        return base.trimmingCharacters(in: .whitespaces).isEmpty || base == "." || base == ".." ? "download" : base
     }
 
     /// The first free URL for the name in the folder: "a.txt", then
@@ -73,7 +75,7 @@ public final class BrowseModel {
     init(core: FluxCore, deviceId: String) {
         self.core = core
         self.deviceId = deviceId
-        deviceName = core.device(deviceId)?.name ?? "The computer"
+        deviceName = core.withDevice(deviceId) { $0.name } ?? "The computer"
     }
 
     /// True when a folder above the current one is inside a root.
@@ -92,7 +94,7 @@ public final class BrowseModel {
         closeSession()
         attempt += 1
         let current = attempt
-        deviceName = core.device(deviceId)?.name ?? deviceName
+        deviceName = core.withDevice(deviceId) { $0.name } ?? deviceName
         loading = true
         error = nil
         roots = []

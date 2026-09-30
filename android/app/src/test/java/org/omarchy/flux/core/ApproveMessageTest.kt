@@ -83,6 +83,10 @@ class ApproveMessageTest {
         assertNull(ApproveMessage.parse(packet("service" to ""), "pc1", "pc"))
         assertNull(ApproveMessage.parse(packet("kind" to "other"), "pc1", "pc"))
         assertNull(ApproveMessage.parse(packet("id" to ""), "pc1", "pc"))
+        for (time in listOf(Long.MIN_VALUE, -1L, 0L, 1L shl 41, Long.MAX_VALUE)) {
+            assertNull("time $time", ApproveMessage.parse(packet("time" to time), "pc1", "pc"))
+        }
+        assertNotNull(ApproveMessage.parse(packet("time" to (1L shl 40)), "pc1", "pc"))
     }
 
     @Test
@@ -99,6 +103,9 @@ class ApproveMessageTest {
         assertTrue(ApproveMessage.fresh(request, request.time - 30))
         assertFalse(ApproveMessage.fresh(request, request.time + 601))
         assertFalse(ApproveMessage.fresh(request, request.time - 601))
+        // nowSeconds - time wraps for a time near now - 2^63.
+        assertFalse(ApproveMessage.fresh(request.copy(time = request.time + Long.MIN_VALUE), request.time))
+        assertFalse(ApproveMessage.fresh(request.copy(time = Long.MIN_VALUE), request.time))
     }
 
     @Test
@@ -126,5 +133,17 @@ class ApproveMessageTest {
         // A packet survives the wire format.
         val back = Packet.parse(a.serialize())!!
         assertEquals(a.string("signature"), back.string("signature"))
+    }
+
+    @Test
+    fun anOpenRequestNeverChanges() {
+        assertEquals(ApproveMessage.Admit.Show, ApproveMessage.admit(null, request))
+        assertEquals("a repeated packet changes nothing", ApproveMessage.Admit.Repeat, ApproveMessage.admit(request, request.copy()))
+        // A request with the same ID and another terminal must not replace what the user reads.
+        assertEquals(ApproveMessage.Admit.Conflict, ApproveMessage.admit(request, request.copy(tty = "/dev/pts/9")))
+        assertEquals(ApproveMessage.Admit.Conflict, ApproveMessage.admit(request, request.copy(nonce = "f".repeat(64))))
+        // Another computer that uses the same ID waits like any other request.
+        assertEquals(ApproveMessage.Admit.Busy, ApproveMessage.admit(request, request.copy(computerId = "pc2")))
+        assertEquals(ApproveMessage.Admit.Busy, ApproveMessage.admit(request, request.copy(id = "req2")))
     }
 }

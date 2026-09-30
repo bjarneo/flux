@@ -2,13 +2,16 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"time"
 
 	"flux/internal/config"
@@ -31,8 +34,8 @@ func doctor() {
 
 	var s State
 	err := callInto("state", nil, &s)
-	check(err == nil, "fluxd is running",
-		"fluxd is not running. Run: systemctl --user enable --now fluxd")
+	check(err == nil, "fluxd is running", notRunning(err))
+	checkUnit(check)
 	if err == nil {
 		check(s.Self.TCPPort > 0, fmt.Sprintf("fluxd listens on TCP %d", s.Self.TCPPort),
 			"fluxd has no TCP port. Check: journalctl --user -u fluxd")
@@ -141,11 +144,16 @@ func doctor() {
 	// herdr is optional. When it runs, the phone shows its agents.
 	if _, err := exec.LookPath("herdr"); err == nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		pong, perr := herdr.Ping(ctx, herdr.SocketPath())
+		path := herdr.SocketPath()
+		pong, perr := herdr.Ping(ctx, path)
 		cancel()
-		if perr != nil {
+		switch {
+		case herdrDown(perr):
 			fmt.Println("- herdr does not run. Start herdr to show its agents on the phone")
-		} else {
+		case perr != nil:
+			// For example, the socket belongs to another user.
+			check(false, "", safe(fmt.Sprintf("The herdr socket %s does not work: %v", path, perr)))
+		default:
 			check(pong.Protocol >= herdr.MinProtocol, fmt.Sprintf("herdr %s runs, so the phone can show its agents", pong.Version),
 				fmt.Sprintf("herdr %s uses API protocol %d, and Flux needs %d or newer. Run: herdr update", pong.Version, pong.Protocol, herdr.MinProtocol))
 		}
@@ -169,6 +177,67 @@ func doctor() {
 		fmt.Printf("%d problem(s) found\n", problems)
 		os.Exit(1)
 	}
+}
+
+// notRunning returns the fix for a fluxd that does not answer.
+func notRunning(err error) string {
+	if err == nil {
+		return ""
+	}
+	if config.IsOff() {
+		return "fluxd is off. To turn it on, run: flux-cli on"
+	}
+	if cerr := config.Check(); cerr != nil {
+		return fmt.Sprintf("fluxd cannot start, because config.toml has an error: %v. Fix the file, then run: flux-cli on", cerr)
+	}
+	return fmt.Sprintf("fluxd does not answer: %v. To see why, run: journalctl --user -u fluxd -e", err)
+}
+
+// checkUnit checks the unit file that systemd loads for fluxd.service. A
+// user unit from an earlier install hides the unit of the package, and
+// its fluxd can be gone.
+func checkUnit(check func(ok bool, pass, fix string)) {
+	out, err := exec.Command("systemctl", "--user", "show", "-p", "FragmentPath", "-p", "ExecStart", "fluxd.service").Output()
+	if err != nil {
+		fmt.Println("? Cannot ask systemd which fluxd.service it loads")
+		return
+	}
+	props := map[string]string{}
+	for _, line := range strings.Split(string(out), "\n") {
+		if k, v, ok := strings.Cut(line, "="); ok {
+			props[k] = v
+		}
+	}
+	frag := props["FragmentPath"]
+	if frag == "" {
+		check(false, "", "fluxd.service is not installed. Run: flux-cli setup")
+		return
+	}
+	if _, err := os.Stat(systemUnit); err == nil && frag != systemUnit {
+		fix := fmt.Sprintf("%s hides %s, so the service does not run the fluxd of the package. ", frag, systemUnit)
+		if b, err := os.ReadFile(frag); err == nil && setupWrote(string(b)) {
+			fix += "To remove it, run: flux-cli setup"
+		} else {
+			fix += "Remove it, then run: systemctl --user daemon-reload"
+		}
+		check(false, "", fix)
+	}
+	if path := execPath(props["ExecStart"]); path != "" {
+		_, serr := os.Stat(path)
+		check(serr == nil, "fluxd.service runs "+path,
+			fmt.Sprintf("fluxd.service runs %s, which does not exist. Run: flux-cli setup", path))
+	}
+}
+
+// execPath returns the program of an ExecStart value of systemctl show,
+// such as "{ path=/usr/bin/fluxd ; argv[]=/usr/bin/fluxd ; ... }".
+func execPath(v string) string {
+	_, rest, ok := strings.Cut(v, "path=")
+	if !ok {
+		return ""
+	}
+	path, _, _ := strings.Cut(rest, " ;")
+	return strings.TrimSpace(path)
 }
 
 func windowName(app, plugin bool) string {
@@ -224,4 +293,10 @@ func udpHolders(port int) ([]string, error) {
 
 func active(unit string) bool {
 	return exec.Command("systemctl", "is-active", "--quiet", unit).Run() == nil
+}
+
+// herdrDown reports whether err is a plain connection failure to the
+// herdr socket: the socket does not exist, or nothing listens on it.
+func herdrDown(err error) bool {
+	return errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ECONNREFUSED)
 }

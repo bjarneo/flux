@@ -1,6 +1,7 @@
 import Crypto
 import _CryptoExtras
 import Foundation
+import NIOSSL
 import SwiftASN1
 import X509
 
@@ -27,21 +28,67 @@ public struct LocalCertificate: Sendable {
     /// new RSA 2048 key and a certificate with CN set to a new device ID.
     /// The directory stays out of backups, also when an older version made
     /// it, see `excludeFromBackup(directory:)`.
+    ///
+    /// Flux makes a new identity only when a file is missing. Files that
+    /// exist but cannot be read, for example before the first unlock of an
+    /// iPhone, throw `IdentityUnreadable`. Files that do not parse throw
+    /// `FluxError`. So a read error does not replace the identity and lose
+    /// every pairing. The key file gets mode 0600 from the start.
     public static func loadOrCreate(directory: URL) throws -> LocalCertificate {
         let keyURL = directory.appendingPathComponent(keyFile)
         let certURL = directory.appendingPathComponent(certFile)
-        if let pem = try? String(contentsOf: keyURL, encoding: .utf8), let der = try? Data(contentsOf: certURL),
-           let loaded = try? LocalCertificate(privateKeyPEM: pem, certificateDER: Array(der)) {
+        let fm = FileManager.default
+        let keyExists = fm.fileExists(atPath: keyURL.path)
+        let certExists = fm.fileExists(atPath: certURL.path)
+        if keyExists && certExists {
+            let key: Data
+            let der: Data
+            do {
+                key = try Data(contentsOf: keyURL)
+                der = try Data(contentsOf: certURL)
+            } catch {
+                throw IdentityUnreadable("Cannot read the identity of this device in \(directory.path): \(error.localizedDescription)")
+            }
+            let loaded: LocalCertificate
+            do {
+                guard let pem = String(data: key, encoding: .utf8) else { throw FluxError("the key is not text") }
+                // The TLS setup reads the key in the same way.
+                _ = try NIOSSLPrivateKey(bytes: Array(pem.utf8), format: .pem)
+                loaded = try LocalCertificate(privateKeyPEM: pem, certificateDER: Array(der))
+            } catch {
+                throw FluxError("The identity of this device in \(directory.path) is damaged: \(error)")
+            }
             keepOutOfBackups(directory)
+            // An older version wrote the key and its folder with the default mode.
+            try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+            try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: keyURL.path)
             return loaded
         }
+        if keyExists || certExists {
+            // A first start that stopped between the 2 writes. The half
+            // identity cannot link, so Flux makes a new one.
+            FluxLog.core.error("the identity of this device is incomplete, Flux makes a new one")
+        }
         let created = try generate(deviceId: UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased())
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try fm.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         keepOutOfBackups(directory)
-        try Data(created.privateKeyPEM.utf8).write(to: keyURL, options: [.atomic])
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: keyURL.path)
+        try writePrivate(Data(created.privateKeyPEM.utf8), to: keyURL)
         try Data(created.certificateDER).write(to: certURL, options: [.atomic])
         return created
+    }
+
+    /// Writes data to a new file with mode 0600, then moves it into place,
+    /// so that the key is never readable by other users.
+    private static func writePrivate(_ data: Data, to url: URL) throws {
+        let temp = url.deletingLastPathComponent().appendingPathComponent(".\(url.lastPathComponent).\(UUID().uuidString)")
+        guard FileManager.default.createFile(atPath: temp.path, contents: data, attributes: [.posixPermissions: 0o600]) else {
+            throw FluxError("Cannot write \(url.path)")
+        }
+        guard rename(temp.path, url.path) == 0 else {
+            let code = errno
+            try? FileManager.default.removeItem(at: temp)
+            throw POSIXError(POSIXErrorCode(rawValue: code) ?? .EIO)
+        }
     }
 
     /// Keeps the directory of the key and the certificate out of iCloud and
@@ -126,9 +173,14 @@ public func subjectPublicKeyInfo(der: [UInt8]) throws -> [UInt8] {
     return Array(fields[5].encodedBytes)
 }
 
-/// Returns the 8-character key that both devices show while they pair. It
-/// hashes the 2 public keys, larger first, then the pairing timestamp in
-/// seconds as decimal text.
+/// The number of hex digits of the verification key.
+public let verificationKeyLength = 16
+
+/// Returns the 16-digit key that both devices show while they pair: the
+/// first 8 bytes of a SHA-256 of the 2 public keys, larger first, then the
+/// pairing timestamp in seconds as decimal text when it is above 0. The
+/// key has uppercase hex digits and no spaces. The apps show it in 4 groups
+/// of 4, for example "5EE6 825F 974E D59A".
 public func verificationKey(ownKey: [UInt8], peerKey: [UInt8], timestamp: Int64) -> String {
     var a = ownKey
     var b = peerKey
@@ -138,7 +190,7 @@ public func verificationKey(ownKey: [UInt8], peerKey: [UInt8], timestamp: Int64)
     hash.update(data: b)
     if timestamp > 0 { hash.update(data: Data(String(timestamp).utf8)) }
     let hex = hash.finalize().map { String(format: "%02x", $0) }.joined()
-    return String(hex.prefix(8)).uppercased()
+    return String(hex.prefix(verificationKeyLength)).uppercased()
 }
 
 public func verificationKey(ownCertificate: [UInt8], peerCertificate: [UInt8], timestamp: Int64) -> String {
@@ -156,6 +208,15 @@ public func compareBytes(_ a: [UInt8], _ b: [UInt8]) -> Int {
 
 /// A Flux error with a message for the user.
 public struct FluxError: Error, CustomStringConvertible, LocalizedError, Sendable {
+    public let description: String
+    public init(_ message: String) { description = message }
+    public var errorDescription: String? { description }
+}
+
+/// The files of the identity exist, but Flux cannot read them now. Before
+/// the first unlock after a restart, iOS keeps the files of an app locked.
+/// A later start can read them, so the app can start the core again.
+public struct IdentityUnreadable: Error, CustomStringConvertible, LocalizedError, Sendable {
     public let description: String
     public init(_ message: String) { description = message }
     public var errorDescription: String? { description }

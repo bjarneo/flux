@@ -20,6 +20,7 @@ import android.util.Range
 import android.util.Size
 import android.view.Surface
 import java.util.concurrent.Executor
+import java.util.concurrent.atomic.AtomicInteger
 
 private const val TAG = "FluxWebcamCamera"
 
@@ -36,7 +37,14 @@ class CameraSource(context: Context) {
     private var device: CameraDevice? = null
     private var session: CameraCaptureSession? = null
     private var active: Pair<Choice, Surface>? = null
-    @Volatile private var generation = 0
+
+    // Each open and close takes a new number, so that callbacks of an
+    // earlier open do nothing. The GL thread opens and the main thread
+    // closes, so the number is atomic.
+    private val generation = AtomicInteger()
+
+    // True after release(). No camera opens after it.
+    @Volatile private var released = false
 
     /** Zoom, exposure, and white balance. They change without a new session. */
     data class Controls(val zoom: Float = 1f, val exposureIndex: Int = 0, val awbMode: Int = CameraMetadata.CONTROL_AWB_MODE_AUTO)
@@ -135,30 +143,43 @@ class CameraSource(context: Context) {
     /**
      * Opens [choice] and streams to [target]. A camera that another screen
      * still holds is tried again for 2 seconds. [fail] gets a message that
-     * the UI can show.
+     * the UI can show. Only the newest open reports to [fail], so a late
+     * error of an earlier camera does not change the screen.
      */
     @SuppressLint("MissingPermission")
     fun open(choice: Choice, target: Surface, fail: (String) -> Unit) {
-        val gen = ++generation
+        if (released) return
+        val gen = generation.incrementAndGet()
+        fun current() = gen == generation.get() && !released
         handler.post { closeNow() }
         fun attempt(left: Int) {
-            if (gen != generation) return
+            if (!current()) return
             try {
                 manager.openCamera(choice.id, executor, object : CameraDevice.StateCallback() {
                     override fun onOpened(camera: CameraDevice) {
-                        if (gen != generation) return camera.close()
+                        if (!current()) return camera.close()
                         device = camera
-                        startSession(camera, choice, target, fail)
+                        startSession(camera, choice, target, { current() }, fail)
                     }
 
                     override fun onDisconnected(camera: CameraDevice) {
                         camera.close()
-                        if (device === camera) device = null
+                        val opened = device === camera
+                        if (opened) closeNow()
+                        if (!current()) return
+                        when {
+                            // Another app took the camera. The image stops, so the screen tells the user.
+                            opened -> fail("Another app uses the camera now. Close this screen and open it again.")
+                            // Android can call this instead of onOpened when the open fails.
+                            left > 0 -> handler.postDelayed({ attempt(left - 1) }, 300)
+                            else -> fail("The camera is not available")
+                        }
                     }
 
                     override fun onError(camera: CameraDevice, error: Int) {
                         camera.close()
-                        if (device === camera) device = null
+                        if (device === camera) closeNow()
+                        if (!current()) return
                         if (error == ERROR_CAMERA_IN_USE && left > 0) {
                             handler.postDelayed({ attempt(left - 1) }, 300)
                         } else {
@@ -167,16 +188,19 @@ class CameraSource(context: Context) {
                     }
                 })
             } catch (e: Exception) {
+                if (!current()) return
                 if (left > 0) handler.postDelayed({ attempt(left - 1) }, 300) else fail("Cannot open the camera: ${e.message}")
             }
         }
         handler.post { attempt(6) }
     }
 
-    private fun startSession(camera: CameraDevice, choice: Choice, target: Surface, fail: (String) -> Unit) {
+    private fun startSession(camera: CameraDevice, choice: Choice, target: Surface, current: () -> Boolean, fail: (String) -> Unit) {
         val output = OutputConfiguration(target).apply {
-            // The computer gets the real image. The preview mirrors the front
-            // camera on its own.
+            // The computer and the preview get the image as the camera sees
+            // it, and only the mirror setting mirrors it. Before Android 13,
+            // the framework mirrors the front camera, and GlRenderer removes
+            // that mirror, see FrameGeometry.unmirror.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) mirrorMode = OutputConfiguration.MIRROR_MODE_NONE
         }
         val config = SessionConfiguration(SessionConfiguration.SESSION_REGULAR, listOf(output), executor, object : CameraCaptureSession.StateCallback() {
@@ -188,20 +212,20 @@ class CameraSource(context: Context) {
             }
 
             override fun onConfigureFailed(s: CameraCaptureSession) {
-                fail("The camera cannot stream at this size")
+                if (current()) fail("The camera cannot stream at this size")
             }
         })
         try {
             camera.createCaptureSession(config)
         } catch (e: Exception) {
             Log.w(TAG, "session failed", e)
-            fail("The camera stopped: ${e.message}")
+            if (current()) fail("The camera stopped: ${e.message}")
         }
     }
 
     /** Closes the camera. */
     fun close() {
-        generation++
+        generation.incrementAndGet()
         handler.post { closeNow() }
     }
 
@@ -213,10 +237,18 @@ class CameraSource(context: Context) {
         device = null
     }
 
-    /** Closes the camera and stops its thread. */
+    /**
+     * Closes the camera and stops its thread. The stop waits behind the
+     * callbacks that the camera already posted. So a camera that opens
+     * during the release still gets to onOpened, which closes it.
+     */
     fun release() {
-        close()
-        thread.quitSafely()
+        released = true
+        generation.incrementAndGet()
+        handler.post {
+            closeNow()
+            thread.quitSafely()
+        }
     }
 
     companion object {

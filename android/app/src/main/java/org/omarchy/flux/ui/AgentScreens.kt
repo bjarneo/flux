@@ -38,6 +38,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -66,9 +67,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.omarchy.flux.core.AgentChoice
 import org.omarchy.flux.core.AgentStatus
-import org.omarchy.flux.core.DebugDemo
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
+import org.omarchy.flux.core.HERDR_BLOCKED
 import org.omarchy.flux.core.HerdrAgent
 import org.omarchy.flux.core.HerdrOutput
 import org.omarchy.flux.core.HerdrReply
@@ -227,15 +228,20 @@ private fun TerminalTile(t: HerdrTerminal, onClick: () -> Unit) {
 fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
     val agent = d.herdr?.agent(pane)
     val status = agent?.status
-    val demo = DebugDemo.isDemo(d.id)
+    val demo = isDemo(d.id)
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(d.id, pane, d.online, status) {
-        if (!d.online || demo) return@LaunchedEffect
+    // A poll waits while the last read did not end, so that reads do not pile up on a slow link.
+    val loading by rememberUpdatedState(d.herdrOutput?.takeIf { it.pane == pane }?.loading == true)
+    // The polls stop when the agent is gone.
+    val alive = agent != null || d.herdr == null
+    LaunchedEffect(d.id, pane, d.online, status, alive) {
+        if (!d.online || demo || !alive) return@LaunchedEffect
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            // A new status reads at once. Only the polls wait for the last read.
             HerdrSync.read(FluxCore, d.id, pane)
             while (status == AgentStatus.Working) {
                 delay(WORKING_REFRESH_MS)
-                HerdrSync.read(FluxCore, d.id, pane)
+                if (!loading) HerdrSync.read(FluxCore, d.id, pane)
             }
         }
     }
@@ -443,6 +449,9 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
     val context = LocalContext.current
     var field by rememberSaveable(d.id, agent.pane, stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue()) }
     var lockError by remember { mutableStateOf<String?>(null) }
+    // The text of the last Send. When fluxd refuses it because the agent
+    // waits for a choice, Send as answer sends the same text again.
+    var lastPrompt by rememberSaveable(d.id, agent.pane) { mutableStateOf("") }
     // A prompt that the computer accepted leaves the field.
     LaunchedEffect(reply) {
         if (reply != null && reply.action == "prompt" && !reply.sending && reply.error == null) field = TextFieldValue()
@@ -456,7 +465,7 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
     // Dictation: the phone turns speech into text at the cursor of the field.
     // The text waits there for Send, so a prompt still needs the phone lock.
     val dictation = rememberDictation()
-    val demo = DebugDemo.isDemo(d.id)
+    val demo = isDemo(d.id)
     val canDictate = demo || remember { Dictation.available(context) }
     val dictating = dictation.phase != Dictation.Phase.Idle
     var voiceError by remember { mutableStateOf<String?>(null) }
@@ -553,6 +562,7 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
                     Modifier.size(56.dp).clip(TileShape).background(if (canSend) Tn.blue else Tn.tile)
                         .clickable(enabled = canSend, onClickLabel = "Send") {
                             val t = field.text
+                            lastPrompt = t
                             guarded { HerdrSync.sendPrompt(FluxCore, d.id, agent.pane, t) }
                         },
                     contentAlignment = Alignment.Center,
@@ -566,9 +576,24 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
             },
         )
         val problem = lockError ?: voiceError ?: dictation.error ?: reply?.error
+        // fluxd refused the text of the field as a prompt, because the agent
+        // waits for a choice. The agent can take the same text as the answer
+        // to its question, for example an answer that is not in the choices.
+        val canAnswer = reply != null && problem == reply.error && reply.code == HERDR_BLOCKED && reply.action == "prompt" &&
+            !reply.sending && lastPrompt.isNotBlank() && field.text == lastPrompt
         if (problem != null) {
             Row(Modifier.padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 T(problem, Modifier.weight(1f), size = 11, color = Tn.red)
+                if (canAnswer) {
+                    T(
+                        "Send as answer",
+                        Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = "Send the text as the answer") {
+                            val t = lastPrompt
+                            guarded { HerdrSync.sendPrompt(FluxCore, d.id, agent.pane, t, answer = true) }
+                        }.padding(horizontal = 6.dp, vertical = 4.dp),
+                        size = 12, color = Tn.blue, weight = FontWeight.SemiBold,
+                    )
+                }
                 if (problem == dictation.error && dictation.languageError) {
                     T(
                         "Choose a language",

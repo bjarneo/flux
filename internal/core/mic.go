@@ -4,12 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
-	"flux/internal/lan"
+	"golang.org/x/sys/unix"
+
 	"flux/internal/proto"
 )
 
@@ -35,9 +39,14 @@ type MicView struct {
 
 type micSession struct {
 	dev    *Device
-	link   *lan.Link
+	link   streamLink
 	cancel context.CancelFunc
 	view   MicView
+
+	// ctx ends with the session. done closes when runMic returns, and
+	// prev is done of the session before, or nil.
+	ctx        context.Context
+	done, prev chan struct{}
 }
 
 type micStart struct {
@@ -64,7 +73,7 @@ func (b *micStart) check() error {
 	case b.Port <= 0 || b.Port > 65535:
 		return fmt.Errorf("the port %d is not valid", b.Port)
 	case b.Format != "s16le":
-		return fmt.Errorf("the format %q is not supported. Send s16le", b.Format)
+		return fmt.Errorf("the format %s is not supported. Send s16le", peerText(b.Format))
 	case b.Rate < 8000 || b.Rate > 96000:
 		return fmt.Errorf("the rate %d Hz is not supported. Send 8000 to 96000 Hz", b.Rate)
 	case b.Channels != 1 && b.Channels != 2:
@@ -87,38 +96,84 @@ func micArgs(rate, channels int) []string {
 	}
 }
 
-func (d *Daemon) handleMic(dev *Device, l *lan.Link, p *proto.Packet) {
+func (d *Daemon) handleMic(dev *Device, l streamLink, p *proto.Packet) {
 	var b micStart
 	if p.Decode(&b) != nil {
 		return
 	}
 	switch b.State {
 	case "start":
-		go d.runMic(dev, l, b)
+		if s := d.claimMic(dev, l, &b); s != nil {
+			go d.runMic(s, b)
+		}
 	case "stop":
 		d.endMic(dev.ID)
 	case "error":
-		d.logf("%s: microphone: %s", dev.Name, b.Message)
+		d.logf("%s: microphone: %s", dev.Name, peerText(b.Message))
 	}
+}
+
+// claimMic makes a new session the microphone session before any slow
+// work, and stops the session that ran before. It returns nil when the
+// microphone cannot start, and then it tells the phone.
+func (d *Daemon) claimMic(dev *Device, l streamLink, b *micStart) *micSession {
+	err := b.check()
+	d.mu.Lock()
+	switch {
+	case err != nil:
+	case d.opts.Headless:
+		err = errors.New("the microphone is off in headless mode")
+	case !dev.Paired:
+		err = fmt.Errorf("%s is not paired with %s", dev.Name, d.nameLocked())
+	}
+	if err != nil {
+		d.mu.Unlock()
+		d.failMic(nil, dev, l, err)
+		return nil
+	}
+	ctx, cancel := context.WithCancel(d.ctx)
+	s := &micSession{dev: dev, link: l, cancel: cancel, ctx: ctx, view: MicView{
+		Source: micSource, From: dev.ID, FromName: dev.Name, Rate: b.Rate, Channels: b.Channels,
+	}}
+	s.done, s.prev = d.sessions.micTurn.take()
+	old := d.mic
+	d.mic, d.micErr = s, ""
+	d.mu.Unlock()
+	if old != nil {
+		old.cancel()
+	}
+	d.watchSession(ctx, cancel, dev, l, nil)
+	d.markDirty()
+	return s
+}
+
+// failMic tells the phone why the microphone stopped, and shows the error
+// in the window.
+func (d *Daemon) failMic(s *micSession, dev *Device, l streamLink, err error) {
+	d.logf("%s: microphone: %v", dev.Name, err)
+	_ = l.Send(proto.New(proto.TypeFluxMic, map[string]any{"state": "error", "message": err.Error()}))
+	d.mu.Lock()
+	if d.mic == nil || d.mic == s {
+		d.micErr = err.Error()
+	}
+	d.mu.Unlock()
+	d.markDirty()
 }
 
 // runMic runs 1 microphone session until the phone stops, the link drops,
 // or the user stops it on this computer.
-func (d *Daemon) runMic(dev *Device, l *lan.Link, b micStart) {
+func (d *Daemon) runMic(s *micSession, b micStart) {
+	dev, l, ctx := s.dev, s.link, s.ctx
+	defer endTurn(s.done, s.prev)
+	defer d.dropMic(s)
+	defer s.cancel()
 	fail := func(err error) {
-		d.logf("%s: microphone: %v", dev.Name, err)
-		_ = l.Send(proto.New(proto.TypeFluxMic, map[string]any{"state": "error", "message": err.Error()}))
-		d.mu.Lock()
-		d.micErr = err.Error()
-		d.mu.Unlock()
-		d.markDirty()
+		if ctx.Err() == nil {
+			d.failMic(s, dev, l, err)
+		}
 	}
-	if err := b.check(); err != nil {
-		fail(err)
-		return
-	}
-	if d.opts.Headless {
-		fail(errors.New("the microphone is off in headless mode"))
+	// The pw-cat of the session before stops first.
+	if !waitTurn(ctx, s.prev) {
 		return
 	}
 	pwcat, err := exec.LookPath("pw-cat")
@@ -126,9 +181,6 @@ func (d *Daemon) runMic(dev *Device, l *lan.Link, b micStart) {
 		fail(errors.New("pw-cat is not installed on the computer. Install it with: sudo pacman -S pipewire"))
 		return
 	}
-	d.endMic("")
-	ctx, cancel := context.WithCancel(d.ctx)
-	defer cancel()
 	tc, err := l.DialPeer(ctx, b.Port)
 	if err != nil {
 		fail(fmt.Errorf("connect to the phone microphone: %w", err))
@@ -138,30 +190,49 @@ func (d *Daemon) runMic(dev *Device, l *lan.Link, b micStart) {
 	// A stop or a dropped link closes the stream, so that the copy to the
 	// process ends at once.
 	defer context.AfterFunc(ctx, func() { tc.Close() })()
-	s := &micSession{dev: dev, link: l, cancel: cancel, view: MicView{
-		Source: micSource, From: dev.ID, FromName: dev.Name, Rate: b.Rate, Channels: b.Channels,
-	}}
+	// Only the current session makes a Flux Microphone source.
 	d.mu.Lock()
-	d.mic, d.micErr = s, ""
+	current := d.mic == s && dev.Paired
 	d.mu.Unlock()
-	defer func() {
-		d.mu.Lock()
-		if d.mic == s {
-			d.mic = nil
-		}
-		d.mu.Unlock()
-		d.markDirty()
-	}()
-	cancelOnLinkDown(ctx, l, cancel)
+	if !current || ctx.Err() != nil {
+		return
+	}
 
+	// pw-cat reads from a small pipe, and micPump keeps at most
+	// micBacklog of audio in front of it. The delay then stays short after
+	// a stall of the network.
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		fail(err)
+		return
+	}
+	defer pw.Close()
+	if sc, err := pw.SyscallConn(); err == nil {
+		_ = sc.Control(func(fd uintptr) { _, _ = unix.FcntlInt(fd, unix.F_SETPIPE_SZ, micPipeSize) })
+	}
 	cmd := childCommand(ctx, pwcat, micArgs(b.Rate, b.Channels)...)
-	cmd.Stdin = tc
+	cmd.Stdin = pr
 	var stderr lockedBuffer
 	cmd.Stderr = &stderr
-	if err := cmd.Start(); err != nil {
+	err = cmd.Start()
+	pr.Close()
+	if err != nil {
 		fail(fmt.Errorf("start pw-cat: %w", err))
 		return
 	}
+	frame := 2 * b.Channels
+	limit := int(micBacklog.Seconds()*float64(b.Rate)) * frame
+	go func() {
+		dropped := false
+		_ = micPump(pw, tc, frame, limit, func() {
+			if !dropped {
+				dropped = true
+				d.logf("%s: microphone: dropped audio after a network stall, to keep the delay short", dev.Name)
+			}
+		})
+		// pw-cat ends at the end of its input.
+		pw.Close()
+	}()
 	// Report the microphone as live once pw-cat runs with the stream.
 	go func() {
 		select {
@@ -188,26 +259,115 @@ func (d *Daemon) runMic(dev *Device, l *lan.Link, b micStart) {
 	d.logf("%s: microphone stopped", dev.Name)
 }
 
-// endMic stops the session. An empty ID stops any session.
-func (d *Daemon) endMic(deviceID string) {
+const (
+	// micBacklog is the most audio that fluxd keeps for pw-cat. Older
+	// audio is dropped, so a stall of the network adds no lasting delay.
+	micBacklog = 150 * time.Millisecond
+	// micPipeSize is the size of the pipe to pw-cat, about 40 ms of audio.
+	micPipeSize = 4096
+)
+
+// micPump copies the audio from src to dst. It keeps at most limit bytes
+// that dst did not take yet, and drops the oldest whole frames of frame
+// bytes when more arrive. It calls dropped for each drop. It returns when
+// src ends or dst fails.
+func micPump(dst io.Writer, src io.Reader, frame, limit int, dropped func()) error {
+	var (
+		mu   sync.Mutex
+		cond = sync.NewCond(&mu)
+		buf  []byte
+		done bool
+		werr error
+	)
+	go func() {
+		chunk := make([]byte, 4096)
+		for {
+			n, err := src.Read(chunk)
+			mu.Lock()
+			if werr != nil {
+				mu.Unlock()
+				return
+			}
+			buf = append(buf, chunk[:n]...)
+			if over := len(buf) - limit; over > 0 {
+				// Drop whole frames, so that the samples stay aligned.
+				over = (over + frame - 1) / frame * frame
+				buf = buf[:copy(buf, buf[min(over, len(buf)):])]
+				dropped()
+			}
+			if err != nil {
+				done = true
+			}
+			cond.Signal()
+			mu.Unlock()
+			if err != nil {
+				return
+			}
+		}
+	}()
+	out := make([]byte, micPipeSize)
+	for {
+		mu.Lock()
+		for len(buf) == 0 && !done {
+			cond.Wait()
+		}
+		if len(buf) == 0 {
+			mu.Unlock()
+			return nil
+		}
+		n := copy(out, buf)
+		buf = buf[:copy(buf, buf[n:])]
+		mu.Unlock()
+		if _, err := dst.Write(out[:n]); err != nil {
+			mu.Lock()
+			werr = err
+			mu.Unlock()
+			return err
+		}
+	}
+}
+
+// dropMic removes a session that ended.
+func (d *Daemon) dropMic(s *micSession) {
 	d.mu.Lock()
-	s := d.mic
+	if d.mic == s {
+		d.mic = nil
+	}
 	d.mu.Unlock()
-	if s != nil && (deviceID == "" || s.dev.ID == deviceID) {
+	d.markDirty()
+}
+
+// takeMic removes the session from the slot and returns it, or nil. An
+// empty ID takes any session. The caller stops the session.
+func (d *Daemon) takeMic(deviceID string) *micSession {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	s := d.mic
+	if s == nil || (deviceID != "" && s.dev.ID != deviceID) {
+		return nil
+	}
+	d.mic = nil
+	return s
+}
+
+// endMic stops the session, also while fluxd still sets it up. An empty ID
+// stops any session.
+func (d *Daemon) endMic(deviceID string) {
+	if s := d.takeMic(deviceID); s != nil {
 		s.cancel()
+		d.markDirty()
 	}
 }
 
 // StopMic stops the phone microphone from this computer and tells the phone.
 func (d *Daemon) StopMic() error {
-	d.mu.Lock()
-	s := d.mic
-	d.mu.Unlock()
+	s := d.takeMic("")
 	if s == nil {
 		return apiErr("not_active", "No phone microphone is live")
 	}
 	_ = s.link.Send(proto.New(proto.TypeFluxMic, map[string]any{"state": "stop"}))
 	s.cancel()
+	d.markDirty()
 	return nil
 }
 

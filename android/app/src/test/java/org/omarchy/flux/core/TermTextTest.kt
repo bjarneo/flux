@@ -2,6 +2,7 @@ package org.omarchy.flux.core
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** The fitting of full-screen agent output, for example opencode, to a phone screen. */
@@ -238,5 +239,38 @@ class TermTextTest {
         assertEquals("a color at half lightness stays", 0xFF0000, invertLightness(0xFF0000))
         assertEquals(0x5C5C5C, invertLightness(0xA3A3A3))
         assertEquals("a light orange becomes a dark orange", 0x522100, invertLightness(0xFFCEAD))
+    }
+
+    @Test
+    fun ansiMergeIsLinear() {
+        // Each "a ESC 7" is a merge into the same span: 300 000 merges in
+        // all. The old parser copied the whole span for each merge.
+        val text = ("a\u001b7".repeat(2_000) + "\n").repeat(150)
+        val start = System.nanoTime()
+        val lines = parseAnsi(text)
+        val ms = (System.nanoTime() - start) / 1_000_000
+        assertEquals(150, lines.size)
+        assertTrue(lines.all { it.spans.single().text.length == 2_000 })
+        assertTrue("the parse took $ms ms", ms < 1_000)
+    }
+
+    @Test
+    fun ansiCapsColumns() {
+        val line = parseAnsi("\t".repeat(10_000) + "end").single()
+        assertEquals(TERM_MAX_COLUMNS, line.text.length)
+    }
+
+    @Test
+    fun ansiDropsC1AndMarksBidiControls() {
+        val line = parseAnsi("ok \u202Eexe.sh\u202C \u0085done\u009B\u2066x\u2069\u2028").single()
+        assertEquals("ok \uFFFDexe.sh\uFFFD done\uFFFDx\uFFFD\uFFFD", line.text)
+    }
+
+    @Test
+    fun ansiKeepsLastLines() {
+        val lines = parseAnsi((1..50).joinToString("\n") { "line $it" }, maxLines = 10)
+        assertEquals(10, lines.size)
+        assertEquals("line 41", lines.first().text)
+        assertEquals("line 50", lines.last().text)
     }
 }

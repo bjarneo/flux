@@ -9,7 +9,7 @@ arch=('x86_64' 'aarch64')
 url='https://omarchy.org'
 # The repository has no license yet.
 license=('LicenseRef-unknown')
-depends=('qt6-base' 'qt6-declarative' 'qt6-svg' 'qt6-wayland' 'ttf-font-nerd' 'wl-clipboard' 'pipewire' 'avahi' 'xdg-utils')
+depends=('qt6-base>=6.6' 'qt6-declarative>=6.6' 'qt6-svg' 'qt6-wayland' 'ttf-font-nerd' 'wl-clipboard' 'pipewire' 'avahi' 'xdg-utils')
 optdepends=(
 	'quickshell: the flux plugin for omarchy-shell'
 	'ffmpeg: the phone as webcam'
@@ -55,9 +55,11 @@ build() {
 	make build VERSION="$pkgver"
 }
 
+# Only the tests. CI also runs go vet, gofmt, and the race detector, which
+# can fail with a newer Go than the Go of CI.
 check() {
 	_src
-	make test vet
+	go test ./cmd/... ./internal/...
 }
 
 package() {

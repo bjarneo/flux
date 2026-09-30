@@ -52,6 +52,25 @@ object SmsPackets {
     /** The most messages that 1 thread request gets. */
     const val MAX_THREAD = 500
 
+    /** The longest message text that goes to a computer, in characters. A longer text ends with a mark. */
+    const val MAX_BODY = 64 * 1024
+
+    /** The mark at the end of a text that [MAX_BODY] cut. */
+    const val CUT_MARK = " […]"
+
+    /**
+     * The longest text message that the phone sends for a computer, in
+     * characters. It is about 10 SMS parts. fluxd uses the same limit.
+     */
+    const val MAX_SEND = 1600
+
+    /**
+     * The largest flux.sms.messages packet, in bytes of JSON. fluxd closes a
+     * link that sends a line of more than 16 MiB, so 1 large message thread
+     * must not reach that limit.
+     */
+    const val MAX_PACKET_BYTES = 4 shl 20
+
     // The event flags of a message.
     private const val EVENT_TEXT = 1
     private const val EVENT_MULTI_TARGET = 2
@@ -61,19 +80,69 @@ object SmsPackets {
      * to its contact name. [threadId] marks the answer to a thread request,
      * so that the computer can tell it from a new message.
      */
-    fun messages(list: List<TextMessage>, names: Map<String, String> = emptyMap(), threadId: Long? = null): Packet {
+    fun messages(list: List<TextMessage>, names: Map<String, String> = emptyMap(), threadId: Long? = null): Packet =
+        packet(list.map { message(it, names) }, threadId)
+
+    /**
+     * The flux.sms.messages packets for [list], each at most [budget] bytes.
+     * A list with no thread splits into more packets, and the computer adds
+     * each one. The computer takes only 1 answer to a thread request, so
+     * that answer keeps the first messages of [list] that fit. [list] has
+     * the newest messages first, so the oldest ones go.
+     *
+     * [conversations] marks the answer to a conversations request. Its
+     * first packet has "conversations": true, and the computer then replaces
+     * its list of conversations. The computer adds the other packets.
+     */
+    fun messagePackets(
+        list: List<TextMessage>,
+        names: Map<String, String> = emptyMap(),
+        threadId: Long? = null,
+        budget: Int = MAX_PACKET_BYTES,
+        conversations: Boolean = false,
+    ): List<Packet> {
+        val batches = ArrayList<List<JsonObject>>()
+        var batch = ArrayList<JsonObject>()
+        var size = 0
+        for (m in list) {
+            val o = message(m, names)
+            val n = o.toString().toByteArray(Charsets.UTF_8).size + 1
+            if (batch.isNotEmpty() && size + n > budget) {
+                batches += batch
+                if (threadId != null) break
+                batch = ArrayList()
+                size = 0
+            }
+            batch += o
+            size += n
+        }
+        if (batch.isNotEmpty() && (threadId == null || batches.isEmpty())) batches += batch
+        // An empty answer still tells the computer that the request ended.
+        if (batches.isEmpty()) batches += emptyList<JsonObject>()
+        return batches.mapIndexed { i, b -> packet(b, threadId, conversations && i == 0) }
+    }
+
+    private fun packet(messages: List<JsonObject>, threadId: Long?, conversations: Boolean = false): Packet {
         val fields = buildList {
             add("version" to 2)
-            add("messages" to list.map { message(it, names) })
+            add("messages" to messages)
             if (threadId != null) add("threadID" to threadId)
+            if (conversations) add("conversations" to true)
         }
         return Packet(Types.SMS_MESSAGES, bodyOf(*fields.toTypedArray()))
+    }
+
+    /** Cuts a text that is longer than [MAX_BODY], and marks the cut. */
+    fun clip(body: String): String {
+        if (body.length <= MAX_BODY) return body
+        val cut = body.take(MAX_BODY).let { if (it.last().isHighSurrogate()) it.dropLast(1) else it }
+        return cut + CUT_MARK
     }
 
     private fun message(m: TextMessage, names: Map<String, String>): JsonObject = bodyOf(
         "_id" to m.id,
         "thread_id" to m.threadId,
-        "body" to m.body,
+        "body" to clip(m.body),
         "date" to m.date,
         "type" to m.type,
         "read" to if (m.read) 1 else 0,
@@ -84,6 +153,9 @@ object SmsPackets {
             if (name.isEmpty()) mapOf("address" to a) else mapOf("address" to a, "contactName" to name)
         },
     )
+
+    /** True when [body] has more than [MAX_SEND] characters. As in fluxd, a character is 1 Unicode code point. */
+    fun tooLong(body: String): Boolean = body.codePointCount(0, body.length) > MAX_SEND
 
     /**
      * Reads a flux.sms.request, which gives a list of addresses. It returns

@@ -18,6 +18,10 @@ const (
 	maxIdentitySize = 64 << 10
 )
 
+// maxUnpairedLine is the longest line that a link reads while its device
+// is not paired. A pair packet is less than 1 KiB.
+const maxUnpairedLine = 64 << 10
+
 // cipherSuites limits TLS 1.2 to forward-secret AEAD suites. TLS 1.3
 // ignores this list.
 var cipherSuites = []uint16{

@@ -76,10 +76,15 @@ data class Packet(
         /**
          * Parses one packet line. It returns null for a line that is not a
          * packet. The computer sends each payload through a tunnel, so the
-         * parse ignores a payload port.
+         * parse ignores a payload port. An Error, for example an
+         * OutOfMemoryError, goes to the caller, so that the link closes.
          */
         fun parse(line: String): Packet? {
-            val obj = runCatching { json.parseToJsonElement(line.trim()).jsonObject }.getOrNull() ?: return null
+            val obj = try {
+                json.parseToJsonElement(line.trim()).jsonObject
+            } catch (_: Exception) {
+                return null
+            }
             val type = (obj["type"] as? JsonPrimitive)?.contentOrNull ?: return null
             val id = (obj["id"] as? JsonPrimitive)?.let { it.longOrNull ?: it.contentOrNull?.toLongOrNull() } ?: 0L
             val body = obj["body"] as? JsonObject ?: JsonObject(emptyMap())

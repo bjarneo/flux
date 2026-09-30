@@ -22,6 +22,18 @@ class CodesTest {
     }
 
     @Test
+    fun onlyWebLinksOpen() {
+        for (raw in listOf("file:///etc/passwd", "ftp://files.example.com/a", "javascript://x%0aalert(1)", "smb://nas/share", "https://", "http:///path")) {
+            val sheet = Codes.sheet(ScannedCode(CodeFormat.QrCode, raw), "pc")
+            assertEquals(raw, CodeKind.Text, sheet.kind)
+            assertEquals(raw, listOf(ShareBody.Save(raw), ShareBody.Copy(raw)), sheet.actions.map { it.body })
+        }
+        // The scanner can call a code a URL. Flux still opens only a web link.
+        assertEquals(CodeKind.Text, Codes.kind(ScannedCode(CodeFormat.QrCode, "intent://x#Intent;end", url = "intent://x#Intent;end")))
+        assertEquals(CodeKind.Url, Codes.kind(ScannedCode(CodeFormat.QrCode, "HTTPS://Omarchy.org")))
+    }
+
+    @Test
     fun textSavesOrCopies() {
         val sheet = Codes.sheet(ScannedCode(CodeFormat.Aztec, "Gate B14"), "pc")
         assertEquals(CodeKind.Text, sheet.kind)

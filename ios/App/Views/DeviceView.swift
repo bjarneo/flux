@@ -49,9 +49,9 @@ struct DeviceView: View {
             }
         }
         .confirmationDialog("Unpair \(device.name)?", isPresented: $confirmUnpair, titleVisibility: .visible) {
-            Button("Unpair", role: .destructive) { model.core.unpair(device.id) }
+            Button("Unpair", role: .destructive) { model.unpair(device.id) }
         } message: {
-            Text("\(device.name) and this iPhone forget each other. Pair again to use it.")
+            Text(model.unpairMessage(device))
         }
     }
 }

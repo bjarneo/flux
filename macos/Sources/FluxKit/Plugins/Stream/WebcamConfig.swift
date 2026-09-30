@@ -34,7 +34,9 @@ public struct WebcamConfig: Equatable, Sendable {
         guard let partial else { return self }
         var c = self
         c.aspect = partial.text("aspect") ?? aspect
-        c.resolution = partial.number("resolution").map(roundHalfUp) ?? resolution
+        // A resolution outside 1 to 10000 pixels is not a value that a
+        // camera has. The clamp to the caps picks the next valid value.
+        c.resolution = partial.number("resolution").flatMap { (1...10_000).contains($0) ? roundHalfUp($0) : nil } ?? resolution
         c.camera = partial.text("camera")?.lowercased() ?? camera
         c.mirror = partial.flag("mirror") ?? mirror
         c.zoom = partial.number("zoom") ?? zoom
@@ -57,7 +59,11 @@ public struct WebcamConfig: Equatable, Sendable {
         }
         var c = self
         c.aspect = caps.aspects.contains(aspect) ? aspect : caps.aspects.first ?? "16:9"
-        c.resolution = caps.resolutions.min { abs($0 - resolution) < abs($1 - resolution) } ?? 720
+        // The distance in Double cannot overflow, also for a resolution
+        // that update gets from a caller. The small range keeps the Double
+        // exact, so a huge resolution gives the largest one in caps.
+        let r = Double(min(max(resolution, 0), 1 << 20))
+        c.resolution = caps.resolutions.min { abs(Double($0) - r) < abs(Double($1) - r) } ?? 720
         c.camera = caps.cameras.contains(camera) ? camera : caps.cameras.first ?? "back"
         c.zoom = round(zoom.limited(1, max(1, caps.zoomMax)), 100)
         c.exposure = round(ev, 1000)
@@ -89,7 +95,8 @@ public struct WebcamConfig: Equatable, Sendable {
     public static func frameSize(aspect: String, short: Int) -> (width: Int, height: Int) {
         let parts = aspect.split(separator: ":", omittingEmptySubsequences: false).compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
         let (a, b) = parts.count == 2 && parts[0] > 0 && parts[1] > 0 ? (parts[0], parts[1]) : (16, 9)
-        func even(_ v: Double) -> Int { roundHalfUp(v / 2) * 2 }
+        // The half stays inside half the Int range, so the product cannot overflow.
+        func even(_ v: Double) -> Int { max(min(roundHalfUp(v / 2), Int.max / 2), Int.min / 2) * 2 }
         return a >= b
             ? (even(Double(short) * Double(a) / Double(b)), short)
             : (short, even(Double(short) * Double(b) / Double(a)))
@@ -147,8 +154,14 @@ public struct WebcamCaps: Equatable, Sendable {
     }
 }
 
-/// Rounds like Kotlin roundToInt, so both apps agree on the values: halves go up.
-private func roundHalfUp(_ v: Double) -> Int { Int((v + 0.5).rounded(.down)) }
+/// Rounds like Kotlin roundToInt, so both apps agree on the values: halves
+/// go up. Like roundToInt it saturates at the Int range, and NaN is 0, so
+/// that no value traps.
+func roundHalfUp(_ v: Double) -> Int {
+    let r = (v + 0.5).rounded(.down)
+    if r.isNaN { return 0 }
+    return Int(exactly: r) ?? (r > 0 ? Int.max : Int.min)
+}
 
 private func round(_ v: Double, _ scale: Double) -> Double { Double(roundHalfUp(v * scale)) / scale }
 

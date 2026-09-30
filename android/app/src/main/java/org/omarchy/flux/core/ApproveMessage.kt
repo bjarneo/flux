@@ -40,6 +40,9 @@ object ApproveMessage {
     /** How far the time of a request can be from the phone clock. */
     const val MAX_SKEW_SECONDS = 600L
 
+    /** The largest time of a request in seconds: 2^40, about the year 36812. fluxd and the Apple apps use the same limit. */
+    const val MAX_TIME = 1L shl 40
+
     /** Valid UTF-8, at most 256 bytes, and no control character. */
     fun validField(v: String): Boolean {
         val bytes = v.toByteArray(Charsets.UTF_8)
@@ -102,7 +105,7 @@ object ApproveMessage {
             service = if (kind == ApproveRequest.Kind.Approve) p.string("service") ?: return null else "",
             tty = p.string("tty") ?: "",
             rhost = p.string("rhost") ?: "",
-            time = p.long("time") ?: return null,
+            time = p.long("time")?.takeIf { it in 1..MAX_TIME } ?: return null,
             nonce = p.string("nonce") ?: return null,
             timeoutSeconds = (p.int("timeout") ?: 20).coerceIn(5, 120),
         )
@@ -112,8 +115,37 @@ object ApproveMessage {
         return r
     }
 
-    /** Reports whether the time of [r] is within 10 minutes of the phone clock. */
-    fun fresh(r: ApproveRequest, nowSeconds: Long): Boolean = kotlin.math.abs(nowSeconds - r.time) <= MAX_SKEW_SECONDS
+    /** What the phone does with a new request. */
+    enum class Admit {
+        /** No request is open, so the phone shows the new one. */
+        Show,
+
+        /** The packet repeats the open request, so nothing changes. */
+        Repeat,
+
+        /** The packet has the ID of the open request but other fields. */
+        Conflict,
+
+        /** Another request is open, so the phone refuses the new one. */
+        Busy,
+    }
+
+    /**
+     * Decides what the phone does with [next] while [open] shows. A request
+     * never changes on screen, because the user approves what the screen
+     * showed. A conflict closes the open request, and the computer asks for
+     * the password.
+     */
+    fun admit(open: ApproveRequest?, next: ApproveRequest): Admit = when {
+        open == null -> Admit.Show
+        open == next -> Admit.Repeat
+        open.id == next.id && open.computerId == next.computerId -> Admit.Conflict
+        else -> Admit.Busy
+    }
+
+    /** Reports whether the time of [r] is within 10 minutes of the phone clock. The check does not subtract the time of [r], so a large time cannot wrap. */
+    fun fresh(r: ApproveRequest, nowSeconds: Long): Boolean =
+        r.time in (nowSeconds - MAX_SKEW_SECONDS)..(nowSeconds + MAX_SKEW_SECONDS)
 
     /** The question on the phone, for example "Approve sudo for user alice on host omarchy-xps?". */
     fun question(r: ApproveRequest): String = when (r.kind) {

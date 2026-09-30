@@ -12,8 +12,8 @@ systemctl --user status fluxd
 journalctl --user -u fluxd -n 100 --no-pager
 ```
 
-Inspect `flux-cli setup` output directly.
-It can print a failed setup step and still exit with zero.
+`flux-cli setup` returns 1 when the service step or the plugin step fails.
+A missing system part does not change the exit code, so also read the list under `3. System parts` in its output.
 
 ## flux runs another program
 
@@ -50,7 +50,19 @@ See [isolated development](development.md#isolated-daemon).
 ## fluxd runs an earlier version
 
 `flux-cli version` shows the version of the running `fluxd`.
-`fluxd.service` restarts by itself after an update, when no transfer or stream runs.
+`fluxd.service` restarts by itself after an update.
+It waits while 1 of these runs:
+
+- A file transfer
+- A webcam, microphone, or screen mirror stream
+- The remote desktop
+- A Browse PC session
+- The send of the Android app
+- A fingerprint approval
+
+The journal then shows a line such as `the restart waits for Browse PC`.
+To end a Browse PC session, select **Stop** in its desktop notification.
+
 If `flux-cli version` says `fluxd runs an earlier version`, restart the service once:
 
 ```sh
@@ -66,18 +78,51 @@ journalctl --user -u fluxd -n 50 --no-pager
 The line `the new ... does not run` means that the new binary failed its version check.
 Install the update again.
 
+### The service runs an old fluxd after a package install
+
+systemd uses a unit in `~/.config/systemd/user/` before the unit of the package in `/usr/lib/systemd/user/`.
+A `flux-cli setup` of a checkout or `make install-user` writes such a unit.
+After a package install, it hides the unit of the package, and the service runs the old `fluxd`.
+`flux-cli doctor` reports it:
+
+```text
+✗ /home/you/.config/systemd/user/fluxd.service hides /usr/lib/systemd/user/fluxd.service, so the service does not run the fluxd of the package. To remove it, run: flux-cli setup
+```
+
+To remove a unit that `flux-cli setup` wrote, run `flux-cli setup` again.
+`flux-cli setup` keeps a unit that you changed and prints its path.
+Remove such a unit yourself, then reload systemd:
+
+```sh
+systemctl --user daemon-reload
+```
+
 ## The release check fails
 
 Flux works without the internet.
 Only the daily [release check](configuration.md#release-check) needs a connection to `api.github.com`.
 `flux-cli doctor` shows the error of the last failed check.
-`fluxd` tries again after 1 hour or at the next network change.
+`fluxd` tries again after 1 hour or at the next network change, but not earlier than 1 minute after the failure.
 
 To turn the check off, set `check_updates = false` in `~/.config/flux/config.toml`, then run:
 
 ```sh
 systemctl --user reload fluxd
 ```
+
+## flux-cli update refuses a release
+
+`flux-cli update` checks `SHA256SUMS.sig` with the public release key of its build, then it checks the package against `SHA256SUMS`.
+When a check fails, it installs nothing and prints the cause:
+
+| Message | Next step |
+| --- | --- |
+| `the release has no SHA256SUMS.sig, so Flux cannot check who made it` | The upload of the release can be incomplete. Try again later. |
+| `SHA256SUMS.sig does not match SHA256SUMS and the release key, so Flux does not trust this release` | Do not install the release. Report it to the maintainer. |
+| `the SHA-256 checksum of FILE is …, and SHA256SUMS gives …` | The download is damaged. Run `flux-cli update` again. |
+
+A `flux-cli` without a release key checks only `SHA256SUMS` and says so.
+See [check a release](install.md#check-a-release) to check the files by hand.
 
 ## The phone does not appear
 
@@ -97,8 +142,14 @@ systemctl --user reload fluxd
    ```
 
 Guest Wi-Fi and client isolation can block devices on the same access point.
-Flux uses outbound desktop connections and mDNS, so a new inbound desktop firewall rule is not the default fix.
+`fluxd` listens on 1 TCP port from 1716 to 1764 and on UDP port 1716, but it does not need inbound traffic.
+It finds the devices through mDNS and opens the connections itself.
+So a new inbound desktop firewall rule is not the default fix.
+See [network ports](security.md#network-ports).
 Keep the existing identity and trust store while you diagnose connectivity.
+
+Flux for Android takes a connection from a new computer only while Flux is on the screen or while it scans.
+Open Flux on the phone before you pair.
 
 On a Mac, check that Flux has access to the local network.
 To read the Mac logs, run:
@@ -106,6 +157,38 @@ To read the Mac logs, run:
 ```sh
 log stream --predicate 'subsystem == "org.omarchy.flux"'
 ```
+
+## The pairing keys differ
+
+The pairing key has 16 characters in 4 groups of 4, for example `5EE6 825F 974E D59A`.
+An earlier Flux app shows only 8 characters.
+If 1 screen shows 8 characters, reject the request, update Flux on that device, and pair again.
+If the 16 characters differ, reject the request.
+Another device can be between the phone and the computer.
+
+`flux-cli pair` finds a name only among the devices that are connected and not paired.
+When the name still matches more than 1 device, `flux-cli pair` returns the `ambiguous` error with the device IDs.
+See [pair and discover](cli.md#pair-and-discover) for the match rule of each command.
+Give the device ID in place of the name.
+
+## A pairing from the computer stops after the phone accepts
+
+A pairing that you start on the computer can stop right after you accept on the phone.
+The Flux window then shows `Pairing with Pixel 8 stopped, because the connection closed`.
+A large phone clipboard can be the cause, because Flux for Android sends its clipboard when it accepts.
+Until you confirm on the computer, `fluxd` reads at most 64 KiB in 1 packet from the phone.
+It closes the connection for a larger packet, and the pairing stops.
+
+To find the cause, run:
+
+```sh
+journalctl --user -u fluxd -n 50 --no-pager | grep "packet too large"
+```
+
+To pair, do 1 of these steps:
+
+- Clear the phone clipboard, or copy a short text on the phone, and pair again.
+- Start the pairing on the phone, and accept it on the computer.
 
 ## The phone does not connect away from home
 

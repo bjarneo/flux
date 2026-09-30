@@ -1,3 +1,4 @@
+import AppKit
 import FluxKit
 import SwiftUI
 
@@ -13,6 +14,15 @@ struct ContentView: View {
             if let device = model.device {
                 DeviceDetailView(device: device)
                     .id(device.id)
+            } else if model.state.localNetworkDenied && !model.state.devices.contains(where: \.online) {
+                // A link that is open shows that Flux reaches a computer.
+                ContentUnavailableView {
+                    Label("Local Network is off", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(LocalNetworkNotice.text)
+                } actions: {
+                    Button("Open System Settings") { NSWorkspace.shared.open(LocalNetworkNotice.settings) }
+                }
             } else {
                 ContentUnavailableView {
                     Label("No computer found", systemImage: "desktopcomputer")
@@ -50,6 +60,12 @@ struct DeviceListView: View {
     var body: some View {
         @Bindable var model = model
         List(selection: $model.selection) {
+            // The paired computers stay in reach, for example to unpair one.
+            if model.state.localNetworkDenied && !model.state.devices.contains(where: \.online) {
+                Section {
+                    LocalNetworkNotice()
+                }
+            }
             if !model.paired.isEmpty {
                 Section("Paired") {
                     ForEach(model.paired) { DeviceRow(device: $0).tag($0.id) }
@@ -92,6 +108,28 @@ struct DeviceListView: View {
     }
 }
 
+/// Tells the user that macOS blocks the local network for Flux, and where
+/// to allow it. Discovery and links fail without it.
+struct LocalNetworkNotice: View {
+    static let text = "Flux needs Local Network access to find and reach computers. Turn on Flux in System Settings > Privacy & Security > Local Network."
+    static let settings = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork")!
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("Local Network is off", systemImage: "wifi.exclamationmark")
+                .font(.body.weight(.medium))
+            Text(Self.text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Open System Settings") { NSWorkspace.shared.open(Self.settings) }
+                .buttonStyle(.link)
+                .font(.caption)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
 struct DeviceRow: View {
     let device: DeviceSnapshot
 
@@ -106,9 +144,16 @@ struct DeviceRow: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Circle()
-                .fill(device.online ? Color.green : Color.secondary.opacity(0.4))
-                .frame(width: 8, height: 8)
+            // A request from the computer waits here, so that it does not take the window.
+            if device.pairState == .incoming {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .foregroundStyle(.orange)
+                    .help("\(device.name) wants to pair")
+            } else {
+                Circle()
+                    .fill(device.online ? Color.green : Color.secondary.opacity(0.4))
+                    .frame(width: 8, height: 8)
+            }
         }
     }
 }

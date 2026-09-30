@@ -22,6 +22,12 @@ import java.util.concurrent.ScheduledExecutorService
 private const val TAG = "FluxCore"
 
 /**
+ * The most links of devices that are not paired. A new device closes the
+ * link of the oldest one that has no open pairing.
+ */
+const val MAX_UNPAIRED_LINKS = 8
+
+/**
  * The process-wide state of Flux: the certificate, the paired devices, the
  * live links, and the actions that the UI calls. All device state changes
  * happen inside [locked], which publishes a new [UiState] at the end.
@@ -42,14 +48,23 @@ object FluxCore {
 
     private val lock = Any()
     private val devices = LinkedHashMap<String, Device>()
-    private var backend: LanBackend? = null
+    @Volatile private var backend: LanBackend? = null
     private var browse: BrowseState? = null
     private var scanning = false
     private var ringingFrom: String? = null
     private var initialized = false
 
-    /** True while an activity of the app is on screen. */
+    /**
+     * True while an activity of the app is on screen. When the app comes to
+     * the front, the phone sends its identity. A new computer then connects
+     * and shows in the list at once, because the phone takes new devices now.
+     */
     @Volatile var foreground = false
+        set(value) {
+            val cameToFront = value && !field
+            field = value
+            if (cameToFront) backend?.broadcast()
+        }
 
     // The flags of the state that need calls to the system. publish() runs
     // for each packet, so it reads these copies. refreshWifi() and
@@ -75,17 +90,22 @@ object FluxCore {
         if (initialized) return
         initialized = true
         app = context.applicationContext
-        local = LocalCertificate.loadOrCreate(File(app.filesDir, "identity"))
+        local = LocalCertificate.loadOrCreate(File(app.filesDir, "identity")) { e ->
+            Log.e(TAG, "the identity of this phone did not load. Flux made a new one.", e)
+            Android.createChannels(app)
+            Android.showEvent(app, "Flux has a new identity", "The saved identity did not load. Pair this phone with your computers again.")
+        }
         trust = TrustStore(app)
         settings = Settings(app)
         // The system keeps the night mode of the app, but a restore or a data clear can change the setting.
         Android.setNightMode(app, settings.theme)
+        // The trust store holds only entries with a readable certificate.
         for (t in trust.all()) {
             val identity = Identity(t.id, t.name, t.type, 8, emptyList(), emptyList())
             val d = Device(this, identity)
             d.pairState = PairState.Paired
             d.lastIp = t.lastIp
-            d.certificate = runCatching { t.cert() }.getOrNull()
+            d.certificate = trust.certificate(t.id)
             devices[t.id] = d
         }
         smsSupported = SmsSync.supported(app)
@@ -142,13 +162,15 @@ object FluxCore {
 
     fun startNetwork() {
         if (backend != null) return
-        val b = LanBackend(local, ::identity, object : LanBackend.Callbacks {
-            override fun trustedCertificate(deviceId: String): X509Certificate? =
-                trust.get(deviceId)?.let { runCatching { it.cert() }.getOrNull() }
+        lateinit var b: LanBackend
+        b = LanBackend(local, ::identity, object : LanBackend.Callbacks {
+            override fun trustedCertificate(deviceId: String): X509Certificate? = trust.certificate(deviceId)
 
             override fun hasLink(deviceId: String): Boolean = synchronized(lock) { devices[deviceId]?.online == true }
 
-            override fun onLink(link: Link) = attach(link)
+            override fun acceptsNewDevices(): Boolean = discoverable()
+
+            override fun onLink(link: Link) = attach(link, b)
 
             override fun knownAddresses(): List<InetAddress> = trust.all()
                 .mapNotNull { t -> t.lastIp.takeIf { it.isNotEmpty() }?.let { runCatching { InetAddress.getByName(it) }.getOrNull() } }
@@ -156,7 +178,7 @@ object FluxCore {
         backend = b
         io.execute {
             b.start()
-            _listenPort.value = b.tcpPort
+            if (backend === b) _listenPort.value = b.tcpPort
             locked { }
         }
     }
@@ -165,8 +187,19 @@ object FluxCore {
         backend?.stop()
         backend = null
         _listenPort.value = 0
-        locked { devices.values.forEach { it.link?.close() } }
+        // Close the links outside the lock: each close removes an unpaired
+        // device from the map. A close can write to the network, so it does
+        // not run on the main thread.
+        val links = synchronized(lock) { devices.values.mapNotNull { it.link } }
+        io.execute { links.forEach { it.close() } }
+        publish()
     }
+
+    /**
+     * True while a new computer can connect: while the app is on screen, or
+     * while the phone scans. A paired computer connects at any time.
+     */
+    private fun discoverable(): Boolean = foreground || synchronized(lock) { scanning }
 
     /** Sends the identity again, for example after the Wi-Fi network changes. */
     fun rediscover() {
@@ -191,15 +224,33 @@ object FluxCore {
         backend?.announceTo(address)
     }
 
-    private fun attach(link: Link) {
+    private fun attach(link: Link, from: LanBackend) {
         locked {
-            val id = link.identity.deviceId
-            val existing = devices[id]
-            val old = existing?.link
-            if (old != null && old.isOpen && old !== link && !old.peerCertificate.encoded.contentEquals(link.peerCertificate.encoded)) {
-                // Only the same certificate may replace a live link.
+            // A handshake that ends after Turn off gets no device.
+            if (backend !== from) {
                 link.close()
                 return@locked
+            }
+            val id = link.identity.deviceId
+            val existing = devices[id]
+            val pinned = trust.get(id)?.let { trust.certificate(id) }
+            val pairing = existing?.pairCertificate?.takeIf { existing.pairing }
+            if (!linkAllowed(link.peerCertificate.encoded, trust.get(id) != null, pinned?.encoded, pairing?.encoded)) {
+                Log.i(TAG, "refused a link for ${link.identity.deviceName}: another certificate")
+                link.close()
+                return@locked
+            }
+            if (existing == null && pinned == null && !makeRoomForNewDevice()) {
+                Log.i(TAG, "refused a link from the new device ${link.identity.deviceName}")
+                link.close()
+                return@locked
+            }
+            val old = existing?.link
+            // A pairing stays on the link on which it started, as in fluxd,
+            // which ends the pairing when a new link comes.
+            if (existing != null && endsPairing(existing.pairing, hasOldLink = old != null, sameLink = old === link)) {
+                existing.dropPairing()
+                toast("Pairing with ${link.identity.deviceName} stopped: the connection changed. Pair again")
             }
             val d = existing ?: Device(this, link.identity).also { devices[id] = it }
             d.identity = link.identity
@@ -209,22 +260,54 @@ object FluxCore {
             if (old != null && old !== link) old.close()
             d.certificate = link.peerCertificate
             d.lastIp = link.address.hostAddress ?: ""
-            if (trust.get(id) != null) {
+            if (pinned != null) {
                 d.pairState = PairState.Paired
                 trust.update(id) { it.copy(name = link.identity.deviceName, lastIp = d.lastIp) }
             }
-            link.start(onPacket = { p -> receive(d, p) }, onClose = { detach(d, link) })
+            link.start(
+                onPacket = { p -> receive(d, link, p) },
+                onClose = { detach(d, link) },
+                idleClose = { idleClose(d, link) },
+                // Only paired packets are that long, so the line counts as a packet from a device that still trusts the phone.
+                onLongLine = { synchronized(lock) { if (d.link === link) d.refuseUnpaired() } },
+            )
             if (d.paired) onConnected(d)
         }
     }
 
     /**
-     * Handles 1 packet on the read thread of the link. The output of a herdr
-     * pane can have 1000 lines, so its parse runs before the core lock.
+     * Makes room for the link of a new device that is not paired. It returns
+     * false when the phone does not take new devices now, or when each
+     * unpaired link has an open pairing. The core lock is held.
      */
-    private fun receive(d: Device, p: Packet) {
-        val output = if (p.type == Types.FLUX_HERDR) parseHerdrOutput(p.body) else null
+    private fun makeRoomForNewDevice(): Boolean {
+        if (!discoverable()) return false
+        val unpaired = devices.values.filter { !it.paired && it.online }
+        if (unpaired.size < MAX_UNPAIRED_LINKS) return true
+        // The map keeps the order in which the devices came, so the first one is the oldest.
+        val oldest = unpaired.firstOrNull { !it.pairing } ?: return false
+        oldest.link?.close()
+        return true
+    }
+
+    /**
+     * True when an unpaired link that sent nothing for a while can close. It
+     * runs on the read thread. While the app is on screen, the link stays,
+     * so that the computer stays in the list of computers to pair.
+     */
+    private fun idleClose(d: Device, link: Link): Boolean =
+        synchronized(lock) { d.link === link && !d.paired && !d.pairing && !discoverable() }
+
+    /**
+     * Handles 1 packet on the read thread of the link. Only the current link
+     * of a device counts. The output of a herdr pane can have 1000 lines, so
+     * its parse runs before the core lock, and only for a paired device.
+     */
+    private fun receive(d: Device, link: Link, p: Packet) {
+        val paired = synchronized(lock) { d.link === link && d.paired }
+        val output = herdrOutputOf(paired, p)
         locked {
+            if (d.link !== link) return@locked
             if (output != null && d.paired) HerdrSync.onOutput(d, output) else dispatch(d, p)
         }
     }
@@ -233,8 +316,37 @@ object FluxCore {
         locked {
             if (d.link !== link) return@locked
             d.link = null
-            if (d.pairState == PairState.Requested || d.pairState == PairState.Incoming) d.pairState = PairState.None
+            d.dropPairing()
             if (!d.paired) devices.remove(d.id)
+        }
+    }
+
+    /**
+     * Ends each session, stream, and request of a device that is no longer
+     * paired. [Device] calls it under the core lock when either side
+     * unpairs. The stops run on [io], because a stop can wait for a thread.
+     * The fingerprint approval key stays. Only an unpair on this phone
+     * deletes it.
+     */
+    fun revoke(d: Device) {
+        val id = d.id
+        val name = d.identity.deviceName
+        d.herdrOutput = null
+        d.herdrReply = null
+        d.herdrAction = null
+        // The computer can no longer dismiss, answer, or press a button on a phone notification.
+        NotificationSync.forgetDevice(id)
+        val browsing = browse?.deviceId == id
+        if (browsing) browse = null
+        io.execute {
+            val message = "$name is no longer paired"
+            org.omarchy.flux.screen.ScreenSession.stopFor(id, message)
+            org.omarchy.flux.webcam.WebcamSession.stopFor(this, id, message)
+            org.omarchy.flux.mic.MicSession.stopFor(this, id, message)
+            org.omarchy.flux.desktop.DesktopSession.stopFor(id, message)
+            if (browsing) Browse.close()
+            Approvals.current.value?.takeIf { it.computerId == id }?.let { Approvals.clear(app, it.id) }
+            Android.cancelFromComputer(app, id)
         }
     }
 
@@ -295,6 +407,7 @@ object FluxCore {
         }
         if (!d.paired) {
             Log.d(TAG, "ignored ${p.type} from unpaired ${d.identity.deviceName}")
+            d.refuseUnpaired()
             return
         }
         Plugins.handle(this, d, p)
@@ -414,3 +527,35 @@ object FluxCore {
         publish()
     }
 }
+
+/**
+ * Reports whether a new link for a device ID can take the place of the
+ * current link. A device with a trust entry must present the pinned
+ * certificate: [trusted] is true when the entry exists, and [pinned] is its
+ * certificate, or null when it does not parse. A device with an open
+ * pairing must present [pairing], the certificate from which the key came.
+ * Otherwise any certificate can replace the link, so that a device that is
+ * not paired cannot keep the device ID from another one.
+ */
+internal fun linkAllowed(cert: ByteArray, trusted: Boolean, pinned: ByteArray?, pairing: ByteArray?): Boolean = when {
+    trusted -> pinned != null && pinned.contentEquals(cert)
+    pairing != null -> pairing.contentEquals(cert)
+    else -> true
+}
+
+/**
+ * Reports whether a new link of a device ends its open pairing. A pairing
+ * stays on the link on which it started, as in fluxd. [hasOldLink] is true
+ * when the device has a link, and [sameLink] is true when the new link is
+ * that link.
+ */
+internal fun endsPairing(pairing: Boolean, hasOldLink: Boolean, sameLink: Boolean): Boolean =
+    pairing && hasOldLink && !sameLink
+
+/**
+ * Parses the output of a herdr pane before the core lock. Only a paired
+ * device gets the parse, so that a device that is not paired cannot make
+ * the phone do the work. It returns null for another packet.
+ */
+internal fun herdrOutputOf(paired: Boolean, p: Packet): HerdrOutput? =
+    if (paired && p.type == Types.FLUX_HERDR) parseHerdrOutput(p.body) else null

@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 import org.omarchy.flux.core.Device
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.net.Payload
-import org.omarchy.flux.net.Tls
+import org.omarchy.flux.net.WrongPeerException
 import org.omarchy.flux.protocol.Packet
 import org.omarchy.flux.protocol.Types
 import java.io.OutputStream
@@ -77,10 +77,11 @@ object WebcamSession {
             try {
                 val d = core.device(deviceId) ?: error("$name is not known")
                 if (Types.FLUX_WEBCAM !in d.identity.incoming) error("Update Flux on $name to use this phone as a webcam")
+                if (!d.paired) error("$name is not paired")
                 val cert = d.certificate ?: error("$name is not connected")
+                val peer = d.link?.address ?: error("$name is not connected")
                 val tls = core.tls ?: error("The network is not ready")
                 val srv = Payload.openServer()
-                srv.soTimeout = CONNECT_TIMEOUT_MS
                 if (!current(id)) return@execute srv.close()
                 synchronized(lock) { server = srv }
                 if (!d.send(WebcamPackets.start(srv.localPort, width, height))) {
@@ -89,14 +90,8 @@ object WebcamSession {
                 }
                 synchronized(lock) { if (attempt == id) announced = true }
                 d.send(WebcamPackets.config(WebcamSettings.config.value, WebcamSettings.caps.value))
-                val raw = srv.accept()
-                raw.tcpNoDelay = true
-                val ssl = tls.wrap(raw, server = true)
-                val peer = Tls.peerCertificate(ssl)
-                if (peer == null || !peer.encoded.contentEquals(cert.encoded)) {
-                    runCatching { ssl.close() }
-                    error("The connection did not come from $name")
-                }
+                // Connections from other hosts or with another certificate close, and the wait goes on.
+                val ssl = Payload.acceptPinned(srv, tls, cert, peer, CONNECT_TIMEOUT_MS)
                 runCatching { srv.close() }
                 val l = synchronized(lock) {
                     if (attempt != id) null else {
@@ -115,7 +110,11 @@ object WebcamSession {
             } catch (e: Exception) {
                 if (!current(id)) return@execute
                 Log.i(TAG, "webcam start failed: ${e.message}")
-                val message = if (e is java.net.SocketTimeoutException) "$name did not connect. Update Flux on the computer." else e.message ?: "The webcam could not start"
+                val message = when (e) {
+                    is java.net.SocketTimeoutException -> "$name did not connect. Update Flux on the computer."
+                    is WrongPeerException -> "The connection did not come from $name"
+                    else -> e.message ?: "The webcam could not start"
+                }
                 end(core, notify = true, Status(Phase.Error, message), id)
             }
         }
@@ -143,6 +142,12 @@ object WebcamSession {
         end(core, notify, status, id)
     }
 
+    /** Stops the stream when it goes to [deviceId], for example after an unpair. */
+    fun stopFor(core: FluxCore, deviceId: String, message: String) {
+        val id = synchronized(lock) { attempt.takeIf { this.deviceId == deviceId } } ?: return
+        end(core, notify = false, Status(Phase.Error, message), id)
+    }
+
     /**
      * Handles flux.webcam from the computer. The core lock is held, so the
      * work moves to [FluxCore.io].
@@ -164,14 +169,14 @@ object WebcamSession {
 
     private fun current(id: Int): Boolean = synchronized(lock) { attempt == id }
 
-    /** Checks the link every second and stops the stream when it drops. */
+    /** Checks the link every second and stops the stream when it drops or the pairing ends. */
     private fun watch(core: FluxCore, d: Device, id: Int) {
         synchronized(lock) {
             // An attempt that ended must not replace the watch of a newer attempt.
             if (attempt != id) return
             watch?.cancel(false)
             watch = watchdog.scheduleWithFixedDelay({
-                if (current(id) && !d.online) end(core, notify = false, Status(Phase.Error, "The connection to ${d.identity.deviceName} closed"), id)
+                if (current(id) && !(d.online && d.paired)) end(core, notify = false, Status(Phase.Error, "The connection to ${d.identity.deviceName} closed"), id)
             }, 1, 1, TimeUnit.SECONDS)
         }
     }

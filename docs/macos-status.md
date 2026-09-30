@@ -30,7 +30,7 @@ The resulting headless daemon (`fluxd -headless -udp-port … -tcp-port …`) se
 
 | Layer | Content |
 | --- | --- |
-| Protocol | `JSONValue`, `Packet`, `Identity`, packet types, RSA 2048 self-signed certificate with the device ID as its common name, SubjectPublicKeyInfo extraction, and the 8-character verification key |
+| Protocol | `JSONValue`, `Packet`, `Identity`, packet types, RSA 2048 self-signed certificate with the device ID as its common name, SubjectPublicKeyInfo extraction, and the verification key. The key now has 16 characters in 4 groups of 4. The first builds showed 8 characters. |
 | Network | TLS 1.2 with SwiftNIO and swift-nio-ssl, UDP identity broadcasts, the TCP listener and dialer, the plain-text identity then TLS upgrade on the same socket, links, payload servers and clients, `flux.tunnel`, and Bonjour `_flux._udp` |
 | Core | `FluxCore`, `Device` with pairing, `TrustStore` with pinned certificates, the `FluxPlugin` protocol, and one shared `Notifier` for UserNotifications |
 
@@ -71,7 +71,7 @@ The integrator merged each branch into `macos-client`, resolved the composition 
 
 - Branch `macos-client`, local only, not pushed.
 - 249 `FluxKitTests` pass. The app builds with no errors. `LanBackend.swift` has 2 deprecation warnings for `removeHandler(context:promise:)` from newer swift-nio.
-- The app is signed ad hoc, not sandboxed, and has no hardened runtime. It targets macOS 14 and later.
+- The app is signed ad hoc and not sandboxed, and it has the hardened runtime. It targets macOS 14 and later.
 - Dependencies: swift-nio 2.103, swift-nio-ssl 2.37, swift-certificates 1.21, swift-crypto 3.15, swift-asn1, and Citadel 0.12.0 for SSH and SFTP. Citadel requires swift-crypto below 4.
 
 ### Capabilities the Mac announces

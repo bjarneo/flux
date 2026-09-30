@@ -162,22 +162,37 @@ public struct HerdrReply: Sendable, Equatable {
     public var seq: Int
     public var sending: Bool
     public var error: String?
+    /// The code of `error`. "blocked" means that the agent waits for a
+    /// choice and fluxd refused the prompt. The UI can then send `text`
+    /// again as an answer.
+    public var code: String?
+    /// The text of a prompt.
+    public var text: String?
 
-    public init(pane: String, action: String, seq: Int, sending: Bool = true, error: String? = nil) {
+    public init(pane: String, action: String, seq: Int, sending: Bool = true, error: String? = nil, code: String? = nil, text: String? = nil) {
         self.pane = pane
         self.action = action
         self.seq = seq
         self.sending = sending
         self.error = error
+        self.code = code
+        self.text = text
     }
+
+    /// True when fluxd refused the prompt because the agent waits for a
+    /// choice. The text can go again as an answer.
+    public var blocked: Bool { action == "prompt" && !sending && code == HerdrWire.blockedCode && text != nil }
 }
 
 /// The answer of the computer to a reply: `{"kind":"sent"}`. `error` is nil
-/// on success.
+/// on success. `code` names some errors, see `HerdrWire.blockedCode`.
+/// `request` is the number of the reply, which a newer fluxd sends back.
 public struct HerdrSent: Sendable, Equatable {
     public var pane: String
     public var action: String
     public var error: String?
+    public var code: String? = nil
+    public var request: Int? = nil
 }
 
 /// The last new agent, new terminal, or close from this device. `action` is
@@ -204,11 +219,13 @@ public struct HerdrAction: Sendable, Equatable {
 }
 
 /// The answer of the computer to a create or a close: `{"kind":"created"}`
-/// or `{"kind":"closed"}`. `action` is "create" or "close".
+/// or `{"kind":"closed"}`. `action` is "create" or "close". `request` is
+/// the number of the action, which a newer fluxd sends back.
 public struct HerdrDone: Sendable, Equatable {
     public var action: String
     public var pane: String?
     public var error: String?
+    public var request: Int? = nil
 }
 
 /// The flux.herdr messages. docs/herdr.md describes the wire format, and
@@ -226,6 +243,9 @@ public enum HerdrWire {
     public static let maxPrompt = 16 * 1024
     /// The number of lines that a read asks for. fluxd allows 1 to 1000.
     public static let readLines = 1000
+    /// The code of a sent answer when fluxd refused a prompt because the
+    /// agent waits for a choice.
+    public static let blockedCode = "blocked"
 
     /// Asks the computer for its agent list. The computer answers with a state.
     public static func request() -> Packet { Packet(PacketType.fluxHerdr, ["kind": "request"]) }
@@ -240,9 +260,13 @@ public enum HerdrWire {
         Packet(PacketType.fluxHerdr, ["kind": "keys", "pane": pane, "keys": keys])
     }
 
-    /// Sends text to the agent in a pane.
-    public static func prompt(pane: String, _ text: String) -> Packet {
-        Packet(PacketType.fluxHerdr, ["kind": "prompt", "pane": pane, "text": text])
+    /// Sends text to the agent in a pane. With `answer`, the text answers a
+    /// dialog of an agent that waits for a choice. Without it, fluxd refuses
+    /// the text for such an agent.
+    public static func prompt(pane: String, _ text: String, answer: Bool = false) -> Packet {
+        var body: [String: Any?] = ["kind": "prompt", "pane": pane, "text": text]
+        if answer { body["answer"] = true }
+        return Packet(PacketType.fluxHerdr, body)
     }
 
     /// Types `text` in the terminal of a pane, then presses `keys`, for
@@ -265,6 +289,15 @@ public enum HerdrWire {
     /// Asks the computer to close a pane. The agent or the shell in it ends.
     public static func close(pane: String) -> Packet {
         Packet(PacketType.fluxHerdr, ["kind": "close", "pane": pane])
+    }
+
+    /// Adds the number of a reply, a create, or a close to its packet. A
+    /// newer fluxd sends the number back in its answer, so that a late
+    /// answer to an earlier request does not end this one.
+    public static func numbered(_ packet: Packet, request: Int) -> Packet {
+        var p = packet
+        p.body["request"] = .int(Int64(request))
+        return p
     }
 
     /// True when fluxd accepts the keys in 1 keys packet.
@@ -322,19 +355,40 @@ public enum HerdrWire {
         )
     }
 
+    /// The longest output text that this device parses, in UTF-8 bytes. fluxd
+    /// sends at most the same.
+    public static let maxText = 1 << 20
+
     /// Parses the body of an output packet. It returns nil for a body that is not an output.
     public static func output(_ body: [String: JSONValue]) -> HerdrOutput? {
         guard body["kind"]?.string == "output", let pane = body["pane"]?.string, !pane.isEmpty else { return nil }
         let error = body["error"]?.string.flatMap { $0.isEmpty ? nil : $0 }
+        let (text, cut) = tail(body["text"]?.string ?? "", max: maxText)
         // An older fluxd sends plain text. It has no escape sequences, so the
         // same parser reads it.
         return HerdrOutput(
             pane: pane,
             loading: false,
-            lines: error == nil ? TermText.lines(body["text"]?.string ?? "") : [],
-            truncated: body["truncated"]?.bool ?? false,
+            lines: error == nil ? TermText.lines(text) : [],
+            truncated: (body["truncated"]?.bool ?? false) || cut,
             error: error
         )
+    }
+
+    /// Keeps the end of the text, at most `max` UTF-8 bytes, from the start
+    /// of a line when it can, like tailText in fluxd. It returns true when
+    /// it cut the text.
+    static func tail(_ text: String, max: Int) -> (String, Bool) {
+        let utf8 = text.utf8
+        guard utf8.count > max else { return (text, false) }
+        var start = utf8.index(utf8.endIndex, offsetBy: -max)
+        if let newline = utf8[start...].firstIndex(of: 0x0A), utf8.index(after: newline) < utf8.endIndex {
+            start = utf8.index(after: newline)
+        } else {
+            // Start at the first byte of a character, not at a continuation byte.
+            while start < utf8.endIndex, utf8[start] & 0xC0 == 0x80 { start = utf8.index(after: start) }
+        }
+        return (String(decoding: utf8[start...], as: UTF8.self), true)
     }
 
     /// Parses the body of a created or closed packet. It returns nil for another body.
@@ -346,13 +400,14 @@ public enum HerdrWire {
         default: return nil
         }
         return HerdrDone(action: action, pane: body["pane"]?.string.flatMap { $0.isEmpty ? nil : $0 },
-                         error: body["error"]?.string.flatMap { $0.isEmpty ? nil : $0 })
+                         error: body["error"]?.string.flatMap { $0.isEmpty ? nil : $0 }, request: body["request"]?.int)
     }
 
     /// Parses the body of a sent packet. It returns nil for a body that is not a sent answer.
     public static func sent(_ body: [String: JSONValue]) -> HerdrSent? {
         guard body["kind"]?.string == "sent", let pane = body["pane"]?.string, !pane.isEmpty else { return nil }
-        return HerdrSent(pane: pane, action: body["action"]?.string ?? "", error: body["error"]?.string.flatMap { $0.isEmpty ? nil : $0 })
+        return HerdrSent(pane: pane, action: body["action"]?.string ?? "", error: body["error"]?.string.flatMap { $0.isEmpty ? nil : $0 },
+                         code: body["code"]?.string.flatMap { $0.isEmpty ? nil : $0 }, request: body["request"]?.int)
     }
 }
 

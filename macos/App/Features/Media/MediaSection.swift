@@ -1,3 +1,4 @@
+import AppKit
 import FluxKit
 import SwiftUI
 
@@ -87,23 +88,26 @@ private struct NowPlaying: View {
     }
 }
 
+/// The art loads through AlbumArtLoader, which limits the scheme and the size.
 private struct AlbumArt: View {
     let url: URL?
+    @State private var image: NSImage?
 
     var body: some View {
         Group {
-            if let url {
-                AsyncImage(url: url) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    placeholder
-                }
+            if let image {
+                Image(nsImage: image).resizable().scaledToFill()
             } else {
                 placeholder
             }
         }
         .frame(width: 64, height: 64)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .task(id: url) {
+            image = nil
+            guard let url, let data = await AlbumArtLoader.load(url) else { return }
+            image = NSImage(data: data)
+        }
     }
 
     private var placeholder: some View {

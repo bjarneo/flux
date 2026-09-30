@@ -97,12 +97,13 @@ flux-cli --device "Pixel 8" addresses remove pixel-8
 ## How it works
 
 - `fluxd` opens every connection to the phone. The phone listens on all its network interfaces, so it accepts connections through Tailscale.
-- For an offline paired device, `fluxd` dials the last address first. Then it dials the extra addresses in the order that you added them.
+- For an offline paired device, `fluxd` dials the last address first. Then it dials the address that UDP or mDNS reported in the last 10 minutes. Then it dials the extra addresses in the order that you added them.
 - `fluxd` starts the next address when the previous address fails or does not answer within 300 milliseconds. The first address that answers makes the link.
 - `fluxd` dials every 30 seconds while the device is offline. It also dials 2 seconds after a link drops, and at once when you add an address.
 - `fluxd` closes a link when sent data gets no acknowledgment for 30 seconds. So an old link does not stay open after the phone leaves the Wi-Fi.
 - When mDNS reports the phone, `fluxd` dials the extra addresses too. Avahi can report an old address from its cache.
 - `fluxd` uses the TCP port of the device from the last link. A device without a known port gets port 1716.
+- UDP and mDNS do not change the address or the port of a paired device, because any host on the network can send them. The address changes only when a link shows the pinned certificate.
 - Payloads, tunnels, and streams use the address of the link, so they also go through Tailscale.
 
 The addresses are in the `addresses` field of each device in `~/.local/share/flux/devices.json`.
@@ -124,8 +125,16 @@ Each link uses TLS with the certificates that you pinned at pairing, as on the l
 Tailscale adds a second layer of encryption.
 
 Other devices in your tailnet can reach the Flux ports of the phone.
-They can send a pair request, as a device on the local network can.
-To stop this, use Tailscale access controls to limit TCP ports 1716 to 1764 on the phone to the desktop.
+Flux for Android takes a connection from a device that is not paired only while Flux is on the screen or while it scans.
+In that time, another device in the tailnet can send a pair request, as a device on the local network can.
+A paired computer connects at any time.
+To stop the other devices, use Tailscale access controls to limit TCP ports 1716 to 1764 on the phone to the desktop.
+
+`fluxd` also listens on 1 TCP port from 1716 to 1764 and on UDP port 1716 on all interfaces, also `tailscale0`.
+The default Omarchy firewall blocks this inbound traffic, and Flux does not need it.
+Do not add a rule such as `ufw allow in on tailscale0` for Flux.
+With such a rule, each device in the tailnet can open a link to `fluxd` and send a pair request.
+See [network ports](security.md#network-ports).
 
 ## Limits
 

@@ -38,6 +38,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <!-- Approve sudo and polkit with a fingerprint. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- Android 12 and later: the pair sheet and the approval screen hide the windows of other apps. -->
+    <uses-permission android:name="android.permission.HIDE_OVERLAY_WINDOWS" />
 
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
@@ -53,6 +55,7 @@
     <application
         android:name=".FluxApp"
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
@@ -64,7 +67,7 @@
             android:name=".ui.MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|density|fontScale|uiMode"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -99,10 +102,12 @@
             android:turnScreenOn="true"
             android:taskAffinity="org.omarchy.flux.ring" />
 
+        <!-- The fingerprint prompt must reach the same activity, so a rotation or a fold does not recreate it. -->
         <activity
             android:name=".ui.ApproveActivity"
             android:exported="false"
             android:excludeFromRecents="true"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|density|fontScale|uiMode"
             android:launchMode="singleTop"
             android:showWhenLocked="true"
             android:turnScreenOn="true"

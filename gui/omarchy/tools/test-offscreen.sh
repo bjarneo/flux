@@ -9,12 +9,15 @@
 # Usage: test-offscreen.sh WORKDIR [copy|link] [FLUX_SOCKET]
 #   copy  installs the plugin as a copy with the test wrappers (default)
 #   link  installs the plugin as a symlink to this checkout, unchanged
-# To stop the shell, run: pkill -f "qs -p WORKDIR/omarchy/shell"
+# Without the FLUX_SOCKET argument, the script uses the socket path of fluxd:
+# $FLUX_SOCKET, else $XDG_RUNTIME_DIR/flux/fluxd.sock, else
+# /run/user/<uid>/flux/fluxd.sock. There is no /tmp fallback.
+# To stop the shell, run: pkill -f '^qs -p WORKDIR/omarchy/shell'
 set -euo pipefail
 
 work=${1:?Usage: test-offscreen.sh WORKDIR [copy|link] [FLUX_SOCKET]}
 mode=${2:-copy}
-socket=${3:-${XDG_RUNTIME_DIR:-/tmp}/flux/fluxd.sock}
+socket=${3:-${FLUX_SOCKET:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/flux/fluxd.sock}}
 plugin_src=$(dirname -- "$(realpath -- "${BASH_SOURCE[0]}")")/..
 plugin_src=$(realpath -- "$plugin_src")
 omarchy_src=${OMARCHY_SOURCE:-/usr/share/omarchy}
@@ -107,4 +110,4 @@ env -u WAYLAND_DISPLAY -u HYPRLAND_INSTANCE_SIGNATURE -u DISPLAY -u QT_QPA_PLATF
   OMARCHY_PATH="$root" FLUX_SOCKET="$socket" FLUX_TEST_SHOTS="$shots" \
   QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
   dbus-run-session -- qs -p "$root/shell" > "$work/shell.log" 2>&1 &
-echo "Started. Log: $work/shell.log. Stop: pkill -f \"qs -p $root/shell\""
+echo "Started. Log: $work/shell.log. Stop: pkill -f '^qs -p $root/shell'"

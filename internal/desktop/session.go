@@ -1,11 +1,18 @@
 package desktop
 
 import (
+	"context"
+	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/godbus/dbus/v5"
 )
 
 // Session is the display of the desktop that the user sees.
@@ -116,7 +123,8 @@ func HyprlandSession(runtimeDir string, procs Procs) (Session, bool) {
 	var displays []string
 	for _, pid := range procs.PIDs() {
 		ppid, comm, args, ok := procs.Info(pid)
-		if !ok || ppid != s.PID || comm != "Xwayland" {
+		// The arguments are empty when the process exits during the scan.
+		if !ok || ppid != s.PID || comm != "Xwayland" || len(args) < 2 {
 			continue
 		}
 		for _, a := range args[1:] {
@@ -148,4 +156,86 @@ func UseSession(s Session) (old string, changed bool) {
 	set("HYPRLAND_INSTANCE_SIGNATURE", s.Signature)
 	set("DISPLAY", s.X11)
 	return old, changed
+}
+
+// lockWait is the longest time that 1 check of the lock state can take.
+const lockWait = 2 * time.Second
+
+// Locked reports whether the screen of the user is locked. 1 of 3 checks
+// is enough: the LockedHint of the graphical logind session of the user, a
+// running hyprlock, and a session lock that holds a monitor of Hyprland.
+// The Omarchy lock screen sets no LockedHint and is not hyprlock, so only
+// the last check finds it. omarchy-hyprland-session-locked reads the same
+// value. A check that fails counts as unlocked.
+func Locked(ctx context.Context) bool {
+	return logindLocked(ctx) || procRuns(SystemProcs{}, "hyprlock") || hyprlandLocked(ctx)
+}
+
+// logindLocked reads the LockedHint of the graphical session of the user
+// from logind on the system bus.
+func logindLocked(ctx context.Context) bool {
+	ctx, cancel := context.WithTimeout(ctx, lockWait)
+	defer cancel()
+	conn, err := dbus.SystemBus()
+	if err != nil {
+		return false
+	}
+	get := func(path dbus.ObjectPath, iface, prop string) (any, bool) {
+		var v dbus.Variant
+		err := conn.Object("org.freedesktop.login1", path).
+			CallWithContext(ctx, "org.freedesktop.DBus.Properties.Get", 0, iface, prop).Store(&v)
+		return v.Value(), err == nil
+	}
+	// Display is the graphical session of the user, as a session ID and
+	// an object path.
+	display, ok := get("/org/freedesktop/login1/user/self", "org.freedesktop.login1.User", "Display")
+	if !ok {
+		return false
+	}
+	fields, _ := display.([]any)
+	if len(fields) != 2 {
+		return false
+	}
+	path, _ := fields[1].(dbus.ObjectPath)
+	if !path.IsValid() || path == "/" {
+		return false
+	}
+	locked, ok := get(path, "org.freedesktop.login1.Session", "LockedHint")
+	hint, _ := locked.(bool)
+	return ok && hint
+}
+
+// procRuns reports whether a process with the name runs.
+func procRuns(procs Procs, name string) bool {
+	for _, pid := range procs.PIDs() {
+		if _, comm, _, ok := procs.Info(pid); ok && comm == name {
+			return true
+		}
+	}
+	return false
+}
+
+// hyprlandLocked asks Hyprland whether a session lock holds a monitor.
+func hyprlandLocked(ctx context.Context) bool {
+	ctx, cancel := context.WithTimeout(ctx, lockWait)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "hyprctl", "-j", "monitors").Output()
+	return err == nil && monitorsLocked(out)
+}
+
+// monitorsLocked reads the output of hyprctl -j monitors. An active
+// ext-session-lock is 1 of the reasons in solitaryBlockedBy, as "LOCK".
+func monitorsLocked(out []byte) bool {
+	var ms []struct {
+		Blocked []string `json:"solitaryBlockedBy"`
+	}
+	if json.Unmarshal(out, &ms) != nil {
+		return false
+	}
+	for _, m := range ms {
+		if slices.Contains(m.Blocked, "LOCK") {
+			return true
+		}
+	}
+	return false
 }

@@ -1,7 +1,10 @@
 package org.omarchy.flux.core
 
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -9,6 +12,8 @@ import org.omarchy.flux.protocol.INCOMING
 import org.omarchy.flux.protocol.OUTGOING
 import org.omarchy.flux.protocol.Packet
 import org.omarchy.flux.protocol.Types
+import org.omarchy.flux.protocol.bool
+import org.omarchy.flux.protocol.str
 
 class HerdrTest {
     private fun body(line: String) = Packet.parse("""{"id":1,"type":"flux.herdr","body":$line}""")!!.body
@@ -76,10 +81,70 @@ class HerdrTest {
 
     @Test
     fun parsesCreatedAndClosed() {
-        assertEquals(HerdrDone("create", "w4:p1", null), parseHerdrDone(body("""{"kind":"created","what":"agent","pane":"w4:p1"}""")))
+        assertEquals(HerdrDone("create", "w4:p1", null, "agent"), parseHerdrDone(body("""{"kind":"created","what":"agent","pane":"w4:p1"}""")))
         assertEquals(HerdrDone("create", null, "The folder /x does not exist"), parseHerdrDone(body("""{"kind":"created","error":"The folder /x does not exist"}""")))
         assertEquals(HerdrDone("close", "w4:p1", null), parseHerdrDone(body("""{"kind":"closed","pane":"w4:p1"}""")))
         assertNull(parseHerdrDone(body("""{"kind":"sent","pane":"w4:p1"}""")))
+    }
+
+    @Test
+    fun parsesRequestNumbers() {
+        // A newer fluxd sends the number of the request back, so a late answer does not end a newer request.
+        assertEquals(HerdrDone("create", "w4:p1", null, "agent", 3), parseHerdrDone(body("""{"kind":"created","what":"agent","pane":"w4:p1","request":3}""")))
+        assertEquals(HerdrSent("w1:p1", "prompt", null, 7), parseHerdrSent(body("""{"kind":"sent","pane":"w1:p1","action":"prompt","request":7}""")))
+        assertNull(parseHerdrSent(body("""{"kind":"sent","pane":"w1:p1","action":"keys"}"""))!!.request)
+    }
+
+    @Test
+    fun keepsBlockedMessage() {
+        val sent = parseHerdrSent(
+            body("""{"kind":"sent","pane":"w1:p1","action":"prompt","code":"blocked","error":"The agent waits for a choice. Pick a choice first."}"""),
+        )
+        assertEquals("The agent waits for a choice. Pick a choice first.", sent!!.error)
+        assertEquals(HERDR_BLOCKED, sent.code)
+        assertNull("an answer without a code has none", parseHerdrSent(body("""{"kind":"sent","pane":"w1:p1","action":"prompt","error":"x"}"""))!!.code)
+    }
+
+    @Test
+    fun onlySendAsAnswerSetsTheAnswerFlag() {
+        val prompt = herdrPromptBody("w1:p1", "Use Postgres", answer = false)
+        assertEquals("prompt", prompt.str("kind"))
+        assertEquals("Use Postgres", prompt.str("text"))
+        assertNull("a normal Send has no answer field", prompt["answer"])
+        val answer = herdrPromptBody("w1:p1", "Use Postgres", answer = true)
+        assertEquals(true, answer.bool("answer"))
+        assertEquals("the same text goes again", "Use Postgres", answer.str("text"))
+    }
+
+    @Test
+    fun anAnswerWithARequestNumberMatchesOnlyThatReply() {
+        val reply = HerdrReply("w1:p1", "prompt", seq = 5)
+        assertTrue(HerdrSent("w1:p1", "prompt", null, request = 5).answers(reply))
+        assertFalse("a late answer to an earlier reply", HerdrSent("w1:p1", "prompt", null, request = 4).answers(reply))
+        assertFalse("a reply that got its answer", HerdrSent("w1:p1", "prompt", null, request = 5).answers(reply.copy(sending = false)))
+        assertFalse("another pane", HerdrSent("w2:p1", "prompt", null, request = 5).answers(reply))
+
+        val create = HerdrAction("create", seq = 3, what = "agent")
+        assertTrue(HerdrDone("create", "w4:p1", null, "agent", request = 3).answers(create))
+        assertFalse("a late answer to an earlier create", HerdrDone("create", "w4:p1", null, "agent", request = 2).answers(create))
+    }
+
+    @Test
+    fun anAnswerWithoutARequestNumberMatchesThePaneAndTheAction() {
+        // An older fluxd sends no number back.
+        val reply = HerdrReply("w1:p1", "prompt", seq = 5)
+        assertTrue(HerdrSent("w1:p1", "prompt", null).answers(reply))
+        assertTrue("an answer without an action", HerdrSent("w1:p1", "", null).answers(reply))
+        assertFalse("an answer to keys", HerdrSent("w1:p1", "keys", null).answers(reply))
+        assertFalse("another pane", HerdrSent("w2:p1", "prompt", null).answers(reply))
+
+        val close = HerdrAction("close", seq = 3, pane = "w4:p1")
+        assertTrue(HerdrDone("close", "w4:p1", null).answers(close))
+        assertFalse("another pane", HerdrDone("close", "w5:p1", null).answers(close))
+        val create = HerdrAction("create", seq = 4, what = "terminal")
+        assertTrue(HerdrDone("create", "w4:p2", null, "terminal").answers(create))
+        assertFalse("a late answer to a new agent", HerdrDone("create", "w4:p2", null, "agent").answers(create))
+        assertFalse("a close is not a create", HerdrDone("close", "w4:p2", null).answers(create))
     }
 
     @Test
@@ -195,5 +260,23 @@ class HerdrTest {
         val alerts = t.update(listOf(agent("a", AgentStatus.Done)))
         assertEquals("a change while offline posts nothing, and a gone pane clears", listOf(AgentAlert.Clear("b")), alerts)
         assertEquals(listOf(AgentAlert.NeedsInput(agent("a", AgentStatus.Blocked))), t.update(listOf(agent("a", AgentStatus.Blocked))))
+    }
+
+    private fun output(text: String) = JsonObject(
+        mapOf("kind" to JsonPrimitive("output"), "pane" to JsonPrimitive("w1:p1"), "text" to JsonPrimitive(text)),
+    )
+
+    @Test
+    fun herdrOutputIsCapped() {
+        val many = (1..HERDR_MAX_LINES + 500).joinToString("\n") { "row $it" }
+        val out = parseHerdrOutput(output(many))
+        assertNotNull(out)
+        assertTrue(out!!.truncated)
+        assertTrue(out.lines.size <= HERDR_MAX_LINES)
+        assertEquals("row ${HERDR_MAX_LINES + 500}", out.lines.last().text)
+
+        val big = parseHerdrOutput(output("z".repeat(100) + "\n" + "y".repeat(HERDR_MAX_TEXT)))!!
+        assertTrue(big.truncated)
+        assertTrue(big.lines.all { it.text.length <= TERM_MAX_COLUMNS })
     }
 }

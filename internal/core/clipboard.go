@@ -35,6 +35,10 @@ const clipImageTimeout = time.Minute
 // one clipboard entry. A copy by ID gives the full text.
 const maxClipPreview = 1024
 
+// maxClipText is the number of text bytes that the clipboard history keeps
+// in total. The history drops the oldest entries first.
+const maxClipText = 16 << 20
+
 // ClipEntry is one clipboard history entry.
 type ClipEntry struct {
 	// ID identifies the entry for clipboard.copy.
@@ -73,12 +77,20 @@ func (d *Daemon) addClipLocked(e ClipEntry) {
 	e.ID = config.NewID(6)
 	all := append([]ClipEntry{e}, d.clipboard...)
 	kept := all[:0]
-	images := 0
+	images, texts := 0, 0
 	for i, c := range all {
 		drop := i >= maxClipboard
 		if c.Image != "" {
 			images++
 			drop = drop || images > maxClipImages
+		}
+		// The newest entry always stays. Its text is at most
+		// desktop.MaxClipboardText.
+		if i > 0 && texts+len(c.Text) > maxClipText {
+			drop = true
+		}
+		if !drop {
+			texts += len(c.Text)
 		}
 		if drop {
 			if c.Image != "" {
@@ -94,6 +106,13 @@ func (d *Daemon) addClipLocked(e ClipEntry) {
 // addClipImage saves an image in the runtime folder and adds it to the
 // clipboard history as the entry e.
 func (d *Daemon) addClipImage(e ClipEntry, data []byte, mime string) error {
+	return d.addClipImageIf(e, data, mime, nil)
+}
+
+// addClipImageIf is addClipImage with the condition ok, which runs under
+// d.mu after the save. When ok returns false, addClipImageIf removes the
+// saved file and the history does not change. A nil ok is always true.
+func (d *Daemon) addClipImageIf(e ClipEntry, data []byte, mime string, ok func() bool) error {
 	d.mu.Lock()
 	dir := d.clipDir
 	d.mu.Unlock()
@@ -107,6 +126,11 @@ func (d *Daemon) addClipImage(e ClipEntry, data []byte, mime string) error {
 	sum := sha256.Sum256(data)
 	e.Text, e.Image, e.sum = "", path, hex.EncodeToString(sum[:])
 	d.mu.Lock()
+	if ok != nil && !ok() {
+		d.mu.Unlock()
+		os.Remove(path)
+		return nil
+	}
 	d.addClipLocked(e)
 	d.mu.Unlock()
 	d.markDirty()
@@ -182,9 +206,17 @@ func (d *Daemon) stopClipSend() {
 }
 
 // onLocalClipboard sends a local clipboard change to every paired device.
+// A text above maxSentText goes only to the clipboard history.
 func (d *Daemon) onLocalClipboard(text string) {
+	fits := len(text) <= maxSentText
 	d.mu.Lock()
 	d.lastLocalClip = time.Now()
+	// A device that connects later gets no older text in place of a text
+	// that is too large.
+	d.content.lastClip = ""
+	if fits {
+		d.content.lastClip = text
+	}
 	auto := d.cfg.AutoClipboard
 	if auto {
 		d.addClipLocked(ClipEntry{Text: text, Dir: "out", DeviceName: "this pc", Time: time.Now().Unix()})
@@ -195,22 +227,37 @@ func (d *Daemon) onLocalClipboard(text string) {
 	}
 	// The text replaces an image that is still on its way.
 	d.stopClipSend()
-	for _, l := range d.pairedLinks() {
-		_ = l.Send(proto.New(proto.TypeClipboard, map[string]any{"content": text}))
+	links := d.pairedLinks()
+	switch {
+	case !fits && len(links) > 0:
+		d.logf("clipboard: did not sync a text of %d bytes", len(text))
+		d.toast("The copied text is larger than %d KiB. Flux did not sync it", maxSentText>>10)
+	case fits:
+		for _, l := range links {
+			_ = l.Send(proto.New(proto.TypeClipboard, map[string]any{"content": text}))
+		}
 	}
 	d.markDirty()
 }
 
 // onLocalImage sends a local image copy to every paired device that
-// accepts clipboard images. A newer copy stops the transfer.
+// accepts clipboard images. A newer copy, an unpair, a dropped link, and
+// auto_clipboard off stop the transfer.
 func (d *Daemon) onLocalImage(data []byte, mime string) {
+	type target struct {
+		dev *Device
+		l   *lan.Link
+	}
 	d.mu.Lock()
 	d.lastLocalClip = time.Now()
+	// A device that connects later gets no older text in place of the
+	// image.
+	d.content.lastClip = ""
 	auto := d.cfg.AutoClipboard
-	var links []*lan.Link
+	var targets []target
 	for _, dev := range d.devices {
 		if dev.Paired && dev.link != nil && dev.accepts(proto.TypeFluxClipboardImage) {
-			links = append(links, dev.link)
+			targets = append(targets, target{dev, dev.link})
 		}
 	}
 	d.mu.Unlock()
@@ -223,12 +270,54 @@ func (d *Daemon) onLocalImage(data []byte, mime string) {
 	ctx, cancel := d.newClipSend()
 	go func() {
 		defer cancel()
-		for _, l := range links {
-			if err := sendClipImage(ctx, l, data, mime); err != nil && ctx.Err() == nil {
-				d.logf("send clipboard image to %s: %v", l.Identity.DeviceName, err)
+		for _, t := range targets {
+			d.mu.Lock()
+			ok := t.dev.Paired && t.dev.link == t.l && d.cfg.AutoClipboard
+			d.mu.Unlock()
+			if !ok || ctx.Err() != nil {
+				continue
+			}
+			lctx, lcancel := context.WithCancel(ctx)
+			cancelOnLinkDown(lctx, t.l, lcancel)
+			err := sendClipImage(lctx, t.l, data, mime)
+			lcancel()
+			if err != nil && ctx.Err() == nil {
+				d.logf("send clipboard image to %s: %v", t.l.Identity.DeviceName, err)
 			}
 		}
 	}()
+}
+
+// sendConnectClipboard sends the last text that Watch reported to a device
+// that connects, with the time of the last local copy. The device keeps
+// its own clipboard when that is newer.
+func (d *Daemon) sendConnectClipboard(l *lan.Link) {
+	d.mu.Lock()
+	text, ts, auto := d.content.lastClip, d.lastLocalClip.UnixMilli(), d.cfg.AutoClipboard
+	d.mu.Unlock()
+	if !auto || text == "" || ts <= 0 {
+		return
+	}
+	_ = l.Send(proto.New(proto.TypeClipboardConnect, map[string]any{"content": text, "timestamp": ts}))
+}
+
+// setClipboard puts text from a device on the local clipboard. 1 worker
+// runs wl-copy, and only the newest waiting text runs, so a burst of
+// copies ends with the newest text on the clipboard. With needAuto, the
+// text is a clipboard sync, which also needs auto_clipboard when the
+// worker runs it. The device must still be paired.
+func (d *Daemon) setClipboard(dev *Device, text string, needAuto bool) {
+	d.runContent(&d.content.clipQ, 0, func() {
+		d.mu.Lock()
+		ok := dev.Paired && (!needAuto || d.cfg.AutoClipboard)
+		d.mu.Unlock()
+		if !ok {
+			return
+		}
+		if err := d.clip.Set(text); err != nil {
+			d.logf("set clipboard: %v", err)
+		}
+	})
 }
 
 func sendClipImage(ctx context.Context, l *lan.Link, data []byte, mime string) error {
@@ -246,65 +335,111 @@ func (d *Daemon) handleClipboard(dev *Device, p *proto.Packet) {
 	if p.Decode(&body) != nil || body.Content == "" {
 		return
 	}
+	if len(body.Content) > desktop.MaxClipboardText {
+		name := d.nameOf(dev)
+		d.logf("%s: ignored a clipboard text of %d bytes", name, len(body.Content))
+		d.toast("%s copied a text that is larger than %d MiB. Flux did not sync it", name, desktop.MaxClipboardText>>20)
+		return
+	}
 	d.mu.Lock()
 	auto := d.cfg.AutoClipboard
 	// A clipboard.connect packet is older than a local change.
 	stale := p.Type == proto.TypeClipboardConnect && body.Timestamp > 0 && body.Timestamp <= d.lastLocalClip.UnixMilli()
 	if !stale {
+		// The text is newer than an image of the device that is still on
+		// its way.
+		if f := d.content.clipImages[dev.ID]; f != nil {
+			f.cancel()
+			f.stale = true
+		}
 		d.addClipLocked(ClipEntry{Text: body.Content, Dir: "in", Device: dev.ID, DeviceName: dev.Name, Time: time.Now().Unix()})
 	}
 	d.mu.Unlock()
 	if auto && !stale {
 		// Run the desktop call outside the read loop of the link, so a slow
 		// clipboard tool cannot block the next packets from the phone.
-		go func() {
-			if err := d.clip.Set(body.Content); err != nil {
-				d.logf("set clipboard: %v", err)
-			}
-		}()
+		d.setClipboard(dev, body.Content, true)
 	}
 	d.markDirty()
 }
 
 // handleClipboardImage receives an image that a device copied. It adds the
 // image to the history. With automatic sync on, it also puts the image on
-// the local clipboard.
+// the local clipboard. Each device sends 1 image at a time. A newer image
+// stops the older one.
 func (d *Daemon) handleClipboardImage(dev *Device, l *lan.Link, p *proto.Packet) {
 	if !p.HasPayload() || p.PayloadSize <= 0 || p.PayloadSize > desktop.MaxClipboardImage {
-		d.logf("%s: ignored a clipboard image of %d bytes", dev.Name, p.PayloadSize)
+		d.logf("%s: ignored a clipboard image of %d bytes", d.nameOf(dev), p.PayloadSize)
 		return
 	}
+	ctx, cancel := context.WithTimeout(d.ctx, clipImageTimeout)
+	fetch := &clipFetch{cancel: cancel}
+	d.mu.Lock()
+	if d.content.clipImages == nil {
+		d.content.clipImages = map[string]*clipFetch{}
+	}
+	if old := d.content.clipImages[dev.ID]; old != nil {
+		old.cancel()
+		old.stale = true
+	}
+	d.content.clipImages[dev.ID] = fetch
+	d.mu.Unlock()
+	cancelOnLinkDown(ctx, l, cancel)
 	go func() {
-		ctx, cancel := context.WithTimeout(d.ctx, clipImageTimeout)
-		defer cancel()
+		defer func() {
+			cancel()
+			d.mu.Lock()
+			if d.content.clipImages[dev.ID] == fetch {
+				delete(d.content.clipImages, dev.ID)
+			}
+			d.mu.Unlock()
+		}()
 		data, err := fetchAll(ctx, l, p)
 		if err != nil {
-			d.logf("%s: receive clipboard image: %v", dev.Name, err)
+			d.logf("%s: receive clipboard image: %v", d.nameOf(dev), err)
 			return
 		}
-		d.receiveClipImage(dev, data)
+		d.receiveClipImage(dev, fetch, data)
 	}()
 }
 
 // receiveClipImage adds an image from a device to the history and, with
-// automatic sync on, puts it on the local clipboard.
-func (d *Daemon) receiveClipImage(dev *Device, data []byte) {
+// automatic sync on, puts it on the local clipboard. An image that arrives
+// after an unpair is dropped. So is an image of the fetch f after a newer
+// text or image of the device. The worker of the texts from the devices
+// sets the image, so that a text that comes later stays on the clipboard.
+// The history and the worker check f again under d.mu, because a text can
+// come while fluxd saves the image.
+func (d *Daemon) receiveClipImage(dev *Device, f *clipFetch, data []byte) {
+	d.mu.Lock()
+	paired, name, stale := dev.Paired, dev.Name, f.stale
+	d.mu.Unlock()
 	mime := clipImageType(data)
 	if mime == "" {
-		d.logf("%s: the clipboard image is not a PNG, JPEG, GIF, or WebP image", dev.Name)
+		d.logf("%s: the clipboard image is not a PNG, JPEG, GIF, or WebP image", name)
 		return
 	}
-	d.mu.Lock()
-	auto := d.cfg.AutoClipboard
-	d.mu.Unlock()
-	if err := d.addClipImage(ClipEntry{Dir: "in", Device: dev.ID, DeviceName: dev.Name, Time: time.Now().Unix()}, data, mime); err != nil {
+	if !paired || stale {
+		return
+	}
+	// current runs under d.mu. It is false after an unpair or after a newer
+	// text or image of the device. The image then stays out of the history
+	// and does not replace the job of the newer text in the worker.
+	current := func() bool { return dev.Paired && !f.stale }
+	if err := d.addClipImageIf(ClipEntry{Dir: "in", Device: dev.ID, DeviceName: name, Time: time.Now().Unix()}, data, mime, current); err != nil {
 		d.logf("save clipboard image: %v", err)
 	}
-	if auto {
+	d.runContentIf(&d.content.clipQ, 0, current, func() {
+		d.mu.Lock()
+		ok := dev.Paired && d.cfg.AutoClipboard && !f.stale
+		d.mu.Unlock()
+		if !ok {
+			return
+		}
 		if err := d.clip.SetImage(data, mime); err != nil {
 			d.logf("set clipboard image: %v", err)
 		}
-	}
+	})
 }
 
 // fetchAll reads the whole payload of p.
@@ -341,6 +476,9 @@ func (d *Daemon) SendClipboard(dev *Device, text string) error {
 			return apiErr("empty", "The clipboard is empty")
 		}
 	}
+	if err := textLimit(text); err != nil {
+		return err
+	}
 	if err := d.send(dev, proto.New(proto.TypeClipboard, map[string]any{"content": text})); err != nil {
 		return err
 	}
@@ -356,13 +494,18 @@ func (d *Daemon) SendClipboard(dev *Device, text string) error {
 func (d *Daemon) sendImageTo(dev *Device, data []byte) error {
 	d.mu.Lock()
 	l := dev.link
-	accepts := dev.accepts(proto.TypeFluxClipboardImage)
-	d.mu.Unlock()
-	if l == nil {
-		return offline(dev)
+	var err error
+	switch {
+	case l == nil:
+		err = offline(dev)
+	case !dev.Paired:
+		err = apiErr("not_paired", "%s is not paired", dev.Name)
+	case !dev.accepts(proto.TypeFluxClipboardImage):
+		err = apiErr("unsupported", "%s does not accept clipboard images. Flux for Android accepts them while Sync clipboard is on", dev.Name)
 	}
-	if !accepts {
-		return apiErr("unsupported", "%s does not accept clipboard images. Flux for Android accepts them while Sync clipboard is on", dev.Name)
+	d.mu.Unlock()
+	if err != nil {
+		return err
 	}
 	ctx, cancel := d.newClipSend()
 	defer cancel()

@@ -7,8 +7,13 @@ import (
 	"time"
 
 	"flux/internal/desktop"
+	"flux/internal/lan"
 	"flux/internal/proto"
 )
+
+// maxCaller is the longest contact name and phone number of a call that
+// fluxd shows.
+const maxCaller = 256
 
 // callMedia is the part of the desktop players that call awareness uses.
 // *desktop.Media implements it. Tests use a fake.
@@ -56,6 +61,10 @@ func (c *callPause) resume(m callMedia) {
 type callState struct {
 	pause  callPause
 	notice uint32
+
+	// link is the link that reported the call. When it drops, the call
+	// state ends.
+	link *lan.Link
 }
 
 // callBody is the body of a flux.telephony packet.
@@ -87,7 +96,26 @@ func (d *Daemon) handleTelephony(dev *Device, p *proto.Packet) {
 	if p.Decode(&b) != nil {
 		return
 	}
+	b.ContactName, b.PhoneNumber = cutText(b.ContactName, maxCaller), cutText(b.PhoneNumber, maxCaller)
 	d.mu.Lock()
+	l, name := dev.link, dev.Name
+	d.mu.Unlock()
+	d.logf("%s: call %s cancel=%v", name, b.Event, b.IsCancel.bool())
+	// The media calls and the notifications go over D-Bus, so they run on
+	// the media worker and not in the read loop of the device.
+	d.runMedia(func() { d.callEvent(dev, l, b) })
+}
+
+// callEvent applies 1 call event of the phone dev, which came on the link
+// l. Only the media worker runs it, so it uses the call state without the
+// daemon lock. The event waits on the worker, so it applies only while
+// dev is paired and l is its link.
+func (d *Daemon) callEvent(dev *Device, l *lan.Link, b callBody) {
+	d.mu.Lock()
+	if !dev.Paired || dev.link != l {
+		d.mu.Unlock()
+		return
+	}
 	if d.calls == nil {
 		d.calls = map[string]*callState{}
 	}
@@ -96,11 +124,19 @@ func (d *Daemon) handleTelephony(dev *Device, p *proto.Packet) {
 		c = &callState{}
 		d.calls[dev.ID] = c
 	}
-	pauseMedia := d.cfg.PauseMediaOnCall
+	watch := l != nil && c.link != l
+	if watch {
+		c.link = l
+	}
+	pauseMedia, name := d.cfg.PauseMediaOnCall, dev.Name
 	d.mu.Unlock()
+	if watch {
+		go func() {
+			<-l.Done()
+			d.runMedia(func() { d.dropCall(dev, l) })
+		}()
+	}
 
-	// Only the read loop of this device uses c, so the media calls, which
-	// go over D-Bus, run without the daemon lock.
 	m := d.callPlayers
 	switch {
 	case b.IsCancel.bool():
@@ -125,17 +161,35 @@ func (d *Daemon) handleTelephony(dev *Device, p *proto.Packet) {
 			// A second ringing packet, with the number or the name, replaces
 			// the first notification.
 			c.notice = d.notify(desktop.Notification{
-				AppName: dev.Name, Title: "Call from " + b.caller(), Body: callDetail(b, dev.Name),
+				AppName: name, Title: "Call from " + b.caller(), Body: callDetail(b, name),
 				Category: "call.incoming", Urgency: 2, Timeout: -1, ReplacesID: c.notice,
 			})
 		}
 	case b.Event == "missedCall":
 		d.notify(desktop.Notification{
-			AppName: dev.Name, Title: "Missed call from " + b.caller(), Body: callDetail(b, dev.Name),
+			AppName: name, Title: "Missed call from " + b.caller(), Body: callDetail(b, name),
 			Category: "call.unanswered", Timeout: -1,
 		})
 	}
-	d.logf("%s: call %s cancel=%v", dev.Name, b.Event, b.IsCancel.bool())
+}
+
+// dropCall ends the call state of the phone dev when the link l that
+// reported the call drops. The phone cannot send the end of the call
+// without the link. The ringing notification closes. The players that
+// fluxd paused stay paused, because the call can still run, and fluxd
+// forgets them, so that a later call does not play them.
+func (d *Daemon) dropCall(dev *Device, l *lan.Link) {
+	d.mu.Lock()
+	c := d.calls[dev.ID]
+	if c == nil || c.link != l {
+		d.mu.Unlock()
+		return
+	}
+	delete(d.calls, dev.ID)
+	d.mu.Unlock()
+	if c.notice != 0 && d.notifier != nil {
+		_ = d.notifier.Close(c.notice)
+	}
 }
 
 // callDetail is the body of a call notification: the number when the
@@ -156,10 +210,10 @@ func (d *Daemon) SendNotification(dev *Device, title, body string) error {
 		return apiErr("bad_params", "title is empty")
 	}
 	d.mu.Lock()
-	accepts := dev.accepts(proto.TypeNotification)
+	accepts, name := dev.accepts(proto.TypeNotification), dev.Name
 	d.mu.Unlock()
 	if !accepts {
-		return apiErr("not_supported", "%s does not show notifications from this computer. Update Flux for Android", dev.Name)
+		return apiErr("not_supported", "%s does not show notifications from this computer. Update Flux for Android", name)
 	}
 	now := time.Now()
 	ticker := title

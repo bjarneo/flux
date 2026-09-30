@@ -343,20 +343,26 @@ public final class CaptureWatchPlugin: FluxPlugin, @unchecked Sendable {
         saveInbox(loadInbox().filter { $0.id > state.baseline })
         // A file that is still being written needs another look.
         if items.contains(where: \.pending) { poke() }
+        if plan.waiting > 0 {
+            FluxLog.plugin.info("capture: \(plan.waiting, privacy: .public) images wait for the next scan, because 1 scan sends at most \(maxCaptureSend, privacy: .public)")
+        }
         guard !plan.send.isEmpty else { return }
-        let targets = core.connectedPaired().map(\.id)
+        let targets = core.connectedPairedIds()
         guard !targets.isEmpty, let share = core.plugin(SharePlugin.self) else { return }
         var any = false
         for (item, kind) in plan.send {
-            guard let source = sources[item.id] else { continue }
+            // A switch that turned off during the scan stops its kind.
+            guard let source = sources[item.id], switchOn(kind) else { continue }
             if await send(item, kind: kind, from: source, to: targets, with: share) {
                 any = true
                 state = state.markSent(item.id)
                 saveState(state)
             }
         }
-        // The sent images can move the baseline now.
-        if any { poke() }
+        // The sent images can move the baseline now. Images that wait go
+        // with the next change, connect, or start, not at once, so that a
+        // large batch does not go out in a row of scans.
+        if any && plan.waiting == 0 { poke() }
     }
 
     #if os(macOS)
@@ -432,7 +438,10 @@ public final class CaptureWatchPlugin: FluxPlugin, @unchecked Sendable {
         for entry in waiting {
             let added = entry.id / 1_000_000
             let asset = assets[entry.asset]
-            let seen = asset.map { LibraryAsset(image: $0.mediaType == .image, screenshot: $0.mediaSubtypes.contains(.photoScreenshot), created: $0.creationDate) }
+            let seen = asset.map {
+                LibraryAsset(image: $0.mediaType == .image, screenshot: $0.mediaSubtypes.contains(.photoScreenshot),
+                             created: $0.creationDate, userLibrary: $0.sourceType.contains(.typeUserLibrary))
+            }
             guard let asset, let kind = libraryKind(seen, from: state.from) else {
                 items.append(CaptureItem(id: entry.id, kind: nil, name: entry.asset, dateAdded: added))
                 continue
@@ -464,8 +473,12 @@ public final class CaptureWatchPlugin: FluxPlugin, @unchecked Sendable {
             do {
                 file = try await Self.export(id, name: item.name)
                 temp = file.deletingLastPathComponent()
+            } catch where Self.onlyInCloud(error) {
+                // Another device or person added it. It stays home for good.
+                FluxLog.plugin.info("\(item.name, privacy: .private(mask: .hash)) stays home: its original is not on this device")
+                return true
             } catch {
-                FluxLog.plugin.error("export \(item.name, privacy: .public) failed: \(String(describing: error), privacy: .public)")
+                FluxLog.plugin.error("export \(item.name, privacy: .private(mask: .hash)) failed: \(String(describing: error), privacy: .public)")
                 return false
             }
         }
@@ -475,15 +488,35 @@ public final class CaptureWatchPlugin: FluxPlugin, @unchecked Sendable {
             do {
                 try await share.sendCapture(file: file, name: item.name, extra: extra, to: id)
                 any = true
-                FluxLog.plugin.info("sent \(item.name, privacy: .public) to \(id, privacy: .public)")
+                FluxLog.plugin.info("sent \(item.name, privacy: .private(mask: .hash)) to \(id, privacy: .public)")
             } catch {
-                FluxLog.plugin.error("send \(item.name, privacy: .public) failed: \(String(describing: error), privacy: .public)")
+                FluxLog.plugin.error("send \(item.name, privacy: .private(mask: .hash)) failed: \(String(describing: error), privacy: .public)")
             }
         }
         return any
     }
 
-    /// Writes the original of a photo to a new temporary folder.
+    /// Reports whether a switch is on now.
+    private func switchOn(_ kind: CaptureKind) -> Bool {
+        switch kind {
+        case .screenshot: return sendScreenshots
+        case .photo: return sendPhotos
+        }
+    }
+
+    /// True when an export failed because the original is only in iCloud.
+    static func onlyInCloud(_ error: Error) -> Bool {
+        #if os(iOS)
+        return (error as? PHPhotosError)?.code == .networkAccessRequired
+        #else
+        return false
+        #endif
+    }
+
+    /// Writes the original of a photo to a new temporary folder. On iOS the
+    /// original must be on this iPhone: a photo that this iPhone took is,
+    /// and a photo from another device or from a Shared Library of other
+    /// people is only in iCloud. The Mac downloads the original.
     static func export(_ localIdentifier: String, name: String) async throws -> URL {
         guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: nil).firstObject,
               let resource = photoResource(asset) else { throw FluxError("the photo is gone") }
@@ -491,7 +524,11 @@ public final class CaptureWatchPlugin: FluxPlugin, @unchecked Sendable {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let file = dir.appendingPathComponent(ShareWire.safeName(name))
         let options = PHAssetResourceRequestOptions()
+        #if os(iOS)
+        options.isNetworkAccessAllowed = false
+        #else
         options.isNetworkAccessAllowed = true
+        #endif
         do {
             try await PHAssetResourceManager.default().writeData(for: resource, toFile: file, options: options)
         } catch {

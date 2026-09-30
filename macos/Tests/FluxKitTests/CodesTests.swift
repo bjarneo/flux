@@ -85,6 +85,18 @@ final class CodesTests: XCTestCase {
         XCTAssertEqual(CodeContent.parse(.code128, "PKG-0925"), ScannedCode(.code128, "PKG-0925"))
     }
 
+    /// Only http and https links open on the computer, as fluxd opens only those.
+    func testBookmarkWithAnotherSchemeIsText() {
+        let web = CodeContent.parse(.qrCode, "MEBKM:TITLE:Flux;URL:https://omarchy.org;;")
+        XCTAssertEqual(Codes.kind(web), .url)
+        XCTAssertEqual(Codes.text(web), "https://omarchy.org")
+        for raw in ["MEBKM:URL:ftp://x.org;;", "MEBKM:URL:file:///etc/passwd;;", "MEBKM:URL:javascript:alert(1);;"] {
+            let code = CodeContent.parse(.qrCode, raw)
+            XCTAssertEqual(Codes.kind(code), .text, raw)
+            XCTAssertEqual(Codes.sheet(code, pc: "pc").actions.map(\.body), [.save(raw), .copy(raw)], raw)
+        }
+    }
+
     func testVisionUPCAIsReported() {
         XCTAssertEqual(VisionScan.code(.ean13, "0036000291452"), ScannedCode(.upcA, "036000291452"))
         XCTAssertEqual(VisionScan.code(.ean13, "7038010009457"), ScannedCode(.ean13, "7038010009457"))

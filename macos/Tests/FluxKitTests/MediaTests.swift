@@ -80,5 +80,27 @@ final class MediaTests: XCTestCase {
         XCTAssertNotNil(p.artURL)
         p.artUrl = "file:///home/me/.cache/cover.png"
         XCTAssertNil(p.artURL)
+        p.artUrl = "http:///cover.png"
+        XCTAssertNil(p.artURL, "a URL without a host does not load")
+        XCTAssertFalse(AlbumArtLoader.loads(URL(string: "ftp://x.org/a.png")!))
+    }
+
+    /// A position near Int64.max trapped in the sum with the time that passed.
+    func testLargePositionDoesNotStopTheApp() {
+        var m = RemoteMedia()
+        _ = m.apply(mpris(["player": "x", "isPlaying": true, "pos": Int64.max, "length": Int64.max]), now: 10)
+        XCTAssertEqual(m.player?.position, RemotePlayer.maxMillis)
+        XCTAssertEqual(m.player?.length, RemotePlayer.maxMillis)
+        XCTAssertEqual(m.player?.position(at: 1e12), RemotePlayer.maxMillis)
+        m.togglePlaying(now: 1e300)
+        XCTAssertEqual(m.player?.position, RemotePlayer.maxMillis)
+        _ = m.apply(mpris(["player": "x", "pos": Int64.min, "length": -5, "volume": 1_000_000]), now: 20)
+        XCTAssertEqual(m.player?.position, 0)
+        XCTAssertEqual(m.player?.length, 0)
+        XCTAssertEqual(m.player?.volume, 100)
+        _ = m.apply(mpris(["player": "x", "pos": 1e300]), now: 30)
+        XCTAssertEqual(m.player?.position, 0, "a number that does not fit keeps the last position")
+        m.seek(to: Int64.max, now: 40)
+        XCTAssertEqual(m.player?.position, RemotePlayer.maxMillis)
     }
 }

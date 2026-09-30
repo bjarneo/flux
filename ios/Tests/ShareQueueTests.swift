@@ -129,6 +129,31 @@ final class ShareQueueTests: XCTestCase {
         XCTAssertTrue(queue.items().isEmpty)
     }
 
+    func testTheSizeCheckComesBeforeTheCopy() throws {
+        var queue = try makeQueue()
+        queue.byteLimit = 100
+        let big = try makeFile("movie.mov", String(repeating: "x", count: 200))
+        XCTAssertThrowsError(try queue.add(file: big, computerId: "a", created: t0, order: 0)) {
+            XCTAssertEqual($0 as? ShareQueueError, .tooLarge("movie.mov"), "a file over the limit fails at once, also in an empty queue")
+        }
+        XCTAssertEqual(queue.bytes(), 0, "the file was not copied")
+        try queue.add(file: try makeFile("a.txt", String(repeating: "x", count: 60)), computerId: "a", created: t0, order: 0)
+        XCTAssertThrowsError(try queue.add(file: try makeFile("b.txt", String(repeating: "x", count: 60)), computerId: "a", created: t0, order: 1)) {
+            XCTAssertEqual($0 as? ShareQueueError, .full)
+        }
+        XCTAssertEqual(queue.items().count, 1)
+        XCTAssertTrue(ShareQueueError.tooLarge("movie.mov").localizedDescription.contains("1 GB"))
+    }
+
+    func testTextHasASizeLimit() throws {
+        let queue = try makeQueue()
+        let big = String(repeating: "x", count: ShareQueue.maxTextBytes + 1)
+        XCTAssertThrowsError(try queue.add(text: big, kind: .text, computerId: "a", created: t0, order: 0)) {
+            XCTAssertEqual($0 as? ShareQueueError, .textTooLarge)
+        }
+        XCTAssertNoThrow(try queue.add(text: String(repeating: "x", count: ShareQueue.maxTextBytes), kind: .text, computerId: "a", created: t0, order: 0))
+    }
+
     func testTheQueueIsFullAtItsItemLimit() throws {
         let queue = try makeQueue()
         XCTAssertNoThrow(try queue.checkRoom(adding: ShareQueue.maxItems))
@@ -155,6 +180,29 @@ final class ShareQueueTests: XCTestCase {
         let file = QueuedShare(id: "1", computerId: "a", kind: .file, name: "a.txt", created: t0, order: 0)
         XCTAssertEqual(QueuedShares.droppedText([file]), "1 file that you shared did not go out in 5 tries or 7 days, so Flux removed it.")
         XCTAssertEqual(QueuedShares.droppedText([file, file]), "2 files that you shared did not go out in 5 tries or 7 days, so Flux removed them.")
+    }
+
+    @MainActor
+    func testTheOutboxKeepsFilesWithTheSameName() async throws {
+        let a = try makeFile("notes.txt", "a")
+        let b = try makeFile("notes.txt", "b")
+        let copies = try await Outbox.copy([a, b])
+        defer { Outbox.remove(copies) }
+        XCTAssertEqual(copies.map(\.lastPathComponent), ["notes.txt", "notes.txt"], "each file keeps its name")
+        XCTAssertEqual(try copies.map { try String(contentsOf: $0, encoding: .utf8) }, ["a", "b"])
+    }
+
+    @MainActor
+    func testAFailedOutboxCopyRemovesItsCopies() async throws {
+        let a = try makeFile("a.txt", "a")
+        let missing = a.deletingLastPathComponent().appendingPathComponent("missing.txt")
+        let before = (try? FileManager.default.contentsOfDirectory(atPath: Outbox.folder.path)) ?? []
+        do {
+            _ = try await Outbox.copy([a, missing])
+            XCTFail("a missing file fails the copy")
+        } catch {}
+        let after = (try? FileManager.default.contentsOfDirectory(atPath: Outbox.folder.path)) ?? []
+        XCTAssertEqual(Set(after), Set(before), "the copies so far go")
     }
 
     @MainActor
@@ -290,11 +338,27 @@ final class SharedItemTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(SharedItem(text("hello"))).kind, .text)
     }
 
+    func testATextFileIsAFile() throws {
+        let file = try XCTUnwrap(SharedItem(data(.plainText, name: "notes.txt")))
+        XCTAssertEqual(file.kind, .file, "a text file from Files goes as a file, not as clipboard text")
+        XCTAssertEqual(file.fileName(loaded: URL(fileURLWithPath: "/tmp/x/abc.txt")), "notes.txt")
+        XCTAssertEqual(try XCTUnwrap(SharedItem(data(.plainText))).kind, .text, "text without a name stays text")
+        XCTAssertEqual(try XCTUnwrap(SharedItem(data(.plainText, name: "Swift 5.9 released"))).kind, .text,
+                       "a title with a dot is no file name")
+        XCTAssertTrue(SharedItem.isFileName("data.json"))
+        XCTAssertFalse(SharedItem.isFileName("Example Domain"))
+        XCTAssertFalse(SharedItem.isFileName(nil))
+    }
+
     func testFilesWinOverLinksAndLinksOverText() {
         let photo = data(.jpeg), page = link("https://example.com"), title = text("Example")
         XCTAssertEqual(SharedItem.sendable([page, photo, title].compactMap(SharedItem.init)).map(\.kind), [.photo])
         XCTAssertEqual(SharedItem.sendable([title, page].compactMap(SharedItem.init)).map(\.kind), [.link], "Safari adds the title as text")
         XCTAssertEqual(SharedItem.sendable([title].compactMap(SharedItem.init)).map(\.kind), [.text])
+        let named = data(.plainText, name: "index.html")
+        XCTAssertEqual(SharedItem.sendable([page, named].compactMap(SharedItem.init)).map(\.kind), [.link],
+                       "a page title with a file name does not replace the link")
+        XCTAssertEqual(SharedItem.sendable([data(.plainText, name: "notes.txt")].compactMap(SharedItem.init)).map(\.kind), [.file])
         XCTAssertEqual(SharedItem.summary(SharedItem.sendable([data(.png), data(.mpeg4Movie), data(.pdf)].compactMap(SharedItem.init))),
                        ShareSummary(photos: 1, videos: 1, files: 1))
     }
@@ -321,5 +385,34 @@ final class SharedItemTests: XCTestCase {
         XCTAssertEqual(linkText, "https://example.com/a")
         let plainText = try await XCTUnwrap(SharedItem(text("hello"))).loadText()
         XCTAssertEqual(plainText, "hello")
+        let notes = try XCTUnwrap(SharedItem(data(.plainText, name: "notes.txt")))
+        let queued = try await notes.queueFile(in: queue, computerId: "a", created: Date(), order: 1)
+        XCTAssertEqual(queued.kind, .file)
+        XCTAssertEqual(queued.name, "notes.txt", "the computer gets the text file with its name")
+        XCTAssertEqual(try Data(contentsOf: try XCTUnwrap(queue.file(of: queued))), Data([1, 2, 3]))
+    }
+
+    func testALargeTextStopsBeforeItsDecode() async throws {
+        let big = try XCTUnwrap(SharedItem(text(String(repeating: "x", count: ShareQueue.maxTextBytes + 1))))
+        do {
+            _ = try await big.loadText()
+            XCTFail("a text larger than 1 MB does not load")
+        } catch {
+            XCTAssertEqual(error as? ShareQueueError, .textTooLarge)
+        }
+        let preview = try await big.loadPreview()
+        XCTAssertEqual(preview.utf8.count, SharedItem.previewBytes, "the preview decodes only the start")
+        let fits = try await XCTUnwrap(SharedItem(text(String(repeating: "x", count: ShareQueue.maxTextBytes)))).loadText()
+        XCTAssertEqual(fits.utf8.count, ShareQueue.maxTextBytes)
+    }
+
+    func testTheStartOfATextKeepsWholeCharacters() {
+        let text = Data("aé".utf8)
+        XCTAssertEqual(SharedItem.decodeStart(text, encoding: .utf8, maxBytes: 2), "a", "a cut in a character drops the character")
+        XCTAssertEqual(SharedItem.decodeStart(text, encoding: .utf8, maxBytes: 3), "aé")
+        let wide = Data([0xFF, 0xFE, 0x61, 0x00, 0x62, 0x00, 0x63, 0x00])
+        XCTAssertEqual(SharedItem.decodeStart(wide, encoding: .utf16(bigEndian: true), maxBytes: 7), "ab", "the byte order mark wins")
+        XCTAssertEqual(SharedItem.decode(Data([0x00, 0x61]), encoding: .utf16(bigEndian: true)), "a")
+        XCTAssertEqual(SharedItem.decode(Data([0x61, 0x00]), encoding: .utf16(bigEndian: false)), "a")
     }
 }

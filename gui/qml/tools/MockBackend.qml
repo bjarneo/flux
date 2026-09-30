@@ -2,6 +2,8 @@ import QtQuick
 
 // A stand-in for a host backend that serves state from fixture.json. The
 // snapshot harness uses it. It follows the backend contract in README.md.
+// fixture.pairing holds sample devices with an open pairing for the view
+// tests and the snapshots.
 // A negative "time" or "lastSeen" value means that many seconds before
 // now. Loading the fixture needs QML_XHR_ALLOW_FILE_READ=1.
 QtObject {
@@ -13,6 +15,10 @@ QtObject {
   property var fixture: ({})
   property bool ready: false
   property var calls: []
+  // Each call as {method, params}, for the view tests.
+  property var requests: []
+  // Errors by method name. A call of such a method gets the error.
+  property var failures: ({})
 
   readonly property var devices: state.devices || []
   readonly property var clipboard: state.clipboard || []
@@ -53,6 +59,12 @@ QtObject {
 
   function call(method, params, cb) {
     calls.push(method)
+    requests.push({ method: method, params: params || {} })
+    if (Object.prototype.hasOwnProperty.call(failures, method)) {
+      var err = failures[method]
+      if (cb) Qt.callLater(function () { try { cb(err, null) } catch (e) {} })
+      return
+    }
     var result = {}
     if (method === "sms.thread") result = { messages: fixTimes((fixture.threads || {})[String(params.thread)] || []) }
     else if (method === "notification.dismissAll") {
@@ -69,6 +81,7 @@ QtObject {
     else if (method === "mic.stop") setState(function (s) { s.mic = null })
     else if (method === "screen.stop") setState(function (s) { s.screen = null })
     else if (method === "desktop.stop") setState(function (s) { s.desktop = null })
+    else if (method === "browse.stop") setState(function (s) { s.browse = [] })
     else if (method === "settings.set") setState(function (s) { s.settings[params.key] = params.value })
     else if (method === "webcam.config") {
       var restarts = false

@@ -178,6 +178,38 @@ func TestClipboardRecordImage(t *testing.T) {
 	}
 }
 
+// TestClipboardObserveAfterWrites checks that a local copy of a text that
+// fluxd wrote before is a change. The phone sends A and then B, and the
+// user copies A again on the desktop.
+func TestClipboardObserveAfterWrites(t *testing.T) {
+	c := NewClipboard()
+	a, b := contentKey("text", []byte("A")), contentKey("text", []byte("B"))
+	c.wrote(a)
+	if c.observe(a, false) {
+		t.Fatal("the write of A is a local change")
+	}
+	c.wrote(b)
+	if c.observe(b, false) {
+		t.Fatal("the write of B is a local change")
+	}
+	if len(c.written) != 0 {
+		t.Fatalf("%d writes stay after Watch saw them", len(c.written))
+	}
+	if !c.observe(a, false) {
+		t.Fatal("a local copy of A is not a change")
+	}
+
+	// Watch can see only the second of 2 fast writes.
+	c.wrote(a)
+	c.wrote(b)
+	if c.observe(b, false) {
+		t.Fatal("the write of B is a local change")
+	}
+	if !c.observe(a, false) {
+		t.Fatal("a local copy of A after 2 fast writes is not a change")
+	}
+}
+
 func TestIsImage(t *testing.T) {
 	cases := map[string]bool{
 		"image/png":                       true,
@@ -446,7 +478,7 @@ func TestClipboardRecordLimit(t *testing.T) {
 	var got []int
 	onText := func(s string) { got = append(got, len(s)) }
 	onImage := func([]byte, string) { t.Fatal("a text selection reported an image") }
-	sizes := []int{maxClipboardText - 1, maxClipboardText, maxClipboardText + 1}
+	sizes := []int{MaxClipboardText - 1, MaxClipboardText, MaxClipboardText + 1}
 	for i, n := range sizes {
 		data := bytes.Repeat([]byte{'a' + byte(i)}, n)
 		c.record("text", record("data", data, "text/plain"), false, onText, onImage)

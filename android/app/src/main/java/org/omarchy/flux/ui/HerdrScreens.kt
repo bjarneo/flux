@@ -31,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -50,7 +51,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
-import org.omarchy.flux.core.DebugDemo
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.FolderChoice
@@ -366,13 +366,17 @@ private fun ChoiceKey(label: String, selected: Boolean, modifier: Modifier, enab
 fun TiledTerminalScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
     val herdr = d.herdr
     val term = herdr?.terminal(pane)
-    val demo = DebugDemo.isDemo(d.id)
+    val demo = isDemo(d.id)
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(d.id, pane, d.online) {
-        if (!d.online || demo) return@LaunchedEffect
+    // A poll waits while the last read did not end, so that reads do not pile up on a slow link.
+    val loading by rememberUpdatedState(d.herdrOutput?.takeIf { it.pane == pane }?.loading == true)
+    // The polls stop when the terminal closes or the computer turns terminals off.
+    val alive = herdr == null || (herdr.terminals && term != null)
+    LaunchedEffect(d.id, pane, d.online, alive) {
+        if (!d.online || demo || !alive) return@LaunchedEffect
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
-                HerdrSync.read(FluxCore, d.id, pane)
+                if (!loading) HerdrSync.read(FluxCore, d.id, pane)
                 delay(TERMINAL_REFRESH_MS)
             }
         }

@@ -4,7 +4,9 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import org.omarchy.flux.protocol.bodyOf
 import org.omarchy.flux.protocol.bool
+import org.omarchy.flux.protocol.long
 import org.omarchy.flux.protocol.str
 
 /**
@@ -100,7 +102,8 @@ data class HerdrOutput(
 /**
  * The last reply to a pane. [action] is "keys" or "prompt". [sending] is
  * true until the computer answers. [seq] is different for each reply, so
- * the UI sees each answer.
+ * the UI sees each answer. [code] is the code of the [error], such as
+ * [HERDR_BLOCKED], or null.
  */
 data class HerdrReply(
     val pane: String,
@@ -108,10 +111,45 @@ data class HerdrReply(
     val seq: Long,
     val sending: Boolean = true,
     val error: String? = null,
+    val code: String? = null,
 )
 
-/** The answer of the computer to a reply: `{"kind":"sent"}`. [error] is null on success. */
-data class HerdrSent(val pane: String, val action: String, val error: String?)
+/**
+ * The answer of the computer to a reply: `{"kind":"sent"}`. [error] is null
+ * on success. [request] is the number of the reply, or null from a fluxd
+ * that does not send it back. [code] names the kind of error, such as
+ * [HERDR_BLOCKED], or it is null.
+ */
+data class HerdrSent(val pane: String, val action: String, val error: String?, val request: Long? = null, val code: String? = null) {
+    /**
+     * True when this is the answer to [reply], while the reply waits. A newer
+     * fluxd sends back the number of the reply, and only that reply matches.
+     * An older fluxd sends no number, so the pane and the action must match.
+     */
+    fun answers(reply: HerdrReply): Boolean {
+        if (reply.pane != pane || !reply.sending) return false
+        // A late answer to an earlier reply does not end this reply.
+        if (action.isNotEmpty() && action != reply.action) return false
+        return request == null || request == reply.seq
+    }
+}
+
+/**
+ * The code of a sent answer when fluxd refused a prompt, because the agent
+ * waits for a choice. The same text can go again as the answer, see
+ * [herdrPromptBody].
+ */
+const val HERDR_BLOCKED = "blocked"
+
+/**
+ * The body of a prompt to the agent in [pane]. fluxd refuses a prompt to
+ * an agent that waits for a choice. With [answer], fluxd types [text] as
+ * the answer to that agent instead.
+ */
+fun herdrPromptBody(pane: String, text: String, answer: Boolean): JsonObject {
+    val fields = listOf<Pair<String, Any?>>("kind" to "prompt", "pane" to pane, "text" to text) + if (answer) listOf("answer" to true) else emptyList()
+    return bodyOf(*fields.toTypedArray())
+}
 
 /**
  * The last new agent, new terminal, or close from this phone. [action] is
@@ -128,8 +166,27 @@ data class HerdrAction(
     val error: String? = null,
 )
 
-/** The answer of the computer to a create or a close: `{"kind":"created"}` or `{"kind":"closed"}`. */
-data class HerdrDone(val action: String, val pane: String?, val error: String?)
+/**
+ * The answer of the computer to a create or a close: `{"kind":"created"}` or
+ * `{"kind":"closed"}`. [what] is "agent" or "terminal" for a create.
+ * [request] is the number of the action, or null from a fluxd that does not
+ * send it back.
+ */
+data class HerdrDone(val action: String, val pane: String?, val error: String?, val what: String = "", val request: Long? = null) {
+    /**
+     * True when this is the answer to [started], while it waits. A newer
+     * fluxd sends back the number of the action, and only that action
+     * matches. An older fluxd sends no number, so the kind, the closed
+     * pane, and the kind of the new pane must match.
+     */
+    fun answers(started: HerdrAction): Boolean {
+        if (started.action != action || !started.sending) return false
+        if (action == "close" && started.pane != pane) return false
+        // A late answer to an earlier create does not end this one.
+        if (action == "create" && what.isNotEmpty() && started.what.isNotEmpty() && what != started.what) return false
+        return request == null || request == started.seq
+    }
+}
 
 /** Sorts by status in the order of [AgentStatus]. The sort is stable, so herdr order stays inside a group. */
 fun sortAgents(agents: List<HerdrAgent>): List<HerdrAgent> = agents.sortedBy { it.status.ordinal }
@@ -175,18 +232,41 @@ fun parseHerdrState(body: JsonObject): HerdrState? {
     )
 }
 
-/** Parses the body of an output packet. It returns null for a body that is not an output. */
+/** The longest output text that the phone reads, in characters. fluxd sends at most 1 MiB. */
+const val HERDR_MAX_TEXT = 1 shl 20
+
+/**
+ * The most output lines that the phone keeps: the lines of a read and the
+ * rows of the screen that fluxd puts under them.
+ */
+const val HERDR_MAX_LINES = 2 * HERDR_READ_LINES
+
+/**
+ * Parses the body of an output packet. It returns null for a body that is
+ * not an output. It keeps the end of a text that is longer than
+ * [HERDR_MAX_TEXT] or has more than [HERDR_MAX_LINES] lines.
+ */
 fun parseHerdrOutput(body: JsonObject): HerdrOutput? {
     if (body.str("kind") != "output") return null
     val pane = body.str("pane")?.takeIf { it.isNotEmpty() } ?: return null
     val error = body.str("error")?.takeIf { it.isNotEmpty() }
+    var text = if (error == null) body.str("text").orEmpty() else ""
+    var cut = false
+    if (text.length > HERDR_MAX_TEXT) {
+        // Start after a line break, so that the first line is whole.
+        val tail = text.substring(text.length - HERDR_MAX_TEXT)
+        val nl = tail.indexOf('\n')
+        text = if (nl >= 0 && nl < tail.length - 1) tail.substring(nl + 1) else tail
+        cut = true
+    }
+    if (!cut && text.count { it == '\n' } >= HERDR_MAX_LINES) cut = true
     // An older fluxd sends plain text. It has no escape sequences, so the
     // same parser reads it.
     return HerdrOutput(
         pane = pane,
         loading = false,
-        lines = if (error == null) termLines(body.str("text").orEmpty()) else emptyList(),
-        truncated = body.bool("truncated") ?: false,
+        lines = if (error == null) tidyLines(parseAnsi(text, HERDR_MAX_LINES)) else emptyList(),
+        truncated = (body.bool("truncated") ?: false) || cut,
         error = error,
     )
 }
@@ -198,14 +278,20 @@ fun parseHerdrDone(body: JsonObject): HerdrDone? {
         "closed" -> "close"
         else -> return null
     }
-    return HerdrDone(action, body.str("pane")?.takeIf { it.isNotEmpty() }, body.str("error")?.takeIf { it.isNotEmpty() })
+    return HerdrDone(
+        action, body.str("pane")?.takeIf { it.isNotEmpty() }, body.str("error")?.takeIf { it.isNotEmpty() },
+        body.str("what").orEmpty(), body.long("request"),
+    )
 }
 
 /** Parses the body of a sent packet. It returns null for a body that is not a sent answer. */
 fun parseHerdrSent(body: JsonObject): HerdrSent? {
     if (body.str("kind") != "sent") return null
     val pane = body.str("pane")?.takeIf { it.isNotEmpty() } ?: return null
-    return HerdrSent(pane, body.str("action").orEmpty(), body.str("error")?.takeIf { it.isNotEmpty() })
+    return HerdrSent(
+        pane, body.str("action").orEmpty(), body.str("error")?.takeIf { it.isNotEmpty() }, body.long("request"),
+        body.str("code")?.takeIf { it.isNotEmpty() },
+    )
 }
 
 /** The key names that fluxd accepts in a keys packet. */

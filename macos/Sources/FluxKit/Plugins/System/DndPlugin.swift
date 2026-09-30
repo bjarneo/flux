@@ -17,7 +17,9 @@ import Observation
 ///
 /// iOS gives apps no way to set the Focus, so the iPhone only reports its
 /// Focus through the same filter. The state that a computer sends shows in
-/// the model and changes nothing on the iPhone.
+/// the model and changes nothing on the iPhone. iOS runs the filter also
+/// while Flux has no link, so a change waits in a `FocusBacklog` for each
+/// computer that was not connected.
 public final class DndPlugin: FluxPlugin, @unchecked Sendable {
     private weak var core: FluxCore?
     public let model: DndModel
@@ -32,6 +34,9 @@ public final class DndPlugin: FluxPlugin, @unchecked Sendable {
     #if os(macOS)
     static let shortcutOnKey = "dnd.shortcutOn"
     static let shortcutOffKey = "dnd.shortcutOff"
+    #else
+    /// Set once in `attach`, before the network starts.
+    private var backlog: FocusBacklog?
     #endif
 
     @MainActor
@@ -42,22 +47,34 @@ public final class DndPlugin: FluxPlugin, @unchecked Sendable {
         let defaults = core.defaults
         let model = model
         DispatchQueue.main.async { model.load(defaults) }
+        #if os(iOS)
+        backlog = FocusBacklog(defaults: defaults)
+        #endif
     }
 
     /// Sets the Focus state at launch, so that the start is not a change.
+    /// On iOS, a state that differs from the last one that Flux saw is a
+    /// change that came while Flux did not run.
     public func start(focusOn on: Bool) {
         _ = dndGuard.local(on, now: Self.now())
         let model = model
         Task { @MainActor in model.focusOn = on }
+        #if os(iOS)
+        report(on)
+        #endif
     }
 
     /// Handles a Focus change on this Mac, reported by the Flux Focus filter.
     public func focusChanged(_ on: Bool) {
         let model = model
         Task { @MainActor in model.focusOn = on }
+        #if os(iOS)
+        report(on)
+        #else
         guard let core, dndGuard.local(on, now: Self.now()), sync(core) else { return }
         FluxLog.plugin.info("Do Not Disturb is \(on ? "on" : "off", privacy: .public) on \(FluxPlatform.current.deviceNoun, privacy: .public)")
         send(on, except: nil)
+        #endif
     }
 
     #if os(macOS)
@@ -93,10 +110,33 @@ public final class DndPlugin: FluxPlugin, @unchecked Sendable {
         Task { @MainActor in model.computers[id] = on }
     }
 
+    /// Called when the link closes and after an unpair. An unpaired
+    /// computer stops its wait for a Focus change.
     public func onDisconnected(_ device: Device) {
         let id = device.id
+        if !device.paired { backlog?.forget(id) }
         let model = model
         Task { @MainActor in model.computers[id] = nil }
+    }
+
+    /// Sends a Focus change that came while this computer was not
+    /// connected. The core lock is held, so it sends on the device.
+    public func onConnected(_ device: Device) {
+        guard let core, let backlog, sync(core), device.accepts(PacketType.fluxDnd),
+              let on = backlog.take(for: device.id) else { return }
+        _ = device.send(Packet(PacketType.fluxDnd, ["on": on]))
+    }
+
+    /// Takes a Focus state from the filter. A change goes to the connected
+    /// computers now and waits in the backlog for the other computers that
+    /// are paired now.
+    private func report(_ on: Bool) {
+        guard let core, let backlog,
+              backlog.report(on, paired: core.trust.all().map(\.id), keep: sync(core)) else { return }
+        FluxLog.plugin.info("Do Not Disturb is \(on ? "on" : "off", privacy: .public) on \(FluxPlatform.current.deviceNoun, privacy: .public)")
+        let packet = Packet(PacketType.fluxDnd, ["on": on])
+        let reached = core.connectedPairedIds(accepting: PacketType.fluxDnd).filter { core.send(packet, to: $0) }
+        backlog.reached(reached, on: on)
     }
     #endif
 
@@ -105,8 +145,8 @@ public final class DndPlugin: FluxPlugin, @unchecked Sendable {
     /// Sends the state to each connected computer that accepts flux.dnd, except `except`.
     private func send(_ on: Bool, except: String?) {
         guard let core else { return }
-        for d in core.connectedPaired() where d.id != except && d.accepts(PacketType.fluxDnd) {
-            _ = d.send(Packet(PacketType.fluxDnd, ["on": on]))
+        for id in core.connectedPairedIds(accepting: PacketType.fluxDnd) where id != except {
+            core.send(Packet(PacketType.fluxDnd, ["on": on]), to: id)
         }
     }
 
