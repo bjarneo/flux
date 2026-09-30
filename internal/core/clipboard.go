@@ -465,6 +465,8 @@ func (d *Daemon) sendImageTo(dev *Device, data []byte) error {
 	switch {
 	case l == nil:
 		err = offline(dev)
+	case !dev.Paired:
+		err = apiErr("not_paired", "%s is not paired", dev.Name)
 	case !dev.accepts(proto.TypeFluxClipboardImage):
 		err = apiErr("unsupported", "%s does not accept clipboard images. Flux for Android accepts them while Sync clipboard is on", dev.Name)
 	}

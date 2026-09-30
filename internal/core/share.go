@@ -705,8 +705,11 @@ func (d *Daemon) SendFiles(dev *Device, paths []string) ([]*Transfer, error) {
 	d.mu.Lock()
 	l := dev.link
 	var err error
-	if l == nil {
+	switch {
+	case l == nil:
 		err = offline(dev)
+	case !dev.Paired:
+		err = apiErr("not_paired", "%s is not paired", dev.Name)
 	}
 	d.mu.Unlock()
 	if err != nil {

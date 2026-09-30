@@ -18,6 +18,7 @@ import (
 
 	"flux/internal/config"
 	"flux/internal/desktop"
+	"flux/internal/lan"
 	"flux/internal/proto"
 )
 
@@ -538,5 +539,20 @@ func TestSendFilesNeedsAbsolutePaths(t *testing.T) {
 	_, err := d.Call(context.Background(), "share.files", []byte(`{"device":"phone1","paths":["/tmp/a.jpg"]}`))
 	if errCode(err) != "offline" {
 		t.Errorf("an absolute path: %v", err)
+	}
+}
+
+// TestSendFilesNeedsPairing checks that files and clipboard images do not
+// go on the link of a device that is not paired. A device that sends a
+// pair request again loses its trust and keeps its link.
+func TestSendFilesNeedsPairing(t *testing.T) {
+	d := testDaemon()
+	dev := &Device{ID: "p1", Name: "Pixel 8", link: &lan.Link{}, Incoming: []string{proto.TypeFluxClipboardImage}}
+	if _, err := d.SendFiles(dev, []string{"/tmp/a.jpg"}); errCode(err) != "not_paired" {
+		t.Errorf("SendFiles: %v", err)
+	}
+	d.clip.(*memClipboard).image = []byte("\x89PNG\r\n\x1a\n")
+	if err := d.SendClipboard(dev, ""); errCode(err) != "not_paired" {
+		t.Errorf("SendClipboard with an image: %v", err)
 	}
 }
