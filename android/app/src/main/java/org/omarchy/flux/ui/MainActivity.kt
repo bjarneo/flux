@@ -40,7 +40,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.collectLatest
 import org.omarchy.flux.core.ApproveKeys
 import org.omarchy.flux.core.FluxCore
-import org.omarchy.flux.core.NotificationSync
 import org.omarchy.flux.core.PairState
 import org.omarchy.flux.core.RemoteInput
 import org.omarchy.flux.core.Ringer
@@ -343,7 +342,6 @@ fun FluxRoot(activity: MainActivity, splash: Boolean = false) {
                 onCancel = { unpairing = null },
                 onConfirm = {
                     FluxCore.unpair(id)
-                    NotificationSync.forgetDevice(id)
                     // A new pairing needs a new enrollment. The key file on the computer stays until: sudo flux-cli approve remove
                     ApproveKeys.delete(id)
                     unpairing = null

@@ -313,6 +313,8 @@ object FluxCore {
      * Ends each session, stream, and request of a device that is no longer
      * paired. [Device] calls it under the core lock when either side
      * unpairs. The stops run on [io], because a stop can wait for a thread.
+     * The fingerprint approval key stays. Only an unpair on this phone
+     * deletes it.
      */
     fun revoke(d: Device) {
         val id = d.id
@@ -320,6 +322,8 @@ object FluxCore {
         d.herdrOutput = null
         d.herdrReply = null
         d.herdrAction = null
+        // The computer can no longer dismiss, answer, or press a button on a phone notification.
+        NotificationSync.forgetDevice(id)
         val browsing = browse?.deviceId == id
         if (browsing) browse = null
         io.execute {
