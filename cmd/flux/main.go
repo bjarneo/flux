@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 
 	"flux/internal/config"
 	"flux/internal/ipc"
@@ -32,8 +35,10 @@ Commands:
                          notifications, messages, commands
   status [--json]        Show this computer and the known devices
   discover               Broadcast this computer on the network now
-  pair DEVICE            Ask a device to pair and show the verification key
-  accept DEVICE          Accept a pair request
+  pair DEVICE            Ask a device to pair, show the verification key, and
+                         ask you to confirm it
+  accept DEVICE [KEY]    Accept a pair request, or confirm a pairing that the
+                         device accepted. With KEY, only the pairing with that key
   reject DEVICE          Reject a pair request
   unpair DEVICE          Remove a paired device
   addresses              List the extra addresses of the paired devices
@@ -103,7 +108,7 @@ func main() {
 	case "pair":
 		err = pair(need(args, "DEVICE"))
 	case "accept":
-		err = accept(need(args, "DEVICE"))
+		err = accept(need(args, "DEVICE"), strings.Join(args[1:], ""))
 	case "reject":
 		err = call("pair.reject", map[string]any{"device": need(args, "DEVICE")})
 	case "unpair":
@@ -376,7 +381,9 @@ type pairResult struct {
 
 // pair asks a device to pair and waits for the answer. It follows the
 // device ID that fluxd resolved, so another device with the same name
-// cannot change the result.
+// cannot change the result. After the device accepts, the user of this
+// computer confirms the key: at a prompt when stdin is a terminal, else
+// with flux-cli accept.
 func pair(device string) error {
 	c, err := dial()
 	if err != nil {
@@ -414,6 +421,8 @@ func pair(device string) error {
 				return nil
 			case d.PairState == "requested":
 				requested = true
+			case d.PairState == "confirm" && d.PairKey == res.Key:
+				return confirmPair(c, d.Name, res)
 			case requested:
 				return fmt.Errorf("%s did not pair", d.Name)
 			}
@@ -426,15 +435,118 @@ func pair(device string) error {
 	return errors.New("fluxd closed the connection")
 }
 
-// accept accepts the pair request of a device and prints the device and
-// the key that it accepted.
-func accept(device string) error {
+// confirmPair asks the user of this computer to compare the key of a
+// pairing that the device accepted. It accepts the pairing with that key
+// on y, and rejects it on any other answer. When stdin is not a terminal,
+// it prints the command that accepts the pairing.
+func confirmPair(c *ipc.Client, name string, res pairResult) error {
+	key := proto.FormatKey(res.Key)
+	if !isTerminal(os.Stdin) {
+		fmt.Printf("%s accepted. Compare the key. When %s shows %s, run:\n  flux-cli accept %s %s\n", name, name, key, res.Device, key)
+		return nil
+	}
+	params := map[string]any{"device": res.Device, "key": res.Key}
+	if !sameKey(bufio.NewReader(os.Stdin), os.Stdout, name, key) {
+		if err := c.Call("pair.reject", params, nil); err != nil {
+			return cleanErr(err)
+		}
+		return fmt.Errorf("you rejected the pairing with %s", name)
+	}
+	if err := c.Call("pair.accept", params, nil); err != nil {
+		return cleanErr(err)
+	}
+	fmt.Printf("✓ %s (%s) paired with the key %s\n", name, res.Device, key)
+	return nil
+}
+
+// sameKey asks whether the device shows the key, and reports whether the
+// user answered y.
+func sameKey(in *bufio.Reader, out io.Writer, name, key string) bool {
+	fmt.Fprintf(out, "Does %s show %s? [y/N] ", name, key)
+	line, _ := in.ReadString('\n')
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return true
+	}
+	return false
+}
+
+// isTerminal reports whether f is a terminal.
+func isTerminal(f *os.File) bool {
+	_, err := unix.IoctlGetTermios(int(f.Fd()), unix.TCGETS)
+	return err == nil
+}
+
+// accept accepts the pairing of a device and prints the device and the
+// key that it accepted: a pair request of the device, or a pairing that
+// this computer started and the device accepted. flux-cli always sends
+// the key, so fluxd accepts only the pairing with that key. Without key,
+// the key comes from the state.
+func accept(device, key string) error {
+	key = strings.ToUpper(key)
+	if key == "" {
+		var err error
+		if device, key, err = openPairing(device); err != nil {
+			return err
+		}
+	} else if !validKey(key) {
+		return fmt.Errorf("a key has 16 hex digits, for example: flux-cli accept %s 5EE6 825F 974E D59A", device)
+	}
 	var res pairResult
-	if err := callInto("pair.accept", map[string]any{"device": device}, &res); err != nil {
+	if err := callInto("pair.accept", map[string]any{"device": device, "key": key}, &res); err != nil {
 		return err
 	}
 	fmt.Printf("✓ %s (%s) paired with the key %s\n", res.Name, res.Device, proto.FormatKey(res.Key))
 	return nil
+}
+
+// openPairing returns the ID and the key of the open pairing of the
+// device that the argument names. An exact device ID wins. A name matches
+// without case, and only a device in state "incoming" or "confirm".
+func openPairing(device string) (id, key string, err error) {
+	var s State
+	if err := callInto("state", nil, &s); err != nil {
+		return "", "", err
+	}
+	return findPairing(&s, device)
+}
+
+// findPairing is openPairing for the state s.
+func findPairing(s *State, device string) (id, key string, err error) {
+	var ids, keys []string
+	for _, d := range s.Devices {
+		open := d.PairState == "incoming" || d.PairState == "confirm"
+		if d.ID == device {
+			if !open {
+				return "", "", fmt.Errorf("%s has no open pair request", d.Name)
+			}
+			return d.ID, d.PairKey, nil
+		}
+		if open && strings.EqualFold(d.Name, device) {
+			ids, keys = append(ids, d.ID), append(keys, d.PairKey)
+		}
+	}
+	switch len(ids) {
+	case 0:
+		return "", "", fmt.Errorf("no device named %q has an open pair request", device)
+	case 1:
+		return ids[0], keys[0], nil
+	}
+	sort.Strings(ids)
+	return "", "", fmt.Errorf("%d devices named %q ask to pair: %s. Give the device ID", len(ids), device, strings.Join(ids, ", "))
+}
+
+// validKey reports whether key has 16 uppercase hex digits.
+func validKey(key string) bool {
+	if len(key) != 16 {
+		return false
+	}
+	for _, r := range key {
+		if !strings.ContainsRune("0123456789ABCDEF", r) {
+			return false
+		}
+	}
+	return true
 }
 
 // unpair removes a paired device and prints the device that it removed.
