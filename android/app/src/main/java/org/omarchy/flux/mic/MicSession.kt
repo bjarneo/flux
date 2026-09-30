@@ -100,6 +100,12 @@ object MicSession {
         end(core, notify, status, id)
     }
 
+    /** Stops the stream when it goes to [deviceId], for example after an unpair. */
+    fun stopFor(core: FluxCore, deviceId: String, message: String) {
+        val id = synchronized(lock) { attempt.takeIf { this.deviceId == deviceId } } ?: return
+        end(core, notify = false, Status(Phase.Error, message, deviceId), id)
+    }
+
     /** Handles flux.mic from the computer. The core lock is held, so the work moves to [FluxCore.io]. */
     fun onPacket(core: FluxCore, d: Device, p: Packet) {
         val reply = MicReply.parse(p) ?: return
@@ -136,7 +142,7 @@ object MicSession {
                     lastLevel = now
                     _level.value = Pcm.peak(chunk, n)
                 }
-                if (!d.online) error("The connection to ${d.identity.deviceName} closed")
+                if (!d.online || !d.paired) error("The connection to ${d.identity.deviceName} closed")
             }
         } finally {
             runCatching { rec.stop() }

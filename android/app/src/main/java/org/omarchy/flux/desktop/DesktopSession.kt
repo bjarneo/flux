@@ -69,6 +69,15 @@ object DesktopSession {
         _status.value = status
     }
 
+    /** Stops the stream when it comes from [deviceId], for example after an unpair. */
+    fun stopFor(deviceId: String, message: String) {
+        val old = synchronized(lock) {
+            run?.takeIf { it.deviceId == deviceId }?.also { run = null }
+        } ?: return
+        old.stop(notify = false)
+        _status.value = Status(Phase.Error, message, deviceId)
+    }
+
     /** Sets the surface that shows the video, or null when the view goes. */
     fun attach(s: Surface?) {
         synchronized(lock) {
@@ -173,6 +182,8 @@ object DesktopSession {
             var config: Pair<ByteArray, ByteArray>? = null
             while (!stopped) {
                 val f = frames.next() ?: return
+                // The pairing can end while the stream runs.
+                if (core.device(deviceId)?.paired != true) error("The computer is no longer paired")
                 when {
                     f.isFormat -> f.size()?.let {
                         size = it

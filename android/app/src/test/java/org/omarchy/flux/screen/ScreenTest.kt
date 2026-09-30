@@ -38,6 +38,22 @@ class ScreenTest {
     }
 
     @Test
+    fun stopForEndsOnlyTheMirrorToThatComputer() {
+        val calls = mutableListOf<Pair<Boolean, ScreenSession.Status>>()
+        ScreenSession.set(ScreenSession.Status(ScreenSession.Phase.Live, "", "pc"))
+        ScreenSession.attach { notify, status -> calls += notify to status }
+        try {
+            ScreenSession.stopFor("other", "other is no longer paired")
+            assertTrue("a mirror to another computer keeps running", calls.isEmpty())
+            ScreenSession.stopFor("pc", "pc is no longer paired")
+            val stopped = ScreenSession.Status(ScreenSession.Phase.Error, "pc is no longer paired", "pc")
+            assertEquals(listOf(false to stopped), calls)
+        } finally {
+            ScreenSession.detach(ScreenSession.Status())
+        }
+    }
+
+    @Test
     fun fitKeepsTheShapeUnder1080() {
         // A portrait phone: the long side is at most 1080 px, both sides a multiple of 16.
         val (w, h) = MirrorSize.fit(1080, 2340)

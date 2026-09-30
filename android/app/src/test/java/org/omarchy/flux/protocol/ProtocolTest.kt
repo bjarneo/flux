@@ -106,12 +106,14 @@ class ProtocolTest {
 
     @Test
     fun verificationKeyVector() {
-        // Expected values come from Python: sha256(larger + smaller + "1790000000").
+        // The shared vector of all Flux apps: the first 8 bytes of
+        // sha256(larger + smaller + "1790000000") in uppercase hex.
         val a = byteArrayOf(0x30, 0x82.toByte(), 0x01, 0x22, 0x80.toByte())
         val b = byteArrayOf(0x30, 0x82.toByte(), 0x01, 0x22, 0x7f)
-        assertEquals("5EE6825F", verificationKey(a, b, 1790000000))
-        assertEquals("5EE6825F", verificationKey(b, a, 1790000000))
-        assertEquals("5BB22DB1", verificationKey(a, b, 0))
+        assertEquals("5EE6825F974ED59A", verificationKey(a, b, 1790000000))
+        assertEquals("5EE6825F974ED59A", verificationKey(b, a, 1790000000))
+        assertEquals("5BB22DB11047F34B", verificationKey(a, b, 0))
+        assertEquals("5EE6 825F 974E D59A", groupKey(verificationKey(a, b, 1790000000)))
     }
 
     @Test
@@ -128,7 +130,25 @@ class ProtocolTest {
         val k1 = verificationKey(c.certificate, other.certificate, 1790000000)
         val k2 = verificationKey(other.certificate, c.certificate, 1790000000)
         assertEquals(k1, k2)
-        assertEquals(8, k1.length)
-        assertNotNull(k1.toLongOrNull(16))
+        assertEquals(VERIFICATION_KEY_DIGITS, k1.length)
+        assertNotNull(k1.toULongOrNull(16))
+    }
+
+    @Test
+    fun brokenIdentityIsKept() {
+        val dir = kotlin.io.path.createTempDirectory("flux-identity").toFile()
+        try {
+            val first = LocalCertificate.loadOrCreate(dir)
+            assertEquals(first.deviceId, LocalCertificate.loadOrCreate(dir).deviceId)
+            java.io.File(dir, "privateKey.der").writeBytes(byteArrayOf(1, 2, 3))
+            var replaced = false
+            val second = LocalCertificate.loadOrCreate(dir) { replaced = true }
+            assertTrue(replaced)
+            assertTrue(second.deviceId != first.deviceId)
+            assertTrue("the broken files stay for a later look", java.io.File(dir, "privateKey.der.broken").exists())
+            assertEquals(second.deviceId, LocalCertificate.loadOrCreate(dir).deviceId)
+        } finally {
+            dir.deleteRecursively()
+        }
     }
 }

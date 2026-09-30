@@ -1,7 +1,10 @@
 package org.omarchy.flux.core
 
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -76,10 +79,26 @@ class HerdrTest {
 
     @Test
     fun parsesCreatedAndClosed() {
-        assertEquals(HerdrDone("create", "w4:p1", null), parseHerdrDone(body("""{"kind":"created","what":"agent","pane":"w4:p1"}""")))
+        assertEquals(HerdrDone("create", "w4:p1", null, "agent"), parseHerdrDone(body("""{"kind":"created","what":"agent","pane":"w4:p1"}""")))
         assertEquals(HerdrDone("create", null, "The folder /x does not exist"), parseHerdrDone(body("""{"kind":"created","error":"The folder /x does not exist"}""")))
         assertEquals(HerdrDone("close", "w4:p1", null), parseHerdrDone(body("""{"kind":"closed","pane":"w4:p1"}""")))
         assertNull(parseHerdrDone(body("""{"kind":"sent","pane":"w4:p1"}""")))
+    }
+
+    @Test
+    fun parsesRequestNumbers() {
+        // A newer fluxd sends the number of the request back, so a late answer does not end a newer request.
+        assertEquals(HerdrDone("create", "w4:p1", null, "agent", 3), parseHerdrDone(body("""{"kind":"created","what":"agent","pane":"w4:p1","request":3}""")))
+        assertEquals(HerdrSent("w1:p1", "prompt", null, 7), parseHerdrSent(body("""{"kind":"sent","pane":"w1:p1","action":"prompt","request":7}""")))
+        assertNull(parseHerdrSent(body("""{"kind":"sent","pane":"w1:p1","action":"keys"}"""))!!.request)
+    }
+
+    @Test
+    fun keepsBlockedMessage() {
+        val sent = parseHerdrSent(
+            body("""{"kind":"sent","pane":"w1:p1","action":"prompt","code":"blocked","error":"The agent waits for a choice. Pick a choice first."}"""),
+        )
+        assertEquals("The agent waits for a choice. Pick a choice first.", sent!!.error)
     }
 
     @Test
@@ -195,5 +214,23 @@ class HerdrTest {
         val alerts = t.update(listOf(agent("a", AgentStatus.Done)))
         assertEquals("a change while offline posts nothing, and a gone pane clears", listOf(AgentAlert.Clear("b")), alerts)
         assertEquals(listOf(AgentAlert.NeedsInput(agent("a", AgentStatus.Blocked))), t.update(listOf(agent("a", AgentStatus.Blocked))))
+    }
+
+    private fun output(text: String) = JsonObject(
+        mapOf("kind" to JsonPrimitive("output"), "pane" to JsonPrimitive("w1:p1"), "text" to JsonPrimitive(text)),
+    )
+
+    @Test
+    fun herdrOutputIsCapped() {
+        val many = (1..HERDR_MAX_LINES + 500).joinToString("\n") { "row $it" }
+        val out = parseHerdrOutput(output(many))
+        assertNotNull(out)
+        assertTrue(out!!.truncated)
+        assertTrue(out.lines.size <= HERDR_MAX_LINES)
+        assertEquals("row ${HERDR_MAX_LINES + 500}", out.lines.last().text)
+
+        val big = parseHerdrOutput(output("z".repeat(100) + "\n" + "y".repeat(HERDR_MAX_TEXT)))!!
+        assertTrue(big.truncated)
+        assertTrue(big.lines.all { it.text.length <= TERM_MAX_COLUMNS })
     }
 }

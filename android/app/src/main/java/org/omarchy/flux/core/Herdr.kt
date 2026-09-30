@@ -2,6 +2,7 @@ package org.omarchy.flux.core
 
 import android.util.Log
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.omarchy.flux.protocol.Packet
 import org.omarchy.flux.protocol.Types
 import org.omarchy.flux.protocol.bodyOf
@@ -78,6 +79,11 @@ object HerdrSync {
                 val sent = parseHerdrSent(p.body) ?: return
                 val reply = d.herdrReply
                 if (reply == null || reply.pane != sent.pane || !reply.sending) return
+                // A late answer to an earlier reply does not end this reply.
+                if (sent.action.isNotEmpty() && sent.action != reply.action) return
+                if (sent.request != null && sent.request != reply.seq) return
+                // The error text of fluxd goes to the screen as it is, for
+                // example when the agent waits for a choice.
                 d.herdrReply = reply.copy(sending = false, error = sent.error)
                 if (sent.error == null) {
                     val id = d.id
@@ -89,6 +95,9 @@ object HerdrSync {
                 val action = d.herdrAction
                 if (action == null || action.action != done.action || !action.sending) return
                 if (done.action == "close" && action.pane != done.pane) return
+                // A late answer to an earlier create does not end this one.
+                if (done.action == "create" && done.what.isNotEmpty() && action.what.isNotEmpty() && done.what != action.what) return
+                if (done.request != null && done.request != action.seq) return
                 d.herdrAction = action.copy(sending = false, pane = done.pane ?: action.pane, error = done.error)
             }
             else -> Log.d(TAG, "ignored flux.herdr kind ${p.string("kind")}")
@@ -180,14 +189,14 @@ object HerdrSync {
      * [workspace] is empty.
      */
     fun create(core: FluxCore, id: String, what: String, kind: String, cwd: String, workspace: String) {
-        action(core, id, HerdrAction("create", 0, what = what), CREATE_TIMEOUT_MS, bodyOf(
-            "kind" to "create", "what" to what, "agent" to kind, "cwd" to cwd.trim(), "workspace" to workspace,
-        ))
+        action(core, id, HerdrAction("create", 0, what = what), CREATE_TIMEOUT_MS) { seq ->
+            bodyOf("kind" to "create", "what" to what, "agent" to kind, "cwd" to cwd.trim(), "workspace" to workspace, "request" to seq)
+        }
     }
 
     /** Asks the computer to close [pane]. The agent or the shell in it ends. */
     fun close(core: FluxCore, id: String, pane: String) {
-        action(core, id, HerdrAction("close", 0, pane = pane), REPLY_TIMEOUT_MS, bodyOf("kind" to "close", "pane" to pane))
+        action(core, id, HerdrAction("close", 0, pane = pane), REPLY_TIMEOUT_MS) { seq -> bodyOf("kind" to "close", "pane" to pane, "request" to seq) }
     }
 
     /** Forgets the last create or close, after the UI used its answer. */
@@ -198,12 +207,16 @@ object HerdrSync {
         }
     }
 
-    private fun action(core: FluxCore, id: String, start: HerdrAction, timeout: Long, body: JsonObject) {
+    /**
+     * Sends a create or a close. [body] gets the number of the action, which
+     * a newer fluxd sends back in its answer.
+     */
+    private fun action(core: FluxCore, id: String, start: HerdrAction, timeout: Long, body: (seq: Long) -> JsonObject) {
         val token = core.locked {
             val d = core.device(id) ?: return@locked null
             val seq = ++actions
             d.herdrAction = start.copy(seq = seq)
-            if (!d.send(Packet(Types.FLUX_HERDR, body))) {
+            if (!d.send(Packet(Types.FLUX_HERDR, body(seq)))) {
                 d.herdrAction = start.copy(seq = seq, sending = false, error = "${d.identity.deviceName} is not reachable")
                 return@locked null
             }
@@ -220,8 +233,12 @@ object HerdrSync {
         }, timeout, TimeUnit.MILLISECONDS)
     }
 
-    /** Sends [text] to the agent in [pane]. The computer submits it as a prompt, or types it into a dialog. */
-    fun sendPrompt(core: FluxCore, id: String, pane: String, text: String) {
+    /**
+     * Sends [text] to the agent in [pane]. The computer submits it as a
+     * prompt. An agent that waits for a choice refuses a prompt, unless
+     * [answer] is true: then the computer types the text as the answer.
+     */
+    fun sendPrompt(core: FluxCore, id: String, pane: String, text: String, answer: Boolean = false) {
         val t = text.trim()
         if (t.isEmpty()) return
         if (t.toByteArray(Charsets.UTF_8).size > HERDR_MAX_PROMPT) {
@@ -231,15 +248,20 @@ object HerdrSync {
             }
             return
         }
-        reply(core, id, pane, "prompt", bodyOf("kind" to "prompt", "pane" to pane, "text" to t))
+        val fields = listOf<Pair<String, Any?>>("kind" to "prompt", "pane" to pane, "text" to t) + if (answer) listOf("answer" to true) else emptyList()
+        reply(core, id, pane, "prompt", bodyOf(*fields.toTypedArray()))
     }
 
+    /**
+     * Sends a reply to a pane. The body gets the number of the reply, which
+     * a newer fluxd sends back in its answer.
+     */
     private fun reply(core: FluxCore, id: String, pane: String, action: String, body: JsonObject) {
         val token = core.locked {
             val d = core.device(id) ?: return@locked null
             val seq = ++replies
             d.herdrReply = HerdrReply(pane, action, seq)
-            if (!d.send(Packet(Types.FLUX_HERDR, body))) {
+            if (!d.send(Packet(Types.FLUX_HERDR, JsonObject(body + ("request" to JsonPrimitive(seq)))))) {
                 d.herdrReply = HerdrReply(pane, action, seq, sending = false, error = "${d.identity.deviceName} is not reachable")
                 return@locked null
             }
