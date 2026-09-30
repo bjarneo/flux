@@ -6,7 +6,7 @@ import "../qml/tools"
 
 // Checks of the shared views with the mock backend. To run them from the
 // repository root:
-//   QT_QPA_PLATFORM=offscreen QML_XHR_ALLOW_FILE_READ=1 qmltestrunner -input gui/tests
+//   make test-gui
 Item {
   id: top
   width: 1180
@@ -348,6 +348,160 @@ Item {
       var sent = requestsOf("notification.dismiss")
       compare(sent.length, 1)
       compare(sent[0].params.id, "hasOwnProperty")
+    }
+  }
+
+  TestCase {
+    name: "Errors"
+    when: mock.ready
+
+    function init() {
+      mock.state = mock.fixTimes(mock.fixture.state)
+      mock.failures = {}
+      mock.requests = []
+    }
+
+    function cleanup() {
+      mock.failures = {}
+    }
+
+    function test_smsSendErrorShowsAtField() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "messages"
+      tryVerify(function () { return !!page(view) && page(view).loaded })
+      var p = page(view)
+      var msg = "The message has 1700 characters. Send at most 1600"
+      mock.failures = { "sms.send": { code: "bad_params", message: msg } }
+      var draft = findBy(p, "placeholder", "Text message via Pixel 8")
+      draft.text = "A long message"
+      p.send()
+      tryCompare(p, "sendError", msg)
+      var line = findBy(p, "text", msg)
+      verify(!!line && line.visible)
+      // The draft stays for a change, and nothing shows as sent.
+      compare(draft.text, "A long message")
+      compare(p.outbox.length, 0)
+      draft.text = "A short message"
+      compare(p.sendError, "")
+      verify(!line.visible)
+    }
+
+    function test_smsSendErrorInOtherThreadShowsInToast() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "messages"
+      tryVerify(function () { return !!page(view) && page(view).loaded })
+      var p = page(view)
+      var msg = "The message has 1700 characters. Send at most 1600"
+      mock.failures = { "sms.send": { code: "bad_params", message: msg } }
+      findBy(p, "placeholder", "Text message via Pixel 8").text = "A long message"
+      var sent = p.selected.thread
+      p.send()
+      // The user opens a different thread before fluxd answers.
+      p.open(p.convos.filter(function (c) { return c.thread !== sent })[0])
+      tryVerify(function () { var t = findBy(view, "message", msg); return !!t && t.visible })
+      compare(p.sendError, "")
+    }
+
+    function test_smsSendErrorAfterPageShowsInToast() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "messages"
+      tryVerify(function () { return !!page(view) && page(view).loaded })
+      var p = page(view)
+      var msg = "The message has 1700 characters. Send at most 1600"
+      mock.failures = { "sms.send": { code: "bad_params", message: msg } }
+      findBy(p, "placeholder", "Text message via Pixel 8").text = "A long message"
+      p.send()
+      // The user opens a different tab before fluxd answers.
+      view.tab = "notifications"
+      tryVerify(function () { var t = findBy(view, "message", msg); return !!t && t.visible })
+    }
+
+    function test_clipboardErrorShowsInToast() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      tryVerify(function () { return view.devOnline })
+      var msg = "The text has 1048577 bytes. Flux shares at most 1 MiB of text"
+      mock.failures = { "clipboard.send": { code: "too_large", message: msg } }
+      view.sendClipboard()
+      compare(requestsOf("clipboard.send").length, 1)
+      tryVerify(function () { var t = findBy(view, "message", msg); return !!t && t.visible })
+    }
+  }
+
+  TestCase {
+    name: "Limits"
+    when: mock.ready
+
+    function init() {
+      mock.state = mock.fixTimes(mock.fixture.state)
+      mock.requests = []
+    }
+
+    function test_notificationShowsAtMost8Actions() {
+      var actions = []
+      for (var i = 0; i < 12; i++) actions.push("Action " + i)
+      mock.updateDevice(top.pixel, function (d) {
+        d.notifications = [
+          { id: "many", app: "Mail", title: "Many actions", text: "", time: 1, dismissable: true, actions: actions },
+          { id: "number", app: "Mail", title: "Number actions", text: "", time: 1, dismissable: true, actions: 1000 }
+        ]
+        return d
+      })
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "notifications"
+      tryVerify(function () { return !!page(view) && !!findBy(page(view), "text", "Many actions") })
+      verify(!!findBy(page(view), "text", "Action 7"))
+      verify(!findBy(page(view), "text", "Action 8"))
+      compare(findBy(page(view), "actionsText", JSON.stringify(actions.slice(0, 8))).actions.length, 8)
+      // Actions that are not a list give no buttons.
+      var card = findBy(page(view), "text", "Number actions")
+      while (card && !card.hasOwnProperty("actionsText")) card = card.parent
+      verify(!!card)
+      compare(card.actionsText, "[]")
+      compare(card.actions.length, 0)
+    }
+
+    function test_cameraShowsAtMost16Chips() {
+      mock.setState(function (s) {
+        var aspects = []
+        var resolutions = []
+        for (var i = 0; i < 40; i++) {
+          aspects.push(i + ":1")
+          resolutions.push(100 + i)
+        }
+        s.webcam.caps.aspects = aspects
+        s.webcam.caps.resolutions = resolutions
+        s.webcam.caps.cameras = 100000
+        s.webcam.caps.whiteBalance = "auto"
+      })
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "overview"
+      var card = null
+      tryVerify(function () { card = findBy(page(view), "objectName", "cameraCard"); return !!card })
+      compare(card.aspects.length, 16)
+      compare(card.resolutions.length, 16)
+      compare(card.cameras.length, 0)
+      compare(card.whiteBalances.length, 0)
+      // An empty list gives the default formats.
+      mock.setState(function (s) { s.webcam.caps.aspects = [] })
+      compare(card.aspects, ["16:9", "4:3", "1:1", "9:16"])
+    }
+
+    function test_overviewShowsFingerprint() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "overview"
+      var line = null
+      tryVerify(function () { line = findBy(page(view), "objectName", "fingerprint"); return !!line })
+      verify(line.visible)
+      verify(!!findBy(line, "text", "5EE6 825F 974E D59A"))
+      mock.updateDevice(top.pixel, function (d) { d.fingerprint = ""; return d })
+      verify(!line.visible)
     }
   }
 }

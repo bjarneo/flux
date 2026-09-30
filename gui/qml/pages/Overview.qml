@@ -105,6 +105,23 @@ Item {
           color: root.online ? Theme.ok : Theme.dim
           elide: Text.ElideRight
         }
+        // The fingerprint of the certificate of the device, as the pair mode
+        // and flux-cli unpair show it. The groups go to the next line as 1
+        // part, so that no group is cut.
+        Flow {
+          objectName: "fingerprint"
+          width: parent.width
+          visible: fingerprintText.text !== ""
+          topPadding: 2
+          spacing: 6
+          Txt { text: "certificate"; color: Theme.dim; font.pixelSize: 11 }
+          Txt {
+            id: fingerprintText
+            text: Fmt.hexGroups(root.dev ? root.dev.fingerprint : "")
+            color: Theme.dim
+            font.pixelSize: 11
+          }
+        }
       }
     }
 

@@ -159,7 +159,8 @@ place, for 1 second. A new key or a move of the card starts the wait again.
 
 In pair mode, each device on the network shows its name, its address, and
 the fingerprint of its certificate. A row with the name of another device
-has a warning line.
+has a warning line. After the pairing, the Overview of the device shows the
+same fingerprint under **certificate**.
 
 ## Layout
 
@@ -187,12 +188,25 @@ QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software QML_XHR_ALLOW_FILE_READ=1 \
 ## View tests
 
 `gui/tests/tst_views.qml` checks the views with the mock backend. It covers
-the device switch in Messages, the pair requests, the key format, and the
-text from a phone. To run the tests from the repository root:
+the device switch in Messages, the pair requests, the key format, the
+errors from fluxd, the list limits, and the text from a phone. To run the
+tests from the repository root:
+
+```sh
+make test-gui
+```
+
+The target runs this command:
 
 ```sh
 QT_QPA_PLATFORM=offscreen QML_XHR_ALLOW_FILE_READ=1 \
   /usr/lib/qt6/bin/qmltestrunner -input gui/tests
+```
+
+To use a `qmltestrunner` in another folder, set `QMLTESTRUNNER`:
+
+```sh
+make test-gui QMLTESTRUNNER=/usr/lib64/qt6/bin/qmltestrunner
 ```
 
 ## Qt app

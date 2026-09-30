@@ -273,6 +273,16 @@ Window {
         ] })
       })
       view.selectedId = "a0000000000000000000000000000006"
+    }],
+    // A message that fluxd refuses. The error shows above the field, and
+    // the draft stays.
+    ["53-messages-send-error", function () {
+      mock.failures = { "sms.send": { code: "bad_params", message: "The message has 1700 characters. Send at most 1600" } }
+      view.selectedId = pixel
+      view.tab = "messages"
+    }, function () {
+      setField("Text message via Pixel 8", "See you at the station at 6")
+      pageItem().send()
     }]
   ]
 

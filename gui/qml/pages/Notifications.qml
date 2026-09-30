@@ -13,8 +13,9 @@ Item {
   readonly property bool online: !!dev && !!dev.online
   readonly property var notifs: dev && dev.notifications ? dev.notifications : []
   readonly property int clearable: notifs.filter(function (n) { return n.dismissable !== false }).length
-  // A card shows at most this number of action buttons.
-  readonly property int maxActions: 5
+  // A card shows at most this number of action buttons. fluxd keeps the
+  // same number of actions, so each action that it keeps has a button.
+  readonly property int maxActions: 8
 
   implicitHeight: list.implicitHeight
 
@@ -68,7 +69,7 @@ Item {
         property bool replying: false
         // The action buttons. The text changes only when the actions
         // change, so a state event does not build the buttons again.
-        readonly property string actionsText: JSON.stringify((modelData.actions || []).slice(0, root.maxActions))
+        readonly property string actionsText: JSON.stringify(Array.isArray(modelData.actions) ? modelData.actions.slice(0, root.maxActions) : [])
         readonly property var actions: JSON.parse(actionsText)
         width: list.width
         implicitHeight: Math.max(36, body.implicitHeight) + 30

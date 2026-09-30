@@ -28,6 +28,9 @@ Item {
   property string loadedFor: ""
   // The error of the last load of the selected thread, or "".
   property string loadError: ""
+  // The error of the last send, or "". It shows above the message field,
+  // for example for a message that is too long. A new draft clears it.
+  property string sendError: ""
   // True when messages belong to the selected thread.
   readonly property bool loaded: !!selected && loadedFor === selectedDev + ":" + selected.thread
   // The New message form shows in place of the thread. sentTo is the
@@ -156,12 +159,14 @@ Item {
     composing = true
     threadOpen = true
     sentTo = ""
+    sendError = ""
     to.clear()
     Qt.callLater(function () { to.input.forceActiveFocus() })
   }
 
   function open(c) {
     composing = false
+    sendError = ""
     load(c)
     threadOpen = true
   }
@@ -188,12 +193,22 @@ Item {
     var list = c ? addresses(c) : [target]
     var entry = { device: devId, thread: c ? c.thread : -1, address: list[0], body: text, time: Math.floor(Date.now() / 1000), outgoing: true, pending: true, failed: false }
     var life = root.life
-    view.call("sms.send", { device: devId, addresses: list, body: text }, function () {
+    var v = view
+    sendError = ""
+    v.call("sms.send", { device: devId, addresses: list, body: text }, function () {
       if (!life.alive || root.devId !== devId) return
       if (entry.thread < 0) root.sentTo = entry.address
       root.outbox = root.outbox.concat([entry])
       draft.clear()
       refreshTimer.restart()
+    }, function (err) {
+      // The error shows above the message field while the page shows the
+      // thread or the form. The draft stays, so the user can change it and
+      // send it again. When the page is gone or shows a different thread,
+      // the error becomes a toast.
+      var msg = err.message || err.code || "Error"
+      if (life.alive && root.devId === devId && (c ? root.showing(devId, c) : root.composing)) root.sendError = msg
+      else v.toast(msg)
     })
   }
 
@@ -244,6 +259,7 @@ Item {
     messages = []
     loading = false
     loadError = ""
+    sendError = ""
     loadedFor = ""
     composing = false
     sentTo = ""
@@ -453,7 +469,7 @@ Item {
       anchors.left: parent.left
       anchors.right: parent.right
       anchors.top: root.composing ? to.bottom : threadName.bottom
-      anchors.bottom: inputRow.top
+      anchors.bottom: sendErrorLine.visible ? sendErrorLine.top : inputRow.top
       anchors.leftMargin: 19
       anchors.rightMargin: 19
       anchors.topMargin: 10
@@ -530,6 +546,22 @@ Item {
       }
     }
 
+    // The error of the last send from fluxd.
+    Txt {
+      id: sendErrorLine
+      visible: root.sendError !== ""
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.bottom: inputRow.top
+      anchors.leftMargin: 19
+      anchors.rightMargin: 19
+      anchors.bottomMargin: 8
+      text: root.sendError
+      color: Theme.err
+      font.pixelSize: 12
+      wrapMode: Text.Wrap
+    }
+
     Row {
       id: inputRow
       anchors.left: parent.left
@@ -544,6 +576,7 @@ Item {
         opacity: enabled ? 1 : 0.6
         placeholder: root.group ? "Reply to group messages on the phone" : "Text message via " + (root.view ? root.view.devName : "")
         onAccepted: root.send()
+        onTextChanged: root.sendError = ""
       }
       AccentButton {
         id: sendButton
