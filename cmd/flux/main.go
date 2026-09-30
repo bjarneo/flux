@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -300,6 +301,10 @@ type State struct {
 			Title string `json:"title"`
 			Text  string `json:"text"`
 		} `json:"notifications"`
+
+		// Fingerprint is 16 hex digits from the certificate of the device,
+		// or "".
+		Fingerprint string `json:"fingerprint"`
 	} `json:"devices"`
 	Commands []config.Command `json:"commands"`
 }
@@ -318,10 +323,18 @@ func status(asJSON bool) error {
 		return err
 	}
 	cleanAll(&s)
-	fmt.Printf("%s (%s) · TCP %d\n", s.Self.Name, s.Self.Type, s.Self.TCPPort)
+	printStatus(os.Stdout, &s)
+	return nil
+}
+
+// printStatus writes this computer and the known devices to w. The line
+// under each device has its ID and the fingerprint of its certificate, so
+// that the user can give the ID when 2 devices have 1 name.
+func printStatus(w io.Writer, s *State) {
+	fmt.Fprintf(w, "%s (%s) · TCP %d\n", s.Self.Name, s.Self.Type, s.Self.TCPPort)
 	if len(s.Devices) == 0 {
-		fmt.Println("No devices. Open Flux on the phone, on the same network.")
-		return nil
+		fmt.Fprintln(w, "No devices. Open Flux on the phone, on the same network.")
+		return
 	}
 	for _, d := range s.Devices {
 		state := "offline"
@@ -339,12 +352,16 @@ func status(asJSON bool) error {
 				bat += " +"
 			}
 		}
-		fmt.Printf("  %-22s %-7s %-10s %-6s %-15s %s\n", d.Name, d.Type, state, bat, d.IP, pair)
+		fmt.Fprintf(w, "  %-22s %-7s %-10s %-6s %-15s %s\n", d.Name, d.Type, state, bat, d.IP, pair)
+		id := "ID " + d.ID
+		if d.Fingerprint != "" {
+			id += " · certificate " + proto.FormatKey(d.Fingerprint)
+		}
+		fmt.Fprintf(w, "  %-22s %s\n", "", id)
 		if d.AppUpdate != "" {
-			fmt.Printf("  %-22s Flux for Android %s is available. To send it, run: flux-cli --device %q update --phone\n", "", d.AppUpdate, d.Name)
+			fmt.Fprintf(w, "  %-22s Flux for Android %s is available. To send it, run: flux-cli --device %q update --phone\n", "", d.AppUpdate, d.Name)
 		}
 	}
-	return nil
 }
 
 // pairResult is the answer of fluxd to pair.request, pair.accept, and
