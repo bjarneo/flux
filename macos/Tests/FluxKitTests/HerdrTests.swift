@@ -198,6 +198,11 @@ final class HerdrTests: XCTestCase {
         XCTAssertEqual(e.action, "prompt")
         XCTAssertEqual(e.error, "Replies from the phone are off on this computer.")
         XCTAssertNil(HerdrWire.sent(body(#"{"kind":"sent","action":"keys"}"#)), "a sent answer needs a pane")
+        let blocked = try XCTUnwrap(HerdrWire.sent(body(#"{"kind":"sent","pane":"w5:p1","action":"prompt","error":"Pick a choice first.","code":"blocked","request":7}"#)))
+        XCTAssertEqual(blocked.code, HerdrWire.blockedCode)
+        XCTAssertEqual(blocked.request, 7)
+        XCTAssertNil(e.code)
+        XCTAssertNil(e.request, "an older fluxd sends no number")
         XCTAssertNil(HerdrWire.sent(body(#"{"kind":"output","pane":"w5:p1"}"#)), "an output is not a sent answer")
     }
 
