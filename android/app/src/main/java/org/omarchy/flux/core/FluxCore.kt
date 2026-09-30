@@ -248,7 +248,7 @@ object FluxCore {
             val old = existing?.link
             // A pairing stays on the link on which it started, as in fluxd,
             // which ends the pairing when a new link comes.
-            if (existing != null && old != null && old !== link && existing.pairing) {
+            if (existing != null && endsPairing(existing.pairing, hasOldLink = old != null, sameLink = old === link)) {
                 existing.dropPairing()
                 toast("Pairing with ${link.identity.deviceName} stopped: the connection changed. Pair again")
             }
@@ -542,6 +542,15 @@ internal fun linkAllowed(cert: ByteArray, trusted: Boolean, pinned: ByteArray?, 
     pairing != null -> pairing.contentEquals(cert)
     else -> true
 }
+
+/**
+ * Reports whether a new link of a device ends its open pairing. A pairing
+ * stays on the link on which it started, as in fluxd. [hasOldLink] is true
+ * when the device has a link, and [sameLink] is true when the new link is
+ * that link.
+ */
+internal fun endsPairing(pairing: Boolean, hasOldLink: Boolean, sameLink: Boolean): Boolean =
+    pairing && hasOldLink && !sameLink
 
 /**
  * Parses the output of a herdr pane before the core lock. Only a paired

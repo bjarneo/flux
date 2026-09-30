@@ -284,7 +284,7 @@ class Device(private val core: FluxCore, var identity: Identity) {
      */
     fun refuseUnpaired() {
         val l = link ?: return
-        if (paired || pairing || refusedLink === l) return
+        if (!refusesUnpaired(paired, pairing, refused = refusedLink === l)) return
         refusedLink = l
         send(Packet(Types.PAIR, bodyOf("pair" to false)))
     }
@@ -314,3 +314,12 @@ class Device(private val core: FluxCore, var identity: Identity) {
         return verificationKey(core.local.certificate, peer, pairTimestamp)
     }
 }
+
+/**
+ * Reports whether the phone answers pair false to a packet other than a
+ * pair packet. Only a device that is not paired and has no open pairing
+ * gets the answer. [refused] is true when the phone already sent pair false
+ * on the link, as an answer or as an unpair.
+ */
+internal fun refusesUnpaired(paired: Boolean, pairing: Boolean, refused: Boolean): Boolean =
+    !paired && !pairing && !refused
