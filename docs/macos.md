@@ -85,6 +85,9 @@ A request from the computer does not change the page that the window shows.
 The sidebar marks the computer, and a notification shows the key.
 Select the computer, compare the key, and select **Accept**.
 Return does not accept a request.
+After the Mac accepts, the computer asks you to confirm the key.
+Select **Confirm** in the Flux window or in the notification, or type `y` at the `flux-cli pair` prompt.
+The computer pins the Mac only after this step, and each step waits at most 30 seconds.
 The Mac announces itself with UDP broadcasts on port 1716 and as `_flux._udp` through Bonjour, like the phone.
 It appears on the computer as `laptop` when it has a battery and `desktop` otherwise.
 
