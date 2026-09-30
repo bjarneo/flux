@@ -69,10 +69,12 @@ object ClipReader {
             PixelFormat.TRANSLUCENT,
         ).apply {
             // Android 12 and later block a touch that passes through a window
-            // of another app when the window is more than 80% opaque. Alpha 0
-            // lets the touch through. The pixel goes to the top left corner,
-            // away from the content of the app below.
-            alpha = 0f
+            // of another app when the window is more than 80% opaque. Alpha
+            // 0.5 lets the touch through, and the view draws nothing, so the
+            // pixel stays clear. Keep the alpha above 0, because SurfaceFlinger
+            // gives no input focus to a window with alpha 0. The pixel goes to
+            // the top left corner, away from the content of the app below.
+            alpha = 0.5f
             gravity = Gravity.TOP or Gravity.START
         }
         val view = object : View(app) {
