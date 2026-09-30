@@ -113,7 +113,7 @@ Flux for Android applies these limits to the network:
 - A computer that is not paired can send only pair packets. The phone answers another packet with an unpair, once for each connection. A computer that still trusts the phone then removes its old pairing.
 - The phone keeps at most 8 connections of computers that are not paired. A new computer closes the oldest one.
 - The handshake of a new connection must finish in 10 seconds.
-- At most 4 connections that UDP identities start run at a time. They do not use the handshake slots of the incoming connections.
+- At most 4 connections that UDP identities start run at a time. They do not use the handshake slots of the incoming connections, in total or for one address.
 - A pairing stays on the connection and the certificate on which it started. A new connection of the computer ends an open pairing, and you pair again. While a pairing is open, and after pairing, the phone refuses a connection with another certificate for the same device ID.
 - A file, stream, or tunnel port takes only the paired computer from the address of its link. Other connections close, and the port waits for the computer.
 - The phone sends its identity to a stored address only when the address is on a network of the phone or on Tailscale.
