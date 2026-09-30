@@ -74,6 +74,8 @@ Without it, the notification still shows when no Focus is on.
 Each release attaches `flux-ios-VERSION.ipa`. The app in it has no signature.
 A sideload tool such as AltStore, SideStore, or Sideloadly signs it with your Apple ID and installs it.
 The limits of a free Apple ID in the table above also apply.
+The window on the computer shows an update notice only for the Android app.
+To find a newer iPhone app, check `https://github.com/bjarneo/flux/releases`.
 
 The share extension needs the App Group `group.org.omarchy.flux`.
 When the sideload tool cannot give the app this group, the share extension cannot queue files for the app.
