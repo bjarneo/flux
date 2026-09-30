@@ -21,8 +21,9 @@ import (
 	"time"
 )
 
-// MaxClipboardText is the largest clipboard text that Flux syncs, in
-// both directions.
+// MaxClipboardText is the largest clipboard text that Flux takes from a
+// device or reads from the desktop clipboard. fluxd sends at most 256 KiB
+// to a device.
 const MaxClipboardText = 1 << 20
 
 // MaxClipboardImage is the largest clipboard image that Flux syncs.
