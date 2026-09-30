@@ -1,6 +1,7 @@
 import Crypto
 import _CryptoExtras
 import Foundation
+import NIOSSL
 import SwiftASN1
 import X509
 
@@ -30,9 +31,9 @@ public struct LocalCertificate: Sendable {
     ///
     /// Flux makes a new identity only when a file is missing. Files that
     /// exist but cannot be read, for example before the first unlock of an
-    /// iPhone, or that do not parse throw, so that a read error does not
-    /// replace the identity and lose every pairing. The key file gets mode
-    /// 0600 from the start.
+    /// iPhone, throw `IdentityUnreadable`. Files that do not parse throw
+    /// `FluxError`. So a read error does not replace the identity and lose
+    /// every pairing. The key file gets mode 0600 from the start.
     public static func loadOrCreate(directory: URL) throws -> LocalCertificate {
         let keyURL = directory.appendingPathComponent(keyFile)
         let certURL = directory.appendingPathComponent(certFile)
@@ -40,16 +41,19 @@ public struct LocalCertificate: Sendable {
         let keyExists = fm.fileExists(atPath: keyURL.path)
         let certExists = fm.fileExists(atPath: certURL.path)
         if keyExists && certExists {
-            let pem: String
+            let key: Data
             let der: Data
             do {
-                pem = try String(contentsOf: keyURL, encoding: .utf8)
+                key = try Data(contentsOf: keyURL)
                 der = try Data(contentsOf: certURL)
             } catch {
-                throw FluxError("Cannot read the identity of this device in \(directory.path): \(error.localizedDescription)")
+                throw IdentityUnreadable("Cannot read the identity of this device in \(directory.path): \(error.localizedDescription)")
             }
             let loaded: LocalCertificate
             do {
+                guard let pem = String(data: key, encoding: .utf8) else { throw FluxError("the key is not text") }
+                // The TLS setup reads the key in the same way.
+                _ = try NIOSSLPrivateKey(bytes: Array(pem.utf8), format: .pem)
                 loaded = try LocalCertificate(privateKeyPEM: pem, certificateDER: Array(der))
             } catch {
                 throw FluxError("The identity of this device in \(directory.path) is damaged: \(error)")
@@ -204,6 +208,15 @@ public func compareBytes(_ a: [UInt8], _ b: [UInt8]) -> Int {
 
 /// A Flux error with a message for the user.
 public struct FluxError: Error, CustomStringConvertible, LocalizedError, Sendable {
+    public let description: String
+    public init(_ message: String) { description = message }
+    public var errorDescription: String? { description }
+}
+
+/// The files of the identity exist, but Flux cannot read them now. Before
+/// the first unlock after a restart, iOS keeps the files of an app locked.
+/// A later start can read them, so the app can start the core again.
+public struct IdentityUnreadable: Error, CustomStringConvertible, LocalizedError, Sendable {
     public let description: String
     public init(_ message: String) { description = message }
     public var errorDescription: String? { description }

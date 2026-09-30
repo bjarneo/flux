@@ -62,7 +62,8 @@ public final class ApprovePlugin: FluxPlugin, @unchecked Sendable {
     func receive(_ p: Packet, computerId: String, computerName: String) {
         switch p.string("kind") {
         case "cancel":
-            if let id = p.string("id") { end(id, .cancelled) }
+            // Only the computer of the open request can cancel it.
+            if let id = p.string("id"), model.current?.computerId == computerId { end(id, .cancelled) }
         case "request", "enroll":
             open(p, computerId: computerId, computerName: computerName)
         default:
@@ -256,18 +257,30 @@ public final class ApprovePlugin: FluxPlugin, @unchecked Sendable {
         switch result {
         case .success(let s):
             if let key = s.newKey {
+                // The old key stays until the new key reached the computer,
+                // so that a failed enrollment keeps the approvals working.
                 do {
-                    try keys.save(blob: key.blob, publicKey: key.publicKey, computerId: r.computerId, host: r.host, user: r.user)
+                    try keys.stage(blob: key.blob, publicKey: key.publicKey, computerId: r.computerId, host: r.host, user: r.user)
                 } catch {
                     FluxLog.plugin.error("approve: saving the key failed: \(String(describing: error), privacy: .public)")
                     fail(r, ApproveTexts.current.saveFailed)
                     return
                 }
-                model.keys = keys.all()
                 guard core?.send(ApproveMessage.enrolled(r.id, spki: key.publicKey, signature: s.signature), to: r.computerId) == true else {
-                    fail(r, "The computer is not connected. Run the enrollment again.")
+                    keys.discard(r.computerId)
+                    let old = keys.has(r.computerId) ? " The old key stays." : ""
+                    fail(r, "The new key did not reach \(r.computerName).\(old)")
                     return
                 }
+                do {
+                    try keys.commit(r.computerId)
+                } catch {
+                    FluxLog.plugin.error("approve: saving the key failed: \(String(describing: error), privacy: .public)")
+                    keys.discard(r.computerId)
+                    fail(r, ApproveTexts.current.saveFailed)
+                    return
+                }
+                model.keys = keys.all()
                 model.phase = .enrolled(code: ApproveMessage.fingerprint(key.publicKey))
                 end(r.id, .enrolled)
             } else {

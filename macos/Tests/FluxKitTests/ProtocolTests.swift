@@ -209,7 +209,24 @@ final class ProtocolTests: XCTestCase {
         _ = try LocalCertificate.loadOrCreate(directory: dir)
         let key = dir.appendingPathComponent(LocalCertificate.keyFile)
         try Data("damaged".utf8).write(to: key)
-        XCTAssertThrowsError(try LocalCertificate.loadOrCreate(directory: dir), "a damaged key is not replaced")
+        XCTAssertThrowsError(try LocalCertificate.loadOrCreate(directory: dir), "a damaged key is not replaced") { error in
+            XCTAssertFalse(error is IdentityUnreadable, "a damaged key does not read later either")
+        }
         XCTAssertEqual(try Data(contentsOf: key), Data("damaged".utf8), "the file stays for the user to recover")
+    }
+
+    /// Before the first unlock after a restart, iOS keeps the identity
+    /// locked. The start fails, and the app starts the core again later.
+    func testLoadOrCreateKeepsAnIdentityThatCannotBeReadNow() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let first = try LocalCertificate.loadOrCreate(directory: dir)
+        let key = dir.appendingPathComponent(LocalCertificate.keyFile)
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: key.path)
+        XCTAssertThrowsError(try LocalCertificate.loadOrCreate(directory: dir)) { error in
+            XCTAssertTrue(error is IdentityUnreadable, "\(error)")
+        }
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: key.path)
+        XCTAssertEqual(try LocalCertificate.loadOrCreate(directory: dir).deviceId, first.deviceId, "the identity stays")
     }
 }

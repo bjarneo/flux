@@ -1,10 +1,76 @@
 import AVFoundation
 import FluxKit
+import UIKit
 import UserNotifications
 import XCTest
 @testable import Flux
 
 final class AppLogicTests: XCTestCase {
+    /// Before the first unlock after a restart, the identity does not read.
+    /// The core starts again when iOS unlocks the files, and the features
+    /// start once.
+    @MainActor
+    func testTheCoreStartsAgainAfterTheUnlock() throws {
+        let center = NotificationCenter()
+        let app = try TestApp.model()
+        var makes = 0
+        var launches = 0
+        let starter = CoreStarter(center: center, make: {
+            makes += 1
+            if makes == 1 { return (.failed("locked"), true) }
+            return (.ready(app), false)
+        }, didLaunch: { _ in launches += 1 })
+        XCTAssertEqual(starter.observers.count, 2, "the unlock and the activation start the core again")
+        starter.didFinishLaunching()
+        XCTAssertEqual(launches, 0, "no core, so no features")
+        for name in [UIApplication.protectedDataDidBecomeAvailableNotification, UIApplication.protectedDataDidBecomeAvailableNotification,
+                     UIApplication.didBecomeActiveNotification] {
+            center.post(name: name, object: nil)
+        }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertEqual(makes, 2, "the core starts again once")
+        guard case .ready(let model) = starter.launch else { return XCTFail("the core did not start") }
+        XCTAssertTrue(model === app)
+        XCTAssertEqual(launches, 1, "the features start once")
+        XCTAssertTrue(starter.observers.isEmpty)
+    }
+
+    /// A core that starts before launch ends starts its features at the end of launch.
+    @MainActor
+    func testTheFeaturesStartAfterLaunch() throws {
+        let app = try TestApp.model()
+        var launches = 0
+        let starter = CoreStarter(center: NotificationCenter(), make: { (.ready(app), false) }, didLaunch: { _ in launches += 1 })
+        XCTAssertTrue(starter.observers.isEmpty)
+        XCTAssertEqual(launches, 0, "the features wait for the end of launch")
+        starter.didFinishLaunching()
+        XCTAssertEqual(launches, 1)
+        starter.didFinishLaunching()
+        XCTAssertEqual(launches, 1, "the features start once")
+    }
+
+    /// An identity that reads but does not parse does not become readable
+    /// later, so the core does not start again.
+    @MainActor
+    func testADamagedIdentityDoesNotStartAgain() {
+        let center = NotificationCenter()
+        var makes = 0
+        let starter = CoreStarter(center: center, make: {
+            makes += 1
+            return (.failed(makes == 1 ? "locked" : "damaged"), makes == 1)
+        }, didLaunch: { _ in XCTFail("no core, so no features") })
+        starter.didFinishLaunching()
+        for _ in 0..<3 {
+            center.post(name: UIApplication.protectedDataDidBecomeAvailableNotification, object: nil)
+            center.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+        }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertEqual(makes, 2, "a start that fails for another reason ends the tries")
+        XCTAssertTrue(starter.observers.isEmpty)
+        guard case .failed(let message) = starter.launch else { return XCTFail("the core started") }
+        XCTAssertEqual(message, "damaged")
+    }
+
     func testNewlyPaired() {
         let old = [(id: "a", paired: false), (id: "b", paired: true), (id: "c", paired: false)]
         let new = [(id: "a", paired: true), (id: "b", paired: true), (id: "c", paired: false), (id: "d", paired: true)]

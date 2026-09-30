@@ -27,6 +27,7 @@ public struct ApproveKeyInfo: Sendable, Equatable {
 /// the Secure Enclave wrapped with its own key, so only the Secure Enclave of
 /// this Mac can use it, and only after Touch ID. A key without the keychain
 /// needs no keychain entitlement, so it works in an ad-hoc signed app.
+/// An enrollment replaces the key only after the computer got the new key.
 /// docs/approve.md is the design.
 struct ApproveKeys: Sendable {
     let directory: URL
@@ -48,6 +49,11 @@ struct ApproveKeys: Sendable {
         validDeviceId(computerId) ? directory.appendingPathComponent(computerId + ".json") : nil
     }
 
+    /// The new key of an enrollment that did not end, in `<computer ID>.pending`.
+    private func stagedURL(_ computerId: String) -> URL? {
+        validDeviceId(computerId) ? directory.appendingPathComponent(computerId + ".pending") : nil
+    }
+
     private func record(_ computerId: String) -> Record? {
         guard let url = url(computerId), let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode(Record.self, from: data)
@@ -67,14 +73,18 @@ struct ApproveKeys: Sendable {
         return out
     }
 
+    /// Deletes the key of the computer, and the new key of an enrollment that did not end.
     func delete(_ computerId: String) {
-        guard let url = url(computerId) else { return }
-        try? FileManager.default.removeItem(at: url)
+        for file in [url(computerId), stagedURL(computerId)].compactMap({ $0 }) {
+            try? FileManager.default.removeItem(at: file)
+        }
     }
 
-    /// Stores a new key for the computer. It replaces the old key.
-    func save(blob: Data, publicKey: Data, computerId: String, host: String, user: String) throws {
-        guard let url = url(computerId) else { throw FluxError("The computer ID is not valid") }
+    /// Stores a new key for the computer next to its current key. The
+    /// current key stays until `commit`, so that an enrollment that does
+    /// not reach the computer keeps the approvals working.
+    func stage(blob: Data, publicKey: Data, computerId: String, host: String, user: String) throws {
+        guard let url = stagedURL(computerId) else { throw FluxError("The computer ID is not valid") }
         let fm = FileManager.default
         try fm.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         try excludeFromBackup()
@@ -82,6 +92,21 @@ struct ApproveKeys: Sendable {
                        enrolled: Int64(Date().timeIntervalSince1970))
         try JSONEncoder().encode(r).write(to: url, options: .atomic)
         try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+    }
+
+    /// Makes the staged key of the computer its current key. It replaces
+    /// the old key. Call it after the computer got the new key.
+    func commit(_ computerId: String) throws {
+        guard let staged = stagedURL(computerId), let url = url(computerId) else { throw FluxError("The computer ID is not valid") }
+        guard rename(staged.path, url.path) == 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+    }
+
+    /// Deletes the staged key of an enrollment that did not end. The current key stays.
+    func discard(_ computerId: String) {
+        guard let staged = stagedURL(computerId) else { return }
+        try? FileManager.default.removeItem(at: staged)
     }
 
     /// Keeps the folder out of iCloud and computer backups on iOS. Only the

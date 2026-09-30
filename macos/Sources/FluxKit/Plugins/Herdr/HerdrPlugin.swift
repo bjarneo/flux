@@ -160,14 +160,20 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
                 await self?.show(out, deviceId: deviceId, parse: parse)
             }
         case "sent":
+            // A newer fluxd sends back the number of the reply. A late answer
+            // to an earlier reply then does not end a newer one. An answer
+            // without a number matches by the pane, as before.
             guard let sent = HerdrWire.sent(p.body) else { return }
-            if sent.action == "prompt", var task = model.firstTasks[deviceId], task.phase == .sending, task.pane == sent.pane {
+            if sent.action == "prompt", var task = model.firstTasks[deviceId], task.phase == .sending, task.pane == sent.pane,
+               sent.request == nil || sent.request == task.reply {
                 task.sent(error: sent.error)
                 model.firstTasks[deviceId] = task
             }
-            guard var reply = model.replies[deviceId], reply.pane == sent.pane, reply.sending else { return }
+            guard var reply = model.replies[deviceId], reply.pane == sent.pane, reply.sending,
+                  sent.request == nil || sent.request == reply.seq else { return }
             reply.sending = false
             reply.error = sent.error
+            reply.code = sent.error == nil ? nil : sent.code
             model.replies[deviceId] = reply
             guard sent.error == nil else { return }
             Task { @MainActor [weak self] in
@@ -179,6 +185,8 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
             guard let done = HerdrWire.done(p.body), var action = model.actions[deviceId],
                   action.action == done.action, action.sending else { return }
             if done.action == "close" && action.pane != done.pane { return }
+            // A late answer to an earlier create or close does not end this one.
+            if let request = done.request, request != action.seq { return }
             action.sending = false
             action.pane = done.pane ?? action.pane
             action.error = done.error
@@ -246,10 +254,10 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
 
     /// Sends `text` to the agent in `pane`. The computer submits it as a
     /// prompt. fluxd refuses a prompt to an agent that waits for a choice,
-    /// with the error "The agent waits for a choice. Pick a choice first.",
-    /// unless `answer` is true: then it types the text into the dialog.
-    /// Set `answer` only from an action where the user chose to type an
-    /// answer.
+    /// with the error "The agent waits for a choice. Pick a choice first."
+    /// and the code "blocked", see `HerdrReply.blocked`. With `answer`,
+    /// fluxd types the text into the dialog. Set `answer` only from an
+    /// action where the user chose to type an answer.
     @MainActor
     public func sendPrompt(_ deviceId: String, pane: String, _ text: String, answer: Bool = false) {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -260,7 +268,7 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
                                                  error: "The text is too long. The limit is 16 KB.")
             return
         }
-        reply(deviceId, pane: pane, action: "prompt", HerdrWire.prompt(pane: pane, t, answer: answer))
+        reply(deviceId, pane: pane, action: "prompt", HerdrWire.prompt(pane: pane, t, answer: answer), text: t)
     }
 
     /// Types `text` in the terminal `pane`, then sends `keys`, for example
@@ -320,7 +328,7 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
         var a = start
         a.seq = seq
         model.actions[deviceId] = a
-        guard core?.send(packet, to: deviceId) == true else {
+        guard core?.send(HerdrWire.numbered(packet, request: seq), to: deviceId) == true else {
             a.sending = false
             a.error = "\(computerName(deviceId)) is not reachable"
             model.actions[deviceId] = a
@@ -383,16 +391,17 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
         model.firstTasks[deviceId] = task
     }
 
-    /// Sends a reply and returns its number.
+    /// Sends a reply and returns its number. The packet gets the number,
+    /// see `HerdrWire.numbered`. `text` is the text of a prompt.
     @MainActor
     @discardableResult
-    private func reply(_ deviceId: String, pane: String, action: String, _ packet: Packet) -> Int {
+    private func reply(_ deviceId: String, pane: String, action: String, _ packet: Packet, text: String? = nil) -> Int {
         replies += 1
         let seq = replies
-        model.replies[deviceId] = HerdrReply(pane: pane, action: action, seq: seq)
-        guard core?.send(packet, to: deviceId) == true else {
+        model.replies[deviceId] = HerdrReply(pane: pane, action: action, seq: seq, text: text)
+        guard core?.send(HerdrWire.numbered(packet, request: seq), to: deviceId) == true else {
             model.replies[deviceId] = HerdrReply(pane: pane, action: action, seq: seq, sending: false,
-                                                 error: "\(computerName(deviceId)) is not reachable")
+                                                 error: "\(computerName(deviceId)) is not reachable", text: text)
             return seq
         }
         Task { @MainActor [weak self] in
