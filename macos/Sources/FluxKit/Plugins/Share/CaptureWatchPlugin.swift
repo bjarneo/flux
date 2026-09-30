@@ -1,4 +1,5 @@
 import Foundation
+import NIOConcurrencyHelpers
 import Observation
 import Photos
 
@@ -61,6 +62,9 @@ public final class CaptureWatchPlugin: FluxPlugin, @unchecked Sendable {
     private var watch: (path: String, source: DispatchSourceFileSystemObject)?
     #endif
     @MainActor private var library: LibraryObserver?
+    /// False while the iOS app runs in the background only for an App
+    /// Intent, see `allowScans`.
+    private let scans = NIOLockedValueBox(true)
 
     private enum Command: Sendable {
         case scan
@@ -220,6 +224,17 @@ public final class CaptureWatchPlugin: FluxPlugin, @unchecked Sendable {
         refresh()
     }
 
+    /// True while the watch scans for new images.
+    public var scansAllowed: Bool { scans.withLockedValue { $0 } }
+
+    /// Turns the scans off and on. The iOS app turns them off while it runs
+    /// in the background only for an App Intent, because the links close
+    /// when the action ends, and a transfer would stop in the middle. The
+    /// images then go with the next scan, for example when Flux opens.
+    public func allowScans(_ on: Bool) {
+        scans.withLockedValue { $0 = on }
+    }
+
     /// Reads the photo access again, for example when the settings appear.
     @MainActor
     public func refreshPhotoAccess() {
@@ -315,7 +330,7 @@ public final class CaptureWatchPlugin: FluxPlugin, @unchecked Sendable {
 
     /// Scans the new images and sends the ones that `planCapture` picks.
     private func scan() async {
-        guard let core else { return }
+        guard let core, scansAllowed else { return }
         #if os(macOS)
         let shots = sendScreenshots
         let photos = sendPhotos && PhotoAccess.current == .authorized

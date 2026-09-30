@@ -39,6 +39,10 @@ final class AppModel {
     /// The number of App Intents that use the links now. The links stay
     /// open in the background while one runs, see `withBackgroundLink`.
     private(set) var intentsRunning = 0
+    /// True while Flux is off the screen and runs only for App Intents. The
+    /// links close when the last action ends, so the features start no
+    /// transfer then, see `FeatureHooks.intentsChanged`.
+    var runsOnlyForIntents: Bool { !isActive && intentsRunning > 0 }
     private var toastTask: Task<Void, Never>?
     private var backgroundTask = UIBackgroundTaskIdentifier.invalid
     /// The pairing sheet that shows now, see `pairSheetClosed`.
@@ -190,11 +194,13 @@ final class AppModel {
             // The demo starts no discovery, listener, or link.
             guard !demo else { return }
             endBackgroundTask()
+            FeatureHooks.intentsChanged(model: self)
             core.resume()
             FeatureHooks.sceneChanged(active: true, model: self)
         case .background:
             isActive = false
             guard !demo else { return }
+            FeatureHooks.intentsChanged(model: self)
             FeatureHooks.sceneChanged(active: false, model: self)
             beginBackgroundTask()
         case .inactive:
@@ -226,10 +232,12 @@ final class AppModel {
     /// them, so that the computers see the iPhone leave.
     func withBackgroundLink<T>(timeout: Duration, _ body: @MainActor ([String]) async -> T) async -> T {
         intentsRunning += 1
+        FeatureHooks.intentsChanged(model: self)
         core.resume()
         let ids = await core.waitForPairedLinks(timeout: timeout)
         let result = await body(ids)
         intentsRunning -= 1
+        FeatureHooks.intentsChanged(model: self)
         stopWhenIdle()
         return result
     }

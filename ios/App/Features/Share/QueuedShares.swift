@@ -89,8 +89,12 @@ final class QueuedShares {
 
     /// Sends the queued items of the connected computers, in order. A call
     /// while a drain runs makes it read the queue again when it ends.
+    ///
+    /// Nothing goes while Flux runs in the background only for an App
+    /// Intent. The links close when the action ends, and a transfer that
+    /// stops counts as a failed try. The items go when Flux opens.
     func drain() {
-        guard queue != nil, model != nil else { return }
+        guard queue != nil, let model, !model.runsOnlyForIntents else { return }
         if draining {
             drainAgain = true
             return

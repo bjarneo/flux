@@ -191,6 +191,13 @@ enum FeatureHooks {
         if !active { model.core.plugin(WebcamPlugin.self)?.stopInBackground() }
     }
 
+    /// Runs when an App Intent starts or ends, and when the app comes on the
+    /// screen or leaves it, see `AppModel.runsOnlyForIntents`.
+    static func intentsChanged(model: AppModel) {
+        // A new image waits for the next scan while only an action holds the links.
+        model.core.plugin(CaptureWatchPlugin.self)?.allowScans(!model.runsOnlyForIntents)
+    }
+
     /// Runs when the app stops being active: it leaves the screen, or iOS
     /// covers it, for example with Notification Center.
     static func leftActive(model: AppModel) {

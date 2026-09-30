@@ -209,6 +209,9 @@ The wait ends when each paired computer is connected, 2 seconds after the first 
 The action sends the text as `flux.clipboard` to each computer that is connected at that time.
 It then closes the links again, unless Flux is on the screen.
 The computer puts the text on its clipboard while `auto_clipboard` is on, which is the default.
+While only the action keeps Flux running, the items of the share queue and new screenshots and photos do not go.
+The links close when the action ends and would stop their transfers.
+They go when Flux opens.
 
 A link usually takes 0.5 to 3 seconds.
 When the computer misses the Bonjour service of the iPhone, it connects only at its next check, which runs every 30 seconds.
