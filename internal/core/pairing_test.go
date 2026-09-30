@@ -936,21 +936,28 @@ func TestDiscoveryKeepsPairedAddress(t *testing.T) {
 }
 
 // TestDiscoveredDevicesAreBounded sends identities with new IDs and a
-// large device type. fluxd keeps at most maxDiscovered of them.
+// large device type. fluxd keeps at most maxDiscovered of them. A device
+// that gets pair false on its next link stays.
 func TestDiscoveredDevicesAreBounded(t *testing.T) {
 	d := &Daemon{devices: map[string]*Device{}}
 	phone := newDevice(strings.Repeat("p", 32))
 	phone.Paired = true
 	d.devices[phone.ID] = phone
+	owed := newDevice(strings.Repeat("q", 32))
+	owed.unpairPeer = true
+	d.devices[owed.ID] = owed
 	big := strings.Repeat("x", 60<<10)
 	for i := range 1000 {
 		d.onIdentity(proto.Identity{DeviceID: fmt.Sprintf("%032x", i), DeviceType: big, TCPPort: 1716}, "192.0.2.1")
 	}
-	if n := len(d.devices); n > maxDiscovered+1 {
+	if n := len(d.devices); n > maxDiscovered+2 {
 		t.Fatalf("%d devices after 1000 identities", n)
 	}
 	if d.devices[phone.ID] != phone {
 		t.Fatal("the paired device is gone")
+	}
+	if d.devices[owed.ID] != owed {
+		t.Fatal("the device that gets pair false is gone")
 	}
 	if dev := d.devices[fmt.Sprintf("%032x", 999)]; dev == nil || dev.Type != "" {
 		t.Fatal("the newest device is missing or keeps its type")
@@ -1262,7 +1269,8 @@ func TestConfirmRejectAndTimeout(t *testing.T) {
 
 // TestConfirmEndsWithLink checks that a pairing in state "confirm" ends
 // with its link, and that the next link of the phone gets pair false. The
-// phone pinned this computer, and it must remove the pin.
+// phone pinned this computer, and it must remove the pin. A link of
+// another host with the ID of the phone does not take the pair false.
 func TestConfirmEndsWithLink(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1284,6 +1292,20 @@ func TestConfirmEndsWithLink(t *testing.T) {
 	confirmState(t, d, dev, again, fromAgain)
 	again.Close()
 	waitFor(t, "the end of the link", func() bool { return field(d, func() *lan.Link { return dev.link }) == nil })
+	if field(d, dev.forgettable) {
+		t.Fatal("fluxd can forget the device before it gets pair false")
+	}
+
+	// A host with the ID of the phone and another certificate links first.
+	evil := newTestPeer(t, ctx, certFor(t, dev.ID)).dial(t, ctx, d, d.lan.TCPPort())
+	_, onEvil := linked(t, d, dev.ID)
+	if !field(d, func() bool { return dev.unpairPeer && dev.unpairCert.Equal(phoneCert.Leaf) }) {
+		t.Fatal("the link of another host took the pair false of the phone")
+	}
+	evil.Close()
+	waitClosed(t, onEvil)
+	waitFor(t, "the end of the link of the host", func() bool { return field(d, func() *lan.Link { return dev.link }) == nil })
+
 	last := newTestPeer(t, ctx, phoneCert).dial(t, ctx, d, d.lan.TCPPort())
 	if body := nextPair(t, packets(last)); body["pair"] != false {
 		t.Fatalf("on the next link %v", body)

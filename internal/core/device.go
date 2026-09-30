@@ -83,11 +83,15 @@ type Device struct {
 
 	// pairEnded is the time of the last pair false, reject, or timeout of
 	// a pairing in state "incoming" or "confirm". A new pair request of the
-	// device counts only pairRetry after it. unpairPeer is true when a pairing in state "confirm" ended
-	// with its link. The device pinned this computer, so fluxd sends pair
-	// false on the next link of the device.
+	// device counts only pairRetry after it.
+	//
+	// unpairPeer is true when a pairing in state "confirm" ended with its
+	// link. The device pinned this computer, so fluxd sends pair false on
+	// the next link that shows unpairCert, the certificate of that
+	// pairing. The device stays in the list of fluxd until then.
 	pairEnded  time.Time
 	unpairPeer bool
+	unpairCert *x509.Certificate
 }
 
 // Battery is the battery state of a device.

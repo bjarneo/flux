@@ -478,7 +478,7 @@ func (d *Daemon) pinLocked(dev *Device, l *lan.Link) (uint32, error) {
 	dev.Paired, dev.badTrust = true, false
 	dev.Cert = cert
 	dev.PairedAt = time.Now().Format("2006-01-02")
-	dev.pairEnded, dev.unpairPeer = time.Time{}, false
+	dev.pairEnded, dev.unpairPeer, dev.unpairCert = time.Time{}, false, nil
 	return note, d.trust.Put(config.TrustedDevice{
 		ID: dev.ID, Name: dev.Name, Type: dev.Type, LastIP: dev.IP, LastPort: dev.Port, PairedAt: dev.PairedAt,
 		CertPEM: proto.CertPEM(cert),
@@ -568,6 +568,18 @@ func (d *Daemon) startPairTimerLocked(dev *Device) {
 		d.markDirty()
 	})
 	dev.pairTimer = t
+}
+
+// pairLinkEndedLocked ends the open pairing of the device, because the
+// link of the pairing went away. A device that pinned this computer in
+// state "confirm" gets pair false on its next link with the certificate
+// of the pairing. It returns the desktop notification of the pairing, as
+// clearPairingLocked does. The caller holds d.mu.
+func (dev *Device) pairLinkEndedLocked() uint32 {
+	if dev.pairState == "confirm" {
+		dev.unpairPeer, dev.unpairCert = true, dev.pairCert
+	}
+	return dev.clearPairingLocked()
 }
 
 // clearPairingLocked ends the open pairing of the device. It returns the

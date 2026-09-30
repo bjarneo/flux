@@ -573,9 +573,10 @@ func (d *Daemon) discoveredLocked(id string) *Device {
 }
 
 // forgettable reports whether fluxd can remove the device from its list:
-// it is not paired, not connected, and has no pairing.
+// it is not paired, not connected, has no pairing, and gets no pair false
+// on its next link.
 func (dev *Device) forgettable() bool {
-	return !dev.Paired && !dev.badTrust && dev.link == nil && dev.pairState == ""
+	return !dev.Paired && !dev.badTrust && dev.link == nil && dev.pairState == "" && !dev.unpairPeer
 }
 
 // lastHeard returns the last time that UDP or mDNS reported the device.
@@ -786,10 +787,7 @@ func (d *Daemon) onLink(l *lan.Link) {
 	stopped := dev.pairState != "" && dev.pairLink != l
 	var note uint32
 	if stopped {
-		if dev.pairState == "confirm" {
-			dev.unpairPeer = true
-		}
-		note = dev.clearPairingLocked()
+		note = dev.pairLinkEndedLocked()
 	}
 	dev.link = l
 	dev.ignored = 0
@@ -815,9 +813,13 @@ func (d *Daemon) onLink(l *lan.Link) {
 		evict = d.unpairedOverflowLocked(l)
 	}
 	// The device pinned this computer in a pairing that ended before the
-	// user of this computer confirmed it.
-	unpair := dev.unpairPeer && !paired
-	dev.unpairPeer = false
+	// user of this computer confirmed it. Only a link with the certificate
+	// of that pairing clears the flag, so that another host with the device
+	// ID cannot take the pair false of the device.
+	unpair := dev.unpairPeer && !paired && l.Cert != nil && dev.unpairCert.Equal(l.Cert)
+	if unpair {
+		dev.unpairPeer, dev.unpairCert = false, nil
+	}
 	name, typ, ip, port := dev.Name, dev.Type, dev.IP, dev.Port
 	d.mu.Unlock()
 	d.closeNotes(note)
@@ -933,12 +935,9 @@ func (d *Daemon) receive(dev *Device, l *lan.Link) {
 	var note uint32
 	stopped := false
 	if current || dev.pairLink == l {
-		// A device that pinned this computer in state "confirm" gets pair
-		// false on its next link.
 		state := dev.pairState
-		dev.unpairPeer = dev.unpairPeer || state == "confirm"
 		stopped = state == "requested" || state == "confirm"
-		note = dev.clearPairingLocked()
+		note = dev.pairLinkEndedLocked()
 	}
 	name := dev.Name
 	d.mu.Unlock()
