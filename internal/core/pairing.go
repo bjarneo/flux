@@ -269,9 +269,10 @@ func (d *Daemon) handlePair(dev *Device, l *lan.Link, p *proto.Packet) {
 		var notes []uint32
 		if paired {
 			notes, _ = d.dropTrustLocked(dev)
-		} else {
-			// A device that withdraws its request waits before a new one
-			// counts.
+		} else if state != "" {
+			// A device that ends a pairing waits before a new request
+			// counts, so that it cannot withdraw and send its request in a
+			// loop.
 			dev.pairEnded = time.Now()
 		}
 		d.mu.Unlock()
