@@ -23,12 +23,29 @@ object Plugins {
     /** The last text that a computer put on the clipboard. Flux does not send it back. */
     @Volatile var lastRemoteClip: String? = null
 
+    /** The clip time of the last clip that Flux sent. A repeat of the same clip does not go out again. */
+    @Volatile var lastSentStamp: Long = 0L
+
+    /**
+     * The time that Flux last wrote the clipboard, from
+     * [SystemClock.elapsedRealtime]. The automatic reader ignores the log
+     * lines for [ClipGate.SELF_WRITE_MS] after this time, because a Flux
+     * write also makes the denial line.
+     */
+    @Volatile var selfWriteAt: Long = 0L
+
     /**
      * The longest text from a computer that Flux puts on the clipboard, in
      * UTF-8 bytes. Android sends a clip through a binder call, and a much
      * larger clip stops the app.
      */
     const val MAX_CLIPBOARD_TEXT = 256 * 1024
+
+    /**
+     * The longest text that the automatic sync sends to the computers, in
+     * UTF-8 bytes. `fluxd` takes up to 1 MiB from a device.
+     */
+    const val MAX_AUTO_TEXT = 1 shl 20
 
     fun onConnected(core: FluxCore, d: Device) {
         sendBattery(core, d)
@@ -133,6 +150,8 @@ object Plugins {
             return false
         }
         lastRemoteClip = text
+        // The write makes the same denial line, so the reader ignores it.
+        selfWriteAt = SystemClock.elapsedRealtime()
         main.post {
             if (!Android.setClipboard(core.app, text)) core.toast("Android did not take the text from $from")
         }
@@ -172,24 +191,102 @@ object Plugins {
     }
 
     /**
-     * Called when the local clipboard changes while the app is on screen.
-     * A clip that its app marks as sensitive, for example a password, stays
-     * on the phone.
+     * Called when the local clipboard changes, from the listener and from
+     * the automatic reader. It sends the new clip to each connected paired
+     * computer. A clip that its app marks as sensitive, for example a
+     * password, stays on the phone.
      */
     fun onLocalClipboard(core: FluxCore) {
-        if (!core.settings.syncClipboard) return
+        sendClipboardToAll(core, manual = false)
+    }
+
+    /**
+     * Sends the clipboard to each connected paired computer. Call it on the
+     * main thread while a window of Flux has focus. [manual] is true for a
+     * user action, for example the tile: it shows 1 toast with the result
+     * and sends the current clip again. The automatic path ([manual] false)
+     * shows no toast and drops a clip that it sent before, a clip that came
+     * from a computer, and a clip that its app marks as sensitive.
+     */
+    fun sendClipboardToAll(core: FluxCore, manual: Boolean): Boolean {
+        if (!core.settings.syncClipboard) {
+            if (manual) core.toast("Turn on Sync clipboard first")
+            return false
+        }
+        val computers = core.connectedPaired()
+        if (computers.isEmpty()) {
+            if (manual) core.toast("No computer is connected")
+            return false
+        }
+        val stamp = Android.clipTimestamp(core.app)
+        // The same clip does not go out twice, for example from 2 listeners.
+        if (!manual && stamp != 0L && stamp == lastSentStamp) return false
         Android.clipboardImage(core.app)?.let { (uri, mime) ->
-            if (uri == ClipImage.lastRemote) return
-            val computers = core.connectedPaired().filter { Types.FLUX_CLIPBOARD_IMAGE in it.identity.incoming }
-            if (computers.isEmpty()) return
+            if (!manual && uri == ClipImage.lastRemote) return false
+            val targets = computers.filter { Types.FLUX_CLIPBOARD_IMAGE in it.identity.incoming }
+            if (targets.isEmpty()) {
+                if (manual) core.toast("Update Flux on the computer to send images")
+                return false
+            }
+            lastSentStamp = stamp
             core.settings.clipboardTimestamp = System.currentTimeMillis()
-            ClipImage.send(core, computers, uri, mime)
+            ClipImage.send(core, targets, uri, mime, manual = manual) { sent ->
+                if (manual) {
+                    core.toast(
+                        when {
+                            sent > 0 -> if (sent == 1) "Image sent to ${targets[0].identity.deviceName}" else "Image sent to $sent computers"
+                            sent < 0 -> "The image is larger than ${ClipImage.MAX_BYTES shr 20} MB"
+                            else -> "Sending the image failed"
+                        },
+                    )
+                }
+            }
+            return true
+        }
+        val text = Android.clipboardText(core.app, automatic = true)
+        if (text.isNullOrEmpty()) {
+            if (manual) core.toast("The clipboard is empty")
+            return false
+        }
+        if (!manual && text == lastRemoteClip) return false
+        if (text.toByteArray(Charsets.UTF_8).size > MAX_AUTO_TEXT) {
+            if (manual) core.toast("The text is too large for the clipboard")
+            return false
+        }
+        lastSentStamp = stamp
+        core.settings.clipboardTimestamp = System.currentTimeMillis()
+        computers.forEach { it.send(Packet(Types.CLIPBOARD, bodyOf("content" to text))) }
+        if (manual) {
+            core.toast(if (computers.size == 1) "Clipboard sent to ${computers[0].identity.deviceName}" else "Clipboard sent to ${computers.size} computers")
+        }
+        return true
+    }
+
+    /**
+     * Sends selected text to each connected paired computer, for the "Send
+     * to computer" text action. It shows 1 toast with the result.
+     */
+    fun sendTextToComputers(core: FluxCore, text: String?) {
+        val body = text?.takeIf { it.isNotBlank() }
+        if (body == null) {
+            core.toast("No text to send")
             return
         }
-        val text = Android.clipboardText(core.app, automatic = true) ?: return
-        if (text == lastRemoteClip) return
-        core.settings.clipboardTimestamp = System.currentTimeMillis()
-        core.connectedPaired().forEach { it.send(Packet(Types.CLIPBOARD, bodyOf("content" to text))) }
+        if (!core.settings.syncClipboard) {
+            core.toast("Turn on Sync clipboard first")
+            return
+        }
+        if (body.toByteArray(Charsets.UTF_8).size > MAX_AUTO_TEXT) {
+            core.toast("The text is too large for the clipboard")
+            return
+        }
+        val computers = core.connectedPaired()
+        if (computers.isEmpty()) {
+            core.toast("No computer is connected")
+            return
+        }
+        computers.forEach { it.send(Packet(Types.CLIPBOARD, bodyOf("content" to body))) }
+        core.toast(if (computers.size == 1) "Sent to ${computers[0].identity.deviceName}" else "Sent to ${computers.size} computers")
     }
 
     // --------------------------------------------------------- run commands

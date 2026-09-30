@@ -76,6 +76,8 @@ object FluxCore {
     @Volatile private var callAccess = false
     @Volatile private var smsAccess = false
     @Volatile private var smsSupported = false
+    @Volatile private var readLogs = false
+    @Volatile private var overlayAccess = false
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state
@@ -130,6 +132,8 @@ object FluxCore {
         notificationAccess = Android.hasNotificationAccess(app)
         callAccess = Android.hasPhoneState(app)
         smsAccess = SmsSync.hasAccess(app)
+        readLogs = Android.hasReadLogs(app)
+        overlayAccess = Android.canDrawOverlays(app)
     }
 
     /** Reads all system flags again and publishes the state. */
@@ -384,6 +388,8 @@ object FluxCore {
                 scanning = scanning,
                 enabled = settings.enabled,
                 theme = settings.theme,
+                clipAuto = ClipWatch.uiState(settings.syncClipboard, readLogs),
+                overlayAccess = overlayAccess,
             )
         }
         _state.value = snapshot
@@ -483,6 +489,8 @@ object FluxCore {
 
     fun setSyncClipboard(on: Boolean) {
         settings.syncClipboard = on
+        // The automatic reader arms again on the next ACTION_REFRESH.
+        if (!on) ClipWatch.stop() else org.omarchy.flux.service.FluxService.start(app, org.omarchy.flux.service.FluxService.ACTION_REFRESH)
         sendIdentity()
         publish()
     }
