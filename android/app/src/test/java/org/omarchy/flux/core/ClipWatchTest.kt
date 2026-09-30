@@ -1,5 +1,6 @@
 package org.omarchy.flux.core
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -37,14 +38,29 @@ class ClipWatchTest {
 
     @Test
     fun debounceMergesABurst() {
-        // The lines of 1 copy come within the merge window and fold into 1 read.
-        assertTrue(ClipGate.debounced(now = 1_100, firstLine = 1_000))
-        assertTrue(ClipGate.debounced(now = 1_000 + ClipGate.DEBOUNCE_MS - 1, firstLine = 1_000))
-        // A later line starts a new read.
-        assertFalse(ClipGate.debounced(now = 1_000 + ClipGate.DEBOUNCE_MS, firstLine = 1_000))
-        assertFalse(ClipGate.debounced(now = 5_000, firstLine = 1_000))
-        // No window is open yet.
-        assertFalse(ClipGate.debounced(now = 1_000, firstLine = 0))
+        // The first line of a copy waits for the merge window.
+        assertEquals(ClipGate.DEBOUNCE_MS, ClipGate.grabDelay(now = 1_000, pending = false, lastGrab = 0, lastSelfWrite = 0))
+        // The next lines of the copy come while that grab waits and need no grab of their own.
+        assertEquals(ClipGate.NO_GRAB, ClipGate.grabDelay(now = 1_100, pending = true, lastGrab = 0, lastSelfWrite = 0))
+        assertEquals(ClipGate.NO_GRAB, ClipGate.grabDelay(now = 1_900, pending = true, lastGrab = 500, lastSelfWrite = 0))
+        // A line after the grab ran starts a new grab.
+        assertEquals(ClipGate.DEBOUNCE_MS, ClipGate.grabDelay(now = 5_000, pending = false, lastGrab = 1_250, lastSelfWrite = 0))
+    }
+
+    @Test
+    fun grabDelayIgnoresFluxOwnWrites() {
+        assertEquals(ClipGate.NO_GRAB, ClipGate.grabDelay(now = 10_500, pending = false, lastGrab = 0, lastSelfWrite = 10_000))
+        assertEquals(ClipGate.DEBOUNCE_MS, ClipGate.grabDelay(now = 12_000, pending = false, lastGrab = 0, lastSelfWrite = 10_000))
+    }
+
+    @Test
+    fun rateLimitMovesALineToALaterGrab() {
+        // A copy 300 ms after a grab gets a grab 1 s after that grab, not no grab.
+        assertEquals(700L, ClipGate.grabDelay(now = 3_300, pending = false, lastGrab = 3_000, lastSelfWrite = 0))
+        // Close to the end of the limit, the merge window is the longer wait.
+        assertEquals(ClipGate.DEBOUNCE_MS, ClipGate.grabDelay(now = 3_900, pending = false, lastGrab = 3_000, lastSelfWrite = 0))
+        // The later grab covers the next lines too.
+        assertEquals(ClipGate.NO_GRAB, ClipGate.grabDelay(now = 3_500, pending = true, lastGrab = 3_000, lastSelfWrite = 0))
     }
 
     @Test

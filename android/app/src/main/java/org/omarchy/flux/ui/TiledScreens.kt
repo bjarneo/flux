@@ -543,14 +543,16 @@ fun TiledHomeScreen(
 
 /**
  * The automatic clipboard state under the sync switches. Active needs no
- * action. The other states open the setup sheet on a tap.
+ * action. A reader that the self-test did not check yet also shows as
+ * automatic, and the self-test corrects it when Flux goes to the
+ * background. The other states open the setup sheet on a tap.
  */
 @Composable
 private fun ClipAutoStatus(state: UiState) {
     var showSheet by remember { mutableStateOf(false) }
-    val active = state.clipAuto == ClipAutoState.Active
+    val active = state.clipAuto == ClipAutoState.Active || state.clipAuto == ClipAutoState.Checking
     val label = when (state.clipAuto) {
-        ClipAutoState.Active -> "Automatic"
+        ClipAutoState.Active, ClipAutoState.Checking -> "Automatic"
         ClipAutoState.NeedsConsent -> "Open Flux to resume automatic sync"
         else -> "Only while Flux is open. Set up automatic sync"
     }

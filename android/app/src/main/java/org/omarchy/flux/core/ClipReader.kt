@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import org.omarchy.flux.ui.ClipboardSendActivity
@@ -23,10 +24,9 @@ private const val TAG = "FluxClipReader"
 object ClipReader {
     private val main = Handler(Looper.getMainLooper())
 
-    // The uptime of the last focus grab, and whether a grab waits.
+    // The time of the last focus grab, and whether a grab waits.
     @Volatile private var lastGrab = 0L
     private var pending = false
-    private var firstLine = 0L
 
     // The overlay window while it waits for focus.
     private var overlay: View? = null
@@ -34,22 +34,19 @@ object ClipReader {
     /**
      * Asks for a read after a copy signal. It merges the lines of 1 copy,
      * ignores the lines that a Flux write makes, and grabs focus at most
-     * once each second.
+     * once each second. See [ClipGate.grabDelay].
      */
     fun request(context: Context) {
         val app = context.applicationContext
         val now = SystemClock.elapsedRealtime()
-        if (ClipGate.isSelfWrite(now, Plugins.selfWriteAt)) return
-        if (ClipGate.rateLimited(now, lastGrab)) return
-        if (pending) return
+        val delay = ClipGate.grabDelay(now, pending, lastGrab, Plugins.selfWriteAt)
+        if (delay == ClipGate.NO_GRAB) return
         pending = true
-        firstLine = now
-        main.postDelayed({ grab(app) }, ClipGate.DEBOUNCE_MS)
+        main.postDelayed({ grab(app) }, delay)
     }
 
     private fun grab(app: Context) {
         pending = false
-        firstLine = 0L
         lastGrab = SystemClock.elapsedRealtime()
         if (Android.canDrawOverlays(app)) grabWithOverlay(app) else startActivity(app)
     }
@@ -70,7 +67,14 @@ object ClipReader {
                 WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT,
-        )
+        ).apply {
+            // Android 12 and later block a touch that passes through a window
+            // of another app when the window is more than 80% opaque. Alpha 0
+            // lets the touch through. The pixel goes to the top left corner,
+            // away from the content of the app below.
+            alpha = 0f
+            gravity = Gravity.TOP or Gravity.START
+        }
         val view = object : View(app) {
             override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
                 super.onWindowFocusChanged(hasWindowFocus)

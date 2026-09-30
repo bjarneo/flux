@@ -388,7 +388,7 @@ object FluxCore {
                 scanning = scanning,
                 enabled = settings.enabled,
                 theme = settings.theme,
-                clipAuto = ClipWatch.uiState(settings.syncClipboard, readLogs),
+                clipAuto = ClipWatch.uiState(settings.syncClipboard, readLogs, overlayAccess),
                 overlayAccess = overlayAccess,
             )
         }
@@ -474,7 +474,10 @@ object FluxCore {
         settings.enabled = on
         publish()
         if (on) {
-            org.omarchy.flux.service.FluxService.start(app)
+            // In the open app, the refresh also starts the automatic clipboard
+            // reader, because the log-access dialog can show now.
+            val action = if (foreground) org.omarchy.flux.service.FluxService.ACTION_REFRESH else null
+            org.omarchy.flux.service.FluxService.start(app, action)
         } else {
             org.omarchy.flux.screen.ScreenSession.stop()
             app.stopService(android.content.Intent(app, org.omarchy.flux.service.FluxService::class.java))

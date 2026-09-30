@@ -16,11 +16,20 @@ enum class ClipAutoState {
     /** The sync clipboard switch is off. */
     Off,
 
-    /** The switch is on, but READ_LOGS is not granted, so only the open app syncs. */
+    /**
+     * The switch is on, but READ_LOGS or the overlay access is missing, so
+     * only the open app syncs.
+     */
     Unavailable,
 
     /** READ_LOGS is granted, but the log reader needs the user to allow log access again. */
     NeedsConsent,
+
+    /**
+     * The log reader started while Flux was on top. The self-test runs when
+     * Flux goes to the background and sets [Active] or [NeedsConsent].
+     */
+    Checking,
 
     /** The log reader runs and reads the copy signal. */
     Active,
@@ -41,6 +50,9 @@ object ClipGate {
     /** The shortest time between 2 focus grabs. A denied read by Flux makes the same line. */
     const val RATE_MS = 1_000L
 
+    /** The answer of [grabDelay] for a line that needs no focus grab of its own. */
+    const val NO_GRAB = -1L
+
     /**
      * True when [line] is the ClipboardService line that denies clipboard
      * access to [pkg]. The comma after the name stops a package with a
@@ -57,9 +69,21 @@ object ClipGate {
     fun rateLimited(now: Long, lastGrab: Long): Boolean =
         lastGrab != 0L && now - lastGrab < RATE_MS
 
-    /** True when a line at [now] falls in the merge window that started at [firstLine]. */
-    fun debounced(now: Long, firstLine: Long): Boolean =
-        firstLine != 0L && now - firstLine < DEBOUNCE_MS
+    /**
+     * The wait before the focus grab for a line at [now], or [NO_GRAB]. A
+     * line within [SELF_WRITE_MS] of a Flux write needs no grab. A line
+     * while a grab waits ([pending]) needs no grab either, because that
+     * grab reads the newest clip. Otherwise the grab waits [DEBOUNCE_MS], so
+     * the lines of 1 copy merge, and it runs no sooner than [RATE_MS] after
+     * [lastGrab]. The rate limit thus moves a line to a later grab and does
+     * not drop it.
+     */
+    fun grabDelay(now: Long, pending: Boolean, lastGrab: Long, lastSelfWrite: Long): Long = when {
+        isSelfWrite(now, lastSelfWrite) -> NO_GRAB
+        pending -> NO_GRAB
+        rateLimited(now + DEBOUNCE_MS, lastGrab) -> lastGrab + RATE_MS - now
+        else -> DEBOUNCE_MS
+    }
 }
 
 /**
@@ -69,10 +93,11 @@ object ClipGate {
  * moment and reads the new clip. See docs/features.md and the research in
  * option 1 of the clipboard design.
  *
- * The reader needs READ_LOGS, which the user grants with adb. Android 13
- * and later ask for log access with a dialog that shows only while Flux is
- * on top, so the reader starts only from [refresh], which the service runs
- * for ACTION_REFRESH after MainActivity.onResume.
+ * The reader needs READ_LOGS, which the user grants with adb, and the
+ * overlay access, which [ClipReader] needs to take focus. Android 13 and
+ * later ask for log access with a dialog that shows only while Flux is on
+ * top, so the reader starts only from [refresh], which the service runs for
+ * ACTION_REFRESH after MainActivity.onResume.
  */
 object ClipWatch {
     private val main = Handler(Looper.getMainLooper())
@@ -86,7 +111,9 @@ object ClipWatch {
     @Volatile var armed = false
         private set
 
-    // The reader thread sets these, the main thread reads them.
+    // The reader thread sets these, the main thread reads them. [lock] guards
+    // the handover of the logcat process, so a stop never misses a process.
+    private val lock = Any()
     @Volatile private var readerState = ClipAutoState.NeedsConsent
     @Volatile private var reader: Thread? = null
     @Volatile private var proc: Process? = null
@@ -98,11 +125,13 @@ object ClipWatch {
 
     /**
      * Reports the state for the UI. [syncOn] is the sync clipboard switch,
-     * [hasReadLogs] is the READ_LOGS permission.
+     * [hasReadLogs] is the READ_LOGS permission, and [overlayAccess] is the
+     * permission to draw over other apps. Without the overlay access, the
+     * reader cannot take focus, so the UI shows the setup hint.
      */
-    fun uiState(syncOn: Boolean, hasReadLogs: Boolean): ClipAutoState = when {
+    fun uiState(syncOn: Boolean, hasReadLogs: Boolean, overlayAccess: Boolean): ClipAutoState = when {
         !syncOn -> ClipAutoState.Off
-        !hasReadLogs -> ClipAutoState.Unavailable
+        !hasReadLogs || !overlayAccess -> ClipAutoState.Unavailable
         else -> readerState
     }
 
@@ -124,13 +153,15 @@ object ClipWatch {
      */
     fun refresh(context: Context) {
         val app = context.applicationContext
-        val want = FluxCore.settings.syncClipboard && FluxCore.enabled && Android.hasReadLogs(app)
+        // Without the overlay access, a copy line cannot lead to a read, so
+        // Flux does not ask for log access.
+        val want = FluxCore.settings.syncClipboard && FluxCore.enabled &&
+            Android.hasReadLogs(app) && Android.canDrawOverlays(app)
         main.post {
             if (want && !armed) {
                 armed = true
                 reconcileListener(app)
                 startReader(app)
-                FluxCore.publish()
             } else if (!want && armed) {
                 stop()
             } else if (want && reader == null) {
@@ -170,13 +201,18 @@ object ClipWatch {
         if (reader != null) return
         val t = Thread({ runReader(app) }, "flux-cliplog").apply { isDaemon = true }
         reader = t
+        // The self-test confirms the log access when Flux goes to the background.
+        readerState = ClipAutoState.Checking
+        FluxCore.publish()
         t.start()
     }
 
     private fun stopReader() {
-        proc?.let { runCatching { it.destroy() } }
-        proc = null
-        reader = null
+        synchronized(lock) {
+            proc?.let { runCatching { it.destroy() } }
+            proc = null
+            reader = null
+        }
     }
 
     /**
@@ -185,30 +221,55 @@ object ClipWatch {
      * The self-test tells an active reader from a declined one.
      */
     private fun runReader(app: Context) {
+        val me = Thread.currentThread()
         val pkg = app.packageName
         val time = timeArg()
         val cmd = listOf("logcat", "-T", time, "ClipboardService:V", "*:S")
         val p = runCatching { ProcessBuilder(cmd).redirectErrorStream(true).start() }.getOrElse {
             Log.w(TAG, "logcat did not start", it)
-            readerState = ClipAutoState.NeedsConsent
-            reader = null
-            main.post { FluxCore.publish() }
+            onReaderExit(me)
             return
         }
-        proc = p
+        synchronized(lock) {
+            // A stop that came before this point found no process to end.
+            if (reader !== me) {
+                runCatching { p.destroy() }
+                return
+            }
+            proc = p
+        }
         runCatching {
             BufferedReader(InputStreamReader(p.inputStream)).use { r ->
                 while (true) {
                     val line = r.readLine() ?: break
+                    if (reader !== me) break
                     if (ClipGate.isDenial(line, pkg)) onDenialLine(app)
                 }
             }
         }.onFailure { Log.w(TAG, "log read stopped", it) }
-        proc = null
-        if (reader === Thread.currentThread()) reader = null
+        synchronized(lock) { if (proc === p) proc = null }
+        runCatching { p.destroy() }
+        onReaderExit(me)
+    }
+
+    /**
+     * Handles the end of the reader thread [me]. A stop clears [reader]
+     * first, so a match here means that logcat exited by itself, for
+     * example after a logd restart or a kill by the phantom process limit.
+     * The user must open Flux to start the reader again.
+     */
+    private fun onReaderExit(me: Thread) {
+        synchronized(lock) {
+            if (reader !== me) return
+            reader = null
+        }
+        readerState = ClipAutoState.NeedsConsent
+        main.post { FluxCore.publish() }
     }
 
     private fun onDenialLine(app: Context) {
+        // A line that comes after the user turned off the sync starts no read.
+        if (!armed) return
         val now = SystemClock.elapsedRealtime()
         if (probeUntil != 0L && now < probeUntil) {
             // The self-test read made this line, so do not grab focus for it.
@@ -224,7 +285,15 @@ object ClipWatch {
      * [ClipAutoState.Active] when it sees the line within the window.
      */
     private fun selfTest(context: Context) {
-        if (!armed || reader == null) return
+        if (!armed) return
+        if (reader == null) {
+            // The reader ended, so only a start from the open app resumes the sync.
+            if (readerState != ClipAutoState.NeedsConsent) {
+                readerState = ClipAutoState.NeedsConsent
+                FluxCore.publish()
+            }
+            return
+        }
         val app = context.applicationContext
         probeSeen = false
         probeUntil = SystemClock.elapsedRealtime() + PROBE_MS
