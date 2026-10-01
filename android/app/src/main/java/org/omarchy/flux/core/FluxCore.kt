@@ -2,6 +2,7 @@ package org.omarchy.flux.core
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.os.SystemClock
 import android.util.Log
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,6 +19,8 @@ import java.net.InetAddress
 import java.security.cert.X509Certificate
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 
 private const val TAG = "FluxCore"
 
@@ -53,6 +56,12 @@ object FluxCore {
     private var scanning = false
     private var ringingFrom: String? = null
     private var initialized = false
+
+    /** The time of the last connection attempt, for [inConnectGrace], or 0. */
+    @Volatile private var connectFrom = 0L
+
+    /** The publish at the end of the connect grace. The core lock guards it. */
+    private var graceEnd: ScheduledFuture<*>? = null
 
     /**
      * True while an activity of the app is on screen. When the app comes to
@@ -107,6 +116,10 @@ object FluxCore {
         }
         trust = TrustStore(app)
         settings = Settings(app)
+        // Earlier versions had no switch for the automatic clipboard sync. An update keeps the sync of a user who set it up.
+        if (!settings.hasAutoClipboard) {
+            settings.autoClipboard = ClipGate.keepsAutoSync(installedBefore(), Android.hasReadLogs(app), Android.canDrawOverlays(app))
+        }
         // The trust store holds only entries with a readable certificate.
         for (t in trust.all()) {
             val identity = Identity(t.id, t.name, t.type, 8, emptyList(), emptyList())
@@ -123,7 +136,29 @@ object FluxCore {
         smsSupported = SmsSync.supported(app)
         refreshWifi()
         refreshAccess()
+        // The service starts the network after the first frame, so the paired computers show as connecting until then.
+        if (settings.enabled) startConnectGrace()
         publish()
+    }
+
+    /** True when this install is an update over an earlier version, not a new install. */
+    private fun installedBefore(): Boolean = runCatching {
+        val info = app.packageManager.getPackageInfo(app.packageName, 0)
+        info.lastUpdateTime != info.firstInstallTime
+    }.getOrDefault(false)
+
+    /**
+     * Starts the time in which the paired computers that are not online show
+     * as connecting, see [UiState.connecting]. At its end, the state
+     * publishes again, so that the UI shows the computers that did not
+     * connect.
+     */
+    private fun startConnectGrace() {
+        connectFrom = SystemClock.elapsedRealtime()
+        synchronized(lock) {
+            graceEnd?.cancel(false)
+            graceEnd = scheduler.schedule({ publish() }, CONNECT_GRACE_MS, TimeUnit.MILLISECONDS)
+        }
     }
 
     /** Reads again whether the phone is on Wi-Fi. The network callback of the service calls it. */
@@ -176,6 +211,7 @@ object FluxCore {
 
     fun startNetwork() {
         if (backend != null) return
+        startConnectGrace()
         lateinit var b: LanBackend
         b = LanBackend(local, ::identity, object : LanBackend.Callbacks {
             override fun trustedCertificate(deviceId: String): X509Certificate? = trust.certificate(deviceId)
@@ -200,6 +236,7 @@ object FluxCore {
     fun stopNetwork() {
         backend?.stop()
         backend = null
+        connectFrom = 0L
         _listenPort.value = 0
         // Close the links outside the lock: each close removes an unpaired
         // device from the map. A close can write to the network, so it does
@@ -215,9 +252,17 @@ object FluxCore {
      */
     private fun discoverable(): Boolean = foreground || synchronized(lock) { scanning }
 
-    /** Sends the identity again, for example after the Wi-Fi network changes. */
+    /**
+     * Sends the identity again, for example after the Wi-Fi network changes
+     * or after a tap on Retry. The paired computers that are not online then
+     * show as connecting for [CONNECT_GRACE_MS].
+     */
     fun rediscover() {
-        backend?.broadcast()
+        val b = backend
+        if (b != null) {
+            startConnectGrace()
+            b.broadcast()
+        }
         publish()
     }
 
@@ -397,6 +442,7 @@ object FluxCore {
                 browse = browse,
                 listeningUdp = backend?.listeningUdp ?: true,
                 scanning = scanning,
+                connecting = inConnectGrace(connectFrom, SystemClock.elapsedRealtime()),
                 enabled = settings.enabled,
                 theme = settings.theme,
                 computerTheme = ComputerThemes.current(),

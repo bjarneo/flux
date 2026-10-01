@@ -107,6 +107,9 @@ Before the first pairing, the **Inbox** shows a pairing guide in the place of th
 - **Set up Flux on the computer**: the setup command and **Read the install guide**, which opens [Install Flux](install.md) on GitHub.
 - **Pair this phone**: the computers on the network of the phone that run Flux. Tap a computer to open the pairing sheet. Then compare the key on both screens.
 
+When the phone already found a computer, **Pair this phone** comes first.
+The setup then shows only the command and **Read the install guide**.
+
 To start `fluxd` on the computer, run this command as your desktop user after you install the package:
 
 ```sh
@@ -115,8 +118,13 @@ flux-cli setup
 
 When the pairing ends, Flux opens the **Inbox** of the new computer.
 For 6 seconds, the **Inbox** shows **COMPUTER is paired**.
-After the first pairing, Android asks once for notifications, so that Flux can show when an agent needs you.
+After the first pairing, the success state also tells why Flux needs notifications.
+1 second later, Android asks once for the permission.
 See [permissions](android-setup.md#permissions).
+
+After a start, the **Inbox** shows **Connecting to COMPUTER** for up to 3 seconds while the links connect.
+If no computer in scope connects in this time, the **Inbox** shows **COMPUTER is not reachable** with **Retry**.
+**Retry** shows **Connecting to COMPUTER** again while Flux looks for the computer.
 
 ## Pairing and connections
 

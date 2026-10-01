@@ -124,8 +124,9 @@ class MainActivity : ComponentActivity() {
 
     /**
      * Shows the permission dialog of Android once, after the first pairing.
-     * The Inbox tells why at the same time. Nothing shows when the app asked
-     * before, or when Android needs no permission.
+     * The success state of the Inbox tells why before the dialog shows.
+     * Nothing shows when the app asked before, or when Android needs no
+     * permission.
      */
     fun askNotificationsAfterPairing() {
         if (Build.VERSION.SDK_INT < 33 || notifyAsk.value != NotifyAsk.Allow || asks.getBoolean(NOTIFY_ASKED, false)) return
@@ -256,6 +257,9 @@ private val DestinationPages = setOf("inbox", "send", "control", "computers", "d
 /** How long the Inbox shows that a new computer is paired, in milliseconds while the app is in the front. */
 private const val WELCOME_MS = 6_000L
 
+/** The time between the success state of the first pairing and the notification dialog of Android, in milliseconds. */
+private const val NOTIFY_ASK_DELAY_MS = 1_000L
+
 @Composable
 fun FluxRoot(activity: MainActivity) {
     val core by FluxCore.state.collectAsStateWithLifecycle()
@@ -298,11 +302,16 @@ fun FluxRoot(activity: MainActivity) {
         scope = id
         nav = Nav()
     }
-    // After the first pairing, Android asks for the notifications while the Inbox tells why.
+    // After the first pairing, the success state tells why Flux needs notifications.
+    // Android asks 1 second later, so that the user reads the reason before the dialog covers the screen.
     // The success state then shows for a short time. The time starts again after the dialog of Android closes.
     LaunchedEffect(welcome) {
         val id = welcome ?: return@LaunchedEffect
-        if (!isDemo(id)) activity.lifecycle.withResumed { activity.askNotificationsAfterPairing() }
+        if (!isDemo(id)) {
+            activity.lifecycle.withResumed { }
+            delay(NOTIFY_ASK_DELAY_MS)
+            activity.lifecycle.withResumed { activity.askNotificationsAfterPairing() }
+        }
         activity.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             delay(WELCOME_MS)
             welcome = null

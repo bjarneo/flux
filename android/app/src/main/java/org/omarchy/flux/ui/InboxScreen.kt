@@ -154,7 +154,6 @@ class InboxActions(
     val approve: (ApproveRequest) -> Unit,
     val showPair: (String) -> Unit,
     val pair: (DeviceUi) -> Unit,
-    val computers: () -> Unit,
     val tools: SendTools,
     val showAll: () -> Unit,
     val allowNotifications: () -> Unit,
@@ -254,6 +253,9 @@ private sealed interface EmptyMode {
     /** A new pairing: the success state of the computer [name]. */
     data class Paired(val name: String) : EmptyMode
 
+    /** No computer in scope is online yet, and the links can still connect. */
+    data object Connecting : EmptyMode
+
     /** No computer in scope is reachable. */
     data object Offline : EmptyMode
 
@@ -264,9 +266,11 @@ private sealed interface EmptyMode {
 /**
  * The Inbox with no items: what shows here, and the 2 most used actions.
  * Before the first pairing, it shows the pairing guide. After a new
- * pairing, it shows the success state for a short time. When no computer
- * in scope is reachable, it says so and offers Retry, so that an empty
- * Inbox is not a false all-clear. The large tile changes with a crossfade.
+ * pairing, it shows the success state for a short time. While the links
+ * connect after a start, it shows that Flux connects. When no computer in
+ * scope is reachable after that, it says so and offers Retry, so that an
+ * empty Inbox is not a false all-clear. The large tile changes with a
+ * crossfade.
  */
 @Composable
 private fun InboxEmpty(state: UiState, notices: InboxNotices, actions: InboxActions) {
@@ -275,6 +279,7 @@ private fun InboxEmpty(state: UiState, notices: InboxNotices, actions: InboxActi
     val welcome = notices.paired
     val mode = when {
         !paired -> EmptyMode.Guide
+        offline && notices.connecting -> EmptyMode.Connecting
         offline -> EmptyMode.Offline
         welcome != null -> EmptyMode.Paired(welcome)
         else -> EmptyMode.Clear
@@ -287,7 +292,14 @@ private fun InboxEmpty(state: UiState, notices: InboxNotices, actions: InboxActi
         Crossfade(mode, animationSpec = fade, label = "empty") { m ->
             when (m) {
                 EmptyMode.Guide -> PairGuide(state, actions)
-                is EmptyMode.Paired -> PairedTile(m.name)
+                is EmptyMode.Paired -> PairedTile(m.name, notices.notify, actions)
+                EmptyMode.Connecting -> EmptyTile {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Tn.blue)
+                        T(connectingTitle(notices.reach), Modifier.weight(1f), size = 22, weight = FontWeight.SemiBold)
+                    }
+                    T("What waits for you shows here when the connection is ready.", size = 14, color = Tn.sub, lineHeight = 1.35f)
+                }
                 EmptyMode.Offline -> EmptyTile {
                     Sym(if (state.onWifi) Ic.wifiFind else Ic.wifiOff, tint = Tn.yellow, size = 28.dp)
                     T(offlineTitle(notices.reach), size = 22, weight = FontWeight.SemiBold)

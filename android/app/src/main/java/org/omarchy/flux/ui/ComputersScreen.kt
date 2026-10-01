@@ -180,9 +180,19 @@ internal fun AvailableRow(d: DeviceUi, onPair: () -> Unit) {
     }
 }
 
-/** The scan state, help when no computer shows, and Scan again. The Inbox guide uses it before the first pairing. */
+/**
+ * The scan state, help when no computer shows, and Scan again. [hint] is
+ * the help under "No computers found", or null for no help. The Inbox guide
+ * uses it before the first pairing, with its own hint.
+ */
 @Composable
-internal fun ScanRow(state: UiState, none: Boolean, first: Boolean, onScan: () -> Unit) {
+internal fun ScanRow(
+    state: UiState,
+    none: Boolean,
+    first: Boolean,
+    hint: String? = "Open Flux on the computer, and use the same Wi-Fi network as this phone.",
+    onScan: () -> Unit,
+) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (state.scanning) {
             Row(Modifier.heightIn(min = 48.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -193,7 +203,7 @@ internal fun ScanRow(state: UiState, none: Boolean, first: Boolean, onScan: () -
         }
         if (none) {
             T(if (first) "No computers found" else "No other computers found", size = 14, weight = FontWeight.SemiBold)
-            T("Open Flux on the computer, and use the same Wi-Fi network as this phone.", size = 13, color = Tn.sub)
+            if (hint != null) T(hint, size = 13, color = Tn.sub)
         }
         TextButton(onClick = onScan) {
             Sym(Ic.refresh, size = 18.dp)

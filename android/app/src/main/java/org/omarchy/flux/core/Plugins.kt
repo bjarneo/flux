@@ -199,7 +199,7 @@ object Plugins {
                     when {
                         sent > 0 -> "Image sent to $name"
                         sent < 0 -> "The image is larger than ${ClipImage.MAX_BYTES shr 20} MB"
-                        else -> "Sending the image failed"
+                        else -> "Sending the image to $name failed"
                     },
                 )
             }
@@ -261,12 +261,16 @@ object Plugins {
             core.settings.clipboardTimestamp = System.currentTimeMillis()
             ClipImage.send(core, targets, uri, mime, manual = manual) { sent ->
                 if (sent > 0) InboxFeed.clipSent(targets.map { it.id to it.identity.deviceName }, null)
+                // The message names the computer, so that the user knows where the image went.
+                val one = targets.singleOrNull()?.identity?.deviceName
                 if (manual) {
                     notify(
                         when {
-                            sent > 0 -> if (sent == 1) "Image sent to ${targets[0].identity.deviceName}" else "Image sent to $sent computers"
                             sent < 0 -> "The image is larger than ${ClipImage.MAX_BYTES shr 20} MB"
-                            else -> "Sending the image failed"
+                            one != null -> if (sent > 0) "Image sent to $one" else "Sending the image to $one failed"
+                            sent == targets.size -> "Image sent to $sent computers"
+                            sent > 0 -> "Image sent to $sent of ${targets.size} computers"
+                            else -> "Sending the image to ${targets.size} computers failed"
                         },
                     )
                 }

@@ -131,6 +131,12 @@ data class UiState(
     val listeningUdp: Boolean = true,
     /** True while the phone looks for computers. See [FluxCore.scan]. */
     val scanning: Boolean = false,
+    /**
+     * True for [CONNECT_GRACE_MS] after the network starts or the phone
+     * sends its identity again. A paired computer that is not online then
+     * counts as connecting, not as not reachable.
+     */
+    val connecting: Boolean = false,
     /** False while the user has turned Flux off. */
     val enabled: Boolean = true,
     val theme: ThemeMode = ThemeMode.Computer,

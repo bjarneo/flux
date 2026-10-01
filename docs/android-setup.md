@@ -174,7 +174,8 @@ After this check, the status line shows **Automatic clipboard sync is on**.
 If the access is off, it shows **Open Flux to resume automatic sync**.
 
 Earlier versions of Flux started the automatic sync when both accesses were in place, with no switch.
-After an update from such a version, turn on **Automatic sync** once.
+An update from such a version keeps **Automatic sync** on when Flux has both accesses.
+A new install starts with **Automatic sync** off, also when you ran the adb commands before the first start.
 
 Android does not keep the log access.
 It ends after each reboot, Flux update, or app kill.
@@ -245,8 +246,8 @@ The other permissions need no prompt.
 
 Flux shows no permission dialog before the first pairing.
 Keep Flux open for the first pairing. Before you allow notifications, Android 13 and later show no notification for a pair request.
-After the first pairing, Android asks once for notifications.
-At the same time, the **Inbox** tells why: **Allow notifications, so that Flux can show when an agent needs you.**
+After the first pairing, the **Inbox** tells why Flux needs notifications: **Allow notifications, so that Flux can show when an agent needs you.**
+1 second later, Android asks once for notifications.
 If you deny it, the **Inbox** keeps the question with **Allow**.
 After 2 denials, Android does not show its dialog again, so the **Inbox** shows **Open settings** in its place.
 **Hide** removes the question. You can allow notifications in the settings of Android at any time.

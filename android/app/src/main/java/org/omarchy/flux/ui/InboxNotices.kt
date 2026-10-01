@@ -29,7 +29,8 @@ import org.omarchy.flux.core.InboxReach
  * computer in scope, or null for all computers. [elsewhere] counts the
  * items out of scope that need the user. [paired] is the name of the
  * computer in scope while the Inbox shows its success state after a new
- * pairing, or null.
+ * pairing, or null. [connecting] is true while the computers in scope that
+ * are not online can still connect, see [org.omarchy.flux.core.UiState.connecting].
  */
 class InboxNotices(
     val reach: InboxReach,
@@ -38,10 +39,15 @@ class InboxNotices(
     val elsewhere: Int,
     val notify: NotifyAsk,
     val paired: String? = null,
+    val connecting: Boolean = false,
 )
 
 /** The title of an Inbox with nothing to do. In a scope, it names the computer. */
 internal fun nothingText(n: InboxNotices): String = n.scopeName?.let { "Nothing on $it needs you" } ?: "Nothing needs you"
+
+/** The title of an Inbox while the computers in scope connect. */
+internal fun connectingTitle(reach: InboxReach): String =
+    reach.offline.singleOrNull()?.let { "Connecting to ${it.name}" } ?: "Connecting to your computers"
 
 /** The title of an Inbox with no computer online. */
 internal fun offlineTitle(reach: InboxReach): String =
@@ -63,6 +69,9 @@ internal fun offlineLine(n: InboxNotices): String {
         ?: "${off.size} computers are not reachable. Their agents do not show here.")
 }
 
+/** Why Flux asks for the notification permission. */
+internal const val NOTIFY_WHY = "Allow notifications, so that Flux can show when an agent needs you."
+
 /** The line for the items on other computers that need the user. */
 internal fun elsewhereText(count: Int): String =
     if (count == 1) "1 item on another computer needs you" else "$count items on other computers need you"
@@ -71,7 +80,8 @@ internal fun elsewhereText(count: Int): String =
  * The notices of the Inbox, each with its next step. [offline] is false
  * when the large tile already tells that no computer is reachable. [paired]
  * is false when the large tile already shows the success state of a new
- * pairing.
+ * pairing, and with it the notification question. While the computers
+ * connect, the Inbox does not call them not reachable.
  */
 @Composable
 internal fun InboxNoticeList(n: InboxNotices, actions: InboxActions, offline: Boolean = true, paired: Boolean = true) {
@@ -88,23 +98,22 @@ internal fun InboxNoticeList(n: InboxNotices, actions: InboxActions, offline: Bo
             TextButton(onClick = actions.showAll) { Text("Show all computers") }
         }
     }
-    if (offline && n.reach.offline.isNotEmpty()) {
+    if (offline && !n.connecting && n.reach.offline.isNotEmpty()) {
         Notice({ LinkDot(false) }, offlineLine(n)) {
             TextButton(onClick = { FluxCore.rediscover() }) { Text("Retry") }
         }
     }
     when (n.notify) {
         NotifyAsk.None -> Unit
-        NotifyAsk.Allow -> Notice(
-            { Sym(Ic.notifications, tint = Tn.yellow, size = 18.dp) },
-            "Allow notifications, so that Flux can show when an agent needs you.",
-        ) {
-            TextButton(onClick = actions.allowNotifications) { Text("Allow") }
-            TextButton(onClick = actions.hideNotifications) { Text("Hide") }
+        NotifyAsk.Allow -> if (paired) {
+            Notice({ Sym(Ic.notifications, tint = Tn.yellow, size = 18.dp) }, NOTIFY_WHY) {
+                TextButton(onClick = actions.allowNotifications) { Text("Allow") }
+                TextButton(onClick = actions.hideNotifications) { Text("Hide") }
+            }
         }
         NotifyAsk.Settings -> Notice(
             { Sym(Ic.notifications, tint = Tn.yellow, size = 18.dp) },
-            "Notifications are off for Flux, so Flux cannot show when an agent needs you. Turn them on in the settings of Android.",
+            "Notifications are off for Flux, so sudo approvals and agent alerts do not reach this phone. Turn them on in the settings of Android.",
         ) {
             TextButton(onClick = actions.allowNotifications) { Text("Open settings") }
             TextButton(onClick = actions.hideNotifications) { Text("Hide") }

@@ -112,6 +112,16 @@ class ClipWatchTest {
     }
 
     @Test
+    fun anUpdateKeepsTheAutomaticSyncOfAUserWhoSetItUp() {
+        // An update from a version without the switch keeps the sync when both accesses are in place.
+        assertTrue(ClipGate.keepsAutoSync(updated = true, hasReadLogs = true, overlayAccess = true))
+        assertFalse(ClipGate.keepsAutoSync(updated = true, hasReadLogs = false, overlayAccess = true))
+        assertFalse(ClipGate.keepsAutoSync(updated = true, hasReadLogs = true, overlayAccess = false))
+        // A new install starts with the switch off, also after the adb commands.
+        assertFalse(ClipGate.keepsAutoSync(updated = false, hasReadLogs = true, overlayAccess = true))
+    }
+
+    @Test
     fun theStateKeepsItsMeaningWithTheAutomaticSwitch() {
         val reader = ClipAutoState.Active
         assertEquals(ClipAutoState.Off, ClipGate.autoState(syncOn = false, autoOn = true, hasReadLogs = true, overlayAccess = true, reader = reader))

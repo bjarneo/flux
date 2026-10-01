@@ -66,6 +66,17 @@ object ClipGate {
         syncOn && autoOn && enabled && hasReadLogs && overlayAccess
 
     /**
+     * The first value of the automatic sync switch, for a store that does not
+     * hold it yet. Earlier versions started the reader when both accesses
+     * were in place, with no switch. So an update ([updated]) from such a
+     * version keeps the sync on when Flux has [hasReadLogs] and
+     * [overlayAccess]. A new install starts with the switch off, also when
+     * the user ran the adb commands before the first start.
+     */
+    fun keepsAutoSync(updated: Boolean, hasReadLogs: Boolean, overlayAccess: Boolean): Boolean =
+        updated && hasReadLogs && overlayAccess
+
+    /**
      * The state for the UI. [reader] is the state of the log reader, which
      * counts only when the automatic sync can run.
      */
