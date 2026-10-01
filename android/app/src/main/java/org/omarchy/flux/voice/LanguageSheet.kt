@@ -117,7 +117,7 @@ fun LanguageSheet(
         ) {
             item {
                 Column(Modifier.padding(start = 4.dp, top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TileLabel("dictation language", Modifier.semantics { heading() })
+                    TileLabel("Dictation language", Modifier.semantics { heading() })
                     T(
                         if (local) {
                             "Choose the language that you speak. The phone transcribes it on the device."
@@ -173,9 +173,9 @@ fun LanguageSheet(
                 item(key = "label-$state") {
                     SectionLabel(
                         when (state) {
-                            LanguageRow.State.Installed -> "on this phone"
-                            LanguageRow.State.Downloading -> "downloading"
-                            LanguageRow.State.Available -> "download"
+                            LanguageRow.State.Installed -> "On this phone"
+                            LanguageRow.State.Downloading -> "Downloading"
+                            LanguageRow.State.Available -> "Available to download"
                         },
                     )
                 }

@@ -314,7 +314,7 @@ private fun ListeningPanel(d: Dictation, onCancel: () -> Unit, onLanguage: (() -
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.size(8.dp).graphicsLayer { alpha = if (listening) blink.value else 1f }.clip(CircleShape).background(if (listening) Tn.green else Tn.magenta))
-            TileLabel(if (listening) "listening" else "transcribing", color = if (listening) Tn.green else Tn.magenta)
+            TileLabel(if (listening) "Listening" else "Transcribing", color = if (listening) Tn.green else Tn.magenta)
             if (onLanguage != null) LanguageChip(d.language, onLanguage) else if (d.language.isNotEmpty()) TileLabel(d.language)
             Spacer(Modifier.weight(1f))
             T(DictationText.clock(now - d.startedAt), size = 12, color = Tn.sub, family = Mono, maxLines = 1)
@@ -344,7 +344,7 @@ private fun LanguageChip(tag: String, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(1.dp),
     ) {
-        TileLabel(tag.ifEmpty { "language" }, color = Tn.sub)
+        TileLabel(tag.ifEmpty { "Language" }, color = Tn.sub)
         Sym(Ic.chevron, null, Modifier.graphicsLayer { rotationZ = 90f }, tint = Tn.sub, size = 16.dp)
     }
 }

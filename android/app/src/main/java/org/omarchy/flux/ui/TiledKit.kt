@@ -544,7 +544,9 @@ fun FieldKey(
         if (busy) {
             CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Tn.blue)
         } else {
-            CompositionLocalProvider(LocalContentColor provides if (fill) Tn.onAccent else if (on) Tn.sub else Tn.dim, content = content)
+            // The content can be a text label, such as Enter, so a key that is off also uses the second ink, which reaches 4.5:1.
+            // An off key has no accent fill, and TalkBack reads it as disabled.
+            CompositionLocalProvider(LocalContentColor provides if (fill) Tn.onAccent else Tn.sub, content = content)
         }
     }
 }
@@ -633,15 +635,24 @@ fun KeyRow(modifier: Modifier = Modifier, gap: Dp = TileGap, content: @Composabl
     )
 }
 
-/** The mono, uppercase label of a tile or a section. It wraps at a large font size. */
+/**
+ * The label of a value or a group in a tile, in the body face and as
+ * written. Write the text in sentence case. It wraps at a large font size.
+ */
 @Composable
 fun TileLabel(text: String, modifier: Modifier = Modifier, color: Color = Tn.sub, maxLines: Int = Int.MAX_VALUE) {
-    T(text.uppercase(), modifier, size = 11, color = color, weight = FontWeight.Medium, family = Mono, letterSpacing = 0.9f, maxLines = maxLines)
+    T(text, modifier, size = 12, color = color, weight = FontWeight.Medium, lineHeight = 1.35f, maxLines = maxLines)
 }
 
+/** The heading of a group of tiles, in the Material 3 Title Small style. Write the text in sentence case. TalkBack reads it as a heading. */
 @Composable
 fun SectionLabel(text: String) {
-    TileLabel(text, Modifier.padding(start = 4.dp, top = 20.dp, bottom = 8.dp).semantics { heading() })
+    Text(
+        text,
+        Modifier.padding(start = 4.dp, top = 20.dp, bottom = 8.dp).semantics { heading() },
+        color = Tn.text,
+        style = MaterialTheme.typography.titleSmall,
+    )
 }
 
 /** A row of tiles with the grid gap. The tiles take the same height, at least [minHeight], and grow with the font size. */

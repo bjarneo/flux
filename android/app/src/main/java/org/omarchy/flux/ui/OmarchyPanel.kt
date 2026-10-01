@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -287,7 +288,7 @@ private fun ShortcutSheet(all: List<Shortcut>, pins: List<String>, onRun: (Short
     val voice = rememberVoiceTyping { query = DictationText.query(it) }
     FluxSheet(onDismiss) {
         Column(Modifier.fillMaxWidth().padding(horizontal = TiledGutter), verticalArrangement = Arrangement.spacedBy(TileGap)) {
-            TileLabel("All shortcuts · ${all.size}")
+            TileLabel("All shortcuts · ${all.size}", Modifier.semantics { heading() })
             VoiceField(voice) { m ->
                 OutlinedTextField(
                     value = query,
