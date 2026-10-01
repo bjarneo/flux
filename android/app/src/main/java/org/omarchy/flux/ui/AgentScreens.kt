@@ -24,9 +24,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -49,16 +51,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -91,6 +103,7 @@ import org.omarchy.flux.voice.rememberSpeechModels
 /** How often the agent screen reads the output again while the agent works. */
 private const val WORKING_REFRESH_MS = 5_000L
 
+/** The color of the status dot and of the pressed border of an agent tile. */
 @Composable
 @ReadOnlyComposable
 private fun statusColor(s: AgentStatus): Color = when (s) {
@@ -98,6 +111,14 @@ private fun statusColor(s: AgentStatus): Color = when (s) {
     AgentStatus.Done -> Tn.green
     AgentStatus.Working -> Tn.blue
     AgentStatus.Idle, AgentStatus.Unknown -> Tn.dim
+}
+
+/** The color of the status word. The dim color is not for text, so an idle or unknown status takes the second ink. */
+@Composable
+@ReadOnlyComposable
+private fun statusInk(s: AgentStatus): Color = when (s) {
+    AgentStatus.Idle, AgentStatus.Unknown -> Tn.sub
+    else -> statusColor(s)
 }
 
 private fun statusLabel(s: AgentStatus): String = when (s) {
@@ -108,13 +129,40 @@ private fun statusLabel(s: AgentStatus): String = when (s) {
     AgentStatus.Unknown -> "Unknown"
 }
 
-/** The status dot and the mono status label of an agent. */
+/** The size and the line height of the window-title line. */
+private val WindowTitleSize = 12.sp
+private val WindowTitleLine = 16.sp
+
+/**
+ * The mono window-title line of an agent: a status dot, the [parts], such
+ * as the agent and the project, and the status as 1 short word in its
+ * color. For example: codex · billing · Needs input. TalkBack reads the
+ * parts, and the status as the state.
+ */
 @Composable
-private fun StatusLine(s: AgentStatus) {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Dot(statusColor(s), 7.dp)
-        // The dim color is not for text, so an idle label takes the second ink.
-        TileLabel(statusLabel(s), color = if (s == AgentStatus.Idle || s == AgentStatus.Unknown) Tn.sub else statusColor(s))
+private fun WindowTitle(parts: List<String>, s: AgentStatus, modifier: Modifier = Modifier) {
+    val label = statusLabel(s)
+    val sub = Tn.sub
+    val ink = statusInk(s)
+    val text = remember(parts, label, sub, ink) {
+        buildAnnotatedString {
+            withStyle(SpanStyle(color = sub)) { for (p in parts) append("$p · ") }
+            withStyle(SpanStyle(color = ink, fontWeight = FontWeight.Medium)) { append(label) }
+        }
+    }
+    val line = with(LocalDensity.current) { WindowTitleLine.toDp() }
+    Row(
+        modifier.semantics { stateDescription = label },
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        // The dot stays at the middle of the first line when the line wraps.
+        Box(Modifier.height(line), contentAlignment = Alignment.Center) { Dot(statusColor(s), 7.dp) }
+        BasicText(
+            text,
+            Modifier.clearAndSetSemantics { if (parts.isNotEmpty()) contentDescription = parts.joinToString(", ") },
+            style = TextStyle(fontFamily = Mono, fontSize = WindowTitleSize, lineHeight = WindowTitleLine),
+        )
     }
 }
 
@@ -169,7 +217,7 @@ fun TiledAgentsScreen(
             else -> Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
                 for (a in herdr.sorted) AgentTile(a) { onOpen(a.pane) }
                 if (herdr.panes.isNotEmpty()) {
-                    TileLabel("Terminals", Modifier.padding(start = 4.dp, top = 12.dp))
+                    TileLabel("Terminals", Modifier.padding(start = 4.dp, top = 12.dp).semantics { heading() })
                     for (t in herdr.panes) TerminalTile(t) { onOpenTerminal(t.pane) }
                 }
             }
@@ -178,29 +226,27 @@ fun TiledAgentsScreen(
     }
 }
 
+/**
+ * An agent: the window-title line with the agent, its place, and its
+ * status, and the task of the agent under it. Without a task, the project
+ * shows in its place.
+ */
 @Composable
 private fun AgentTile(a: HerdrAgent, onClick: () -> Unit) {
     val blocked = a.status == AgentStatus.Blocked
+    val task = a.title.ifEmpty { a.project.ifEmpty { a.pane } }
+    // The window title does not repeat the task.
+    val parts = listOf(a.agent, a.project, a.workspace).filter { it.isNotEmpty() && it != task }.distinct()
     Tile(
-        Modifier.fillMaxWidth().heightIn(min = 96.dp), onClick,
+        Modifier.fillMaxWidth().heightIn(min = 72.dp), onClick,
         accent = statusColor(a.status),
         container = if (blocked) Tn.tileHi else Tn.tile,
         border = BorderStroke(1.dp, if (blocked) Tn.red else Tn.line),
         padding = PaddingValues(14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            StatusLine(a.status)
-            Spacer(Modifier.weight(1f))
-            T(a.agent, size = 11, color = Tn.sub, family = Mono)
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
-                T(a.project.ifEmpty { a.pane }, Modifier.weight(1f, fill = false), size = 15, weight = FontWeight.SemiBold)
-                if (a.workspace.isNotEmpty() && a.workspace != a.project) T(a.workspace, size = 11, color = Tn.sub, family = Mono)
-            }
-            T(a.title.ifEmpty { a.pane }, size = 12, color = Tn.sub, maxLines = 2)
-        }
+        WindowTitle(parts, a.status)
+        T(task, size = 15, weight = FontWeight.SemiBold, maxLines = 2)
     }
 }
 
@@ -273,41 +319,141 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
                 "The agent in $pane on ${d.name} stopped or moved to another pane.",
                 Modifier.padding(top = 48.dp),
             )
-            else -> {
-                if (agent != null) AgentHeader(agent, closer.takeIf { d.herdr?.control == true })
-                Spacer(Modifier.height(TileGap))
-                AgentOutput(out, Modifier.weight(1f))
-                if (agent != null) {
-                    Spacer(Modifier.height(TileGap))
-                    if (d.herdr?.control == true) {
+            else -> PaneLayout(
+                Modifier.weight(1f),
+                header = { if (agent != null) AgentHeader(agent, closer.takeIf { d.herdr?.control == true }) },
+                output = { m -> AgentOutput(out, m) },
+                controls = {
+                    if (agent != null && d.herdr?.control == true) {
                         ReplyControls(d, agent, out, d.herdrReply?.takeIf { it.pane == pane })
-                    } else {
+                    } else if (agent != null) {
                         T(
                             "To answer from this phone, set herdr_control = true on ${d.name}.",
                             Modifier.padding(horizontal = 4.dp), size = 12, color = Tn.sub,
                         )
                     }
-                }
-                Spacer(Modifier.height(12.dp))
-            }
+                },
+            )
         }
     }
     closer.Dialog("Close ${agent?.agent ?: "the agent"}?", "herdr closes $pane on ${d.name}, and the agent in it stops.")
 }
 
+/**
+ * The header of an agent: the window-title line with the pane and the
+ * status, the Close key, and the task of the agent. The top bar already
+ * names the agent and the project.
+ */
 @Composable
 private fun AgentHeader(a: HerdrAgent, closer: PaneCloser?) {
     Tile(Modifier.fillMaxWidth(), padding = PaddingValues(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            StatusLine(a.status)
-            Spacer(Modifier.weight(1f))
-            T(a.pane, size = 11, color = Tn.sub, family = Mono)
+            WindowTitle(listOf(a.pane), a.status, Modifier.weight(1f).semantics(mergeDescendants = true) {})
             closer?.Button()
         }
         if (a.title.isNotEmpty()) T(a.title, size = 13, weight = FontWeight.SemiBold, maxLines = 2)
         closer?.error?.let { T(it, size = 12, color = Tn.red) }
     }
 }
+
+// ───────────────────────── Pane layout ─────────────────────────
+
+/** The fewest lines of output that the agent and terminal screens show, at each font size. */
+private const val OUTPUT_MIN_LINES = 8
+
+/** The line height of [TermLines]. It grows with the font size. */
+private val TermLineHeight = 16.sp
+
+/** The space above and below the lines in the output. */
+private val OutputPadding = 10.dp
+
+/** The part of a wide window that the controls take. The output takes the rest. */
+private const val CONTROLS_PART = 0.4f
+
+/** The narrowest controls pane on a wide window, unless that is more than half of the window. */
+private val ControlsMinWidth = 320.dp
+
+/** The space under the controls, above the bottom edge of the screen. */
+private val ControlsEnd = 12.dp
+
+/**
+ * The part of the agent and terminal screens under the top bar: the
+ * [header], the [output], and the [controls]. On a narrow window, the 3
+ * parts stack. The output takes the free height, and at least
+ * [OUTPUT_MIN_LINES] lines. When the parts do not fit, for example at a
+ * large font size, the column scrolls, so that no part gets clipped. On a
+ * wide window, the output takes the left pane, and the header and the
+ * controls take the right pane.
+ */
+@Composable
+internal fun PaneLayout(
+    modifier: Modifier,
+    header: @Composable () -> Unit,
+    output: @Composable (Modifier) -> Unit,
+    controls: @Composable () -> Unit,
+) {
+    if (rememberWideWindow()) {
+        BoxWithConstraints(modifier.fillMaxWidth()) {
+            val side = maxOf(maxWidth * CONTROLS_PART, minOf(ControlsMinWidth, maxWidth / 2))
+            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(TileGap)) {
+                output(Modifier.weight(1f).fillMaxHeight().padding(bottom = ControlsEnd))
+                // The controls sit at the bottom of their pane, at thumb height.
+                FillColumn(Modifier.width(side).fillMaxHeight(), minMiddle = 0.dp, top = header, middle = {}, bottom = controls)
+            }
+        }
+    } else {
+        val minOutput = with(LocalDensity.current) { TermLineHeight.toDp() } * OUTPUT_MIN_LINES + OutputPadding * 2
+        FillColumn(modifier.fillMaxWidth(), minMiddle = minOutput, top = header, middle = { output(Modifier.fillMaxSize()) }, bottom = controls)
+    }
+}
+
+/**
+ * A column that scrolls, with [top], [middle], and [bottom]. The middle
+ * takes the height that the other parts leave free, and at least
+ * [minMiddle]. When the parts do not fit, the column is taller than its
+ * place, and the user scrolls to the bottom part. [ControlsEnd] stays free
+ * under the bottom part.
+ */
+@Composable
+private fun FillColumn(
+    modifier: Modifier,
+    minMiddle: Dp,
+    top: @Composable () -> Unit,
+    middle: @Composable () -> Unit,
+    bottom: @Composable () -> Unit,
+) {
+    BoxWithConstraints(modifier) {
+        val viewport = if (constraints.hasBoundedHeight) constraints.maxHeight else 0
+        Layout(
+            contents = listOf(
+                { Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(TileGap)) { top() } },
+                { Box(propagateMinConstraints = true) { middle() } },
+                { Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(TileGap)) { bottom() } },
+            ),
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+        ) { (topSlot, middleSlot, bottomSlot), bounds ->
+            val width = bounds.maxWidth
+            val loose = Constraints(maxWidth = width)
+            val gap = TileGap.roundToPx()
+            val end = ControlsEnd.roundToPx()
+            val head = topSlot.first().measure(loose)
+            val foot = bottomSlot.first().measure(loose)
+            // An empty part takes no gap.
+            val headGap = if (head.height > 0) gap else 0
+            val footGap = if (foot.height > 0) gap else 0
+            val free = viewport - head.height - headGap - footGap - foot.height - end
+            val height = maxOf(minMiddle.roundToPx(), free)
+            val body = middleSlot.first().measure(Constraints.fixed(width, height))
+            layout(width, head.height + headGap + height + footGap + foot.height + end) {
+                head.placeRelative(0, 0)
+                body.placeRelative(0, head.height + headGap)
+                foot.placeRelative(0, head.height + headGap + height + footGap)
+            }
+        }
+    }
+}
+
+// ───────────────────────── Output ─────────────────────────
 
 /** How close to the end the output must be, in pixels, to follow new lines. */
 private const val FOLLOW_SLACK_PX = 48
@@ -316,7 +462,7 @@ private const val FOLLOW_SLACK_PX = 48
  * The output of an agent or a terminal as a small terminal: dark, mono,
  * and in the colors of the pane. The view follows new lines at the end.
  * When the user scrolls up to read older lines, the view stays there, and
- * a button goes back to the newest lines.
+ * a key under the lines goes back to the newest lines.
  */
 @Composable
 internal fun AgentOutput(out: HerdrOutput?, modifier: Modifier) {
@@ -334,6 +480,13 @@ internal fun AgentOutput(out: HerdrOutput?, modifier: Modifier) {
         snapshotFlow { scroll.maxValue }.first { it > 0 && it < Int.MAX_VALUE }
         scroll.scrollTo(scroll.maxValue)
     }
+    // While the view follows, it stays at the end when the view changes its height,
+    // for example when the keyboard opens or the choices show under it.
+    LaunchedEffect(scroll) {
+        snapshotFlow { scroll.maxValue }.collect { end ->
+            if (follow && !scroll.isScrollInProgress && end in 1 until Int.MAX_VALUE) scroll.scrollTo(end)
+        }
+    }
     Box(modifier.fillMaxWidth()) {
         when {
             // The lines of the output load in the place where they show.
@@ -342,36 +495,55 @@ internal fun AgentOutput(out: HerdrOutput?, modifier: Modifier) {
             ) {
                 LineSkeleton("Reading the output", lines = listOf(0.62f, 0.9f, 0.48f, 0.84f, 0.7f, 0.36f, 0.78f, 0.55f))
             }
-            out.error != null && out.lines.isEmpty() -> EmptyState(Ic.error, "No output", out.error, Modifier.padding(top = 32.dp))
+            // The empty state scrolls when a large font size makes it taller than its place.
+            out.error != null && out.lines.isEmpty() -> EmptyState(
+                Ic.error, "No output", out.error, Modifier.verticalScroll(rememberScrollState()).padding(top = 32.dp),
+            )
             else -> BoxWithConstraints(Modifier.fillMaxSize().clip(TileShape).background(TermBg).border(1.dp, Tn.line, TileShape)) {
                 val width = maxWidth
-                SelectionContainer {
-                    Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(vertical = 10.dp)) {
-                        val pad = Modifier.padding(horizontal = TermPad)
-                        if (out.truncated) T("Older lines are cut.", pad.padding(bottom = 6.dp), size = 11, color = Tn.sub, family = Mono)
-                        out.error?.let { T(it, pad.padding(bottom = 6.dp), size = 12, color = Tn.red) }
-                        if (out.lines.isEmpty()) {
-                            T("No output yet.", pad, size = 12, color = Tn.sub, family = Mono)
-                        } else {
-                            TermLines(out.lines, width)
+                Column(Modifier.fillMaxSize()) {
+                    SelectionContainer(Modifier.weight(1f)) {
+                        Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(vertical = OutputPadding)) {
+                            val pad = Modifier.padding(horizontal = TermPad)
+                            if (out.truncated) T("Older lines are cut.", pad.padding(bottom = 6.dp), size = 11, color = Tn.sub, family = Mono)
+                            out.error?.let { T(it, pad.padding(bottom = 6.dp), size = 12, color = Tn.red) }
+                            if (out.lines.isEmpty()) {
+                                T("No output yet.", pad, size = 12, color = Tn.sub, family = Mono)
+                            } else {
+                                TermLines(out.lines, width)
+                            }
                         }
                     }
-                }
-                if (!follow && out.lines.isNotEmpty()) {
-                    Box(
-                        Modifier.align(Alignment.BottomEnd).padding(8.dp).size(48.dp).clip(RoundedCornerShape(8.dp))
-                            .background(Tn.tileHi).border(1.dp, Tn.blue, RoundedCornerShape(8.dp))
-                            .clickable(onClickLabel = "Show the newest lines", role = Role.Button) {
-                                follow = true
-                                scope.launch { scroll.animateScrollTo(scroll.maxValue) }
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Sym(Ic.up, "Show the newest lines", Modifier.rotate(180f), tint = Tn.blue, size = 20.dp)
+                    // The key takes its own row under the lines, so that it covers no output.
+                    if (!follow && out.lines.isNotEmpty()) {
+                        NewestLinesKey {
+                            follow = true
+                            scope.launch { scroll.animateScrollTo(scroll.maxValue) }
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+/**
+ * The key under the output that goes back to the newest lines. It shows
+ * while the user reads older lines. A line above it separates it from the
+ * output.
+ */
+@Composable
+private fun NewestLinesKey(onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().background(Tn.line).padding(top = 1.dp).background(TermBg)
+            .heightIn(min = 48.dp)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = TermPad),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        T("Show the newest lines", size = 13, color = Tn.blue, weight = FontWeight.SemiBold)
+        Sym(Ic.up, modifier = Modifier.rotate(180f), tint = Tn.blue, size = 20.dp)
     }
 }
 
@@ -385,10 +557,13 @@ internal class PaneCloser(
     private val dialog: @Composable (title: String, body: String) -> Unit,
     val error: String?,
 ) {
-    /** The Close key: a destructive button. A dialog asks before the pane closes. */
+    /**
+     * The Close key: an outlined button. It is not red, because red means
+     * that something needs the user. The dialog asks before the pane closes.
+     */
     @Composable
     fun Button() {
-        FluxButton("Close", onAsk, kind = ButtonKind.Destructive)
+        FluxButton("Close", onAsk, kind = ButtonKind.Outlined)
     }
 
     @Composable
@@ -436,9 +611,6 @@ internal fun rememberPaneCloser(d: DeviceUi, pane: String, onClosed: () -> Unit)
 }
 
 // ───────────────────────── Replies ─────────────────────────
-
-/** The highest part of the screen that the choices of a dialog can take. More choices scroll. */
-private val ChoicesMaxHeight = 196.dp
 
 /**
  * The reply controls of an agent: the choices of a dialog, a key bar, a
@@ -522,24 +694,20 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
         onDispose { view.keepScreenOn = false }
     }
 
+    // The choices take their full height. The screen scrolls when they do not fit, see [PaneLayout].
+    // The grid gap keeps 8 dp between the choices, so that a tap does not hit the next choice.
     Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
         val choices = if (agent.status == AgentStatus.Blocked) out?.choices.orEmpty() else emptyList()
-        if (choices.isNotEmpty()) {
-            Column(
-                Modifier.heightIn(max = ChoicesMaxHeight).verticalScroll(rememberScrollState()),
-                // The grid gap keeps 8 dp between the choices, so that a tap does not hit the next choice.
-                verticalArrangement = Arrangement.spacedBy(TileGap),
-            ) {
-                for (c in choices) ChoiceTile(c) { keys(c.key) }
-            }
-        }
-        KeyRow {
-            KeyTile("esc", "Escape", Modifier.weight(1f)) { keys("esc") }
-            KeyTile("tab", "Tab", Modifier.weight(1f)) { keys("tab") }
-            KeyTile("↑", "Up", Modifier.weight(1f)) { keys("up") }
-            KeyTile("↓", "Down", Modifier.weight(1f)) { keys("down") }
-            KeyTile("enter", "Enter", Modifier.weight(1.4f), accent = agent.status == AgentStatus.Blocked && choices.isEmpty()) { keys("enter") }
-        }
+        for (c in choices) ChoiceTile(c) { keys(c.key) }
+        KeyBar(
+            listOf(
+                BarKey("esc", "Escape") { keys("esc") },
+                BarKey("tab", "Tab") { keys("tab") },
+                BarKey("↑", "Up") { keys("up") },
+                BarKey("↓", "Down") { keys("down") },
+                BarKey("enter", "Enter", share = 1.4f, accent = agent.status == AgentStatus.Blocked && choices.isEmpty()) { keys("enter") },
+            ),
+        )
         val sendingPrompt = reply?.sending == true && reply.action == "prompt"
         DictationBar(
             dictation,
@@ -631,6 +799,52 @@ private fun ChoiceTile(c: AgentChoice, onClick: () -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             T(c.key, size = 14, color = Tn.blue, weight = FontWeight.Bold, family = Mono)
             T(c.label, Modifier.weight(1f), size = 14)
+        }
+    }
+}
+
+/**
+ * A key of a [KeyBar]. [share] is its part of the row width. [accent] marks
+ * the key that the dialog needs. TalkBack reads [description].
+ */
+internal class BarKey(
+    val label: String,
+    val description: String,
+    val share: Float = 1f,
+    val accent: Boolean = false,
+    val onClick: () -> Unit,
+)
+
+/** The widest that a key gets for each share, so that the keys do not stretch across a wide row. */
+private val KeyMaxWidth = 80.dp
+
+/** The narrowest key: the touch target of 48 dp. */
+private val KeyMinWidth = 48.dp
+
+/**
+ * The key bar of the agent and terminal screens. The keys share 1 row, up
+ * to [KeyMaxWidth] for each share, and the free width stays at the end.
+ * When the row is too narrow for keys of [KeyMinWidth], the keys go to 2
+ * rows that fill the width.
+ */
+@Composable
+internal fun KeyBar(keys: List<BarKey>) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val shares = keys.sumOf { it.share.toDouble() }.toFloat()
+        val oneRow = KeyMinWidth * shares + TileGap * (keys.size - 1) <= maxWidth
+        Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
+            if (oneRow) {
+                KeyRow {
+                    for (k in keys) {
+                        val m = Modifier.weight(k.share, fill = false).widthIn(max = KeyMaxWidth * k.share).fillMaxWidth()
+                        KeyTile(k.label, k.description, m, k.accent, k.onClick)
+                    }
+                }
+            } else {
+                for (row in keys.chunked((keys.size + 1) / 2)) {
+                    KeyRow { for (k in row) KeyTile(k.label, k.description, Modifier.weight(k.share), k.accent, k.onClick) }
+                }
+            }
         }
     }
 }

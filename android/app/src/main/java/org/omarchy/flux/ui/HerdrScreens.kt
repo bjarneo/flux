@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.KeyboardActions
@@ -390,25 +389,29 @@ fun TiledTerminalScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
             term == null && herdr != null -> EmptyState(
                 Ic.terminal, "The terminal is gone", "The terminal $pane on ${d.name} closed.", Modifier.padding(top = 48.dp),
             )
-            else -> {
-                Tile(Modifier.fillMaxWidth(), padding = PaddingValues(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Sym(Ic.terminal, tint = Tn.green, size = 18.dp)
-                        T(term?.title?.ifEmpty { null } ?: "shell", Modifier.weight(1f), size = 13, weight = FontWeight.SemiBold, family = Mono, maxLines = 2)
-                        T(pane, size = 11, color = Tn.sub, family = Mono)
-                        closer.Button()
-                    }
-                    closer.error?.let { T(it, size = 12, color = Tn.red) }
-                }
-                Spacer(Modifier.height(TileGap))
-                AgentOutput(out, Modifier.weight(1f))
-                Spacer(Modifier.height(TileGap))
-                TerminalControls(d, pane, d.herdrReply?.takeIf { it.pane == pane })
-                Spacer(Modifier.height(12.dp))
-            }
+            else -> PaneLayout(
+                Modifier.weight(1f),
+                header = { TerminalHeader(term?.title?.ifEmpty { null } ?: "shell", pane, closer) },
+                output = { m -> AgentOutput(out, m) },
+                controls = { TerminalControls(d, pane, d.herdrReply?.takeIf { it.pane == pane }) },
+            )
         }
     }
     closer.Dialog("Close this terminal?", "herdr closes $pane on ${d.name}. The shell and its command stop.")
+}
+
+/** The header of a terminal: the terminal title, the pane, the Close key, and the last close problem. */
+@Composable
+private fun TerminalHeader(title: String, pane: String, closer: PaneCloser) {
+    Tile(Modifier.fillMaxWidth(), padding = PaddingValues(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Sym(Ic.terminal, tint = Tn.green, size = 18.dp)
+            T(title, Modifier.weight(1f), size = 13, weight = FontWeight.SemiBold, family = Mono, maxLines = 2)
+            T(pane, size = 11, color = Tn.sub, family = Mono)
+            closer.Button()
+        }
+        closer.error?.let { T(it, size = 12, color = Tn.red) }
+    }
 }
 
 /** The key bar and the command field of a terminal. Send types the command and presses Enter. */
@@ -447,15 +450,18 @@ private fun TerminalControls(d: DeviceUi, pane: String, reply: HerdrReply?) {
         field = TextFieldValue(e.text, TextRange(e.cursor))
     }
     Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
-        KeyRow {
-            KeyTile("esc", "Escape", Modifier.weight(1f)) { keys("esc") }
-            KeyTile("tab", "Tab", Modifier.weight(1f)) { keys("tab") }
-            KeyTile("^C", "Control C", Modifier.weight(1f)) { keys("ctrl+c") }
-            KeyTile("^D", "Control D", Modifier.weight(1f)) { keys("ctrl+d") }
-            KeyTile("↑", "Up", Modifier.weight(1f)) { keys("up") }
-            KeyTile("↓", "Down", Modifier.weight(1f)) { keys("down") }
-            KeyTile("enter", "Enter", Modifier.weight(1.4f)) { keys("enter") }
-        }
+        // The 7 keys have the same width. Then 48 dp keys fit in 1 row on a window that is 404 dp wide or more.
+        KeyBar(
+            listOf(
+                BarKey("esc", "Escape") { keys("esc") },
+                BarKey("tab", "Tab") { keys("tab") },
+                BarKey("^C", "Control C") { keys("ctrl+c") },
+                BarKey("^D", "Control D") { keys("ctrl+d") },
+                BarKey("↑", "Up") { keys("up") },
+                BarKey("↓", "Down") { keys("down") },
+                BarKey("enter", "Enter") { keys("enter") },
+            ),
+        )
         VoiceField(
             voice,
             send = { FieldKey("Run", onClick = { send() }, busy = sending) { Sym(Ic.send, size = 22.dp) } },
