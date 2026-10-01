@@ -135,6 +135,7 @@ class MainActivity : ComponentActivity() {
             org.omarchy.flux.core.DebugDemo.on = true
             FluxCore.publish()
         }
+        intent?.getStringExtra("flux.debug.theme")?.let { org.omarchy.flux.core.DebugTheme.select(it) }
         intent?.getStringExtra("flux.debug.page")?.let { debugPage.value = it }
         if (intent?.getBooleanExtra("flux.debug.showWhenLocked", false) != true) return
         setShowWhenLocked(true)

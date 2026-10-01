@@ -172,12 +172,13 @@ object Android {
     /**
      * Android 12 and later: sets the night mode of the app, so that the
      * system splash screen and the -night resources match the theme.
-     * [ThemeMode.System] removes the override.
+     * [ThemeMode.System] removes the override. [ComputerThemes.applyNightMode]
+     * gives the night mode of [ThemeMode.Computer].
      */
     fun setNightMode(context: Context, mode: ThemeMode) {
         if (Build.VERSION.SDK_INT < 31) return
         val night = when (mode) {
-            ThemeMode.System -> UiModeManager.MODE_NIGHT_AUTO
+            ThemeMode.System, ThemeMode.Computer -> UiModeManager.MODE_NIGHT_AUTO
             ThemeMode.Light -> UiModeManager.MODE_NIGHT_NO
             ThemeMode.Dark -> UiModeManager.MODE_NIGHT_YES
         }

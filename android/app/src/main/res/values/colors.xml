@@ -4,6 +4,9 @@
     <color name="flux_mark_bg">#FF16161E</color>
     <color name="flux_mark_fg">#FFC0CAF5</color>
     <color name="flux_mark_accent">#FF7AA2F7</color>
-    <!-- The window background, the same as Tn.bg in the light theme. values-night has the dark color. -->
-    <color name="flux_bg">#FFD0D5E3</color>
+    <!--
+        The window background before Compose draws: the page of Tokyo Night Day, the light palette without a computer theme.
+        values-night has the Tokyo Night color. With a computer theme, TiledTheme sets the window background to its page.
+    -->
+    <color name="flux_bg">#FFE1E2E7</color>
 </resources>

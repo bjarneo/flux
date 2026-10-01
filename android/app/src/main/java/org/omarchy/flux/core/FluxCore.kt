@@ -99,8 +99,10 @@ object FluxCore {
         }
         trust = TrustStore(app)
         settings = Settings(app)
-        // The system keeps the night mode of the app, but a restore or a data clear can change the setting.
-        Android.setNightMode(app, settings.theme)
+        // The last computer theme draws at once. The system keeps the night
+        // mode of the app, but a restore or a data clear can change the setting.
+        ComputerThemes.load(settings)
+        ComputerThemes.applyNightMode(app, settings.theme)
         // The trust store holds only entries with a readable certificate.
         for (t in trust.all()) {
             val identity = Identity(t.id, t.name, t.type, 8, emptyList(), emptyList())
@@ -340,6 +342,7 @@ object FluxCore {
         d.herdrAction = null
         // The computer can no longer dismiss, answer, or press a button on a phone notification.
         NotificationSync.forgetDevice(id)
+        ComputerThemes.forget(this, id)
         val browsing = browse?.deviceId == id
         if (browsing) browse = null
         io.execute {
@@ -388,6 +391,9 @@ object FluxCore {
                 scanning = scanning,
                 enabled = settings.enabled,
                 theme = settings.theme,
+                computerTheme = ComputerThemes.current(),
+                themeScope = ComputerThemes.scope,
+                computerThemes = ComputerThemes.names(),
                 clipAuto = ClipWatch.uiState(settings.syncClipboard, readLogs, overlayAccess),
                 overlayAccess = overlayAccess,
             )
@@ -489,7 +495,7 @@ object FluxCore {
 
     fun setTheme(mode: ThemeMode) {
         settings.theme = mode
-        Android.setNightMode(app, mode)
+        ComputerThemes.applyNightMode(app, mode)
         publish()
     }
 

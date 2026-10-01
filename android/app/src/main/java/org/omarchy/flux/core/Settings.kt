@@ -28,10 +28,23 @@ class Settings(context: Context) {
         get() = prefs.getString("pinnedShortcuts", null)?.split('\n')?.filter { it.isNotEmpty() }
         set(v) = prefs.edit().putString("pinnedShortcuts", v?.joinToString("\n")).apply()
 
-    /** The color theme of the app. */
+    /** The color theme of the app. Without a choice, it is [ThemeMode.Computer]. */
     var theme: ThemeMode
         get() = ThemeMode.fromKey(prefs.getString("theme", null))
         set(v) = prefs.edit().putString("theme", v.key).apply()
+
+    /**
+     * The last theme that a computer sent, in the form of the flux.theme
+     * body, or null. The next cold start draws it at once.
+     */
+    var computerTheme: String?
+        get() = prefs.getString("computerTheme", null)
+        set(v) = prefs.edit().putString("computerTheme", v).apply()
+
+    /** The device ID of the computer that sent [computerTheme]. */
+    var computerThemeFrom: String?
+        get() = prefs.getString("computerThemeFrom", null)
+        set(v) = prefs.edit().putString("computerThemeFrom", v).apply()
 
     /** Sends the calls of this phone to the computers. It needs the phone permission. */
     var callAlerts: Boolean

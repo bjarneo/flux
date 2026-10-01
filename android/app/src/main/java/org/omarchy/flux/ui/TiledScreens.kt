@@ -218,11 +218,7 @@ private fun AppMenu(theme: ThemeMode) {
     }
 }
 
-private val ThemeItems = listOf(
-    Triple(ThemeMode.System, "System", Ic.systemTheme),
-    Triple(ThemeMode.Light, "Light", Ic.lightMode),
-    Triple(ThemeMode.Dark, "Dark", Ic.darkMode),
-)
+private val ThemeItems = ThemeChoices
 
 @Composable
 private fun PairedTile(d: DeviceUi, modifier: Modifier, onOpen: () -> Unit, onUnpair: () -> Unit) {

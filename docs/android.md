@@ -184,6 +184,28 @@ sdk.dir=/absolute/path/to/Android/Sdk
 Keep SDK paths and keystores out of Git.
 See [releases](releasing.md#android-release-key) for signed builds and release secrets.
 
+## Theme
+
+Flux follows the active Omarchy theme of the computer.
+`fluxd` sends the theme in a `flux.theme` packet when the phone connects and when the theme changes.
+Flux keeps the last theme, so the next start draws it at once.
+
+To change the theme, open the menu of the device list. The choices are:
+
+- **Computer**, the default: the theme of the computer in scope. Without a theme from a computer, Flux uses Tokyo Night on a dark phone and Tokyo Night Day on a light phone.
+- **System**: Tokyo Night on a dark phone and Tokyo Night Day on a light phone.
+- **Light**: Tokyo Night Day.
+- **Dark**: Tokyo Night.
+
+A contrast guard maps the theme to the colors of the app. It moves only the lightness of a color, so each hue stays:
+
+- Body text and secondary text reach 4.5:1 on each surface.
+- The accent and the status colors reach 4.5:1 as text. The text on a filled button reaches 4.5:1.
+- The dim color is for borders and disabled states only, and reaches 3:1.
+- The master tile takes the gradient of `hyprland_active_border`, at 3:1 or more.
+
+The theme engine is in `app/src/main/java/org/omarchy/flux/theme`.
+
 ## Test
 
 To run the JVM tests for packets, identity, certificates, and the verification key, run:
@@ -195,10 +217,16 @@ To run the JVM tests for packets, identity, certificates, and the verification k
 The release task also checks the R8-optimized build.
 Without signing variables, it produces `app/build/outputs/apk/release/app-release-unsigned.apk`.
 
-To test the app against a desktop peer without a firewall rule, run the test peer. It connects through `adb forward`, pairs, and sends sample battery, theme, command, and media packets. Open Flux on the phone first, because the phone takes a new computer only while the app is on screen:
+To test the app against a desktop peer without a firewall rule, run the test peer. It connects through `adb forward`, pairs, and sends sample battery, command, and media packets. Open Flux on the phone first, because the phone takes a new computer only while the app is on screen:
 
 ```bash
 python3 tools/test_peer.py
+```
+
+To send an Omarchy theme from the test peer, give it a `colors.toml` file:
+
+```bash
+python3 tools/test_peer.py --theme ~/.local/state/omarchy/current/theme/colors.toml
 ```
 
 To test the remote desktop, add `--desktop`. The peer streams the first monitor of this computer with `gpu-screen-recorder`, like `fluxd`, and prints the touches. It also answers the Omarchy panel with sample shortcuts and workspaces. It does not run the touches or the shortcuts:
@@ -231,6 +259,12 @@ The pages are:
 - `empty` for the app with no computers.
 - `icon` for the launcher and notification icons.
 
+To draw the sample computer in a sample theme, set `FLUX_THEME` to `neon`, `tokyo-night`, `tokyo-night-day`, `catppuccin-latte`, or `low-contrast`. The value `none` removes the theme:
+
+```bash
+ANDROID_SERIAL=emulator-5554 FLUX_DEMO=1 FLUX_THEME=catppuccin-latte tools/shot.sh home /tmp/home-latte.png
+```
+
 Release builds ignore these extras.
 
 ## Icons
@@ -249,6 +283,7 @@ python3 tools/fetch_icons.py
 | `app/src/main/java/org/omarchy/flux/net` | UDP discovery, TCP links, TLS, and payload transfers |
 | `app/src/main/java/org/omarchy/flux/core` | Devices, pairing, trust store, and the plugins |
 | `app/src/main/java/org/omarchy/flux/service` | The foreground service and the notification listener |
+| `app/src/main/java/org/omarchy/flux/theme` | The computer theme, the contrast guard, and the palettes. Plain Kotlin with JVM tests. |
 | `app/src/main/java/org/omarchy/flux/ui` | The Compose screens |
 | `tools` | The test peer, the screenshot helper, and the icon script |
 
