@@ -367,8 +367,14 @@ fun FluxRoot(activity: MainActivity) {
             return@LaunchedEffect
         }
         // "<page>@offline" opens the page of a paired computer that is not reachable.
+        // "<page>@connecting" opens the same page while that computer still connects.
         val page = request.substringBefore('@')
-        val offline = request.endsWith("@offline")
+        val connecting = request.endsWith("@connecting")
+        val offline = connecting || request.endsWith("@offline")
+        if (connecting != DebugInbox.connecting) {
+            DebugInbox.connecting = connecting
+            FluxCore.publish()
+        }
         val d = if (offline) {
             state.devices.firstOrNull { it.paired && !it.online }
         } else {
@@ -385,7 +391,7 @@ fun FluxRoot(activity: MainActivity) {
         if (page == "unpair" && d != null) unpairing = d.id
         val (next, pageScope) = Nav.debug(page, d?.id.orEmpty())
         nav = next
-        // A destination with @offline shows the computer that is not reachable as the scope.
+        // A destination with @offline or @connecting shows the computer that is not reachable as the scope.
         scope = pageScope ?: if (offline && destination) d?.id else null
         activity.debugPage.value = null
     }

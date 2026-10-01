@@ -295,6 +295,7 @@ The pages are:
 - `camera:<mode>` for a camera mode: `text`, `qr`, `photo`, `document`, or `signature`. `camera:webcam` opens the `webcam` page.
 - `ring`, `pair`, and `unpair` for the ring overlay, the pairing sheet, and the unpair dialog.
 - `<page>@offline` for the page of a paired computer that is not reachable. A destination with `@offline` shows that computer as the scope.
+- `<page>@connecting` for the same page while that computer still connects. For example, `inbox@connecting` shows the Inbox in the connecting state.
 - `empty` for the app with no computers.
 - `firstrun` for the pairing guide of the **Inbox** before the first pairing, with the sample computer to pair. It needs `FLUX_DEMO=1`.
 - `paired` for the success state of a new pairing on the sample computer to pair. It needs `FLUX_DEMO=1`. The success state shows for 6 seconds.

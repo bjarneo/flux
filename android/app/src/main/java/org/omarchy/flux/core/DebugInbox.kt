@@ -21,10 +21,17 @@ object DebugInbox {
         loaded = true,
     )
 
+    /**
+     * True while the debug page `<page>@connecting` shows. The sample
+     * computer that is not reachable then shows as connecting.
+     */
+    @Volatile var connecting = false
+
     /** The state with the sample computer of [DebugDemo.PC] set up for the Omarchy panel. */
     fun decorate(state: UiState): UiState {
         if (!DebugDemo.on) return state
         return state.copy(
+            connecting = state.connecting || connecting,
             devices = state.devices.map { d ->
                 if (d.id == DebugDemo.PC) d.copy(shortcutsSupported = true, shortcuts = sampleShortcuts) else d
             },

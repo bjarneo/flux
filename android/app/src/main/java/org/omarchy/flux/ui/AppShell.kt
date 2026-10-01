@@ -133,8 +133,8 @@ fun FluxShell(
         notify = notify,
         // The success state of a new pairing shows only in the scope of that computer.
         paired = state.devices.firstOrNull { it.paired && it.id == welcome && it.id == scope }?.name,
-        // A sample computer of the demo never connects, so it does not wait.
-        connecting = state.connecting && reach.offline.any { !isDemo(it.id) },
+        // A sample computer of the demo never connects, so it does not wait. The debug page @connecting is the exception.
+        connecting = state.connecting && reach.offline.any { !isDemo(it.id) || org.omarchy.flux.core.DebugInbox.connecting },
     )
     val picker = rememberTargetPicker()
     val tools = rememberSendTools(state.devices, scope, picker)
