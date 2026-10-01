@@ -4,14 +4,13 @@ import android.app.Activity
 import android.media.projection.MediaProjectionManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -34,10 +33,12 @@ import org.omarchy.flux.screen.ScreenMirrorService
 import org.omarchy.flux.screen.ScreenSession
 
 /**
- * The Control destination: the tools that act on the computer in scope, in
- * bands of at most 4 tiles. A tile shows when a computer in scope has the
- * feature, and it is dimmed while no such computer is online. With more
- * than 1 computer online, a tap asks for the computer.
+ * The Control destination: the tools that act on the computer in scope.
+ * The most used tool, the Omarchy panel, takes the master tile. The other
+ * tools stack under it in compact rows, in groups. A tool shows when a
+ * computer in scope has the feature, and it is dimmed while no such
+ * computer is online. With more than 1 computer online, a tap asks for the
+ * computer.
  */
 @Composable
 fun ControlScreen(state: UiState, scope: String?, picker: TargetPicker, onOpen: (Route) -> Unit, onPair: () -> Unit) {
@@ -76,103 +77,83 @@ fun ControlScreen(state: UiState, scope: String?, picker: TargetPicker, onOpen: 
     val mirroring = screen.active
     val mirrorName = devices.firstOrNull { it.id == screen.deviceId }?.name
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = TiledGutter).padding(bottom = 24.dp)) {
+    CappedScrollColumn {
         TargetLine(any, devices, "Acts on", onPair)
-        Band("Control") {
+        Spacer(Modifier.height(TileGap))
+        // The Omarchy panel is the master tile. The other tools that act on the computer stack under it.
+        Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
             if (shows { it.shortcutsSupported }) {
-                ActionTile(
-                    Ic.grid, "Omarchy panel", Modifier.fillMaxWidth(),
-                    sub = "Workspaces, windows, and key bindings", enabled = canRun { it.shortcutsSupported },
-                ) { open({ it.shortcutsSupported }, "Open the Omarchy panel of", OMARCHY_PAGE) }
-            }
-            if (shows { it.inputSupported } || shows { it.desktopSupported }) EqualRow {
-                if (shows { it.inputSupported }) {
-                    // Remote input can type in any window of the computer, so it asks for the phone lock first.
-                    ActionTile(
-                        Ic.touchpad, "Touchpad and keyboard", Modifier.weight(1f).fillMaxHeight(), accent = Tn.green,
-                        sub = if (one != null && one.remoteInput != true) "Off on ${one.name}" else "Pointer, keys, and slides",
-                        enabled = canRun { it.inputSupported },
-                    ) { open({ it.inputSupported }, "Use the touchpad of", "touchpad", "Use the touchpad" to "use the touchpad") }
-                }
-                if (shows { it.desktopSupported }) {
-                    // The screen of the computer can show private content, so it also asks for the phone lock first.
-                    ActionTile(
-                        Ic.desktop, "Remote desktop", Modifier.weight(1f).fillMaxHeight(),
-                        sub = when {
-                            one == null -> "See and use the screen"
-                            one.remoteDesktop != true -> "Off on ${one.name}"
-                            one.remoteInput != true -> "View only"
-                            else -> "See and use the screen"
-                        },
-                        enabled = canRun { it.desktopSupported },
-                    ) { open({ it.desktopSupported }, "Show the screen of", "desktop", "Show the computer screen" to "show the computer screen") }
+                MasterTool(Ic.grid, "Omarchy panel", "Workspaces, windows, and key bindings", enabled = canRun { it.shortcutsSupported }) {
+                    open({ it.shortcutsSupported }, "Open the Omarchy panel of", OMARCHY_PAGE)
                 }
             }
-            EqualRow {
-                ActionTile(
-                    Ic.terminal, "Commands", Modifier.weight(1f).fillMaxHeight(), accent = Tn.yellow,
-                    sub = "Run the commands of the computer", enabled = any !is Target.None,
-                ) { open({ true }, "Run the commands of", "commands") }
-                ActionTile(
-                    Ic.music, "Media", Modifier.weight(1f).fillMaxHeight(), accent = Tn.green,
-                    sub = one?.player?.title?.takeIf { it.isNotEmpty() } ?: "Play, pause, and volume", enabled = any !is Target.None,
-                ) { open({ true }, "Control the media of", "media") }
+            if (shows { it.inputSupported }) {
+                // Remote input can type in any window of the computer, so it asks for the phone lock first.
+                ToolRow(
+                    Ic.touchpad, "Touchpad and keyboard",
+                    if (one != null && one.remoteInput != true) "Off on ${one.name}" else "Pointer, keys, and slides",
+                    enabled = canRun { it.inputSupported },
+                ) { open({ it.inputSupported }, "Use the touchpad of", "touchpad", "Use the touchpad" to "use the touchpad") }
             }
+            if (shows { it.desktopSupported }) {
+                // The screen of the computer can show private content, so it also asks for the phone lock first.
+                ToolRow(
+                    Ic.desktop, "Remote desktop",
+                    when {
+                        one == null -> "See and use the screen"
+                        one.remoteDesktop != true -> "Off on ${one.name}"
+                        one.remoteInput != true -> "View only"
+                        else -> "See and use the screen"
+                    },
+                    enabled = canRun { it.desktopSupported },
+                ) { open({ it.desktopSupported }, "Show the screen of", "desktop", "Show the computer screen" to "show the computer screen") }
+            }
+            ToolRow(Ic.terminal, "Commands", "Run the commands of the computer", enabled = any !is Target.None) {
+                open({ true }, "Run the commands of", "commands")
+            }
+            ToolRow(
+                Ic.music, "Media", one?.player?.title?.takeIf { it.isNotEmpty() } ?: "Play, pause, and volume", enabled = any !is Target.None,
+            ) { open({ true }, "Control the media of", "media") }
         }
-        Band("Stream") {
-            EqualRow {
-                ActionTile(
-                    Ic.mic, "Mic", Modifier.weight(1f).fillMaxHeight(), accent = Tn.orange,
-                    sub = "Use this phone as a microphone", enabled = any !is Target.None,
-                ) { open({ true }, "Stream the mic to", "mic") }
-                ActionTile(
-                    Ic.videocamOutline, "Webcam", Modifier.weight(1f).fillMaxHeight(), accent = Tn.cyan,
-                    sub = "Use this phone as a webcam", enabled = any !is Target.None,
-                ) { open({ true }, "Stream the camera to", WEBCAM_PAGE) }
+        SectionLabel("Stream")
+        Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
+            ToolRow(Ic.mic, "Mic", "Use this phone as a microphone", enabled = any !is Target.None) {
+                open({ true }, "Stream the mic to", "mic")
             }
-            EqualRow {
-                if (mirroring) {
-                    ActionTile(
-                        Ic.stopScreenShare, "Stop the mirror", Modifier.weight(1f).fillMaxHeight(), accent = Tn.cyan,
-                        sub = mirrorName?.let { "Shows this phone on $it" },
-                    ) { ScreenSession.stop() }
-                } else {
-                    ActionTile(
-                        Ic.screenShare, "Mirror", Modifier.weight(1f).fillMaxHeight(), accent = Tn.cyan,
-                        sub = "Show this phone screen on the computer", enabled = any !is Target.None,
-                    ) {
-                        picker.run(target(scope, devices), "Mirror this phone to") { d ->
-                            mirrorFor = d.id
-                            askCapture.launch(context.getSystemService(MediaProjectionManager::class.java).createScreenCaptureIntent())
-                        }
+            ToolRow(Ic.videocamOutline, "Webcam", "Use this phone as a webcam", enabled = any !is Target.None) {
+                open({ true }, "Stream the camera to", WEBCAM_PAGE)
+            }
+            if (mirroring) {
+                ToolRow(Ic.stopScreenShare, "Stop the mirror", mirrorName?.let { "Shows this phone on $it" }, enabled = true) { ScreenSession.stop() }
+            } else {
+                ToolRow(Ic.screenShare, "Mirror", "Show this phone screen on the computer", enabled = any !is Target.None) {
+                    picker.run(target(scope, devices), "Mirror this phone to") { d ->
+                        mirrorFor = d.id
+                        askCapture.launch(context.getSystemService(MediaProjectionManager::class.java).createScreenCaptureIntent())
                     }
                 }
-                Spacer(Modifier.weight(1f))
             }
         }
         if (shows { it.herdrSupported }) {
-            Band("Agents") {
-                val scoped = devices.filter { it.paired && it.online && (scope == null || it.id == scope) }
-                val agents = scoped.sumOf { it.herdr?.agents?.size ?: 0 }
-                val blocked = scoped.sumOf { d -> d.herdr?.agents?.count { it.status == AgentStatus.Blocked } ?: 0 }
-                val terminals = scoped.sumOf { it.herdr?.panes?.size ?: 0 }
-                EqualRow {
-                    ActionTile(
-                        Ic.agent, "Agents and terminals", Modifier.weight(1f).fillMaxHeight(), accent = Tn.magenta,
-                        sub = listOf(
-                            "$agents ${if (agents == 1) "agent" else "agents"}",
-                            "$terminals ${if (terminals == 1) "terminal" else "terminals"}",
-                        ).joinToString(" · "),
-                        enabled = canRun { it.herdrSupported }, badge = blocked,
-                    ) { open({ it.herdrSupported }, "Show the agents of", AGENTS_PAGE) }
-                    if (shows { it.herdr?.control == true }) {
-                        ActionTile(
-                            Ic.add, "New agent or terminal", Modifier.weight(1f).fillMaxHeight(), accent = Tn.magenta,
-                            sub = "Start it in a herdr workspace", enabled = canRun { it.herdr?.let { h -> h.running && h.control } == true },
-                        ) { open({ it.herdr?.let { h -> h.running && h.control } == true }, "Start an agent on", NEW_PANE_PAGE) }
-                    } else {
-                        Spacer(Modifier.weight(1f))
-                    }
+            SectionLabel("Agents")
+            val scoped = devices.filter { it.paired && it.online && (scope == null || it.id == scope) }
+            val agents = scoped.sumOf { it.herdr?.agents?.size ?: 0 }
+            val blocked = scoped.sumOf { d -> d.herdr?.agents?.count { it.status == AgentStatus.Blocked } ?: 0 }
+            val terminals = scoped.sumOf { it.herdr?.panes?.size ?: 0 }
+            Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
+                ToolRow(
+                    Ic.agent, "Agents and terminals",
+                    listOf(
+                        "$agents ${if (agents == 1) "agent" else "agents"}",
+                        "$terminals ${if (terminals == 1) "terminal" else "terminals"}",
+                    ).joinToString(" · "),
+                    enabled = canRun { it.herdrSupported }, badge = blocked,
+                ) { open({ it.herdrSupported }, "Show the agents of", AGENTS_PAGE) }
+                if (shows { it.herdr?.control == true }) {
+                    ToolRow(
+                        Ic.add, "New agent or terminal", "Start it in a herdr workspace",
+                        enabled = canRun { it.herdr?.let { h -> h.running && h.control } == true },
+                    ) { open({ it.herdr?.let { h -> h.running && h.control } == true }, "Start an agent on", NEW_PANE_PAGE) }
                 }
             }
         }

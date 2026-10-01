@@ -688,6 +688,74 @@ fun CappedScrollColumn(modifier: Modifier = Modifier, bottom: Dp = 24.dp, conten
     }
 }
 
+// ───────────────────────── Tools ─────────────────────────
+
+/** The tint of the icon of a tool. All tools use the accent, and a tool that is off uses the second ink. */
+@Composable
+@ReadOnlyComposable
+private fun toolTint(enabled: Boolean): Color = if (enabled) Tn.blue else Tn.sub
+
+/**
+ * The tool that a destination uses most, such as Send clipboard: the
+ * master tile above the other tools. It is taller than a [ToolRow], and
+ * its fill stands out. A tool that is not [enabled] shows dimmed, takes no
+ * taps, and TalkBack reads it as disabled.
+ */
+@Composable
+fun MasterTool(@DrawableRes icon: Int, label: String, sub: String?, enabled: Boolean, onClick: () -> Unit) {
+    Tile(
+        Modifier.fillMaxWidth().heightIn(min = 128.dp),
+        onClick = onClick,
+        container = Tn.tileHi,
+        border = BorderStroke(1.dp, Tn.lineHi),
+        enabled = enabled,
+        padding = PaddingValues(18.dp),
+    ) {
+        // The icon stays at the top and the text at the bottom. At a large font size, the tile grows and keeps the gap.
+        Sym(icon, modifier = Modifier.padding(bottom = 16.dp), tint = toolTint(enabled), size = 28.dp)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            T(label, size = 20, weight = FontWeight.SemiBold, lineHeight = 1.2f)
+            if (sub != null) T(sub, size = 14, color = Tn.sub, lineHeight = 1.3f)
+        }
+    }
+}
+
+/**
+ * A tool under the master tile: a compact row with the icon, the label,
+ * and an optional line under the label. The rows of a group stack with the
+ * tile gap. A [badge] above 0 shows the number of items that need the
+ * user. A tool that is not [enabled] shows dimmed, takes no taps, and
+ * TalkBack reads it as disabled.
+ */
+@Composable
+fun ToolRow(@DrawableRes icon: Int, label: String, sub: String?, enabled: Boolean, badge: Int = 0, onClick: () -> Unit) {
+    Tile(
+        Modifier.fillMaxWidth().heightIn(min = 56.dp),
+        onClick = onClick,
+        enabled = enabled,
+        padding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Sym(icon, tint = toolTint(enabled), size = 22.dp)
+            // The text wraps with no limit. At a large font size, the row grows.
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                T(label, size = 15, weight = FontWeight.SemiBold)
+                if (sub != null) T(sub, size = 13, color = Tn.sub, lineHeight = 1.3f)
+            }
+            if (badge > 0) {
+                val description = if (badge == 1) "1 needs you" else "$badge need you"
+                T(
+                    if (badge > 9) "9+" else "$badge",
+                    Modifier.clip(RoundedCornerShape(8.dp)).background(Tn.red).padding(horizontal = 7.dp, vertical = 1.dp)
+                        .clearAndSetSemantics { contentDescription = description },
+                    size = 12, color = Tn.onAccent, weight = FontWeight.Bold, family = Mono,
+                )
+            }
+        }
+    }
+}
+
 /**
  * A square button with an icon, for top bars: a 40 dp tile that takes
  * taps on 48 dp. TalkBack reads [description].
