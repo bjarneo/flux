@@ -41,6 +41,7 @@ import androidx.core.content.edit
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.collectLatest
 import org.omarchy.flux.core.ApproveKeys
+import org.omarchy.flux.core.ComputerThemes
 import org.omarchy.flux.core.DebugInbox
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.PairState
@@ -255,6 +256,8 @@ fun FluxRoot(activity: MainActivity, splash: Boolean = false) {
     LaunchedEffect(Unit) {
         FluxCore.toasts.collectLatest { snacks.showSnackbar(it) }
     }
+    // The Computer theme follows the computer in scope, or the last theme for all computers.
+    LaunchedEffect(scope) { ComputerThemes.setScope(scope) }
     // Leave the screens of a computer that is gone or no longer paired, and show all computers again.
     val pairedIds = state.devices.filter { it.paired }.map { it.id }.toSet()
     LaunchedEffect(pairedIds, nav) {

@@ -192,7 +192,7 @@ Flux saves the theme of each computer, so the next start draws it at once.
 
 To change the theme, open **Computers** and select a choice under **Theme**. The choices are:
 
-- **Computer**, the default: the theme of the computer in scope. In the scope of all computers, Flux uses the theme that changed most recently. A reconnect does not change the theme. Without a theme from the computer in scope, Flux uses Tokyo Night on a dark phone and Tokyo Night Day on a light phone. The choice shows the theme name and the computer that sent it.
+- **Computer**, the default: the theme of the computer in scope. The scope chip at the top of the app sets the scope. In the scope of all computers, Flux uses the theme that changed most recently. A reconnect does not change the theme. Without a theme from the computer in scope, Flux uses Tokyo Night on a dark phone and Tokyo Night Day on a light phone. The choice shows the theme name and the computer that sent it.
 - **System**: Tokyo Night on a dark phone and Tokyo Night Day on a light phone.
 - **Light**: Tokyo Night Day.
 - **Dark**: Tokyo Night.
