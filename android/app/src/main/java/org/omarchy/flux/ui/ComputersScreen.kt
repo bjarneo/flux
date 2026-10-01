@@ -61,6 +61,7 @@ fun ComputersScreen(
     val paired = state.devices.filter { it.paired }
     val available = state.devices.filter { !it.paired && it.online }
     var refreshing by remember { mutableStateOf(false) }
+    var turningOff by remember { mutableStateOf(false) }
     LaunchedEffect(refreshing) {
         if (refreshing) {
             FluxCore.scan()
@@ -85,11 +86,26 @@ fun ComputersScreen(
             }
             Band("Settings") {
                 val (on, total) = syncSummary(state)
-                SettingRow(Ic.sync, "Sync", "$on of $total switches on. They apply to every computer.", onSync)
+                SettingRow(Ic.sync, "Sync", "$on of $total switches on. They apply to every computer.", onClick = onSync)
                 ThemeRow(state.theme)
-                SettingRow(Ic.power, "Turn off Flux", "This phone stops all connections until you turn Flux on again.") { FluxCore.setEnabled(false) }
+                // The row runs an action and opens no screen, so it has no chevron. A dialog asks first.
+                SettingRow(Ic.power, "Turn off Flux", "This phone stops all connections until you turn Flux on again.", chevron = false) { turningOff = true }
             }
         }
+    }
+    if (turningOff) {
+        ConfirmDialog(
+            "Turn off Flux?",
+            "This phone stops all connections to the computers. Approvals, agent alerts, and the clipboard do not reach this phone until you turn Flux on again.",
+            "Turn off",
+            onCancel = { turningOff = false },
+            onConfirm = {
+                turningOff = false
+                FluxCore.setEnabled(false)
+            },
+            icon = Ic.power,
+            destructive = true,
+        )
     }
 }
 
@@ -134,6 +150,8 @@ private fun ComputerRow(d: DeviceUi, inScope: Boolean, onScope: () -> Unit, onUn
                 LinkDot(d.online, 7.dp)
                 T(linkText(d), size = 13, color = Tn.sub, maxLines = 2)
             }
+            // The address helps with network and Tailscale problems.
+            if (d.ip.isNotBlank()) T(d.ip, size = 12, color = Tn.sub, family = Mono, maxLines = 1)
             if (!d.online) T("Check that Flux runs on ${d.name}, and that both are on the same Wi-Fi.", size = 13, color = Tn.sub)
             if (inScope) T("In scope", size = 12, color = Tn.blue, weight = FontWeight.Medium)
         }
@@ -182,9 +200,9 @@ private fun ScanRow(state: UiState, none: Boolean, first: Boolean, onScan: () ->
     }
 }
 
-/** A row that opens a setting or runs it. */
+/** A row that opens a setting, with a chevron, or that runs an action, with no chevron. */
 @Composable
-private fun SettingRow(@DrawableRes icon: Int, title: String, detail: String, onClick: () -> Unit) {
+private fun SettingRow(@DrawableRes icon: Int, title: String, detail: String, chevron: Boolean = true, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(TileShape).background(Tn.tile).border(1.dp, Tn.line, TileShape)
             .clickable(role = Role.Button, onClick = onClick)
@@ -197,7 +215,7 @@ private fun SettingRow(@DrawableRes icon: Int, title: String, detail: String, on
             T(title, size = 15, weight = FontWeight.SemiBold)
             T(detail, size = 13, color = Tn.sub, lineHeight = 1.3f)
         }
-        Sym(Ic.chevron, tint = Tn.sub, size = 20.dp)
+        if (chevron) Sym(Ic.chevron, tint = Tn.sub, size = 20.dp)
     }
 }
 

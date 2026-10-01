@@ -134,7 +134,8 @@ A restart of `fluxd` after an update does not stop them.
 
 ## Browse PC
 
-With `share_home = true`, a paired phone can read these folders of the desktop:
+With `share_home = true`, a paired phone can read these folders of the desktop.
+On the phone, open **Send > Get files**.
 
 - The home folder.
 - The `download_dir` folder.
@@ -297,7 +298,7 @@ The desktop name identifies the sender.
 
 ## Text messages
 
-Turn on **Text messages** on the phone's device screen.
+Turn on **Text messages** in **Computers > Sync** on the phone.
 The switch applies to every paired computer: each of them can then read your conversations and send text messages.
 The phone asks for SMS access and contacts access.
 Flux needs SMS access. Contacts access adds names to the conversations.
@@ -350,7 +351,7 @@ The phone can request only the commands configured on the desktop.
 
 ## Calls
 
-Enable **Call alerts** on the phone's device screen.
+Enable **Call alerts** in **Computers > Sync** on the phone.
 Phone access reports call state.
 Call-log access supplies the number, and contacts access supplies the name.
 Without those optional details, the notification shows **Unknown caller**.

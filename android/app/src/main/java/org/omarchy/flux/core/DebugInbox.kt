@@ -56,7 +56,7 @@ object DebugInbox {
         val now = System.currentTimeMillis()
         return listOf(
             Transfer(-1, DebugDemo.PC, "omarchy-xps", "invoice-2026-09.pdf", incoming = true, state = TransferState.Running, at = now),
-            Transfer(-2, DebugDemo.PC, "omarchy-xps", "holiday.jpg", incoming = false, state = TransferState.Done, at = now - 120_000),
+            Transfer(-2, DebugDemo.PC, "omarchy-xps", "holiday.jpg", incoming = false, state = TransferState.Done, at = now - 120_000, ended = now - 100_000),
         )
     }
 

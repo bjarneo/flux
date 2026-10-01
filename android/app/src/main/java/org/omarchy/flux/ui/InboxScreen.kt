@@ -45,10 +45,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -66,8 +68,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import kotlin.math.abs
+import kotlinx.coroutines.delay
 import org.omarchy.flux.core.AgentChoice
 import org.omarchy.flux.core.AgentItem
 import org.omarchy.flux.core.ApprovalItem
@@ -91,32 +97,61 @@ import org.omarchy.flux.core.TransferItem
 import org.omarchy.flux.core.TransferState
 import org.omarchy.flux.core.UiState
 import org.omarchy.flux.core.agentPrompt
-import org.omarchy.flux.core.inScope
 import org.omarchy.flux.core.inboxItems
 import org.omarchy.flux.core.needsYou
 
-/** The Inbox items of the computers in [scope], ranked. A debug build with the demo adds the samples of [DebugInbox]. */
+/**
+ * The Inbox items of all computers, ranked. Old finished items leave each
+ * minute. A debug build with the demo adds the samples of [DebugInbox].
+ */
 @Composable
-fun rememberInboxItems(state: UiState, scope: String?): List<InboxItem> {
+fun rememberInboxItems(state: UiState): List<InboxItem> {
     val approval by Approvals.current.collectAsStateWithLifecycle()
     val transfers by InboxFeed.transfers.collectAsStateWithLifecycle()
     val clip by InboxFeed.clip.collectAsStateWithLifecycle()
+    val playedAt by InboxFeed.playedAt.collectAsStateWithLifecycle()
+    val now by rememberClock()
+    // A paused player stays for a time after it played, so the Inbox records the players that play.
+    LaunchedEffect(state.devices, now) { InboxFeed.seePlayers(state.devices, now) }
     val demo = org.omarchy.flux.BuildConfig.DEBUG && DebugDemo.on
-    return remember(state.devices, approval, transfers, clip, demo, scope) {
+    return remember(state.devices, approval, transfers, clip, playedAt, now, demo) {
         val a = approval ?: if (demo) DebugInbox.approval() else null
         val t = if (demo) transfers + DebugInbox.transfers() else transfers
         val c = clip ?: if (demo) DebugInbox.clip() else null
-        inboxItems(state.devices, a, t, c).inScope(scope)
+        inboxItems(state.devices, a, t, c, now, playedAt)
     }
 }
 
-/** What the Inbox items do: open screens, the approval screen, and the pair sheet. */
+/** The step of [rememberClock], in milliseconds. */
+private const val CLOCK_MS = 60_000L
+
+/** The time in milliseconds since the epoch. It changes each minute while the app is in the foreground, and when it comes back. */
+@Composable
+private fun rememberClock(): State<Long> {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    return produceState(System.currentTimeMillis(), lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                value = System.currentTimeMillis()
+                delay(CLOCK_MS)
+            }
+        }
+    }
+}
+
+/**
+ * What the Inbox items and notices do: open screens, the approval screen,
+ * and the pair sheet, show all computers, and ask for the notifications.
+ */
 class InboxActions(
     val open: (Route) -> Unit,
     val approve: (ApproveRequest) -> Unit,
     val showPair: (String) -> Unit,
     val computers: () -> Unit,
     val tools: SendTools,
+    val showAll: () -> Unit,
+    val allowNotifications: () -> Unit,
+    val hideNotifications: () -> Unit,
 )
 
 /**
@@ -124,13 +159,16 @@ class InboxActions(
  * item is the master tile, at about 55% of the height, with its whole
  * action. The other items wait in a stack of 2 columns. A swipe on the
  * master moves it to the end of the stack, and a tap on a stack tile moves
- * that tile to the master. [items] are in the order of the user.
+ * that tile to the master. [items] are in the order of the user. [notices]
+ * tell what the Inbox cannot show. [active] is false while the screen
+ * moves, so that it reads nothing new then.
  */
 @Composable
 fun InboxScreen(
     state: UiState,
     items: List<InboxItem>,
     active: Boolean,
+    notices: InboxNotices,
     actions: InboxActions,
     onSwipe: (String) -> Unit,
     onPromote: (String) -> Unit,
@@ -145,7 +183,7 @@ fun InboxScreen(
         }
     }
     if (items.isEmpty()) {
-        InboxEmpty(state, actions)
+        InboxEmpty(state, notices, actions)
         return
     }
     val reduce = LocalReduceMotion.current
@@ -159,7 +197,7 @@ fun InboxScreen(
             horizontalArrangement = Arrangement.spacedBy(TileGap),
             verticalArrangement = Arrangement.spacedBy(TileGap),
         ) {
-            item(key = "status", span = { GridItemSpan(maxLineSpan) }) { InboxStatus(needs) }
+            item(key = "status", span = { GridItemSpan(maxLineSpan) }) { InboxStatus(needs, notices, actions) }
             val master = items.first()
             item(key = master.key, span = { GridItemSpan(maxLineSpan) }, contentType = "master") {
                 MasterTile(
@@ -181,51 +219,82 @@ fun InboxScreen(
     }
 }
 
-/** The line above the master: how many items need the user. */
+/** The lines above the master: how many items need the user, then the notices. */
 @Composable
-private fun InboxStatus(needs: Int) {
-    Row(
-        Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (needs > 0) {
-            Dot(Tn.red)
-            T(if (needs == 1) "1 item needs you" else "$needs items need you", size = 14, weight = FontWeight.SemiBold)
-        } else {
-            T("Nothing needs you", size = 14, color = Tn.sub)
+private fun InboxStatus(needs: Int, notices: InboxNotices, actions: InboxActions) {
+    Column(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (needs > 0) {
+                Dot(Tn.red)
+                T(if (needs == 1) "1 item needs you" else "$needs items need you", size = 14, weight = FontWeight.SemiBold)
+            } else {
+                T(nothingText(notices), size = 14, color = Tn.sub)
+            }
         }
+        InboxNoticeList(notices, actions)
     }
 }
 
-/** The Inbox with no items: what shows here, and the 2 most used actions. Before the first pairing, it shows how to pair. */
+/**
+ * The Inbox with no items: what shows here, and the 2 most used actions.
+ * Before the first pairing, it shows how to pair. When no computer in
+ * scope is reachable, it says so and offers Retry, so that an empty Inbox
+ * is not a false all-clear.
+ */
 @Composable
-private fun InboxEmpty(state: UiState, actions: InboxActions) {
+private fun InboxEmpty(state: UiState, notices: InboxNotices, actions: InboxActions) {
     val paired = state.devices.any { it.paired }
+    val offline = paired && notices.reach.noneOnline
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = TiledGutter).padding(top = 4.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(TileGap),
     ) {
         Tile(Modifier.fillMaxWidth(), border = activeBorder(), padding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (!paired) {
-                T("Pair a computer", size = 22, weight = FontWeight.SemiBold)
-                T(
-                    "Open Flux on the computer, and use the same Wi-Fi network as this phone. Then pair the computer in Computers.",
-                    size = 14, color = Tn.sub, lineHeight = 1.35f,
-                )
-                Button(onClick = actions.computers, modifier = Modifier.padding(top = 4.dp).heightIn(min = 48.dp)) { Text("Find computers") }
-            } else {
-                T("Nothing needs you", size = 22, weight = FontWeight.SemiBold)
-                T(
-                    "Agents that wait for you, approvals, and pair requests show here first. Transfers, the clipboard, and what plays now follow.",
-                    size = 14, color = Tn.sub, lineHeight = 1.35f,
-                )
+            when {
+                !paired -> {
+                    T("Pair a computer", size = 22, weight = FontWeight.SemiBold)
+                    T(
+                        "Open Flux on the computer, and use the same Wi-Fi network as this phone. Then pair the computer in Computers.",
+                        size = 14, color = Tn.sub, lineHeight = 1.35f,
+                    )
+                    Button(onClick = actions.computers, modifier = Modifier.padding(top = 4.dp).heightIn(min = 48.dp)) { Text("Find computers") }
+                }
+                offline -> {
+                    Sym(if (state.onWifi) Ic.wifiFind else Ic.wifiOff, tint = Tn.yellow, size = 28.dp)
+                    T(offlineTitle(notices.reach), size = 22, weight = FontWeight.SemiBold)
+                    T(offlineHint(state.onWifi), size = 14, color = Tn.sub, lineHeight = 1.35f)
+                    T("The Inbox shows what waits on a computer only while the computer is reachable.", size = 14, color = Tn.sub, lineHeight = 1.35f)
+                    Button(onClick = { FluxCore.rediscover() }, modifier = Modifier.padding(top = 4.dp).heightIn(min = 48.dp)) {
+                        Sym(Ic.refresh, size = 18.dp)
+                        Spacer(Modifier.size(8.dp))
+                        Text("Retry")
+                    }
+                }
+                else -> {
+                    T(nothingText(notices), size = 22, weight = FontWeight.SemiBold)
+                    T(
+                        "Agents that wait for you, approvals, and pair requests show here first. Transfers, the clipboard, and what plays now follow.",
+                        size = 14, color = Tn.sub, lineHeight = 1.35f,
+                    )
+                }
             }
         }
         if (paired) {
+            InboxNoticeList(notices, actions, offline = !offline)
+            // With no computer online, the tiles show dimmed, so that the Inbox still teaches them.
             EqualRow {
-                ActionTile(Ic.pasteGo, "Send clipboard", Modifier.weight(1f).fillMaxHeight(), sub = "Paste it on the computer", onClick = actions.tools.sendClipboard)
-                ActionTile(Ic.sendFiles, "Send files", Modifier.weight(1f).fillMaxHeight(), accent = Tn.magenta, sub = "Pick files on this phone", onClick = actions.tools.sendFiles)
+                ActionTile(
+                    Ic.pasteGo, "Send clipboard", Modifier.weight(1f).fillMaxHeight(),
+                    sub = "Paste it on the computer", enabled = !offline, onClick = actions.tools.sendClipboard,
+                )
+                ActionTile(
+                    Ic.sendFiles, "Send files", Modifier.weight(1f).fillMaxHeight(),
+                    accent = Tn.magenta, sub = "Pick files on this phone", enabled = !offline, onClick = actions.tools.sendFiles,
+                )
             }
         }
     }
@@ -293,16 +362,21 @@ private fun MasterTile(
     }
 }
 
-/** The state label, the computer, and the Later button of the master tile. */
+/**
+ * The state label and the Later button of the master tile, with the
+ * computer on its own line. A long computer name does not push the label
+ * or the button out of the row.
+ */
 @Composable
 private fun MasterHeader(item: InboxItem, canSwipe: Boolean, onSwipe: () -> Unit) {
     val color = kindColor(item)
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Dot(color)
-        TileLabel(kindLabel(item), Modifier.weight(1f, fill = false), color = color)
-        Spacer(Modifier.weight(1f))
+    Column {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Dot(color)
+            TileLabel(kindLabel(item), Modifier.weight(1f), color = color)
+            if (canSwipe) TextButton(onClick = onSwipe) { Text("Later") }
+        }
         T(item.computer, size = 12, color = Tn.sub, family = Mono, maxLines = 1)
-        if (canSwipe) TextButton(onClick = onSwipe) { Text("Later") }
     }
 }
 
@@ -337,12 +411,17 @@ private fun ColumnScope.AgentMaster(item: AgentItem, d: DeviceUi?, active: Boole
     val prompt = remember(out?.lines) { out?.lines?.let { lines -> agentPrompt(lines.map { it.text }) }.orEmpty() }
     val context = LocalContext.current
     var lockError by remember(item.key) { mutableStateOf<String?>(null) }
-    val reply = d?.herdrReply?.takeIf { it.pane == pane }
+    // The number of the last reply before this tile answered. The tile shows only the replies
+    // that it sent, so that an old error does not show next to a new question.
+    var sentAfter by remember(item.key) { mutableStateOf<Long?>(null) }
+    val reply = d?.herdrReply?.takeIf { r -> r.pane == pane && sentAfter.let { it != null && r.seq > it } }
     val sending = reply?.sending == true
+    val lastSeq = d?.herdrReply?.seq ?: 0L
     fun answer(key: String) {
         lockError = null
         ReplyLock.run(context, {
             answered = out
+            sentAfter = lastSeq
             HerdrSync.sendKeys(FluxCore, item.deviceId, pane, listOf(key))
         }) { lockError = it }
     }

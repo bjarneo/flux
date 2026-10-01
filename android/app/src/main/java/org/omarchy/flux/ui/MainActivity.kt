@@ -35,7 +35,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.collectLatest
 import org.omarchy.flux.core.ApproveKeys
@@ -53,10 +55,13 @@ class MainActivity : ComponentActivity() {
     /** The device ID and the pane of the agent that a notification opens. */
     val openAgent = kotlinx.coroutines.flow.MutableStateFlow<Pair<String, String>?>(null)
 
-    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    /** What the Inbox shows about the notification permission. See [updateNotifyAsk]. */
+    val notifyAsk = kotlinx.coroutines.flow.MutableStateFlow(NotifyAsk.None)
 
-    /** True after the notification question of this app start. */
-    private var askedNotifications = false
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { updateNotifyAsk() }
+
+    /** The questions that the app asked. They survive a restart. */
+    private val asks by lazy { getSharedPreferences("asks", MODE_PRIVATE) }
 
     /**
      * True when a window of another app covered this window during the last
@@ -74,6 +79,7 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
         FluxCore.init(this)
+        updateNotifyAsk()
         // The app scans for computers once when it opens, not after a recreation.
         FluxService.start(this, if (savedInstanceState == null) FluxService.ACTION_SCAN else null)
         debugShowWhenLocked(intent)
@@ -84,16 +90,37 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Asks for the notification permission, once in each app start. The app
-     * asks only after the first pairing, because the approvals and the agent
-     * alerts of a computer need it. A message gives the reason first.
+     * Reads the notification permission. Android shows its dialog before the
+     * first request and once more after 1 denial. After that, only the
+     * notification settings of Flux can turn the notifications on.
      */
-    fun askNotifications() {
-        if (askedNotifications || Build.VERSION.SDK_INT < 33) return
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
-        askedNotifications = true
-        FluxCore.toast("Allow notifications, so that approvals and agent alerts reach this phone")
-        notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+    fun updateNotifyAsk() {
+        // With the permission, the notifications can still be off in the settings of Android.
+        val granted = Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        notifyAsk.value = when {
+            NotificationManagerCompat.from(this).areNotificationsEnabled() || asks.getBoolean(NOTIFY_HIDDEN, false) -> NotifyAsk.None
+            !granted && (!asks.getBoolean(NOTIFY_ASKED, false) || shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) -> NotifyAsk.Allow
+            else -> NotifyAsk.Settings
+        }
+    }
+
+    /** Shows the permission dialog of Android, or the notification settings of Flux when Android does not show the dialog. */
+    fun allowNotifications() {
+        if (notifyAsk.value == NotifyAsk.Allow && Build.VERSION.SDK_INT >= 33) {
+            asks.edit { putBoolean(NOTIFY_ASKED, true) }
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            return
+        }
+        val settings = android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+            .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName)
+        runCatching { startActivity(settings) }
+    }
+
+    /** Hides the notification question. It does not show again. */
+    fun hideNotifyAsk() {
+        asks.edit { putBoolean(NOTIFY_HIDDEN, true) }
+        notifyAsk.value = NotifyAsk.None
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -133,6 +160,12 @@ class MainActivity : ComponentActivity() {
 
         /** The form of a herdr pane ID, such as w1:p2. */
         private val PANE_ID = Regex("^[A-Za-z0-9_.:-]{1,64}$")
+
+        /** True after the first permission dialog for notifications. */
+        private const val NOTIFY_ASKED = "notifyAsked"
+
+        /** True after the user hid the notification question. */
+        private const val NOTIFY_HIDDEN = "notifyHidden"
     }
 
     /**
@@ -155,6 +188,8 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         FluxService.start(this, FluxService.ACTION_REFRESH)
+        // The user can turn the notifications on in the settings of Android, then come back.
+        updateNotifyAsk()
     }
 
     /** On the touchpad screen, the volume keys can change the slides on the computer. */
@@ -180,6 +215,18 @@ class MainActivity : ComponentActivity() {
 internal fun isDemo(id: String?): Boolean =
     org.omarchy.flux.BuildConfig.DEBUG && org.omarchy.flux.core.DebugDemo.on && org.omarchy.flux.core.DebugDemo.isDemo(id) &&
         id in setOf(org.omarchy.flux.core.DebugDemo.PC, org.omarchy.flux.core.DebugDemo.OFFLINE, org.omarchy.flux.core.DebugDemo.NEW)
+
+/** What the Inbox shows about the notification permission. */
+enum class NotifyAsk {
+    /** The notifications are on, or the user hid the question. */
+    None,
+
+    /** Android can show its permission dialog. */
+    Allow,
+
+    /** Android does not show its dialog again. The notification settings of Flux can turn the notifications on. */
+    Settings,
+}
 
 /** Keeps the navigation across a recreation of the activity, see [Nav.save]. */
 private val NavSaver = listSaver<Nav, String>(save = { it.save() }, restore = { Nav.restore(it) })
@@ -213,10 +260,11 @@ fun FluxRoot(activity: MainActivity, splash: Boolean = false) {
         nav = nav.without { it !in pairedIds }
         if (scope != null && scope !in pairedIds) scope = null
     }
-    // Notifications carry the approvals and the agent alerts, so the app asks for them after the first pairing.
-    // The sample computers of a debug build do not ask, so that screenshots show no system dialog.
+    // Notifications carry the approvals and the agent alerts, so the Inbox asks for them after the first pairing.
+    // The sample computers of a debug build do not count, so that screenshots show no question.
     val anyPaired = state.devices.any { it.paired && !isDemo(it.id) }
-    LaunchedEffect(anyPaired) { if (anyPaired) activity.askNotifications() }
+    val notify by activity.notifyAsk.collectAsStateWithLifecycle()
+    val wide = rememberWideWindow()
     // Close the outgoing dialog when the pairing ends.
     val out = outgoing
     val outDevice = state.devices.firstOrNull { it.id == out?.deviceId }
@@ -296,6 +344,9 @@ fun FluxRoot(activity: MainActivity, splash: Boolean = false) {
                     val o = outgoing
                     if (o != null && o.deviceId != id) FluxCore.toast("Finish or cancel the other pairing first")
                 },
+                notify = if (anyPaired) notify else NotifyAsk.None,
+                onNotify = activity::allowNotifications,
+                onNotifyHide = activity::hideNotifyAsk,
             )
         }
         if (out != null && outDevice != null) {
@@ -336,8 +387,8 @@ fun FluxRoot(activity: MainActivity, splash: Boolean = false) {
             )
         }
         if (showIcons) Box(Modifier.fillMaxSize().background(Tn.bg).systemBarsPadding()) { DebugIconsScreen() }
-        // The messages show above the navigation bar of a destination.
-        val barShown = state.enabled && nav.stack.isEmpty()
+        // The messages show above the navigation bar of a destination. A wide window has a navigation rail at the side.
+        val barShown = state.enabled && nav.stack.isEmpty() && !wide
         SnackbarHost(
             snacks,
             Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding().padding(bottom = if (barShown) 88.dp else 16.dp),

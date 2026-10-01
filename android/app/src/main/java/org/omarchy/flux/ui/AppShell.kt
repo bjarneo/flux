@@ -5,20 +5,20 @@ import androidx.activity.compose.PredictiveBackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.ExperimentalTransitionApi
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.SeekableTransitionState
+import androidx.compose.animation.core.Transition
+import androidx.compose.animation.core.createChildTransition
 import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.only
@@ -40,6 +41,8 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -70,6 +73,8 @@ import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.InboxArrangement
 import org.omarchy.flux.core.UiState
+import org.omarchy.flux.core.inScope
+import org.omarchy.flux.core.inboxReach
 import org.omarchy.flux.core.needsYou
 import org.omarchy.flux.mic.MicScreen
 
@@ -80,13 +85,15 @@ private val ArrangementSaver = listSaver<InboxArrangement, String>(
 )
 
 /**
- * The app structure: the scope chip at the top, the 4 destinations in a
- * navigation bar at the bottom, and the feature screens above a
- * destination. The destinations change with a fade through, and a feature
- * screen moves in and out on the horizontal axis. System Back follows the
- * predictive back gesture. The Remove animations setting turns the motion
- * off.
+ * The app structure: the destinations with the scope chip at the top and
+ * the navigation bar at the bottom, and the feature screens above a
+ * destination. A wide window shows a navigation rail at the side. The
+ * destinations change with a fade through, and a feature screen moves in
+ * and out on the horizontal axis with the bars of the destination. System
+ * Back follows the predictive back gesture. The Remove animations setting
+ * turns the motion off.
  */
+@OptIn(ExperimentalTransitionApi::class)
 @Composable
 fun FluxShell(
     state: UiState,
@@ -97,23 +104,40 @@ fun FluxShell(
     onPair: (DeviceUi) -> Unit,
     onUnpair: (DeviceUi) -> Unit,
     onShowPair: (String) -> Unit,
+    notify: NotifyAsk,
+    onNotify: () -> Unit,
+    onNotifyHide: () -> Unit,
 ) {
     val context = LocalContext.current
     val reduce = rememberReduceMotion()
+    val wide = rememberWideWindow()
     val current by rememberUpdatedState(nav)
     val go by rememberUpdatedState(onNav)
 
     // The Inbox: the ranked items in scope, in the order that the user gave them.
+    // The badge counts the items of all computers, so that the scope hides nothing that needs the user.
     var arrangement by rememberSaveable(stateSaver = ArrangementSaver) { mutableStateOf(InboxArrangement()) }
-    val items = rememberInboxItems(state, scope)
+    val all = rememberInboxItems(state)
+    val items = remember(all, scope) { all.inScope(scope) }
     LaunchedEffect(items) { arrangement = arrangement.sync(items) }
     val arranged = remember(items, arrangement) { arrangement.arrange(items) }
+    val needs = all.needsYou()
+    val notices = InboxNotices(
+        reach = remember(scope, state.devices) { inboxReach(scope, state.devices) },
+        onWifi = state.onWifi,
+        scopeName = state.devices.firstOrNull { it.paired && it.id == scope }?.name,
+        elsewhere = needs - items.needsYou(),
+        notify = notify,
+    )
     val picker = rememberTargetPicker()
     val tools = rememberSendTools(state.devices, scope, picker)
 
     val dest = nav.dest
-    val seek = remember { SeekableTransitionState<Dest>(dest) }
+    val seek = remember { SeekableTransitionState(dest) }
     val screens = rememberTransition(seek, label = "screens")
+    // 2 parts of 1 transition: the feature screen on top, or null for a destination, and the destination under it.
+    val layers = screens.createChildTransition(label = "layers") { it as? Dest.Detail }
+    val tabs = screens.createChildTransition(label = "tabs") { it.tab }
     LaunchedEffect(dest, reduce) {
         if (reduce) seek.snapTo(dest) else seek.animateTo(dest)
     }
@@ -133,73 +157,118 @@ fun FluxShell(
 
     fun open(r: Route) = go(current.push(r))
     val toComputers = { go(Nav(Tab.Computers)) }
+    val toSync = { open(Route(null, SYNC_PAGE)) }
+    // The same intent as Approvals.show: the screen opens in its own task, and Android reuses a screen that waits there.
     val approve: (ApproveRequest) -> Unit = { r ->
-        if (isDemo(r.computerId)) FluxCore.toast("This is a sample request") else context.startActivity(Intent(context, ApproveActivity::class.java))
+        if (isDemo(r.computerId)) {
+            FluxCore.toast("This is a sample request")
+        } else {
+            context.startActivity(Intent(context, ApproveActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
     }
-    val chrome = nav.dest is Dest.Root
+    val actions = InboxActions(
+        open = ::open, approve = approve, showPair = onShowPair, computers = toComputers, tools = tools,
+        showAll = { onScope(null) }, allowNotifications = onNotify, hideNotifications = onNotifyHide,
+    )
+    val select = { t: Tab -> go(current.select(t)) }
 
     CompositionLocalProvider(LocalReduceMotion provides reduce) {
-        Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
-            AnimatedVisibility(chrome, enter = chromeIn(reduce), exit = chromeOut(reduce)) {
-                ShellTopBar(state, scope, onScope)
-            }
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                screens.AnimatedContent(Modifier.fillMaxSize(), transitionSpec = { navTransform(reduce) }) { d ->
-                    // An exiting screen takes no new reads, so that it does not race the new screen.
-                    val active = transition.targetState == EnterExitState.Visible
-                    when (d) {
-                        is Dest.Root -> Box(Modifier.fillMaxSize().semantics { paneTitle = d.tab.label }) {
-                            when (d.tab) {
+        layers.AnimatedContent(
+            Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
+            transitionSpec = { layerTransform(reduce) },
+        ) { detail ->
+            // A screen that moves in, or that the back gesture only shows, takes no new reads,
+            // so that it does not race the screen that stays on top.
+            val settled = transition.settledVisible()
+            if (detail != null) {
+                Box(Modifier.fillMaxSize().systemBarsPadding()) {
+                    DetailScreen(detail.route, state, current = { current }, go = { go(it) })
+                }
+            } else {
+                // The bars are part of the destination, so that the back gesture shows the destination as it is after Back.
+                ShellFrame(wide, nav.tab, needs, select, top = { ShellTopBar(state, scope, onScope) }) {
+                    tabs.AnimatedContent(Modifier.fillMaxSize(), transitionSpec = { fadeThrough(reduce) }) { tab ->
+                        val active = settled && transition.settledVisible()
+                        Box(Modifier.fillMaxSize().semantics { paneTitle = tab.label }) {
+                            when (tab) {
                                 Tab.Inbox -> InboxScreen(
-                                    state, arranged, active,
-                                    InboxActions(open = ::open, approve = approve, showPair = onShowPair, computers = toComputers, tools = tools),
+                                    state, arranged, active, notices, actions,
                                     onSwipe = { arrangement = arrangement.swipe(it) },
                                     onPromote = { arrangement = arrangement.promote(it) },
                                 )
-                                Tab.Send -> SendScreen(state, scope, picker, tools, onOpen = ::open, onSync = { open(Route(null, SYNC_PAGE)) }, onPair = toComputers)
+                                Tab.Send -> SendScreen(state, scope, picker, tools, onOpen = ::open, onSync = toSync, onPair = toComputers)
                                 Tab.Control -> ControlScreen(state, scope, picker, onOpen = ::open, onPair = toComputers)
-                                Tab.Computers -> ComputersScreen(state, scope, onScope, onPair, onUnpair, onSync = { open(Route(null, SYNC_PAGE)) })
+                                Tab.Computers -> ComputersScreen(state, scope, onScope, onPair, onUnpair, onSync = toSync)
                             }
-                        }
-                        is Dest.Detail -> Box(Modifier.fillMaxSize().systemBarsPadding()) {
-                            DetailScreen(d.route, state, current = { current }, go = { go(it) })
                         }
                     }
                 }
-            }
-            AnimatedVisibility(chrome, enter = chromeIn(reduce), exit = chromeOut(reduce)) {
-                ShellNavBar(nav.tab, items.needsYou()) { t -> go(current.select(t)) }
             }
         }
         TargetPickerDialog(picker)
     }
 }
 
-private fun chromeIn(reduce: Boolean): EnterTransition =
-    if (reduce) EnterTransition.None else fadeIn(tween(MOTION_MS, easing = FastOutSlowInEasing)) + expandVertically(tween(MOTION_MS, easing = FastOutSlowInEasing))
-
-private fun chromeOut(reduce: Boolean): ExitTransition =
-    if (reduce) ExitTransition.None else fadeOut(tween(MOTION_MS, easing = FastOutSlowInEasing)) + shrinkVertically(tween(MOTION_MS, easing = FastOutSlowInEasing))
+/** True when the screen is on screen and does not move in or out. */
+private fun Transition<EnterExitState>.settledVisible(): Boolean =
+    currentState == EnterExitState.Visible && targetState == EnterExitState.Visible
 
 /**
- * The motion between 2 screens: a fade through between destinations, and
- * the horizontal shared axis into and out of a feature screen. Each part
- * takes 250 ms or less.
+ * The frame of a destination: the top bar, the content, and the navigation
+ * bar at the bottom. A wide window shows a navigation rail at the side in
+ * the place of the navigation bar.
  */
-private fun AnimatedContentTransitionScope<Dest>.navTransform(reduce: Boolean): ContentTransform {
+@Composable
+private fun ShellFrame(
+    wide: Boolean,
+    tab: Tab,
+    needs: Int,
+    onSelect: (Tab) -> Unit,
+    top: @Composable () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    if (wide) {
+        Row(Modifier.fillMaxSize()) {
+            ShellNavRail(tab, needs, onSelect)
+            Column(Modifier.weight(1f).fillMaxHeight()) {
+                top()
+                // No bar holds the bottom inset, so the content keeps clear of the gesture area.
+                Box(Modifier.weight(1f).fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
+                    content()
+                }
+            }
+        }
+    } else {
+        Column(Modifier.fillMaxSize()) {
+            top()
+            Box(Modifier.weight(1f).fillMaxWidth()) { content() }
+            ShellNavBar(tab, needs, onSelect)
+        }
+    }
+}
+
+/**
+ * The motion of a feature screen: the horizontal shared axis into and out
+ * of the screen, and a fade through when a screen replaces the screen at
+ * the same depth. Each part takes 250 ms or less.
+ */
+private fun AnimatedContentTransitionScope<Dest.Detail?>.layerTransform(reduce: Boolean): ContentTransform {
+    if (reduce) return EnterTransition.None togetherWith ExitTransition.None
+    val from = initialState?.depth ?: 0
+    val to = targetState?.depth ?: 0
+    if (from == to) return fadeThrough(false)
+    val ease = FastOutSlowInEasing
+    val dir = if (to > from) 1 else -1
+    return (slideInHorizontally(tween(220, easing = ease)) { dir * it / 8 } + fadeIn(tween(160, delayMillis = 60, easing = ease))) togetherWith
+        (slideOutHorizontally(tween(220, easing = ease)) { -dir * it / 8 } + fadeOut(tween(90, easing = ease)))
+}
+
+/** The fade through between 2 destinations, in 240 ms. */
+private fun fadeThrough(reduce: Boolean): ContentTransform {
     if (reduce) return EnterTransition.None togetherWith ExitTransition.None
     val ease = FastOutSlowInEasing
-    val deeper = targetState.depth > initialState.depth
-    val shallower = targetState.depth < initialState.depth
-    return when {
-        deeper || shallower -> {
-            val dir = if (deeper) 1 else -1
-            (slideInHorizontally(tween(220, easing = ease)) { dir * it / 8 } + fadeIn(tween(160, delayMillis = 60, easing = ease))) togetherWith
-                (slideOutHorizontally(tween(220, easing = ease)) { -dir * it / 8 } + fadeOut(tween(90, easing = ease)))
-        }
-        else -> (fadeIn(tween(160, delayMillis = 80, easing = ease)) + scaleIn(tween(160, delayMillis = 80, easing = ease), initialScale = 0.96f)) togetherWith
-            fadeOut(tween(80, easing = ease))
-    }
+    return (fadeIn(tween(160, delayMillis = 80, easing = ease)) + scaleIn(tween(160, delayMillis = 80, easing = ease), initialScale = 0.96f)) togetherWith
+        fadeOut(tween(80, easing = ease))
 }
 
 /** The top bar of the destinations: the Flux mark and the scope chip. */
@@ -223,29 +292,38 @@ private fun tabIcon(t: Tab): Int = when (t) {
     Tab.Computers -> Ic.laptop
 }
 
-/** The navigation bar. The Inbox shows the number of items that need the user. */
+/** The icon of a destination. The Inbox shows the number of items that need the user. */
+@Composable
+private fun TabIcon(t: Tab, needs: Int) {
+    if (t != Tab.Inbox || needs == 0) {
+        Sym(tabIcon(t))
+        return
+    }
+    BadgedBox(
+        badge = {
+            Badge(Modifier.clearAndSetSemantics { contentDescription = if (needs == 1) "1 item needs you" else "$needs items need you" }) {
+                Text(if (needs > 9) "9+" else "$needs")
+            }
+        },
+    ) { Sym(tabIcon(t)) }
+}
+
+/** The navigation bar of a compact window. */
 @Composable
 private fun ShellNavBar(tab: Tab, needs: Int, onSelect: (Tab) -> Unit) {
     NavigationBar {
         for (t in Tab.entries) {
-            NavigationBarItem(
-                selected = t == tab,
-                onClick = { onSelect(t) },
-                icon = {
-                    if (t == Tab.Inbox && needs > 0) {
-                        BadgedBox(
-                            badge = {
-                                Badge(Modifier.clearAndSetSemantics { contentDescription = if (needs == 1) "1 item needs you" else "$needs items need you" }) {
-                                    Text(if (needs > 9) "9+" else "$needs")
-                                }
-                            },
-                        ) { Sym(tabIcon(t)) }
-                    } else {
-                        Sym(tabIcon(t))
-                    }
-                },
-                label = { Text(t.label) },
-            )
+            NavigationBarItem(selected = t == tab, onClick = { onSelect(t) }, icon = { TabIcon(t, needs) }, label = { Text(t.label) })
+        }
+    }
+}
+
+/** The navigation rail of a medium or expanded window. */
+@Composable
+private fun ShellNavRail(tab: Tab, needs: Int, onSelect: (Tab) -> Unit) {
+    NavigationRail {
+        for (t in Tab.entries) {
+            NavigationRailItem(selected = t == tab, onClick = { onSelect(t) }, icon = { TabIcon(t, needs) }, label = { Text(t.label) })
         }
     }
 }

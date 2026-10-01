@@ -216,7 +216,7 @@ The other permissions need no prompt.
 | --- | --- | --- |
 | `INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE`, `CHANGE_WIFI_MULTICAST_STATE`, `CHANGE_NETWORK_STATE` | Discovery and links on the local network | No prompt |
 | `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_CONNECTED_DEVICE`, `RECEIVE_BOOT_COMPLETED`, `WAKE_LOCK` | The background service | No prompt |
-| `POST_NOTIFICATIONS` | The service notification, pair requests, and alerts | When the app first opens |
+| `POST_NOTIFICATIONS` | The service notification, pair requests, and alerts | After the first pairing, when you tap **Allow** in the **Inbox** |
 | `USE_FULL_SCREEN_INTENT`, `VIBRATE` | **Find my phone** and fingerprint approval requests | No prompt |
 | Notification listener | **Share notifications** | The switch opens the Android settings page |
 | `QUERY_ALL_PACKAGES` | App names on shared notifications | No prompt |
@@ -231,6 +231,11 @@ The other permissions need no prompt.
 | `REQUEST_INSTALL_PACKAGES` | [Updates that the computer sends](android.md#update-the-app) | Android asks to allow **Install unknown apps** at the first update |
 | `READ_LOGS` | The [automatic clipboard sync](#automatic-clipboard-sync) finds the copy signal in the system log | You grant it with adb |
 | `SYSTEM_ALERT_WINDOW` | The [automatic clipboard sync](#automatic-clipboard-sync) takes window focus to read the new clip | You grant it with adb, or with **Appear on top** |
+
+Keep Flux open for the first pairing. Before you allow notifications, Android 13 and later show no notification for a pair request.
+After the first pairing, the **Inbox** asks for notifications with **Allow**.
+After 2 denials, Android does not show its dialog again, so the **Inbox** shows **Open settings** in its place.
+**Hide** removes the question. You can allow notifications in the settings of Android at any time.
 
 `READ_EXTERNAL_STORAGE` applies only to Android 12 and earlier.
 The call log and the contacts are optional for **Call alerts**. They add the number and the name of the caller.

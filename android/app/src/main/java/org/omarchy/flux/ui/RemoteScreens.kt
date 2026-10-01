@@ -83,7 +83,7 @@ fun BrowseScreen(d: DeviceUi, browse: BrowseState?, onBack: () -> Unit) {
         rootEntry?.let { it.first + "/" + path.removePrefix(it.second).trimEnd('/') }?.trimEnd('/') ?: path
     }
     Column(Modifier.fillMaxSize()) {
-        TopBar("Browse PC", onBack = { up() }, subtitle = shown ?: "On ${d.name}")
+        TopBar("Get files", onBack = { up() }, subtitle = shown ?: "On ${d.name}")
         if (browse != null && browse.loading) LinearProgressIndicator(Modifier.fillMaxWidth()) else Spacer(Modifier.height(4.dp))
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             if (browse != null && browse.roots.size > 1) {

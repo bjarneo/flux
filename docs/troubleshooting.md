@@ -227,7 +227,7 @@ Missing icons usually indicate a missing Nerd Font or Qt SVG package.
 
 If the Messages page is missing, the phone does not offer its text messages.
 
-1. Open the device screen of the computer in Flux for Android.
+1. Open **Computers > Sync** in Flux for Android.
 2. Turn on **Text messages**.
 3. Allow SMS access when the phone asks.
 

@@ -10,9 +10,9 @@ class NavTest {
         val agents = Route("pc", AGENTS_PAGE)
         val agent = Route("pc", "${AGENT_PAGE}w2:p1")
         var nav: Nav? = Nav(Tab.Control, listOf(agents, agent))
-        assertEquals(Dest.Detail(agent, 2), nav!!.dest)
+        assertEquals(Dest.Detail(agent, 2, Tab.Control), nav!!.dest)
         nav = nav.back()
-        assertEquals(Dest.Detail(agents, 1), nav!!.dest)
+        assertEquals(Dest.Detail(agents, 1, Tab.Control), nav!!.dest)
         nav = nav.back()
         assertEquals(Dest.Root(Tab.Control), nav!!.dest)
         nav = nav.back()
@@ -54,7 +54,7 @@ class NavTest {
     @Test
     fun aNotificationOpensTheAgentAboveTheInbox() {
         val nav = Nav.agent("pc", "w2:p1")
-        assertEquals(Dest.Detail(Route("pc", "${AGENT_PAGE}w2:p1"), 1), nav.dest)
+        assertEquals(Dest.Detail(Route("pc", "${AGENT_PAGE}w2:p1"), 1, Tab.Inbox), nav.dest)
         assertEquals(Nav(Tab.Inbox), nav.back())
     }
 

@@ -120,7 +120,7 @@ Flux for Android applies these limits to the network:
 - The phone finds a computer that sleeps or loses power in 90 seconds or less. While data waits for the computer, it finds it in 30 seconds.
 - The Wi-Fi multicast lock is on only while the phone scans, before the first pairing, and while a paired computer is away.
 
-When you unpair a computer on either side, the phone stops the screen mirror, the webcam, the microphone, the remote desktop, and Browse PC for that computer.
+When you unpair a computer on either side, the phone stops the screen mirror, the webcam, the microphone, the remote desktop, and **Get files** for that computer.
 It also closes its approval request and removes its notifications.
 When you start the screen mirror to a second computer, the mirror to the first computer stops.
 

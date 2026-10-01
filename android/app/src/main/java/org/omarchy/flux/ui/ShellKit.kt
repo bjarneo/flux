@@ -46,6 +46,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -83,6 +85,20 @@ fun rememberReduceMotion(): Boolean {
         onPauseOrDispose { }
     }
     return off
+}
+
+/** The narrowest window width of the medium and expanded size classes. */
+private val WideWindow = 600.dp
+
+/**
+ * True for a window of the medium or expanded width class, for example a
+ * phone in landscape, a foldable, or a tablet. The shell then shows a
+ * navigation rail in the place of the navigation bar.
+ */
+@Composable
+fun rememberWideWindow(): Boolean {
+    val width = LocalWindowInfo.current.containerSize.width
+    return with(LocalDensity.current) { width.toDp() } >= WideWindow
 }
 
 /** A tween with the standard easing, or null when motion is off. */
@@ -142,9 +158,10 @@ fun ActionTile(
                 )
             }
         }
+        // The text wraps with no limit. At a large font size, the tile and its row grow.
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            T(label, size = 15, weight = FontWeight.SemiBold, maxLines = 2)
-            if (sub != null) T(sub, size = 12, color = Tn.sub, maxLines = 2)
+            T(label, size = 15, weight = FontWeight.SemiBold)
+            if (sub != null) T(sub, size = 12, color = Tn.sub)
         }
     }
 }

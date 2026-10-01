@@ -92,7 +92,8 @@ enum class TransferState { Running, Done, Failed }
 
 /**
  * A file transfer. [incoming] is true for a file from the computer. [at]
- * is the start time in milliseconds since the epoch.
+ * is the start time and [ended] the end time, in milliseconds since the
+ * epoch. [ended] is 0 while the transfer runs.
  */
 data class Transfer(
     val id: Long,
@@ -102,6 +103,7 @@ data class Transfer(
     val incoming: Boolean,
     val state: TransferState = TransferState.Running,
     val at: Long = 0,
+    val ended: Long = 0,
 )
 
 /**
@@ -118,13 +120,29 @@ data class ClipEvent(
     val at: Long = 0,
 )
 
+/** How long a finished transfer, the last clip, and a paused player stay in the Inbox, in milliseconds. */
+const val INBOX_KEEP_MS = 30 * 60_000L
+
 /**
  * Collects the Inbox items of all computers and ranks them. The order is
  * the order of [InboxKind]. Inside a kind, the computers keep their order,
  * running transfers come before the newest finished ones, and a player
  * that plays comes before a paused one.
+ *
+ * [now] is the time in milliseconds since the epoch. A finished transfer
+ * and the clip stay for [INBOX_KEEP_MS] after they end. A paused player
+ * stays for [INBOX_KEEP_MS] after the time in [playedAt], which maps a
+ * device ID to the last time that its player played. Each key shows once.
  */
-fun inboxItems(devices: List<DeviceUi>, approval: ApproveRequest?, transfers: List<Transfer>, clip: ClipEvent?): List<InboxItem> {
+fun inboxItems(
+    devices: List<DeviceUi>,
+    approval: ApproveRequest?,
+    transfers: List<Transfer>,
+    clip: ClipEvent?,
+    now: Long,
+    playedAt: Map<String, Long>,
+): List<InboxItem> {
+    fun recent(at: Long) = now - at <= INBOX_KEEP_MS
     val out = ArrayList<InboxItem>()
     for (d in devices) {
         if (!d.paired) {
@@ -142,15 +160,26 @@ fun inboxItems(devices: List<DeviceUi>, approval: ApproveRequest?, transfers: Li
         }
     }
     approval?.let { out += ApprovalItem(it) }
-    transfers.sortedWith(compareBy<Transfer> { it.state != TransferState.Running }.thenByDescending { it.at })
+    transfers.filter { it.state == TransferState.Running || recent(if (it.ended > 0) it.ended else it.at) }
+        .sortedWith(compareBy<Transfer> { it.state != TransferState.Running }.thenByDescending { it.at })
         .forEach { out += TransferItem(it) }
-    clip?.let { out += ClipItem(it) }
+    clip?.takeIf { recent(it.at) }?.let { out += ClipItem(it) }
     devices.filter { it.paired && it.online }
-        .mapNotNull { d -> d.player?.takeIf { it.playing || it.title.isNotEmpty() }?.let { MediaItem(d.id, d.name, it) } }
+        .mapNotNull { d ->
+            d.player?.takeIf { it.playing || (it.title.isNotEmpty() && playedAt[d.id]?.let(::recent) == true) }?.let { MediaItem(d.id, d.name, it) }
+        }
         .sortedBy { !it.player.playing }
         .forEach { out += it }
-    // The sort is stable, so the order above stays inside each kind.
-    return out.sortedBy { it.kind.ordinal }
+    // The sort is stable, so the order above stays inside each kind. A
+    // computer can report 2 agents on 1 pane, and the Inbox needs each key once.
+    return out.sortedBy { it.kind.ordinal }.distinctBy { it.key }
+}
+
+/** Records [now] as the last play time of each computer whose player plays. */
+fun notePlaying(playedAt: Map<String, Long>, devices: List<DeviceUi>, now: Long): Map<String, Long> {
+    val playing = devices.filter { it.paired && it.online && it.player?.playing == true }
+    if (playing.isEmpty()) return playedAt
+    return playedAt + playing.associate { it.id to now }
 }
 
 /** The items of the computer [scope], or all items when [scope] is null. */
@@ -159,6 +188,22 @@ fun List<InboxItem>.inScope(scope: String?): List<InboxItem> =
 
 /** The number of items that need the user. */
 fun List<InboxItem>.needsYou(): Int = count { it.kind.needsYou }
+
+/**
+ * The link state of the paired computers in a scope: the number that are
+ * online, and the computers that are not reachable. The Inbox cannot show
+ * the agents of a computer that is not reachable.
+ */
+data class InboxReach(val online: Int, val offline: List<DeviceUi>) {
+    /** True when the scope has paired computers and none of them is online. */
+    val noneOnline: Boolean get() = online == 0 && offline.isNotEmpty()
+}
+
+/** The link state of the paired computers in [scope], or of all paired computers when [scope] is null. */
+fun inboxReach(scope: String?, devices: List<DeviceUi>): InboxReach {
+    val paired = devices.filter { it.paired && (scope == null || it.id == scope) }
+    return InboxReach(paired.count { it.online }, paired.filter { !it.online })
+}
 
 /**
  * The order that the user gave the Inbox. [pinned] is the item that the
@@ -289,9 +334,9 @@ fun startTransfer(list: List<Transfer>, t: Transfer, max: Int = MAX_TRANSFERS): 
     return all.filter { it.id in keep }
 }
 
-/** Marks the running transfer [id] as done or failed. */
-fun endTransfer(list: List<Transfer>, id: Long, ok: Boolean): List<Transfer> =
-    list.map { if (it.id == id && it.state == TransferState.Running) it.copy(state = if (ok) TransferState.Done else TransferState.Failed) else it }
+/** Marks the running transfer [id] as done or failed at the time [at]. */
+fun endTransfer(list: List<Transfer>, id: Long, ok: Boolean, at: Long): List<Transfer> =
+    list.map { if (it.id == id && it.state == TransferState.Running) it.copy(state = if (ok) TransferState.Done else TransferState.Failed, ended = at) else it }
 
 /**
  * The recent transfers and the last clip, for the Inbox. The share and
@@ -302,12 +347,21 @@ object InboxFeed {
     private val ids = AtomicLong()
     private val _transfers = MutableStateFlow<List<Transfer>>(emptyList())
     private val _clip = MutableStateFlow<ClipEvent?>(null)
+    private val _playedAt = MutableStateFlow<Map<String, Long>>(emptyMap())
 
     /** The recent transfers, newest first. */
     val transfers: StateFlow<List<Transfer>> = _transfers
 
     /** The last clip that this phone sent or received. */
     val clip: StateFlow<ClipEvent?> = _clip
+
+    /** The last time that the player of each computer played, by device ID. See [inboxItems]. */
+    val playedAt: StateFlow<Map<String, Long>> = _playedAt
+
+    /** Records the players that play at the time [now]. The Inbox calls it while it shows. */
+    fun seePlayers(devices: List<DeviceUi>, now: Long) {
+        _playedAt.update { notePlaying(it, devices, now) }
+    }
 
     /** Reports a clip that went to [computers], as pairs of the device ID and the name. [text] is null for an image. */
     fun clipSent(computers: List<Pair<String, String>>, text: String?) {
@@ -330,6 +384,6 @@ object InboxFeed {
     }
 
     fun transferEnded(id: Long, ok: Boolean) {
-        _transfers.update { endTransfer(it, id, ok) }
+        _transfers.update { endTransfer(it, id, ok, System.currentTimeMillis()) }
     }
 }

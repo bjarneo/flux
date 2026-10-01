@@ -18,15 +18,19 @@ enum class Tab(val key: String, val label: String) {
  */
 data class Route(val deviceId: String?, val page: String)
 
-/** What the screen shows: a destination, or a screen above it at [depth] 1 or more. */
+/**
+ * What the screen shows: a destination, or a screen above it at [depth] 1
+ * or more. [tab] is the destination, or the destination under the screen.
+ */
 sealed interface Dest {
     val depth: Int
+    val tab: Tab
 
-    data class Root(val tab: Tab) : Dest {
+    data class Root(override val tab: Tab) : Dest {
         override val depth: Int get() = 0
     }
 
-    data class Detail(val route: Route, override val depth: Int) : Dest
+    data class Detail(val route: Route, override val depth: Int, override val tab: Tab) : Dest
 }
 
 /** The page prefix of the screen of one agent. The herdr pane ID follows it. */
@@ -52,7 +56,7 @@ const val SYNC_PAGE = "sync"
  * System Back pops a screen, then goes to the Inbox, then leaves the app.
  */
 data class Nav(val tab: Tab = Tab.Inbox, val stack: List<Route> = emptyList()) {
-    val dest: Dest get() = stack.lastOrNull()?.let { Dest.Detail(it, stack.size) } ?: Dest.Root(tab)
+    val dest: Dest get() = stack.lastOrNull()?.let { Dest.Detail(it, stack.size, tab) } ?: Dest.Root(tab)
 
     fun push(r: Route): Nav = copy(stack = stack + r)
 
