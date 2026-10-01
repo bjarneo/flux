@@ -8,17 +8,20 @@ import kotlinx.coroutines.flow.update
 /**
  * The kinds of Inbox items, in the order of the Inbox. The first 3 kinds
  * need the user: an agent that waits for input, an approval, and a pair
- * request. The other kinds show what happens on the computers.
+ * request. Then come the kinds that the user can act on from the stack:
+ * what plays now, the clipboard, and the transfers. The agents that are
+ * done or that work come last. The order is the declaration order, and
+ * nothing stores it, so a new order needs no migration.
  */
 enum class InboxKind(val needsYou: Boolean) {
     AgentInput(true),
     Approval(true),
     PairRequest(true),
+    Media(false),
+    Clipboard(false),
+    Transfer(false),
     AgentDone(false),
     AgentWorking(false),
-    Transfer(false),
-    Clipboard(false),
-    Media(false),
 }
 
 /**

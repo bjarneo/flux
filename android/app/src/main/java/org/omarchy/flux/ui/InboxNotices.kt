@@ -59,6 +59,12 @@ internal fun offlineHint(onWifi: Boolean): String =
         "This phone is not on Wi-Fi. Connect to the network of the computer, or turn on Tailscale."
     }
 
+/**
+ * True when the Inbox tells that computers in scope are not reachable.
+ * While the computers connect, the Inbox does not call them not reachable.
+ */
+internal fun offlineShows(n: InboxNotices): Boolean = !n.connecting && n.reach.offline.isNotEmpty()
+
 /** The line for the computers in scope that are not reachable while the Inbox shows other items. */
 internal fun offlineLine(n: InboxNotices): String {
     val wifi = if (n.onWifi) "" else "This phone is not on Wi-Fi. "
@@ -76,10 +82,10 @@ internal fun elsewhereText(count: Int): String =
 
 /**
  * The notices of the Inbox, each with its next step. [offline] is false
- * when the large tile already tells that no computer is reachable. [paired]
- * is false when the large tile already shows the success state of a new
- * pairing, and with it the notification question. While the computers
- * connect, the Inbox does not call them not reachable.
+ * when the large tile or the status line already tells that computers are
+ * not reachable. [paired] is false when the large tile already shows the
+ * success state of a new pairing, and with it the notification question.
+ * While the computers connect, the Inbox does not call them not reachable.
  */
 @Composable
 internal fun InboxNoticeList(n: InboxNotices, actions: InboxActions, offline: Boolean = true, paired: Boolean = true) {
@@ -96,8 +102,8 @@ internal fun InboxNoticeList(n: InboxNotices, actions: InboxActions, offline: Bo
             FluxButton("Show all computers", actions.showAll, kind = ButtonKind.Text)
         }
     }
-    if (offline && !n.connecting && n.reach.offline.isNotEmpty()) {
-        Notice({ LinkDot(false) }, offlineLine(n)) {
+    if (offline && offlineShows(n)) {
+        Notice({ LinkDot(false) }, offlineLine(n), inline = true) {
             FluxButton("Retry", { FluxCore.rediscover() }, kind = ButtonKind.Text)
         }
     }
@@ -119,15 +125,30 @@ internal fun InboxNoticeList(n: InboxNotices, actions: InboxActions, offline: Bo
     }
 }
 
-/** 1 notice: a mark, the text, and the actions under the text. The actions wrap at a large font size. */
+/**
+ * 1 notice: a mark, the text, and the actions under the text. The actions
+ * wrap at a large font size. An [inline] notice shows its actions at the
+ * end of the text, in the same row.
+ */
 @Composable
 private fun Notice(
     mark: @Composable () -> Unit,
     text: String,
     modifier: Modifier = Modifier,
     color: Color = Tn.sub,
+    inline: Boolean = false,
     actions: @Composable FlowRowScope.() -> Unit,
 ) {
+    if (inline) {
+        Row(modifier.fillMaxWidth().padding(start = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.padding(top = 5.dp), contentAlignment = Alignment.Center) { mark() }
+                T(text, size = 13, color = color, lineHeight = 1.35f)
+            }
+            FlowRow(content = actions)
+        }
+        return
+    }
     Row(modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.padding(top = 5.dp), contentAlignment = Alignment.Center) { mark() }
         Column(Modifier.weight(1f)) {
