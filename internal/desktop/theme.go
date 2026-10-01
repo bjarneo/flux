@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/BurntSushi/toml"
 	"golang.org/x/sys/unix"
@@ -120,28 +121,26 @@ func readLimited(path string, max int64) ([]byte, error) {
 }
 
 // ParseTheme parses the text of a colors.toml file. name is the content of
-// theme.name. ParseTheme returns an error when the text is not TOML, or when
-// background or foreground is not a "#rrggbb" color. It drops each other
-// color that is not a "#rrggbb" color.
+// theme.name. When the text is not valid TOML, ParseTheme reads it line by
+// line, as Omarchy does. ParseTheme returns an error when background or
+// foreground is not a "#rrggbb" color. It drops each other color that is
+// not a "#rrggbb" color.
 func ParseTheme(data []byte, name string) (*Theme, error) {
-	var raw map[string]any
-	if _, err := toml.Decode(string(data), &raw); err != nil {
-		return nil, fmt.Errorf("colors.toml: %w", err)
-	}
+	raw, tomlErr := themeValues(data)
 	t := &Theme{Name: themeName(name), Colors: map[string]string{}}
 	for _, k := range themeColorKeys {
-		if s, ok := raw[k].(string); ok {
-			if c, ok := hexColor(s); ok {
-				t.Colors[k] = c
-			}
+		if c, ok := hexColor(raw[k]); ok {
+			t.Colors[k] = c
 		}
 	}
 	bg, fg := t.Colors["background"], t.Colors["foreground"]
 	if bg == "" || fg == "" {
+		if tomlErr != nil {
+			return nil, fmt.Errorf("colors.toml: %w", tomlErr)
+		}
 		return nil, errors.New("colors.toml has no valid background and foreground")
 	}
-	mode, _ := raw["mode"].(string)
-	switch m := strings.ToLower(strings.TrimSpace(mode)); m {
+	switch m := strings.ToLower(strings.TrimSpace(raw["mode"])); m {
 	case "dark", "light":
 		t.Mode = m
 	default:
@@ -152,10 +151,76 @@ func ParseTheme(data []byte, name string) (*Theme, error) {
 			t.Mode = "light"
 		}
 	}
-	if s, ok := raw["hyprland_active_border"].(string); ok {
+	if s, ok := raw["hyprland_active_border"]; ok {
 		t.Border = parseBorder(s, t.Colors)
 	}
 	return t, nil
+}
+
+// themeValues returns the top-level string values of a colors.toml file.
+// When the text is not valid TOML, themeValues returns the values of
+// themeLines and the TOML error.
+func themeValues(data []byte) (map[string]string, error) {
+	var raw map[string]any
+	if _, err := toml.Decode(string(data), &raw); err != nil {
+		return themeLines(data), err
+	}
+	values := make(map[string]string, len(raw))
+	for k, v := range raw {
+		if s, ok := v.(string); ok {
+			values[k] = s
+		}
+	}
+	return values, nil
+}
+
+var (
+	// themeKeyRe and themeValueRe are the characters that
+	// omarchy-theme-color accepts in a key and in a value.
+	themeKeyRe   = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+	themeValueRe = regexp.MustCompile(`^[A-Za-z0-9#(),._+/% -]*$`)
+)
+
+// themeLines reads a colors.toml file line by line, as omarchy-theme-color
+// does. The phone then gets the theme that Omarchy applies to the desktop,
+// also from a file that is not valid TOML. Examples are a file with a key
+// 2 times and a file with a value without quotes.
+//
+// Each line is "key = value". The key loses its quotes and its spaces. A
+// value with a quote is the text between its first 2 quotes. A value
+// without quotes loses the spaces at its ends. The last value of a key
+// wins. themeLines skips a line without "=", a comment, and a line with a
+// key or a value that has other characters.
+func themeLines(data []byte) map[string]string {
+	values := map[string]string{}
+	for _, line := range strings.Split(string(data), "\n") {
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		key = strings.Map(func(r rune) rune {
+			if r == '"' || r == '\'' || unicode.IsSpace(r) {
+				return -1
+			}
+			return r
+		}, key)
+		if !themeKeyRe.MatchString(key) {
+			continue
+		}
+		if i := strings.IndexAny(value, `"'`); i >= 0 {
+			value = value[i+1:]
+			if j := strings.IndexAny(value, `"'`); j >= 0 {
+				value = value[:j]
+			}
+		} else {
+			value = strings.TrimSpace(value)
+		}
+		if !themeValueRe.MatchString(value) {
+			continue
+		}
+		values[key] = value
+	}
+	return values
 }
 
 // themeName returns the first line of theme.name without control

@@ -158,18 +158,87 @@ func TestParseThemeModeFromColors(t *testing.T) {
 func TestParseThemeBroken(t *testing.T) {
 	for _, text := range []string{
 		"",
-		"background = \"#1a1b26\n", // the string does not end
-		"background = #1a1b26\nforeground = #c0caf5\n",            // no quotes
-		"foreground = \"#c0caf5\"\n",                              // no background
-		"background = \"#1a1b26\"\n",                              // no foreground
-		"background = \"#1a1b2\"\nforeground = \"#c0caf5\"\n",     // 5 digits
-		"background = \"#1a1b26ff\"\nforeground = \"#c0caf5\"\n",  // 8 digits
-		"background = \"1a1b26\"\nforeground = \"#c0caf5\"\n",     // no #
-		"background = 26\nforeground = \"#c0caf5\"\n",             // a number
-		"background = \"#1a1b26\"\nforeground = \"#c0caf5\"\nx\n", // a line that is not TOML
+		"\x00\x01\x02\xff",
+		"background = \"#1a1b26\n",   // the string does not end
+		"foreground = \"#c0caf5\"\n", // no background
+		"background = \"#1a1b26\"\n", // no foreground
+		"background = \"#1a1b2\"\nforeground = \"#c0caf5\"\n",       // 5 digits
+		"background = \"#1a1b26ff\"\nforeground = \"#c0caf5\"\n",    // 8 digits
+		"background = \"1a1b26\"\nforeground = \"#c0caf5\"\n",       // no #
+		"background = 26\nforeground = \"#c0caf5\"\n",               // a number
+		"background #1a1b26\nforeground #c0caf5\n",                  // no =
+		"background = #1a1b26 # dark\nforeground = #c0caf5\n",       // a comment after a value without quotes
+		"background = \"#1a1b26\"\nforeground = \"#c0caf5;\"\nx\n",  // a character that Omarchy does not accept
+		"# background = \"#1a1b26\"\nforeground = \"#c0caf5\"\nx\n", // a comment
+		"background = \"#1a1b26\"\nfore ground! = \"#c0caf5\"\nx\n", // a key that Omarchy does not accept
 	} {
 		if th, err := ParseTheme([]byte(text), ""); err == nil {
 			t.Errorf("%q parsed: %+v", text, th)
+		}
+	}
+}
+
+// A file that is not valid TOML parses line by line, as in
+// omarchy-theme-color. The last value of a key wins.
+func TestParseThemeLines(t *testing.T) {
+	// A key 2 times. The last value wins.
+	text := realTheme + "accent = \"#123456\"\nbackground = \"#000000\"\n"
+	if _, err := themeValues([]byte(text)); err == nil {
+		t.Fatal("a key 2 times must not be valid TOML")
+	}
+	th, err := ParseTheme([]byte(text), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if th.Colors["accent"] != "#123456" || th.Colors["background"] != "#000000" || th.Colors["red"] != "#fe288f" {
+		t.Fatalf("colors %v", th.Colors)
+	}
+	wantBorder := &ThemeBorder{Colors: []string{"#21e4f8ee", "#d563feee"}, Angle: 45}
+	if th.Mode != "dark" || !reflect.DeepEqual(th.Border, wantBorder) {
+		t.Fatalf("mode %q, border %+v", th.Mode, th.Border)
+	}
+
+	// Values without quotes, quoted keys, comments, and lines that are
+	// not "key = value".
+	text = `mode = light
+background = #FAFAFA
+foreground = #202020
+accent = '#7aa2f7' # a comment
+"red" = "#ff0000"
+# green = "#00ff00"
+[colors]
+x
+blue = "#0000ff;"
+cyan = "#00ffff"
+cyan = "#00ffff;"
+hyprland_active_border = rgba(33ccffee) rgba(00ff99ee) 45deg
+`
+	th, err = ParseTheme([]byte(text), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A value that Omarchy does not accept drops out, and an earlier value
+	// of the key stays.
+	want := map[string]string{
+		"background": "#fafafa", "foreground": "#202020", "accent": "#7aa2f7",
+		"red": "#ff0000", "cyan": "#00ffff",
+	}
+	if !reflect.DeepEqual(th.Colors, want) {
+		t.Fatalf("colors %v", th.Colors)
+	}
+	wantBorder = &ThemeBorder{Colors: []string{"#33ccffee", "#00ff99ee"}, Angle: 45}
+	if th.Mode != "light" || !reflect.DeepEqual(th.Border, wantBorder) {
+		t.Fatalf("mode %q, border %+v", th.Mode, th.Border)
+	}
+
+	// The line parser reads a valid file the same way as the TOML parser.
+	for _, text := range []string{realTheme, lightTheme} {
+		values, err := themeValues([]byte(text))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if lines := themeLines([]byte(text)); !reflect.DeepEqual(lines, values) {
+			t.Errorf("lines %v, TOML %v", lines, values)
 		}
 	}
 }

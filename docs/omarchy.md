@@ -176,8 +176,10 @@ The body of the packet:
 - `bright_red`, `bright_yellow`, `bright_green`, `bright_cyan`, `bright_blue`, and `bright_magenta`.
 - `color0` to `color15`. A theme that Omarchy made from an Alacritty file has these keys.
 
-`colors.toml` must be valid TOML, with a `#rrggbb` color in `background` and in `foreground`.
+`colors.toml` must have a `#rrggbb` color in `background` and in `foreground`.
 `fluxd` drops each other color that is not a `#rrggbb` color.
+When `colors.toml` is not valid TOML, `fluxd` reads it line by line, as `omarchy-theme-color` does.
+In this case, the last value of a key wins, and a value can be without quotes.
 The `border` field is missing when the file has no `hyprland_active_border`, or when a part of the value does not parse.
 Then a device uses `accent` for the border. Omarchy does the same for Hyprland when the file has no `hyprland_active_border`.
 A part of the border value can be `rgba(rrggbbaa)`, `rgb(rrggbb)`, `#rrggbb`, `#rrggbbaa`, `0xaarrggbb`, `rgba(r,g,b,a)`, or the name of a color in `colors`, such as `accent`.
