@@ -51,9 +51,10 @@ class InboxModelTest {
         val transfer = Transfer(1, "a", "name-a", "f.pdf", incoming = true)
         val items = inbox(devices, approval("a"), listOf(transfer), clip)
         assertEquals(
+            "what needs the user, then what plays, the clip, and the transfers, then the agents that do not wait",
             listOf(
-                InboxKind.AgentInput, InboxKind.Approval, InboxKind.PairRequest, InboxKind.AgentDone,
-                InboxKind.AgentWorking, InboxKind.Transfer, InboxKind.Clipboard, InboxKind.Media,
+                InboxKind.AgentInput, InboxKind.Approval, InboxKind.PairRequest, InboxKind.Media,
+                InboxKind.Clipboard, InboxKind.Transfer, InboxKind.AgentDone, InboxKind.AgentWorking,
             ),
             items.map { it.kind },
         )
@@ -94,7 +95,7 @@ class InboxModelTest {
         val fresh = ClipEvent(listOf("a"), "a", sent = true, preview = "x", at = now - 60_000)
         val stale = fresh.copy(at = now - INBOX_KEEP_MS - 1)
         val items = inboxItems(emptyList(), null, listOf(run, done, old), fresh, now, emptyMap())
-        assertEquals(listOf("transfer|1", "transfer|2", "clip"), items.map { it.key })
+        assertEquals(listOf("clip", "transfer|1", "transfer|2"), items.map { it.key })
         assertTrue(inboxItems(emptyList(), null, listOf(old), stale, now, emptyMap()).isEmpty())
     }
 
@@ -143,7 +144,7 @@ class InboxModelTest {
         val items = inbox(devices, null, emptyList(), clip)
         assertEquals(4, items.inScope(null).size)
         val b = items.inScope("b")
-        assertEquals(listOf(InboxKind.PairRequest, InboxKind.AgentDone, InboxKind.Clipboard), b.map { it.kind })
+        assertEquals(listOf(InboxKind.PairRequest, InboxKind.Clipboard, InboxKind.AgentDone), b.map { it.kind })
     }
 
     @Test
