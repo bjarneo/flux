@@ -20,6 +20,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,6 +44,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -129,7 +131,7 @@ fun TiledDevicesScreen(
                     Sym(Ic.refresh, size = 16.dp, tint = Tn.sub)
                     T(if (state.scanning) "Scanning…" else "Scan again", size = 12, color = Tn.sub)
                 }
-                AppMenu(state.theme)
+                AppMenu(state)
             }
             Tile(Modifier.fillMaxWidth(), border = activeBorder(), padding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -186,9 +188,14 @@ fun TiledDevicesScreen(
     }
 }
 
-/** The menu of the device list: the theme of the app, and Flux off. */
+/**
+ * The menu of the device list: the theme of the app, and Flux off. The
+ * Computer choice names the theme that it draws now.
+ */
 @Composable
-private fun AppMenu(theme: ThemeMode) {
+private fun AppMenu(state: UiState) {
+    val theme = state.theme
+    val computerLine = computerThemeLine(state, isSystemInDarkTheme())
     var open by remember { mutableStateOf(false) }
     Box {
         SquareButton(Ic.more, "More options", { open = true }, size = 32.dp)
@@ -196,7 +203,16 @@ private fun AppMenu(theme: ThemeMode) {
             TileLabel("Theme", Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
             for ((mode, label, icon) in ThemeItems) {
                 DropdownMenuItem(
-                    text = { Text(label) },
+                    text = {
+                        if (mode == ThemeMode.Computer) {
+                            Column(Modifier.padding(vertical = 6.dp)) {
+                                Text(label)
+                                Text(computerLine, style = MaterialTheme.typography.bodySmall, color = Tn.sub)
+                            }
+                        } else {
+                            Text(label)
+                        }
+                    },
                     leadingIcon = { Sym(icon) },
                     trailingIcon = { if (mode == theme) Sym(Ic.check, "Selected", tint = Tn.blue) },
                     onClick = {
@@ -609,11 +625,11 @@ private fun ClipAutoSheet(state: UiState, onDismiss: () -> Unit) {
                     contentAlignment = Alignment.Center,
                 ) { T("Allow drawing over apps", size = 14, color = Tn.onAccent, weight = FontWeight.SemiBold) }
             }
-            T("Run these on a computer with adb:", size = 12, color = Tn.dim)
+            T("Run these on a computer with adb:", size = 12, color = Tn.sub)
             for (cmd in CLIP_SETUP_COMMANDS) ClipCommandRow(cmd)
             T(
                 "The Appear on top switch in the Android app settings does the same as the second command.",
-                size = 12, color = Tn.dim, lineHeight = 1.3f,
+                size = 12, color = Tn.sub, lineHeight = 1.3f,
             )
             Spacer(Modifier.height(16.dp))
         }
@@ -651,7 +667,7 @@ private fun StatusTile(d: DeviceUi) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Dot(if (d.online) Tn.green else Tn.dim, 7.dp)
-                TileLabel(if (d.online) "Connected" else "Not reachable", color = if (d.online) Tn.green else Tn.dim)
+                TileLabel(if (d.online) "Connected" else "Not reachable", color = if (d.online) Tn.green else Tn.sub)
             }
             if (d.online) {
                 d.battery?.let { T("$it%" + if (d.charging) ", charging" else "", size = 12, color = Tn.sub, family = Mono) }
@@ -685,7 +701,7 @@ private fun MediaTile(d: DeviceUi, modifier: Modifier, onOpen: () -> Unit) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Sym(Ic.music, tint = Tn.green, size = 22.dp)
             Spacer(Modifier.weight(1f))
-            if (p != null) T(p.name, size = 10, color = Tn.dim, family = Mono, maxLines = 1)
+            if (p != null) T(p.name, size = 10, color = Tn.sub, family = Mono, maxLines = 1)
         }
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -705,7 +721,7 @@ private fun MediaTile(d: DeviceUi, modifier: Modifier, onOpen: () -> Unit) {
 
 @Composable
 private fun SyncTile(s: SyncItem, modifier: Modifier) {
-    val fg = if (s.on) Tn.blue else Tn.dim
+    val fg = if (s.on) Tn.blue else Tn.sub
     Tile(
         modifier, s.onClick,
         container = if (s.on) Tn.tileHi else Tn.offTile,
@@ -817,8 +833,8 @@ fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
                         },
                     )
                     Row(Modifier.fillMaxWidth()) {
-                        T(clock(dragging?.toLong() ?: position), Modifier.weight(1f), size = 11, color = Tn.dim, family = Mono)
-                        T(clock(p.length), size = 11, color = Tn.dim, family = Mono)
+                        T(clock(dragging?.toLong() ?: position), Modifier.weight(1f), size = 11, color = Tn.sub, family = Mono)
+                        T(clock(p.length), size = 11, color = Tn.sub, family = Mono)
                     }
                 }
             }
@@ -868,7 +884,7 @@ fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
                                 )
                             },
                         )
-                        T("${volumeDrag?.roundToInt() ?: volume}", size = 11, color = Tn.dim, family = Mono)
+                        T("${volumeDrag?.roundToInt() ?: volume}", size = 11, color = Tn.sub, family = Mono)
                     }
                 }
             }
@@ -937,7 +953,7 @@ fun TiledCommandsScreen(d: DeviceUi, onBack: () -> Unit) {
                             }
                             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 T(c.name, size = 14, weight = FontWeight.SemiBold, maxLines = 1)
-                                T(c.command, size = 10, color = Tn.dim, family = Mono, maxLines = 1)
+                                T(c.command, size = 10, color = Tn.sub, family = Mono, maxLines = 1)
                             }
                         }
                     }

@@ -135,8 +135,10 @@ data class UiState(
     val enabled: Boolean = true,
     val theme: ThemeMode = ThemeMode.Computer,
     /**
-     * The theme of the computer in [themeScope], or the last theme that a
-     * computer sent. It is null when no computer has sent a theme.
+     * The theme that [ThemeMode.Computer] draws. With a [themeScope], it is
+     * the theme of that computer. Without a scope, it is the theme that
+     * changed most recently. It is null when that computer, or each
+     * computer, sent no theme.
      */
     val computerTheme: ComputerTheme? = null,
     /** The computer whose theme the app follows, or null for all computers. See [ComputerThemes.setScope]. */

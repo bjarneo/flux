@@ -194,7 +194,7 @@ private fun Workspaces(state: ShortcutsState?, onGo: (Int) -> Unit, onMove: (Int
                             color = when {
                                 active -> Tn.onAccent
                                 used -> Tn.text
-                                else -> Tn.dim
+                                else -> Tn.sub
                             },
                         )
                         if (used && !active) {
@@ -264,7 +264,7 @@ private fun ActionKey(label: String, description: String, modifier: Modifier, co
 private fun LaunchKey(s: Shortcut, modifier: Modifier, onClick: () -> Unit) {
     Tile(modifier.height(52.dp), onClick, padding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)) {
         T(s.description, size = 13, weight = FontWeight.SemiBold, maxLines = 1)
-        T(Shortcuts.keysLabel(s.keys), size = 10, color = Tn.dim, family = Mono, maxLines = 1)
+        T(Shortcuts.keysLabel(s.keys), size = 10, color = Tn.sub, family = Mono, maxLines = 1)
     }
 }
 
@@ -286,7 +286,7 @@ private fun ShortcutSheet(all: List<Shortcut>, pins: List<String>, onRun: (Short
                     value = query,
                     onValueChange = { query = it },
                     modifier = m,
-                    placeholder = { T("Search, for example workspace or browser", color = Tn.dim) },
+                    placeholder = { T("Search, for example workspace or browser", color = Tn.sub) },
                     leadingIcon = { Sym(Ic.search, tint = Tn.sub, size = 20.dp) },
                     singleLine = true,
                     textStyle = TextStyle(color = Tn.text, fontSize = 14.sp),
@@ -306,7 +306,7 @@ private fun ShortcutSheet(all: List<Shortcut>, pins: List<String>, onRun: (Short
                     ) {
                         Column(Modifier.weight(1f)) {
                             T(s.description, size = 14, weight = FontWeight.SemiBold, maxLines = 1)
-                            if (s.keys.isNotEmpty()) T(Shortcuts.keysLabel(s.keys), size = 11, color = Tn.dim, family = Mono, maxLines = 1)
+                            if (s.keys.isNotEmpty()) T(Shortcuts.keysLabel(s.keys), size = 11, color = Tn.sub, family = Mono, maxLines = 1)
                         }
                         Box(
                             Modifier.size(40.dp).clip(RoundedCornerShape(8.dp))

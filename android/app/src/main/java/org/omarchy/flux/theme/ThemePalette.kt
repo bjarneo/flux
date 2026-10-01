@@ -6,6 +6,15 @@ import org.omarchy.flux.core.ThemeMode
  * The colors of 1 Flux palette, as 0xRRGGBB. TiledKit turns a palette into
  * the Tn tokens. [paletteOf] makes a palette from the theme of a computer,
  * and [TokyoNight] and [TokyoNightDay] are the palettes without one.
+ *
+ * The contrast contract:
+ * - [text] and [sub] reach 4.5:1 on each of the [containers]: the
+ *   [surfaces], [line], and [accentTile].
+ * - The [fills], from [accent] to [yellow], reach 4.5:1 as text on the
+ *   [surfaces] and [accentTile]. On [line], they reach 3:1, so use them
+ *   there for icons and borders only.
+ * - [onAccent] reaches 4.5:1 on each fill.
+ * - [dim] reaches 3:1 on [bg], [tile], and [tileHi]. It is not for text.
  */
 data class PaletteSpec(
     /** The name of the theme, for example "tokyo-night". */
@@ -18,20 +27,26 @@ data class PaletteSpec(
     val tile: Int,
     /** A tile that stands out, a menu, or a dialog. */
     val tileHi: Int,
-    /** The border of a tile, and a container for [text]. */
+    /** The border of a tile, and a tonal container for [text] and [sub]. */
     val line: Int,
     val lineHi: Int,
-    /** The body ink. It reaches 4.5:1 on each surface. */
+    /** The body ink. It is at least [TEXT_STEP] away from [sub]. */
     val text: Int,
-    /** The second ink. It reaches 4.5:1 on each surface except [line] and [accentTile]. */
+    /** The second ink, for hints, labels, and placeholders. */
     val sub: Int,
     /** For borders and disabled states only. It reaches 3:1 on [bg], [tile], and [tileHi]. */
     val dim: Int,
     /** The ink on a fill of [accent] or a semantic color. It reaches 4.5:1 on each of them. */
     val onAccent: Int,
-    /** The accent of the theme. */
+    /**
+     * The primary color, for actions and selection. It is the accent of the
+     * theme, unless that accent is too close to [red], see [paletteOf].
+     */
     val accent: Int,
-    /** A tile with a tint of the accent, for a selected item. [text] reaches 4.5:1 on it. */
+    /**
+     * A tile with the hue of [accent], for a selected item. It has the
+     * luminance of [tileHi], so each ink that reads on [tileHi] reads on it.
+     */
     val accentTile: Int,
     val cyan: Int,
     val green: Int,
@@ -40,13 +55,26 @@ data class PaletteSpec(
     /** Red means "needs you" or an error, nothing else. */
     val red: Int,
     val yellow: Int,
-    /** The colors of the active border gradient. Each reaches 3:1 on [bg] and [tile]. */
+    /**
+     * The blue of the terminal, for ANSI blue in the agent output. It is the
+     * blue of the theme, and it reaches 4.5:1 on the [surfaces]. The
+     * [accent] can be another color.
+     */
+    val termBlue: Int,
+    /**
+     * The colors of the active border gradient. Each reaches 3:1 on [bg] and
+     * [tile]. Without a theme border, the gradient goes from the accent of
+     * the theme to [cyan].
+     */
     val border: List<Int>,
     /** The angle of the border gradient in degrees, as in Hyprland, or null for corner to corner. */
     val borderAngle: Float?,
 ) {
-    /** The surfaces that body text sits on. */
+    /** The surfaces that the tiles and the page use. */
     val surfaces: List<Int> get() = listOf(bg, offTile, tile, tileHi)
+
+    /** Each color that holds [text] and [sub]: the [surfaces], [line], and [accentTile]. */
+    val containers: List<Int> get() = surfaces + line + accentTile
 
     /** The fills that take [onAccent] text. */
     val fills: List<Int> get() = listOf(accent, cyan, green, magenta, orange, red, yellow)
@@ -58,8 +86,20 @@ const val TEXT_CONTRAST = 4.5
 /** The contrast that icons, borders, and large text need, WCAG 2.2 AA. */
 const val NON_TEXT_CONTRAST = 3.0
 
+/** The least contrast of [PaletteSpec.text] against [PaletteSpec.sub], so that the 2 inks look different. */
+const val TEXT_STEP = 1.4
+
+/**
+ * The least OKLAB [distance] of the accent from red. Below it, the accent
+ * looks like red, and red must mean "needs you" only.
+ */
+const val MIN_ACCENT_DISTANCE = 0.08
+
 /** How much of the accent the [PaletteSpec.accentTile] takes. */
 private const val ACCENT_TILE_MIX = 0.18
+
+/** The least chroma of a color that replaces the accent, so that it is not a gray. */
+private const val MIN_ACCENT_CHROMA = 0.05
 
 private const val WHITE = 0xFFFFFF
 private const val BLACK = 0x000000
@@ -70,9 +110,9 @@ private fun spec(
     orange: Int, red: Int, yellow: Int,
 ) = PaletteSpec(
     name, dark, bg, offTile, tile, tileHi, line, lineHi, text, sub, dim, onAccent, accent,
-    accentTile = mix(tileHi, accent, ACCENT_TILE_MIX),
+    accentTile = tint(tileHi, accent, ACCENT_TILE_MIX),
     cyan = cyan, green = green, magenta = magenta, orange = orange, red = red, yellow = yellow,
-    border = listOf(accent, cyan), borderAngle = null,
+    termBlue = accent, border = listOf(accent, cyan), borderAngle = null,
 )
 
 /**
@@ -83,7 +123,7 @@ private fun spec(
 val TokyoNight = spec(
     name = "tokyo-night", dark = true,
     bg = 0x16161E, offTile = 0x1A1B26, tile = 0x1F2335, tileHi = 0x24283B, line = 0x292E42, lineHi = 0x3B4261,
-    text = 0xC0CAF5, sub = 0x858EB8, dim = 0x66709B, onAccent = 0x16161E,
+    text = 0xC0CAF5, sub = 0x8B94BE, dim = 0x66709B, onAccent = 0x16161E,
     accent = 0x7AA2F7, cyan = 0x7DCFFF, green = 0x9ECE6A, magenta = 0xBB9AF7, orange = 0xFF9E64, red = 0xF7768E, yellow = 0xE0AF68,
 )
 
@@ -96,7 +136,7 @@ val TokyoNight = spec(
 val TokyoNightDay = spec(
     name = "tokyo-night-day", dark = false,
     bg = 0xE1E2E7, offTile = 0xDDDEE4, tile = 0xD9DBE1, tileHi = 0xD4D5DC, line = 0xC4C8DA, lineHi = 0xA8AECB,
-    text = 0x343B58, sub = 0x4B5993, dim = 0x70769E, onAccent = WHITE,
+    text = 0x343B58, sub = 0x44518A, dim = 0x70769E, onAccent = WHITE,
     accent = 0x2457B8, cyan = 0x006486, green = 0x496529, magenta = 0x7B31CF, orange = 0x914A00, red = 0xBA0046, yellow = 0x765729,
 )
 
@@ -109,7 +149,7 @@ private const val BG_HEADROOM = 10.0
 /** The same for a tile, so that the text and the colors can reach their contrast. */
 private const val TILE_HEADROOM = 7.0
 
-/** The same for [PaletteSpec.line] and [PaletteSpec.accentTile], which hold text. */
+/** The same for [PaletteSpec.line], which holds text. */
 private const val LINE_HEADROOM = 6.0
 
 /** The contrast of a surface step against the page: the least, the most, and the value to make. */
@@ -128,7 +168,37 @@ private const val DIM_MIX = 0.55
 /** The most chroma of the body ink in a light theme, so that it reads as a neutral. */
 private const val NEUTRAL_CHROMA = 0.045
 
+/** The theme colors that can replace an accent that looks like red, in order. */
+private val ACCENT_STANDINS = listOf("blue", "bright_blue", "cyan", "bright_cyan", "magenta", "bright_magenta")
+
 private fun needs(ratio: Double, colors: List<Int>) = colors.map { Need(it, ratio) }
+
+/**
+ * 1 choice of the accent: the [source] color of the theme, the
+ * [accentTile] that it tints, the [needs] of a fill as text with that
+ * tile, and the guarded [accent] and [red].
+ */
+private class AccentTrial(val source: Int, val accentTile: Int, val needs: List<Need>, val accent: Int, val red: Int) {
+    val apart: Double = distance(accent, red)
+}
+
+/**
+ * Keeps the accent apart from red. When [first] is too close to red, it
+ * takes the first of [others] that has a visible chroma, reaches its
+ * contrast, and is far enough from red. When no color is far enough, it
+ * takes the color that is farthest from red.
+ */
+private fun pickAccent(first: AccentTrial, others: List<Int>, trial: (Int) -> AccentTrial): AccentTrial {
+    if (first.apart >= MIN_ACCENT_DISTANCE) return first
+    var best = first
+    for (c in others) {
+        val t = trial(c)
+        if (oklch(t.accent).c < MIN_ACCENT_CHROMA || !meets(t.accent, t.needs)) continue
+        if (t.apart >= MIN_ACCENT_DISTANCE) return t
+        if (t.apart > best.apart) best = t
+    }
+    return best
+}
 
 /**
  * Makes the palette of a computer theme, through the contrast guard:
@@ -138,9 +208,13 @@ private fun needs(ratio: Double, colors: List<Int>) = colors.map { Need(it, rati
  *   dark_background and darker_background in a light theme.
  * - foreground gives the body ink. In a light theme, the ink loses its
  *   chroma, so that it is a neutral and not the accent.
- * - The second ink comes from the body ink and the page.
+ * - The second ink comes from the body ink and the page. When the 2 inks
+ *   are too close, the body ink moves away from the second ink.
  * - muted gives the dim color, accent the accent, and the terminal colors
  *   the semantic colors. A missing color comes from Tokyo Night.
+ * - Red means "needs you". When the accent looks like red, blue, cyan, or
+ *   magenta of the theme takes its place, and Tokyo Night blue after
+ *   them. The border gradient keeps the accent of the theme.
  * - The guard moves only the lightness of a color, so the hue stays.
  *
  * The background decides whether the theme is dark. The mode of the
@@ -186,25 +260,36 @@ fun paletteOf(theme: OmarchyTheme): PaletteSpec {
     val lineHi = mix(tileHi, ink, LINE_HI_MIX)
     val surfaces = listOf(bg, offTile, tile, tileHi)
 
-    val rawAccent = theme["accent"] ?: theme["blue"] ?: base.accent
-    val accentTile = surface(mix(tileHi, rawAccent, ACCENT_TILE_MIX), LINE_HEADROOM)
+    fun semantic(key: String, fallback: Int) = theme[key] ?: theme["bright_$key"] ?: fallback
+    val themeAccent = theme["accent"] ?: theme["blue"] ?: base.accent
+    val rawRed = semantic("red", base.red)
+
+    // The accent tile takes the hue of the accent, so the needs of each ink depend on the accent.
+    fun trial(source: Int): AccentTrial {
+        val accentTile = tint(tileHi, source, ACCENT_TILE_MIX)
+        val n = needs(TEXT_CONTRAST, surfaces + accentTile) + Need(line, NON_TEXT_CONTRAST)
+        return AccentTrial(source, accentTile, n, guard(source, n, lighter = dark), guard(rawRed, n, lighter = dark))
+    }
+    val chosen = pickAccent(trial(themeAccent), ACCENT_STANDINS.mapNotNull { theme[it] } + base.accent, ::trial)
+    val accentTile = chosen.accentTile
+    val fillNeeds = chosen.needs
+    val inkNeeds = needs(TEXT_CONTRAST, surfaces + line + accentTile)
 
     val body = if (dark) fg else limitChroma(fg, NEUTRAL_CHROMA)
-    val text = guard(body, needs(TEXT_CONTRAST, surfaces + line + accentTile), lighter = dark)
-    val sub = guard(mix(text, bg, SUB_MIX), needs(TEXT_CONTRAST, surfaces), lighter = dark)
+    val firstText = guard(body, inkNeeds, lighter = dark)
+    val sub = guard(mix(firstText, bg, SUB_MIX), inkNeeds, lighter = dark)
+    val text = guard(firstText, inkNeeds + Need(sub, TEXT_STEP), lighter = dark)
     val dim = guard(theme["muted"] ?: mix(text, bg, DIM_MIX), needs(NON_TEXT_CONTRAST, listOf(bg, tile, tileHi)), lighter = dark)
 
-    fun semantic(key: String, fallback: Int) = theme[key] ?: theme["bright_$key"] ?: fallback
-    val onSurfaces = needs(TEXT_CONTRAST, surfaces)
     var colors = listOf(
-        rawAccent,
+        chosen.source,
         semantic("cyan", base.cyan),
         semantic("green", base.green),
         semantic("magenta", base.magenta),
         semantic("orange", base.orange),
-        semantic("red", base.red),
+        rawRed,
         semantic("yellow", base.yellow),
-    ).map { guard(it, onSurfaces, lighter = dark) }
+    ).map { guard(it, fillNeeds, lighter = dark) }
 
     // The ink on a fill: the light or the dark ink, whichever reads better on the accent.
     val lightInk = if (luminance(text) > luminance(bg)) text else bg
@@ -213,20 +298,23 @@ fun paletteOf(theme: OmarchyTheme): PaletteSpec {
     val onAccent = guard(if (light) lightInk else darkInk, needs(TEXT_CONTRAST, colors), lighter = light)
     colors = colors.map { c ->
         if (contrast(c, onAccent) >= TEXT_CONTRAST) c
-        else guard(c, onSurfaces + Need(onAccent, TEXT_CONTRAST), lighter = !light)
+        else guard(c, fillNeeds + Need(onAccent, TEXT_CONTRAST), lighter = !light)
     }
     val (accent, cyan, green, magenta, orange) = colors
     val red = colors[5]
     val yellow = colors[6]
 
+    val termBlue = guard(theme["blue"] ?: theme["bright_blue"] ?: base.termBlue, needs(TEXT_CONTRAST, surfaces), lighter = dark)
     val borderNeeds = needs(NON_TEXT_CONTRAST, listOf(bg, tile))
-    val border = theme.border.ifEmpty { listOf(accent, cyan) }.map { guard(it, borderNeeds, lighter = dark) }
+    // The theme accent stays in the gradient, so that the theme stays recognizable.
+    val ownAccent = if (chosen.source == themeAccent) accent else guard(themeAccent, fillNeeds, lighter = dark)
+    val border = theme.border.ifEmpty { listOf(ownAccent, cyan) }.map { guard(it, borderNeeds, lighter = dark) }
     return PaletteSpec(
         name = theme.name, dark = dark,
         bg = bg, offTile = offTile, tile = tile, tileHi = tileHi, line = line, lineHi = lineHi,
         text = text, sub = sub, dim = dim, onAccent = onAccent, accent = accent, accentTile = accentTile,
         cyan = cyan, green = green, magenta = magenta, orange = orange, red = red, yellow = yellow,
-        border = border, borderAngle = if (theme.border.isEmpty()) null else theme.borderAngle,
+        termBlue = termBlue, border = border, borderAngle = if (theme.border.isEmpty()) null else theme.borderAngle,
     )
 }
 

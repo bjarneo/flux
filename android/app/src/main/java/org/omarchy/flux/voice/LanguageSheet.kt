@@ -143,7 +143,7 @@ fun LanguageSheet(
                         value = query,
                         onValueChange = { query = it },
                         modifier = m,
-                        placeholder = { T("Find a language", color = Tn.dim) },
+                        placeholder = { T("Find a language", color = Tn.sub) },
                         leadingIcon = { Sym(Ic.search, tint = Tn.dim, size = 20.dp) },
                         trailingIcon = if (query.isEmpty()) null else {
                             { Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClickLabel = "Clear") { query = "" }, contentAlignment = Alignment.Center) { Sym(Ic.close, "Clear", tint = Tn.dim, size = 18.dp) } }
@@ -170,7 +170,7 @@ fun LanguageSheet(
                 SpeechModels.Load.Unsupported -> item {
                     T(
                         "This Android version cannot list or download speech models. You can choose one of the phone languages.",
-                        Modifier.padding(4.dp), size = 12, color = Tn.dim,
+                        Modifier.padding(4.dp), size = 12, color = Tn.sub,
                     )
                 }
                 else -> {}
@@ -199,13 +199,13 @@ fun LanguageSheet(
                 }
             }
             if (models.load == SpeechModels.Load.Ready && rows.isEmpty() && query.isNotBlank()) {
-                item { T("No language matches \"${query.trim()}\".", Modifier.padding(4.dp), size = 13, color = Tn.dim) }
+                item { T("No language matches \"${query.trim()}\".", Modifier.padding(4.dp), size = 13, color = Tn.sub) }
             }
             if (!unsupported && local) {
                 item {
                     T(
                         "Android downloads each model from Google once. Dictation then runs on this phone, and the audio stays on the phone.",
-                        Modifier.padding(start = 4.dp, end = 4.dp, top = 12.dp), size = 11, color = Tn.dim,
+                        Modifier.padding(start = 4.dp, end = 4.dp, top = 12.dp), size = 11, color = Tn.sub,
                     )
                 }
             }
@@ -256,7 +256,7 @@ private fun LanguageTile(row: LanguageRow, selected: Boolean, progress: Int?, on
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     T(row.name, Modifier.weight(1f, fill = false), size = 14, weight = FontWeight.SemiBold, maxLines = 1)
-                    T(row.tag, size = 10, color = Tn.dim, family = Mono, maxLines = 1)
+                    T(row.tag, size = 10, color = Tn.sub, family = Mono, maxLines = 1)
                 }
                 if (row.native != row.name) T(row.native, size = 12, color = Tn.sub, maxLines = 1)
                 if (loading) {
@@ -276,7 +276,7 @@ private fun LanguageTile(row: LanguageRow, selected: Boolean, progress: Int?, on
                     }
                     T(
                         if (p >= 0) "Downloading, $p %" else "Waiting for Android to download it",
-                        size = 11, color = Tn.dim,
+                        size = 11, color = Tn.sub,
                     )
                 }
             }

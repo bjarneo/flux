@@ -84,6 +84,16 @@ import kotlin.math.sin
  * Hyprland on Omarchy. [Tn] gives the colors of the current theme. The
  * palettes come from [PaletteSpec] through the contrast guard, see
  * [paletteOf], so each pair below reaches WCAG 2.2 AA.
+ *
+ * The contrast contract, see [PaletteSpec]:
+ * - [text] and [sub] reach 4.5:1 on [bg], [offTile], [tile], [tileHi],
+ *   [line], and [accentTile].
+ * - [blue], [cyan], [green], [magenta], [orange], [red], and [yellow]
+ *   reach 4.5:1 as text on the same colors except [line]. On [line], they
+ *   reach 3:1, so use them there for icons and borders only.
+ * - [onAccent] reaches 4.5:1 on a fill of each of these colors.
+ * - [dim] reaches 3:1, for borders, icons, and disabled states. It is not
+ *   for text.
  */
 @Immutable
 class TiledColors(
@@ -95,20 +105,25 @@ class TiledColors(
     val tileHi: Color,
     /** A tile that is off, and the background of the agent output. */
     val offTile: Color,
-    /** The border of a tile, and a container for [text]. */
+    /** The border of a tile, and a tonal container for [text] and [sub]. */
     val line: Color,
     val lineHi: Color,
-    /** The body ink. It reaches 4.5:1 on each surface. */
+    /** The body ink. */
     val text: Color,
-    /** The second ink, for hints and labels. It reaches 4.5:1 on [bg], [offTile], [tile], and [tileHi]. */
+    /** The second ink, for hints, labels, placeholders, and data that is not the main value. */
     val sub: Color,
-    /** For borders and disabled states only, never for text that carries meaning. It reaches 3:1. */
+    /**
+     * For borders, icons, and disabled states only, never for text that
+     * carries meaning. It reaches 3:1 on [bg], [tile], and [tileHi].
+     */
     val dim: Color,
     /** The text and icons on an accent fill or a fill of a semantic color. */
     val onAccent: Color,
     /**
-     * The accent of the theme. On Tokyo Night it is blue, and on another
-     * theme it is the accent of that theme. [accent] is the same color.
+     * The primary color, for actions and selection. On Tokyo Night it is
+     * blue. On another theme it is the accent of that theme, or the blue
+     * of that theme when its accent looks like [red]. [accent] is the same
+     * color. For the blue of the terminal, use [termBlue].
      */
     val blue: Color,
     val cyan: Color,
@@ -118,14 +133,16 @@ class TiledColors(
     /** Red means "needs you" or an error, nothing else. */
     val red: Color,
     val yellow: Color,
-    /** A tile with a tint of the accent, for a selected item. [text] reaches 4.5:1 on it. */
+    /** A tile with the hue of the accent and the luminance of [tileHi], for a selected item. */
     val accentTile: Color = tileHi,
     /** The colors of the active border gradient, from the hyprland_active_border of the theme. */
     val border: List<Color> = listOf(blue, cyan),
     /** The angle of [border] in degrees, as in Hyprland, or null for corner to corner. */
     val borderAngle: Float? = null,
+    /** The blue of the theme for ANSI blue in the terminal output. It reaches 4.5:1 on [bg], [offTile], [tile], and [tileHi]. */
+    val termBlue: Color = blue,
 ) {
-    /** The accent of the theme, the same color as [blue]. */
+    /** The primary color, the same color as [blue]. */
     val accent: Color get() = blue
 }
 
@@ -142,6 +159,7 @@ fun PaletteSpec.toTiledColors() = TiledColors(
     accentTile = rgb(accentTile),
     border = border.map(::rgb),
     borderAngle = borderAngle,
+    termBlue = rgb(termBlue),
 )
 
 /** Tokyo Night, the theme without a computer theme in the dark mode. */

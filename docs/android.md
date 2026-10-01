@@ -188,20 +188,24 @@ See [releases](releasing.md#android-release-key) for signed builds and release s
 
 Flux follows the active Omarchy theme of the computer.
 `fluxd` sends the theme in a `flux.theme` packet when the phone connects and when the theme changes.
-Flux keeps the last theme, so the next start draws it at once.
+Flux saves the theme of each computer, so the next start draws it at once.
 
 To change the theme, open the menu of the device list. The choices are:
 
-- **Computer**, the default: the theme of the computer in scope. Without a theme from a computer, Flux uses Tokyo Night on a dark phone and Tokyo Night Day on a light phone.
+- **Computer**, the default: the theme of the computer in scope. In the scope of all computers, Flux uses the theme that changed most recently. A reconnect does not change the theme. Without a theme from the computer in scope, Flux uses Tokyo Night on a dark phone and Tokyo Night Day on a light phone. The menu shows the theme name and the computer that sent it.
 - **System**: Tokyo Night on a dark phone and Tokyo Night Day on a light phone.
 - **Light**: Tokyo Night Day.
 - **Dark**: Tokyo Night.
 
 A contrast guard maps the theme to the colors of the app. It moves only the lightness of a color, so each hue stays:
 
-- Body text and secondary text reach 4.5:1 on each surface.
-- The accent and the status colors reach 4.5:1 as text. The text on a filled button reaches 4.5:1.
-- The dim color is for borders and disabled states only, and reaches 3:1.
+- Body text and secondary text reach 4.5:1 on each surface, on the border color `line`, and on the selected tile `accentTile`. The body text keeps a step of 1.4:1 from the secondary text.
+- The accent and the status colors reach 4.5:1 as text on each surface and on `accentTile`. On `line`, they reach 3:1, for icons and borders.
+- The text on a filled button reaches 4.5:1.
+- The dim color is for borders, icons, and disabled states only, and reaches 3:1. Text that carries meaning uses the secondary text color.
+- The selected tile `accentTile` takes the hue of the accent at the luminance of `tileHi`, so it does not change a contrast.
+- Red means "needs you" or an error. When the theme accent looks like red, the theme blue, cyan, or magenta takes its place as the primary color. The border gradient keeps the theme accent.
+- ANSI blue in the agent output uses the theme blue, as in the terminal on the computer.
 - The master tile takes the gradient of `hyprland_active_border`, at 3:1 or more.
 
 The theme engine is in `app/src/main/java/org/omarchy/flux/theme`.
@@ -259,7 +263,7 @@ The pages are:
 - `empty` for the app with no computers.
 - `icon` for the launcher and notification icons.
 
-To draw the sample computer in a sample theme, set `FLUX_THEME` to `neon`, `tokyo-night`, `tokyo-night-day`, `catppuccin-latte`, or `low-contrast`. The value `none` removes the theme:
+To draw the sample computer in a sample theme, set `FLUX_THEME` to `neon`, `tokyo-night`, `tokyo-night-day`, `catppuccin-latte`, `cotton-candy`, `futurism`, or `low-contrast`. The value `none` removes the theme:
 
 ```bash
 ANDROID_SERIAL=emulator-5554 FLUX_DEMO=1 FLUX_THEME=catppuccin-latte tools/shot.sh home /tmp/home-latte.png

@@ -49,6 +49,27 @@ object SampleThemes {
         border = listOf("#8839efee"), angle = 0f,
     )
 
+    /** A dark Omarchy theme whose accent and red are 2 pinks that look alike. */
+    val cottonCandy = theme(
+        "cotton-candy", true,
+        "background" to "#191125", "dark_background" to "#130d1c", "darker_background" to "#0d0913",
+        "lighter_background" to "#271f35", "foreground" to "#e9e6ef", "muted" to "#685c81",
+        "accent" to "#e1a4ed", "selection" to "#513a5d", "red" to "#f097c5", "yellow" to "#f9dd7d",
+        "orange" to "#feb79e", "green" to "#58e3dc", "cyan" to "#61e6ff", "blue" to "#8eaffe",
+        "magenta" to "#e1a4ed", "bright_blue" to "#bdd1fe",
+        border = listOf("#61e6ffee", "#e1a4edee"), angle = 45f,
+    )
+
+    /** A dark Omarchy theme whose accent is its red, and whose blue is a near white. */
+    val futurism = theme(
+        "futurism", true,
+        "background" to "#0a1428", "lighter_background" to "#17294a", "foreground" to "#f0f8ff",
+        "muted" to "#53627a", "accent" to "#ff40a3", "red" to "#ff40a3", "yellow" to "#5076b2",
+        "orange" to "#ff7ab8", "green" to "#00bfff", "cyan" to "#f0f8ff", "blue" to "#f0f8ff",
+        "magenta" to "#ff40a3", "bright_blue" to "#00bfff", "bright_cyan" to "#00bfff",
+        "bright_magenta" to "#ff40a3",
+    )
+
     /** A broken theme: every color is a gray near the background. */
     val lowContrast = theme(
         "low-contrast", true,
@@ -57,7 +78,7 @@ object SampleThemes {
         border = listOf("#5b5b5bee", "#595959ee"),
     )
 
-    val all = listOf(neon, tokyoNight, tokyoNightDay, catppuccinLatte, lowContrast)
+    val all = listOf(neon, tokyoNight, tokyoNightDay, catppuccinLatte, cottonCandy, futurism, lowContrast)
 
     /** Returns the sample with [name], or null. */
     fun byName(name: String?): OmarchyTheme? = all.firstOrNull { it.name == name }

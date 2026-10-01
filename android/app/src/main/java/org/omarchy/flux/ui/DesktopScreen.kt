@@ -332,7 +332,7 @@ private fun ColumnScope.RemoteDesktop(d: DeviceUi, monitor: String?, hint: Boole
             if (control) "Tap clicks · hold for the right button · hold, then move to drag\n2 fingers scroll · pinch zooms · 1 finger moves the zoomed view"
             else "View only · pinch zooms · 1 finger moves the zoomed view",
             Modifier.fillMaxWidth().padding(horizontal = TiledGutter, vertical = 8.dp),
-            size = 11, color = Tn.dim, align = TextAlign.Center, lineHeight = 1.5f,
+            size = 11, color = Tn.sub, align = TextAlign.Center, lineHeight = 1.5f,
         )
     }
 }

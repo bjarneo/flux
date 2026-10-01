@@ -99,10 +99,6 @@ object FluxCore {
         }
         trust = TrustStore(app)
         settings = Settings(app)
-        // The last computer theme draws at once. The system keeps the night
-        // mode of the app, but a restore or a data clear can change the setting.
-        ComputerThemes.load(settings)
-        ComputerThemes.applyNightMode(app, settings.theme)
         // The trust store holds only entries with a readable certificate.
         for (t in trust.all()) {
             val identity = Identity(t.id, t.name, t.type, 8, emptyList(), emptyList())
@@ -112,6 +108,10 @@ object FluxCore {
             d.certificate = trust.certificate(t.id)
             devices[t.id] = d
         }
+        // The saved computer themes draw at once. The system keeps the night
+        // mode of the app, but a restore or a data clear can change the setting.
+        ComputerThemes.load(settings) { it in devices }
+        ComputerThemes.applyNightMode(app)
         smsSupported = SmsSync.supported(app)
         refreshWifi()
         refreshAccess()
@@ -495,7 +495,7 @@ object FluxCore {
 
     fun setTheme(mode: ThemeMode) {
         settings.theme = mode
-        ComputerThemes.applyNightMode(app, mode)
+        ComputerThemes.applyNightMode(app)
         publish()
     }
 

@@ -9,9 +9,8 @@ import org.omarchy.flux.protocol.Packet
 import org.omarchy.flux.protocol.json
 import org.omarchy.flux.theme.OmarchyTheme
 import org.omarchy.flux.theme.PaletteSpec
+import org.omarchy.flux.theme.ThemeBook
 import org.omarchy.flux.theme.nightModeOf
-import org.omarchy.flux.theme.paletteOf
-import java.util.concurrent.ConcurrentHashMap
 
 /** The Omarchy theme of 1 computer, and its palette after the contrast guard. */
 data class ComputerTheme(val deviceId: String, val theme: OmarchyTheme, val palette: PaletteSpec) {
@@ -20,31 +19,30 @@ data class ComputerTheme(val deviceId: String, val theme: OmarchyTheme, val pale
 
 /**
  * The Omarchy themes of the computers. A computer sends flux.theme when
- * it connects and when its theme changes. Flux keeps the theme of each
- * computer while it runs, and the last theme in [Settings], so that the
- * next cold start draws it at once. [ThemeMode.Computer] follows the
- * computer in [scope]. Without a scope, or for a computer that sent no
- * theme, it follows the last theme.
+ * it connects and when its theme changes. [ThemeBook] keeps the theme of
+ * each computer and picks the theme to draw. [Settings] keeps the book, so
+ * that the next cold start draws the theme at once. [ThemeMode.Computer]
+ * follows the computer in [scope], or the last theme without a scope.
  */
 object ComputerThemes {
     private const val TAG = "FluxTheme"
     private val main = Handler(Looper.getMainLooper())
-    private val themes = ConcurrentHashMap<String, ComputerTheme>()
-    @Volatile private var last: ComputerTheme? = null
-    @Volatile private var applied: ThemeMode? = null
+    private val book = ThemeBook()
+
+    /** The night mode that the app set last. Only the main thread uses it. */
+    private var applied: ThemeMode? = null
 
     /** The computer whose theme the app follows, or null for all computers. */
     @Volatile var scope: String? = null
         private set
 
-    /** Reads the last theme from [settings]. [FluxCore.init] calls it before the first state. */
-    fun load(settings: Settings) {
-        val from = settings.computerThemeFrom ?: return
-        val body = settings.computerTheme?.let { runCatching { json.parseToJsonElement(it) as? JsonObject }.getOrNull() } ?: return
-        val theme = OmarchyTheme.parse(body) ?: return
-        val t = ComputerTheme(from, theme, paletteOf(theme))
-        themes[from] = t
-        last = t
+    /**
+     * Reads the themes from [settings]. It keeps only the computers that
+     * [paired] accepts. [FluxCore.init] calls it before the first state.
+     */
+    fun load(settings: Settings, paired: (String) -> Boolean) {
+        val saved = settings.computerThemes?.let { runCatching { json.parseToJsonElement(it) as? JsonObject }.getOrNull() }
+        book.load(saved, paired)
     }
 
     /**
@@ -53,30 +51,21 @@ object ComputerThemes {
      */
     fun onPacket(core: FluxCore, d: Device, p: Packet) {
         val theme = OmarchyTheme.parse(p.body) ?: return
-        val known = themes[d.id]?.takeIf { it.theme == theme }
-        val t = known ?: ComputerTheme(d.id, theme, paletteOf(theme)).also { themes[d.id] = it }
-        if (last != t) {
-            last = t
-            core.settings.computerTheme = theme.toJson().toString()
-            core.settings.computerThemeFrom = d.id
-        }
-        if (known == null) Log.i(TAG, "${d.identity.deviceName} uses the theme ${theme.name.ifEmpty { "without a name" }}")
-        applyNightMode(core.app, core.settings.theme)
+        if (!book.put(d.id, theme)) return
+        save(core.settings)
+        Log.i(TAG, "${d.identity.deviceName} uses the theme ${theme.name.ifEmpty { "without a name" }}")
+        applyNightMode(core.app)
     }
 
-    /**
-     * Forgets the theme of a computer that is no longer paired. When it
-     * sent the last theme, the theme of another computer takes its place.
-     */
+    /** Forgets the theme of a computer that is no longer paired. */
     fun forget(core: FluxCore, id: String) {
-        themes.remove(id) ?: return
-        if (last?.deviceId == id) {
-            val next = themes.values.firstOrNull()
-            last = next
-            core.settings.computerTheme = next?.theme?.toJson()?.toString()
-            core.settings.computerThemeFrom = next?.deviceId
-        }
-        applyNightMode(core.app, core.settings.theme)
+        if (!book.forget(id)) return
+        save(core.settings)
+        applyNightMode(core.app)
+    }
+
+    private fun save(settings: Settings) {
+        settings.computerThemes = book.toJson().toString()
     }
 
     /**
@@ -91,33 +80,41 @@ object ComputerThemes {
 
     /** Applies the night mode again and publishes the state, for example after a debug theme change. */
     fun refresh() {
-        applyNightMode(FluxCore.app, FluxCore.settings.theme)
+        applyNightMode(FluxCore.app)
         FluxCore.publish()
     }
 
-    /** The theme that [ThemeMode.Computer] follows now, or null when no computer has sent one. */
+    /**
+     * The theme that [ThemeMode.Computer] follows now. It is null when the
+     * computer in scope, or each computer without a scope, sent no theme.
+     */
     fun current(): ComputerTheme? {
         val s = scope
         DebugTheme.current()?.let { if (s == null || s == it.deviceId) return it }
-        return s?.let { themes[it] } ?: last
+        return book.current(s)
     }
 
     /** The name of the theme of each computer, by device ID. */
     fun names(): Map<String, String> {
-        val names = themes.mapValues { it.value.name }
+        val names = book.names()
         return DebugTheme.current()?.let { names + (it.deviceId to it.name) } ?: names
     }
 
     /**
      * Sets the night mode of the app on Android 12 and later, so that the
      * system splash screen and the window background match the palette.
-     * It calls the system only when the night mode changes.
+     * The main thread reads the setting and the theme when it applies the
+     * night mode, so that a late call cannot apply an old value. It calls
+     * the system only when the night mode changes.
      */
-    fun applyNightMode(context: Context, mode: ThemeMode) {
-        val night = nightModeOf(mode, current()?.palette)
+    fun applyNightMode(context: Context) {
+        if (Looper.myLooper() == Looper.getMainLooper()) applyNow(context) else main.post { applyNow(context) }
+    }
+
+    private fun applyNow(context: Context) {
+        val night = nightModeOf(FluxCore.settings.theme, current()?.palette)
         if (night == applied) return
         applied = night
-        if (Looper.myLooper() == Looper.getMainLooper()) Android.setNightMode(context, night)
-        else main.post { Android.setNightMode(context, night) }
+        Android.setNightMode(context, night)
     }
 }

@@ -179,7 +179,7 @@ fun TiledNewPaneScreen(d: DeviceUi, onBack: () -> Unit, onOpened: (what: String,
                         }
                     }
                     if (kinds.isEmpty()) {
-                        T("No coding agent is installed on ${d.name}.", Modifier.padding(horizontal = 4.dp), size = 11, color = Tn.dim)
+                        T("No coding agent is installed on ${d.name}.", Modifier.padding(horizontal = 4.dp), size = 11, color = Tn.sub)
                     }
                     TileLabel("Folder", Modifier.padding(start = 4.dp, top = 12.dp))
                     FolderPicker(folders, target, query, enabled = !busy, onQuery = { query = it }) {
@@ -217,7 +217,7 @@ private fun RunTile(choice: String, running: Int, selected: Boolean, enabled: Bo
                 T(if (terminal) "terminal" else choice, size = 14, weight = FontWeight.SemiBold, family = Mono, maxLines = 1)
                 val sub = if (terminal) "a shell" else agentProduct(choice)
                 val line = listOfNotNull(sub, if (running > 0) "$running running" else null).joinToString(" · ")
-                if (line.isNotEmpty()) T(line, size = 11, color = Tn.dim, maxLines = 1)
+                if (line.isNotEmpty()) T(line, size = 11, color = Tn.sub, maxLines = 1)
             }
         }
     }
@@ -245,7 +245,7 @@ private fun FolderPicker(
             onValueChange = onQuery,
             modifier = m,
             enabled = enabled,
-            placeholder = { T("Search, or type a path such as ~/Code/app", color = Tn.dim, size = 13) },
+            placeholder = { T("Search, or type a path such as ~/Code/app", color = Tn.sub, size = 13) },
             leadingIcon = { Sym(Ic.search, tint = Tn.dim, size = 20.dp) },
             textStyle = TextStyle(color = Tn.text, fontFamily = Mono, fontSize = 14.sp),
             shape = TileShape,
@@ -264,7 +264,7 @@ private fun FolderPicker(
     }
     for (f in shown) FolderRow(f, selected = f.path == selected, enabled = enabled) { onSelect(f.path) }
     if (shown.isEmpty() && !looksLikePath(query)) {
-        T("No folder has \"$query\". Type a path that starts with ~/ or /.", Modifier.padding(horizontal = 4.dp), size = 12, color = Tn.dim)
+        T("No folder has \"$query\". Type a path that starts with ~/ or /.", Modifier.padding(horizontal = 4.dp), size = 12, color = Tn.sub)
     }
 }
 
@@ -282,10 +282,10 @@ private fun FolderRow(f: FolderChoice, selected: Boolean, enabled: Boolean, type
             Sym(if (f.path == "~") Ic.home else Ic.folder, tint = if (selected || typed) Tn.blue else Tn.sub, size = 20.dp)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 T(f.name, size = 14, weight = FontWeight.SemiBold, maxLines = 1)
-                T(f.path, size = 11, color = Tn.dim, family = Mono, maxLines = 1)
+                T(f.path, size = 11, color = Tn.sub, family = Mono, maxLines = 1)
             }
-            if (typed) T("typed", size = 11, color = Tn.dim)
-            if (f.agents > 0) T(if (f.agents == 1) "1 agent" else "${f.agents} agents", size = 11, color = Tn.dim)
+            if (typed) T("typed", size = 11, color = Tn.sub)
+            if (f.agents > 0) T(if (f.agents == 1) "1 agent" else "${f.agents} agents", size = 11, color = Tn.sub)
             if (selected) Sym(Ic.check, "Selected", tint = Tn.blue, size = 18.dp)
         }
     }
@@ -316,7 +316,7 @@ private fun StartBar(
                 ChoiceKey("New workspace", newWorkspace, Modifier.weight(1f), enabled = !busy) { onNewWorkspace(true) }
             }
         } else {
-            T("Opens in a new workspace, because no workspace has this folder.", Modifier.padding(horizontal = 4.dp), size = 11, color = Tn.dim)
+            T("Opens in a new workspace, because no workspace has this folder.", Modifier.padding(horizontal = 4.dp), size = 11, color = Tn.sub)
         }
         if (problem != null) T(problem, Modifier.padding(horizontal = 4.dp), size = 12, color = Tn.red)
         Box(
@@ -412,7 +412,7 @@ fun TiledTerminalScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Sym(Ic.terminal, tint = Tn.green, size = 18.dp)
                         T(term?.title?.ifEmpty { null } ?: "shell", Modifier.weight(1f), size = 13, weight = FontWeight.SemiBold, family = Mono, maxLines = 1)
-                        T(pane, size = 10, color = Tn.dim, family = Mono, maxLines = 1)
+                        T(pane, size = 10, color = Tn.sub, family = Mono, maxLines = 1)
                         closer.Button()
                     }
                     closer.error?.let { T(it, size = 11, color = Tn.red) }
@@ -493,7 +493,7 @@ private fun TerminalControls(d: DeviceUi, pane: String, reply: HerdrReply?) {
                 value = field,
                 onValueChange = { field = it },
                 modifier = m,
-                placeholder = { T("Type a command", color = Tn.dim, family = Mono) },
+                placeholder = { T("Type a command", color = Tn.sub, family = Mono) },
                 textStyle = TextStyle(color = Tn.text, fontFamily = Mono, fontSize = 14.sp),
                 shape = TileShape,
                 singleLine = true,

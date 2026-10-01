@@ -19,18 +19,33 @@ class ThemePaletteTest {
         assertTrue("$what: ${hex(a)} on ${hex(b)} is ${"%.2f".format(r)}:1, needs $least:1", r >= least)
     }
 
-    /** Asserts each contrast that the palette promises. */
+    /** Asserts each contrast that the palette promises, see the contract of [PaletteSpec]. */
     private fun assertReadable(p: PaletteSpec) {
-        for (s in p.surfaces + p.line + p.accentTile) assertContrast("${p.name} text", p.text, s, TEXT_CONTRAST)
-        for (s in p.surfaces) assertContrast("${p.name} sub", p.sub, s, TEXT_CONTRAST)
+        assertEquals(p.surfaces + p.line + p.accentTile, p.containers)
+        for (s in p.containers) {
+            assertContrast("${p.name} text", p.text, s, TEXT_CONTRAST)
+            assertContrast("${p.name} sub", p.sub, s, TEXT_CONTRAST)
+        }
+        assertContrast("${p.name} text against sub", p.text, p.sub, TEXT_STEP)
         for (s in listOf(p.bg, p.tile, p.tileHi)) assertContrast("${p.name} dim", p.dim, s, NON_TEXT_CONTRAST)
         val fills = listOf("accent", "cyan", "green", "magenta", "orange", "red", "yellow").zip(p.fills)
         for ((name, c) in fills) {
-            for (s in p.surfaces) assertContrast("${p.name} $name as text", c, s, TEXT_CONTRAST)
+            for (s in p.surfaces + p.accentTile) assertContrast("${p.name} $name as text", c, s, TEXT_CONTRAST)
+            assertContrast("${p.name} $name as an icon on line", c, p.line, NON_TEXT_CONTRAST)
             assertContrast("${p.name} ink on $name", p.onAccent, c, TEXT_CONTRAST)
         }
+        for (s in p.surfaces) assertContrast("${p.name} terminal blue", p.termBlue, s, TEXT_CONTRAST)
         assertTrue("${p.name} has a border", p.border.isNotEmpty())
         for (b in p.border) for (s in listOf(p.bg, p.tile)) assertContrast("${p.name} border", b, s, NON_TEXT_CONTRAST)
+        assertApart(p)
+        // The selected tile has the luminance of tileHi, so it does not change a contrast.
+        assertTrue("${p.name} accent tile", contrast(p.accentTile, p.tileHi) < 1.03)
+    }
+
+    /** Asserts that the accent does not look like red, because red means "needs you". */
+    private fun assertApart(p: PaletteSpec) {
+        val d = distance(p.accent, p.red)
+        assertTrue("${p.name}: the accent ${hex(p.accent)} and red ${hex(p.red)} are ${"%.3f".format(d)} apart", d >= MIN_ACCENT_DISTANCE)
     }
 
     private fun hueDistance(a: Double, b: Double): Double {
@@ -92,8 +107,10 @@ class ThemePaletteTest {
         assertTrue("the light body ink is a neutral", oklch(TokyoNightDay.text).c < 0.06)
         // The light body ink and the accent no longer look alike.
         assertTrue(oklch(TokyoNightDay.accent).c > 3 * oklch(TokyoNightDay.text).c)
-        // Dark: the second ink is about #8089B3, and the dim borders reach 3:1.
-        assertEquals(0x858EB8, TokyoNight.sub)
+        // The light second ink is a little darker than #4C5A94, so that it also reads on line.
+        assertEquals(0x44518A, TokyoNightDay.sub)
+        // Dark: the second ink is about #8089B3, a little lighter, so that it also reads on line.
+        assertEquals(0x8B94BE, TokyoNight.sub)
         assertEquals(0x16161E, TokyoNight.bg)
         assertEquals(0xC0CAF5, TokyoNight.text)
     }
@@ -110,8 +127,11 @@ class ThemePaletteTest {
         assertEquals(0xD563FE, p.accent)
         assertEquals(0xFE288F, p.red)
         assertEquals(0x21E4F8, p.cyan)
-        // The accent, not the lime blue, is the primary color.
+        // The accent, not the lime blue, is the primary color. The lime blue is the ANSI blue.
         assertNotEquals(0xBDFF6D, p.accent)
+        assertEquals(0xBDFF6D, p.termBlue)
+        // The selected tile moves toward the purple of the accent.
+        assertTrue(distance(p.accentTile, p.accent) < distance(p.tileHi, p.accent))
         // The muted color gets lighter for its 3:1 and keeps its hue.
         assertNotEquals(0x665A8C, p.dim)
         assertSameHue("muted", 0x665A8C, p.dim)
@@ -166,13 +186,83 @@ class ThemePaletteTest {
         assertEquals(0xEFF1F5, p.bg)
         assertEquals(0xE6E9EF, p.tile)
         assertEquals(0xDCE0E8, p.tileHi)
-        assertEquals(0x4C4F69, p.text)
+        // The body ink is a little darker than the foreground, so that the second ink can sit between it and the page.
+        assertTrue(luminance(p.text) < luminance(0x4C4F69))
+        assertSameHue("text", 0x4C4F69, p.text)
+        // The ANSI blue is the theme blue, not the mauve accent.
+        assertSameHue("terminal blue", 0x1E66F5, p.termBlue)
         for (key in listOf("red", "green", "yellow", "cyan", "magenta")) {
             val c = p.fills[listOf("accent", "cyan", "green", "magenta", "orange", "red", "yellow").indexOf(key)]
             assertSameHue(key, theme[key]!!, c)
         }
         // 1 border color makes a solid border.
         assertEquals(1, p.border.size)
+    }
+
+    @Test
+    fun anAccentThatLooksLikeRedGivesWayToTheThemeBlue() {
+        // cotton-candy: the accent #e1a4ed and red #f097c5 are 2 pinks.
+        val theme = SampleThemes.cottonCandy
+        assertTrue(distance(theme["accent"]!!, theme["red"]!!) < MIN_ACCENT_DISTANCE)
+        val p = paletteOf(theme)
+        assertReadable(p)
+        assertEquals(0x8EAFFE, p.accent)
+        assertEquals(0xF097C5, p.red)
+        assertEquals(0x61E6FF, p.cyan)
+        assertEquals(0x8EAFFE, p.termBlue)
+        // The border keeps the accent of the theme, so the theme stays recognizable.
+        assertEquals(listOf(0x61E6FF, 0xE1A4ED), p.border)
+        // The selected tile moves toward the new accent.
+        assertTrue(distance(p.accentTile, p.accent) < distance(p.tileHi, p.accent))
+    }
+
+    @Test
+    fun anAccentThatIsRedGivesWayToAColorWithChroma() {
+        // futurism: the accent is red, and blue and cyan are a near white.
+        val theme = SampleThemes.futurism
+        assertEquals(theme["accent"], theme["red"])
+        val p = paletteOf(theme)
+        assertReadable(p)
+        // The near white has no chroma, so bright_blue takes the place of the accent.
+        assertEquals(0x00BFFF, p.accent)
+        assertSameHue("red", 0xFF40A3, p.red)
+        // The terminal keeps the near white blue of the theme.
+        assertEquals(0xF0F8FF, p.termBlue)
+        // Without a theme border, the gradient starts at the accent of the theme.
+        assertSameHue("border", 0xFF40A3, p.border.first())
+        assertNull(p.borderAngle)
+    }
+
+    @Test
+    fun aThemeWithoutChromaTakesTheTokyoNightAccent() {
+        // snow: each color is the same near black, so no theme color can be the accent.
+        val ink = 0x0A0A0A
+        val keys = listOf("foreground", "accent", "red", "green", "yellow", "orange", "cyan", "blue", "magenta", "bright_blue", "bright_cyan", "bright_magenta")
+        val theme = OmarchyTheme("snow", false, mapOf("background" to 0xFFFFFF, "muted" to 0x919191) + keys.associateWith { ink })
+        val p = paletteOf(theme)
+        assertReadable(p)
+        assertFalse(p.dark)
+        assertSameHue("accent", TokyoNightDay.accent, p.accent)
+        assertEquals(ink, p.red)
+    }
+
+    @Test
+    fun anAccentFarFromRedStays() {
+        for (theme in listOf(SampleThemes.neon, SampleThemes.tokyoNight, SampleThemes.catppuccinLatte)) {
+            val p = paletteOf(theme)
+            assertSameHue("${theme.name} accent", theme["accent"]!!, p.accent)
+        }
+    }
+
+    @Test
+    fun theTintKeepsTheLuminance() {
+        val t = tint(0x24283B, 0x7AA2F7, 0.18)
+        assertNotEquals(0x24283B, t)
+        assertEquals(luminance(0x24283B), luminance(t), 0.002)
+        assertTrue(distance(t, 0x7AA2F7) < distance(0x24283B, 0x7AA2F7))
+        assertEquals(0.0, distance(0x7AA2F7, 0x7AA2F7), 0.0)
+        assertTrue(distance(0xE1A4ED, 0xF097C5) < MIN_ACCENT_DISTANCE)
+        assertTrue(distance(0x8EAFFE, 0xF097C5) > MIN_ACCENT_DISTANCE)
     }
 
     @Test
@@ -184,8 +274,10 @@ class ThemePaletteTest {
         // The page goes darker so that the ink can reach its contrast.
         assertTrue(luminance(p.bg) < luminance(theme["background"]!!))
         assertTrue(contrast(p.text, p.bg) >= TEXT_CONTRAST)
-        assertSameHue("accent", theme["accent"]!!, p.accent)
         assertSameHue("red", theme["red"]!!, p.red)
+        // The gray blue accent is too close to the gray red, and the theme has no
+        // other color with chroma. The Tokyo Night blue takes the place of the accent.
+        assertSameHue("accent", TokyoNight.accent, p.accent)
     }
 
     @Test

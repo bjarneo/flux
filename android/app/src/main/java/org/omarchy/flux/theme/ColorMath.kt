@@ -1,11 +1,13 @@
 package org.omarchy.flux.theme
 
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 /*
  * The color math of the theme engine. A color is an Int in the form
@@ -67,6 +69,19 @@ fun oklch(rgb: Int): Oklch {
     return Oklch(lab, hypot(a, bb), atan2(bb, a))
 }
 
+/**
+ * The distance of 2 colors in OKLAB, from 0 for the same color. 0.02 is
+ * about the smallest difference that people see. 0.1 is a clear
+ * difference.
+ */
+fun distance(a: Int, b: Int): Double {
+    val x = oklch(a)
+    val y = oklch(b)
+    val da = x.c * cos(x.h) - y.c * cos(y.h)
+    val db = x.c * sin(x.h) - y.c * sin(y.h)
+    return sqrt((x.l - y.l).pow(2) + da * da + db * db)
+}
+
 /** Converts OKLAB to linear sRGB. The values can be outside 0 to 1. */
 private fun linearRgb(l: Double, a: Double, b: Double): DoubleArray {
     val l3 = (l + 0.3963377774 * a + 0.2158037573 * b).pow(3)
@@ -106,6 +121,9 @@ fun rgbOf(c: Oklch): Int {
 class Need(val against: Int, val ratio: Double) {
     internal val lum = luminance(against)
 }
+
+/** True when [rgb] meets each of the [needs]. */
+fun meets(rgb: Int, needs: List<Need>): Boolean = needs.all { contrast(rgb, it.against) >= it.ratio }
 
 /** The step of the lightness search, in OKLCH lightness. */
 private const val LIGHTNESS_STEP = 0.002
@@ -147,6 +165,25 @@ fun guard(rgb: Int, needs: List<Need>, lighter: Boolean): Int {
         if (!any) break
     }
     return best
+}
+
+/**
+ * Returns the color at [t] on the line from [base] to [toward], with the
+ * luminance of [base]. The result takes the hue of [toward], but each
+ * color keeps its contrast against it, as against [base].
+ */
+fun tint(base: Int, toward: Int, t: Double): Int {
+    val o = oklch(mix(base, toward, t))
+    val target = luminance(base)
+    var lo = 0.0
+    var hi = 1.0
+    repeat(30) {
+        val mid = (lo + hi) / 2
+        if (luminance(rgbOf(Oklch(mid, o.c, o.h))) < target) lo = mid else hi = mid
+    }
+    val a = rgbOf(Oklch(lo, o.c, o.h))
+    val b = rgbOf(Oklch(hi, o.c, o.h))
+    return if (abs(luminance(a) - target) < abs(luminance(b) - target)) a else b
 }
 
 /** Reduces the chroma of a color to [max] at most. The lightness and the hue stay. */

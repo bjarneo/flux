@@ -34,17 +34,13 @@ class Settings(context: Context) {
         set(v) = prefs.edit().putString("theme", v.key).apply()
 
     /**
-     * The last theme that a computer sent, in the form of the flux.theme
-     * body, or null. The next cold start draws it at once.
+     * The theme of each computer and the last theme, in the JSON form of
+     * [org.omarchy.flux.theme.ThemeBook.toJson], or null. The next cold
+     * start draws the theme at once.
      */
-    var computerTheme: String?
-        get() = prefs.getString("computerTheme", null)
-        set(v) = prefs.edit().putString("computerTheme", v).apply()
-
-    /** The device ID of the computer that sent [computerTheme]. */
-    var computerThemeFrom: String?
-        get() = prefs.getString("computerThemeFrom", null)
-        set(v) = prefs.edit().putString("computerThemeFrom", v).apply()
+    var computerThemes: String?
+        get() = prefs.getString("computerThemes", null)
+        set(v) = prefs.edit().putString("computerThemes", v).apply()
 
     /** Sends the calls of this phone to the computers. It needs the phone permission. */
     var callAlerts: Boolean

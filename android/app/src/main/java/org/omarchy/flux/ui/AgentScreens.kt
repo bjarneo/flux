@@ -109,7 +109,8 @@ private fun statusLabel(s: AgentStatus): String = when (s) {
 private fun StatusLine(s: AgentStatus) {
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         Dot(statusColor(s), 7.dp)
-        TileLabel(statusLabel(s), color = statusColor(s))
+        // The dim color is not for text, so an idle label takes the second ink.
+        TileLabel(statusLabel(s), color = if (s == AgentStatus.Idle || s == AgentStatus.Unknown) Tn.sub else statusColor(s))
     }
 }
 
@@ -189,12 +190,12 @@ private fun AgentTile(a: HerdrAgent, onClick: () -> Unit) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             StatusLine(a.status)
             Spacer(Modifier.weight(1f))
-            T(a.agent, size = 10, color = Tn.dim, family = Mono, maxLines = 1)
+            T(a.agent, size = 10, color = Tn.sub, family = Mono, maxLines = 1)
         }
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
                 T(a.project.ifEmpty { a.pane }, Modifier.weight(1f, fill = false), size = 15, weight = FontWeight.SemiBold, maxLines = 1)
-                if (a.workspace.isNotEmpty() && a.workspace != a.project) T(a.workspace, size = 10, color = Tn.dim, family = Mono, maxLines = 1)
+                if (a.workspace.isNotEmpty() && a.workspace != a.project) T(a.workspace, size = 10, color = Tn.sub, family = Mono, maxLines = 1)
             }
             T(a.title.ifEmpty { a.pane }, size = 11, color = Tn.sub, maxLines = 1)
         }
@@ -208,8 +209,8 @@ private fun TerminalTile(t: HerdrTerminal, onClick: () -> Unit) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Sym(Ic.terminal, tint = Tn.green, size = 18.dp)
             T(t.project.ifEmpty { t.pane }, Modifier.weight(1f), size = 14, weight = FontWeight.SemiBold, maxLines = 1)
-            if (t.workspace.isNotEmpty() && t.workspace != t.project) T(t.workspace, size = 10, color = Tn.dim, family = Mono, maxLines = 1)
-            T(t.pane, size = 10, color = Tn.dim, family = Mono, maxLines = 1)
+            if (t.workspace.isNotEmpty() && t.workspace != t.project) T(t.workspace, size = 10, color = Tn.sub, family = Mono, maxLines = 1)
+            T(t.pane, size = 10, color = Tn.sub, family = Mono, maxLines = 1)
         }
         T(t.title.ifEmpty { "shell" }, size = 11, color = Tn.sub, family = Mono, maxLines = 1)
     }
@@ -279,7 +280,7 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
                     } else {
                         T(
                             "To answer from this phone, set herdr_control = true on ${d.name}.",
-                            Modifier.padding(horizontal = 4.dp), size = 11, color = Tn.dim,
+                            Modifier.padding(horizontal = 4.dp), size = 11, color = Tn.sub,
                         )
                     }
                 }
@@ -296,7 +297,7 @@ private fun AgentHeader(a: HerdrAgent, closer: PaneCloser?) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             StatusLine(a.status)
             Spacer(Modifier.weight(1f))
-            T(a.pane, size = 10, color = Tn.dim, family = Mono, maxLines = 1)
+            T(a.pane, size = 10, color = Tn.sub, family = Mono, maxLines = 1)
             closer?.Button()
         }
         if (a.title.isNotEmpty()) T(a.title, size = 13, weight = FontWeight.SemiBold, maxLines = 1)
@@ -343,10 +344,10 @@ internal fun AgentOutput(out: HerdrOutput?, modifier: Modifier) {
                 SelectionContainer {
                     Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(vertical = 10.dp)) {
                         val pad = Modifier.padding(horizontal = TermPad)
-                        if (out.truncated) T("Older lines are cut.", pad.padding(bottom = 6.dp), size = 10, color = Tn.dim, family = Mono)
+                        if (out.truncated) T("Older lines are cut.", pad.padding(bottom = 6.dp), size = 10, color = Tn.sub, family = Mono)
                         out.error?.let { T(it, pad.padding(bottom = 6.dp), size = 11, color = Tn.red) }
                         if (out.lines.isEmpty()) {
-                            T("No output yet.", pad, size = 11, color = Tn.dim, family = Mono)
+                            T("No output yet.", pad, size = 11, color = Tn.sub, family = Mono)
                         } else {
                             TermLines(out.lines, width)
                         }
@@ -549,7 +550,7 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
                     value = field,
                     onValueChange = { field = it },
                     modifier = m,
-                    placeholder = { T("Write to ${agent.agent}", color = Tn.dim) },
+                    placeholder = { T("Write to ${agent.agent}", color = Tn.sub) },
                     textStyle = TextStyle(color = Tn.text, fontSize = 14.sp),
                     shape = TileShape,
                     maxLines = 4,
