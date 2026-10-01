@@ -1,8 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- The system splash screen shows only the background. The start animation in the app then draws the mark. -->
+    <!--
+        The approval screen and the ring screen: the system splash screen shows only the background.
+        The night mode of the app selects the light or the dark background.
+    -->
     <style name="Theme.Flux" parent="Base.Theme.Flux">
         <item name="android:windowSplashScreenBackground">@color/flux_bg</item>
         <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+    </style>
+
+    <!--
+        The main window: the system splash screen shows the Flux mark on the background of the theme.
+        The splash screen closes when the app draws its first frame, so the app plays no start animation of its own.
+    -->
+    <style name="Theme.Flux.Main" parent="Theme.Flux">
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/flux_splash_mark</item>
     </style>
 </resources>

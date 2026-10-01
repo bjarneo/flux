@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        The Flux mark in the system splash screen, on flux_bg: the ink and the accent of Tokyo Night Day.
+        values-night has the Tokyo Night colors.
+    -->
+    <color name="flux_splash_fg">#FF343B58</color>
+    <color name="flux_splash_accent">#FF2457B8</color>
+</resources>

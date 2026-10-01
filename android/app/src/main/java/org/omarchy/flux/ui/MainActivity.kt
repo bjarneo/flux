@@ -85,9 +85,8 @@ class MainActivity : ComponentActivity() {
         FluxService.start(this, if (savedInstanceState == null) FluxService.ACTION_SCAN else null)
         debugShowWhenLocked(intent)
         takeOpenAgent(intent)
-        // The start animation plays when the launcher starts the app, not after a recreation or a notification tap.
-        val splash = savedInstanceState == null && intent?.hasCategory(android.content.Intent.CATEGORY_LAUNCHER) == true
-        setContent { TiledTheme { FluxRoot(this, splash) } }
+        // The system splash screen shows the Flux mark until the first frame. The app plays no start animation.
+        setContent { TiledTheme { FluxRoot(this) } }
     }
 
     /**
@@ -240,11 +239,10 @@ private data class Outgoing(val deviceId: String, val timestamp: Long, val key: 
 private val DestinationPages = setOf("inbox", "send", "control", "computers", "devices", "sync")
 
 @Composable
-fun FluxRoot(activity: MainActivity, splash: Boolean = false) {
+fun FluxRoot(activity: MainActivity) {
     val core by FluxCore.state.collectAsStateWithLifecycle()
     // Debug builds with the demo add sample data for the Omarchy panel. Release builds keep the state as it is.
     val state = remember(core) { if (org.omarchy.flux.BuildConfig.DEBUG) DebugInbox.decorate(core) else core }
-    var splashing by remember { mutableStateOf(splash) }
     var nav by rememberSaveable(stateSaver = NavSaver) { mutableStateOf(Nav()) }
     // The computer in scope, or null for all computers.
     var scope by rememberSaveable { mutableStateOf<String?>(null) }
@@ -406,6 +404,5 @@ fun FluxRoot(activity: MainActivity, splash: Boolean = false) {
             )
         }
         state.ringingFrom?.let { from -> RingOverlay(from) { Ringer.stop(activity) } }
-        if (splashing) FluxSplash { splashing = false }
     }
 }
