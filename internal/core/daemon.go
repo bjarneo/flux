@@ -66,6 +66,17 @@ type Daemon struct {
 	dndGuard dndGuard
 	dndWake  chan struct{}
 
+	// themePath is the colors.toml file of the active Omarchy theme, or ""
+	// in a headless daemon, which sends no theme. themeBody is the JSON of
+	// the last theme that parsed, or nil when the file is missing or does
+	// not parse. themeErr is the last read error, so the log shows each
+	// error once. themeSend keeps the theme packets in order, so that a
+	// link never gets an old theme after a new one.
+	themePath string
+	themeBody json.RawMessage
+	themeErr  string
+	themeSend sync.Mutex
+
 	// mdns resolves the address of a paired device again. It is nil when
 	// Avahi is not available.
 	mdns *lan.MDNS
@@ -285,6 +296,10 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 		} else {
 			d.logf("media control off: %v", err)
 		}
+		// The first link can come before the theme watch starts, so the
+		// theme loads now.
+		d.themePath = desktop.ThemePath()
+		d.reloadTheme()
 	}
 	return d, nil
 }
@@ -429,6 +444,7 @@ func (d *Daemon) Run() error {
 	go d.discoveryLoop(ctx)
 	go d.batteryLoop(ctx)
 	go d.herdrLoop(ctx)
+	go d.themeLoop(ctx)
 
 	<-ctx.Done()
 	d.closeLinks()
@@ -1067,6 +1083,7 @@ func (d *Daemon) onPairedLink(dev *Device, l *lan.Link) {
 		d.mu.Unlock()
 		_ = l.Send(state)
 	}
+	d.sendThemeTo(dev, l)
 }
 
 // markDirty schedules a state event for all subscribers.
