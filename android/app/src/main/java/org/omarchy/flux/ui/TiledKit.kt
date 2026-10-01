@@ -27,15 +27,19 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -663,6 +667,25 @@ fun TileRow(minHeight: Dp, modifier: Modifier = Modifier, gap: Dp = TileGap, con
         horizontalArrangement = Arrangement.spacedBy(gap),
         content = content,
     )
+}
+
+/** The largest width of the content of a screen. A wider window, such as a tablet, shows the content in the center. */
+val ContentMaxWidth = 840.dp
+
+/**
+ * The scroll column of a screen. The scroll area fills the window, so that
+ * a drag at the side of the content also scrolls. The content is at most
+ * [ContentMaxWidth] wide and stays in the center, with the gutter at the
+ * sides and [bottom] of space after the last item.
+ */
+@Composable
+fun CappedScrollColumn(modifier: Modifier = Modifier, bottom: Dp = 24.dp, content: @Composable ColumnScope.() -> Unit) {
+    Box(modifier.fillMaxSize().verticalScroll(rememberScrollState()), contentAlignment = Alignment.TopCenter) {
+        Column(
+            Modifier.widthIn(max = ContentMaxWidth).fillMaxWidth().padding(horizontal = TiledGutter).padding(bottom = bottom),
+            content = content,
+        )
+    }
 }
 
 /**

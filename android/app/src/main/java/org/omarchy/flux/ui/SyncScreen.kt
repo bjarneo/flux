@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -218,7 +217,7 @@ fun SyncScreen(state: UiState, onBack: () -> Unit) {
         }
     }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = TiledGutter)) {
+    CappedScrollColumn(bottom = 48.dp) {
         TiledTopBar("Sync", onBack, context = "All computers")
         T("These switches apply to every paired computer.", Modifier.padding(start = 4.dp, bottom = 12.dp), size = 14, color = Tn.sub)
         Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
@@ -230,7 +229,6 @@ fun SyncScreen(state: UiState, onBack: () -> Unit) {
             }
         }
         if (state.syncClipboard) ClipAutoStatus(state)
-        Spacer(Modifier.height(48.dp))
     }
 }
 

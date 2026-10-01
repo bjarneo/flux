@@ -14,10 +14,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
@@ -71,9 +69,10 @@ fun ComputersScreen(
         }
     }
     PullToRefreshBox(isRefreshing = refreshing, onRefresh = { refreshing = true }, modifier = Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = TiledGutter).padding(bottom = 24.dp)) {
+        CappedScrollColumn {
             PhoneRow(state)
-            Band("Paired") {
+            SectionLabel("Paired")
+            Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
                 if (paired.isEmpty()) {
                     T("No computer is paired. Pair one below. A paired computer connects by itself.", Modifier.padding(horizontal = 4.dp), size = 14, color = Tn.sub)
                 }
@@ -81,11 +80,13 @@ fun ComputersScreen(
                     ComputerRow(d, inScope = scope == d.id, onScope = { onScope(if (scope == d.id) null else d.id) }, onUnpair = { onUnpair(d) })
                 }
             }
-            Band("Available") {
+            SectionLabel("Available")
+            Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
                 for (d in available) AvailableRow(d) { onPair(d) }
                 ScanRow(state, none = available.isEmpty(), first = paired.isEmpty()) { refreshing = true }
             }
-            Band("Settings") {
+            SectionLabel("Settings")
+            Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
                 val (on, total) = syncSummary(state)
                 SettingRow(Ic.sync, "Sync", "$on of $total switches on. They apply to every computer.", onClick = onSync)
                 ThemeRow(state)
