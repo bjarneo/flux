@@ -237,7 +237,8 @@ fun clipAutoLine(state: UiState): Pair<String, Boolean> = when {
  * The automatic clipboard state under the sync switches. Active needs no
  * action. A reader that the self-test did not check yet also shows as
  * automatic, and the self-test corrects it when Flux goes to the
- * background. The other states open the setup sheet on a tap.
+ * background. A tap opens the setup sheet, which also turns the automatic
+ * sync off.
  */
 @Composable
 private fun ClipAutoStatus(state: UiState) {
@@ -246,14 +247,14 @@ private fun ClipAutoStatus(state: UiState) {
     Row(
         Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 48.dp)
             .clip(RoundedCornerShape(8.dp))
-            .clickable(enabled = !active, onClickLabel = "Set up automatic sync") { showSheet = true }
+            .clickable(onClickLabel = if (active) "Change automatic sync" else "Set up automatic sync") { showSheet = true }
             .padding(horizontal = 4.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Sym(if (active) Ic.sync else Ic.paste, tint = if (active) Tn.green else Tn.sub, size = 18.dp)
         T(label, Modifier.weight(1f), size = 13, color = if (active) Tn.green else Tn.sub)
-        if (!active) Sym(Ic.chevron, tint = Tn.sub, size = 18.dp)
+        Sym(Ic.chevron, tint = Tn.sub, size = 18.dp)
     }
     if (showSheet) ClipAutoSheet(state) { showSheet = false }
 }
@@ -267,8 +268,9 @@ private val CLIP_SETUP_COMMANDS = listOf(
 
 /**
  * The setup sheet for the automatic clipboard sync. It opens the overlay
- * permission screen and shows the adb commands with a copy button. After
- * each reboot or update, the user opens Flux once.
+ * permission screen and shows the adb commands with a copy button. The
+ * switch at the end turns the sync on after the accesses are in place.
+ * After each reboot or update, the user opens Flux once.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -283,7 +285,7 @@ private fun ClipAutoSheet(state: UiState, onDismiss: () -> Unit) {
             TileLabel("Automatic clipboard sync", color = Tn.sub)
             T(
                 "Flux copies from other apps to the computer without the app open. Grant the access once with adb. " +
-                    "Open Flux once after each reboot or update.",
+                    "Then turn on the switch at the end. Open Flux once after each reboot or update.",
                 size = 13, color = Tn.sub, lineHeight = 1.3f,
             )
             if (!state.overlayAccess) {
@@ -303,8 +305,48 @@ private fun ClipAutoSheet(state: UiState, onDismiss: () -> Unit) {
                 "The Appear on top switch in the Android app settings does the same as the second command.",
                 size = 12, color = Tn.sub, lineHeight = 1.3f,
             )
+            T(
+                "The log access covers the system log of all apps. Flux reads only the lines of the clipboard service.",
+                size = 12, color = Tn.sub, lineHeight = 1.3f,
+            )
+            ClipAutoSwitch(state)
             Spacer(Modifier.height(16.dp))
         }
+    }
+}
+
+/**
+ * The switch of the automatic clipboard sync. It is off by default, and it
+ * turns on only after the log access and the overlay access are in place.
+ * So Android shows its log access dialog only after the user asks for the
+ * sync. The switch can always turn off.
+ */
+@Composable
+private fun ClipAutoSwitch(state: UiState) {
+    val on = state.autoClipboard
+    val ready = state.readLogs && state.overlayAccess
+    val enabled = ready || on
+    val detail = when {
+        on && !ready -> "Flux needs both accesses above. Then the automatic sync starts."
+        !state.readLogs -> "Run the commands above first. Then turn on this switch."
+        !state.overlayAccess -> "Allow drawing over apps first. Then turn on this switch."
+        on -> clipAutoLine(state).first
+        Build.VERSION.SDK_INT >= 33 -> "Android then asks for log access. Tap Allow one-time access."
+        else -> "Flux then reads each copy from the system log."
+    }
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(TileShape).background(Tn.tile).border(1.dp, Tn.line, TileShape)
+            .toggleable(value = on, enabled = enabled, role = Role.Switch, onValueChange = { FluxCore.setAutoClipboard(it) })
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            T("Automatic sync", size = 15, weight = FontWeight.SemiBold, color = if (enabled) Tn.text else Tn.sub)
+            T(detail, size = 13, color = Tn.sub, lineHeight = 1.3f)
+        }
+        // The row takes the tap and gives the state to TalkBack, so the switch only shows it.
+        Switch(checked = on, onCheckedChange = null, enabled = enabled)
     }
 }
 

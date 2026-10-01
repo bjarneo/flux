@@ -394,7 +394,9 @@ object FluxCore {
                 computerTheme = ComputerThemes.current(),
                 themeScope = ComputerThemes.scope,
                 computerThemes = ComputerThemes.names(),
-                clipAuto = ClipWatch.uiState(settings.syncClipboard, readLogs, overlayAccess),
+                autoClipboard = settings.autoClipboard,
+                clipAuto = ClipWatch.uiState(settings.syncClipboard, settings.autoClipboard, readLogs, overlayAccess),
+                readLogs = readLogs,
                 overlayAccess = overlayAccess,
             )
         }
@@ -504,6 +506,19 @@ object FluxCore {
         // The automatic reader arms again on the next ACTION_REFRESH.
         if (!on) ClipWatch.stop() else org.omarchy.flux.service.FluxService.start(app, org.omarchy.flux.service.FluxService.ACTION_REFRESH)
         sendIdentity()
+        publish()
+    }
+
+    /**
+     * Turns the automatic clipboard sync on or off. The setup sheet turns it
+     * on after the log access and the overlay access are in place. On, the
+     * next ACTION_REFRESH starts the log reader, and Android 13 and later
+     * then ask for log access. Off stops the reader.
+     */
+    fun setAutoClipboard(on: Boolean) {
+        settings.autoClipboard = on
+        if (!on) ClipWatch.stop() else org.omarchy.flux.service.FluxService.start(app, org.omarchy.flux.service.FluxService.ACTION_REFRESH)
+        refreshAccess()
         publish()
     }
 
