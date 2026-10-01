@@ -117,16 +117,7 @@ fun rememberShortWindow(): Boolean {
 fun <T> shellMotion(reduce: Boolean, ms: Int = MOTION_MS): FiniteAnimationSpec<T>? =
     if (reduce) null else tween(ms, easing = FastOutSlowInEasing)
 
-// ───────────────────────── Bands and tiles ─────────────────────────
-
-/** A labelled group of tiles. The label is a heading for TalkBack. */
-@Composable
-fun Band(label: String, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier) {
-        TileLabel(label, Modifier.padding(start = 4.dp, top = 20.dp, bottom = 8.dp).semantics { heading() }, color = Tn.sub)
-        Column(verticalArrangement = Arrangement.spacedBy(TileGap), content = content)
-    }
-}
+// ───────────────────────── Tiles ─────────────────────────
 
 /** A row of tiles with the same height. The height grows with the font size. */
 @Composable
