@@ -5,8 +5,9 @@ The peer reaches the phone through `adb forward`, so no firewall rule is
 needed on the computer. It opens TCP to the app, sends a plain-text
 identity, runs TLS as the server, exchanges the protocol 8 identity, and
 then sends a pairing request. After the user accepts on the phone, it sends
-sample battery, theme, command, media, and remote input packets and answers
-requests. It prints the packets that the phone sends.
+sample battery, command, media, and remote input packets and answers
+requests. It prints the packets that the phone sends. With --theme, it also
+sends an Omarchy theme from a colors.toml file, like fluxd.
 
 Run it with a debug build installed and USB debugging on:
 
@@ -25,6 +26,7 @@ import hashlib
 import json
 import os
 import queue
+import re
 import select
 import socket
 import ssl
@@ -109,6 +111,28 @@ def flv_frames(stream, width, height):
         return
 
 
+def theme_body(path):
+    """Reads an Omarchy colors.toml file into the body of a flux.theme packet."""
+    body = {"name": os.path.basename(os.path.dirname(os.path.abspath(path))), "colors": {}}
+    with open(path) as f:
+        for line in f:
+            m = re.match(r'\s*([a-z_]+)\s*=\s*"([^"]*)"', line)
+            if not m:
+                continue
+            key, value = m.groups()
+            if key == "mode":
+                body["mode"] = value
+            elif key == "hyprland_active_border":
+                stops = re.findall(r"(?:rgba?\(|#)([0-9a-fA-F]{6,8})", value)
+                angle = re.search(r"(-?\d+)deg", value)
+                body["border"] = {"colors": ["#" + s.lower().ljust(8, "f") for s in stops]}
+                if angle:
+                    body["border"]["angle"] = int(angle.group(1))
+            elif re.fullmatch(r"#[0-9a-fA-F]{6}", value):
+                body["colors"][key] = value.lower()
+    return body
+
+
 def make_identity(dev_id, target=None, name="flux-test-peer", desktop=False):
     body = {
         "deviceId": dev_id,
@@ -147,6 +171,7 @@ def main():
     ap.add_argument("--name", default="flux-test-peer")
     ap.add_argument("--desktop", nargs="?", const="", metavar="MONITOR",
                     help="stream a monitor of this computer to Remote desktop, the first monitor by default")
+    ap.add_argument("--theme", metavar="COLORS_TOML", help="send the Omarchy theme in this colors.toml file after pairing")
     ap.add_argument("--state", default=os.path.expanduser("~/.cache/flux-test-peer"),
                     help="keeps the peer certificate and pairing between runs")
     args = ap.parse_args()
@@ -230,6 +255,8 @@ def main():
         send("flux.mpris", {"playerList": ["spotify"], "supportAlbumArtPayload": False})
         # The touchpad screen works. The peer prints the input that it gets.
         send("flux.input", {"enabled": True, "desktop": desktop})
+        if args.theme:
+            send("flux.theme", theme_body(args.theme))
         if args.send_file:
             send_file(args.send_file)
         if args.clipboard_image:

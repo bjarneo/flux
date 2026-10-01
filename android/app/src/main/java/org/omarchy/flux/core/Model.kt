@@ -3,14 +3,21 @@ package org.omarchy.flux.core
 /** The pairing state of one device. */
 enum class PairState { None, Requested, Incoming, Paired }
 
-/** The color theme of the app. [System] follows the dark theme setting of the phone. */
+/**
+ * The color theme of the app. [Computer], the default, follows the
+ * Omarchy theme of the computer in scope. Without a theme from a computer,
+ * it follows the phone like [System]. [System] follows the dark theme
+ * setting of the phone. [Light] and [Dark] are Tokyo Night Day and Tokyo
+ * Night.
+ */
 enum class ThemeMode(val key: String) {
+    Computer("computer"),
     System("system"),
     Light("light"),
     Dark("dark");
 
     companion object {
-        fun fromKey(key: String?): ThemeMode = entries.firstOrNull { it.key == key } ?: System
+        fun fromKey(key: String?): ThemeMode = entries.firstOrNull { it.key == key } ?: Computer
     }
 }
 
@@ -126,7 +133,18 @@ data class UiState(
     val scanning: Boolean = false,
     /** False while the user has turned Flux off. */
     val enabled: Boolean = true,
-    val theme: ThemeMode = ThemeMode.System,
+    val theme: ThemeMode = ThemeMode.Computer,
+    /**
+     * The theme that [ThemeMode.Computer] draws. With a [themeScope], it is
+     * the theme of that computer. Without a scope, it is the theme that
+     * changed most recently. It is null when that computer, or each
+     * computer, sent no theme.
+     */
+    val computerTheme: ComputerTheme? = null,
+    /** The computer whose theme the app follows, or null for all computers. See [ComputerThemes.setScope]. */
+    val themeScope: String? = null,
+    /** The name of the theme of each computer that sent one, by device ID. */
+    val computerThemes: Map<String, String> = emptyMap(),
 
     /** The state of the automatic clipboard sync. See [ClipWatch]. */
     val clipAuto: ClipAutoState = ClipAutoState.Off,

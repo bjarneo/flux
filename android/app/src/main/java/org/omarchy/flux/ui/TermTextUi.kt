@@ -53,11 +53,13 @@ val TermBg: Color
 
 /**
  * The 16 theme colors of the terminal in the Tiled colors, so the agent
- * output matches the app. The bright colors use the same hues.
+ * output matches the app. The bright colors use the same hues. ANSI blue
+ * is the blue of the theme and not the accent, as in the terminal on the
+ * computer.
  */
 private fun TiledColors.termPalette() = listOf(
-    bg, red, green, yellow, blue, magenta, cyan, sub,
-    dim, red, green, yellow, blue, magenta, cyan, text,
+    bg, red, green, yellow, termBlue, magenta, cyan, sub,
+    dim, red, green, yellow, termBlue, magenta, cyan, text,
 )
 
 /** The alpha of dim text. */

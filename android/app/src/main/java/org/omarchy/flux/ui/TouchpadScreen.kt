@@ -163,7 +163,7 @@ private fun Touchpad(d: DeviceUi) {
         ) {
             T(
                 "1 finger moves · tap clicks\n2 fingers scroll · tap for the right button\nHold still to drag",
-                size = 12, color = Tn.dim, align = TextAlign.Center, lineHeight = 1.5f,
+                size = 12, color = Tn.sub, align = TextAlign.Center, lineHeight = 1.5f,
             )
         }
         Row(Modifier.fillMaxWidth().height(52.dp), horizontalArrangement = Arrangement.spacedBy(TileGap)) {
@@ -299,7 +299,7 @@ private fun TypeField(
             Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Sym(Ic.keyboard, tint = Tn.sub, size = 20.dp)
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    if (field.text == SENTINEL) T("Type on ${d.name}", color = Tn.dim, maxLines = 1)
+                    if (field.text == SENTINEL) T("Type on ${d.name}", color = Tn.sub, maxLines = 1)
                     inner()
                 }
             }

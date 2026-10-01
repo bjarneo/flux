@@ -369,7 +369,7 @@ private fun Transcript(d: Dictation, modifier: Modifier = Modifier) {
     val empty = settled.isEmpty() && pending.isEmpty()
     val text = buildAnnotatedString {
         if (empty) {
-            withStyle(SpanStyle(color = Tn.dim)) {
+            withStyle(SpanStyle(color = Tn.sub)) {
                 append(if (d.onDevice) "Speak now. This phone transcribes on the device." else "Speak now.")
             }
         } else {

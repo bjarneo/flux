@@ -28,10 +28,19 @@ class Settings(context: Context) {
         get() = prefs.getString("pinnedShortcuts", null)?.split('\n')?.filter { it.isNotEmpty() }
         set(v) = prefs.edit().putString("pinnedShortcuts", v?.joinToString("\n")).apply()
 
-    /** The color theme of the app. */
+    /** The color theme of the app. Without a choice, it is [ThemeMode.Computer]. */
     var theme: ThemeMode
         get() = ThemeMode.fromKey(prefs.getString("theme", null))
         set(v) = prefs.edit().putString("theme", v.key).apply()
+
+    /**
+     * The theme of each computer and the last theme, in the JSON form of
+     * [org.omarchy.flux.theme.ThemeBook.toJson], or null. The next cold
+     * start draws the theme at once.
+     */
+    var computerThemes: String?
+        get() = prefs.getString("computerThemes", null)
+        set(v) = prefs.edit().putString("computerThemes", v).apply()
 
     /** Sends the calls of this phone to the computers. It needs the phone permission. */
     var callAlerts: Boolean

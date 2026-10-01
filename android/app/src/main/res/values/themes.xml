@@ -3,6 +3,7 @@
     <!--
         The window theme before Compose draws, in the Tokyo Night background color.
         On Android 12 and later, the app sets its night mode, so the -night resources follow the theme of the app.
+        With a computer theme, the night mode follows its mode, and TiledTheme sets the window background and the bar icons.
     -->
     <style name="Base.Theme.Flux" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/flux_bg</item>

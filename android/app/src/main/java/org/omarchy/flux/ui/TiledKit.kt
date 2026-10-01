@@ -1,6 +1,8 @@
 package org.omarchy.flux.ui
 
 import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.LocalIndication
@@ -46,94 +48,125 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.center
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.LinearGradientShader
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.Shader
+import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.ui.graphics.takeOrElse
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.drawable.toDrawable
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.ThemeMode
+import org.omarchy.flux.theme.PaletteSpec
+import org.omarchy.flux.theme.TokyoNight
+import org.omarchy.flux.theme.TokyoNightDay
+import org.omarchy.flux.theme.paletteOf
+import org.omarchy.flux.theme.resolvePalette
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
- * The Tiled design: Tokyo Night colors, 12 dp tiles with 8 dp gaps, and an
- * active-window gradient border like Hyprland on Omarchy. [Tn] gives the
- * colors of the current theme.
+ * The Tiled design: the colors of the Omarchy theme of the computer, 12 dp
+ * tiles with 8 dp gaps, and an active-window gradient border like
+ * Hyprland on Omarchy. [Tn] gives the colors of the current theme. The
+ * palettes come from [PaletteSpec] through the contrast guard, see
+ * [paletteOf], so each pair below reaches WCAG 2.2 AA.
+ *
+ * The contrast contract, see [PaletteSpec]:
+ * - [text] and [sub] reach 4.5:1 on [bg], [offTile], [tile], [tileHi],
+ *   [line], and [accentTile].
+ * - [blue], [cyan], [green], [magenta], [orange], [red], and [yellow]
+ *   reach 4.5:1 as text on the same colors except [line]. On [line], they
+ *   reach 3:1, so use them there for icons and borders only.
+ * - [onAccent] reaches 4.5:1 on a fill of each of these colors.
+ * - [dim] reaches 3:1, for borders, icons, and disabled states. It is not
+ *   for text.
  */
 @Immutable
 class TiledColors(
     val dark: Boolean,
+    /** The page. */
     val bg: Color,
     val tile: Color,
+    /** A tile that stands out, a menu, or a dialog. */
     val tileHi: Color,
+    /** A tile that is off, and the background of the agent output. */
     val offTile: Color,
+    /** The border of a tile, and a tonal container for [text] and [sub]. */
     val line: Color,
     val lineHi: Color,
+    /** The body ink. */
     val text: Color,
+    /** The second ink, for hints, labels, placeholders, and data that is not the main value. */
     val sub: Color,
+    /**
+     * For borders, icons, and disabled states only, never for text that
+     * carries meaning. It reaches 3:1 on [bg], [tile], and [tileHi].
+     */
     val dim: Color,
-    /** The text and icons on an accent fill. */
+    /** The text and icons on an accent fill or a fill of a semantic color. */
     val onAccent: Color,
+    /**
+     * The primary color, for actions and selection. On Tokyo Night it is
+     * blue. On another theme it is the accent of that theme, or the blue
+     * of that theme when its accent looks like [red]. [accent] is the same
+     * color. For the blue of the terminal, use [termBlue].
+     */
     val blue: Color,
     val cyan: Color,
     val green: Color,
     val magenta: Color,
     val orange: Color,
+    /** Red means "needs you" or an error, nothing else. */
     val red: Color,
     val yellow: Color,
+    /** A tile with the hue of the accent and the luminance of [tileHi], for a selected item. */
+    val accentTile: Color = tileHi,
+    /** The colors of the active border gradient, from the hyprland_active_border of the theme. */
+    val border: List<Color> = listOf(blue, cyan),
+    /** The angle of [border] in degrees, as in Hyprland, or null for corner to corner. */
+    val borderAngle: Float? = null,
+    /** The blue of the theme for ANSI blue in the terminal output. It reaches 4.5:1 on [bg], [offTile], [tile], and [tileHi]. */
+    val termBlue: Color = blue,
+) {
+    /** The primary color, the same color as [blue]. */
+    val accent: Color get() = blue
+}
+
+private fun rgb(c: Int) = Color(0xFF000000.toInt() or c)
+
+/** Turns a palette into the Tiled colors. */
+fun PaletteSpec.toTiledColors() = TiledColors(
+    dark = dark,
+    bg = rgb(bg), tile = rgb(tile), tileHi = rgb(tileHi), offTile = rgb(offTile),
+    line = rgb(line), lineHi = rgb(lineHi),
+    text = rgb(text), sub = rgb(sub), dim = rgb(dim), onAccent = rgb(onAccent),
+    blue = rgb(accent), cyan = rgb(cyan), green = rgb(green), magenta = rgb(magenta),
+    orange = rgb(orange), red = rgb(red), yellow = rgb(yellow),
+    accentTile = rgb(accentTile),
+    border = border.map(::rgb),
+    borderAngle = borderAngle,
+    termBlue = rgb(termBlue),
 )
 
-/** Tokyo Night. */
-private val TiledDark = TiledColors(
-    dark = true,
-    bg = Color(0xFF16161E),
-    tile = Color(0xFF1F2335),
-    tileHi = Color(0xFF24283B),
-    offTile = Color(0xFF1A1B26),
-    line = Color(0xFF292E42),
-    lineHi = Color(0xFF3B4261),
-    text = Color(0xFFC0CAF5),
-    sub = Color(0xFFA9B1D6),
-    dim = Color(0xFF565F89),
-    onAccent = Color(0xFF16161E),
-    blue = Color(0xFF7AA2F7),
-    cyan = Color(0xFF7DCFFF),
-    green = Color(0xFF9ECE6A),
-    magenta = Color(0xFFBB9AF7),
-    orange = Color(0xFFFF9E64),
-    red = Color(0xFFF7768E),
-    yellow = Color(0xFFE0AF68),
-)
+/** Tokyo Night, the theme without a computer theme in the dark mode. */
+private val TiledDark = TokyoNight.toTiledColors()
 
-/**
- * Tokyo Night Day. The tiles are lighter than the background, as in the
- * dark theme. [TiledColors.tileHi] and [TiledColors.offTile] are steps
- * between the Tokyo Night Day colors.
- */
-private val TiledLight = TiledColors(
-    dark = false,
-    bg = Color(0xFFD0D5E3),
-    tile = Color(0xFFE1E2E7),
-    tileHi = Color(0xFFE9EAEF),
-    offTile = Color(0xFFD8DBE5),
-    line = Color(0xFFC4C8DA),
-    lineHi = Color(0xFFA8AECB),
-    text = Color(0xFF3760BF),
-    sub = Color(0xFF6172B0),
-    dim = Color(0xFF848CB5),
-    onAccent = Color(0xFFE1E2E7),
-    blue = Color(0xFF2E7DE9),
-    cyan = Color(0xFF007197),
-    green = Color(0xFF587539),
-    magenta = Color(0xFF9854F1),
-    orange = Color(0xFFB15C00),
-    red = Color(0xFFF52A65),
-    yellow = Color(0xFF8C6C3E),
-)
+/** Tokyo Night Day, the theme without a computer theme in the light mode. */
+private val TiledLight = TokyoNightDay.toTiledColors()
 
 private val LocalTiledColors = staticCompositionLocalOf { TiledDark }
 
@@ -152,34 +185,85 @@ val TiledGutter = 10.dp
 /** The alpha of a tile whose computer is not reachable. */
 private const val DimAlpha = 0.55f
 
+/**
+ * The active border of the master tile, 2 dp wide. Without colors, it is
+ * the hyprland_active_border gradient of the theme at its angle. Without a
+ * theme border, it goes from the accent to cyan, corner to corner.
+ */
 @Composable
 @ReadOnlyComposable
-fun activeBorder(from: Color = Tn.blue, to: Color = Tn.cyan) = BorderStroke(2.dp, Brush.linearGradient(listOf(from, to)))
+fun activeBorder(from: Color = Color.Unspecified, to: Color = Color.Unspecified): BorderStroke =
+    if (from.isSpecified || to.isSpecified) {
+        BorderStroke(2.dp, Brush.linearGradient(listOf(from.takeOrElse { Tn.blue }, to.takeOrElse { Tn.cyan })))
+    } else {
+        BorderStroke(2.dp, activeBorderBrush())
+    }
+
+/** The brush of the active border of the theme, for a custom outline. */
+@Composable
+@ReadOnlyComposable
+fun activeBorderBrush(): Brush = borderBrush(Tn.border, Tn.borderAngle)
 
 /**
- * The theme of the app: Tokyo Night in the dark theme and Tokyo Night Day in
- * the light theme. [ThemeMode.System] follows the phone. Material parts,
- * such as menus, sliders, dialogs, and the camera and mic screens, take the
- * same colors as the tiles.
+ * A gradient of [colors] at [angle] degrees: 0 goes from left to right and
+ * 90 from top to bottom, as in Hyprland. A null angle goes from the top
+ * left corner to the bottom right corner.
+ */
+fun borderBrush(colors: List<Color>, angle: Float?): Brush = when {
+    colors.isEmpty() -> SolidColor(Color.Transparent)
+    colors.size == 1 -> SolidColor(colors[0])
+    angle == null -> Brush.linearGradient(colors)
+    else -> AngleGradient(colors, angle)
+}
+
+/** A linear gradient at an angle that spans the whole box. */
+private class AngleGradient(private val colors: List<Color>, private val angle: Float) : ShaderBrush() {
+    override fun createShader(size: Size): Shader {
+        val rad = Math.toRadians(angle.toDouble())
+        val dx = cos(rad).toFloat()
+        val dy = sin(rad).toFloat()
+        val half = (abs(size.width * dx) + abs(size.height * dy)) / 2f
+        val c = size.center
+        return LinearGradientShader(Offset(c.x - dx * half, c.y - dy * half), Offset(c.x + dx * half, c.y + dy * half), colors)
+    }
+
+    override fun equals(other: Any?) = other is AngleGradient && other.colors == colors && other.angle == angle
+    override fun hashCode() = 31 * colors.hashCode() + angle.hashCode()
+}
+
+/**
+ * The theme of the app. [ThemeMode.Computer], the default, follows the
+ * Omarchy theme of the computer in scope, see
+ * [org.omarchy.flux.core.ComputerThemes]. Without a
+ * computer theme, and with [ThemeMode.System], it follows the phone:
+ * Tokyo Night in the dark theme and Tokyo Night Day in the light theme.
+ * Material parts, such as menus, sliders, dialogs, and the camera and mic
+ * screens, take the same colors as the tiles. The system bars and the
+ * window background follow the palette.
  */
 @Composable
 fun TiledTheme(content: @Composable () -> Unit) {
-    val mode = FluxCore.state.collectAsStateWithLifecycle().value.theme
-    val dark = when (mode) {
-        ThemeMode.System -> isSystemInDarkTheme()
-        ThemeMode.Light -> false
-        ThemeMode.Dark -> true
+    val state = FluxCore.state.collectAsStateWithLifecycle().value
+    val spec = resolvePalette(state.theme, state.computerTheme?.palette, isSystemInDarkTheme())
+    val colors = remember(spec) {
+        when (spec) {
+            TokyoNight -> TiledDark
+            TokyoNightDay -> TiledLight
+            else -> spec.toTiledColors()
+        }
     }
-    val colors = if (dark) TiledDark else TiledLight
     val scheme = remember(colors) { colors.scheme() }
     // The system bars are transparent, so their icons take the color of the theme.
     val view = LocalView.current
-    DisposableEffect(view, dark) {
-        (view.context as? Activity)?.window?.let { window ->
+    DisposableEffect(view, colors) {
+        view.context.findActivity()?.let { activity ->
+            val window = activity.window
             WindowCompat.getInsetsController(window, view).run {
-                isAppearanceLightStatusBars = !dark
-                isAppearanceLightNavigationBars = !dark
+                isAppearanceLightStatusBars = !colors.dark
+                isAppearanceLightNavigationBars = !colors.dark
             }
+            // The window shows behind Compose, for example during a resize. A translucent window stays clear.
+            if (!activity.translucent()) window.setBackgroundDrawable(colors.bg.toArgb().toDrawable())
         }
         onDispose { }
     }
@@ -190,10 +274,29 @@ fun TiledTheme(content: @Composable () -> Unit) {
     }
 }
 
+private fun Context.findActivity(): Activity? {
+    var c: Context? = this
+    while (c is ContextWrapper) {
+        if (c is Activity) return c
+        c = c.baseContext
+    }
+    return null
+}
+
+/** True when the theme of the activity makes its window translucent. */
+private fun Activity.translucent(): Boolean {
+    val a = obtainStyledAttributes(intArrayOf(android.R.attr.windowIsTranslucent))
+    return try {
+        a.getBoolean(0, false)
+    } finally {
+        a.recycle()
+    }
+}
+
 /** The Material 3 color scheme of the tiles. */
 private fun TiledColors.scheme(): ColorScheme = (if (dark) darkColorScheme() else lightColorScheme()).copy(
     primary = blue, onPrimary = onAccent,
-    primaryContainer = tileHi, onPrimaryContainer = text,
+    primaryContainer = accentTile, onPrimaryContainer = text,
     secondary = cyan, onSecondary = onAccent,
     secondaryContainer = line, onSecondaryContainer = text,
     tertiary = magenta, onTertiary = onAccent,
@@ -260,7 +363,7 @@ fun LineTile(
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Sym(icon, tint = accent, size = 22.dp)
             T(label, Modifier.weight(1f), size = 13, weight = FontWeight.SemiBold, maxLines = 1)
-            if (trailing != null) T(trailing, size = 11, color = Tn.dim, family = Mono)
+            if (trailing != null) T(trailing, size = 11, color = Tn.sub, family = Mono)
         }
     }
 }
@@ -299,7 +402,7 @@ fun MiniTile(
 
 /** The mono, uppercase label of a tile or a section. */
 @Composable
-fun TileLabel(text: String, modifier: Modifier = Modifier, color: Color = Tn.dim) {
+fun TileLabel(text: String, modifier: Modifier = Modifier, color: Color = Tn.sub) {
     T(text.uppercase(), modifier, size = 11, color = color, weight = FontWeight.Medium, family = Mono, letterSpacing = 0.9f, maxLines = 1)
 }
 
@@ -332,7 +435,7 @@ fun TiledTopBar(label: String, onBack: () -> Unit, trailing: @Composable RowScop
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SquareButton(Ic.back, "Back", onBack)
-        T(label, Modifier.weight(1f), size = 12, color = Tn.dim, weight = FontWeight.Medium, family = Mono, maxLines = 1)
+        T(label, Modifier.weight(1f), size = 12, color = Tn.sub, weight = FontWeight.Medium, family = Mono, maxLines = 1)
         trailing()
     }
 }

@@ -7,7 +7,11 @@ page=$1
 out=$2
 adb shell input keyevent KEYCODE_WAKEUP
 # FLUX_DEMO=1 shows the sample computers, for an emulator with no computer.
+# FLUX_THEME=<name> gives the sample computer a sample theme, or none.
+theme=()
+if [ -n "${FLUX_THEME:-}" ]; then theme=(--es flux.debug.theme "$FLUX_THEME"); fi
 adb shell am start -n org.omarchy.flux/.ui.MainActivity --ez flux.debug.showWhenLocked true \
-    --ez flux.debug.demo "$([ "${FLUX_DEMO:-}" = 1 ] && echo true || echo false)" --es flux.debug.page "$page" >/dev/null 2>&1
+    --ez flux.debug.demo "$([ "${FLUX_DEMO:-}" = 1 ] && echo true || echo false)" --es flux.debug.page "$page" \
+    ${theme[@]+"${theme[@]}"} >/dev/null 2>&1
 sleep "${FLUX_SHOT_DELAY:-2}"
 adb exec-out screencap -p >"$out"

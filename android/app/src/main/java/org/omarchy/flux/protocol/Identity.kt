@@ -68,6 +68,13 @@ object Types {
 
     /** The computer sends its Hyprland key bindings and workspaces, and runs them for this phone. Both sides send it. */
     const val FLUX_SHORTCUTS = "flux.shortcuts"
+
+    /**
+     * The computer sends its active Omarchy theme, {"name", "mode", "colors":
+     * {key: "#rrggbb"}, "border": {"colors": ["#rrggbbaa"], "angle": deg}},
+     * when the phone connects and when the theme changes.
+     */
+    const val FLUX_THEME = "flux.theme"
 }
 
 /** Packet types that the phone accepts. */
@@ -77,7 +84,7 @@ val INCOMING = listOf(
     Types.NOTIFICATION_ACTION, Types.FIND_MY_PHONE, Types.RUN_COMMAND, Types.MPRIS,
     Types.SFTP, Types.FLUX_TUNNEL, Types.FLUX_WEBCAM, Types.FLUX_DND,
     Types.FLUX_MIC, Types.FLUX_SCREEN, Types.FLUX_APPROVE, Types.FLUX_HERDR, Types.FLUX_INPUT,
-    Types.FLUX_DESKTOP, Types.FLUX_SHORTCUTS,
+    Types.FLUX_DESKTOP, Types.FLUX_SHORTCUTS, Types.FLUX_THEME,
 )
 
 /** Packet types that the phone sends. */

@@ -184,6 +184,32 @@ sdk.dir=/absolute/path/to/Android/Sdk
 Keep SDK paths and keystores out of Git.
 See [releases](releasing.md#android-release-key) for signed builds and release secrets.
 
+## Theme
+
+Flux follows the active Omarchy theme of the computer.
+`fluxd` sends the theme in a `flux.theme` packet when the phone connects and when the theme changes.
+Flux saves the theme of each computer, so the next start draws it at once.
+
+To change the theme, open the menu of the device list. The choices are:
+
+- **Computer**, the default: the theme of the computer in scope. In the scope of all computers, Flux uses the theme that changed most recently. A reconnect does not change the theme. Without a theme from the computer in scope, Flux uses Tokyo Night on a dark phone and Tokyo Night Day on a light phone. The menu shows the theme name and the computer that sent it.
+- **System**: Tokyo Night on a dark phone and Tokyo Night Day on a light phone.
+- **Light**: Tokyo Night Day.
+- **Dark**: Tokyo Night.
+
+A contrast guard maps the theme to the colors of the app. It moves only the lightness of a color, so each hue stays:
+
+- Body text and secondary text reach 4.5:1 on each surface, on the border color `line`, and on the selected tile `accentTile`. The body text keeps a step of 1.4:1 from the secondary text.
+- The accent and the status colors reach 4.5:1 as text on each surface and on `accentTile`. On `line`, they reach 3:1, for icons and borders.
+- The text on a filled button reaches 4.5:1.
+- The dim color is for borders, icons, and disabled states only, and reaches 3:1. Text that carries meaning uses the secondary text color.
+- The selected tile `accentTile` takes the hue of the accent at the luminance of `tileHi`, so it does not change a contrast.
+- Red means "needs you" or an error. When the theme accent looks like red, the theme blue, cyan, or magenta takes its place as the primary color. The border gradient keeps the theme accent.
+- ANSI blue in the agent output uses the theme blue, as in the terminal on the computer.
+- The master tile takes the gradient of `hyprland_active_border`, at 3:1 or more.
+
+The theme engine is in `app/src/main/java/org/omarchy/flux/theme`.
+
 ## Test
 
 To run the JVM tests for packets, identity, certificates, and the verification key, run:
@@ -195,10 +221,16 @@ To run the JVM tests for packets, identity, certificates, and the verification k
 The release task also checks the R8-optimized build.
 Without signing variables, it produces `app/build/outputs/apk/release/app-release-unsigned.apk`.
 
-To test the app against a desktop peer without a firewall rule, run the test peer. It connects through `adb forward`, pairs, and sends sample battery, theme, command, and media packets. Open Flux on the phone first, because the phone takes a new computer only while the app is on screen:
+To test the app against a desktop peer without a firewall rule, run the test peer. It connects through `adb forward`, pairs, and sends sample battery, command, and media packets. Open Flux on the phone first, because the phone takes a new computer only while the app is on screen:
 
 ```bash
 python3 tools/test_peer.py
+```
+
+To send an Omarchy theme from the test peer, give it a `colors.toml` file:
+
+```bash
+python3 tools/test_peer.py --theme ~/.local/state/omarchy/current/theme/colors.toml
 ```
 
 To test the remote desktop, add `--desktop`. The peer streams the first monitor of this computer with `gpu-screen-recorder`, like `fluxd`, and prints the touches. It also answers the Omarchy panel with sample shortcuts and workspaces. It does not run the touches or the shortcuts:
@@ -231,6 +263,12 @@ The pages are:
 - `empty` for the app with no computers.
 - `icon` for the launcher and notification icons.
 
+To draw the sample computer in a sample theme, set `FLUX_THEME` to `neon`, `tokyo-night`, `tokyo-night-day`, `catppuccin-latte`, `cotton-candy`, `futurism`, or `low-contrast`. The value `none` removes the theme:
+
+```bash
+ANDROID_SERIAL=emulator-5554 FLUX_DEMO=1 FLUX_THEME=catppuccin-latte tools/shot.sh home /tmp/home-latte.png
+```
+
 Release builds ignore these extras.
 
 ## Icons
@@ -249,6 +287,7 @@ python3 tools/fetch_icons.py
 | `app/src/main/java/org/omarchy/flux/net` | UDP discovery, TCP links, TLS, and payload transfers |
 | `app/src/main/java/org/omarchy/flux/core` | Devices, pairing, trust store, and the plugins |
 | `app/src/main/java/org/omarchy/flux/service` | The foreground service and the notification listener |
+| `app/src/main/java/org/omarchy/flux/theme` | The computer theme, the contrast guard, and the palettes. Plain Kotlin with JVM tests. |
 | `app/src/main/java/org/omarchy/flux/ui` | The Compose screens |
 | `tools` | The test peer, the screenshot helper, and the icon script |
 

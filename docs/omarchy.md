@@ -122,6 +122,7 @@ Both hosts use the [shared QML views](qml.md).
 
 The desktop reads `~/.local/state/omarchy/current/theme/colors.toml` and follows theme changes.
 Flux for Android follows the active Omarchy theme of the computer, light or dark, through the [theme packet](#theme-packet).
+See [the theme of Flux for Android](android.md#theme) for the contrast guard and the fallback.
 
 `dist/hyprland.lua` supplies floating-window rules and the `SUPER + ALT + P` shortcut for `flux-cli open`.
 `dist/omarchy-menu.jsonc` supplies a Flux item for the Trigger menu.
