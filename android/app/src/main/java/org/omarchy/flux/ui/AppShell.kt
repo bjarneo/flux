@@ -107,6 +107,7 @@ fun FluxShell(
     notify: NotifyAsk,
     onNotify: () -> Unit,
     onNotifyHide: () -> Unit,
+    welcome: String? = null,
 ) {
     val context = LocalContext.current
     val reduce = rememberReduceMotion()
@@ -128,6 +129,8 @@ fun FluxShell(
         scopeName = state.devices.firstOrNull { it.paired && it.id == scope }?.name,
         elsewhere = needs - items.needsYou(),
         notify = notify,
+        // The success state of a new pairing shows only in the scope of that computer.
+        paired = state.devices.firstOrNull { it.paired && it.id == welcome && it.id == scope }?.name,
     )
     val picker = rememberTargetPicker()
     val tools = rememberSendTools(state.devices, scope, picker)
@@ -167,7 +170,7 @@ fun FluxShell(
         }
     }
     val actions = InboxActions(
-        open = ::open, approve = approve, showPair = onShowPair, computers = toComputers, tools = tools,
+        open = ::open, approve = approve, showPair = onShowPair, pair = onPair, computers = toComputers, tools = tools,
         showAll = { onScope(null) }, allowNotifications = onNotify, hideNotifications = onNotifyHide,
     )
     val select = { t: Tab -> go(current.select(t)) }

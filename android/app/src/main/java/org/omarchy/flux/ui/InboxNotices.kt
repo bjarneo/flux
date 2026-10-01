@@ -15,16 +15,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.InboxReach
 
 /**
- * What the Inbox tells next to its items: the computers in scope that are
- * not reachable, the items on other computers that need the user, and the
- * notification question. [scopeName] is the name of the computer in scope,
- * or null for all computers. [elsewhere] counts the items out of scope that
- * need the user.
+ * What the Inbox tells next to its items: a new pairing, the computers in
+ * scope that are not reachable, the items on other computers that need the
+ * user, and the notification question. [scopeName] is the name of the
+ * computer in scope, or null for all computers. [elsewhere] counts the
+ * items out of scope that need the user. [paired] is the name of the
+ * computer in scope while the Inbox shows its success state after a new
+ * pairing, or null.
  */
 class InboxNotices(
     val reach: InboxReach,
@@ -32,6 +37,7 @@ class InboxNotices(
     val scopeName: String?,
     val elsewhere: Int,
     val notify: NotifyAsk,
+    val paired: String? = null,
 )
 
 /** The title of an Inbox with nothing to do. In a scope, it names the computer. */
@@ -63,10 +69,20 @@ internal fun elsewhereText(count: Int): String =
 
 /**
  * The notices of the Inbox, each with its next step. [offline] is false
- * when the large tile already tells that no computer is reachable.
+ * when the large tile already tells that no computer is reachable. [paired]
+ * is false when the large tile already shows the success state of a new
+ * pairing.
  */
 @Composable
-internal fun InboxNoticeList(n: InboxNotices, actions: InboxActions, offline: Boolean = true) {
+internal fun InboxNoticeList(n: InboxNotices, actions: InboxActions, offline: Boolean = true, paired: Boolean = true) {
+    if (paired && n.paired != null) {
+        Notice(
+            { Sym(Ic.checkCircle, tint = Tn.green, size = 18.dp) },
+            "${n.paired} is paired. What waits for you on ${n.paired} shows here first.",
+            Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            color = Tn.text,
+        ) {}
+    }
     if (n.elsewhere > 0) {
         Notice({ Dot(Tn.red) }, elsewhereText(n.elsewhere), color = Tn.text) {
             TextButton(onClick = actions.showAll) { Text("Show all computers") }
@@ -81,14 +97,14 @@ internal fun InboxNoticeList(n: InboxNotices, actions: InboxActions, offline: Bo
         NotifyAsk.None -> Unit
         NotifyAsk.Allow -> Notice(
             { Sym(Ic.notifications, tint = Tn.yellow, size = 18.dp) },
-            "Allow notifications, so that approvals and agent alerts reach this phone.",
+            "Allow notifications, so that Flux can show when an agent needs you.",
         ) {
             TextButton(onClick = actions.allowNotifications) { Text("Allow") }
             TextButton(onClick = actions.hideNotifications) { Text("Hide") }
         }
         NotifyAsk.Settings -> Notice(
             { Sym(Ic.notifications, tint = Tn.yellow, size = 18.dp) },
-            "Notifications are off for Flux. Approvals and agent alerts do not reach this phone. Turn them on in the settings of Android.",
+            "Notifications are off for Flux, so Flux cannot show when an agent needs you. Turn them on in the settings of Android.",
         ) {
             TextButton(onClick = actions.allowNotifications) { Text("Open settings") }
             TextButton(onClick = actions.hideNotifications) { Text("Hide") }
@@ -98,8 +114,14 @@ internal fun InboxNoticeList(n: InboxNotices, actions: InboxActions, offline: Bo
 
 /** 1 notice: a mark, the text, and the actions under the text. The actions wrap at a large font size. */
 @Composable
-private fun Notice(mark: @Composable () -> Unit, text: String, color: Color = Tn.sub, actions: @Composable FlowRowScope.() -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+private fun Notice(
+    mark: @Composable () -> Unit,
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = Tn.sub,
+    actions: @Composable FlowRowScope.() -> Unit,
+) {
+    Row(modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.padding(top = 5.dp), contentAlignment = Alignment.Center) { mark() }
         Column(Modifier.weight(1f)) {
             T(text, size = 13, color = color, lineHeight = 1.35f)

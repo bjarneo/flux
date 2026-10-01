@@ -265,7 +265,7 @@ class Device(private val core: FluxCore, var identity: Identity) {
                 lastIp = link?.address?.hostAddress ?: "",
             ),
         )
-        core.toast("Paired with ${identity.deviceName}")
+        // The Inbox of the new computer shows the success state, see FluxCore.newPairing.
         core.onPaired(this)
     }
 

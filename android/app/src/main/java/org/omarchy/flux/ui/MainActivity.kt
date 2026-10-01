@@ -38,10 +38,15 @@ import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.withResumed
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import org.omarchy.flux.core.ApproveKeys
 import org.omarchy.flux.core.ComputerThemes
+import org.omarchy.flux.core.DebugFirstRun
 import org.omarchy.flux.core.DebugInbox
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.PairState
@@ -115,6 +120,16 @@ class MainActivity : ComponentActivity() {
         val settings = android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
             .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName)
         runCatching { startActivity(settings) }
+    }
+
+    /**
+     * Shows the permission dialog of Android once, after the first pairing.
+     * The Inbox tells why at the same time. Nothing shows when the app asked
+     * before, or when Android needs no permission.
+     */
+    fun askNotificationsAfterPairing() {
+        if (Build.VERSION.SDK_INT < 33 || notifyAsk.value != NotifyAsk.Allow || asks.getBoolean(NOTIFY_ASKED, false)) return
+        allowNotifications()
     }
 
     /** Hides the notification question. It does not show again. */
@@ -238,11 +253,14 @@ private data class Outgoing(val deviceId: String, val timestamp: Long, val key: 
 /** The debug pages that need no computer: the destinations and the sync switches. */
 private val DestinationPages = setOf("inbox", "send", "control", "computers", "devices", "sync")
 
+/** How long the Inbox shows that a new computer is paired, in milliseconds while the app is in the front. */
+private const val WELCOME_MS = 6_000L
+
 @Composable
 fun FluxRoot(activity: MainActivity) {
     val core by FluxCore.state.collectAsStateWithLifecycle()
-    // Debug builds with the demo add sample data for the Omarchy panel. Release builds keep the state as it is.
-    val state = remember(core) { if (org.omarchy.flux.BuildConfig.DEBUG) DebugInbox.decorate(core) else core }
+    // Debug builds with the demo add sample data for the Omarchy panel and the first run. Release builds keep the state as it is.
+    val state = remember(core) { if (org.omarchy.flux.BuildConfig.DEBUG) DebugInbox.decorate(DebugFirstRun.decorate(core)) else core }
     var nav by rememberSaveable(stateSaver = NavSaver) { mutableStateOf(Nav()) }
     // The computer in scope, or null for all computers.
     var scope by rememberSaveable { mutableStateOf<String?>(null) }
@@ -267,6 +285,29 @@ fun FluxRoot(activity: MainActivity) {
     val anyPaired = state.devices.any { it.paired && !isDemo(it.id) }
     val notify by activity.notifyAsk.collectAsStateWithLifecycle()
     val wide = rememberWideWindow()
+
+    // A new pairing opens the Inbox of the new computer, with a short success state on top.
+    // The state of the computer can come after the event, so the effect waits for it.
+    val newPairing by FluxCore.newPairing.collectAsStateWithLifecycle()
+    var welcome by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(newPairing, pairedIds) {
+        val id = newPairing ?: return@LaunchedEffect
+        if (id !in pairedIds) return@LaunchedEffect
+        FluxCore.takeNewPairing(id)
+        welcome = id
+        scope = id
+        nav = Nav()
+    }
+    // After the first pairing, Android asks for the notifications while the Inbox tells why.
+    // The success state then shows for a short time. The time starts again after the dialog of Android closes.
+    LaunchedEffect(welcome) {
+        val id = welcome ?: return@LaunchedEffect
+        if (!isDemo(id)) activity.lifecycle.withResumed { activity.askNotificationsAfterPairing() }
+        activity.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            delay(WELCOME_MS)
+            welcome = null
+        }
+    }
     // Close the outgoing dialog when the pairing ends.
     val out = outgoing
     val outDevice = state.devices.firstOrNull { it.id == out?.deviceId }
@@ -285,6 +326,25 @@ fun FluxRoot(activity: MainActivity) {
         FluxCore.setRinging(null)
         outgoing = null
         unpairing = null
+        welcome = null
+        // With the demo, "firstrun" shows the Inbox before the first pairing, with the sample computer to pair.
+        // "paired" pairs that sample computer, so that the Inbox shows the success state of a new pairing.
+        val firstRun = when (request) {
+            "firstrun" -> DebugFirstRun.Mode.FirstRun
+            "paired" -> DebugFirstRun.Mode.Paired
+            else -> DebugFirstRun.Mode.Off
+        }
+        if (firstRun != DebugFirstRun.mode) {
+            DebugFirstRun.mode = firstRun
+            FluxCore.publish()
+        }
+        if (firstRun != DebugFirstRun.Mode.Off) {
+            nav = Nav()
+            scope = null
+            if (firstRun == DebugFirstRun.Mode.Paired) FluxCore.notePairing(org.omarchy.flux.core.DebugDemo.NEW)
+            activity.debugPage.value = null
+            return@LaunchedEffect
+        }
         if (showIcons) {
             activity.debugPage.value = null
             return@LaunchedEffect
@@ -341,6 +401,7 @@ fun FluxRoot(activity: MainActivity) {
                     outgoing = Outgoing(it.id, ts, FluxCore.previewKey(it.id, ts))
                 },
                 onUnpair = { unpairing = it.id },
+                welcome = welcome,
                 // The sheet of an incoming request shows by itself, unless this phone starts another pairing.
                 onShowPair = { id ->
                     val o = outgoing

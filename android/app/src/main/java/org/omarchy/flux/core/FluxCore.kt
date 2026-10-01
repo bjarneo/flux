@@ -87,6 +87,14 @@ object FluxCore {
     val listenPort: StateFlow<Int> = _listenPort
     private val _toasts = MutableSharedFlow<String>(extraBufferCapacity = 16)
     val toasts: SharedFlow<String> = _toasts
+    private val _newPairing = MutableStateFlow<String?>(null)
+
+    /**
+     * The device ID of the last new pairing, until the UI takes it with
+     * [takeNewPairing]. The Inbox then shows a short success state for that
+     * computer. It waits while no UI shows.
+     */
+    val newPairing: StateFlow<String?> = _newPairing
 
     fun init(context: Context) {
         if (initialized) return
@@ -431,7 +439,18 @@ object FluxCore {
     }
 
     fun onPaired(d: Device) {
+        notePairing(d.id)
         onConnected(d)
+    }
+
+    /** Records a new pairing for the UI. [onPaired] calls it. Debug builds call it for a sample computer. */
+    fun notePairing(id: String) {
+        _newPairing.value = id
+    }
+
+    /** Clears the new pairing [id] after the UI showed it. A newer pairing stays. */
+    fun takeNewPairing(id: String) {
+        _newPairing.compareAndSet(id, null)
     }
 
     /** Sends the packets that a paired device expects after it connects. */
