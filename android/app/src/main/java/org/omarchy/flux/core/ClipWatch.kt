@@ -17,8 +17,9 @@ enum class ClipAutoState {
     Off,
 
     /**
-     * The switch is on, but READ_LOGS or the overlay access is missing, so
-     * only the open app syncs.
+     * The sync clipboard switch is on, but the automatic sync is off, or
+     * READ_LOGS or the overlay access is missing, so only the open app
+     * syncs. The setup sheet turns the automatic sync on.
      */
     Unavailable,
 
@@ -53,6 +54,37 @@ object ClipGate {
 
     /** The answer of [grabDelay] for a line that needs no focus grab of its own. */
     const val NO_GRAB = -1L
+
+    /**
+     * True when the log reader must run. [syncOn] is the sync clipboard
+     * switch, [autoOn] is the automatic sync that the user turns on in the
+     * setup sheet, and [enabled] is false while Flux is off. Without
+     * [overlayAccess], a copy line cannot lead to a read, so Flux does not
+     * ask for log access then either.
+     */
+    fun wantsReader(syncOn: Boolean, autoOn: Boolean, enabled: Boolean, hasReadLogs: Boolean, overlayAccess: Boolean): Boolean =
+        syncOn && autoOn && enabled && hasReadLogs && overlayAccess
+
+    /**
+     * The first value of the automatic sync switch, for a store that does not
+     * hold it yet. Earlier versions started the reader when both accesses
+     * were in place, with no switch. So an update ([updated]) from such a
+     * version keeps the sync on when Flux has [hasReadLogs] and
+     * [overlayAccess]. A new install starts with the switch off, also when
+     * the user ran the adb commands before the first start.
+     */
+    fun keepsAutoSync(updated: Boolean, hasReadLogs: Boolean, overlayAccess: Boolean): Boolean =
+        updated && hasReadLogs && overlayAccess
+
+    /**
+     * The state for the UI. [reader] is the state of the log reader, which
+     * counts only when the automatic sync can run.
+     */
+    fun autoState(syncOn: Boolean, autoOn: Boolean, hasReadLogs: Boolean, overlayAccess: Boolean, reader: ClipAutoState): ClipAutoState = when {
+        !syncOn -> ClipAutoState.Off
+        !autoOn || !hasReadLogs || !overlayAccess -> ClipAutoState.Unavailable
+        else -> reader
+    }
 
     /**
      * True when [line] is the ClipboardService line that denies clipboard
@@ -112,10 +144,12 @@ object ClipGate {
  * option 1 of the clipboard design.
  *
  * The reader needs READ_LOGS, which the user grants with adb, and the
- * overlay access, which [ClipReader] needs to take focus. Android 13 and
- * later ask for log access with a dialog that shows only while Flux is on
- * top, so the reader starts only from [refresh], which the service runs for
- * ACTION_REFRESH after MainActivity.onResume.
+ * overlay access, which [ClipReader] needs to take focus. It starts only
+ * after the user turns on the automatic sync in the setup sheet, see
+ * [Settings.autoClipboard]. Android 13 and later ask for log access with a
+ * dialog that shows only while Flux is on top, so the reader starts only
+ * from [refresh], which the service runs for ACTION_REFRESH after
+ * MainActivity.onResume and after the switch turns on.
  */
 object ClipWatch {
     private val main = Handler(Looper.getMainLooper())
@@ -143,15 +177,13 @@ object ClipWatch {
 
     /**
      * Reports the state for the UI. [syncOn] is the sync clipboard switch,
+     * [autoOn] is the automatic sync switch of the setup sheet,
      * [hasReadLogs] is the READ_LOGS permission, and [overlayAccess] is the
      * permission to draw over other apps. Without the overlay access, the
      * reader cannot take focus, so the UI shows the setup hint.
      */
-    fun uiState(syncOn: Boolean, hasReadLogs: Boolean, overlayAccess: Boolean): ClipAutoState = when {
-        !syncOn -> ClipAutoState.Off
-        !hasReadLogs || !overlayAccess -> ClipAutoState.Unavailable
-        else -> readerState
-    }
+    fun uiState(syncOn: Boolean, autoOn: Boolean, hasReadLogs: Boolean, overlayAccess: Boolean): ClipAutoState =
+        ClipGate.autoState(syncOn, autoOn, hasReadLogs, overlayAccess, readerState)
 
     /** Follows the app between the front and the background, from [FluxApp]. */
     fun setForeground(context: Context, on: Boolean) {
@@ -171,10 +203,9 @@ object ClipWatch {
      */
     fun refresh(context: Context) {
         val app = context.applicationContext
-        // Without the overlay access, a copy line cannot lead to a read, so
-        // Flux does not ask for log access.
-        val want = FluxCore.settings.syncClipboard && FluxCore.enabled &&
-            Android.hasReadLogs(app) && Android.canDrawOverlays(app)
+        // Without the switch of the setup sheet, Flux starts no reader, so Android shows no log access dialog.
+        val s = FluxCore.settings
+        val want = ClipGate.wantsReader(s.syncClipboard, s.autoClipboard, FluxCore.enabled, Android.hasReadLogs(app), Android.canDrawOverlays(app))
         main.post {
             if (want && !armed) {
                 armed = true

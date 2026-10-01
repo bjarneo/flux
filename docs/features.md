@@ -236,7 +236,7 @@ Android shows this dialog only while Flux is on the screen, so no computer or
 background task can turn the sync back on.
 While **Sync clipboard** is on, a status line under the switches of the **Sync** screen shows the state. The **Clipboard** band of **Send** shows the same line:
 
-- **Only while Flux is open. Set up automatic sync**: the automatic sync is not set up. Flux has no `READ_LOGS` permission or no overlay access.
+- **Only while Flux is open. Set up automatic sync**: the automatic sync is not set up. **Automatic sync** is off in the setup sheet, or Flux has no `READ_LOGS` permission or no overlay access.
 - **Automatic sync starts when you leave Flux**: Flux checks the log access when you leave the app.
 - **Automatic clipboard sync is on**: the automatic sync runs.
 - **Open Flux to resume automatic sync**: the log access ended. Open Flux to resume it.

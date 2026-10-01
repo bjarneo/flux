@@ -100,6 +100,44 @@ class ClipWatchTest {
     }
 
     @Test
+    fun theReaderRunsOnlyAfterTheUserTurnsOnTheAutomaticSync() {
+        // With the accesses in place, the reader still waits for the switch of the setup sheet.
+        assertFalse(ClipGate.wantsReader(syncOn = true, autoOn = false, enabled = true, hasReadLogs = true, overlayAccess = true))
+        assertTrue(ClipGate.wantsReader(syncOn = true, autoOn = true, enabled = true, hasReadLogs = true, overlayAccess = true))
+        // Each other condition stops the reader too.
+        assertFalse(ClipGate.wantsReader(syncOn = false, autoOn = true, enabled = true, hasReadLogs = true, overlayAccess = true))
+        assertFalse(ClipGate.wantsReader(syncOn = true, autoOn = true, enabled = false, hasReadLogs = true, overlayAccess = true))
+        assertFalse(ClipGate.wantsReader(syncOn = true, autoOn = true, enabled = true, hasReadLogs = false, overlayAccess = true))
+        assertFalse(ClipGate.wantsReader(syncOn = true, autoOn = true, enabled = true, hasReadLogs = true, overlayAccess = false))
+    }
+
+    @Test
+    fun anUpdateKeepsTheAutomaticSyncOfAUserWhoSetItUp() {
+        // An update from a version without the switch keeps the sync when both accesses are in place.
+        assertTrue(ClipGate.keepsAutoSync(updated = true, hasReadLogs = true, overlayAccess = true))
+        assertFalse(ClipGate.keepsAutoSync(updated = true, hasReadLogs = false, overlayAccess = true))
+        assertFalse(ClipGate.keepsAutoSync(updated = true, hasReadLogs = true, overlayAccess = false))
+        // A new install starts with the switch off, also after the adb commands.
+        assertFalse(ClipGate.keepsAutoSync(updated = false, hasReadLogs = true, overlayAccess = true))
+    }
+
+    @Test
+    fun theStateKeepsItsMeaningWithTheAutomaticSwitch() {
+        val reader = ClipAutoState.Active
+        assertEquals(ClipAutoState.Off, ClipGate.autoState(syncOn = false, autoOn = true, hasReadLogs = true, overlayAccess = true, reader = reader))
+        // Without the switch, only the open app syncs, and the status line leads to the setup sheet.
+        assertEquals(ClipAutoState.Unavailable, ClipGate.autoState(syncOn = true, autoOn = false, hasReadLogs = true, overlayAccess = true, reader = reader))
+        assertEquals(ClipAutoState.Unavailable, ClipGate.autoState(syncOn = true, autoOn = true, hasReadLogs = false, overlayAccess = true, reader = reader))
+        assertEquals(ClipAutoState.Unavailable, ClipGate.autoState(syncOn = true, autoOn = true, hasReadLogs = true, overlayAccess = false, reader = reader))
+        // With the switch and the accesses, the reader gives the state.
+        assertEquals(ClipAutoState.Active, ClipGate.autoState(syncOn = true, autoOn = true, hasReadLogs = true, overlayAccess = true, reader = reader))
+        assertEquals(
+            ClipAutoState.NeedsConsent,
+            ClipGate.autoState(syncOn = true, autoOn = true, hasReadLogs = true, overlayAccess = true, reader = ClipAutoState.NeedsConsent),
+        )
+    }
+
+    @Test
     fun onlyTheFirstLineOfTheSelfTestIsTheProbe() {
         // The first line in the window is the probe line.
         assertTrue(ClipGate.isProbeLine(now = 1_000, probeUntil = 2_500, probeSeen = false))

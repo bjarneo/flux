@@ -75,6 +75,7 @@
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
+            android:theme="@style/Theme.Flux.Main"
             android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|density|fontScale|uiMode"
             android:windowSoftInputMode="adjustResize">

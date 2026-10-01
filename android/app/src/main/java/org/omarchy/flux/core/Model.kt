@@ -133,6 +133,12 @@ data class UiState(
     val listeningUdp: Boolean = true,
     /** True while the phone looks for computers. See [FluxCore.scan]. */
     val scanning: Boolean = false,
+    /**
+     * True for [CONNECT_GRACE_MS] after the network starts or the phone
+     * sends its identity again. A paired computer that is not online then
+     * counts as connecting, not as not reachable.
+     */
+    val connecting: Boolean = false,
     /** False while the user has turned Flux off. */
     val enabled: Boolean = true,
     val theme: ThemeMode = ThemeMode.Computer,
@@ -148,8 +154,12 @@ data class UiState(
     /** The name of the theme of each computer that sent one, by device ID. */
     val computerThemes: Map<String, String> = emptyMap(),
 
+    /** The user turned on the automatic clipboard sync in its setup sheet. See [Settings.autoClipboard]. */
+    val autoClipboard: Boolean = false,
     /** The state of the automatic clipboard sync. See [ClipWatch]. */
     val clipAuto: ClipAutoState = ClipAutoState.Off,
+    /** Flux may read the system log, which the automatic clipboard reader needs. The user grants it with adb. */
+    val readLogs: Boolean = false,
     /** Flux may draw over other apps, which the automatic clipboard reader needs. */
     val overlayAccess: Boolean = false,
 )

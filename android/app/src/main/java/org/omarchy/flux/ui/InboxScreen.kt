@@ -4,8 +4,10 @@ import android.app.DownloadManager
 import android.content.Intent
 import android.text.format.DateUtils
 import androidx.annotation.DrawableRes
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -35,10 +37,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ReadOnlyComposable
@@ -78,6 +78,7 @@ import org.omarchy.flux.core.ApproveMessage
 import org.omarchy.flux.core.ApproveRequest
 import org.omarchy.flux.core.ClipItem
 import org.omarchy.flux.core.DebugDemo
+import org.omarchy.flux.core.DebugFirstRun
 import org.omarchy.flux.core.DebugInbox
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
@@ -109,7 +110,8 @@ fun rememberInboxItems(state: UiState): List<InboxItem> {
     val now by rememberClock()
     // A paused player stays for a time after it played, so the Inbox records the players that play.
     LaunchedEffect(state.devices, now) { InboxFeed.seePlayers(state.devices, now) }
-    val demo = org.omarchy.flux.BuildConfig.DEBUG && DebugDemo.on
+    // The first run and the pairing success state of a debug build show no samples.
+    val demo = org.omarchy.flux.BuildConfig.DEBUG && DebugDemo.on && DebugFirstRun.mode == DebugFirstRun.Mode.Off
     return remember(state.devices, approval, transfers, clip, playedAt, now, demo) {
         val a = approval ?: if (demo) DebugInbox.approval() else null
         val t = if (demo) transfers + DebugInbox.transfers() else transfers
@@ -137,13 +139,15 @@ private fun rememberClock(): State<Long> {
 
 /**
  * What the Inbox items and notices do: open screens, the approval screen,
- * and the pair sheet, show all computers, and ask for the notifications.
+ * and the pair sheet, pair a computer, show all computers, and ask for the
+ * notifications. [pair] starts the pairing that this phone sends, as in
+ * Computers.
  */
 class InboxActions(
     val open: (Route) -> Unit,
     val approve: (ApproveRequest) -> Unit,
     val showPair: (String) -> Unit,
-    val computers: () -> Unit,
+    val pair: (DeviceUi) -> Unit,
     val tools: SendTools,
     val showAll: () -> Unit,
     val allowNotifications: () -> Unit,
@@ -235,38 +239,69 @@ private fun InboxStatus(needs: Int, notices: InboxNotices, actions: InboxActions
     }
 }
 
+/** What the large tile of an empty Inbox shows. */
+private sealed interface EmptyMode {
+    /** No computer is paired: the pairing guide. */
+    data object Guide : EmptyMode
+
+    /** A new pairing: the success state of the computer [name]. */
+    data class Paired(val name: String) : EmptyMode
+
+    /** No computer in scope is online yet, and the links can still connect. */
+    data object Connecting : EmptyMode
+
+    /** No computer in scope is reachable. */
+    data object Offline : EmptyMode
+
+    /** Nothing needs the user. */
+    data object Clear : EmptyMode
+}
+
 /**
  * The Inbox with no items: what shows here, and the 2 most used actions.
- * Before the first pairing, it shows how to pair. When no computer in
- * scope is reachable, it says so and offers Retry, so that an empty Inbox
- * is not a false all-clear.
+ * Before the first pairing, it shows the pairing guide. After a new
+ * pairing, it shows the success state for a short time. While the links
+ * connect after a start, it shows that Flux connects. When no computer in
+ * scope is reachable after that, it says so and offers Retry, so that an
+ * empty Inbox is not a false all-clear. The large tile changes with a
+ * crossfade.
  */
 @Composable
 private fun InboxEmpty(state: UiState, notices: InboxNotices, actions: InboxActions) {
     val paired = state.devices.any { it.paired }
     val offline = paired && notices.reach.noneOnline
+    val welcome = notices.paired
+    val mode = when {
+        !paired -> EmptyMode.Guide
+        offline && notices.connecting -> EmptyMode.Connecting
+        offline -> EmptyMode.Offline
+        welcome != null -> EmptyMode.Paired(welcome)
+        else -> EmptyMode.Clear
+    }
+    val fade = shellMotion<Float>(LocalReduceMotion.current) ?: snap()
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = TiledGutter).padding(top = 4.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(TileGap),
     ) {
-        Tile(Modifier.fillMaxWidth(), border = activeBorder(), padding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            when {
-                !paired -> {
-                    T("Pair a computer", size = 22, weight = FontWeight.SemiBold)
-                    T(
-                        "Open Flux on the computer, and use the same Wi-Fi network as this phone. Then pair the computer in Computers.",
-                        size = 14, color = Tn.sub, lineHeight = 1.35f,
-                    )
-                    FluxButton("Find computers", actions.computers, Modifier.padding(top = 4.dp))
+        Crossfade(mode, animationSpec = fade, label = "empty") { m ->
+            when (m) {
+                EmptyMode.Guide -> PairGuide(state, actions)
+                is EmptyMode.Paired -> PairedTile(m.name, notices.notify, actions)
+                EmptyMode.Connecting -> EmptyTile {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Tn.blue)
+                        T(connectingTitle(notices.reach), Modifier.weight(1f), size = 22, weight = FontWeight.SemiBold)
+                    }
+                    T("What waits for you shows here when the connection is ready.", size = 14, color = Tn.sub, lineHeight = 1.35f)
                 }
-                offline -> {
+                EmptyMode.Offline -> EmptyTile {
                     Sym(if (state.onWifi) Ic.wifiFind else Ic.wifiOff, tint = Tn.yellow, size = 28.dp)
                     T(offlineTitle(notices.reach), size = 22, weight = FontWeight.SemiBold)
                     T(offlineHint(state.onWifi), size = 14, color = Tn.sub, lineHeight = 1.35f)
                     T("The Inbox shows what waits on a computer only while the computer is reachable.", size = 14, color = Tn.sub, lineHeight = 1.35f)
                     FluxButton("Retry", { FluxCore.rediscover() }, Modifier.padding(top = 4.dp), icon = Ic.refresh)
                 }
-                else -> {
+                EmptyMode.Clear -> EmptyTile {
                     T(nothingText(notices), size = 22, weight = FontWeight.SemiBold)
                     T(
                         "Agents that wait for you, approvals, and pair requests show here first. Transfers, the clipboard, and what plays now follow.",
@@ -276,7 +311,7 @@ private fun InboxEmpty(state: UiState, notices: InboxNotices, actions: InboxActi
             }
         }
         if (paired) {
-            InboxNoticeList(notices, actions, offline = !offline)
+            InboxNoticeList(notices, actions, offline = !offline, paired = mode !is EmptyMode.Paired)
             // With no computer online, the tiles show dimmed, so that the Inbox still teaches them.
             EqualRow {
                 ActionTile(

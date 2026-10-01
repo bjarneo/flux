@@ -161,9 +161,9 @@ private fun ComputerRow(d: DeviceUi, inScope: Boolean, onScope: () -> Unit, onUn
     }
 }
 
-/** A computer that runs Flux and is not paired. A tap opens the pairing sheet. */
+/** A computer that runs Flux and is not paired. A tap opens the pairing sheet. The Inbox guide uses it before the first pairing. */
 @Composable
-private fun AvailableRow(d: DeviceUi, onPair: () -> Unit) {
+internal fun AvailableRow(d: DeviceUi, onPair: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().heightIn(min = 64.dp).dashedBorder(Tn.yellow).clip(TileShape)
             .clickable(onClickLabel = "Pair with ${d.name}", role = Role.Button, onClick = onPair)
@@ -179,9 +179,19 @@ private fun AvailableRow(d: DeviceUi, onPair: () -> Unit) {
     }
 }
 
-/** The scan state, help when no computer shows, and Scan again. */
+/**
+ * The scan state, help when no computer shows, and Scan again. [hint] is
+ * the help under "No computers found", or null for no help. The Inbox guide
+ * uses it before the first pairing, with its own hint.
+ */
 @Composable
-private fun ScanRow(state: UiState, none: Boolean, first: Boolean, onScan: () -> Unit) {
+internal fun ScanRow(
+    state: UiState,
+    none: Boolean,
+    first: Boolean,
+    hint: String? = "Open Flux on the computer, and use the same Wi-Fi network as this phone.",
+    onScan: () -> Unit,
+) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (state.scanning) {
             Row(Modifier.heightIn(min = 48.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -192,7 +202,7 @@ private fun ScanRow(state: UiState, none: Boolean, first: Boolean, onScan: () ->
         }
         if (none) {
             T(if (first) "No computers found" else "No other computers found", size = 14, weight = FontWeight.SemiBold)
-            T("Open Flux on the computer, and use the same Wi-Fi network as this phone.", size = 13, color = Tn.sub)
+            if (hint != null) T(hint, size = 13, color = Tn.sub)
         }
         FluxButton("Scan again", onScan, Modifier.offset(x = (-12).dp), kind = ButtonKind.Text, icon = Ic.refresh)
     }

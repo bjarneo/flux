@@ -218,9 +218,12 @@ object Share {
                         }
                     }.onFailure { Log.w(TAG, "send $name failed", it) }.isSuccess
                     InboxFeed.transferEnded(transfer, ok)
-                    if (ok) sent += name else core.toast("Sending $name failed")
+                    if (ok) sent += name else core.toast("Sending $name to ${d.identity.deviceName} failed")
                 }
-                if (sent.isNotEmpty()) core.toast(if (sent.size == 1) "Sent ${sent[0]}" else "Sent ${sent.size} files to ${d.identity.deviceName}")
+                // The message names the computer, so that the user knows where the files went.
+                if (sent.isNotEmpty()) {
+                    core.toast(if (sent.size == 1) "Sent ${sent[0]} to ${d.identity.deviceName}" else "Sent ${sent.size} files to ${d.identity.deviceName}")
+                }
             } finally {
                 onDone?.invoke()
             }

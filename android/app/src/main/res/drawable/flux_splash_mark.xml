@@ -1,0 +1,26 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!--
+        The Flux mark, Φ phi, for the system splash screen of Android 12 and later.
+        It has the geometry of ic_launcher_foreground. The colors follow the night
+        mode of the app, so that the mark shows on the light and the dark background.
+    -->
+    <group
+        android:scaleX="2.53125"
+        android:scaleY="2.53125"
+        android:translateX="33.75"
+        android:translateY="33.75">
+        <!-- The ring: 10 units at 3 units, with a 2-unit stroke. -->
+        <path
+            android:fillColor="@color/flux_splash_fg"
+            android:fillType="evenOdd"
+            android:pathData="M3,3 L13,3 L13,13 L3,13 Z M5,5 L5,11 L11,11 L11,5 Z" />
+        <!-- The bar: 2 by 14 units at 7 and 1 units, over the ring. -->
+        <path
+            android:fillColor="@color/flux_splash_accent"
+            android:pathData="M7,1 L9,1 L9,15 L7,15 Z" />
+    </group>
+</vector>

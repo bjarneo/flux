@@ -252,7 +252,7 @@ If the access is off, the status line shows **Open Flux to resume automatic sync
 The service notification then shows **Open Flux to resume clipboard sync**.
 
 If the status line stays on **Only while Flux is open. Set up automatic sync**,
-Flux has no `READ_LOGS` permission or no overlay access.
+**Automatic sync** is off, or Flux has no `READ_LOGS` permission or no overlay access.
 Tap the status line to open the setup sheet.
 If the sheet shows **Allow drawing over apps**, tap it.
 To give the overlay access with adb, run:
@@ -260,6 +260,8 @@ To give the overlay access with adb, run:
 ```sh
 adb shell appops set org.omarchy.flux SYSTEM_ALERT_WINDOW allow
 ```
+
+When Flux has both accesses, turn on **Automatic sync** at the end of the sheet.
 
 To give the log access again, follow [set up the automatic clipboard](android-setup.md#automatic-clipboard-sync).
 

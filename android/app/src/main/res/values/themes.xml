@@ -15,6 +15,9 @@
 
     <style name="Theme.Flux" parent="Base.Theme.Flux" />
 
+    <!-- The main window. On Android 12 and later, its system splash screen shows the Flux mark. See values-v31. -->
+    <style name="Theme.Flux.Main" parent="Theme.Flux" />
+
     <style name="Theme.Flux.Translucent" parent="Theme.Flux">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
