@@ -42,7 +42,7 @@ object Browse {
         core.scheduler.schedule({
             val s = core.browseState()
             if (s != null && s.deviceId == id && s.loading && s.entries.isEmpty() && s.error == null) {
-                core.setBrowse(s.copy(loading = false, error = "${d.identity.deviceName} did not answer. Browse PC needs fluxd."))
+                core.setBrowse(s.copy(loading = false, error = "${d.identity.deviceName} did not answer. Get files needs fluxd."))
             }
         }, 10, java.util.concurrent.TimeUnit.SECONDS)
     }

@@ -21,7 +21,7 @@ See [configuration](configuration.md) for their default paths.
 Signature mode turns a signature on paper into a transparent PNG that you can paste on the computer.
 
 1. Sign on blank white paper with a dark pen.
-2. Open **Camera**, then **Signature**, and fit the signature in the frame.
+2. In **Send**, open a camera mode, select **Signature** in the mode bar, and fit the signature in the frame.
 3. Tap the shutter. To use a photo that you already have, tap the gallery button instead.
 4. Select **Black**, **Blue**, or **Original** for the ink color.
 5. Tap **Send**.

@@ -48,7 +48,7 @@ See [IPC](ipc.md) for the socket.
 
 ## Show the screen
 
-On the phone, open the computer and select **Remote desktop**.
+On the phone, open **Control** and select **Remote desktop**.
 The phone asks for its screen lock first. The unlock stays valid for 5 minutes.
 A phone without a screen lock cannot open the remote desktop.
 The phone also asks when the switch on the computer is off or not known yet.
@@ -121,6 +121,7 @@ The stream shows the pointer.
 
 Select the grid button to show the Omarchy panel.
 In landscape, the panel shows at the right of the video. In portrait, it shows under the video.
+To use the panel without the video, select **Omarchy panel** in **Control**.
 
 | Control | Result |
 | --- | --- |

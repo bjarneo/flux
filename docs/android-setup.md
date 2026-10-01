@@ -96,8 +96,8 @@ To give Flux these permissions:
 2. Open the menu in the top corner and select **Allow restricted settings**.
    The menu item shows only after Android has shown **Restricted setting** for Flux once.
 3. Confirm with the PIN or the fingerprint of the phone.
-4. Return to Flux and open the page of the computer.
-   Scroll below the large tiles and turn on **Share notifications** or **Text messages** again.
+4. Return to Flux and open **Computers > Sync**.
+   Turn on **Share notifications** or **Text messages** again.
 
 If the menu item does not show, allow restricted settings from the computer with `adb`:
 
@@ -157,7 +157,7 @@ To set up the automatic sync:
 
 5. Open Flux and tap **Allow one-time access**.
 
-While **Sync clipboard** is on, a status line under the switches of **Sync with all computers** shows the state of the automatic sync.
+While **Sync clipboard** is on, a status line under the switches of the **Sync** screen shows the state of the automatic sync.
 A tap on the status line opens a sheet with the same commands and a copy button.
 The sheet also opens the overlay permission screen.
 
@@ -189,7 +189,7 @@ It keeps the links to the computers open while the app is in the background.
 Android requires a visible notification for this service, so Flux shows **Waiting for a computer on this network** or the number of connected computers.
 
 The service starts again after a restart of the phone and after an app update.
-**Turn off Flux** in the app menu or **Turn off** in the notification stops the service.
+**Turn off Flux** in **Computers** or **Turn off** in the notification stops the service.
 Flux then stays off after a restart, until you turn it on again.
 
 ### Network
@@ -205,7 +205,7 @@ Both devices must be on the same local network, or use an [extra address](tailsc
 
 When the app opens, the phone scans for computers for 10 seconds.
 A scan sends the identity over UDP and browses mDNS, then stops.
-To scan again, tap **Scan again** on the device list.
+To scan again, open **Computers** and pull the list down, or tap **Scan again**.
 
 ### Permissions
 
@@ -216,7 +216,7 @@ The other permissions need no prompt.
 | --- | --- | --- |
 | `INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE`, `CHANGE_WIFI_MULTICAST_STATE`, `CHANGE_NETWORK_STATE` | Discovery and links on the local network | No prompt |
 | `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_CONNECTED_DEVICE`, `RECEIVE_BOOT_COMPLETED`, `WAKE_LOCK` | The background service | No prompt |
-| `POST_NOTIFICATIONS` | The service notification, pair requests, and alerts | When the app first opens |
+| `POST_NOTIFICATIONS` | The service notification, pair requests, and alerts | After the first pairing, when you tap **Allow** in the **Inbox** |
 | `USE_FULL_SCREEN_INTENT`, `VIBRATE` | **Find my phone** and fingerprint approval requests | No prompt |
 | Notification listener | **Share notifications** | The switch opens the Android settings page |
 | `QUERY_ALL_PACKAGES` | App names on shared notifications | No prompt |
@@ -232,6 +232,11 @@ The other permissions need no prompt.
 | `READ_LOGS` | The [automatic clipboard sync](#automatic-clipboard-sync) finds the copy signal in the system log | You grant it with adb |
 | `SYSTEM_ALERT_WINDOW` | The [automatic clipboard sync](#automatic-clipboard-sync) takes window focus to read the new clip | You grant it with adb, or with **Appear on top** |
 
+Keep Flux open for the first pairing. Before you allow notifications, Android 13 and later show no notification for a pair request.
+After the first pairing, the **Inbox** asks for notifications with **Allow**.
+After 2 denials, Android does not show its dialog again, so the **Inbox** shows **Open settings** in its place.
+**Hide** removes the question. You can allow notifications in the settings of Android at any time.
+
 `READ_EXTERNAL_STORAGE` applies only to Android 12 and earlier.
 The call log and the contacts are optional for **Call alerts**. They add the number and the name of the caller.
 When you allow the call log later, the next call shows the number without a restart of Flux.
@@ -239,7 +244,7 @@ The source of truth is `android/app/src/main/AndroidManifest.xml`.
 
 ### Sync switches
 
-The switches under **Sync with all computers** on the page of a computer are settings of the phone.
+The switches on the **Sync** screen in **Computers** are settings of the phone.
 Each switch applies to every paired computer, not only to the computer whose page shows it.
 For example, **Text messages** lets each paired computer read your conversations and send text messages.
 **Send new photos** sends each new photo to each connected computer.

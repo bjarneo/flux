@@ -8,7 +8,6 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,6 +16,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,7 +26,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.listSaver
@@ -35,15 +35,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.collectLatest
 import org.omarchy.flux.core.ApproveKeys
+import org.omarchy.flux.core.DebugInbox
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.PairState
 import org.omarchy.flux.core.RemoteInput
 import org.omarchy.flux.core.Ringer
-import org.omarchy.flux.core.UiState
 import org.omarchy.flux.service.FluxService
 
 class MainActivity : ComponentActivity() {
@@ -53,7 +55,13 @@ class MainActivity : ComponentActivity() {
     /** The device ID and the pane of the agent that a notification opens. */
     val openAgent = kotlinx.coroutines.flow.MutableStateFlow<Pair<String, String>?>(null)
 
-    private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    /** What the Inbox shows about the notification permission. See [updateNotifyAsk]. */
+    val notifyAsk = kotlinx.coroutines.flow.MutableStateFlow(NotifyAsk.None)
+
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { updateNotifyAsk() }
+
+    /** The questions that the app asked. They survive a restart. */
+    private val asks by lazy { getSharedPreferences("asks", MODE_PRIVATE) }
 
     /**
      * True when a window of another app covered this window during the last
@@ -71,18 +79,48 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
         FluxCore.init(this)
+        updateNotifyAsk()
         // The app scans for computers once when it opens, not after a recreation.
         FluxService.start(this, if (savedInstanceState == null) FluxService.ACTION_SCAN else null)
-        if (Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
         debugShowWhenLocked(intent)
         takeOpenAgent(intent)
         // The start animation plays when the launcher starts the app, not after a recreation or a notification tap.
         val splash = savedInstanceState == null && intent?.hasCategory(android.content.Intent.CATEGORY_LAUNCHER) == true
         setContent { TiledTheme { FluxRoot(this, splash) } }
+    }
+
+    /**
+     * Reads the notification permission. Android shows its dialog before the
+     * first request and once more after 1 denial. After that, only the
+     * notification settings of Flux can turn the notifications on.
+     */
+    fun updateNotifyAsk() {
+        // With the permission, the notifications can still be off in the settings of Android.
+        val granted = Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        notifyAsk.value = when {
+            NotificationManagerCompat.from(this).areNotificationsEnabled() || asks.getBoolean(NOTIFY_HIDDEN, false) -> NotifyAsk.None
+            !granted && (!asks.getBoolean(NOTIFY_ASKED, false) || shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) -> NotifyAsk.Allow
+            else -> NotifyAsk.Settings
+        }
+    }
+
+    /** Shows the permission dialog of Android, or the notification settings of Flux when Android does not show the dialog. */
+    fun allowNotifications() {
+        if (notifyAsk.value == NotifyAsk.Allow && Build.VERSION.SDK_INT >= 33) {
+            asks.edit { putBoolean(NOTIFY_ASKED, true) }
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            return
+        }
+        val settings = android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+            .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName)
+        runCatching { startActivity(settings) }
+    }
+
+    /** Hides the notification question. It does not show again. */
+    fun hideNotifyAsk() {
+        asks.edit { putBoolean(NOTIFY_HIDDEN, true) }
+        notifyAsk.value = NotifyAsk.None
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -122,6 +160,12 @@ class MainActivity : ComponentActivity() {
 
         /** The form of a herdr pane ID, such as w1:p2. */
         private val PANE_ID = Regex("^[A-Za-z0-9_.:-]{1,64}$")
+
+        /** True after the first permission dialog for notifications. */
+        private const val NOTIFY_ASKED = "notifyAsked"
+
+        /** True after the user hid the notification question. */
+        private const val NOTIFY_HIDDEN = "notifyHidden"
     }
 
     /**
@@ -145,6 +189,8 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         FluxService.start(this, FluxService.ACTION_REFRESH)
+        // The user can turn the notifications on in the settings of Android, then come back.
+        updateNotifyAsk()
     }
 
     /** On the touchpad screen, the volume keys can change the slides on the computer. */
@@ -171,46 +217,55 @@ internal fun isDemo(id: String?): Boolean =
     org.omarchy.flux.BuildConfig.DEBUG && org.omarchy.flux.core.DebugDemo.on && org.omarchy.flux.core.DebugDemo.isDemo(id) &&
         id in setOf(org.omarchy.flux.core.DebugDemo.PC, org.omarchy.flux.core.DebugDemo.OFFLINE, org.omarchy.flux.core.DebugDemo.NEW)
 
-/** The page prefix of the screen of one agent. The herdr pane ID follows it. */
-private const val AGENT_PAGE = "agent:"
+/** What the Inbox shows about the notification permission. */
+enum class NotifyAsk {
+    /** The notifications are on, or the user hid the question. */
+    None,
 
-/** The page prefix of the screen of one herdr terminal. The pane ID follows it. */
-private const val TERMINAL_PAGE = "terminal:"
+    /** Android can show its permission dialog. */
+    Allow,
 
-/** The page that starts a herdr agent or opens a terminal. */
-private const val NEW_PANE_PAGE = "newpane"
+    /** Android does not show its dialog again. The notification settings of Flux can turn the notifications on. */
+    Settings,
+}
 
-/** One entry of the screen stack. [page] is empty for the device home screen. */
-private data class Route(val deviceId: String? = null, val page: String = "")
-
-/** Keeps the screen stack across a recreation of the activity, as pairs of the device ID and the page. */
-private val RouteStackSaver = listSaver<List<Route>, String>(
-    save = { stack -> stack.flatMap { listOf(it.deviceId.orEmpty(), it.page) } },
-    restore = { saved -> saved.chunked(2).map { (id, page) -> Route(id.ifEmpty { null }, page) }.ifEmpty { listOf(Route()) } },
-)
+/** Keeps the navigation across a recreation of the activity, see [Nav.save]. */
+private val NavSaver = listSaver<Nav, String>(save = { it.save() }, restore = { Nav.restore(it) })
 
 /** A pairing that this phone starts. The dialog shows the key before the request goes out. */
 private data class Outgoing(val deviceId: String, val timestamp: Long, val key: String, val sent: Boolean = false)
 
+/** The debug pages that need no computer: the destinations and the sync switches. */
+private val DestinationPages = setOf("inbox", "send", "control", "computers", "devices", "sync")
+
 @Composable
 fun FluxRoot(activity: MainActivity, splash: Boolean = false) {
-    val state by FluxCore.state.collectAsStateWithLifecycle()
+    val core by FluxCore.state.collectAsStateWithLifecycle()
+    // Debug builds with the demo add sample data for the Omarchy panel. Release builds keep the state as it is.
+    val state = remember(core) { if (org.omarchy.flux.BuildConfig.DEBUG) DebugInbox.decorate(core) else core }
     var splashing by remember { mutableStateOf(splash) }
-    var stack by rememberSaveable(stateSaver = RouteStackSaver) { mutableStateOf(listOf(Route())) }
+    var nav by rememberSaveable(stateSaver = NavSaver) { mutableStateOf(Nav()) }
+    // The computer in scope, or null for all computers.
+    var scope by rememberSaveable { mutableStateOf<String?>(null) }
     val snacks = remember { SnackbarHostState() }
     var outgoing by remember { mutableStateOf<Outgoing?>(null) }
     var unpairing by remember { mutableStateOf<String?>(null) }
-    val route = stack.last()
-    val device = state.devices.firstOrNull { it.id == route.deviceId }
 
     // A new message replaces the one on screen.
     LaunchedEffect(Unit) {
         FluxCore.toasts.collectLatest { snacks.showSnackbar(it) }
     }
-    // Leave the device screens when the device is gone or no longer paired.
-    LaunchedEffect(route, device?.paired) {
-        if (route.deviceId != null && (device == null || !device.paired)) stack = listOf(Route())
+    // Leave the screens of a computer that is gone or no longer paired, and show all computers again.
+    val pairedIds = state.devices.filter { it.paired }.map { it.id }.toSet()
+    LaunchedEffect(pairedIds, nav) {
+        nav = nav.without { it !in pairedIds }
+        if (scope != null && scope !in pairedIds) scope = null
     }
+    // Notifications carry the approvals and the agent alerts, so the Inbox asks for them after the first pairing.
+    // The sample computers of a debug build do not count, so that screenshots show no question.
+    val anyPaired = state.devices.any { it.paired && !isDemo(it.id) }
+    val notify by activity.notifyAsk.collectAsStateWithLifecycle()
+    val wide = rememberWideWindow()
     // Close the outgoing dialog when the pairing ends.
     val out = outgoing
     val outDevice = state.devices.firstOrNull { it.id == out?.deviceId }
@@ -219,7 +274,7 @@ fun FluxRoot(activity: MainActivity, splash: Boolean = false) {
         if (outDevice == null || outDevice.paired || (out.sent && outDevice.pairState == PairState.None)) outgoing = null
     }
 
-    // Debug builds only: open a page of the first paired device from adb.
+    // Debug builds only: open a page from adb. See the Test section of docs/android.md.
     val debugPage by activity.debugPage.collectAsStateWithLifecycle()
     var showIcons by remember { mutableStateOf(false) }
     LaunchedEffect(debugPage, state.devices.size) {
@@ -236,7 +291,8 @@ fun FluxRoot(activity: MainActivity, splash: Boolean = false) {
         if (request == "empty") {
             org.omarchy.flux.core.DebugDemo.on = false
             FluxCore.publish()
-            stack = listOf(Route())
+            nav = Nav()
+            scope = null
             activity.debugPage.value = null
             return@LaunchedEffect
         }
@@ -247,73 +303,52 @@ fun FluxRoot(activity: MainActivity, splash: Boolean = false) {
             state.devices.firstOrNull { it.paired && !it.online }
         } else {
             state.devices.firstOrNull { it.paired && it.online } ?: state.devices.firstOrNull { it.paired }
-        } ?: return@LaunchedEffect
+        }
+        val destination = page in DestinationPages
+        if (d == null && !destination) return@LaunchedEffect
         // The ring page shows the overlay without the alarm sound.
-        if (page == "ring") FluxCore.setRinging(d.name)
-        // The pair and unpair pages show their dialogs over the device list.
+        if (page == "ring" && d != null) FluxCore.setRinging(d.name)
+        // The pair and unpair pages show their dialogs over the Computers destination.
         if (page == "pair") {
             state.devices.firstOrNull { !it.paired && it.online }?.let { outgoing = Outgoing(it.id, 0, "5EE6825F974ED59A") }
         }
-        if (page == "unpair") unpairing = d.id
-        stack = when (page) {
-            "devices", "ring", "pair", "unpair" -> listOf(Route())
-            "home" -> listOf(Route(), Route(d.id))
-            else -> listOf(Route(), Route(d.id), Route(d.id, page))
-        }
+        if (page == "unpair" && d != null) unpairing = d.id
+        val (next, pageScope) = Nav.debug(page, d?.id.orEmpty())
+        nav = next
+        // A destination with @offline shows the computer that is not reachable as the scope.
+        scope = pageScope ?: if (offline && destination) d?.id else null
         activity.debugPage.value = null
     }
 
-    // A tap on an agent notification opens the screen of the agent.
+    // A tap on an agent notification opens the screen of the agent. Back goes to the Inbox.
     val openAgent by activity.openAgent.collectAsStateWithLifecycle()
     LaunchedEffect(openAgent, state.devices.size) {
         val (id, pane) = openAgent ?: return@LaunchedEffect
         if (state.devices.none { it.id == id && it.paired }) return@LaunchedEffect
-        stack = listOf(Route(), Route(id), Route(id, "agents"), Route(id, "$AGENT_PAGE$pane"))
+        nav = Nav.agent(id, pane)
         activity.openAgent.value = null
     }
 
-    fun push(r: Route) { stack = stack + r }
-    fun pop() { if (stack.size > 1) stack = stack.dropLast(1) }
-    BackHandler(enabled = stack.size > 1) { pop() }
-
     Box(Modifier.fillMaxSize().background(Tn.bg)) {
-        Box(Modifier.fillMaxSize().systemBarsPadding()) {
-            when {
-                !state.enabled -> FluxOffScreen()
-                device == null -> TiledDevicesScreen(
-                    state,
-                    onOpen = { push(Route(it.id)) },
-                    onPair = {
-                        val ts = System.currentTimeMillis() / 1000
-                        outgoing = Outgoing(it.id, ts, FluxCore.previewKey(it.id, ts))
-                    },
-                    onUnpair = { unpairing = it.id },
-                )
-                route.page == "media" -> TiledMediaScreen(device, ::pop)
-                route.page == "mic" -> org.omarchy.flux.mic.MicScreen(device, ::pop)
-                route.page == "commands" -> TiledCommandsScreen(device, ::pop)
-                route.page == "agents" -> TiledAgentsScreen(
-                    device, ::pop,
-                    onOpen = { pane -> push(Route(device.id, "$AGENT_PAGE$pane")) },
-                    onOpenTerminal = { pane -> push(Route(device.id, "$TERMINAL_PAGE$pane")) },
-                    onNew = { push(Route(device.id, NEW_PANE_PAGE)) },
-                )
-                route.page.startsWith(AGENT_PAGE) -> key(route.page) { TiledAgentScreen(device, route.page.removePrefix(AGENT_PAGE), ::pop) }
-                route.page.startsWith(TERMINAL_PAGE) -> key(route.page) { TiledTerminalScreen(device, route.page.removePrefix(TERMINAL_PAGE), ::pop) }
-                // The new pane replaces the new pane page, so Back goes to the agent list.
-                route.page == NEW_PANE_PAGE -> TiledNewPaneScreen(device, ::pop) { what, pane ->
-                    val page = if (what == "terminal") "$TERMINAL_PAGE$pane" else "$AGENT_PAGE$pane"
-                    stack = stack.dropLast(1) + Route(device.id, page)
-                }
-                route.page == "browse" -> BrowseScreen(device, state.browse, ::pop)
-                route.page == "touchpad" -> TouchpadScreen(device, ::pop)
-                route.page == "desktop" -> DesktopScreen(device, ::pop)
-                // Debug builds open a mode with "camera:<mode>".
-                route.page.startsWith("camera") -> key(route.page) {
-                    org.omarchy.flux.camera.CameraScreen(device, ::pop, org.omarchy.flux.camera.CameraMode.fromKey(route.page.substringAfter(':', "")))
-                }
-                else -> TiledHomeScreen(device, state, ::pop, onUnpair = { unpairing = device.id }) { page -> push(Route(device.id, page)) }
-            }
+        if (!state.enabled) {
+            Box(Modifier.fillMaxSize().systemBarsPadding()) { FluxOffScreen() }
+        } else {
+            FluxShell(
+                state, nav, onNav = { nav = it }, scope, onScope = { scope = it },
+                onPair = {
+                    val ts = System.currentTimeMillis() / 1000
+                    outgoing = Outgoing(it.id, ts, FluxCore.previewKey(it.id, ts))
+                },
+                onUnpair = { unpairing = it.id },
+                // The sheet of an incoming request shows by itself, unless this phone starts another pairing.
+                onShowPair = { id ->
+                    val o = outgoing
+                    if (o != null && o.deviceId != id) FluxCore.toast("Finish or cancel the other pairing first")
+                },
+                notify = if (anyPaired) notify else NotifyAsk.None,
+                onNotify = activity::allowNotifications,
+                onNotifyHide = activity::hideNotifyAsk,
+            )
         }
         if (out != null && outDevice != null) {
             TiledPairSheet(
@@ -353,7 +388,12 @@ fun FluxRoot(activity: MainActivity, splash: Boolean = false) {
             )
         }
         if (showIcons) Box(Modifier.fillMaxSize().background(Tn.bg).systemBarsPadding()) { DebugIconsScreen() }
-        SnackbarHost(snacks, Modifier.align(Alignment.BottomCenter).systemBarsPadding().padding(bottom = 16.dp)) { data ->
+        // The messages show above the navigation bar of a destination. A wide window has a navigation rail at the side.
+        val barShown = state.enabled && nav.stack.isEmpty() && !wide
+        SnackbarHost(
+            snacks,
+            Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding().padding(bottom = if (barShown) 88.dp else 16.dp),
+        ) { data ->
             val shape = RoundedCornerShape(10.dp)
             T(
                 data.visuals.message,

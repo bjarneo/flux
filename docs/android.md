@@ -120,7 +120,7 @@ Flux for Android applies these limits to the network:
 - The phone finds a computer that sleeps or loses power in 90 seconds or less. While data waits for the computer, it finds it in 30 seconds.
 - The Wi-Fi multicast lock is on only while the phone scans, before the first pairing, and while a paired computer is away.
 
-When you unpair a computer on either side, the phone stops the screen mirror, the webcam, the microphone, the remote desktop, and Browse PC for that computer.
+When you unpair a computer on either side, the phone stops the screen mirror, the webcam, the microphone, the remote desktop, and **Get files** for that computer.
 It also closes its approval request and removes its notifications.
 When you start the screen mirror to a second computer, the mirror to the first computer stops.
 
@@ -190,9 +190,9 @@ Flux follows the active Omarchy theme of the computer.
 `fluxd` sends the theme in a `flux.theme` packet when the phone connects and when the theme changes.
 Flux saves the theme of each computer, so the next start draws it at once.
 
-To change the theme, open the menu of the device list. The choices are:
+To change the theme, open **Computers** and select a choice under **Theme**. The choices are:
 
-- **Computer**, the default: the theme of the computer in scope. In the scope of all computers, Flux uses the theme that changed most recently. A reconnect does not change the theme. Without a theme from the computer in scope, Flux uses Tokyo Night on a dark phone and Tokyo Night Day on a light phone. The menu shows the theme name and the computer that sent it.
+- **Computer**, the default: the theme of the computer in scope. In the scope of all computers, Flux uses the theme that changed most recently. A reconnect does not change the theme. Without a theme from the computer in scope, Flux uses Tokyo Night on a dark phone and Tokyo Night Day on a light phone. The choice shows the theme name and the computer that sent it.
 - **System**: Tokyo Night on a dark phone and Tokyo Night Day on a light phone.
 - **Light**: Tokyo Night Day.
 - **Dark**: Tokyo Night.
@@ -248,25 +248,30 @@ tools/shot.sh media /tmp/media.png
 To render the pages on an emulator with no computer, turn on the sample computers with `FLUX_DEMO=1`. Set `ANDROID_SERIAL` when a phone is also connected:
 
 ```bash
-ANDROID_SERIAL=emulator-5554 FLUX_DEMO=1 tools/shot.sh home /tmp/home.png
+ANDROID_SERIAL=emulator-5554 FLUX_DEMO=1 tools/shot.sh inbox /tmp/inbox.png
 ```
 
 The pages are:
 
-- `devices`, `home`, `media`, `commands`, `browse`, `mic`, `agents`, and `camera`.
+- `inbox`, `send`, `control`, and `computers` for the 4 destinations of the navigation bar. `devices` is the same as `computers`.
+- `sync` for the sync switches.
+- `home` for **Control** with the first paired computer in scope.
+- `media`, `commands`, `browse`, `mic`, `touchpad`, `desktop`, `omarchy`, `agents`, and `camera`.
 - `agent:<pane>` for the output of one herdr agent. The sample blocked agent is `agent:w2:p1`.
 - `newpane` for the screen that starts a herdr agent or opens a terminal.
 - `terminal:<pane>` for one herdr terminal. The sample terminals are `terminal:w1:p2` and `terminal:w3:p3`.
 - `camera:<mode>` for a camera mode: `text`, `qr`, `photo`, `document`, `signature`, or `webcam`.
 - `ring`, `pair`, and `unpair` for the ring overlay, the pairing sheet, and the unpair dialog.
-- `<page>@offline` for the page of a paired computer that is not reachable.
+- `<page>@offline` for the page of a paired computer that is not reachable. A destination with `@offline` shows that computer as the scope.
 - `empty` for the app with no computers.
 - `icon` for the launcher and notification icons.
+
+With `FLUX_DEMO=1`, the Inbox also shows a sample approval, 2 sample transfers, and a sample clip, and the sample computer shows the Omarchy panel. A tap on the sample approval does not open the approval screen.
 
 To draw the sample computer in a sample theme, set `FLUX_THEME` to `neon`, `tokyo-night`, `tokyo-night-day`, `catppuccin-latte`, `cotton-candy`, `futurism`, or `low-contrast`. The value `none` removes the theme:
 
 ```bash
-ANDROID_SERIAL=emulator-5554 FLUX_DEMO=1 FLUX_THEME=catppuccin-latte tools/shot.sh home /tmp/home-latte.png
+ANDROID_SERIAL=emulator-5554 FLUX_DEMO=1 FLUX_THEME=catppuccin-latte tools/shot.sh inbox /tmp/inbox-latte.png
 ```
 
 Release builds ignore these extras.

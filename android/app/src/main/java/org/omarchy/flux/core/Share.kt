@@ -90,7 +90,10 @@ object Share {
     fun receive(core: FluxCore, d: Device, p: Packet) {
         val from = d.identity.deviceName
         p.string("text")?.let { text ->
-            if (Plugins.putRemoteText(core, from, text)) core.toast("Text from $from is on the clipboard")
+            if (Plugins.putRemoteText(core, from, text)) {
+                InboxFeed.clipReceived(d.id, from, text)
+                core.toast("Text from $from is on the clipboard")
+            }
             return
         }
         p.string("url")?.let { url ->
@@ -121,7 +124,9 @@ object Share {
         tls: org.omarchy.flux.net.Tls,
     ) {
         val mime = Android.mimeType(name)
+        val transfer = InboxFeed.transferStarted(d.id, from, name, incoming = true)
         val dl = runCatching { Android.createDownload(core.app, name, mime) }.getOrElse {
+            InboxFeed.transferEnded(transfer, false)
             core.toast("Cannot save $name: ${it.message}")
             d.send(TunnelPackets.failed(token, "cannot save the file"))
             return
@@ -131,6 +136,7 @@ object Share {
             .onFailure { Log.w(TAG, "receive $name failed", it) }
             .isSuccess
         Android.finishDownload(core.app, dl, ok)
+        InboxFeed.transferEnded(transfer, ok)
         if (!ok) {
             core.toast("Receiving $name failed")
             return
@@ -182,6 +188,7 @@ object Share {
                 d.send(Packet(Types.SHARE_UPDATE, bodyOf("numberOfFiles" to files.size, "totalPayloadSize" to total)))
                 val sent = ArrayList<String>()
                 for ((uri, name, size) in files) {
+                    val transfer = InboxFeed.transferStarted(d.id, d.identity.deviceName, name, incoming = false)
                     val ok = runCatching {
                         // The protocol needs the exact size before the transfer.
                         // A source without a size goes through a cache file.
@@ -210,6 +217,7 @@ object Share {
                             temp?.delete()
                         }
                     }.onFailure { Log.w(TAG, "send $name failed", it) }.isSuccess
+                    InboxFeed.transferEnded(transfer, ok)
                     if (ok) sent += name else core.toast("Sending $name failed")
                 }
                 if (sent.isNotEmpty()) core.toast(if (sent.size == 1) "Sent ${sent[0]}" else "Sent ${sent.size} files to ${d.identity.deviceName}")

@@ -1,0 +1,110 @@
+package org.omarchy.flux.ui
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.FlowRowScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import org.omarchy.flux.core.FluxCore
+import org.omarchy.flux.core.InboxReach
+
+/**
+ * What the Inbox tells next to its items: the computers in scope that are
+ * not reachable, the items on other computers that need the user, and the
+ * notification question. [scopeName] is the name of the computer in scope,
+ * or null for all computers. [elsewhere] counts the items out of scope that
+ * need the user.
+ */
+class InboxNotices(
+    val reach: InboxReach,
+    val onWifi: Boolean,
+    val scopeName: String?,
+    val elsewhere: Int,
+    val notify: NotifyAsk,
+)
+
+/** The title of an Inbox with nothing to do. In a scope, it names the computer. */
+internal fun nothingText(n: InboxNotices): String = n.scopeName?.let { "Nothing on $it needs you" } ?: "Nothing needs you"
+
+/** The title of an Inbox with no computer online. */
+internal fun offlineTitle(reach: InboxReach): String =
+    reach.offline.singleOrNull()?.let { "${it.name} is not reachable" } ?: "No computer is reachable"
+
+/** The next step when a computer is not reachable. */
+internal fun offlineHint(onWifi: Boolean): String =
+    if (onWifi) {
+        "Check that Flux runs on the computer, and that this phone can reach it on this network or on Tailscale."
+    } else {
+        "This phone is not on Wi-Fi. Connect to the network of the computer, or turn on Tailscale."
+    }
+
+/** The line for the computers in scope that are not reachable while the Inbox shows other items. */
+internal fun offlineLine(n: InboxNotices): String {
+    val wifi = if (n.onWifi) "" else "This phone is not on Wi-Fi. "
+    val off = n.reach.offline
+    return wifi + (off.singleOrNull()?.let { "${it.name} is not reachable. Its agents do not show here." }
+        ?: "${off.size} computers are not reachable. Their agents do not show here.")
+}
+
+/** The line for the items on other computers that need the user. */
+internal fun elsewhereText(count: Int): String =
+    if (count == 1) "1 item on another computer needs you" else "$count items on other computers need you"
+
+/**
+ * The notices of the Inbox, each with its next step. [offline] is false
+ * when the large tile already tells that no computer is reachable.
+ */
+@Composable
+internal fun InboxNoticeList(n: InboxNotices, actions: InboxActions, offline: Boolean = true) {
+    if (n.elsewhere > 0) {
+        Notice({ Dot(Tn.red) }, elsewhereText(n.elsewhere), color = Tn.text) {
+            TextButton(onClick = actions.showAll) { Text("Show all computers") }
+        }
+    }
+    if (offline && n.reach.offline.isNotEmpty()) {
+        Notice({ LinkDot(false) }, offlineLine(n)) {
+            TextButton(onClick = { FluxCore.rediscover() }) { Text("Retry") }
+        }
+    }
+    when (n.notify) {
+        NotifyAsk.None -> Unit
+        NotifyAsk.Allow -> Notice(
+            { Sym(Ic.notifications, tint = Tn.yellow, size = 18.dp) },
+            "Allow notifications, so that approvals and agent alerts reach this phone.",
+        ) {
+            TextButton(onClick = actions.allowNotifications) { Text("Allow") }
+            TextButton(onClick = actions.hideNotifications) { Text("Hide") }
+        }
+        NotifyAsk.Settings -> Notice(
+            { Sym(Ic.notifications, tint = Tn.yellow, size = 18.dp) },
+            "Notifications are off for Flux. Approvals and agent alerts do not reach this phone. Turn them on in the settings of Android.",
+        ) {
+            TextButton(onClick = actions.allowNotifications) { Text("Open settings") }
+            TextButton(onClick = actions.hideNotifications) { Text("Hide") }
+        }
+    }
+}
+
+/** 1 notice: a mark, the text, and the actions under the text. The actions wrap at a large font size. */
+@Composable
+private fun Notice(mark: @Composable () -> Unit, text: String, color: Color = Tn.sub, actions: @Composable FlowRowScope.() -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(Modifier.padding(top = 5.dp), contentAlignment = Alignment.Center) { mark() }
+        Column(Modifier.weight(1f)) {
+            T(text, size = 13, color = color, lineHeight = 1.35f)
+            // The buttons line up with the text. The padding of a text button holds the offset.
+            FlowRow(Modifier.offset(x = (-12).dp), content = actions)
+        }
+    }
+}

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Takes a screenshot of one Flux page on a connected test phone. Debug builds only.
 # Usage: tools/shot.sh <page> <out.png>
-# Pages: see the Test section of android/README.md.
+# Pages: see the Test section of docs/android.md.
 set -euo pipefail
 page=$1
 out=$2
