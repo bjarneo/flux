@@ -4,7 +4,9 @@
 
 ## Camera modes
 
-The Android Camera screen includes text, QR, photo, document, signature, and webcam modes.
+The Android Camera screen has text, QR, photo, document, and signature modes.
+Select a mode in the mode strip above the shutter.
+The webcam has its own screen: open **Control**, then **Webcam** in the **Stream** band.
 Text recognition and barcode recognition use models bundled in the app.
 Document capture uses the Google Play services document scanner.
 The iPhone has the same modes with Apple's Vision and VisionKit. See [Flux for iOS](ios.md#features).
@@ -21,7 +23,7 @@ See [configuration](configuration.md) for their default paths.
 Signature mode turns a signature on paper into a transparent PNG that you can paste on the computer.
 
 1. Sign on blank white paper with a dark pen.
-2. In **Send**, open a camera mode, select **Signature** in the mode bar, and fit the signature in the frame.
+2. In **Send**, open a camera mode, select **Signature** in the mode strip, and fit the signature in the frame.
 3. Tap the shutter. To use a photo that you already have, tap the gallery button instead.
 4. Select **Black**, **Blue**, or **Original** for the ink color.
 5. Tap **Send**.
@@ -53,7 +55,7 @@ sudo sh /usr/share/flux/post-install.sh
 For another kernel, select its matching headers package.
 The setup preserves existing `v4l2loopback` camera settings.
 
-On the phone, open Camera, select Webcam, and press Start.
+On the phone, open **Control**, select **Webcam** in the **Stream** band, and press **Start webcam**.
 Desktop video apps see **Flux Camera**.
 
 ```sh
@@ -64,7 +66,7 @@ flux-cli webcam stop
 ```
 
 On the desktop, open the PHONE CAMERA card on Overview and select Settings.
-On the phone, select Settings in Webcam mode.
+On the phone, select **Settings** on the Webcam screen.
 The preview shows each change.
 Changes to `aspect` or `resolution` restart the stream.
 Other settings apply while the stream runs.
@@ -99,7 +101,7 @@ A headless `fluxd` does not start the webcam.
 
 ## Phone as microphone
 
-On the phone, open Microphone and press Start.
+On the phone, open **Control**, select **Mic** in the **Stream** band, and press **Start the mic**.
 The stream stops when you leave the screen.
 Desktop apps see **Flux Microphone**.
 The daemon uses `pw-cat` from PipeWire, so this feature needs no additional package on Omarchy.

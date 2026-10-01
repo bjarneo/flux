@@ -373,12 +373,8 @@ fun FluxRoot(activity: MainActivity, splash: Boolean = false) {
         unpairing?.let { id ->
             val d = state.devices.firstOrNull { it.id == id }
             if (d == null) unpairing = null
-            else ConfirmDialog(
-                "Unpair ${d.name}?",
-                "This phone and ${d.name} stop connecting, and this phone deletes its fingerprint approval key for ${d.name}. " +
-                    "You can pair them again later. " +
-                    "The key file on the computer stays until you run: sudo flux-cli approve remove",
-                "Unpair",
+            else UnpairDialog(
+                d.name,
                 onCancel = { unpairing = null },
                 onConfirm = {
                     FluxCore.unpair(id)
@@ -386,8 +382,6 @@ fun FluxRoot(activity: MainActivity, splash: Boolean = false) {
                     ApproveKeys.delete(id)
                     unpairing = null
                 },
-                icon = Ic.unlink,
-                destructive = true,
             )
         }
         if (showIcons) Box(Modifier.fillMaxSize().background(Tn.bg).systemBarsPadding()) { DebugIconsScreen() }

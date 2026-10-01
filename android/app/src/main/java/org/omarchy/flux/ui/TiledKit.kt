@@ -4,6 +4,11 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.annotation.DrawableRes
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -17,21 +22,37 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -56,17 +77,35 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Shader
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toDrawable
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
+import org.omarchy.flux.core.Android
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.ThemeMode
 import org.omarchy.flux.theme.PaletteSpec
@@ -74,9 +113,6 @@ import org.omarchy.flux.theme.TokyoNight
 import org.omarchy.flux.theme.TokyoNightDay
 import org.omarchy.flux.theme.paletteOf
 import org.omarchy.flux.theme.resolvePalette
-import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.sin
 
 /**
  * The Tiled design: the colors of the Omarchy theme of the computer, 12 dp
@@ -177,12 +213,9 @@ val Tn: TiledColors
 val TileShape = RoundedCornerShape(12.dp)
 val TileGap = 8.dp
 
-/** The height of 1 grid row on the device home screen. 2 rows are 2 × 62 + 8. */
-val TileUnit = 62.dp
-val TileUnit2 = TileUnit * 2 + TileGap
 val TiledGutter = 10.dp
 
-/** The alpha of a tile whose computer is not reachable. */
+/** The alpha of a tile or a choice that takes no taps, for example while its computer is not reachable. */
 private const val DimAlpha = 0.55f
 
 /**
@@ -313,10 +346,14 @@ private fun TiledColors.scheme(): ColorScheme = (if (dark) darkColorScheme() els
     errorContainer = red, onErrorContainer = onAccent,
 )
 
+// ───────────────────────── Components ─────────────────────────
+
 /**
  * A tile. The border takes [accent] while pressed. A long press runs
  * [onLongClick], for example to unpair a computer. A tile that is not
- * [enabled] shows at a lower alpha and still takes taps.
+ * [enabled] shows dimmed, takes no taps, and TalkBack reads it as
+ * disabled. A tile with a [selected] value is 1 choice of a group:
+ * TalkBack reads it as a radio button with its state.
  */
 @Composable
 fun Tile(
@@ -330,6 +367,7 @@ fun Tile(
     padding: PaddingValues = PaddingValues(14.dp),
     verticalArrangement: Arrangement.Vertical = Arrangement.SpaceBetween,
     horizontalAlignment: Alignment.Horizontal = Alignment.Start,
+    selected: Boolean? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val source = remember { MutableInteractionSource() }
@@ -338,9 +376,15 @@ fun Tile(
     var m = modifier.alpha(if (enabled) 1f else DimAlpha).clip(TileShape).background(container)
     if (stroke != null) m = m.border(stroke, TileShape)
     if (onClick != null) {
+        if (selected != null) {
+            val chosen: Boolean = selected
+            m = m.semantics { this.selected = chosen }
+        }
         m = m.combinedClickable(
             interactionSource = source,
             indication = LocalIndication.current,
+            enabled = enabled,
+            role = if (selected != null) Role.RadioButton else Role.Button,
             onLongClick = onLongClick,
             onClick = onClick,
         )
@@ -348,95 +392,339 @@ fun Tile(
     Column(m.padding(padding), verticalArrangement = verticalArrangement, horizontalAlignment = horizontalAlignment, content = content)
 }
 
-/** A short tile with an icon and a label on 1 line. */
+/** The fill of a choice. A selected choice takes the accent tile. The app has 1 selection color, the accent. */
 @Composable
-fun LineTile(
-    @DrawableRes icon: Int,
-    label: String,
-    accent: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    trailing: String? = null,
-) {
-    Tile(modifier, onClick, accent = accent, enabled = enabled, padding = PaddingValues(horizontal = 12.dp), verticalArrangement = Arrangement.Center) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Sym(icon, tint = accent, size = 22.dp)
-            T(label, Modifier.weight(1f), size = 13, weight = FontWeight.SemiBold, maxLines = 1)
-            if (trailing != null) T(trailing, size = 11, color = Tn.sub, family = Mono)
-        }
-    }
-}
+@ReadOnlyComposable
+fun choiceFill(selected: Boolean): Color = if (selected) Tn.accentTile else Tn.tile
 
-/** A small tile: the icon over the label, centered. A [badge] above 0 shows as a red count on the icon. */
+/** The border of a choice: 2 dp of the accent while selected, else the tile border. */
 @Composable
-fun MiniTile(
-    @DrawableRes icon: Int,
+@ReadOnlyComposable
+fun choiceBorder(selected: Boolean): BorderStroke = if (selected) BorderStroke(2.dp, Tn.blue) else BorderStroke(1.dp, Tn.line)
+
+/**
+ * A choice of a small group, such as a player, a camera mode, or a
+ * shape. It draws at least 40 dp high and takes taps on 48 dp. [role]
+ * tells TalkBack the kind of choice, for example [Role.Tab] for a mode.
+ * [leading] draws before the label, for example a color swatch. [inset]
+ * is the space at the start and the end of the label.
+ */
+@Composable
+fun ChoiceChip(
     label: String,
-    accent: Color,
+    selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    container: Color = Tn.tile,
-    badge: Int = 0,
+    mono: Boolean = false,
+    role: Role = Role.RadioButton,
+    inset: Dp = 12.dp,
+    leading: (@Composable () -> Unit)? = null,
 ) {
-    Tile(
-        modifier, onClick, accent = accent, container = container, enabled = enabled,
-        padding = PaddingValues(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
+    val shape = RoundedCornerShape(8.dp)
+    val border = choiceBorder(selected)
+    Row(
+        modifier.minimumInteractiveComponentSize().heightIn(min = 40.dp).alpha(if (enabled) 1f else DimAlpha)
+            .clip(shape).background(choiceFill(selected)).border(border, shape)
+            .selectable(selected = selected, enabled = enabled, role = role, onClick = onClick)
+            .padding(horizontal = inset, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box {
-            Sym(icon, tint = accent, size = 20.dp)
-            if (badge > 0) {
-                T(
-                    if (badge > 9) "9+" else "$badge",
-                    Modifier.align(Alignment.TopEnd).offset(x = 10.dp, y = (-6).dp)
-                        .clip(RoundedCornerShape(7.dp)).background(Tn.red).padding(horizontal = 4.dp),
-                    size = 10, color = Tn.onAccent, weight = FontWeight.Bold, family = Mono,
-                )
-            }
-        }
-        T(label, size = 11, weight = FontWeight.SemiBold, maxLines = 1)
+        leading?.invoke()
+        T(
+            label, size = 13, color = if (selected) Tn.text else Tn.sub, weight = FontWeight.SemiBold,
+            family = if (mono) Mono else FontFamily.Default, align = TextAlign.Center,
+        )
     }
 }
 
-/** The mono, uppercase label of a tile or a section. */
+/** The kinds of [FluxButton]. */
+enum class ButtonKind {
+    /** The main action of a screen or a tile: the accent fill. */
+    Filled,
+
+    /** A second action that still needs weight, such as Stop or Done. */
+    Tonal,
+
+    /** A second action: an outline and the accent text. */
+    Outlined,
+
+    /** An action that deletes or ends something for good: a red outline and red text. */
+    Destructive,
+
+    /** A small action in a line of text, such as Retry. */
+    Text,
+}
+
+/**
+ * The button of the app, on the tile shape. It is at least 48 dp high,
+ * and its label wraps at a large font size. [icon] draws before the
+ * label. While [busy], a spinner replaces the icon and the button takes no
+ * taps. [mono] sets the label in the mono family, for data such as a
+ * monitor name.
+ */
 @Composable
-fun TileLabel(text: String, modifier: Modifier = Modifier, color: Color = Tn.sub) {
-    T(text.uppercase(), modifier, size = 11, color = color, weight = FontWeight.Medium, family = Mono, letterSpacing = 0.9f, maxLines = 1)
+fun FluxButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    kind: ButtonKind = ButtonKind.Filled,
+    @DrawableRes icon: Int? = null,
+    enabled: Boolean = true,
+    busy: Boolean = false,
+    mono: Boolean = false,
+) {
+    val on = enabled && !busy
+    val (fill, ink) = when (kind) {
+        ButtonKind.Filled -> Tn.blue to Tn.onAccent
+        ButtonKind.Tonal -> Tn.line to Tn.text
+        ButtonKind.Outlined, ButtonKind.Text -> Color.Transparent to Tn.blue
+        ButtonKind.Destructive -> Color.Transparent to Tn.red
+    }
+    val flat = kind == ButtonKind.Outlined || kind == ButtonKind.Text || kind == ButtonKind.Destructive
+    // A busy button keeps its colors, so that its label stays legible. It takes no taps.
+    val colors = ButtonDefaults.buttonColors(
+        containerColor = fill, contentColor = ink,
+        disabledContainerColor = if (busy) fill else if (flat) Color.Transparent else Tn.tile,
+        disabledContentColor = if (busy) ink else Tn.dim,
+    )
+    val border = when (kind) {
+        ButtonKind.Outlined -> BorderStroke(1.dp, if (on || busy) Tn.dim else Tn.line)
+        ButtonKind.Destructive -> BorderStroke(1.dp, if (on || busy) Tn.red else Tn.line)
+        else -> null
+    }
+    Button(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = 48.dp),
+        enabled = on,
+        shape = TileShape,
+        colors = colors,
+        border = border,
+        contentPadding = PaddingValues(horizontal = if (kind == ButtonKind.Text) 12.dp else 18.dp, vertical = 10.dp),
+    ) {
+        if (busy) {
+            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = LocalContentColor.current)
+            Spacer(Modifier.size(8.dp))
+        } else if (icon != null) {
+            Sym(icon, size = 18.dp)
+            Spacer(Modifier.size(8.dp))
+        }
+        Text(
+            label,
+            style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.SemiBold, fontFamily = if (mono) Mono else FontFamily.Default),
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/**
+ * The key at the end of a text field, such as Send or Run: 56 dp square on
+ * the tile shape. [filled] draws it in the accent while it can send.
+ * While [busy], a spinner shows and the key takes no taps.
+ */
+@Composable
+fun FieldKey(
+    description: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    busy: Boolean = false,
+    filled: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    val on = enabled && !busy
+    val fill = filled && on
+    Box(
+        Modifier.size(56.dp).clip(TileShape).background(if (fill) Tn.blue else Tn.tile)
+            .border(1.dp, if (fill) Tn.blue else Tn.line, TileShape)
+            .clickable(enabled = on, onClickLabel = description, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (busy) {
+            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Tn.blue)
+        } else {
+            CompositionLocalProvider(LocalContentColor provides if (fill) Tn.onAccent else if (on) Tn.sub else Tn.dim, content = content)
+        }
+    }
+}
+
+/**
+ * Lines in the place of text that loads, such as the output of an agent.
+ * TalkBack reads [description]. The lines pulse unless the Remove
+ * animations setting is on.
+ */
+@Composable
+fun LineSkeleton(
+    description: String,
+    modifier: Modifier = Modifier,
+    lines: List<Float> = listOf(0.92f, 0.78f, 0.86f, 0.55f, 0.7f),
+    color: Color = Tn.line,
+) {
+    val reduce = LocalReduceMotion.current
+    val pulse = if (reduce) {
+        null
+    } else {
+        rememberInfiniteTransition(label = "skeleton").animateFloat(
+            1f, 0.45f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "skeletonAlpha",
+        )
+    }
+    Column(
+        modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = description }
+            .graphicsLayer { alpha = pulse?.value ?: 1f },
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        for (f in lines) Box(Modifier.fillMaxWidth(f).height(12.dp).clip(RoundedCornerShape(3.dp)).background(color))
+    }
+}
+
+/**
+ * A bottom sheet of the app. It opens in full, and Back or a tap on the
+ * scrim closes it. The pairing sheet is not a [FluxSheet], see
+ * [TiledPairSheet].
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FluxSheet(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheet,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+        containerColor = Tn.bg,
+        contentColor = Tn.text,
+        dragHandle = { BottomSheetDefaults.DragHandle(color = Tn.dim) },
+        content = content,
+    )
+}
+
+/** A command to run on a computer, in mono, with a key that copies it. */
+@Composable
+fun CommandBlock(command: String, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    Row(
+        modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Tn.offTile).border(1.dp, Tn.line, RoundedCornerShape(8.dp))
+            .padding(start = 12.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        SelectionContainer(Modifier.weight(1f).padding(vertical = 10.dp)) {
+            T(command, size = 13, color = Tn.text, family = Mono, lineHeight = 1.3f)
+        }
+        IconButton(onClick = { if (Android.setClipboard(context, command)) FluxCore.toast("Copied") }) {
+            Sym(Ic.copy, "Copy the command", tint = Tn.blue, size = 20.dp)
+        }
+    }
+}
+
+/** A key of a key bar or a keyboard. The label shrinks to fit the key at a large font size. */
+@Composable
+fun KeyLabel(text: String, color: Color, size: Int = 12, family: FontFamily = Mono) {
+    T(text, size = size, color = color, weight = FontWeight.SemiBold, family = family, maxLines = 1, fit = true)
+}
+
+/** A row of keys with the same height, at least 48 dp, and the grid gap of 8 dp between the keys. */
+@Composable
+fun KeyRow(modifier: Modifier = Modifier, gap: Dp = TileGap, content: @Composable RowScope.() -> Unit) {
+    Row(
+        modifier.fillMaxWidth().heightIn(min = 48.dp).height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(gap),
+        content = content,
+    )
+}
+
+/** The mono, uppercase label of a tile or a section. It wraps at a large font size. */
+@Composable
+fun TileLabel(text: String, modifier: Modifier = Modifier, color: Color = Tn.sub, maxLines: Int = Int.MAX_VALUE) {
+    T(text.uppercase(), modifier, size = 11, color = color, weight = FontWeight.Medium, family = Mono, letterSpacing = 0.9f, maxLines = maxLines)
 }
 
 @Composable
 fun SectionLabel(text: String) {
-    TileLabel(text, Modifier.padding(start = 4.dp, top = 20.dp, bottom = 8.dp))
+    TileLabel(text, Modifier.padding(start = 4.dp, top = 20.dp, bottom = 8.dp).semantics { heading() })
 }
 
-/** A row of tiles with the grid gap. */
+/** A row of tiles with the grid gap. The tiles take the same height, at least [minHeight], and grow with the font size. */
 @Composable
-fun TileRow(height: Dp, modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
-    Row(modifier.fillMaxWidth().height(height), horizontalArrangement = Arrangement.spacedBy(TileGap), content = content)
-}
-
-/** A small square button with an icon, for top bars. */
-@Composable
-fun SquareButton(@DrawableRes icon: Int, description: String, onClick: () -> Unit, size: Dp = 36.dp) {
-    Box(
-        Modifier.size(size).clip(RoundedCornerShape(8.dp)).background(Tn.tile).clickable(onClickLabel = description, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) { Sym(icon, description, size = if (size < 36.dp) 18.dp else 20.dp) }
-}
-
-/** The top bar of an inner tiled screen: a square back button and a mono label. */
-@Composable
-fun TiledTopBar(label: String, onBack: () -> Unit, trailing: @Composable RowScope.() -> Unit = {}) {
+fun TileRow(minHeight: Dp, modifier: Modifier = Modifier, gap: Dp = TileGap, content: @Composable RowScope.() -> Unit) {
     Row(
-        Modifier.fillMaxWidth().padding(start = 2.dp, top = 8.dp, bottom = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        SquareButton(Ic.back, "Back", onBack)
-        T(label, Modifier.weight(1f), size = 12, color = Tn.sub, weight = FontWeight.Medium, family = Mono, maxLines = 1)
-        trailing()
+        modifier.fillMaxWidth().heightIn(min = minHeight).height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(gap),
+        content = content,
+    )
+}
+
+/**
+ * A square button with an icon, for top bars: a 40 dp tile that takes
+ * taps on 48 dp. TalkBack reads [description].
+ */
+@Composable
+fun SquareButton(@DrawableRes icon: Int, description: String, onClick: () -> Unit, enabled: Boolean = true) {
+    FilledTonalIconButton(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(8.dp),
+        colors = IconButtonDefaults.filledTonalIconButtonColors(
+            containerColor = Tn.tile, contentColor = Tn.text, disabledContainerColor = Tn.tile, disabledContentColor = Tn.dim,
+        ),
+    ) { Sym(icon, description, size = 20.dp) }
+}
+
+/** A spinner in the place of a [SquareButton], for a read that runs. */
+@Composable
+fun SquareSpinner(description: String) {
+    Box(
+        Modifier.size(48.dp).semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Tn.blue) }
+}
+
+/**
+ * The top bar of every screen above a destination: a back button, the
+ * [title], and an optional [context] line in mono, such as the computer.
+ * [trailing] holds the actions of the screen. The title is a heading for
+ * TalkBack, and both lines wrap at a large font size. When the actions
+ * leave the title less width than its longest word, the actions move to a
+ * second row under the title, so that no word breaks.
+ */
+@Composable
+fun TiledTopBar(title: String, onBack: () -> Unit, context: String? = null, trailing: @Composable RowScope.() -> Unit = {}) {
+    Layout(
+        contents = listOf(
+            { SquareButton(Ic.back, "Back", onBack) },
+            {
+                Column(Modifier.padding(start = 2.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    T(title, Modifier.semantics { heading() }, size = 18, weight = FontWeight.SemiBold, lineHeight = 1.2f)
+                    if (!context.isNullOrEmpty()) T(context, size = 12, color = Tn.sub, family = Mono)
+                }
+            },
+            { Row(horizontalArrangement = Arrangement.spacedBy(TileGap), verticalAlignment = Alignment.CenterVertically, content = trailing) },
+        ),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(top = 4.dp, bottom = 8.dp),
+    ) { (backSlot, titleSlot, actionSlot), constraints ->
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val gap = TileGap.roundToPx()
+        val back = backSlot.first().measure(loose)
+        val actions = actionSlot.first().measure(loose)
+        val titleItem = titleSlot.first()
+        val start = back.width + gap
+        val end = if (actions.width > 0) actions.width + gap else 0
+        val width = if (constraints.hasBoundedWidth) constraints.maxWidth else start + titleItem.maxIntrinsicWidth(Constraints.Infinity) + end
+        val inlineWidth = (width - start - end).coerceAtLeast(0)
+        // The minimum intrinsic width of the title is the width of its longest word.
+        val inline = actions.width == 0 || titleItem.minIntrinsicWidth(Constraints.Infinity) <= inlineWidth
+        val titleWidth = if (inline) inlineWidth else (width - start).coerceAtLeast(0)
+        val titleBlock = titleItem.measure(Constraints(minWidth = titleWidth, maxWidth = titleWidth))
+        val firstRow = maxOf(back.height, titleBlock.height, if (inline) actions.height else 0)
+        val secondRow = if (inline) 0 else gap + actions.height
+        val height = (firstRow + secondRow).coerceIn(constraints.minHeight, constraints.maxHeight)
+        layout(width, height) {
+            val top = if (inline) (height - firstRow) / 2 else 0
+            back.placeRelative(0, top + (firstRow - back.height) / 2)
+            titleBlock.placeRelative(start, top + (firstRow - titleBlock.height) / 2)
+            val actionsTop = if (inline) top + (firstRow - actions.height) / 2 else firstRow + gap
+            actions.placeRelative(width - actions.width, actionsTop)
+        }
     }
 }
 

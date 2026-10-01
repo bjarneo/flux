@@ -101,7 +101,7 @@ It shares FluxKit with [Flux for macOS](macos.md) and offers the Android feature
 ## Phase 6: Camera, webcam, and microphone
 
 - [x] Camera modes: Text, QR, Photo, Document, and Signature, from the camera, a picked photo, or a pasted image.
-  Webcam is the sixth mode of the Camera screen, like on Android.
+  Webcam is the sixth mode of the Camera screen. Android shows the webcam on its own screen under Control.
 - [x] Webcam in H.264 with the front and back cameras, offered as `back` and `front` like Android.
   The stream stops with a notice when Flux leaves the screen, because iOS gives the camera only to the app on the screen.
 - [x] Microphone as a 48 kHz mono stream, with the webcam option to also send the microphone.

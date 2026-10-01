@@ -337,6 +337,8 @@ If more than one player runs, select another player at the top of the screen.
 
 The volume control shows only for a player that accepts a new volume, such as mpv.
 Chromium does not accept one, so the phone shows no volume control for it.
+When a player reports album art at an `https` address, the phone loads the image from that address and shows it above the controls.
+Without album art, the controls move up.
 The desktop does not show or control the players on the phone.
 
 Add desktop commands in the Phone commands page or through the CLI:
@@ -348,6 +350,8 @@ flux-cli commands
 
 A new configuration has no commands.
 The phone can request only the commands configured on the desktop.
+A tap on a command shows **Sent** on the phone.
+The desktop does not report the end of a command, so the phone does not show **Done**.
 
 ## Calls
 

@@ -25,6 +25,19 @@ class LanguageCatalogTest {
     }
 
     @Test
+    fun putsThePhoneLanguagesFirstInTheDownloads() {
+        val rows = LanguageCatalog.rows(
+            installed = emptyList(),
+            downloading = emptyList(),
+            supported = listOf("cmn-Hans-CN", "en-AU", "de-DE", "en-US"),
+            phone = listOf("en-US"),
+            query = "",
+        )
+        // The phone language, then the other English variants, then the rest by name.
+        assertEquals(listOf("en-US", "en-AU", "cmn-Hans-CN", "de-DE"), rows.map { it.tag })
+    }
+
+    @Test
     fun aFinishedDownloadIsInstalled() {
         val rows = LanguageCatalog.rows(listOf("fr-FR"), listOf("fr-FR"), listOf("fr-FR"), phone, "")
         assertEquals(listOf(LanguageRow.State.Installed), rows.map { it.state })

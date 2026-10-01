@@ -5,13 +5,12 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -20,19 +19,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import org.omarchy.flux.mic.MicSession
+import org.omarchy.flux.ui.ButtonKind
+import org.omarchy.flux.ui.FluxButton
+import org.omarchy.flux.ui.Ic
+import org.omarchy.flux.ui.MIC_REFUSED
 import org.omarchy.flux.ui.T
 import org.omarchy.flux.ui.Tn
+import org.omarchy.flux.ui.needsMicSettings
+import org.omarchy.flux.ui.openAppSettings
 
 /**
  * Dictation that puts its words somewhere, for example in a text field or
@@ -50,6 +52,10 @@ class VoiceTyping internal constructor(val dictation: Dictation, private val con
 
     /** True while the language picker shows. */
     var picking by mutableStateOf(false)
+
+    /** True after the user refused the microphone. The error then offers the app settings. */
+    var refused by mutableStateOf(false)
+        internal set
 
     internal var askMic: () -> Unit = {}
     internal var onText: (String) -> Unit = {}
@@ -92,7 +98,8 @@ fun rememberVoiceTyping(automatic: Boolean = false, onText: (String) -> Unit): V
     val v = remember(dictation) { VoiceTyping(dictation, context, automatic) }
     val text by rememberUpdatedState(onText)
     val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (ok) v.startAfterGrant = true else v.error = "Allow the microphone for Flux to dictate"
+        v.refused = !ok
+        if (ok) v.startAfterGrant = true else v.error = MIC_REFUSED
     }
     v.askMic = { askMic.launch(Manifest.permission.RECORD_AUDIO) }
     v.onText = { text(it) }
@@ -162,15 +169,17 @@ fun VoiceField(
         )
         val problem = v.error ?: v.dictation.error
         if (problem != null) {
-            Row(Modifier.padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                T(problem, Modifier.weight(1f), size = 11, color = Tn.red)
-                if (languages && problem == v.dictation.error && v.dictation.languageError) {
-                    T(
-                        "Choose a language",
-                        Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = "Choose the dictation language") { v.picking = true }
-                            .padding(horizontal = 6.dp, vertical = 4.dp),
-                        size = 12, color = Tn.blue, weight = FontWeight.SemiBold,
-                    )
+            val context = LocalContext.current
+            Column(Modifier.padding(horizontal = 4.dp)) {
+                T(problem, size = 12, color = Tn.red, lineHeight = 1.3f)
+                // The buttons line up with the text. The padding of a text button holds the offset.
+                FlowRow(Modifier.offset(x = (-12).dp)) {
+                    if (languages && problem == v.dictation.error && v.dictation.languageError) {
+                        FluxButton("Choose a language", { v.picking = true }, kind = ButtonKind.Text)
+                    }
+                    if (needsMicSettings(problem, v.refused && problem == v.error)) {
+                        FluxButton("Open app settings", { openAppSettings(context) }, kind = ButtonKind.Text, icon = Ic.settings)
+                    }
                 }
             }
         }

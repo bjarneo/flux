@@ -1,9 +1,9 @@
 package org.omarchy.flux.core
 
-import android.util.Log
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import kotlinx.serialization.json.JsonObject
 import org.omarchy.flux.protocol.Packet
 import org.omarchy.flux.protocol.Types
@@ -361,15 +361,18 @@ object Plugins {
         core.device(id)?.send(Packet(Types.RUN_COMMAND_REQUEST, bodyOf("requestCommandList" to true)))
     }
 
-    fun runCommand(core: FluxCore, id: String, cmd: RemoteCommand) {
+    /** Sends [cmd] to the computer. It returns false when no link is open, and then sends nothing. */
+    fun runCommand(core: FluxCore, id: String, cmd: RemoteCommand): Boolean {
         val d = core.device(id)
         if (d == null || !d.send(Packet(Types.RUN_COMMAND_REQUEST, bodyOf("key" to cmd.key)))) {
             Log.i("FluxCommands", "not sent: ${cmd.key}, no open link")
             core.toast("Not connected. Try again in a moment")
-            return
+            return false
         }
         Log.i("FluxCommands", "sent: ${cmd.key}")
-        core.toast("Ran “${cmd.name}”")
+        // The computer does not report the end of the command, so the phone tells only that it sent the command.
+        core.toast("Sent “${cmd.name}” to ${d.identity.deviceName}")
+        return true
     }
 
     // ------------------------------------------------------------------ media
@@ -458,5 +461,19 @@ internal fun mergePlayer(old: PlayerState, b: JsonObject, at: Long): PlayerState
     canGoNext = b.bool("canGoNext") ?: old.canGoNext,
     canGoPrevious = b.bool("canGoPrevious") ?: old.canGoPrevious,
     volume = if ("isPlaying" in b) b.long("volume")?.toInt()?.coerceIn(0, 100) else old.volume,
+    artUrl = b.str("albumArtUrl")?.let(::albumArtUrl) ?: old.artUrl,
     updatedAt = at,
 )
+
+/** The longest album art address that the phone loads. */
+private const val MAX_ART_URL = 2048
+
+/**
+ * The album art address that the phone loads: an https address, or empty.
+ * The computer sends only web addresses, and the phone loads no address
+ * without TLS.
+ */
+internal fun albumArtUrl(raw: String): String {
+    val url = raw.trim()
+    return if (url.length <= MAX_ART_URL && url.startsWith("https://", ignoreCase = true) && url.none { it.isWhitespace() }) url else ""
+}

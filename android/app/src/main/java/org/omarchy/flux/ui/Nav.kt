@@ -48,6 +48,9 @@ const val AGENTS_PAGE = "agents"
 /** The Omarchy panel: workspaces, windows, and key bindings. */
 const val OMARCHY_PAGE = "omarchy"
 
+/** The webcam of 1 computer, in the Stream band of Control. */
+const val WEBCAM_PAGE = "webcam"
+
 /** The sync switches. They apply to every computer, so the page has no computer. */
 const val SYNC_PAGE = "sync"
 

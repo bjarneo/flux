@@ -29,10 +29,12 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
@@ -54,12 +56,14 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
@@ -72,6 +76,8 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.RemoteInput
@@ -80,8 +86,6 @@ import org.omarchy.flux.desktop.DesktopViewport
 import org.omarchy.flux.protocol.Packet
 import org.omarchy.flux.voice.Dictation
 import org.omarchy.flux.voice.rememberVoiceTyping
-import kotlin.math.abs
-import kotlin.math.roundToInt
 
 /** A finger that stays this long without a motion clicks the right button, or drags when it moves. */
 private const val DESKTOP_HOLD_MS = 450L
@@ -135,21 +139,18 @@ fun DesktopScreen(d: DeviceUi, onBack: () -> Unit) {
     val buttons: @Composable () -> Unit = {
         if (ready && status.deviceId == d.id && status.monitors.size > 1) {
             val next = status.monitors[(status.monitors.indexOf(status.monitor) + 1) % status.monitors.size]
-            T(
-                status.monitor,
-                Modifier.clip(RoundedCornerShape(8.dp)).background(Tn.tile)
-                    .clickable(onClickLabel = "Show $next") {
-                        monitor = next
-                        DesktopSession.start(FluxCore, d.id, next)
-                    }.padding(horizontal = 10.dp, vertical = 8.dp),
-                size = 12, color = Tn.sub, family = Mono, weight = FontWeight.Medium, maxLines = 1,
-            )
+            // The key shows the monitor on screen. A tap shows the next monitor.
+            MonitorKey(status.monitor, next) {
+                monitor = next
+                DesktopSession.start(FluxCore, d.id, next)
+            }
         }
         if (ready && control) {
             if (d.shortcutsSupported) PanelButton(Ic.grid, "Omarchy", shown == Panel.Omarchy) { toggle(Panel.Omarchy) }
             PanelButton(Ic.keyboard, "Keys", shown == Panel.Keys) { toggle(Panel.Keys) }
             if (voice.available) {
-                PanelButton(Ic.mic, if (dictating) "Stop dictation" else "Dictate", dictating, Tn.red) {
+                // Green marks a live microphone, as the privacy dot of Android does.
+                PanelButton(Ic.mic, if (dictating) "Stop dictation" else "Dictate", dictating, Tn.green) {
                     panel = Panel.Keys
                     if (dictating) voice.dictation.stop() else voice.start()
                 }
@@ -159,7 +160,7 @@ fun DesktopScreen(d: DeviceUi, onBack: () -> Unit) {
     val gutter = Modifier.padding(horizontal = TiledGutter)
     Column(Modifier.fillMaxSize().then(if (wide) Modifier.displayCutoutPadding() else Modifier).imePadding()) {
         if (!wide) {
-            Box(gutter) { TiledTopBar("desktop · ${d.name}", onBack) { buttons() } }
+            Box(gutter) { TiledTopBar("Remote desktop", onBack, context = d.name) { buttons() } }
         }
         when {
             !d.online -> Box(gutter) { NotReachable(d, "The screen and the controls") }
@@ -211,16 +212,33 @@ fun DesktopScreen(d: DeviceUi, onBack: () -> Unit) {
     }
 }
 
-/** A button that shows or hides a panel. It has the [accent] color while [on]. */
+/**
+ * A button that shows or hides a panel: a 40 dp key that takes taps on
+ * 48 dp. It has the [accent] color while [on], and TalkBack reads its state.
+ */
 @Composable
 private fun PanelButton(@DrawableRes icon: Int, description: String, on: Boolean, accent: Color = Tn.blue, onClick: () -> Unit) {
     val shape = RoundedCornerShape(8.dp)
     Box(
-        Modifier.clip(shape).background(if (on) Tn.tileHi else Tn.tile)
-            .border(1.dp, if (on) accent else Tn.tile, shape)
-            .clickable(onClickLabel = description, onClick = onClick)
-            .padding(8.dp),
-    ) { Sym(icon, description, tint = if (on) accent else Tn.sub, size = 20.dp) }
+        Modifier.minimumInteractiveComponentSize().size(40.dp).clip(shape).background(if (on) Tn.accentTile else Tn.tile)
+            .border(1.dp, if (on) accent else Tn.line, shape)
+            .toggleable(value = on, role = Role.Switch, onValueChange = { onClick() })
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) { Sym(icon, tint = if (on) accent else Tn.sub, size = 20.dp) }
+}
+
+/** The monitor that the stream shows, in mono. A tap shows the [next] monitor. */
+@Composable
+private fun MonitorKey(current: String, next: String, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(8.dp)
+    Box(
+        Modifier.minimumInteractiveComponentSize().heightIn(min = 40.dp).clip(shape).background(Tn.tile).border(1.dp, Tn.line, shape)
+            .clickable(onClickLabel = "Show $next", role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = "Monitor $current" }
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) { T(current, size = 12, color = Tn.text, family = Mono, weight = FontWeight.Medium) }
 }
 
 /**
@@ -352,13 +370,18 @@ private fun StreamState(d: DeviceUi, status: DesktopSession.Status, modifier: Mo
             CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.dp, color = Tn.blue)
             T(if (mine) status.message else "Connecting to ${d.name}…", size = 13, color = Tn.sub)
         }
-        status.phase == DesktopSession.Phase.Error || status.phase == DesktopSession.Phase.Idle -> Box(modifier.background(Tn.bg), contentAlignment = Alignment.Center) {
+        status.phase == DesktopSession.Phase.Error || status.phase == DesktopSession.Phase.Idle -> Box(
+            modifier.background(Tn.bg).verticalScroll(rememberScrollState()),
+            contentAlignment = Alignment.Center,
+        ) {
+            val problem = if (status.phase == DesktopSession.Phase.Error) desktopProblem(status.message, d.name) else null
             EmptyState(
                 Ic.desktop,
-                if (status.phase == DesktopSession.Phase.Error) "The screen does not show" else "The stream stopped",
-                // The computer writes its errors in lower case.
-                status.message.replaceFirstChar { it.uppercase() }.ifEmpty { "Start the stream again." },
-                action = { TextButton(onClick = { DesktopSession.start(FluxCore, d.id, status.monitor.ifEmpty { null }) }) { Text("Start again") } },
+                problem?.title ?: "The stream stopped",
+                problem?.let { "${it.cause} ${it.step}" } ?: "${status.message.ifEmpty { "The stream stopped" }}. Start the stream again.",
+                action = {
+                    FluxButton("Start again", { DesktopSession.start(FluxCore, d.id, status.monitor.ifEmpty { null }) }, kind = ButtonKind.Tonal, icon = Ic.refresh)
+                },
             )
         }
     }

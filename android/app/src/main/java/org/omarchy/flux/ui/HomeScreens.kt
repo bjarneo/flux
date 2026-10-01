@@ -29,6 +29,6 @@ fun FluxOffScreen() {
             color = scheme.onSurfaceVariant,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
-        IconTextButton(Ic.power, "Turn on Flux", onClick = { FluxCore.setEnabled(true) })
+        FluxButton("Turn on Flux", { FluxCore.setEnabled(true) }, icon = Ic.power)
     }
 }

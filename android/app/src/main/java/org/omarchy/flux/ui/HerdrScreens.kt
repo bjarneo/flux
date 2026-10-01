@@ -1,29 +1,28 @@
 package org.omarchy.flux.ui
 
 import android.content.Context
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -36,8 +35,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -128,9 +128,9 @@ fun TiledNewPaneScreen(d: DeviceUi, onBack: () -> Unit, onOpened: (what: String,
     val busy = action?.sending == true
 
     Column(Modifier.fillMaxSize().imePadding().padding(horizontal = TiledGutter)) {
-        TiledTopBar("new · ${d.name}", onBack)
+        TiledTopBar("New agent or terminal", onBack, context = d.name)
         when {
-            !d.online -> NotReachable(d, "herdr")
+            !d.online -> NotReachable(d, "The agents that you can start")
             herdr == null || !herdr.running -> EmptyState(
                 Ic.agent, "herdr is not running", "Start herdr on ${d.name}. Then start agents from here.", Modifier.padding(top = 48.dp),
             )
@@ -167,21 +167,23 @@ fun TiledNewPaneScreen(d: DeviceUi, onBack: () -> Unit, onOpened: (what: String,
                     }
                 }
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(TileGap)) {
-                    TileLabel("Run", Modifier.padding(start = 4.dp))
+                    TileLabel("Run", Modifier.padding(start = 4.dp).semantics { heading() })
                     val options = kinds + if (shell) listOf(SHELL_CHOICE) else emptyList()
-                    for (row in options.chunked(2)) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TileGap)) {
-                            for (k in row) {
-                                val running = if (k == SHELL_CHOICE) 0 else herdr.agents.count { it.agent == k }
-                                RunTile(k, running, selected = k == choice, enabled = !busy, modifier = Modifier.weight(1f)) { run = k }
+                    Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(TileGap)) {
+                        for (row in options.chunked(2)) {
+                            TileRow(68.dp) {
+                                for (k in row) {
+                                    val running = if (k == SHELL_CHOICE) 0 else herdr.agents.count { it.agent == k }
+                                    RunTile(k, running, selected = k == choice, enabled = !busy, modifier = Modifier.weight(1f).fillMaxHeight()) { run = k }
+                                }
+                                if (row.size == 1) Spacer(Modifier.weight(1f))
                             }
-                            if (row.size == 1) Spacer(Modifier.weight(1f))
                         }
                     }
                     if (kinds.isEmpty()) {
-                        T("No coding agent is installed on ${d.name}.", Modifier.padding(horizontal = 4.dp), size = 11, color = Tn.sub)
+                        T("No coding agent is installed on ${d.name}.", Modifier.padding(horizontal = 4.dp), size = 12, color = Tn.sub)
                     }
-                    TileLabel("Folder", Modifier.padding(start = 4.dp, top = 12.dp))
+                    TileLabel("Folder", Modifier.padding(start = 4.dp, top = 12.dp).semantics { heading() })
                     FolderPicker(folders, target, query, enabled = !busy, onQuery = { query = it }) {
                         folder = normalFolder(it)
                         query = ""
@@ -197,27 +199,30 @@ fun TiledNewPaneScreen(d: DeviceUi, onBack: () -> Unit, onOpened: (what: String,
 
 /**
  * One thing to run: an agent kind with its product name, or a terminal.
- * [running] counts the agents of the kind that run now.
+ * [running] counts the agents of the kind that run now. The selected tile
+ * takes the selection color, the accent.
  */
 @Composable
 private fun RunTile(choice: String, running: Int, selected: Boolean, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val terminal = choice == SHELL_CHOICE
     val accent = if (terminal) Tn.green else Tn.magenta
     Tile(
-        modifier.height(68.dp), if (enabled) onClick else null,
-        accent = accent,
-        container = if (selected) Tn.tileHi else Tn.tile,
-        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) accent else Tn.line),
+        modifier.heightIn(min = 68.dp), onClick,
+        accent = Tn.blue,
+        container = choiceFill(selected),
+        border = choiceBorder(selected),
+        enabled = enabled,
         padding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.Center,
+        selected = selected,
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Sym(if (terminal) Ic.terminal else Ic.agent, tint = accent, size = 20.dp)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                T(if (terminal) "terminal" else choice, size = 14, weight = FontWeight.SemiBold, family = Mono, maxLines = 1)
+                T(if (terminal) "terminal" else choice, size = 14, weight = FontWeight.SemiBold, family = Mono)
                 val sub = if (terminal) "a shell" else agentProduct(choice)
                 val line = listOfNotNull(sub, if (running > 0) "$running running" else null).joinToString(" · ")
-                if (line.isNotEmpty()) T(line, size = 11, color = Tn.sub, maxLines = 1)
+                if (line.isNotEmpty()) T(line, size = 12, color = Tn.sub)
             }
         }
     }
@@ -246,6 +251,7 @@ private fun FolderPicker(
             modifier = m,
             enabled = enabled,
             placeholder = { T("Search, or type a path such as ~/Code/app", color = Tn.sub, size = 13) },
+            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Tn.blue, unfocusedBorderColor = Tn.dim),
             leadingIcon = { Sym(Ic.search, tint = Tn.dim, size = 20.dp) },
             textStyle = TextStyle(color = Tn.text, fontFamily = Mono, fontSize = 14.sp),
             shape = TileShape,
@@ -264,7 +270,7 @@ private fun FolderPicker(
     }
     for (f in shown) FolderRow(f, selected = f.path == selected, enabled = enabled) { onSelect(f.path) }
     if (shown.isEmpty() && !looksLikePath(query)) {
-        T("No folder has \"$query\". Type a path that starts with ~/ or /.", Modifier.padding(horizontal = 4.dp), size = 12, color = Tn.sub)
+        T("No folder has \"$query\". Type a path that starts with ~/ or /.", Modifier.padding(horizontal = 4.dp), size = 13, color = Tn.sub)
     }
 }
 
@@ -272,21 +278,23 @@ private fun FolderPicker(
 @Composable
 private fun FolderRow(f: FolderChoice, selected: Boolean, enabled: Boolean, typed: Boolean = false, onClick: () -> Unit) {
     Tile(
-        Modifier.fillMaxWidth().height(58.dp), if (enabled) onClick else null,
-        container = if (selected) Tn.tileHi else Tn.tile,
-        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) Tn.blue else Tn.line),
-        padding = PaddingValues(horizontal = 12.dp),
+        Modifier.fillMaxWidth().heightIn(min = 58.dp), onClick,
+        container = choiceFill(selected),
+        border = choiceBorder(selected),
+        enabled = enabled,
+        padding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.Center,
+        selected = selected,
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Sym(if (f.path == "~") Ic.home else Ic.folder, tint = if (selected || typed) Tn.blue else Tn.sub, size = 20.dp)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                T(f.name, size = 14, weight = FontWeight.SemiBold, maxLines = 1)
-                T(f.path, size = 11, color = Tn.sub, family = Mono, maxLines = 1)
+                T(f.name, size = 14, weight = FontWeight.SemiBold)
+                T(f.path, size = 12, color = Tn.sub, family = Mono, maxLines = 2)
             }
-            if (typed) T("typed", size = 11, color = Tn.sub)
-            if (f.agents > 0) T(if (f.agents == 1) "1 agent" else "${f.agents} agents", size = 11, color = Tn.sub)
-            if (selected) Sym(Ic.check, "Selected", tint = Tn.blue, size = 18.dp)
+            if (typed) T("typed", size = 12, color = Tn.sub)
+            if (f.agents > 0) T(if (f.agents == 1) "1 agent" else "${f.agents} agents", size = 12, color = Tn.sub)
+            if (selected) Sym(Ic.check, tint = Tn.blue, size = 18.dp)
         }
     }
 }
@@ -311,46 +319,23 @@ private fun StartBar(
     val canStart = choice != null && !busy
     Column(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (match != null) {
-            Row(Modifier.fillMaxWidth().height(40.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                ChoiceKey("New tab in ${match.label}", !newWorkspace, Modifier.weight(1f), enabled = !busy) { onNewWorkspace(false) }
-                ChoiceKey("New workspace", newWorkspace, Modifier.weight(1f), enabled = !busy) { onNewWorkspace(true) }
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).selectableGroup(), horizontalArrangement = Arrangement.spacedBy(TileGap)) {
+                ChoiceChip("New tab in ${match.label}", !newWorkspace, { onNewWorkspace(false) }, Modifier.weight(1f).fillMaxHeight(), enabled = !busy)
+                ChoiceChip("New workspace", newWorkspace, { onNewWorkspace(true) }, Modifier.weight(1f).fillMaxHeight(), enabled = !busy)
             }
         } else {
-            T("Opens in a new workspace, because no workspace has this folder.", Modifier.padding(horizontal = 4.dp), size = 11, color = Tn.sub)
+            T("Opens in a new workspace, because no workspace has this folder.", Modifier.padding(horizontal = 4.dp), size = 12, color = Tn.sub)
         }
         if (problem != null) T(problem, Modifier.padding(horizontal = 4.dp), size = 12, color = Tn.red)
-        Box(
-            Modifier.fillMaxWidth().height(54.dp).clip(TileShape).background(if (canStart) Tn.blue else Tn.tile)
-                .clickable(enabled = canStart, onClickLabel = if (terminal) "Open the terminal" else "Start the agent", onClick = onStart),
-            contentAlignment = Alignment.Center,
-        ) {
-            Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Tn.magenta)
-                val where = folderName(folder)
-                val label = when {
-                    choice == null -> "Select what to run"
-                    busy && terminal -> "Opening a terminal in $where"
-                    busy -> "Starting $choice. This can take 30 seconds."
-                    terminal -> "Open a terminal in $where"
-                    else -> "Start $choice in $where"
-                }
-                T(label, size = 14, weight = FontWeight.SemiBold, color = if (canStart) Tn.onAccent else Tn.sub, maxLines = 1)
-            }
+        val where = folderName(folder)
+        val label = when {
+            choice == null -> "Select what to run"
+            busy && terminal -> "Opening a terminal in $where"
+            busy -> "Starting $choice. This can take 30 seconds."
+            terminal -> "Open a terminal in $where"
+            else -> "Start $choice in $where"
         }
-    }
-}
-
-/** A key of a 2-way choice, such as a new tab or a new workspace. */
-@Composable
-private fun ChoiceKey(label: String, selected: Boolean, modifier: Modifier, enabled: Boolean = true, onClick: () -> Unit) {
-    Box(
-        modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)).background(if (selected) Tn.tileHi else Tn.tile)
-            .border(1.dp, if (selected) Tn.blue else Tn.line, RoundedCornerShape(8.dp))
-            .clickable(enabled = enabled, onClickLabel = label, onClick = onClick)
-            .padding(horizontal = 8.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        T(label, size = 12, color = if (selected) Tn.blue else Tn.sub, weight = FontWeight.SemiBold, maxLines = 1)
+        FluxButton(label, onStart, Modifier.fillMaxWidth().heightIn(min = 54.dp), enabled = canStart || busy, busy = busy)
     }
 }
 
@@ -385,19 +370,17 @@ fun TiledTerminalScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
 
     val out = d.herdrOutput?.takeIf { it.pane == pane }
     val closer = rememberPaneCloser(d, pane, onBack)
-    val label = "terminal · ${term?.project?.ifEmpty { null } ?: pane}"
+    val title = term?.project?.ifEmpty { null } ?: pane
     Column(Modifier.fillMaxSize().imePadding().padding(horizontal = TiledGutter)) {
-        TiledTopBar(label, onBack) {
+        TiledTopBar(title, onBack, context = "terminal · ${d.name}") {
             if (out?.loading == true && out.lines.isNotEmpty()) {
-                Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Tn.magenta)
-                }
+                SquareSpinner("Reading the output")
             } else if (d.online && term != null && !demo) {
                 SquareButton(Ic.refresh, "Refresh", { HerdrSync.read(FluxCore, d.id, pane) })
             }
         }
         when {
-            !d.online -> NotReachable(d, "The terminal")
+            !d.online -> NotReachable(d, "The lines of the terminal")
             herdr != null && !herdr.terminals -> EmptyState(
                 Ic.terminal,
                 "Terminals are off",
@@ -411,11 +394,11 @@ fun TiledTerminalScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
                 Tile(Modifier.fillMaxWidth(), padding = PaddingValues(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Sym(Ic.terminal, tint = Tn.green, size = 18.dp)
-                        T(term?.title?.ifEmpty { null } ?: "shell", Modifier.weight(1f), size = 13, weight = FontWeight.SemiBold, family = Mono, maxLines = 1)
-                        T(pane, size = 10, color = Tn.sub, family = Mono, maxLines = 1)
+                        T(term?.title?.ifEmpty { null } ?: "shell", Modifier.weight(1f), size = 13, weight = FontWeight.SemiBold, family = Mono, maxLines = 2)
+                        T(pane, size = 11, color = Tn.sub, family = Mono)
                         closer.Button()
                     }
-                    closer.error?.let { T(it, size = 11, color = Tn.red) }
+                    closer.error?.let { T(it, size = 12, color = Tn.red) }
                 }
                 Spacer(Modifier.height(TileGap))
                 AgentOutput(out, Modifier.weight(1f))
@@ -464,7 +447,7 @@ private fun TerminalControls(d: DeviceUi, pane: String, reply: HerdrReply?) {
         field = TextFieldValue(e.text, TextRange(e.cursor))
     }
     Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
-        Row(Modifier.fillMaxWidth().height(40.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        KeyRow {
             KeyTile("esc", "Escape", Modifier.weight(1f)) { keys("esc") }
             KeyTile("tab", "Tab", Modifier.weight(1f)) { keys("tab") }
             KeyTile("^C", "Control C", Modifier.weight(1f)) { keys("ctrl+c") }
@@ -475,19 +458,7 @@ private fun TerminalControls(d: DeviceUi, pane: String, reply: HerdrReply?) {
         }
         VoiceField(
             voice,
-            send = {
-                Box(
-                    Modifier.size(56.dp).clip(TileShape).background(if (!sending) Tn.blue else Tn.tile)
-                        .clickable(enabled = !sending, onClickLabel = "Run") { send() },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (sending) {
-                        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Tn.magenta)
-                    } else {
-                        Sym(Ic.send, "Run", tint = Tn.onAccent, size = 22.dp)
-                    }
-                }
-            },
+            send = { FieldKey("Run", onClick = { send() }, busy = sending) { Sym(Ic.send, size = 22.dp) } },
         ) { m ->
             OutlinedTextField(
                 value = field,
@@ -504,6 +475,6 @@ private fun TerminalControls(d: DeviceUi, pane: String, reply: HerdrReply?) {
             )
         }
         val problem = lockError ?: reply?.error
-        if (problem != null) T(problem, Modifier.padding(horizontal = 4.dp), size = 11, color = Tn.red)
+        if (problem != null) T(problem, Modifier.padding(horizontal = 4.dp), size = 12, color = Tn.red)
     }
 }

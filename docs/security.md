@@ -135,6 +135,14 @@ The [limits below](#devices-that-are-not-paired) apply to such hosts.
 The Android phone, the iPhone, and the Mac also listen on TCP ports 1716 to 1764.
 Flux for Android takes a link from a computer that is not paired only while Flux is on the screen or while it scans.
 
+## Album art
+
+Besides the paired computers, the apps connect to 1 other kind of host.
+The **Media** screen loads the album art from the `https` address that a player on the computer reports.
+That host is usually a server of the music or video service, and it sees the IP address of the device.
+`fluxd` sends only `https` addresses to the devices, never a `file:` address with a local path.
+Without an address, the screen shows no art and loads nothing.
+
 ## Devices that are not paired
 
 Any host on the network can send an identity and open a link.

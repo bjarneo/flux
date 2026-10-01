@@ -1,12 +1,5 @@
 package org.omarchy.flux.camera
 
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import org.omarchy.flux.ui.Ic
-import org.omarchy.flux.ui.Sym
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.size
 import android.graphics.Bitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -17,7 +10,6 @@ import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +19,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,6 +30,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,7 +41,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -60,8 +53,13 @@ import com.google.mlkit.vision.common.InputImage
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.Share
+import org.omarchy.flux.ui.ButtonKind
+import org.omarchy.flux.ui.FluxButton
+import org.omarchy.flux.ui.Ic
 import org.omarchy.flux.ui.Palette
 import org.omarchy.flux.ui.T
+import org.omarchy.flux.ui.TileLabel
+import org.omarchy.flux.ui.TileShape
 
 private sealed interface QrPhase {
     data object Live : QrPhase
@@ -69,9 +67,13 @@ private sealed interface QrPhase {
     data class Missing(val image: Bitmap?) : QrPhase
 }
 
-/** QR mode: reads QR codes and barcodes and sends the value to the computer. */
+/**
+ * QR mode: reads QR codes and barcodes and sends the value to the
+ * computer. [strip] is the mode strip. [onHolding] tells the Camera screen
+ * while the mode holds a code or an open photo picker.
+ */
 @Composable
-fun QrMode(d: DeviceUi) {
+fun QrMode(d: DeviceUi, strip: @Composable () -> Unit = {}, onHolding: (Boolean) -> Unit = {}) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val permission = rememberCameraPermission()
@@ -89,7 +91,10 @@ fun QrMode(d: DeviceUi) {
         phase = if (code == null) QrPhase.Missing(image) else QrPhase.Found(image, Codes.sheet(code.toScanned(), d.name))
     }
 
+    // True while the photo picker is open, so that a link drop does not lose the photo.
+    var picking by rememberSaveable { mutableStateOf(false) }
     val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        picking = false
         if (uri == null) return@rememberLauncherForActivityResult
         val image = runCatching { decodeScaled(context, uri) }.getOrNull()
         if (image == null) {
@@ -100,7 +105,11 @@ fun QrMode(d: DeviceUi) {
             .addOnSuccessListener { found(image, it) }
             .addOnFailureListener { phase = QrPhase.Missing(image) }
     }
-    val choosePhoto = { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+    val choosePhoto = {
+        picking = true
+        pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+    ReportHolding(phase != QrPhase.Live || picking, onHolding)
 
     val controller = remember { LifecycleCameraController(context).apply { setEnabledUseCases(LifecycleCameraController.IMAGE_ANALYSIS) } }
     val live = permission.granted && phase == QrPhase.Live
@@ -126,7 +135,7 @@ fun QrMode(d: DeviceUi) {
     }
 
     if (!permission.granted && phase == QrPhase.Live) {
-        CameraRationale(onAllow = permission.request, onSettings = permission.openSettings, onPhoto = choosePhoto, what = "scan codes")
+        CameraRationale(onAllow = permission.request, onSettings = permission.openSettings, onPhoto = choosePhoto, what = "scan codes", strip = strip)
         return
     }
     Column(Modifier.fillMaxSize()) {
@@ -154,21 +163,24 @@ fun QrMode(d: DeviceUi) {
             }
         }
         when (val p = phase) {
-            QrPhase.Live -> Row(
-                Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 20.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text("Point the camera at a code", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                OutlinedPill("From photo", choosePhoto, Ic.gallery)
+            QrPhase.Live -> {
+                strip()
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    T("Point the camera at a code", Modifier.weight(1f), size = 14, color = Palette.secondary)
+                    FluxButton("From photo", choosePhoto, kind = ButtonKind.Outlined, icon = Ic.gallery)
+                }
             }
             is QrPhase.Found -> CodeSheetView(d, p.sheet) { phase = QrPhase.Live }
             is QrPhase.Missing -> Column(
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text("No code found in this image.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { FilledPill("Scan again", { phase = QrPhase.Live }, Ic.qr) }
+                T("No code found in this image.", size = 14, color = Palette.secondary)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { FluxButton("Scan again", { phase = QrPhase.Live }, icon = Ic.qr) }
             }
         }
     }
@@ -179,10 +191,10 @@ fun QrMode(d: DeviceUi) {
 private fun CodeSheetView(d: DeviceUi, sheet: CodeSheet, onAgain: () -> Unit) {
     Column(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
-            .clip(RoundedCornerShape(24.dp)).background(Palette.tile).padding(18.dp),
+            .clip(TileShape).background(Palette.tile).padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        T(sheet.title, size = 13, color = Palette.accent, weight = FontWeight.Medium)
+        TileLabel(sheet.title)
         SelectionContainer(Modifier.heightIn(max = 160.dp).verticalScroll(rememberScrollState())) {
             T(sheet.value, size = 16)
         }
@@ -192,14 +204,13 @@ private fun CodeSheetView(d: DeviceUi, sheet: CodeSheet, onAgain: () -> Unit) {
                     val ok = Share.sendFields(FluxCore, d.id, action.body.fields())
                     FluxCore.toast(if (ok) "Sent to ${d.name}" else "Not connected")
                 }
-                if (i == 0) FilledPill(action.verb, send, verbIcon(action.verb)) else OutlinedPill(action.verb, send, verbIcon(action.verb))
+                FluxButton(
+                    action.verb, send, kind = if (i == 0) ButtonKind.Filled else ButtonKind.Outlined,
+                    icon = verbIcon(action.verb), enabled = d.online,
+                )
             }
         }
-        TextButton(onClick = onAgain) {
-            Sym(Ic.qr, size = 18.dp)
-            Spacer(Modifier.size(8.dp))
-            Text("Scan again")
-        }
+        FluxButton("Scan again", onAgain, Modifier.offset(x = (-12).dp), kind = ButtonKind.Text, icon = Ic.qr)
     }
 }
 

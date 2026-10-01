@@ -128,7 +128,7 @@ fun ControlScreen(state: UiState, scope: String?, picker: TargetPicker, onOpen: 
                 ActionTile(
                     Ic.videocamOutline, "Webcam", Modifier.weight(1f).fillMaxHeight(), accent = Tn.cyan,
                     sub = "Use this phone as a webcam", enabled = any !is Target.None,
-                ) { open({ true }, "Stream the camera to", "camera:webcam") }
+                ) { open({ true }, "Stream the camera to", WEBCAM_PAGE) }
             }
             EqualRow {
                 if (mirroring) {
@@ -189,7 +189,7 @@ fun OmarchyScreen(d: DeviceUi, onBack: () -> Unit) {
     val ready = d.online && d.shortcutsSupported && d.remoteInput == true
     val unlocked = rememberRemoteUnlock(ready, "Use the Omarchy panel", "use the Omarchy panel", onBack, sample = isDemo(d.id))
     Column(Modifier.fillMaxSize().padding(horizontal = TiledGutter)) {
-        TiledTopBar("omarchy · ${d.name}", onBack)
+        TiledTopBar("Omarchy panel", onBack, context = d.name)
         when {
             !d.online -> NotReachable(d, "The workspaces and the shortcuts")
             !d.shortcutsSupported -> EmptyState(

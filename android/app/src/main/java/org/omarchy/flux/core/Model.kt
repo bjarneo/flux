@@ -35,6 +35,8 @@ data class PlayerState(
     val canGoPrevious: Boolean = true,
     /** The volume from 0 to 100, or null when the player takes no volume. */
     val volume: Int? = null,
+    /** The https address of the album art, or empty when the player has none. See [albumArtUrl]. */
+    val artUrl: String = "",
     /** The time of the position value, from SystemClock.elapsedRealtime. */
     val updatedAt: Long = 0,
 )

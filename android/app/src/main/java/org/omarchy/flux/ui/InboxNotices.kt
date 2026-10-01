@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,12 +67,12 @@ internal fun elsewhereText(count: Int): String =
 internal fun InboxNoticeList(n: InboxNotices, actions: InboxActions, offline: Boolean = true) {
     if (n.elsewhere > 0) {
         Notice({ Dot(Tn.red) }, elsewhereText(n.elsewhere), color = Tn.text) {
-            TextButton(onClick = actions.showAll) { Text("Show all computers") }
+            FluxButton("Show all computers", actions.showAll, kind = ButtonKind.Text)
         }
     }
     if (offline && n.reach.offline.isNotEmpty()) {
         Notice({ LinkDot(false) }, offlineLine(n)) {
-            TextButton(onClick = { FluxCore.rediscover() }) { Text("Retry") }
+            FluxButton("Retry", { FluxCore.rediscover() }, kind = ButtonKind.Text)
         }
     }
     when (n.notify) {
@@ -83,15 +81,15 @@ internal fun InboxNoticeList(n: InboxNotices, actions: InboxActions, offline: Bo
             { Sym(Ic.notifications, tint = Tn.yellow, size = 18.dp) },
             "Allow notifications, so that approvals and agent alerts reach this phone.",
         ) {
-            TextButton(onClick = actions.allowNotifications) { Text("Allow") }
-            TextButton(onClick = actions.hideNotifications) { Text("Hide") }
+            FluxButton("Allow", actions.allowNotifications, kind = ButtonKind.Text)
+            FluxButton("Hide", actions.hideNotifications, kind = ButtonKind.Text)
         }
         NotifyAsk.Settings -> Notice(
             { Sym(Ic.notifications, tint = Tn.yellow, size = 18.dp) },
             "Notifications are off for Flux. Approvals and agent alerts do not reach this phone. Turn them on in the settings of Android.",
         ) {
-            TextButton(onClick = actions.allowNotifications) { Text("Open settings") }
-            TextButton(onClick = actions.hideNotifications) { Text("Hide") }
+            FluxButton("Open settings", actions.allowNotifications, kind = ButtonKind.Text)
+            FluxButton("Hide", actions.hideNotifications, kind = ButtonKind.Text)
         }
     }
 }

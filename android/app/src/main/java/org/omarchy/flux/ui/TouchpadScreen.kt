@@ -16,13 +16,17 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -39,8 +43,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -50,6 +57,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.hypot
+import kotlin.math.max
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.RemoteInput
@@ -58,8 +67,6 @@ import org.omarchy.flux.core.TextEdit
 import org.omarchy.flux.voice.VoiceField
 import org.omarchy.flux.voice.VoiceTyping
 import org.omarchy.flux.voice.rememberVoiceTyping
-import kotlin.math.hypot
-import kotlin.math.max
 
 /** A finger that stays this long without a motion starts a drag. */
 private const val HOLD_MS = 450L
@@ -98,17 +105,11 @@ fun TouchpadScreen(d: DeviceUi, onBack: () -> Unit) {
     }
     // The phone keyboard pushes the keys and the field up, and the touchpad gets smaller.
     Column(Modifier.fillMaxSize().imePadding().padding(horizontal = TiledGutter)) {
-        TiledTopBar("touchpad · ${d.name}", onBack) {
+        TiledTopBar("Touchpad and keyboard", onBack, context = d.name) {
             if (ready) {
-                Box(
-                    Modifier.clip(RoundedCornerShape(8.dp)).background(if (slides) Tn.tileHi else Tn.bg)
-                        .border(1.dp, if (slides) Tn.green else Tn.bg, RoundedCornerShape(8.dp))
-                        .clickable(onClickLabel = "Change slides with the volume keys") {
-                            slides = !slides
-                            FluxCore.toast(if (slides) "The volume keys change slides" else "The volume keys change the volume")
-                        }.padding(8.dp),
-                ) {
-                    Sym(Ic.slides, "Slides", tint = if (slides) Tn.green else Tn.sub, size = 22.dp)
+                SlidesSwitch(slides) {
+                    slides = it
+                    FluxCore.toast(if (it) "The volume keys change slides" else "The volume keys change the volume")
                 }
             }
         }
@@ -166,7 +167,7 @@ private fun Touchpad(d: DeviceUi) {
                 size = 12, color = Tn.sub, align = TextAlign.Center, lineHeight = 1.5f,
             )
         }
-        Row(Modifier.fillMaxWidth().height(52.dp), horizontalArrangement = Arrangement.spacedBy(TileGap)) {
+        KeyRow(Modifier.heightIn(min = 52.dp), gap = TileGap) {
             HoldButton("Left button", Modifier.weight(1f)) { down -> send(RemoteInput.hold(down)) }
             PadKey("right", "Right button", Modifier.weight(1f)) { send(RemoteInput.click(RemoteInput.Click.Right)) }
         }
@@ -177,7 +178,9 @@ private fun Touchpad(d: DeviceUi) {
 /**
  * The keys and the text field for the phone keyboard: Escape, Tab, the
  * arrows, the modifiers, Backspace, and Enter. A modifier holds for the
- * next key or text. With [voice], a mic key next to the field dictates.
+ * next key or text. With [voice], a mic key next to the field dictates,
+ * and the Enter key moves next to the field, so that the panel has 1
+ * Enter key.
  */
 @Composable
 fun KeyPanel(
@@ -192,18 +195,19 @@ fun KeyPanel(
         mods = RemoteInput.Mods()
     }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(TileGap)) {
-        Row(Modifier.fillMaxWidth().height(40.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        KeyRow {
             for (k in listOf(RemoteInput.Key.Escape, RemoteInput.Key.Tab, RemoteInput.Key.Left, RemoteInput.Key.Up, RemoteInput.Key.Down, RemoteInput.Key.Right)) {
                 PadKey(k.label, k.name, Modifier.weight(1f)) { key(k) }
             }
         }
-        Row(Modifier.fillMaxWidth().height(40.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            ModKey("ctrl", mods.ctrl) { mods = mods.copy(ctrl = !mods.ctrl) }
-            ModKey("alt", mods.alt) { mods = mods.copy(alt = !mods.alt) }
-            ModKey("shift", mods.shift) { mods = mods.copy(shift = !mods.shift) }
-            ModKey("super", mods.meta) { mods = mods.copy(meta = !mods.meta) }
+        KeyRow {
+            ModKey("ctrl", "Control", mods.ctrl) { mods = mods.copy(ctrl = !mods.ctrl) }
+            ModKey("alt", "Alt", mods.alt) { mods = mods.copy(alt = !mods.alt) }
+            ModKey("shift", "Shift", mods.shift) { mods = mods.copy(shift = !mods.shift) }
+            ModKey("super", "Super", mods.meta) { mods = mods.copy(meta = !mods.meta) }
             PadKey(RemoteInput.Key.Backspace.label, "Backspace", Modifier.weight(1f)) { key(RemoteInput.Key.Backspace) }
-            PadKey(RemoteInput.Key.Enter.label, "Enter", Modifier.weight(1f)) { key(RemoteInput.Key.Enter) }
+            // With voice, the Enter key is next to the field.
+            if (voice == null) PadKey(RemoteInput.Key.Enter.label, "Enter", Modifier.weight(1f)) { key(RemoteInput.Key.Enter) }
         }
         if (voice == null) {
             TypeField(d, mods, onSend = send, onModsUsed = { mods = RemoteInput.Mods() }, onEnter = { key(RemoteInput.Key.Enter) }, Modifier.fillMaxWidth())
@@ -212,11 +216,9 @@ fun KeyPanel(
                 voice,
                 // The mic key sits before this key. Dictate, then press Enter.
                 send = {
-                    Box(
-                        Modifier.size(56.dp).clip(TileShape).background(Tn.tile).border(1.dp, Tn.line, TileShape)
-                            .clickable(onClickLabel = "Enter") { key(RemoteInput.Key.Enter) },
-                        contentAlignment = Alignment.Center,
-                    ) { T(RemoteInput.Key.Enter.label, size = 16, color = Tn.sub, weight = FontWeight.SemiBold, family = Mono) }
+                    FieldKey("Enter", onClick = { key(RemoteInput.Key.Enter) }, filled = false) {
+                        KeyLabel(RemoteInput.Key.Enter.label, LocalContentColor.current, size = 18)
+                    }
                 },
             ) { m ->
                 TypeField(d, mods, onSend = send, onModsUsed = { mods = RemoteInput.Mods() }, onEnter = { key(RemoteInput.Key.Enter) }, m, 56.dp)
@@ -379,29 +381,57 @@ private fun Modifier.touchpad(
     }
 }
 
-/** A key of the touchpad, with a mono label. */
+/** A key of the touchpad, with a mono label. TalkBack reads [description]. */
 @Composable
 private fun PadKey(label: String, description: String, modifier: Modifier, onClick: () -> Unit) {
     Box(
         modifier.fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(Tn.tile)
             .border(1.dp, Tn.line, RoundedCornerShape(8.dp))
-            .clickable(onClickLabel = description, onClick = onClick),
+            .clickable(onClickLabel = description, role = Role.Button, onClick = onClick)
+            .clearAndSetSemantics { contentDescription = description }
+            .padding(horizontal = 4.dp),
         contentAlignment = Alignment.Center,
     ) {
-        T(label, size = 13, color = Tn.sub, weight = FontWeight.SemiBold, family = Mono, maxLines = 1)
+        KeyLabel(label, Tn.sub, size = 13)
     }
 }
 
-/** A modifier key. It stays on for the next key or text. */
+/**
+ * A modifier key. It stays on for the next key or text. TalkBack reads it
+ * as a switch: [name], on or off.
+ */
 @Composable
-private fun RowScope.ModKey(label: String, on: Boolean, onClick: () -> Unit) {
+private fun RowScope.ModKey(label: String, name: String, on: Boolean, onClick: () -> Unit) {
     Box(
-        Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(if (on) Tn.tileHi else Tn.tile)
+        Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(if (on) Tn.accentTile else Tn.tile)
             .border(1.dp, if (on) Tn.blue else Tn.line, RoundedCornerShape(8.dp))
-            .clickable(onClickLabel = if (on) "Release $label" else "Hold $label for the next key", onClick = onClick),
+            .toggleable(value = on, role = Role.Switch, onValueChange = { onClick() })
+            .clearAndSetSemantics { contentDescription = "$name for the next key" }
+            .padding(horizontal = 4.dp),
         contentAlignment = Alignment.Center,
     ) {
-        T(label, size = 12, color = if (on) Tn.blue else Tn.sub, weight = FontWeight.SemiBold, family = Mono, maxLines = 1)
+        KeyLabel(label, if (on) Tn.blue else Tn.sub)
+    }
+}
+
+/**
+ * The switch that lets the volume keys change the slides on the computer.
+ * It shows an icon and a label, and TalkBack reads it as a switch.
+ */
+@Composable
+private fun SlidesSwitch(on: Boolean, onChange: (Boolean) -> Unit) {
+    val shape = RoundedCornerShape(8.dp)
+    Row(
+        Modifier.minimumInteractiveComponentSize().heightIn(min = 40.dp).clip(shape).background(choiceFill(on)).border(choiceBorder(on), shape)
+            .toggleable(value = on, role = Role.Switch, onValueChange = onChange)
+            // TalkBack reads the label 1 time, with the switch role and its state.
+            .clearAndSetSemantics { contentDescription = "Volume keys change slides" }
+            .padding(horizontal = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Sym(Ic.slides, tint = if (on) Tn.blue else Tn.sub, size = 20.dp)
+        T("Slides", size = 13, color = if (on) Tn.text else Tn.sub, weight = FontWeight.SemiBold)
     }
 }
 
@@ -410,9 +440,18 @@ private fun RowScope.ModKey(label: String, on: Boolean, onClick: () -> Unit) {
 private fun HoldButton(description: String, modifier: Modifier, onChange: (Boolean) -> Unit) {
     var pressed by remember { mutableStateOf(false) }
     Box(
-        modifier.fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(if (pressed) Tn.tileHi else Tn.tile)
-            .border(1.dp, if (pressed) Tn.green else Tn.line, RoundedCornerShape(8.dp))
-            .semantics { contentDescription = description }
+        modifier.fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(if (pressed) Tn.accentTile else Tn.tile)
+            .border(1.dp, if (pressed) Tn.blue else Tn.line, RoundedCornerShape(8.dp))
+            // TalkBack cannot hold the button, so its action clicks: a press and a release.
+            .clearAndSetSemantics {
+                contentDescription = description
+                role = Role.Button
+                onClick {
+                    onChange(true)
+                    onChange(false)
+                    true
+                }
+            }
             .pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown()
@@ -425,6 +464,6 @@ private fun HoldButton(description: String, modifier: Modifier, onChange: (Boole
             },
         contentAlignment = Alignment.Center,
     ) {
-        T("left", size = 13, color = if (pressed) Tn.green else Tn.sub, weight = FontWeight.SemiBold, family = Mono, maxLines = 1)
+        KeyLabel("left", if (pressed) Tn.blue else Tn.sub, size = 13)
     }
 }

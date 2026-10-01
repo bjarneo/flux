@@ -23,7 +23,6 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
@@ -93,7 +93,7 @@ class ShareActivity : ComponentActivity() {
                 Box(Modifier.fillMaxSize().clickable { finish() }, contentAlignment = Alignment.Center) {
                     Surface(
                         Modifier.width(328.dp).clickable(enabled = false) { },
-                        shape = RoundedCornerShape(28.dp),
+                        shape = RoundedCornerShape(20.dp),
                         color = scheme.surfaceContainerHigh,
                     ) {
                         Column(Modifier.padding(vertical = 20.dp)) {
@@ -122,28 +122,30 @@ class ShareActivity : ComponentActivity() {
                                 color = scheme.onSurfaceVariant,
                             )
                             for (d in targets) {
+                                // A computer that is not reachable cannot take the share, so its row takes no taps.
+                                // The badge of a connected computer has the accent fill, so it stands out on the dialog.
                                 ListItem(
                                     headlineContent = { Text(d.name) },
                                     supportingContent = { Text(if (d.online) "Connected" else "Not reachable") },
                                     leadingContent = {
                                         IconBadge(
                                             deviceIcon(d.type),
-                                            container = if (d.online) scheme.primaryContainer else scheme.surfaceContainerHighest,
-                                            content = if (d.online) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+                                            container = if (d.online) Tn.blue else Tn.line,
+                                            content = if (d.online) Tn.onAccent else Tn.sub,
                                         )
                                     },
-                                    modifier = Modifier.clickable {
-                                        if (!d.online) {
-                                            Toast.makeText(this@ShareActivity, "${d.name} is not reachable", Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            send(d.id, d.name, uris, text)
-                                        }
+                                    modifier = Modifier.clickable(enabled = d.online, role = Role.Button, onClickLabel = "Send to ${d.name}") {
+                                        send(d.id, d.name, uris, text)
                                     }.padding(horizontal = 8.dp),
-                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                    colors = ListItemDefaults.colors(
+                                        containerColor = Color.Transparent,
+                                        headlineColor = if (d.online) Tn.text else Tn.sub,
+                                        supportingColor = Tn.sub,
+                                    ),
                                 )
                             }
                             Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), contentAlignment = Alignment.CenterEnd) {
-                                TextButton(onClick = { finish() }) { Text("Cancel") }
+                                FluxButton("Cancel", { finish() }, kind = ButtonKind.Text)
                             }
                         }
                     }
