@@ -25,6 +25,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,7 +66,15 @@ fun MicScreen(d: DeviceUi, onBack: () -> Unit) {
     fun has() = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
     var granted by remember { mutableStateOf(has()) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it }
-    LaunchedEffect(d.online) { if (!granted && d.online) ask.launch(Manifest.permission.RECORD_AUDIO) }
+    // The screen asks for the microphone 1 time, when the computer is first reachable.
+    // After a refusal, the Allow microphone button asks again.
+    var asked by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(d.online) {
+        if (!asked && !granted && d.online) {
+            asked = true
+            ask.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
 
     val status by MicSession.status.collectAsState()
     val level by MicSession.level.collectAsState()
@@ -117,7 +126,7 @@ fun MicScreen(d: DeviceUi, onBack: () -> Unit) {
             if (!granted) {
                 T("Allow the microphone", size = 20, weight = FontWeight.SemiBold, align = TextAlign.Center)
                 T(
-                    "Flux uses the microphone only while this screen is open and you press Start.",
+                    "Flux uses the microphone only while this screen is open and the mic runs.",
                     size = 14, color = Tn.sub, align = TextAlign.Center, lineHeight = 1.35f,
                 )
                 FluxButton("Allow microphone", { ask.launch(Manifest.permission.RECORD_AUDIO) }, icon = Ic.mic)
@@ -129,7 +138,7 @@ fun MicScreen(d: DeviceUi, onBack: () -> Unit) {
                 when {
                     active -> status.message
                     mine && status.message.isNotEmpty() -> status.message
-                    else -> "Press Start to use this phone as a microphone on ${d.name}."
+                    else -> "Press Start the mic to use this phone as a microphone on ${d.name}."
                 },
                 size = 16, color = if (error) Tn.red else Tn.text, align = TextAlign.Center, lineHeight = 1.35f,
             )

@@ -29,9 +29,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +61,18 @@ import org.omarchy.flux.ui.openAppSettings
 
 /** The largest side of a still image that Flux reads. It keeps memory use low. */
 internal const val MAX_STILL_SIDE = 2048
+
+/**
+ * Tells the Camera screen whether the mode holds work that a link drop
+ * must not end: a capture, a send that runs, or a picker or a scanner
+ * that is open. The screen then keeps the mode on the screen.
+ */
+@Composable
+internal fun ReportHolding(holding: Boolean, onHolding: (Boolean) -> Unit) {
+    val report by rememberUpdatedState(onHolding)
+    SideEffect { report(holding) }
+    DisposableEffect(Unit) { onDispose { report(false) } }
+}
 
 /** The camera permission of a mode. */
 internal class CameraPermission(val granted: Boolean, val request: () -> Unit, val openSettings: () -> Unit)

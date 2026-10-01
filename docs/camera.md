@@ -101,7 +101,7 @@ A headless `fluxd` does not start the webcam.
 
 ## Phone as microphone
 
-On the phone, open Microphone and press Start.
+On the phone, open **Control**, select **Mic** in the **Stream** band, and press **Start the mic**.
 The stream stops when you leave the screen.
 Desktop apps see **Flux Microphone**.
 The daemon uses `pw-cat` from PipeWire, so this feature needs no additional package on Omarchy.

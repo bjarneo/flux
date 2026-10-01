@@ -30,6 +30,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,9 +67,13 @@ private sealed interface QrPhase {
     data class Missing(val image: Bitmap?) : QrPhase
 }
 
-/** QR mode: reads QR codes and barcodes and sends the value to the computer. [strip] is the mode strip. */
+/**
+ * QR mode: reads QR codes and barcodes and sends the value to the
+ * computer. [strip] is the mode strip. [onHolding] tells the Camera screen
+ * while the mode holds a code or an open photo picker.
+ */
 @Composable
-fun QrMode(d: DeviceUi, strip: @Composable () -> Unit = {}) {
+fun QrMode(d: DeviceUi, strip: @Composable () -> Unit = {}, onHolding: (Boolean) -> Unit = {}) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val permission = rememberCameraPermission()
@@ -86,7 +91,10 @@ fun QrMode(d: DeviceUi, strip: @Composable () -> Unit = {}) {
         phase = if (code == null) QrPhase.Missing(image) else QrPhase.Found(image, Codes.sheet(code.toScanned(), d.name))
     }
 
+    // True while the photo picker is open, so that a link drop does not lose the photo.
+    var picking by rememberSaveable { mutableStateOf(false) }
     val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        picking = false
         if (uri == null) return@rememberLauncherForActivityResult
         val image = runCatching { decodeScaled(context, uri) }.getOrNull()
         if (image == null) {
@@ -97,7 +105,11 @@ fun QrMode(d: DeviceUi, strip: @Composable () -> Unit = {}) {
             .addOnSuccessListener { found(image, it) }
             .addOnFailureListener { phase = QrPhase.Missing(image) }
     }
-    val choosePhoto = { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+    val choosePhoto = {
+        picking = true
+        pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+    ReportHolding(phase != QrPhase.Live || picking, onHolding)
 
     val controller = remember { LifecycleCameraController(context).apply { setEnabledUseCases(LifecycleCameraController.IMAGE_ANALYSIS) } }
     val live = permission.granted && phase == QrPhase.Live
@@ -192,7 +204,10 @@ private fun CodeSheetView(d: DeviceUi, sheet: CodeSheet, onAgain: () -> Unit) {
                     val ok = Share.sendFields(FluxCore, d.id, action.body.fields())
                     FluxCore.toast(if (ok) "Sent to ${d.name}" else "Not connected")
                 }
-                FluxButton(action.verb, send, kind = if (i == 0) ButtonKind.Filled else ButtonKind.Outlined, icon = verbIcon(action.verb))
+                FluxButton(
+                    action.verb, send, kind = if (i == 0) ButtonKind.Filled else ButtonKind.Outlined,
+                    icon = verbIcon(action.verb), enabled = d.online,
+                )
             }
         }
         FluxButton("Scan again", onAgain, Modifier.offset(x = (-12).dp), kind = ButtonKind.Text, icon = Ic.qr)

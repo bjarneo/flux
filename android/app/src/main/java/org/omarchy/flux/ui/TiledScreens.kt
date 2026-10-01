@@ -201,7 +201,7 @@ fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Image(
                         image, "Album art",
-                        Modifier.fillMaxWidth().widthIn(max = 360.dp).aspectRatio(1f).clip(TileShape).border(1.dp, Tn.line, TileShape),
+                        Modifier.widthIn(max = 360.dp).fillMaxWidth().aspectRatio(1f).clip(TileShape).border(1.dp, Tn.line, TileShape),
                         contentScale = ContentScale.Crop,
                     )
                 }
@@ -349,10 +349,8 @@ fun TiledCommandsScreen(d: DeviceUi, onBack: () -> Unit) {
                             val done = sent == c.key
                             Tile(
                                 Modifier.weight(1f).fillMaxHeight(),
-                                onClick = {
-                                    Plugins.runCommand(FluxCore, d.id, c)
-                                    sent = c.key
-                                },
+                                // The tile shows Sent only when the phone sent the command.
+                                onClick = { if (Plugins.runCommand(FluxCore, d.id, c)) sent = c.key },
                                 accent = Tn.yellow,
                                 border = BorderStroke(1.dp, if (done) Tn.green else Tn.line),
                                 verticalArrangement = Arrangement.spacedBy(12.dp),

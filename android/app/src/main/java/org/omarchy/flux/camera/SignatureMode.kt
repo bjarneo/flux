@@ -95,9 +95,11 @@ private sealed interface SignPhase {
 /**
  * Signature mode: photographs a signature on paper, cuts out the ink, and
  * sends it as a transparent PNG. The computer puts it on the clipboard.
+ * [onHolding] tells the Camera screen while the mode holds a capture or an
+ * open photo picker.
  */
 @Composable
-fun SignatureMode(d: DeviceUi, strip: @Composable () -> Unit = {}) {
+fun SignatureMode(d: DeviceUi, strip: @Composable () -> Unit = {}, onHolding: (Boolean) -> Unit = {}) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
@@ -116,13 +118,20 @@ fun SignatureMode(d: DeviceUi, strip: @Composable () -> Unit = {}) {
         }
     }
 
+    // True while the photo picker is open, so that a link drop does not lose the photo.
+    var picking by rememberSaveable { mutableStateOf(false) }
     val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        picking = false
         if (uri != null) {
             val image = runCatching { decodeScaled(context, uri) }.getOrNull()
             if (image == null) FluxCore.toast("Cannot open the photo") else cut(image, null)
         }
     }
-    val choosePhoto = { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+    val choosePhoto = {
+        picking = true
+        pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+    ReportHolding(phase != SignPhase.Live || picking, onHolding)
 
     val controller = remember {
         LifecycleCameraController(context).apply {
@@ -270,6 +279,7 @@ fun SignatureMode(d: DeviceUi, strip: @Composable () -> Unit = {}) {
                 color = color,
                 onColor = { color = it },
                 sending = sending,
+                canSend = d.online,
                 failure = failure,
                 onRetake = {
                     failure = null
@@ -367,6 +377,7 @@ private fun ResultControls(
     color: InkColor,
     onColor: (InkColor) -> Unit,
     sending: Boolean,
+    canSend: Boolean,
     failure: String?,
     onRetake: () -> Unit,
     onSend: () -> Unit,
@@ -389,7 +400,7 @@ private fun ResultControls(
         if (failure != null) T(failure, color = MaterialTheme.colorScheme.error, size = 13)
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             FluxButton("Retake", onRetake, kind = ButtonKind.Outlined, icon = Ic.refresh)
-            if (ink != null) FluxButton(if (sending) "Sending" else "Send to ${d.name}", onSend, icon = Ic.send, busy = sending)
+            if (ink != null) FluxButton(if (sending) "Sending" else "Send to ${d.name}", onSend, icon = Ic.send, enabled = canSend, busy = sending)
         }
     }
 }

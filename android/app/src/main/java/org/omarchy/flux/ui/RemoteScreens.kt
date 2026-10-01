@@ -1,6 +1,8 @@
 package org.omarchy.flux.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -22,9 +24,15 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import org.omarchy.flux.core.Browse
 import org.omarchy.flux.core.BrowseState
@@ -58,6 +66,29 @@ fun NotReachable(d: DeviceUi, what: String, modifier: Modifier = Modifier) {
 }
 
 /**
+ * The 1-line form of [NotReachable], for a screen that keeps its work while
+ * the link is down, such as a capture to send. [what] names what works
+ * again when the computer connects. TalkBack reads the line when it shows.
+ */
+@Composable
+fun NotReachableLine(d: DeviceUi, what: String, modifier: Modifier = Modifier) {
+    Row(
+        modifier.fillMaxWidth().clip(TileShape).background(Tn.tile).border(1.dp, Tn.line, TileShape)
+            .padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Sym(Ic.wifiOff, tint = Tn.sub, size = 20.dp)
+        T(
+            "${d.name} is not reachable. $what works again when it connects.",
+            Modifier.weight(1f).padding(vertical = 8.dp).semantics { liveRegion = LiveRegionMode.Polite },
+            size = 13, lineHeight = 1.3f,
+        )
+        FluxButton("Retry", { FluxCore.rediscover() }, kind = ButtonKind.Text, icon = Ic.refresh)
+    }
+}
+
+/**
  * Get files: the folders that the computer shares, read-only. A tap on a
  * folder opens it, and a tap on a file downloads it to this phone. Back
  * goes up 1 folder, then leaves the screen.
@@ -67,21 +98,32 @@ fun BrowseScreen(d: DeviceUi, browse: BrowseState?, onBack: () -> Unit) {
     fun open() {
         if (isDemo(d.id)) FluxCore.setBrowse(DebugDemo.browse()) else Browse.start(FluxCore, d.id)
     }
-    // The session starts when the computer is reachable, and starts again when it connects again.
-    DisposableEffect(d.id, d.online) {
-        if (d.online) open()
+    // The state of the screen stays until the screen closes. A link drop
+    // keeps the folder that is open.
+    DisposableEffect(d.id) {
         onDispose {
             Browse.close()
             FluxCore.setBrowse(null)
         }
     }
+    // The session starts when the computer is reachable. fluxd ends the
+    // session when the link drops, so a new session opens the same folder.
+    LaunchedEffect(d.id, d.online) {
+        if (!d.online) return@LaunchedEffect
+        if (isDemo(d.id)) {
+            if (browse == null) open()
+        } else {
+            Browse.start(FluxCore, d.id, browse?.path?.takeIf { browse.deviceId == d.id && it.isNotEmpty() })
+        }
+    }
     val rootEntry = browse?.roots?.firstOrNull { browse.path.startsWith(it.second) }
     val root = rootEntry?.second
     val atRoot = browse == null || browse.path.isEmpty() || browse.path == root
+    // Back goes up 1 folder. While the computer is not reachable, Back leaves the screen.
     val up = {
-        if (atRoot) onBack() else Browse.list(FluxCore, browse!!.path.trimEnd('/').substringBeforeLast('/').ifEmpty { "/" })
+        if (atRoot || !d.online) onBack() else Browse.list(FluxCore, browse!!.path.trimEnd('/').substringBeforeLast('/').ifEmpty { "/" })
     }
-    BackHandler(enabled = !atRoot) { up() }
+    BackHandler(enabled = d.online && !atRoot) { up() }
     // Show the path from the root folder name, not the full path on the computer.
     val shown = browse?.path?.takeIf { it.isNotEmpty() }?.let { path ->
         rootEntry?.let { it.first + "/" + path.removePrefix(it.second).trimEnd('/') }?.trimEnd('/') ?: path

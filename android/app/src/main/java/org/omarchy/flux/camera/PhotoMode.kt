@@ -45,6 +45,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.Share
@@ -62,9 +63,13 @@ private sealed interface PhotoStatus {
     data class Failed(val thumb: Bitmap?, val file: File, val name: String, val message: String) : PhotoStatus
 }
 
-/** Photo mode: takes a full-quality photo and sends it to the computer as a file. [strip] is the mode strip. */
+/**
+ * Photo mode: takes a full-quality photo and sends it to the computer as a
+ * file. [strip] is the mode strip. [onHolding] tells the Camera screen
+ * while a photo saves, sends, or waits for a retry.
+ */
 @Composable
-fun PhotoMode(d: DeviceUi, strip: @Composable () -> Unit = {}) {
+fun PhotoMode(d: DeviceUi, strip: @Composable () -> Unit = {}, onHolding: (Boolean) -> Unit = {}) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val permission = rememberCameraPermission()
@@ -82,9 +87,15 @@ fun PhotoMode(d: DeviceUi, strip: @Composable () -> Unit = {}) {
             .build()
     }
     LaunchedEffect(flash) { capture.flashMode = flash }
+    ReportHolding(status == PhotoStatus.Saving || status is PhotoStatus.Sending || status is PhotoStatus.Failed, onHolding)
     // A photo that did not go out stays in the cache only while the screen shows its retry.
+    // A send that fails after the mode left deletes its photo at once.
+    val shown = remember { AtomicBoolean(true) }
     DisposableEffect(Unit) {
-        onDispose { (status as? PhotoStatus.Failed)?.file?.delete() }
+        onDispose {
+            shown.set(false)
+            (status as? PhotoStatus.Failed)?.file?.delete()
+        }
     }
 
     DisposableEffect(permission.granted, lens) {
@@ -123,15 +134,17 @@ fun PhotoMode(d: DeviceUi, strip: @Composable () -> Unit = {}) {
                     FluxCore.toast("Sent to ${d.name}")
                 } else {
                     val message = result.exceptionOrNull()?.message ?: "Sending failed"
-                    status = PhotoStatus.Failed(thumb, file, name, message)
                     FluxCore.toast(message)
+                    if (shown.get()) status = PhotoStatus.Failed(thumb, file, name, message) else file.delete()
                 }
             }
         }
     }
 
     fun shoot() {
-        if (status == PhotoStatus.Saving || status is PhotoStatus.Sending) return
+        if (status == PhotoStatus.Saving || status is PhotoStatus.Sending || !d.online) return
+        // A new photo takes the place of a photo that waits for a retry.
+        (status as? PhotoStatus.Failed)?.file?.delete()
         val name = CaptureNames.photo()
         val dir = File(context.cacheDir, "photos").apply { mkdirs() }
         val file = File(dir, name)
@@ -174,8 +187,11 @@ fun PhotoMode(d: DeviceUi, strip: @Composable () -> Unit = {}) {
             Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { LastPhoto(status) { s -> send(s.file, s.name, s.thumb) } }
-            Shutter(::shoot, busy = status == PhotoStatus.Saving)
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                LastPhoto(status, canSend = d.online) { s -> send(s.file, s.name, s.thumb) }
+            }
+            // Without the computer, the shutter takes no photo, because the photo cannot go out.
+            Shutter(::shoot, busy = status == PhotoStatus.Saving || !d.online)
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
                 if (hasFront) {
                     FilledTonalIconButton(
@@ -188,19 +204,22 @@ fun PhotoMode(d: DeviceUi, strip: @Composable () -> Unit = {}) {
     }
 }
 
-/** The thumbnail of the last photo with its send state. A failed photo sends again on tap. */
+/**
+ * The thumbnail of the last photo with its send state. A failed photo
+ * sends again on tap while [canSend] is true.
+ */
 @Composable
-private fun LastPhoto(status: PhotoStatus, onRetry: (PhotoStatus.Failed) -> Unit) {
+private fun LastPhoto(status: PhotoStatus, canSend: Boolean, onRetry: (PhotoStatus.Failed) -> Unit) {
     val (thumb, label) = when (status) {
         PhotoStatus.None -> return
         PhotoStatus.Saving -> null to "Saving…"
         is PhotoStatus.Sending -> status.thumb to "Sending…"
         is PhotoStatus.Sent -> status.thumb to "Sent"
-        is PhotoStatus.Failed -> status.thumb to "Tap to send again"
+        is PhotoStatus.Failed -> status.thumb to if (canSend) "Tap to send again" else "Not sent"
     }
     Column(
         Modifier.clip(RoundedCornerShape(8.dp))
-            .clickable(enabled = status is PhotoStatus.Failed, onClickLabel = "Send the photo again", role = Role.Button) {
+            .clickable(enabled = status is PhotoStatus.Failed && canSend, onClickLabel = "Send the photo again", role = Role.Button) {
                 onRetry(status as PhotoStatus.Failed)
             },
         verticalArrangement = Arrangement.spacedBy(4.dp),

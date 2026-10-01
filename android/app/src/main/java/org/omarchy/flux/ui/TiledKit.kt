@@ -82,6 +82,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
@@ -94,6 +95,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -404,7 +406,8 @@ fun choiceBorder(selected: Boolean): BorderStroke = if (selected) BorderStroke(2
  * A choice of a small group, such as a player, a camera mode, or a
  * shape. It draws at least 40 dp high and takes taps on 48 dp. [role]
  * tells TalkBack the kind of choice, for example [Role.Tab] for a mode.
- * [leading] draws before the label, for example a color swatch.
+ * [leading] draws before the label, for example a color swatch. [inset]
+ * is the space at the start and the end of the label.
  */
 @Composable
 fun ChoiceChip(
@@ -415,6 +418,7 @@ fun ChoiceChip(
     enabled: Boolean = true,
     mono: Boolean = false,
     role: Role = Role.RadioButton,
+    inset: Dp = 12.dp,
     leading: (@Composable () -> Unit)? = null,
 ) {
     val shape = RoundedCornerShape(8.dp)
@@ -423,7 +427,7 @@ fun ChoiceChip(
         modifier.minimumInteractiveComponentSize().heightIn(min = 40.dp).alpha(if (enabled) 1f else DimAlpha)
             .clip(shape).background(choiceFill(selected)).border(border, shape)
             .selectable(selected = selected, enabled = enabled, role = role, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = inset, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -619,9 +623,9 @@ fun KeyLabel(text: String, color: Color, size: Int = 12, family: FontFamily = Mo
     T(text, size = size, color = color, weight = FontWeight.SemiBold, family = family, maxLines = 1, fit = true)
 }
 
-/** A row of keys with the same height, at least 48 dp. */
+/** A row of keys with the same height, at least 48 dp, and the grid gap of 8 dp between the keys. */
 @Composable
-fun KeyRow(modifier: Modifier = Modifier, gap: Dp = 6.dp, content: @Composable RowScope.() -> Unit) {
+fun KeyRow(modifier: Modifier = Modifier, gap: Dp = TileGap, content: @Composable RowScope.() -> Unit) {
     Row(
         modifier.fillMaxWidth().heightIn(min = 48.dp).height(IntrinsicSize.Min),
         horizontalArrangement = Arrangement.spacedBy(gap),
@@ -679,21 +683,48 @@ fun SquareSpinner(description: String) {
  * The top bar of every screen above a destination: a back button, the
  * [title], and an optional [context] line in mono, such as the computer.
  * [trailing] holds the actions of the screen. The title is a heading for
- * TalkBack, and both lines wrap at a large font size.
+ * TalkBack, and both lines wrap at a large font size. When the actions
+ * leave the title less width than its longest word, the actions move to a
+ * second row under the title, so that no word breaks.
  */
 @Composable
 fun TiledTopBar(title: String, onBack: () -> Unit, context: String? = null, trailing: @Composable RowScope.() -> Unit = {}) {
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(top = 4.dp, bottom = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        SquareButton(Ic.back, "Back", onBack)
-        Column(Modifier.weight(1f).padding(start = 2.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            T(title, Modifier.semantics { heading() }, size = 18, weight = FontWeight.SemiBold, lineHeight = 1.2f)
-            if (!context.isNullOrEmpty()) T(context, size = 12, color = Tn.sub, family = Mono)
+    Layout(
+        contents = listOf(
+            { SquareButton(Ic.back, "Back", onBack) },
+            {
+                Column(Modifier.padding(start = 2.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    T(title, Modifier.semantics { heading() }, size = 18, weight = FontWeight.SemiBold, lineHeight = 1.2f)
+                    if (!context.isNullOrEmpty()) T(context, size = 12, color = Tn.sub, family = Mono)
+                }
+            },
+            { Row(horizontalArrangement = Arrangement.spacedBy(TileGap), verticalAlignment = Alignment.CenterVertically, content = trailing) },
+        ),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(top = 4.dp, bottom = 8.dp),
+    ) { (backSlot, titleSlot, actionSlot), constraints ->
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val gap = TileGap.roundToPx()
+        val back = backSlot.first().measure(loose)
+        val actions = actionSlot.first().measure(loose)
+        val titleItem = titleSlot.first()
+        val start = back.width + gap
+        val end = if (actions.width > 0) actions.width + gap else 0
+        val width = if (constraints.hasBoundedWidth) constraints.maxWidth else start + titleItem.maxIntrinsicWidth(Constraints.Infinity) + end
+        val inlineWidth = (width - start - end).coerceAtLeast(0)
+        // The minimum intrinsic width of the title is the width of its longest word.
+        val inline = actions.width == 0 || titleItem.minIntrinsicWidth(Constraints.Infinity) <= inlineWidth
+        val titleWidth = if (inline) inlineWidth else (width - start).coerceAtLeast(0)
+        val titleBlock = titleItem.measure(Constraints(minWidth = titleWidth, maxWidth = titleWidth))
+        val firstRow = maxOf(back.height, titleBlock.height, if (inline) actions.height else 0)
+        val secondRow = if (inline) 0 else gap + actions.height
+        val height = (firstRow + secondRow).coerceIn(constraints.minHeight, constraints.maxHeight)
+        layout(width, height) {
+            val top = if (inline) (height - firstRow) / 2 else 0
+            back.placeRelative(0, top + (firstRow - back.height) / 2)
+            titleBlock.placeRelative(start, top + (firstRow - titleBlock.height) / 2)
+            val actionsTop = if (inline) top + (firstRow - actions.height) / 2 else firstRow + gap
+            actions.placeRelative(width - actions.width, actionsTop)
         }
-        trailing()
     }
 }
 

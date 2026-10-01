@@ -123,16 +123,16 @@ fun OmarchyPanel(d: DeviceUi, modifier: Modifier = Modifier) {
             DirectionPad(move, Modifier.weight(1f), onToggle = { move = !move }) { dir ->
                 send(if (move) Shortcuts.swap(dir) else Shortcuts.focus(dir))
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TileGap)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(TileGap)) {
                     ActionKey("close", "Close the window", Modifier.weight(1f), destructive = true) { send(Shortcuts.action(Shortcuts.Action.Close)) }
                     ActionKey("full", "Full screen", Modifier.weight(1f)) { send(Shortcuts.action(Shortcuts.Action.Fullscreen)) }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(TileGap)) {
                     ActionKey("float", "Float or tile the window", Modifier.weight(1f)) { send(Shortcuts.action(Shortcuts.Action.Float)) }
                     ActionKey("split", "Toggle the split", Modifier.weight(1f)) { send(Shortcuts.action(Shortcuts.Action.Split)) }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(TileGap)) {
                     ActionKey("next", "Focus the next window", Modifier.weight(1f)) { send(Shortcuts.action(Shortcuts.Action.NextWindow)) }
                     ActionKey("scratch", "Toggle the scratchpad", Modifier.weight(1f)) { send(Shortcuts.action(Shortcuts.Action.Scratchpad)) }
                 }
@@ -171,9 +171,9 @@ fun OmarchyPanel(d: DeviceUi, modifier: Modifier = Modifier) {
 @Composable
 private fun Workspaces(state: ShortcutsState?, onGo: (Int) -> Unit, onMove: (Int) -> Unit) {
     val windows = state?.workspaces.orEmpty().associate { it.id to it.windows }
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
         for (row in (1..Shortcuts.MAX_WORKSPACE).chunked(5)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(TileGap)) {
                 for (id in row) {
                     val active = state?.active == id
                     val used = (windows[id] ?: 0) > 0
@@ -217,13 +217,13 @@ private fun Workspaces(state: ShortcutsState?, onGo: (Int) -> Unit, onMove: (Int
 @Composable
 private fun DirectionPad(move: Boolean, modifier: Modifier, onToggle: () -> Unit, onDirection: (Shortcuts.Direction) -> Unit) {
     val accent = Tn.blue
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(TileGap)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(TileGap)) {
             Spacer(Modifier.weight(1f))
             ArrowKey(Shortcuts.Direction.Up, accent, move, Modifier.weight(1f), onDirection)
             Spacer(Modifier.weight(1f))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(TileGap)) {
             ArrowKey(Shortcuts.Direction.Left, accent, move, Modifier.weight(1f), onDirection)
             val shape = RoundedCornerShape(8.dp)
             Box(
@@ -235,7 +235,7 @@ private fun DirectionPad(move: Boolean, modifier: Modifier, onToggle: () -> Unit
             ) { KeyLabel(if (move) "move" else "focus", accent, size = 11) }
             ArrowKey(Shortcuts.Direction.Right, accent, move, Modifier.weight(1f), onDirection)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(TileGap)) {
             Spacer(Modifier.weight(1f))
             ArrowKey(Shortcuts.Direction.Down, accent, move, Modifier.weight(1f), onDirection)
             Spacer(Modifier.weight(1f))
@@ -302,7 +302,7 @@ private fun ShortcutSheet(all: List<Shortcut>, pins: List<String>, onRun: (Short
                 )
             }
             val found = remember(all, query) { Shortcuts.search(all, query) }
-            LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(TileGap)) {
                 items(found, key = { it.ref }) { s ->
                     val pinned = s.description in pins
                     Row(

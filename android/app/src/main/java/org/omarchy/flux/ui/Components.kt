@@ -27,8 +27,10 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -50,6 +52,9 @@ import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -115,7 +120,8 @@ fun openAppSettings(context: Context) {
 fun PermissionNotice(text: String, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     Column(modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        T(text, size = 13, color = Tn.red, lineHeight = 1.3f)
+        // TalkBack reads the notice when it shows.
+        T(text, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, size = 13, color = Tn.red, lineHeight = 1.3f)
         FluxButton("Open app settings", { openAppSettings(context) }, Modifier.offset(x = (-12).dp), kind = ButtonKind.Text, icon = Ic.settings)
     }
 }
@@ -168,7 +174,8 @@ fun ConfirmDialog(
         onDismissRequest = onCancel,
         icon = icon?.let { { Sym(it) } },
         title = { Text(title) },
-        text = { Text(body) },
+        // The body scrolls when a large font size makes it taller than the dialog.
+        text = { Text(body, Modifier.verticalScroll(rememberScrollState())) },
         confirmButton = { FluxButton(confirm, onConfirm, kind = if (destructive) ButtonKind.Destructive else ButtonKind.Filled) },
         dismissButton = { FluxButton("Cancel", onCancel, kind = ButtonKind.Text) },
     )
@@ -188,7 +195,8 @@ fun UnpairDialog(name: String, onCancel: () -> Unit, onConfirm: () -> Unit) {
         icon = { Sym(Ic.unlink) },
         title = { Text("Unpair $name?") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // The body scrolls when a large font size makes it taller than the dialog, so the command stays reachable.
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("This phone and $name stop connecting. This phone deletes its fingerprint approval key for $name. You can pair them again later.")
                 Text(
                     "The key file on $name stays until you run this command there:",

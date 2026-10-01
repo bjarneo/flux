@@ -39,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -87,9 +88,13 @@ private sealed interface ScanPhase {
     data class Result(val image: Bitmap?, val text: String) : ScanPhase
 }
 
-/** Text mode: reads text with the camera or from a photo and sends it to the computer. [strip] is the mode strip. */
+/**
+ * Text mode: reads text with the camera or from a photo and sends it to the
+ * computer. [strip] is the mode strip. [onHolding] tells the Camera screen
+ * while the mode holds a scan or an open photo picker.
+ */
 @Composable
-fun TextMode(d: DeviceUi, strip: @Composable () -> Unit = {}) {
+fun TextMode(d: DeviceUi, strip: @Composable () -> Unit = {}, onHolding: (Boolean) -> Unit = {}) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val reader: TextReader = remember { MlKitTextReader() }
@@ -118,13 +123,20 @@ fun TextMode(d: DeviceUi, strip: @Composable () -> Unit = {}) {
         }
     }
 
+    // True while the photo picker is open, so that a link drop does not lose the photo.
+    var picking by rememberSaveable { mutableStateOf(false) }
     val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        picking = false
         if (uri != null) {
             val image = runCatching { decodeScaled(context, uri) }.getOrNull()
             if (image == null) FluxCore.toast("Cannot open the photo") else readStill(image)
         }
     }
-    val choosePhoto = { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+    val choosePhoto = {
+        picking = true
+        pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+    ReportHolding(phase != ScanPhase.Live || picking, onHolding)
 
     val controller = remember {
         LifecycleCameraController(context).apply {
@@ -301,7 +313,7 @@ private fun ResultControls(d: DeviceUi, text: String, onText: (String) -> Unit, 
         }
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             FluxButton("Retake", onRetake, kind = ButtonKind.Outlined, icon = Ic.refresh)
-            if (text.isNotBlank()) FluxButton("Send to ${d.name}", onSend, icon = Ic.send)
+            if (text.isNotBlank()) FluxButton("Send to ${d.name}", onSend, icon = Ic.send, enabled = d.online)
         }
     }
 }

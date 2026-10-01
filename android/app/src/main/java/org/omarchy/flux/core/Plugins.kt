@@ -361,16 +361,18 @@ object Plugins {
         core.device(id)?.send(Packet(Types.RUN_COMMAND_REQUEST, bodyOf("requestCommandList" to true)))
     }
 
-    fun runCommand(core: FluxCore, id: String, cmd: RemoteCommand) {
+    /** Sends [cmd] to the computer. It returns false when no link is open, and then sends nothing. */
+    fun runCommand(core: FluxCore, id: String, cmd: RemoteCommand): Boolean {
         val d = core.device(id)
         if (d == null || !d.send(Packet(Types.RUN_COMMAND_REQUEST, bodyOf("key" to cmd.key)))) {
             Log.i("FluxCommands", "not sent: ${cmd.key}, no open link")
             core.toast("Not connected. Try again in a moment")
-            return
+            return false
         }
         Log.i("FluxCommands", "sent: ${cmd.key}")
         // The computer does not report the end of the command, so the phone tells only that it sent the command.
         core.toast("Sent “${cmd.name}” to ${d.identity.deviceName}")
+        return true
     }
 
     // ------------------------------------------------------------------ media

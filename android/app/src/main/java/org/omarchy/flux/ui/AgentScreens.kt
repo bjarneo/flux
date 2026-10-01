@@ -527,7 +527,8 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
         if (choices.isNotEmpty()) {
             Column(
                 Modifier.heightIn(max = ChoicesMaxHeight).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                // The grid gap keeps 8 dp between the choices, so that a tap does not hit the next choice.
+                verticalArrangement = Arrangement.spacedBy(TileGap),
             ) {
                 for (c in choices) ChoiceTile(c) { keys(c.key) }
             }

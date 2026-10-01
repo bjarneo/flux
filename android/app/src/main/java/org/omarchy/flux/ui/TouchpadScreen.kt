@@ -48,7 +48,6 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -425,7 +424,8 @@ private fun SlidesSwitch(on: Boolean, onChange: (Boolean) -> Unit) {
     Row(
         Modifier.minimumInteractiveComponentSize().heightIn(min = 40.dp).clip(shape).background(choiceFill(on)).border(choiceBorder(on), shape)
             .toggleable(value = on, role = Role.Switch, onValueChange = onChange)
-            .semantics(mergeDescendants = true) { contentDescription = "Volume keys change slides" }
+            // TalkBack reads the label 1 time, with the switch role and its state.
+            .clearAndSetSemantics { contentDescription = "Volume keys change slides" }
             .padding(horizontal = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,

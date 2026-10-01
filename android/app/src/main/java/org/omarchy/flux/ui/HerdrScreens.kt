@@ -319,7 +319,7 @@ private fun StartBar(
     val canStart = choice != null && !busy
     Column(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (match != null) {
-            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).selectableGroup(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).selectableGroup(), horizontalArrangement = Arrangement.spacedBy(TileGap)) {
                 ChoiceChip("New tab in ${match.label}", !newWorkspace, { onNewWorkspace(false) }, Modifier.weight(1f).fillMaxHeight(), enabled = !busy)
                 ChoiceChip("New workspace", newWorkspace, { onNewWorkspace(true) }, Modifier.weight(1f).fillMaxHeight(), enabled = !busy)
             }
