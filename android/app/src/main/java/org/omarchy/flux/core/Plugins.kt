@@ -161,7 +161,7 @@ object Plugins {
         if (text.isNullOrEmpty() || !core.settings.syncClipboard) return
         if (timestamp != null && timestamp in 1..core.settings.clipboardTimestamp) return
         core.settings.clipboardTimestamp = if (timestamp != null && timestamp > 0) timestamp else System.currentTimeMillis()
-        putRemoteText(core, d.identity.deviceName, text)
+        if (putRemoteText(core, d.identity.deviceName, text)) InboxFeed.clipReceived(d.id, d.identity.deviceName, text)
     }
 
     /**
@@ -193,6 +193,7 @@ object Plugins {
             }
             core.settings.clipboardTimestamp = System.currentTimeMillis()
             ClipImage.send(core, listOf(d), uri, mime, manual = true) { sent ->
+                if (sent > 0) InboxFeed.clipSent(listOf(d.id to name), null)
                 core.toast(
                     when {
                         sent > 0 -> "Image sent to $name"
@@ -210,6 +211,7 @@ object Plugins {
         }
         core.settings.clipboardTimestamp = System.currentTimeMillis()
         d.send(Packet(Types.CLIPBOARD, bodyOf("content" to text)))
+        InboxFeed.clipSent(listOf(d.id to name), text)
         core.toast("Clipboard sent to ${d.identity.deviceName}")
         return true
     }
@@ -257,6 +259,7 @@ object Plugins {
             lastSentStamp = stamp
             core.settings.clipboardTimestamp = System.currentTimeMillis()
             ClipImage.send(core, targets, uri, mime, manual = manual) { sent ->
+                if (sent > 0) InboxFeed.clipSent(targets.map { it.id to it.identity.deviceName }, null)
                 if (manual) {
                     notify(
                         when {
@@ -288,6 +291,7 @@ object Plugins {
         lastSentStamp = stamp
         core.settings.clipboardTimestamp = System.currentTimeMillis()
         computers.forEach { it.send(Packet(Types.CLIPBOARD, bodyOf("content" to text))) }
+        InboxFeed.clipSent(computers.map { it.id to it.identity.deviceName }, text)
         if (manual) {
             notify(if (computers.size == 1) "Clipboard sent to ${computers[0].identity.deviceName}" else "Clipboard sent to ${computers.size} computers")
         }

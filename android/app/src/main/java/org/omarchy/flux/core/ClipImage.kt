@@ -82,6 +82,7 @@ object ClipImage {
         dir.listFiles()?.filter { it != file }?.forEach { it.delete() }
         val uri = FileProvider.getUriForFile(core.app, authority(core.app), file)
         lastRemote = uri
+        InboxFeed.clipReceived(d.id, d.identity.deviceName, null)
         // The write makes the clipboard denial line, so the reader ignores it.
         Plugins.selfWriteAt = SystemClock.elapsedRealtime()
         main.post { Android.setClipboardImage(core.app, uri) }
