@@ -32,4 +32,20 @@ class MediaTest {
         assertFalse(s.canGoNext)
         assertEquals(1000L, s.position)
     }
+
+    @Test
+    fun albumArtKeepsOnlyHttpsAddresses() {
+        val s = mergePlayer(PlayerState("spotify"), bodyOf("isPlaying" to true, "albumArtUrl" to "https://i.scdn.co/image/ab67"), 0)
+        assertEquals("https://i.scdn.co/image/ab67", s.artUrl)
+        assertEquals("", albumArtUrl("http://example.com/art.jpg"))
+        assertEquals("", albumArtUrl("file:///home/user/art.png"))
+        assertEquals("", albumArtUrl("https://example.com/a b.jpg"))
+    }
+
+    @Test
+    fun emptyAlbumArtClearsTheOldArt() {
+        val old = PlayerState("spotify", artUrl = "https://i.scdn.co/image/ab67")
+        assertEquals("", mergePlayer(old, bodyOf("albumArtUrl" to ""), 0).artUrl)
+        assertEquals(old.artUrl, mergePlayer(old, bodyOf("pos" to 5), 0).artUrl)
+    }
 }

@@ -31,7 +31,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
@@ -314,15 +313,15 @@ fun TargetPickerDialog(picker: TargetPicker) {
                     ) {
                         Sym(deviceIcon(d.type), tint = Tn.blue)
                         Column(Modifier.weight(1f)) {
-                            T(d.name, size = 15, weight = FontWeight.SemiBold, maxLines = 1)
-                            T(linkText(d), size = 12, color = Tn.sub, maxLines = 1)
+                            T(d.name, size = 15, weight = FontWeight.SemiBold)
+                            T(linkText(d), size = 12, color = Tn.sub)
                         }
                     }
                 }
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = picker::dismiss) { Text("Cancel") } },
+        dismissButton = { FluxButton("Cancel", picker::dismiss, kind = ButtonKind.Text) },
     )
 }
 
@@ -381,9 +380,9 @@ fun TargetLine(t: Target, devices: List<DeviceUi>, verb: String, onPair: () -> U
                     Modifier.weight(1f), size = 14, color = Tn.sub,
                 )
                 if (!paired) {
-                    TextButton(onClick = onPair) { Text("Pair") }
+                    FluxButton("Pair", onPair, kind = ButtonKind.Text)
                 } else {
-                    TextButton(onClick = { FluxCore.rediscover() }) { Text("Retry") }
+                    FluxButton("Retry", { FluxCore.rediscover() }, kind = ButtonKind.Text)
                 }
             }
         }

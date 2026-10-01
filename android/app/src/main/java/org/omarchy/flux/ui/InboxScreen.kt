@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -39,9 +38,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ReadOnlyComposable
@@ -62,7 +59,6 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -261,18 +257,14 @@ private fun InboxEmpty(state: UiState, notices: InboxNotices, actions: InboxActi
                         "Open Flux on the computer, and use the same Wi-Fi network as this phone. Then pair the computer in Computers.",
                         size = 14, color = Tn.sub, lineHeight = 1.35f,
                     )
-                    Button(onClick = actions.computers, modifier = Modifier.padding(top = 4.dp).heightIn(min = 48.dp)) { Text("Find computers") }
+                    FluxButton("Find computers", actions.computers, Modifier.padding(top = 4.dp))
                 }
                 offline -> {
                     Sym(if (state.onWifi) Ic.wifiFind else Ic.wifiOff, tint = Tn.yellow, size = 28.dp)
                     T(offlineTitle(notices.reach), size = 22, weight = FontWeight.SemiBold)
                     T(offlineHint(state.onWifi), size = 14, color = Tn.sub, lineHeight = 1.35f)
                     T("The Inbox shows what waits on a computer only while the computer is reachable.", size = 14, color = Tn.sub, lineHeight = 1.35f)
-                    Button(onClick = { FluxCore.rediscover() }, modifier = Modifier.padding(top = 4.dp).heightIn(min = 48.dp)) {
-                        Sym(Ic.refresh, size = 18.dp)
-                        Spacer(Modifier.size(8.dp))
-                        Text("Retry")
-                    }
+                    FluxButton("Retry", { FluxCore.rediscover() }, Modifier.padding(top = 4.dp), icon = Ic.refresh)
                 }
                 else -> {
                     T(nothingText(notices), size = 22, weight = FontWeight.SemiBold)
@@ -374,7 +366,7 @@ private fun MasterHeader(item: InboxItem, canSwipe: Boolean, onSwipe: () -> Unit
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Dot(color)
             TileLabel(kindLabel(item), Modifier.weight(1f), color = color)
-            if (canSwipe) TextButton(onClick = onSwipe) { Text("Later") }
+            if (canSwipe) FluxButton("Later", onSwipe, kind = ButtonKind.Text)
         }
         T(item.computer, size = 12, color = Tn.sub, family = Mono, maxLines = 1)
     }
@@ -454,9 +446,9 @@ private fun ColumnScope.AgentMaster(item: AgentItem, d: DeviceUi?, active: Boole
             }
             Spacer(Modifier.weight(1f))
             if (blocked && fresh && choices.isEmpty() && item.control) {
-                Button(onClick = open, modifier = Modifier.heightIn(min = 48.dp)) { Text("Reply") }
+                FluxButton("Reply", open)
             } else {
-                OutlinedButton(onClick = open, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (blocked) "Reply" else "Open") }
+                FluxButton(if (blocked) "Reply" else "Open", open, kind = ButtonKind.Outlined)
             }
         }
     }
@@ -465,14 +457,7 @@ private fun ColumnScope.AgentMaster(item: AgentItem, d: DeviceUi?, active: Boole
 /** Lines in the place of the question while the output loads. */
 @Composable
 private fun PromptSkeleton() {
-    Column(
-        Modifier.fillMaxWidth().semantics { contentDescription = "Reading the question" },
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        for (f in listOf(0.9f, 0.7f, 0.5f)) {
-            Box(Modifier.fillMaxWidth(f).height(12.dp).clip(RoundedCornerShape(3.dp)).background(Tn.line))
-        }
-    }
+    LineSkeleton("Reading the question", lines = listOf(0.9f, 0.7f, 0.5f))
 }
 
 /** A numbered choice of the agent. A tap sends its digit, after the phone lock. */
@@ -481,15 +466,15 @@ private fun ChoiceRow(c: AgentChoice, enabled: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(8.dp)
     Row(
         Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(shape)
-            .background(if (c.selected) Tn.tileHi else Tn.bg)
-            .border(1.dp, if (c.selected) Tn.blue else Tn.line, shape)
+            .background(if (c.selected) Tn.accentTile else Tn.bg)
+            .border(choiceBorder(c.selected), shape)
             .clickable(enabled = enabled, onClickLabel = "Answer ${c.key}", role = Role.Button, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         T(c.key, size = 15, color = Tn.blue, weight = FontWeight.Bold, family = Mono)
-        T(c.label, Modifier.weight(1f), size = 14, maxLines = 3)
+        T(c.label, Modifier.weight(1f), size = 14)
     }
 }
 
@@ -506,11 +491,7 @@ private fun ColumnScope.ApprovalMaster(item: ApprovalItem, header: @Composable (
         T(listOf("user ${r.user}", r.tty, r.host).filter { it.isNotBlank() }.joinToString(" · "), size = 13, color = Tn.sub, family = Mono, maxLines = 2)
     }
     Push()
-    Button(onClick = { actions.approve(r) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-        Sym(Ic.key, size = 18.dp)
-        Spacer(Modifier.size(8.dp))
-        Text("Review")
-    }
+    FluxButton("Review", { actions.approve(r) }, Modifier.fillMaxWidth(), icon = Ic.key)
 }
 
 @Composable
@@ -521,7 +502,7 @@ private fun ColumnScope.PairMaster(item: PairItem, header: @Composable () -> Uni
         T("${item.computer} asks to pair with this phone. Compare the key on both screens.", size = 14, color = Tn.sub, lineHeight = 1.35f)
     }
     Push()
-    Button(onClick = { actions.showPair(item.deviceId) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Compare the key") }
+    FluxButton("Compare the key", { actions.showPair(item.deviceId) }, Modifier.fillMaxWidth())
 }
 
 @Composable
@@ -541,12 +522,12 @@ private fun ColumnScope.TransferMaster(item: TransferItem, header: @Composable (
     }
     Push()
     if (t.incoming && t.state == TransferState.Done) {
-        OutlinedButton(
-            onClick = {
-                runCatching { context.startActivity(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-            },
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-        ) { Text("Show Downloads") }
+        FluxButton(
+            "Show Downloads",
+            { runCatching { context.startActivity(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
+            Modifier.fillMaxWidth(),
+            kind = ButtonKind.Outlined,
+        )
     }
 }
 
@@ -560,7 +541,7 @@ private fun ColumnScope.ClipMaster(item: ClipItem, header: @Composable () -> Uni
         if (c.at > 0) T(DateUtils.getRelativeTimeSpanString(c.at, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString(), size = 12, color = Tn.sub)
     }
     Push()
-    OutlinedButton(onClick = actions.tools.sendClipboard, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Send the clipboard") }
+    FluxButton("Send the clipboard", actions.tools.sendClipboard, Modifier.fillMaxWidth(), kind = ButtonKind.Outlined)
 }
 
 @Composable
@@ -583,7 +564,7 @@ private fun ColumnScope.MediaMaster(item: MediaItem, d: DeviceUi?, header: @Comp
         }
         RoundIcon(Ic.next, "Next", enabled = online && p.canGoNext) { Plugins.mediaAction(FluxCore, id, "Next") }
         Spacer(Modifier.weight(1f))
-        OutlinedButton(onClick = { actions.open(Route(id, "media")) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Open") }
+        FluxButton("Open", { actions.open(Route(id, "media")) }, kind = ButtonKind.Outlined)
     }
 }
 

@@ -5,6 +5,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,7 +25,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
@@ -42,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -134,6 +138,10 @@ fun TiledPairSheet(name: String, key: String, waiting: Boolean, onCancel: () -> 
 
 // ───────────────────────── Media ─────────────────────────
 
+/**
+ * The player controls of 1 computer. The album art shows when the player
+ * has it. Without art, the controls move up.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
@@ -145,7 +153,8 @@ fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
     var volumeDrag by remember { mutableStateOf<Float?>(null) }
     var volumeSentAt by remember { mutableLongStateOf(0L) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(d.id) {
+    LaunchedEffect(d.id, d.online) {
+        if (!d.online) return@LaunchedEffect
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
                 Plugins.requestPlayers(FluxCore, d.id)
@@ -167,7 +176,7 @@ fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
         else -> p.position
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = TiledGutter)) {
-        TiledTopBar("media · ${d.name}", onBack)
+        TiledTopBar("Media", onBack, context = d.name)
         if (!d.online) {
             NotReachable(d, "The player controls")
             return@Column
@@ -178,27 +187,30 @@ fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
         }
         Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
             if (d.players.size > 1) {
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).selectableGroup(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     for (name in d.players) {
-                        val sel = name == p.name
-                        T(
-                            name,
-                            Modifier.clip(RoundedCornerShape(8.dp)).background(if (sel) Tn.green else Tn.tile)
-                                .clickable { Plugins.selectPlayer(FluxCore, d.id, name) }.padding(horizontal = 10.dp, vertical = 6.dp),
-                            size = 12, color = if (sel) Tn.onAccent else Tn.sub, family = Mono, weight = FontWeight.Medium,
-                        )
+                        ChoiceChip(name, selected = name == p.name, onClick = { Plugins.selectPlayer(FluxCore, d.id, name) }, mono = true)
                     }
                 }
             }
-            Tile(
-                Modifier.fillMaxWidth().aspectRatio(1f), border = activeBorder(Tn.green, Tn.cyan),
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
-            ) {
-                Sym(Ic.music, tint = Tn.green, size = 96.dp)
+            val art by rememberAlbumArt(p.artUrl)
+            art?.let { image ->
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Image(
+                        image, "Album art",
+                        Modifier.fillMaxWidth().widthIn(max = 360.dp).aspectRatio(1f).clip(TileShape).border(1.dp, Tn.line, TileShape),
+                        contentScale = ContentScale.Crop,
+                    )
+                }
             }
             Tile(Modifier.fillMaxWidth(), border = null, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                T(p.title.ifEmpty { "Unknown title" }, size = 22, weight = FontWeight.SemiBold, letterSpacing = -0.4f, maxLines = 2)
-                T(listOf(p.artist, p.name).filter { it.isNotEmpty() }.joinToString(" · "), size = 13, color = Tn.sub, maxLines = 1)
+                T(p.title.ifEmpty { "Unknown title" }, size = 22, weight = FontWeight.SemiBold, letterSpacing = -0.4f)
+                val by = listOf(p.artist, p.album).filter { it.isNotEmpty() }.joinToString(" · ")
+                if (by.isNotEmpty()) T(by, size = 14, color = Tn.sub)
+                T(p.name, size = 12, color = Tn.sub, family = Mono)
                 if (p.length > 0) {
                     // A thin track like the battery bar, with a small thumb while the player can seek.
                     val colors = SliderDefaults.colors(
@@ -215,6 +227,7 @@ fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
                         },
                         valueRange = 0f..p.length.toFloat(),
                         enabled = p.canSeek,
+                        modifier = Modifier.semantics { contentDescription = "Position" },
                         colors = colors,
                         interactionSource = source,
                         thumb = {
@@ -236,11 +249,12 @@ fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
             TileRow(64.dp) {
                 ControlTile(Ic.previous, "Previous", Modifier.weight(1f), p.canGoPrevious) { Plugins.mediaAction(FluxCore, d.id, "Previous") }
                 Tile(
-                    Modifier.weight(1f).fillMaxHeight(), { Plugins.mediaAction(FluxCore, d.id, "PlayPause") },
+                    Modifier.weight(1f).fillMaxHeight().semantics { contentDescription = if (p.playing) "Pause" else "Play" },
+                    { Plugins.mediaAction(FluxCore, d.id, "PlayPause") },
                     container = Tn.green, border = null, padding = PaddingValues(0.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
                 ) {
-                    Sym(if (p.playing) Ic.pause else Ic.play, if (p.playing) "Pause" else "Play", tint = Tn.onAccent, size = 34.dp)
+                    Sym(if (p.playing) Ic.pause else Ic.play, tint = Tn.onAccent, size = 34.dp)
                 }
                 ControlTile(Ic.next, "Next", Modifier.weight(1f), p.canGoNext) { Plugins.mediaAction(FluxCore, d.id, "Next") }
             }
@@ -249,7 +263,7 @@ fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
             if (volume != null) {
                 Tile(Modifier.fillMaxWidth(), border = null, padding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Sym(Ic.volume, "Volume", tint = Tn.green, size = 22.dp)
+                        Sym(Ic.volume, tint = Tn.green, size = 22.dp)
                         val colors = SliderDefaults.colors(thumbColor = Tn.green, activeTrackColor = Tn.green, inactiveTrackColor = Tn.line)
                         val source = remember { MutableInteractionSource() }
                         Slider(
@@ -268,7 +282,7 @@ fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
                                 volumeDrag = null
                             },
                             valueRange = 0f..100f,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1f).semantics { contentDescription = "Volume" },
                             colors = colors,
                             interactionSource = source,
                             thumb = { SliderDefaults.Thumb(source, colors = colors, thumbSize = DpSize(4.dp, 18.dp)) },
@@ -288,71 +302,80 @@ fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
     }
 }
 
+/** A key of the player. A key that the player does not offer shows dimmed and takes no taps. */
 @Composable
 private fun ControlTile(@DrawableRes icon: Int, description: String, modifier: Modifier, enabled: Boolean = true, onClick: () -> Unit) {
     Tile(
-        modifier.fillMaxHeight(), onClick.takeIf { enabled }, accent = Tn.green, enabled = enabled, padding = PaddingValues(0.dp),
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+        modifier.fillMaxHeight().semantics { contentDescription = description }, onClick, accent = Tn.green, enabled = enabled,
+        padding = PaddingValues(0.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
     ) {
-        Sym(icon, description, size = 28.dp)
+        Sym(icon, size = 28.dp)
     }
 }
 
 // ───────────────────────── Commands ─────────────────────────
 
+/**
+ * The commands that a computer publishes. A tap sends the command. The
+ * computer does not report when a command ends, so the tile shows Sent,
+ * not Done.
+ */
 @Composable
 fun TiledCommandsScreen(d: DeviceUi, onBack: () -> Unit) {
-    LaunchedEffect(d.id) { Plugins.requestCommands(FluxCore, d.id) }
-    // The command that ran last shows a check for a moment.
-    var ran by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(ran) {
-        if (ran != null) {
-            delay(1600)
-            ran = null
+    LaunchedEffect(d.id, d.online) { if (d.online) Plugins.requestCommands(FluxCore, d.id) }
+    // The command that the phone sent last shows Sent for a moment.
+    var sent by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(sent) {
+        if (sent != null) {
+            delay(2000)
+            sent = null
         }
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = TiledGutter)) {
-        TiledTopBar("commands · ${d.name}", onBack)
+        TiledTopBar("Commands", onBack, context = d.name)
         when {
             !d.online -> NotReachable(d, "The commands")
-            !d.commandsLoaded -> Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Tn.yellow)
-                T("Loading the commands of ${d.name}", color = Tn.sub)
-            }
+            !d.commandsLoaded -> LineSkeleton("Loading the commands of ${d.name}", Modifier.padding(4.dp), lines = listOf(0.5f, 0.35f, 0.45f))
             d.commands.isEmpty() -> EmptyState(
                 Ic.terminal,
                 "No commands yet",
                 "On ${d.name}, open Flux and add commands in Phone commands. They show here.",
                 Modifier.padding(top = 48.dp),
             )
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
-            for (row in d.commands.chunked(2)) {
-                TileRow(112.dp) {
-                    for (c in row) {
-                        val done = ran == c.key
-                        Tile(
-                            Modifier.weight(1f).fillMaxHeight(),
-                            onClick = {
-                                Plugins.runCommand(FluxCore, d.id, c)
-                                ran = c.key
-                            },
-                            accent = Tn.yellow,
-                            container = if (done) Tn.tileHi else Tn.tile,
-                            border = BorderStroke(1.dp, if (done) Tn.green else Tn.line),
-                        ) {
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                Sym(Ic.terminal, tint = Tn.yellow, size = 22.dp)
+            else -> Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
+                for (row in d.commands.chunked(2)) {
+                    TileRow(112.dp) {
+                        for (c in row) {
+                            val done = sent == c.key
+                            Tile(
+                                Modifier.weight(1f).fillMaxHeight(),
+                                onClick = {
+                                    Plugins.runCommand(FluxCore, d.id, c)
+                                    sent = c.key
+                                },
+                                accent = Tn.yellow,
+                                border = BorderStroke(1.dp, if (done) Tn.green else Tn.line),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Sym(Ic.terminal, tint = Tn.yellow, size = 22.dp)
+                                    Spacer(Modifier.weight(1f))
+                                    if (done) {
+                                        Sym(Ic.check, tint = Tn.green, size = 18.dp)
+                                        T("Sent", size = 12, color = Tn.green, weight = FontWeight.SemiBold)
+                                    } else {
+                                        Sym(Ic.play, tint = Tn.sub, size = 18.dp)
+                                    }
+                                }
                                 Spacer(Modifier.weight(1f))
-                                Sym(if (done) Ic.checkCircle else Ic.play, if (done) "Done" else "Run", tint = if (done) Tn.green else Tn.dim, size = 18.dp)
-                            }
-                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                T(c.name, size = 14, weight = FontWeight.SemiBold, maxLines = 1)
-                                T(c.command, size = 10, color = Tn.sub, family = Mono, maxLines = 1)
+                                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    T(c.name, size = 14, weight = FontWeight.SemiBold)
+                                    T(c.command, size = 11, color = Tn.sub, family = Mono, maxLines = 2)
+                                }
                             }
                         }
+                        if (row.size == 1) Spacer(Modifier.weight(1f))
                     }
-                    if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
         }

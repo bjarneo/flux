@@ -1,19 +1,8 @@
 package org.omarchy.flux.camera
 
-import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.CircularProgressIndicator
-import org.omarchy.flux.ui.Ic
-import org.omarchy.flux.ui.Sym
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.graphics.ImageDecoder
-import android.net.Uri
-import android.provider.Settings
 import android.util.Size
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -26,22 +15,24 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -54,13 +45,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -76,8 +64,13 @@ import org.omarchy.flux.scan.MlKitTextReader
 import org.omarchy.flux.scan.ScanBlock
 import org.omarchy.flux.scan.TextAssembly
 import org.omarchy.flux.scan.TextReader
+import org.omarchy.flux.ui.ButtonKind
+import org.omarchy.flux.ui.FluxButton
+import org.omarchy.flux.ui.Ic
 import org.omarchy.flux.ui.Palette
+import org.omarchy.flux.ui.Sym
 import org.omarchy.flux.ui.T
+import org.omarchy.flux.ui.openAppSettings
 import org.omarchy.flux.voice.DictationText
 import org.omarchy.flux.voice.VoiceField
 import org.omarchy.flux.voice.rememberVoiceTyping
@@ -94,9 +87,9 @@ private sealed interface ScanPhase {
     data class Result(val image: Bitmap?, val text: String) : ScanPhase
 }
 
-/** Text mode: reads text with the camera or from a photo and sends it to the computer. */
+/** Text mode: reads text with the camera or from a photo and sends it to the computer. [strip] is the mode strip. */
 @Composable
-fun TextMode(d: DeviceUi) {
+fun TextMode(d: DeviceUi, strip: @Composable () -> Unit = {}) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val reader: TextReader = remember { MlKitTextReader() }
@@ -180,13 +173,9 @@ fun TextMode(d: DeviceUi) {
         if (!granted && phase == ScanPhase.Live) {
             CameraRationale(
                 onAllow = { askCamera.launch(Manifest.permission.CAMERA) },
-                onSettings = {
-                    context.startActivity(
-                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                    )
-                },
+                onSettings = { openAppSettings(context) },
                 onPhoto = choosePhoto,
+                strip = strip,
             )
             return@Column
         }
@@ -222,7 +211,10 @@ fun TextMode(d: DeviceUi) {
             }
         }
         when (val p = phase) {
-            ScanPhase.Live -> LiveControls(onPhoto = choosePhoto, onCapture = ::capture)
+            ScanPhase.Live -> {
+                strip()
+                LiveControls(onPhoto = choosePhoto, onCapture = ::capture)
+            }
             is ScanPhase.Reading -> Box(Modifier.fillMaxWidth().padding(24.dp))
             is ScanPhase.Result -> ResultControls(
                 d = d,
@@ -266,7 +258,7 @@ private fun TextBoxes(blocks: List<ScanBlock>) {
 @Composable
 private fun LiveControls(onPhoto: () -> Unit, onCapture: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 20.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
@@ -293,7 +285,7 @@ private fun ResultControls(d: DeviceUi, text: String, onText: (String) -> Unit, 
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         if (text.isEmpty()) {
-            T("No text found. Move closer or add light.", Modifier.fillMaxWidth().padding(vertical = 12.dp), color = Palette.secondary, align = TextAlign.Center)
+            T("No text found. Move closer, or add light.", Modifier.fillMaxWidth().padding(vertical = 12.dp), color = Palette.secondary, align = TextAlign.Center)
         } else {
             VoiceField(voice) { m ->
                 OutlinedTextField(
@@ -307,9 +299,9 @@ private fun ResultControls(d: DeviceUi, text: String, onText: (String) -> Unit, 
                 )
             }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
-            OutlinedPill("Retake", onRetake, Ic.refresh)
-            if (text.isNotBlank()) FilledPill("Send to ${d.name}", onSend, Ic.send)
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FluxButton("Retake", onRetake, kind = ButtonKind.Outlined, icon = Ic.refresh)
+            if (text.isNotBlank()) FluxButton("Send to ${d.name}", onSend, icon = Ic.send)
         }
     }
 }

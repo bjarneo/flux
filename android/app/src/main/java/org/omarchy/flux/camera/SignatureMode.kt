@@ -19,16 +19,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -61,17 +62,20 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.scale
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.Share
+import org.omarchy.flux.ui.ButtonKind
+import org.omarchy.flux.ui.ChoiceChip
+import org.omarchy.flux.ui.FluxButton
 import org.omarchy.flux.ui.Ic
 import org.omarchy.flux.ui.Palette
 import org.omarchy.flux.ui.Sym
 import org.omarchy.flux.ui.T
-import java.io.File
 
 /** The largest side of the image that the ink comes from. */
 private const val MAX_SIGNATURE_SIDE = 1600
@@ -93,7 +97,7 @@ private sealed interface SignPhase {
  * sends it as a transparent PNG. The computer puts it on the clipboard.
  */
 @Composable
-fun SignatureMode(d: DeviceUi) {
+fun SignatureMode(d: DeviceUi, strip: @Composable () -> Unit = {}) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
@@ -204,7 +208,7 @@ fun SignatureMode(d: DeviceUi) {
     }
 
     if (!permission.granted && phase == SignPhase.Live) {
-        CameraRationale(onAllow = permission.request, onSettings = permission.openSettings, onPhoto = choosePhoto, what = "capture a signature")
+        CameraRationale(onAllow = permission.request, onSettings = permission.openSettings, onPhoto = choosePhoto, what = "capture a signature", strip = strip)
         return
     }
     Column(Modifier.fillMaxSize()) {
@@ -255,7 +259,10 @@ fun SignatureMode(d: DeviceUi) {
             }
         }
         when (val p = phase) {
-            SignPhase.Live -> LiveControls(onPhoto = choosePhoto, onCapture = ::capture)
+            SignPhase.Live -> {
+                strip()
+                LiveControls(onPhoto = choosePhoto, onCapture = ::capture)
+            }
             is SignPhase.Working -> Box(Modifier.fillMaxWidth().padding(24.dp))
             is SignPhase.Result -> ResultControls(
                 d = d,
@@ -342,7 +349,7 @@ private fun SignaturePreview(ink: SignatureInk, color: InkColor) {
 @Composable
 private fun LiveControls(onPhoto: () -> Unit, onCapture: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 20.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
@@ -369,21 +376,20 @@ private fun ResultControls(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         if (ink != null) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (c in InkColor.entries) {
-                    FilterChip(
-                        selected = c == color,
-                        onClick = { onColor(c) },
-                        label = { Text(c.label) },
-                        leadingIcon = { Box(Modifier.size(14.dp).clip(CircleShape).background(Color(0xFF000000 or c.of(ink).toLong()))) },
+                    ChoiceChip(
+                        c.label, selected = c == color, onClick = { onColor(c) },
+                        // The swatch shows the ink, a content color.
+                        leading = { Box(Modifier.size(14.dp).clip(CircleShape).background(Color(0xFF000000 or c.of(ink).toLong()))) },
                     )
                 }
             }
         }
         if (failure != null) T(failure, color = MaterialTheme.colorScheme.error, size = 13)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
-            OutlinedPill("Retake", onRetake, Ic.refresh)
-            if (ink != null) FilledPill(if (sending) "Sending…" else "Send to ${d.name}", onSend, Ic.send)
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FluxButton("Retake", onRetake, kind = ButtonKind.Outlined, icon = Ic.refresh)
+            if (ink != null) FluxButton(if (sending) "Sending" else "Send to ${d.name}", onSend, icon = Ic.send, busy = sending)
         }
     }
 }

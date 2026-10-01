@@ -12,7 +12,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,22 +25,20 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -90,22 +87,26 @@ fun syncSummary(state: UiState): Pair<Int, Int> {
 @Composable
 fun SyncScreen(state: UiState, onBack: () -> Unit) {
     val context = LocalContext.current
+    // A permission that the user refused. The screen tells what it is for and opens the app settings.
+    var refused by rememberSaveable { mutableStateOf<String?>(null) }
     // Call alerts need the phone state. The call log and the contacts add
     // the number and the name, and the user can refuse them.
     val askPhone = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
         if (granted[Manifest.permission.READ_PHONE_STATE] == true) {
+            refused = null
             FluxCore.setCallAlerts(true)
         } else {
-            FluxCore.toast("Call alerts need phone access. Allow it in the app settings.")
+            refused = "Call alerts need phone access. Allow it in the app settings."
         }
     }
     // Text messages need to read and send SMS. The contacts add the names,
     // and the user can refuse them.
     val askSms = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         if (SmsSync.hasAccess(context)) {
+            refused = null
             FluxCore.setSyncSms(true)
         } else {
-            FluxCore.toast("Text messages need SMS access. Allow it in the app settings.")
+            refused = "Text messages need SMS access. Allow it in the app settings."
         }
     }
     // The first capture switch that turns on asks for access to photos.
@@ -114,9 +115,12 @@ fun SyncScreen(state: UiState, onBack: () -> Unit) {
         val kind = asking ?: return@rememberLauncherForActivityResult
         asking = null
         when {
-            CaptureWatch.hasAccess(context) -> FluxCore.setSendCaptures(kind, true)
+            CaptureWatch.hasAccess(context) -> {
+                refused = null
+                FluxCore.setSendCaptures(kind, true)
+            }
             // Access to selected photos only does not show new images.
-            else -> FluxCore.toast("Allow access to all photos, so that Flux sees new images")
+            else -> refused = "Flux sees new images only with access to all photos. Allow it in the app settings."
         }
     }
     fun captureToggle(kind: CaptureKind, current: Boolean) {
@@ -194,8 +198,9 @@ fun SyncScreen(state: UiState, onBack: () -> Unit) {
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = TiledGutter)) {
-        TiledTopBar("sync · all computers", onBack)
+        TiledTopBar("Sync", onBack, context = "All computers")
         T("These switches apply to every paired computer.", Modifier.padding(start = 4.dp, bottom = 12.dp), size = 14, color = Tn.sub)
+        refused?.let { PermissionNotice(it, Modifier.padding(bottom = 8.dp)) }
         Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
             for (s in sync) SyncRow(s)
         }
@@ -270,60 +275,39 @@ private val CLIP_SETUP_COMMANDS = listOf(
  * permission screen and shows the adb commands with a copy button. After
  * each reboot or update, the user opens Flux once.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ClipAutoSheet(state: UiState, onDismiss: () -> Unit) {
     val context = LocalContext.current
-    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = Tn.bg) {
+    FluxSheet(onDismiss) {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = TiledGutter, vertical = 4.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            TileLabel("Automatic clipboard sync", color = Tn.sub)
+            TileLabel("Automatic clipboard sync", Modifier.semantics { heading() }, color = Tn.sub)
             T(
                 "Flux copies from other apps to the computer without the app open. Grant the access once with adb. " +
                     "Open Flux once after each reboot or update.",
                 size = 13, color = Tn.sub, lineHeight = 1.3f,
             )
             if (!state.overlayAccess) {
-                Button(
-                    onClick = {
+                FluxButton(
+                    "Allow drawing over apps",
+                    {
                         val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, "package:${context.packageName}".toUri())
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         runCatching { context.startActivity(intent) }
                             .onFailure { runCatching { context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)) } }
                     },
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                ) { Text("Allow drawing over apps") }
+                    Modifier.fillMaxWidth(),
+                )
             }
-            T("Run these on a computer with adb:", size = 12, color = Tn.sub)
-            for (cmd in CLIP_SETUP_COMMANDS) ClipCommandRow(cmd)
+            T("Run these on a computer with adb:", size = 13, color = Tn.sub)
+            for (cmd in CLIP_SETUP_COMMANDS) CommandBlock(cmd)
             T(
                 "The Appear on top switch in the Android app settings does the same as the second command.",
-                size = 12, color = Tn.sub, lineHeight = 1.3f,
+                size = 13, color = Tn.sub, lineHeight = 1.3f,
             )
             Spacer(Modifier.height(16.dp))
         }
-    }
-}
-
-/** One adb command with a copy button. */
-@Composable
-private fun ClipCommandRow(command: String) {
-    val context = LocalContext.current
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Tn.tile).padding(start = 12.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        T(command, Modifier.weight(1f), size = 12, color = Tn.text, family = Mono, lineHeight = 1.3f)
-        Box(
-            Modifier.size(48.dp).clip(RoundedCornerShape(8.dp))
-                .clickable(onClickLabel = "Copy the command") {
-                    if (Android.setClipboard(context, command)) FluxCore.toast("Copied")
-                },
-            contentAlignment = Alignment.Center,
-        ) { Sym(Ic.copy, "Copy", tint = Tn.blue, size = 20.dp) }
     }
 }

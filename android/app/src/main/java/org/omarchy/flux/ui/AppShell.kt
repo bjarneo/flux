@@ -77,6 +77,7 @@ import org.omarchy.flux.core.inScope
 import org.omarchy.flux.core.inboxReach
 import org.omarchy.flux.core.needsYou
 import org.omarchy.flux.mic.MicScreen
+import org.omarchy.flux.webcam.WebcamScreen
 
 /** Keeps the order that the user gave the Inbox across a recreation: the pinned key, then the deferred keys. */
 private val ArrangementSaver = listSaver<InboxArrangement, String>(
@@ -368,6 +369,8 @@ private fun DetailScreen(route: Route, state: UiState, current: () -> Nav, go: (
         page == "touchpad" -> TouchpadScreen(device, pop)
         page == "desktop" -> DesktopScreen(device, pop)
         page == OMARCHY_PAGE -> OmarchyScreen(device, pop)
+        // The Webcam was a mode of the camera. Debug builds still open it with "camera:webcam".
+        page == WEBCAM_PAGE || page == "camera:webcam" -> WebcamScreen(device, pop)
         // Debug builds open a mode with "camera:<mode>".
         page.startsWith("camera") -> key(page) { CameraScreen(device, pop, CameraMode.fromKey(page.substringAfter(':', ""))) }
     }

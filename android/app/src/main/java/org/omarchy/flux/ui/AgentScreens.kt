@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -28,18 +30,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -50,6 +51,9 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -73,8 +77,8 @@ import org.omarchy.flux.core.HERDR_BLOCKED
 import org.omarchy.flux.core.HerdrAgent
 import org.omarchy.flux.core.HerdrOutput
 import org.omarchy.flux.core.HerdrReply
-import org.omarchy.flux.core.HerdrTerminal
 import org.omarchy.flux.core.HerdrSync
+import org.omarchy.flux.core.HerdrTerminal
 import org.omarchy.flux.mic.MicSession
 import org.omarchy.flux.voice.Dictation
 import org.omarchy.flux.voice.DictationBar
@@ -133,16 +137,13 @@ fun TiledAgentsScreen(
     LaunchedEffect(d.id, d.online) { if (d.online) HerdrSync.request(FluxCore, d.id) }
     val herdr = d.herdr
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = TiledGutter)) {
-        TiledTopBar("agents · ${d.name}", onBack) {
+        TiledTopBar("Agents", onBack, context = d.name) {
             if (d.online && herdr?.running == true && herdr.control) SquareButton(Ic.add, "New agent or terminal", onNew)
             if (d.online) SquareButton(Ic.refresh, "Refresh", { HerdrSync.request(FluxCore, d.id) })
         }
         when {
             !d.online -> NotReachable(d, "The agents")
-            herdr == null -> Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Tn.magenta)
-                T("Loading the agents of ${d.name}", color = Tn.sub)
-            }
+            herdr == null -> LineSkeleton("Loading the agents of ${d.name}", Modifier.padding(4.dp), lines = listOf(0.7f, 0.5f, 0.6f))
             !herdr.enabled -> EmptyState(
                 Ic.agent,
                 "Agent status is off",
@@ -159,7 +160,7 @@ fun TiledAgentsScreen(
                 Ic.agent,
                 "No agents yet",
                 if (herdr.control) {
-                    "Select + to start an agent on ${d.name}, or start one in a herdr pane there."
+                    "Select New agent or terminal to start an agent on ${d.name}, or start one in a herdr pane there."
                 } else {
                     "Start a coding agent in a herdr pane on ${d.name}. It shows here."
                 },
@@ -181,23 +182,24 @@ fun TiledAgentsScreen(
 private fun AgentTile(a: HerdrAgent, onClick: () -> Unit) {
     val blocked = a.status == AgentStatus.Blocked
     Tile(
-        Modifier.fillMaxWidth().height(96.dp), onClick,
+        Modifier.fillMaxWidth().heightIn(min = 96.dp), onClick,
         accent = statusColor(a.status),
         container = if (blocked) Tn.tileHi else Tn.tile,
         border = BorderStroke(1.dp, if (blocked) Tn.red else Tn.line),
         padding = PaddingValues(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             StatusLine(a.status)
             Spacer(Modifier.weight(1f))
-            T(a.agent, size = 10, color = Tn.sub, family = Mono, maxLines = 1)
+            T(a.agent, size = 11, color = Tn.sub, family = Mono)
         }
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
-                T(a.project.ifEmpty { a.pane }, Modifier.weight(1f, fill = false), size = 15, weight = FontWeight.SemiBold, maxLines = 1)
-                if (a.workspace.isNotEmpty() && a.workspace != a.project) T(a.workspace, size = 10, color = Tn.sub, family = Mono, maxLines = 1)
+                T(a.project.ifEmpty { a.pane }, Modifier.weight(1f, fill = false), size = 15, weight = FontWeight.SemiBold)
+                if (a.workspace.isNotEmpty() && a.workspace != a.project) T(a.workspace, size = 11, color = Tn.sub, family = Mono)
             }
-            T(a.title.ifEmpty { a.pane }, size = 11, color = Tn.sub, maxLines = 1)
+            T(a.title.ifEmpty { a.pane }, size = 12, color = Tn.sub, maxLines = 2)
         }
     }
 }
@@ -205,14 +207,17 @@ private fun AgentTile(a: HerdrAgent, onClick: () -> Unit) {
 /** A herdr terminal: its folder, its workspace, and the terminal title. */
 @Composable
 private fun TerminalTile(t: HerdrTerminal, onClick: () -> Unit) {
-    Tile(Modifier.fillMaxWidth().height(72.dp), onClick, accent = Tn.green, padding = PaddingValues(horizontal = 14.dp, vertical = 12.dp)) {
+    Tile(
+        Modifier.fillMaxWidth().heightIn(min = 72.dp), onClick, accent = Tn.green,
+        padding = PaddingValues(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Sym(Ic.terminal, tint = Tn.green, size = 18.dp)
-            T(t.project.ifEmpty { t.pane }, Modifier.weight(1f), size = 14, weight = FontWeight.SemiBold, maxLines = 1)
-            if (t.workspace.isNotEmpty() && t.workspace != t.project) T(t.workspace, size = 10, color = Tn.sub, family = Mono, maxLines = 1)
-            T(t.pane, size = 10, color = Tn.sub, family = Mono, maxLines = 1)
+            T(t.project.ifEmpty { t.pane }, Modifier.weight(1f), size = 14, weight = FontWeight.SemiBold)
+            if (t.workspace.isNotEmpty() && t.workspace != t.project) T(t.workspace, size = 11, color = Tn.sub, family = Mono)
+            T(t.pane, size = 11, color = Tn.sub, family = Mono)
         }
-        T(t.title.ifEmpty { "shell" }, size = 11, color = Tn.sub, family = Mono, maxLines = 1)
+        T(t.title.ifEmpty { "shell" }, size = 12, color = Tn.sub, family = Mono, maxLines = 2)
     }
 }
 
@@ -250,19 +255,18 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
 
     val out = d.herdrOutput?.takeIf { it.pane == pane }
     val closer = rememberPaneCloser(d, pane, onBack)
-    val label = if (agent != null) "${agent.agent} · ${agent.project.ifEmpty { pane }}" else pane
+    val title = agent?.project?.ifEmpty { null } ?: agent?.agent ?: pane
+    val context = listOfNotNull(agent?.agent?.takeIf { it != title }, d.name).joinToString(" · ")
     Column(Modifier.fillMaxSize().imePadding().padding(horizontal = TiledGutter)) {
-        TiledTopBar(label, onBack) {
+        TiledTopBar(title, onBack, context = context) {
             if (out?.loading == true && out.lines.isNotEmpty()) {
-                Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Tn.magenta)
-                }
+                SquareSpinner("Reading the output")
             } else if (d.online && agent != null && !demo) {
                 SquareButton(Ic.refresh, "Refresh", { HerdrSync.read(FluxCore, d.id, pane) })
             }
         }
         when {
-            !d.online -> NotReachable(d, "The agent output")
+            !d.online -> NotReachable(d, "The lines of the agent")
             agent == null && d.herdr != null -> EmptyState(
                 Ic.agent,
                 "The agent is gone",
@@ -280,7 +284,7 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
                     } else {
                         T(
                             "To answer from this phone, set herdr_control = true on ${d.name}.",
-                            Modifier.padding(horizontal = 4.dp), size = 11, color = Tn.sub,
+                            Modifier.padding(horizontal = 4.dp), size = 12, color = Tn.sub,
                         )
                     }
                 }
@@ -297,11 +301,11 @@ private fun AgentHeader(a: HerdrAgent, closer: PaneCloser?) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             StatusLine(a.status)
             Spacer(Modifier.weight(1f))
-            T(a.pane, size = 10, color = Tn.sub, family = Mono, maxLines = 1)
+            T(a.pane, size = 11, color = Tn.sub, family = Mono)
             closer?.Button()
         }
-        if (a.title.isNotEmpty()) T(a.title, size = 13, weight = FontWeight.SemiBold, maxLines = 1)
-        closer?.error?.let { T(it, size = 11, color = Tn.red) }
+        if (a.title.isNotEmpty()) T(a.title, size = 13, weight = FontWeight.SemiBold, maxLines = 2)
+        closer?.error?.let { T(it, size = 12, color = Tn.red) }
     }
 }
 
@@ -332,11 +336,11 @@ internal fun AgentOutput(out: HerdrOutput?, modifier: Modifier) {
     }
     Box(modifier.fillMaxWidth()) {
         when {
-            out == null || (out.loading && out.lines.isEmpty()) -> Row(
-                Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically,
+            // The lines of the output load in the place where they show.
+            out == null || (out.loading && out.lines.isEmpty()) -> Box(
+                Modifier.fillMaxSize().clip(TileShape).background(TermBg).border(1.dp, Tn.line, TileShape).padding(horizontal = TermPad, vertical = 14.dp),
             ) {
-                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Tn.magenta)
-                T("Reading the output", color = Tn.sub)
+                LineSkeleton("Reading the output", lines = listOf(0.62f, 0.9f, 0.48f, 0.84f, 0.7f, 0.36f, 0.78f, 0.55f))
             }
             out.error != null && out.lines.isEmpty() -> EmptyState(Ic.error, "No output", out.error, Modifier.padding(top = 32.dp))
             else -> BoxWithConstraints(Modifier.fillMaxSize().clip(TileShape).background(TermBg).border(1.dp, Tn.line, TileShape)) {
@@ -344,10 +348,10 @@ internal fun AgentOutput(out: HerdrOutput?, modifier: Modifier) {
                 SelectionContainer {
                     Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(vertical = 10.dp)) {
                         val pad = Modifier.padding(horizontal = TermPad)
-                        if (out.truncated) T("Older lines are cut.", pad.padding(bottom = 6.dp), size = 10, color = Tn.sub, family = Mono)
-                        out.error?.let { T(it, pad.padding(bottom = 6.dp), size = 11, color = Tn.red) }
+                        if (out.truncated) T("Older lines are cut.", pad.padding(bottom = 6.dp), size = 11, color = Tn.sub, family = Mono)
+                        out.error?.let { T(it, pad.padding(bottom = 6.dp), size = 12, color = Tn.red) }
                         if (out.lines.isEmpty()) {
-                            T("No output yet.", pad, size = 11, color = Tn.sub, family = Mono)
+                            T("No output yet.", pad, size = 12, color = Tn.sub, family = Mono)
                         } else {
                             TermLines(out.lines, width)
                         }
@@ -355,9 +359,9 @@ internal fun AgentOutput(out: HerdrOutput?, modifier: Modifier) {
                 }
                 if (!follow && out.lines.isNotEmpty()) {
                     Box(
-                        Modifier.align(Alignment.BottomEnd).padding(10.dp).size(40.dp).clip(RoundedCornerShape(8.dp))
+                        Modifier.align(Alignment.BottomEnd).padding(8.dp).size(48.dp).clip(RoundedCornerShape(8.dp))
                             .background(Tn.tileHi).border(1.dp, Tn.blue, RoundedCornerShape(8.dp))
-                            .clickable(onClickLabel = "Show the newest lines") {
+                            .clickable(onClickLabel = "Show the newest lines", role = Role.Button) {
                                 follow = true
                                 scope.launch { scroll.animateScrollTo(scroll.maxValue) }
                             },
@@ -381,14 +385,10 @@ internal class PaneCloser(
     private val dialog: @Composable (title: String, body: String) -> Unit,
     val error: String?,
 ) {
+    /** The Close key: a destructive button. A dialog asks before the pane closes. */
     @Composable
     fun Button() {
-        T(
-            "Close",
-            Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = "Close the pane", onClick = onAsk)
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            size = 12, color = Tn.red, weight = FontWeight.SemiBold,
-        )
+        FluxButton("Close", onAsk, kind = ButtonKind.Destructive)
     }
 
     @Composable
@@ -470,9 +470,12 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
     val canDictate = demo || remember { Dictation.available(context) }
     val dictating = dictation.phase != Dictation.Phase.Idle
     var voiceError by remember { mutableStateOf<String?>(null) }
+    // True after the user refused the microphone. The error then offers the app settings.
+    var micRefused by remember { mutableStateOf(false) }
     var startAfterGrant by remember { mutableStateOf(false) }
     val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (ok) startAfterGrant = true else voiceError = "Allow the microphone for Flux to dictate"
+        micRefused = !ok
+        if (ok) startAfterGrant = true else voiceError = MIC_REFUSED
     }
     fun dictate(): Boolean {
         voiceError = null
@@ -529,7 +532,7 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
                 for (c in choices) ChoiceTile(c) { keys(c.key) }
             }
         }
-        Row(Modifier.fillMaxWidth().height(40.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        KeyRow {
             KeyTile("esc", "Escape", Modifier.weight(1f)) { keys("esc") }
             KeyTile("tab", "Tab", Modifier.weight(1f)) { keys("tab") }
             KeyTile("↑", "Up", Modifier.weight(1f)) { keys("up") }
@@ -558,22 +561,16 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
                 )
             },
             send = {
-                val canSend = field.text.isNotBlank() && !sendingPrompt
-                Box(
-                    Modifier.size(56.dp).clip(TileShape).background(if (canSend) Tn.blue else Tn.tile)
-                        .clickable(enabled = canSend, onClickLabel = "Send") {
-                            val t = field.text
-                            lastPrompt = t
-                            guarded { HerdrSync.sendPrompt(FluxCore, d.id, agent.pane, t) }
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (sendingPrompt) {
-                        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Tn.magenta)
-                    } else {
-                        Sym(Ic.send, "Send", tint = if (canSend) Tn.onAccent else Tn.dim, size = 22.dp)
-                    }
-                }
+                FieldKey(
+                    "Send",
+                    onClick = {
+                        val t = field.text
+                        lastPrompt = t
+                        guarded { HerdrSync.sendPrompt(FluxCore, d.id, agent.pane, t) }
+                    },
+                    enabled = field.text.isNotBlank(),
+                    busy = sendingPrompt,
+                ) { Sym(Ic.send, size = 22.dp) }
             },
         )
         val problem = lockError ?: voiceError ?: dictation.error ?: reply?.error
@@ -583,25 +580,22 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
         val canAnswer = reply != null && problem == reply.error && reply.code == HERDR_BLOCKED && reply.action == "prompt" &&
             !reply.sending && lastPrompt.isNotBlank() && field.text == lastPrompt
         if (problem != null) {
-            Row(Modifier.padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                T(problem, Modifier.weight(1f), size = 11, color = Tn.red)
-                if (canAnswer) {
-                    T(
-                        "Send as answer",
-                        Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = "Send the text as the answer") {
+            Column(Modifier.padding(horizontal = 4.dp)) {
+                T(problem, size = 12, color = Tn.red, lineHeight = 1.3f)
+                // The buttons line up with the text. The padding of a text button holds the offset.
+                FlowRow(Modifier.offset(x = (-12).dp)) {
+                    if (canAnswer) {
+                        FluxButton("Send as answer", {
                             val t = lastPrompt
                             guarded { HerdrSync.sendPrompt(FluxCore, d.id, agent.pane, t, answer = true) }
-                        }.padding(horizontal = 6.dp, vertical = 4.dp),
-                        size = 12, color = Tn.blue, weight = FontWeight.SemiBold,
-                    )
-                }
-                if (problem == dictation.error && dictation.languageError) {
-                    T(
-                        "Choose a language",
-                        Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = "Choose the dictation language") { picking = true }
-                            .padding(horizontal = 6.dp, vertical = 4.dp),
-                        size = 12, color = Tn.blue, weight = FontWeight.SemiBold,
-                    )
+                        }, kind = ButtonKind.Text)
+                    }
+                    if (problem == dictation.error && dictation.languageError) {
+                        FluxButton("Choose a language", { picking = true }, kind = ButtonKind.Text)
+                    }
+                    if (needsMicSettings(problem, micRefused && problem == voiceError)) {
+                        FluxButton("Open app settings", { openAppSettings(context) }, kind = ButtonKind.Text, icon = Ic.settings)
+                    }
                 }
             }
         }
@@ -624,29 +618,45 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
 /** A numbered choice of a dialog. A tap sends its digit. */
 @Composable
 private fun ChoiceTile(c: AgentChoice, onClick: () -> Unit) {
+    // The agent marks 1 choice with its cursor. The tile shows it in the selection color.
     Tile(
-        Modifier.fillMaxWidth(), onClick,
+        Modifier.fillMaxWidth().heightIn(min = 48.dp), onClick,
         accent = Tn.blue,
-        container = if (c.selected) Tn.tileHi else Tn.tile,
-        border = BorderStroke(1.dp, if (c.selected) Tn.blue else Tn.line),
+        container = choiceFill(c.selected),
+        border = choiceBorder(c.selected),
         padding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.Center,
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            T(c.key, size = 13, color = Tn.blue, weight = FontWeight.Bold, family = Mono)
-            T(c.label, Modifier.weight(1f), size = 13, maxLines = 2)
+            T(c.key, size = 14, color = Tn.blue, weight = FontWeight.Bold, family = Mono)
+            T(c.label, Modifier.weight(1f), size = 14)
         }
     }
 }
 
-/** A key of the key bar, with a mono label. [accent] marks the key that the dialog needs. */
+/**
+ * A key of the key bar, with a mono label. [accent] marks the key that the
+ * dialog needs. TalkBack reads [description].
+ */
 @Composable
 internal fun KeyTile(label: String, description: String, modifier: Modifier, accent: Boolean = false, onClick: () -> Unit) {
     Box(
-        modifier.fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(if (accent) Tn.tileHi else Tn.tile)
+        modifier.fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(if (accent) Tn.accentTile else Tn.tile)
             .border(1.dp, if (accent) Tn.blue else Tn.line, RoundedCornerShape(8.dp))
-            .clickable(onClickLabel = description, onClick = onClick),
+            .clickable(onClickLabel = description, role = Role.Button, onClick = onClick)
+            .clearAndSetSemantics { contentDescription = description }
+            .padding(horizontal = 4.dp),
         contentAlignment = Alignment.Center,
     ) {
-        T(label, size = 12, color = if (accent) Tn.blue else Tn.sub, weight = FontWeight.SemiBold, family = Mono, maxLines = 1)
+        KeyLabel(label, if (accent) Tn.blue else Tn.sub)
     }
 }
+
+/** The error after the user refused the microphone for dictation. */
+internal const val MIC_REFUSED = "Allow the microphone for Flux to dictate"
+
+/**
+ * True when a dictation [problem] needs the app settings: the user refused
+ * the microphone, or the speech recognizer has no microphone access.
+ */
+internal fun needsMicSettings(problem: String, refused: Boolean): Boolean = refused || problem.endsWith("in the app settings")

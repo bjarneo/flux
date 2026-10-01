@@ -8,11 +8,13 @@ import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -32,8 +35,11 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.Share
+import org.omarchy.flux.ui.FluxButton
 import org.omarchy.flux.ui.Ic
 import org.omarchy.flux.ui.IconBadge
+import org.omarchy.flux.ui.T
+import org.omarchy.flux.ui.Tn
 
 private const val NO_PLAY_SERVICES = "Document scan needs Google Play services, and this phone does not have them."
 
@@ -42,7 +48,7 @@ private const val NO_PLAY_SERVICES = "Document scan needs Google Play services, 
  * scans 1 or more pages, and gives a PDF. Flux sends the PDF to the computer.
  */
 @Composable
-fun DocumentMode(d: DeviceUi) {
+fun DocumentMode(d: DeviceUi, strip: @Composable () -> Unit = {}) {
     val context = LocalContext.current
     var status by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -89,21 +95,23 @@ fun DocumentMode(d: DeviceUi) {
             .addOnFailureListener { status = NO_PLAY_SERVICES + " " + (it.message ?: "") }
     }
 
-    Column(
-        Modifier.fillMaxSize().padding(horizontal = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        IconBadge(Ic.document, size = 72.dp)
-        Text("Scan a document", style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
-        Text(
-            "The scanner finds the page edges. You can add pages or import from the gallery. Flux sends 1 PDF to ${d.name}.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        if (busy) CircularProgressIndicator() else FilledPill("Scan document", ::start, Ic.document)
-        status?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center) }
+    Column(Modifier.fillMaxSize()) {
+        Column(
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            IconBadge(Ic.document, size = 72.dp)
+            T("Scan a document", size = 20, weight = FontWeight.SemiBold, align = TextAlign.Center)
+            T(
+                "The scanner finds the page edges. You can add pages or import from the gallery. Flux sends 1 PDF to ${d.name}.",
+                size = 14, color = Tn.sub, align = TextAlign.Center, lineHeight = 1.35f,
+            )
+            FluxButton(if (busy) "Sending" else "Scan document", ::start, icon = Ic.document, busy = busy)
+            status?.let { T(it, size = 14, color = Tn.sub, align = TextAlign.Center, lineHeight = 1.35f) }
+        }
+        strip()
+        Spacer(Modifier.height(16.dp))
     }
 }
 

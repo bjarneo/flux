@@ -1,9 +1,9 @@
 package org.omarchy.flux.core
 
-import android.util.Log
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import kotlinx.serialization.json.JsonObject
 import org.omarchy.flux.protocol.Packet
 import org.omarchy.flux.protocol.Types
@@ -369,7 +369,8 @@ object Plugins {
             return
         }
         Log.i("FluxCommands", "sent: ${cmd.key}")
-        core.toast("Ran “${cmd.name}”")
+        // The computer does not report the end of the command, so the phone tells only that it sent the command.
+        core.toast("Sent “${cmd.name}” to ${d.identity.deviceName}")
     }
 
     // ------------------------------------------------------------------ media
@@ -458,5 +459,19 @@ internal fun mergePlayer(old: PlayerState, b: JsonObject, at: Long): PlayerState
     canGoNext = b.bool("canGoNext") ?: old.canGoNext,
     canGoPrevious = b.bool("canGoPrevious") ?: old.canGoPrevious,
     volume = if ("isPlaying" in b) b.long("volume")?.toInt()?.coerceIn(0, 100) else old.volume,
+    artUrl = b.str("albumArtUrl")?.let(::albumArtUrl) ?: old.artUrl,
     updatedAt = at,
 )
+
+/** The longest album art address that the phone loads. */
+private const val MAX_ART_URL = 2048
+
+/**
+ * The album art address that the phone loads: an https address, or empty.
+ * The computer sends only web addresses, and the phone loads no address
+ * without TLS.
+ */
+internal fun albumArtUrl(raw: String): String {
+    val url = raw.trim()
+    return if (url.length <= MAX_ART_URL && url.startsWith("https://", ignoreCase = true) && url.none { it.isWhitespace() }) url else ""
+}

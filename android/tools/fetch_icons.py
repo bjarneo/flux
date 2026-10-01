@@ -42,7 +42,7 @@ mic+fill mic_off screen_share stop_screen_share sms
 fingerprint power_settings_new signature smart_toy
 light_mode dark_mode contrast
 touchpad_mouse keyboard slideshow
-inbox devices expand_more
+inbox devices expand_more star+fill
 """.split()
 
 BASE = "https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android"

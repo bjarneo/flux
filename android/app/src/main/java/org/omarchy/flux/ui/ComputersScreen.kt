@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -21,8 +22,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -121,7 +120,7 @@ private fun PhoneRow(state: UiState) {
     ) {
         Sym(Ic.phone, tint = Tn.cyan, size = 22.dp)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            T(state.phoneName.ifEmpty { "This phone" }, size = 15, weight = FontWeight.SemiBold, maxLines = 1)
+            T(state.phoneName.ifEmpty { "This phone" }, size = 15, weight = FontWeight.SemiBold)
             T(
                 if (state.onWifi) "Visible to computers on this Wi-Fi" else "Not on Wi-Fi. Connect to the network of the computer.",
                 size = 13, color = if (state.onWifi) Tn.sub else Tn.yellow,
@@ -147,7 +146,7 @@ private fun ComputerRow(d: DeviceUi, inScope: Boolean, onScope: () -> Unit, onUn
     ) {
         Sym(deviceIcon(d.type), tint = if (d.online) Tn.blue else Tn.sub, size = 24.dp)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            T(d.name, size = 16, weight = FontWeight.SemiBold, maxLines = 1)
+            T(d.name, size = 16, weight = FontWeight.SemiBold)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 LinkDot(d.online, 7.dp)
                 T(linkText(d), size = 13, color = Tn.sub, maxLines = 2)
@@ -157,7 +156,7 @@ private fun ComputerRow(d: DeviceUi, inScope: Boolean, onScope: () -> Unit, onUn
             if (!d.online) T("Check that Flux runs on ${d.name}, and that both are on the same Wi-Fi.", size = 13, color = Tn.sub)
             if (inScope) T("In scope", size = 12, color = Tn.blue, weight = FontWeight.Medium)
         }
-        if (!d.online) TextButton(onClick = { FluxCore.rediscover() }) { Text("Retry") }
+        if (!d.online) FluxButton("Retry", { FluxCore.rediscover() }, kind = ButtonKind.Text)
         IconButton(onClick = onUnpair) { Sym(Ic.unlink, "Unpair ${d.name}", tint = Tn.sub) }
     }
 }
@@ -174,7 +173,7 @@ private fun AvailableRow(d: DeviceUi, onPair: () -> Unit) {
     ) {
         Sym(Ic.add, tint = Tn.yellow, size = 24.dp)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            T(d.name, size = 16, weight = FontWeight.SemiBold, maxLines = 1)
+            T(d.name, size = 16, weight = FontWeight.SemiBold)
             T("Tap to pair", size = 13, color = Tn.yellow)
         }
     }
@@ -195,10 +194,7 @@ private fun ScanRow(state: UiState, none: Boolean, first: Boolean, onScan: () ->
             T(if (first) "No computers found" else "No other computers found", size = 14, weight = FontWeight.SemiBold)
             T("Open Flux on the computer, and use the same Wi-Fi network as this phone.", size = 13, color = Tn.sub)
         }
-        TextButton(onClick = onScan) {
-            Sym(Ic.refresh, size = 18.dp)
-            Text("Scan again", Modifier.padding(start = 8.dp))
-        }
+        FluxButton("Scan again", onScan, Modifier.offset(x = (-12).dp), kind = ButtonKind.Text, icon = Ic.refresh)
     }
 }
 
