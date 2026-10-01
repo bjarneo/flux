@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -50,15 +51,22 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -91,6 +99,7 @@ import org.omarchy.flux.voice.rememberSpeechModels
 /** How often the agent screen reads the output again while the agent works. */
 private const val WORKING_REFRESH_MS = 5_000L
 
+/** The color of the status dot and of the pressed border of an agent tile. */
 @Composable
 @ReadOnlyComposable
 private fun statusColor(s: AgentStatus): Color = when (s) {
@@ -98,6 +107,14 @@ private fun statusColor(s: AgentStatus): Color = when (s) {
     AgentStatus.Done -> Tn.green
     AgentStatus.Working -> Tn.blue
     AgentStatus.Idle, AgentStatus.Unknown -> Tn.dim
+}
+
+/** The color of the status word. The dim color is not for text, so an idle or unknown status takes the second ink. */
+@Composable
+@ReadOnlyComposable
+private fun statusInk(s: AgentStatus): Color = when (s) {
+    AgentStatus.Idle, AgentStatus.Unknown -> Tn.sub
+    else -> statusColor(s)
 }
 
 private fun statusLabel(s: AgentStatus): String = when (s) {
@@ -108,13 +125,40 @@ private fun statusLabel(s: AgentStatus): String = when (s) {
     AgentStatus.Unknown -> "Unknown"
 }
 
-/** The status dot and the mono status label of an agent. */
+/** The size and the line height of the window-title line. */
+private val WindowTitleSize = 12.sp
+private val WindowTitleLine = 16.sp
+
+/**
+ * The mono window-title line of an agent: a status dot, the [parts], such
+ * as the agent and the project, and the status as 1 short word in its
+ * color. For example: codex · billing · Needs input. TalkBack reads the
+ * parts, and the status as the state.
+ */
 @Composable
-private fun StatusLine(s: AgentStatus) {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Dot(statusColor(s), 7.dp)
-        // The dim color is not for text, so an idle label takes the second ink.
-        TileLabel(statusLabel(s), color = if (s == AgentStatus.Idle || s == AgentStatus.Unknown) Tn.sub else statusColor(s))
+private fun WindowTitle(parts: List<String>, s: AgentStatus, modifier: Modifier = Modifier) {
+    val label = statusLabel(s)
+    val sub = Tn.sub
+    val ink = statusInk(s)
+    val text = remember(parts, label, sub, ink) {
+        buildAnnotatedString {
+            withStyle(SpanStyle(color = sub)) { for (p in parts) append("$p · ") }
+            withStyle(SpanStyle(color = ink, fontWeight = FontWeight.Medium)) { append(label) }
+        }
+    }
+    val line = with(LocalDensity.current) { WindowTitleLine.toDp() }
+    Row(
+        modifier.semantics { stateDescription = label },
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        // The dot stays at the middle of the first line when the line wraps.
+        Box(Modifier.height(line), contentAlignment = Alignment.Center) { Dot(statusColor(s), 7.dp) }
+        BasicText(
+            text,
+            Modifier.clearAndSetSemantics { if (parts.isNotEmpty()) contentDescription = parts.joinToString(", ") },
+            style = TextStyle(fontFamily = Mono, fontSize = WindowTitleSize, lineHeight = WindowTitleLine),
+        )
     }
 }
 
@@ -169,7 +213,7 @@ fun TiledAgentsScreen(
             else -> Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
                 for (a in herdr.sorted) AgentTile(a) { onOpen(a.pane) }
                 if (herdr.panes.isNotEmpty()) {
-                    TileLabel("Terminals", Modifier.padding(start = 4.dp, top = 12.dp))
+                    TileLabel("Terminals", Modifier.padding(start = 4.dp, top = 12.dp).semantics { heading() })
                     for (t in herdr.panes) TerminalTile(t) { onOpenTerminal(t.pane) }
                 }
             }
@@ -178,29 +222,27 @@ fun TiledAgentsScreen(
     }
 }
 
+/**
+ * An agent: the window-title line with the agent, its place, and its
+ * status, and the task of the agent under it. Without a task, the project
+ * shows in its place.
+ */
 @Composable
 private fun AgentTile(a: HerdrAgent, onClick: () -> Unit) {
     val blocked = a.status == AgentStatus.Blocked
+    val task = a.title.ifEmpty { a.project.ifEmpty { a.pane } }
+    // The window title does not repeat the task.
+    val parts = listOf(a.agent, a.project, a.workspace).filter { it.isNotEmpty() && it != task }.distinct()
     Tile(
-        Modifier.fillMaxWidth().heightIn(min = 96.dp), onClick,
+        Modifier.fillMaxWidth().heightIn(min = 72.dp), onClick,
         accent = statusColor(a.status),
         container = if (blocked) Tn.tileHi else Tn.tile,
         border = BorderStroke(1.dp, if (blocked) Tn.red else Tn.line),
         padding = PaddingValues(14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            StatusLine(a.status)
-            Spacer(Modifier.weight(1f))
-            T(a.agent, size = 11, color = Tn.sub, family = Mono)
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
-                T(a.project.ifEmpty { a.pane }, Modifier.weight(1f, fill = false), size = 15, weight = FontWeight.SemiBold)
-                if (a.workspace.isNotEmpty() && a.workspace != a.project) T(a.workspace, size = 11, color = Tn.sub, family = Mono)
-            }
-            T(a.title.ifEmpty { a.pane }, size = 12, color = Tn.sub, maxLines = 2)
-        }
+        WindowTitle(parts, a.status)
+        T(task, size = 15, weight = FontWeight.SemiBold, maxLines = 2)
     }
 }
 
@@ -295,13 +337,16 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
     closer.Dialog("Close ${agent?.agent ?: "the agent"}?", "herdr closes $pane on ${d.name}, and the agent in it stops.")
 }
 
+/**
+ * The header of an agent: the window-title line with the pane and the
+ * status, the Close key, and the task of the agent. The top bar already
+ * names the agent and the project.
+ */
 @Composable
 private fun AgentHeader(a: HerdrAgent, closer: PaneCloser?) {
     Tile(Modifier.fillMaxWidth(), padding = PaddingValues(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            StatusLine(a.status)
-            Spacer(Modifier.weight(1f))
-            T(a.pane, size = 11, color = Tn.sub, family = Mono)
+            WindowTitle(listOf(a.pane), a.status, Modifier.weight(1f).semantics(mergeDescendants = true) {})
             closer?.Button()
         }
         if (a.title.isNotEmpty()) T(a.title, size = 13, weight = FontWeight.SemiBold, maxLines = 2)
@@ -385,10 +430,13 @@ internal class PaneCloser(
     private val dialog: @Composable (title: String, body: String) -> Unit,
     val error: String?,
 ) {
-    /** The Close key: a destructive button. A dialog asks before the pane closes. */
+    /**
+     * The Close key: an outlined button. It is not red, because red means
+     * that something needs the user. The dialog asks before the pane closes.
+     */
     @Composable
     fun Button() {
-        FluxButton("Close", onAsk, kind = ButtonKind.Destructive)
+        FluxButton("Close", onAsk, kind = ButtonKind.Outlined)
     }
 
     @Composable
