@@ -96,8 +96,8 @@ fun TiledPairSheet(name: String, key: String, waiting: Boolean, onCancel: () -> 
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TileLabel("Pair", color = Tn.yellow)
-                    T(name, size = 22, weight = FontWeight.SemiBold, letterSpacing = -0.4f, maxLines = 1)
+                    // The heading names the action. The yellow band above it carries the color of the pairing.
+                    T("Pair with $name", size = 22, weight = FontWeight.SemiBold, letterSpacing = -0.4f, maxLines = 2)
                     T(
                         if (waiting) "Confirm the same code on $name. Compare all 16 characters." else "Check that $name shows the same code. Compare all 16 characters.",
                         size = 13, color = Tn.sub,

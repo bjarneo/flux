@@ -100,6 +100,19 @@ fun rememberWideWindow(): Boolean {
     return with(LocalDensity.current) { width.toDp() } >= WideWindow
 }
 
+/** The lowest window height of the medium and expanded height classes. */
+private val TallWindow = 480.dp
+
+/**
+ * True for a window of the compact height class, for example a phone in
+ * landscape. The top bar then takes less height.
+ */
+@Composable
+fun rememberShortWindow(): Boolean {
+    val height = LocalWindowInfo.current.containerSize.height
+    return with(LocalDensity.current) { height.toDp() } < TallWindow
+}
+
 /** A tween with the standard easing, or null when motion is off. */
 fun <T> shellMotion(reduce: Boolean, ms: Int = MOTION_MS): FiniteAnimationSpec<T>? =
     if (reduce) null else tween(ms, easing = FastOutSlowInEasing)

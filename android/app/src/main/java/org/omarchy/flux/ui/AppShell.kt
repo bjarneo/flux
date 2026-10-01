@@ -209,6 +209,7 @@ fun FluxShell(
                             when (tab) {
                                 Tab.Inbox -> InboxScreen(
                                     state, arranged, active, notices, actions,
+                                    wide = wide,
                                     onSwipe = { arrangement = arrangement.swipe(it) },
                                     onPromote = { arrangement = arrangement.promote(it) },
                                 )
@@ -287,11 +288,17 @@ private fun fadeThrough(reduce: Boolean): ContentTransform {
         fadeOut(tween(80, easing = ease))
 }
 
-/** The top bar of the destinations: the Flux mark and the scope chip. */
+/**
+ * The top bar of the destinations: the Flux mark and the scope chip. In a
+ * window of little height, for example a phone in landscape, it has less
+ * space above and below the chip.
+ */
 @Composable
 private fun ShellTopBar(state: UiState, scope: String?, onScope: (String?) -> Unit) {
+    val short = rememberShortWindow()
     Row(
-        Modifier.fillMaxWidth().statusBarsPadding().padding(start = TiledGutter + 6.dp, end = TiledGutter, top = 6.dp, bottom = 8.dp),
+        Modifier.fillMaxWidth().statusBarsPadding()
+            .padding(start = TiledGutter + 6.dp, end = TiledGutter, top = if (short) 0.dp else 6.dp, bottom = if (short) 4.dp else 8.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
