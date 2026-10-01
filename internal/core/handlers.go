@@ -66,9 +66,17 @@ func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 		var id proto.Identity
 		if p.Decode(&id) == nil && id.DeviceID == dev.ID {
 			d.mu.Lock()
+			hadTheme := dev.accepts(proto.TypeFluxTheme)
 			dev.setIdentity(id)
+			newTheme := !hadTheme && dev.accepts(proto.TypeFluxTheme)
 			d.mu.Unlock()
 			d.markDirty()
+			// A phone that starts to follow the theme gets it at once. A
+			// slow send of the theme to another phone must not delay the
+			// packets of this link.
+			if newTheme {
+				go d.sendThemeTo(dev, l)
+			}
 		}
 	case proto.TypePing:
 		d.handlePing(dev, p)

@@ -220,6 +220,17 @@ func TestMediaGoesOneWay(t *testing.T) {
 	}
 }
 
+func TestThemeGoesOneWay(t *testing.T) {
+	// The computer sends its Omarchy theme to the phone. It does not take
+	// a theme from the phone.
+	if !slices.Contains(Outgoing, TypeFluxTheme) {
+		t.Error("the computer must send the theme")
+	}
+	if slices.Contains(Incoming, TypeFluxTheme) {
+		t.Error("the computer must not take a theme")
+	}
+}
+
 // TestIdentityApp checks the optional app fields. An earlier app sends
 // neither, and the JSON of an identity without them has no such keys.
 func TestIdentityApp(t *testing.T) {

@@ -81,6 +81,12 @@ const (
 	// the phone, and runs a binding or a workspace action for it. Both
 	// sides send it.
 	TypeFluxShortcuts = "flux.shortcuts"
+	// TypeFluxTheme carries the active Omarchy theme of this computer to
+	// the phone: the name, the mode, the colors, and the Hyprland active
+	// border. fluxd sends it after the link starts and after the theme
+	// changes, only to a device that lists it as incoming. docs/omarchy.md
+	// describes the body.
+	TypeFluxTheme = "flux.theme"
 )
 
 // Incoming lists the packet types that Flux accepts. The phone enables a
@@ -104,6 +110,7 @@ var Outgoing = []string{
 	TypeSmsConversation, TypeSftp, TypeFluxWebcam, TypeFluxDnd,
 	TypeFluxMic, TypeFluxScreen, TypeFluxApprove, TypeFluxHerdr,
 	TypeFluxClipboardImage, TypeFluxInput, TypeFluxDesktop, TypeFluxShortcuts,
+	TypeFluxTheme,
 }
 
 // Identity is the body of a flux.identity packet.

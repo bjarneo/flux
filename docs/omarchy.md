@@ -121,9 +121,68 @@ Both hosts use the [shared QML views](qml.md).
 ## Theme and desktop integration
 
 The desktop reads `~/.local/state/omarchy/current/theme/colors.toml` and follows theme changes.
-The Android app follows the phone's system theme.
+Flux for Android follows the active Omarchy theme of the computer, light or dark, through the [theme packet](#theme-packet).
 
 `dist/hyprland.lua` supplies floating-window rules and the `SUPER + ALT + P` shortcut for `flux-cli open`.
 `dist/omarchy-menu.jsonc` supplies a Flux item for the Trigger menu.
 Merge the menu item into `~/.config/omarchy/extensions/omarchy-menu.jsonc` to enable it.
 The package does not merge these examples into your desktop configuration.
+
+### Theme packet
+
+`fluxd` sends the active Omarchy theme to a device in a `flux.theme` packet.
+Only a paired device that lists `flux.theme` in its incoming types gets the packet.
+`fluxd` sends it at these times:
+
+- When a paired device connects, and when a pairing completes.
+- When the theme changes. `fluxd` watches the theme folder and its parent folder, and reads the file 500 ms after the last change. A poll every 30 seconds finds a change that the watch misses.
+- When the device sends a new identity that adds `flux.theme` to its incoming types.
+
+When `colors.toml` is missing or does not parse, `fluxd` sends nothing.
+The device then keeps the last theme that it got, or its default theme.
+A headless `fluxd` sends no theme.
+
+The body of the packet:
+
+```json
+{
+  "name": "synthwave-aether-studio-2",
+  "mode": "dark",
+  "colors": {
+    "accent": "#d563fe",
+    "background": "#0c031f",
+    "foreground": "#e8e6ef",
+    "muted": "#665a8c",
+    "red": "#fe288f"
+  },
+  "border": {"colors": ["#21e4f8ee", "#d563feee"], "angle": 45}
+}
+```
+
+| Field | Value |
+| --- | --- |
+| `name` | The first line of `~/.local/state/omarchy/current/theme.name`, such as `tokyo-night`. It is an empty string when the file is missing. |
+| `mode` | `dark` or `light`, from `mode` in `colors.toml`. Without a valid `mode`, the theme is `light` when `background` has a higher luminance than `foreground`. |
+| `colors` | Each color key that `colors.toml` sets to a `#rrggbb` value, in lowercase. `background` and `foreground` are always present. |
+| `border` | The Hyprland active border from `hyprland_active_border`: 1 to 10 colors as `#rrggbbaa`, and the angle of the gradient in degrees, from 0 to less than 360. The angle is 0 when the value has none. |
+
+`fluxd` reads these color keys:
+
+- `accent`, `selection`, `muted`, and `cursor`.
+- `background`, `dark_background`, `darker_background`, and `lighter_background`.
+- `foreground`, `dark_foreground`, `light_foreground`, and `bright_foreground`.
+- `selection_foreground` and `selection_background`.
+- `red`, `yellow`, `orange`, `green`, `cyan`, `blue`, `magenta`, and `brown`.
+- `bright_red`, `bright_yellow`, `bright_green`, `bright_cyan`, `bright_blue`, and `bright_magenta`.
+- `color0` to `color15`. A theme that Omarchy made from an Alacritty file has these keys.
+
+`colors.toml` must have a `#rrggbb` color in `background` and in `foreground`.
+`fluxd` drops each other color that is not a `#rrggbb` color.
+When `colors.toml` is not valid TOML, `fluxd` reads it line by line, as `omarchy-theme-color` does.
+In this case, the last value of a key wins, and a value can be without quotes.
+The `border` field is missing when the file has no `hyprland_active_border`, or when a part of the value does not parse.
+Then a device uses `accent` for the border. Omarchy does the same for Hyprland when the file has no `hyprland_active_border`.
+A part of the border value can be `rgba(rrggbbaa)`, `rgb(rrggbb)`, `#rrggbb`, `#rrggbbaa`, `0xaarrggbb`, `rgba(r,g,b,a)`, or the name of a color in `colors`, such as `accent`.
+
+A theme can have colors with low contrast.
+Before a device shows text in a theme color, it must check the contrast and change the color when the check fails.
