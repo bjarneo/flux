@@ -182,7 +182,9 @@ The body of the packet:
 When `colors.toml` is not valid TOML, `fluxd` reads it line by line, as `omarchy-theme-color` does.
 In this case, the last value of a key wins, and a value can be without quotes.
 The `border` field is missing when the file has no `hyprland_active_border`, or when a part of the value does not parse.
-Then a device uses `accent` for the border. Omarchy does the same for Hyprland when the file has no `hyprland_active_border`.
+Then a device starts the border with `accent`.
+Omarchy draws a solid `accent` border in Hyprland when the file has no `hyprland_active_border`.
+Flux for Android draws a gradient from `accent` to `cyan`.
 A part of the border value can be `rgba(rrggbbaa)`, `rgb(rrggbb)`, `#rrggbb`, `#rrggbbaa`, `0xaarrggbb`, `rgba(r,g,b,a)`, or the name of a color in `colors`, such as `accent`.
 
 A theme can have colors with low contrast.
