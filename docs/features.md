@@ -5,7 +5,7 @@
 This page describes Flux for Android.
 For the Mac app, see [Flux for macOS](macos.md#features). For the iPhone, see [Flux for iOS](ios.md#features).
 
-The switches under **Sync with all computers** on the page of a computer are settings of the phone.
+The switches on the **Sync** screen in **Computers** are settings of the phone.
 Each switch applies to every paired computer, not only to the computer whose page shows it.
 For example, **Text messages** lets each paired computer read your conversations.
 See [sync switches](android-setup.md#sync-switches) and [security](security.md).
@@ -233,11 +233,11 @@ The automatic sync stops after each reboot, Flux update, or app kill.
 To resume it, open Flux and tap **Allow one-time access**.
 Android shows this dialog only while Flux is on the screen, so no computer or
 background task can turn the sync back on.
-While **Sync clipboard** is on, a status line under the switches of **Sync with all computers** shows the state:
+While **Sync clipboard** is on, a status line under the switches of the **Sync** screen shows the state. The **Clipboard** band of **Send** shows the same line:
 
 - **Only while Flux is open. Set up automatic sync**: the automatic sync is not set up. Flux has no `READ_LOGS` permission or no overlay access.
 - **Automatic sync starts when you leave Flux**: Flux checks the log access when you leave the app.
-- **Automatic**: the automatic sync runs.
+- **Automatic clipboard sync is on**: the automatic sync runs.
 - **Open Flux to resume automatic sync**: the log access ended. Open Flux to resume it.
 
 A tap on the status line opens the setup sheet.
@@ -329,7 +329,7 @@ Chat messages that an app keeps in its own database, for example RCS chats, do n
 ## Media and desktop commands
 
 The phone controls the media players on the desktop.
-Open **Media** on the phone to play, pause, skip, seek, and set the volume.
+Open **Media** in **Control** on the phone to play, pause, skip, seek, and set the volume. The **Inbox** also shows what plays now, with play and pause.
 The controls show when a desktop player publishes its state over MPRIS.
 The phone selects the player that plays.
 If more than one player runs, select another player at the top of the screen.
@@ -372,7 +372,7 @@ Reload with `systemctl --user reload fluxd`.
 
 ## Do Not Disturb
 
-Enable **Sync Do Not Disturb** on the phone's device page.
+Enable **Sync Do Not Disturb** in **Computers > Sync** on the phone.
 Android requests Do Not Disturb access the first time.
 Each side sends state only after a change, so daemon startup does not change either side.
 
@@ -390,7 +390,7 @@ Reload with `systemctl --user reload fluxd`.
 
 ## Automatic screenshots and photos
 
-Enable **Send new screenshots** or **Send new photos** on the phone's device page.
+Enable **Send new screenshots** or **Send new photos** in **Computers > Sync** on the phone.
 Both options default to off.
 Allow access to all photos when Android asks.
 Selected-photo access does not expose new captures.
@@ -420,7 +420,7 @@ See [camera and streams](camera.md) for direct capture and live media.
 
 ## herdr agents
 
-When [herdr](https://herdr.dev) runs on the computer, select **Agents** on the phone's device page.
+When [herdr](https://herdr.dev) runs on the computer, an agent that waits for input shows first in the phone's **Inbox**. To see all agents, select **Agents and terminals** in **Control**.
 The phone shows the status and the colored output of each coding agent, and posts a notification when an agent needs input or finishes.
 
 To answer agents from the phone, set:
@@ -444,7 +444,7 @@ To allow it, turn on **Remote input** in the **Remote access** card of the Flux 
 flux-cli input on
 ```
 
-Then select **Touchpad and keyboard** on the phone's device page, or **Open Touchpad…** on the computer's page in Flux for macOS.
+Then select **Touchpad and keyboard** in **Control** on the phone, or **Open Touchpad…** on the computer's page in Flux for macOS.
 See [Touchpad and keyboard](remote-input.md) for the gestures, the keys, and the slides.
 
 ## Remote desktop
@@ -457,7 +457,7 @@ flux-cli desktop on
 flux-cli input on
 ```
 
-Then select **Remote desktop** on the phone's device page. The phone turns to landscape.
+Then select **Remote desktop** in **Control** on the phone. The phone turns to landscape.
 In Flux for macOS, select **Open Remote Desktop…** on the computer's page.
 See [Remote desktop](remote-desktop.md) for the gestures, the monitors, and the stream.
 

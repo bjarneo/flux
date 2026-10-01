@@ -40,7 +40,7 @@ See [IPC](ipc.md) for the socket.
 
 ## Use the touchpad on the phone
 
-On the phone, open the computer and select **Touchpad and keyboard**.
+On the phone, open **Control** and select **Touchpad and keyboard**.
 The phone asks for its screen lock first. The unlock stays valid for 5 minutes.
 A phone without a screen lock cannot open the touchpad.
 The phone also asks when the switch on the computer is off or not known yet.

@@ -120,6 +120,9 @@ object Ic {
     val keyboard = R.drawable.ic_keyboard
     val slides = R.drawable.ic_slideshow
     val grid = R.drawable.ic_grid_view
+    val inbox = R.drawable.ic_inbox
+    val devices = R.drawable.ic_devices
+    val expand = R.drawable.ic_expand_more
 }
 
 /** An icon from [Ic]. It takes the content color unless [tint] is set. */

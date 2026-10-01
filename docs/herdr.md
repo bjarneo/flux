@@ -40,14 +40,14 @@ When herdr runs, `flux-cli doctor` prints this line:
 ## See your agents
 
 1. Start herdr on the computer.
-2. Open Flux for Android and select the computer.
-3. Select **Agents**.
+2. Open Flux for Android. An agent that waits for input shows first in the **Inbox**, with its question and its choices.
+3. To see all agents, open **Control** and select **Agents and terminals**.
 4. Select an agent to read its recent output.
 
 The list puts blocked agents first, then done, working, idle, and unknown agents.
 A blocked agent waits for an approval or for the answer to a question.
 Idle and done agents are ready for new input.
-The **Agents** tile shows the number of blocked agents.
+The **Agents and terminals** tile shows the number of blocked agents.
 
 The output screen of the phone shows up to 1000 lines of recent output.
 The screen part of the output has the colors and styles of the terminal.
@@ -87,7 +87,7 @@ The phone does not post notifications for the first agent list after it connects
 It waits 2 seconds before a finished notification, because the status can change between tool calls.
 When the agent works again, the phone removes its notification.
 
-To turn off a notification type, use the **Agent needs input** or **Agent finished** switch on the phone's device page.
+To turn off a notification type, use the **Agent needs input** or **Agent finished** switch in **Computers > Sync** on the phone.
 The switches apply to all computers.
 Android also lists the two types as the **Agents that need input** and **Agents that finish** channels.
 
@@ -496,7 +496,7 @@ An app sends `answer` only after the user selects an action to type an answer.
 
 | Problem | Next step |
 | --- | --- |
-| The **Agents** tile is missing | Update `fluxd` and Flux for Android. The tile shows only when the computer sends `flux.herdr`. |
+| The **Agents and terminals** tile is missing | Update `fluxd` and Flux for Android. The tile shows in **Control** only when the computer sends `flux.herdr`. |
 | The phone says that herdr is not running | Run `herdr status` and `flux-cli doctor` on the computer. |
 | The list is empty | Run `herdr agent list`. herdr must detect the agent in its pane. |
 | The phone says that the feature is off | Set `herdr = true` and reload `fluxd`. |

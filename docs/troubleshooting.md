@@ -246,7 +246,7 @@ update, or an app kill.
 Android does not keep the log access, so the automatic sync ends.
 
 To resume it, open Flux and tap **Allow one-time access**.
-The status line under the switches of **Sync with all computers** then shows **Automatic**.
+The status line under the switches of the **Sync** screen then shows **Automatic clipboard sync is on**.
 Flux checks the log access the first time that you leave the app after the automatic sync starts.
 If the access is off, the status line shows **Open Flux to resume automatic sync**.
 The service notification then shows **Open Flux to resume clipboard sync**.
@@ -265,7 +265,7 @@ To give the log access again, follow [set up the automatic clipboard](android-se
 
 A copy that its app marks as sensitive, for example a password, does not sync by itself.
 The **Send clipboard** tile does not send it either.
-To send such a copy, open Flux and tap **Send clipboard** on the page of the computer.
+To send such a copy, open Flux and tap **Send clipboard** in **Send**.
 
 ## Media controls do not show on the phone
 
