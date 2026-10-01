@@ -37,8 +37,12 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
@@ -58,12 +62,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.launch
 import org.omarchy.flux.camera.CameraMode
@@ -299,6 +308,41 @@ private fun tabIcon(t: Tab): Int = when (t) {
     Tab.Computers -> Ic.laptop
 }
 
+/**
+ * The largest font scale of the navigation labels and of the badge. Above
+ * it, "Computers" does not fit on 1 line, and the badge covers its icon.
+ */
+private const val NAV_FONT_SCALE = 1.5f
+
+/** Gives [content] a font scale of [max] at most. Below [max], the text follows the font size of Android. */
+@Composable
+private fun MaxFontScale(max: Float, content: @Composable () -> Unit) {
+    val density = LocalDensity.current
+    if (density.fontScale <= max) {
+        content()
+    } else {
+        CompositionLocalProvider(LocalDensity provides Density(density.density, max), content = content)
+    }
+}
+
+/**
+ * The label of a destination: 1 line that grows with the font size up to
+ * [NAV_FONT_SCALE]. A label that does not fit then gets smaller.
+ */
+@Composable
+private fun NavLabel(text: String) {
+    MaxFontScale(NAV_FONT_SCALE) {
+        val style = LocalTextStyle.current
+        BasicText(
+            text,
+            style = style.copy(color = style.color.takeOrElse { LocalContentColor.current }),
+            overflow = TextOverflow.Ellipsis,
+            maxLines = 1,
+            autoSize = TextAutoSize.StepBased(minFontSize = style.fontSize * 0.75f, maxFontSize = style.fontSize, stepSize = 0.5.sp),
+        )
+    }
+}
+
 /** The icon of a destination. The Inbox shows the number of items that need the user. */
 @Composable
 private fun TabIcon(t: Tab, needs: Int) {
@@ -308,8 +352,10 @@ private fun TabIcon(t: Tab, needs: Int) {
     }
     BadgedBox(
         badge = {
-            Badge(Modifier.clearAndSetSemantics { contentDescription = if (needs == 1) "1 item needs you" else "$needs items need you" }) {
-                Text(if (needs > 9) "9+" else "$needs")
+            MaxFontScale(NAV_FONT_SCALE) {
+                Badge(Modifier.clearAndSetSemantics { contentDescription = if (needs == 1) "1 item needs you" else "$needs items need you" }) {
+                    Text(if (needs > 9) "9+" else "$needs", maxLines = 1)
+                }
             }
         },
     ) { Sym(tabIcon(t)) }
@@ -320,7 +366,7 @@ private fun TabIcon(t: Tab, needs: Int) {
 private fun ShellNavBar(tab: Tab, needs: Int, onSelect: (Tab) -> Unit) {
     NavigationBar {
         for (t in Tab.entries) {
-            NavigationBarItem(selected = t == tab, onClick = { onSelect(t) }, icon = { TabIcon(t, needs) }, label = { Text(t.label) })
+            NavigationBarItem(selected = t == tab, onClick = { onSelect(t) }, icon = { TabIcon(t, needs) }, label = { NavLabel(t.label) })
         }
     }
 }
@@ -330,7 +376,7 @@ private fun ShellNavBar(tab: Tab, needs: Int, onSelect: (Tab) -> Unit) {
 private fun ShellNavRail(tab: Tab, needs: Int, onSelect: (Tab) -> Unit) {
     NavigationRail {
         for (t in Tab.entries) {
-            NavigationRailItem(selected = t == tab, onClick = { onSelect(t) }, icon = { TabIcon(t, needs) }, label = { Text(t.label) })
+            NavigationRailItem(selected = t == tab, onClick = { onSelect(t) }, icon = { TabIcon(t, needs) }, label = { NavLabel(t.label) })
         }
     }
 }
