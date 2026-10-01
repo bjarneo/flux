@@ -96,6 +96,28 @@ The offer needs the [release check](configuration.md#release-check) and a phone 
 Earlier versions of the app do not report it, so update them once with an APK from the release.
 A debug build gets no offer, because a release APK has another signing key and cannot replace it.
 
+## First run
+
+On Android 12 and later, the system splash screen shows the Flux mark until the first screen is ready.
+Flux shows no permission dialog before the first pairing.
+
+Before the first pairing, the **Inbox** shows a pairing guide in the place of the master tile:
+
+- 1 line that tells what Flux does.
+- **Set up Flux on the computer**: the setup command and **Read the install guide**, which opens [Install Flux](install.md) on GitHub.
+- **Pair this phone**: the computers on the network of the phone that run Flux. Tap a computer to open the pairing sheet. Then compare the key on both screens.
+
+To start `fluxd` on the computer, run this command as your desktop user after you install the package:
+
+```sh
+flux-cli setup
+```
+
+When the pairing ends, Flux opens the **Inbox** of the new computer.
+For 6 seconds, the **Inbox** shows **COMPUTER is paired**.
+After the first pairing, Android asks once for notifications, so that Flux can show when an agent needs you.
+See [permissions](android-setup.md#permissions).
+
 ## Pairing and connections
 
 The pairing key has 16 characters in 4 groups, for example `5EE6 825F 974E D59A`.
@@ -135,6 +157,8 @@ For a copy in another app, use a 1-tap path or the automatic sync.
 See [send a copy from another app](features.md#send-a-copy-from-another-app) for the paths, and [set up the automatic clipboard](android-setup.md#automatic-clipboard-sync) for the automatic mode.
 
 The automatic mode needs `READ_LOGS` and `SYSTEM_ALERT_WINDOW`, which you grant with adb.
+Then turn on **Automatic sync** in the setup sheet of the **Sync** screen.
+The switch is off by default. While it is off, Flux does not read the log, and Android shows no log access dialog.
 Android asks for log access again after each reboot, Flux update, or app kill.
 Open Flux once and tap **Allow one-time access** to resume the sync.
 
@@ -264,6 +288,8 @@ The pages are:
 - `ring`, `pair`, and `unpair` for the ring overlay, the pairing sheet, and the unpair dialog.
 - `<page>@offline` for the page of a paired computer that is not reachable. A destination with `@offline` shows that computer as the scope.
 - `empty` for the app with no computers.
+- `firstrun` for the pairing guide of the **Inbox** before the first pairing, with the sample computer to pair. It needs `FLUX_DEMO=1`.
+- `paired` for the success state of a new pairing on the sample computer to pair. It needs `FLUX_DEMO=1`. The success state shows for 6 seconds.
 - `icon` for the launcher and notification icons.
 
 With `FLUX_DEMO=1`, the Inbox also shows a sample approval, 2 sample transfers, and a sample clip, and the sample computer shows the Omarchy panel. A tap on the sample approval does not open the approval screen.

@@ -125,10 +125,12 @@ These paths need no setup and no extra permission.
 
 The automatic sync sends each phone copy to the computer without the Flux app open.
 It is opt in, because it needs 2 permissions that you grant with adb.
+It stays off until you turn on **Automatic sync** in its setup sheet.
 
 Android 10 and later do not let a background app read the clipboard.
 Flux reads the copy signal from the system log with `READ_LOGS`.
 It then takes window focus for a moment with `SYSTEM_ALERT_WINDOW`, so it can read the new clip.
+While **Automatic sync** is off, Flux does not start the log reader, so Android shows no log access dialog.
 
 CAUTION: `READ_LOGS` gives Flux read access to all device logs. Grant it only if you accept this.
 
@@ -155,15 +157,24 @@ To set up the automatic sync:
    adb shell am force-stop org.omarchy.flux
    ```
 
-5. Open Flux and tap **Allow one-time access**.
+5. In Flux, open **Computers > Sync**.
+6. Tap the status line under the switches to open the setup sheet.
+7. Turn on **Automatic sync** at the end of the sheet.
+   The switch turns on only when Flux has both accesses.
+8. On Android 13 and later, tap **Allow one-time access**.
 
-While **Sync clipboard** is on, a status line under the switches of the **Sync** screen shows the state of the automatic sync.
-A tap on the status line opens a sheet with the same commands and a copy button.
-The sheet also opens the overlay permission screen.
+The setup sheet shows the commands of steps 2 to 4 with a copy button.
+It also opens the overlay permission screen.
+To stop the automatic sync, open the sheet again and turn off **Automatic sync**.
 
-After step 5, the status line shows **Automatic**.
+While **Sync clipboard** is on, the status line shows the state of the automatic sync.
+After you turn on **Automatic sync**, it shows **Automatic sync starts when you leave Flux**.
 Flux checks the log access the first time that you leave the app after the automatic sync starts.
-If the access is off, the status line then shows **Open Flux to resume automatic sync**.
+After this check, the status line shows **Automatic clipboard sync is on**.
+If the access is off, it shows **Open Flux to resume automatic sync**.
+
+Earlier versions of Flux started the automatic sync when both accesses were in place, with no switch.
+After an update from such a version, turn on **Automatic sync** once.
 
 Android does not keep the log access.
 It ends after each reboot, Flux update, or app kill.
@@ -216,7 +227,7 @@ The other permissions need no prompt.
 | --- | --- | --- |
 | `INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE`, `CHANGE_WIFI_MULTICAST_STATE`, `CHANGE_NETWORK_STATE` | Discovery and links on the local network | No prompt |
 | `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_CONNECTED_DEVICE`, `RECEIVE_BOOT_COMPLETED`, `WAKE_LOCK` | The background service | No prompt |
-| `POST_NOTIFICATIONS` | The service notification, pair requests, and alerts | After the first pairing, when you tap **Allow** in the **Inbox** |
+| `POST_NOTIFICATIONS` | The service notification, pair requests, and alerts | Once after the first pairing. The **Inbox** tells why. |
 | `USE_FULL_SCREEN_INTENT`, `VIBRATE` | **Find my phone** and fingerprint approval requests | No prompt |
 | Notification listener | **Share notifications** | The switch opens the Android settings page |
 | `QUERY_ALL_PACKAGES` | App names on shared notifications | No prompt |
@@ -229,11 +240,14 @@ The other permissions need no prompt.
 | `USE_BIOMETRIC` | [Fingerprint approval](approvals.md) of `sudo` and polkit | No prompt |
 | `HIDE_OVERLAY_WINDOWS` | The pair sheet and the approval screen hide the windows of other apps on Android 12 and later | No prompt |
 | `REQUEST_INSTALL_PACKAGES` | [Updates that the computer sends](android.md#update-the-app) | Android asks to allow **Install unknown apps** at the first update |
-| `READ_LOGS` | The [automatic clipboard sync](#automatic-clipboard-sync) finds the copy signal in the system log | You grant it with adb |
+| `READ_LOGS` | The [automatic clipboard sync](#automatic-clipboard-sync) finds the copy signal in the system log | You grant it with adb. Flux reads the log only after you turn on **Automatic sync**. |
 | `SYSTEM_ALERT_WINDOW` | The [automatic clipboard sync](#automatic-clipboard-sync) takes window focus to read the new clip | You grant it with adb, or with **Appear on top** |
 
+Flux shows no permission dialog before the first pairing.
 Keep Flux open for the first pairing. Before you allow notifications, Android 13 and later show no notification for a pair request.
-After the first pairing, the **Inbox** asks for notifications with **Allow**.
+After the first pairing, Android asks once for notifications.
+At the same time, the **Inbox** tells why: **Allow notifications, so that Flux can show when an agent needs you.**
+If you deny it, the **Inbox** keeps the question with **Allow**.
 After 2 denials, Android does not show its dialog again, so the **Inbox** shows **Open settings** in its place.
 **Hide** removes the question. You can allow notifications in the settings of Android at any time.
 
