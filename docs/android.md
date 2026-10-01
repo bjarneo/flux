@@ -256,11 +256,11 @@ The pages are:
 - `inbox`, `send`, `control`, and `computers` for the 4 destinations of the navigation bar. `devices` is the same as `computers`.
 - `sync` for the sync switches.
 - `home` for **Control** with the first paired computer in scope.
-- `media`, `commands`, `browse`, `mic`, `touchpad`, `desktop`, `omarchy`, `agents`, and `camera`.
+- `media`, `commands`, `browse`, `mic`, `webcam`, `touchpad`, `desktop`, `omarchy`, `agents`, and `camera`.
 - `agent:<pane>` for the output of one herdr agent. The sample blocked agent is `agent:w2:p1`.
 - `newpane` for the screen that starts a herdr agent or opens a terminal.
 - `terminal:<pane>` for one herdr terminal. The sample terminals are `terminal:w1:p2` and `terminal:w3:p3`.
-- `camera:<mode>` for a camera mode: `text`, `qr`, `photo`, `document`, `signature`, or `webcam`.
+- `camera:<mode>` for a camera mode: `text`, `qr`, `photo`, `document`, or `signature`. `camera:webcam` opens the `webcam` page.
 - `ring`, `pair`, and `unpair` for the ring overlay, the pairing sheet, and the unpair dialog.
 - `<page>@offline` for the page of a paired computer that is not reachable. A destination with `@offline` shows that computer as the scope.
 - `empty` for the app with no computers.
