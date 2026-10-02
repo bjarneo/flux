@@ -39,6 +39,7 @@ A paired device can also connect through [Tailscale](tailscale.md) away from tha
 | [Architecture](architecture.md) | Components, source layout, and network direction |
 | [IPC](ipc.md) | Unix socket, request format, responses, and events |
 | [Shared QML](qml.md) | Desktop backend contract, icons, themes, and snapshots |
+| [Android design system](../DESIGN.md) | Theme roles, the contrast guard, type, the Inbox master and stack, components, and rules |
 | [Development](development.md) | Component checks, isolated daemons, and local iteration |
 | [Releases](releasing.md) | GitHub workflows, AUR publication, APK signatures, and secrets |
 | [Agent skill](agents.md) | Skill installation, scope, and example prompts |

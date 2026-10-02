@@ -1,0 +1,596 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-02T00:23:11+00:00",
+  "title": "Design System: Flux for Android",
+  "extensions": {
+    "colorMeta": {
+      "bg": {
+        "role": "neutral",
+        "displayName": "Page",
+        "canonical": "#16161E",
+        "source": "PaletteSpec.bg",
+        "lightReference": "#E1E2E7",
+        "tonalRamp": [
+          "#0A0A12",
+          "#24242D",
+          "#41414A",
+          "#60606A",
+          "#81818C",
+          "#A4A4AF",
+          "#C8C8D3",
+          "#EDEDF9"
+        ]
+      },
+      "off-tile": {
+        "role": "neutral",
+        "displayName": "Off Tile",
+        "canonical": "#1A1B26",
+        "source": "PaletteSpec.offTile",
+        "lightReference": "#DDDEE4",
+        "tonalRamp": [
+          "#090A14",
+          "#23242F",
+          "#40414D",
+          "#5F606E",
+          "#80818F",
+          "#A2A4B3",
+          "#C6C8D7",
+          "#EBEDFD"
+        ]
+      },
+      "tile": {
+        "role": "neutral",
+        "displayName": "Tile",
+        "canonical": "#1F2335",
+        "source": "PaletteSpec.tile",
+        "lightReference": "#D9DBE1",
+        "tonalRamp": [
+          "#070A19",
+          "#202436",
+          "#3C4155",
+          "#5B6075",
+          "#7C8197",
+          "#9EA4BB",
+          "#C2C8E0",
+          "#E9EEFF"
+        ]
+      },
+      "tile-hi": {
+        "role": "neutral",
+        "displayName": "Raised Tile",
+        "canonical": "#24283B",
+        "source": "PaletteSpec.tileHi",
+        "lightReference": "#D4D5DC",
+        "tonalRamp": [
+          "#07091A",
+          "#202436",
+          "#3C4155",
+          "#5B6076",
+          "#7C8198",
+          "#9EA4BC",
+          "#C2C8E1",
+          "#E9EEFF"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Line",
+        "canonical": "#292E42",
+        "source": "PaletteSpec.line",
+        "lightReference": "#C4C8DA",
+        "tonalRamp": [
+          "#07091A",
+          "#1F2437",
+          "#3B4156",
+          "#5A6077",
+          "#7B8199",
+          "#9DA4BD",
+          "#C1C8E2",
+          "#E9EEFF"
+        ]
+      },
+      "line-hi": {
+        "role": "neutral",
+        "displayName": "Raised Line",
+        "canonical": "#3B4261",
+        "source": "PaletteSpec.lineHi",
+        "lightReference": "#A8AECB",
+        "tonalRamp": [
+          "#060821",
+          "#1D233F",
+          "#39405F",
+          "#575F80",
+          "#7880A3",
+          "#9AA3C7",
+          "#BEC7ED",
+          "#E9EEFF"
+        ]
+      },
+      "accent-tile": {
+        "role": "primary",
+        "displayName": "Accent Tile",
+        "canonical": "#1E2845",
+        "source": "PaletteSpec.accentTile",
+        "lightReference": "#CBD6EE",
+        "tonalRamp": [
+          "#040822",
+          "#1A2340",
+          "#354160",
+          "#546081",
+          "#7482A4",
+          "#96A4C9",
+          "#BAC9EE",
+          "#E8EEFF"
+        ],
+        "note": "Derived by the guard: tint of tile-hi with 18% of the accent at the luminance of tile-hi. The value is computed for Tokyo Night."
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Body Ink",
+        "canonical": "#C0CAF5",
+        "source": "PaletteSpec.text",
+        "lightReference": "#343B58",
+        "tonalRamp": [
+          "#060624",
+          "#1D2242",
+          "#383F62",
+          "#575F84",
+          "#7780A7",
+          "#99A3CC",
+          "#BDC7F2",
+          "#E9EEFF"
+        ]
+      },
+      "sub": {
+        "role": "neutral",
+        "displayName": "Second Ink",
+        "canonical": "#8B94BE",
+        "source": "PaletteSpec.sub",
+        "lightReference": "#44518A",
+        "tonalRamp": [
+          "#060625",
+          "#1D2143",
+          "#383F63",
+          "#575E85",
+          "#7780A9",
+          "#99A2CD",
+          "#BDC7F3",
+          "#E9EEFF"
+        ]
+      },
+      "dim": {
+        "role": "neutral",
+        "displayName": "Dim",
+        "canonical": "#66709B",
+        "source": "PaletteSpec.dim",
+        "lightReference": "#70769E",
+        "tonalRamp": [
+          "#050527",
+          "#1B2146",
+          "#373F66",
+          "#555E88",
+          "#7580AC",
+          "#97A3D0",
+          "#BBC7F6",
+          "#E9EEFF"
+        ]
+      },
+      "on-accent": {
+        "role": "neutral",
+        "displayName": "On Accent",
+        "canonical": "#16161E",
+        "source": "PaletteSpec.onAccent",
+        "lightReference": "#FFFFFF",
+        "tonalRamp": [
+          "#0A0A12",
+          "#24242D",
+          "#41414A",
+          "#60606A",
+          "#81818C",
+          "#A4A4AF",
+          "#C8C8D3",
+          "#EDEDF9"
+        ]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Theme Accent",
+        "canonical": "#7AA2F7",
+        "source": "PaletteSpec.accent, Tn.blue",
+        "lightReference": "#2457B8",
+        "tonalRamp": [
+          "#000036",
+          "#031A64",
+          "#1C3B87",
+          "#3A5DAB",
+          "#597FD1",
+          "#7BA3F8",
+          "#AFC9FF",
+          "#E7EFFF"
+        ]
+      },
+      "cyan": {
+        "role": "secondary",
+        "displayName": "Clipboard Cyan",
+        "canonical": "#7DCFFF",
+        "source": "PaletteSpec.cyan",
+        "lightReference": "#006486",
+        "tonalRamp": [
+          "#000D17",
+          "#00293D",
+          "#004867",
+          "#026994",
+          "#378CB8",
+          "#5DAFDE",
+          "#8AD3FF",
+          "#DEF2FF"
+        ]
+      },
+      "green": {
+        "role": "secondary",
+        "displayName": "Done Green",
+        "canonical": "#9ECE6A",
+        "source": "PaletteSpec.green",
+        "lightReference": "#496529",
+        "tonalRamp": [
+          "#060E00",
+          "#192B00",
+          "#2F4C00",
+          "#476F00",
+          "#66922C",
+          "#87B652",
+          "#ABDB77",
+          "#D4FFAA"
+        ]
+      },
+      "magenta": {
+        "role": "tertiary",
+        "displayName": "Theme Magenta",
+        "canonical": "#BB9AF7",
+        "source": "PaletteSpec.magenta",
+        "lightReference": "#7B31CF",
+        "tonalRamp": [
+          "#120027",
+          "#31045B",
+          "#4E2B7D",
+          "#6D4CA1",
+          "#8F6EC7",
+          "#B291ED",
+          "#D2BCFF",
+          "#F1EBFF"
+        ]
+      },
+      "orange": {
+        "role": "secondary",
+        "displayName": "Low Orange",
+        "canonical": "#FF9E64",
+        "source": "PaletteSpec.orange",
+        "lightReference": "#914A00",
+        "tonalRamp": [
+          "#180500",
+          "#3F1800",
+          "#6A2E00",
+          "#994600",
+          "#C16629",
+          "#E8894F",
+          "#FFB68D",
+          "#FFEADE"
+        ]
+      },
+      "red": {
+        "role": "secondary",
+        "displayName": "Needs-You Red",
+        "canonical": "#F7768E",
+        "source": "PaletteSpec.red",
+        "lightReference": "#BA0046",
+        "tonalRamp": [
+          "#1E0006",
+          "#4B0019",
+          "#7E002F",
+          "#A72C4C",
+          "#CE526C",
+          "#F7768E",
+          "#FFB0BB",
+          "#FFE8EA"
+        ]
+      },
+      "yellow": {
+        "role": "secondary",
+        "displayName": "Warning Yellow",
+        "canonical": "#E0AF68",
+        "source": "PaletteSpec.yellow",
+        "lightReference": "#765729",
+        "tonalRamp": [
+          "#130900",
+          "#352000",
+          "#5A3B00",
+          "#835700",
+          "#A7782F",
+          "#CB9B54",
+          "#F1C078",
+          "#FFEBD1"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "master-title": {
+        "displayName": "Master title",
+        "purpose": "The item title in the master tile and the master tool label."
+      },
+      "empty-title": {
+        "displayName": "Empty title",
+        "purpose": "The empty Inbox title and the media title in the master."
+      },
+      "top-bar-title": {
+        "displayName": "Top bar title",
+        "purpose": "The title of a feature screen."
+      },
+      "tool-label": {
+        "displayName": "Tool label",
+        "purpose": "Tool rows, action tiles, and computer rows."
+      },
+      "section-label": {
+        "displayName": "Section label",
+        "purpose": "The heading of a group of tiles, Material 3 Title Small."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Descriptions and choice labels."
+      },
+      "button": {
+        "displayName": "Button",
+        "purpose": "Every FluxButton label."
+      },
+      "secondary": {
+        "displayName": "Secondary",
+        "purpose": "The line under a tool label, and error text."
+      },
+      "tile-label": {
+        "displayName": "Tile label",
+        "purpose": "The label of a value or a group in a tile."
+      },
+      "prompt": {
+        "displayName": "Prompt",
+        "purpose": "The agent question and the clipboard preview, in mono."
+      },
+      "window-title": {
+        "displayName": "Window title",
+        "purpose": "The state word in Roboto, then the source in mono. 12 sp in the stack."
+      },
+      "choice-key": {
+        "displayName": "Choice key",
+        "purpose": "The digit of an agent choice, in the accent."
+      },
+      "data": {
+        "displayName": "Data",
+        "purpose": "Computer names, context lines, approval data, file names, keys, and badges."
+      }
+    },
+    "themeSource": {
+      "description": "The live Omarchy theme of the computer in scope, from the flux.theme packet, through the contrast guard in paletteOf. Tokyo Night is the dark fallback and Tokyo Night Day the light fallback. The frontmatter colors are the Tokyo Night reference set.",
+      "textContrast": 4.5,
+      "nonTextContrast": 3.0,
+      "textStep": 1.4,
+      "minAccentDistanceFromRed": 0.08,
+      "accentTileMix": 0.18,
+      "sources": [
+        "android/app/src/main/java/org/omarchy/flux/theme/ThemePalette.kt",
+        "android/app/src/main/java/org/omarchy/flux/ui/TiledKit.kt",
+        "docs/omarchy.md#theme-packet",
+        "internal/desktop/theme.go"
+      ]
+    },
+    "activeBorder": {
+      "width": "2dp",
+      "value": "The hyprland_active_border colors of the theme at its angle. Fallback: linear gradient from accent to cyan, corner to corner.",
+      "fallbackCss": "linear-gradient(135deg, #7AA2F7, #7DCFFF)",
+      "usage": "Only the tile in the master position: the master tile or the empty Inbox tile."
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "shell",
+        "value": "200ms FastOutSlowInEasing, cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "MOTION_MS: promote to master, swipe away, stack placement."
+      },
+      {
+        "name": "feature-screen",
+        "value": "slide 220ms, fade in 160ms after 60ms, fade out 90ms",
+        "purpose": "Shared horizontal axis into and out of a feature screen."
+      },
+      {
+        "name": "fade-through",
+        "value": "fade and scale from 0.96 in 160ms after 80ms, fade out 80ms",
+        "purpose": "Change of destination."
+      },
+      {
+        "name": "skeleton-pulse",
+        "value": "alpha 1 to 0.45, 900ms, reverse",
+        "purpose": "Lines in the place of loading agent output."
+      },
+      {
+        "name": "reduce-motion",
+        "value": "none",
+        "purpose": "With Remove animations on, every transition is instant."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "wide",
+        "value": "600dp width: navigation rail and split Inbox, master 60% of the width"
+      },
+      {
+        "name": "short",
+        "value": "480dp height: compact top bar"
+      },
+      {
+        "name": "compact-master",
+        "value": "460dp height of the master column"
+      },
+      {
+        "name": "content-max",
+        "value": "840dp content width"
+      },
+      {
+        "name": "action-max",
+        "value": "600dp choice and action row width"
+      }
+    ],
+    "states": {
+      "disabledAlpha": 0.55,
+      "pressedBorder": "1dp accent",
+      "selected": "accent-tile fill and 2dp accent border"
+    }
+  },
+  "components": [
+    {
+      "name": "Filled Button",
+      "kind": "button",
+      "refersTo": "button-filled",
+      "description": "The main action of a screen or a tile.",
+      "html": "<button class=\"ds-btn-filled\">Send clipboard</button>",
+      "css": ".ds-btn-filled { background: #7AA2F7; color: #16161E; font: 600 14px Roboto, sans-serif; min-height: 48px; padding: 10px 18px; border: none; border-radius: 12px; cursor: pointer; } .ds-btn-filled:active { filter: brightness(1.08); } .ds-btn-filled:focus-visible { outline: 2px solid #7DCFFF; outline-offset: 2px; } .ds-btn-filled:disabled { background: #1F2335; color: #66709B; }"
+    },
+    {
+      "name": "Outlined Button",
+      "kind": "button",
+      "refersTo": "button-outlined",
+      "description": "A second action, such as Reply beside the choices.",
+      "html": "<button class=\"ds-btn-outlined\">Reply</button>",
+      "css": ".ds-btn-outlined { background: transparent; color: #7AA2F7; font: 600 14px Roboto, sans-serif; min-height: 48px; padding: 10px 18px; border: 1px solid #66709B; border-radius: 12px; cursor: pointer; } .ds-btn-outlined:active { background: #292E42; } .ds-btn-outlined:focus-visible { outline: 2px solid #7AA2F7; outline-offset: 2px; }"
+    },
+    {
+      "name": "Destructive Button",
+      "kind": "button",
+      "refersTo": "button-destructive",
+      "description": "An action that ends or deletes something for good.",
+      "html": "<button class=\"ds-btn-destructive\">Unpair</button>",
+      "css": ".ds-btn-destructive { background: transparent; color: #F7768E; font: 600 14px Roboto, sans-serif; min-height: 48px; padding: 10px 18px; border: 1px solid #F7768E; border-radius: 12px; cursor: pointer; } .ds-btn-destructive:focus-visible { outline: 2px solid #F7768E; outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Button",
+      "kind": "button",
+      "refersTo": "button-text",
+      "description": "A small action in a line of text, such as Retry or Later.",
+      "html": "<button class=\"ds-btn-text\">Later</button>",
+      "css": ".ds-btn-text { background: transparent; color: #7AA2F7; font: 600 14px Roboto, sans-serif; min-height: 48px; padding: 10px 12px; border: none; border-radius: 12px; cursor: pointer; } .ds-btn-text:active { background: #292E42; } .ds-btn-text:focus-visible { outline: 2px solid #7AA2F7; }"
+    },
+    {
+      "name": "Master Tile",
+      "kind": "custom",
+      "refersTo": "master-tile",
+      "description": "The first Inbox item with its whole action, framed in the active border gradient.",
+      "html": "<div class=\"ds-master\"><div class=\"ds-wt\"><span class=\"ds-dot\"></span><span class=\"ds-state\">Needs input</span><span class=\"ds-src\"> · codex · billing</span></div><div class=\"ds-pc\">omarchy-xps</div><div class=\"ds-mt\">Run the database migration</div><pre class=\"ds-prompt\">Bash command\nbin/migrate --apply</pre><button class=\"ds-choice ds-sel\"><b>1</b>Yes</button><button class=\"ds-choice\"><b>2</b>No, and tell Codex what to do</button></div>",
+      "css": ".ds-master { background: linear-gradient(#1F2335,#1F2335) padding-box, linear-gradient(135deg,#7AA2F7,#7DCFFF) border-box; border: 2px solid transparent; border-radius: 12px; padding: 16px; color: #C0CAF5; font-family: Roboto, sans-serif; display: flex; flex-direction: column; gap: 10px; max-width: 420px; } .ds-wt { font-size: 13px; line-height: 1.35; } .ds-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #F7768E; margin-right: 8px; } .ds-state { color: #F7768E; font-weight: 500; } .ds-src, .ds-pc { color: #8B94BE; font-family: monospace; } .ds-pc { font-size: 12px; } .ds-mt { font-size: 20px; font-weight: 600; } .ds-prompt { margin: 0; font: 14px/1.35 monospace; white-space: pre-wrap; } .ds-choice { display: flex; gap: 12px; align-items: center; min-height: 48px; padding: 10px 12px; background: #16161E; color: #C0CAF5; border: 1px solid #292E42; border-radius: 8px; font: 14px Roboto, sans-serif; text-align: left; cursor: pointer; } .ds-choice b { color: #7AA2F7; font: 700 15px monospace; } .ds-choice.ds-sel { background: #1E2845; border: 2px solid #7AA2F7; } .ds-choice:active { border-color: #7AA2F7; } .ds-choice:focus-visible { outline: 2px solid #7AA2F7; outline-offset: 2px; }"
+    },
+    {
+      "name": "Stack Tile",
+      "kind": "card",
+      "refersTo": "stack-tile",
+      "description": "An Inbox item that waits. A tap moves it to the master. A red border marks an item that needs the user.",
+      "html": "<button class=\"ds-stack ds-needs\"><span class=\"ds-swt\"><i></i><em>Needs approval</em><span> · sudo</span></span><strong>Approve sudo</strong><small>dev on omarchy-xps</small></button>",
+      "css": ".ds-stack { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; min-height: 48px; padding: 10px 12px; background: #1F2335; color: #C0CAF5; border: 1px solid #292E42; border-radius: 12px; font-family: Roboto, sans-serif; text-align: left; width: 200px; cursor: pointer; } .ds-stack.ds-needs { border-color: #F7768E; } .ds-stack:active { border-color: #7AA2F7; } .ds-stack:focus-visible { outline: 2px solid #7AA2F7; outline-offset: 2px; } .ds-swt { font-size: 12px; } .ds-swt i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #F7768E; margin-right: 8px; } .ds-swt em { font-style: normal; font-weight: 500; color: #F7768E; } .ds-swt span { color: #8B94BE; font-family: monospace; } .ds-stack strong { font-size: 14px; font-weight: 600; } .ds-stack small { font-size: 12px; color: #8B94BE; }"
+    },
+    {
+      "name": "Tool Row",
+      "kind": "card",
+      "refersTo": "tool-row",
+      "description": "A tool under the master tool of Send or Control.",
+      "html": "<button class=\"ds-tool\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M4 4h10l6 6v10H4z\"/></svg><span><strong>Send files</strong><small>Pick files on this phone</small></span></button>",
+      "css": ".ds-tool { display: flex; gap: 14px; align-items: center; min-height: 56px; width: 320px; padding: 10px 14px; background: #1F2335; color: #C0CAF5; border: 1px solid #292E42; border-radius: 12px; font-family: Roboto, sans-serif; text-align: left; cursor: pointer; } .ds-tool svg { color: #7AA2F7; flex: none; } .ds-tool span { display: flex; flex-direction: column; gap: 2px; } .ds-tool strong { font-size: 15px; font-weight: 600; } .ds-tool small { font-size: 13px; line-height: 1.3; color: #8B94BE; } .ds-tool:active { border-color: #7AA2F7; } .ds-tool:focus-visible { outline: 2px solid #7AA2F7; outline-offset: 2px; }"
+    },
+    {
+      "name": "Scope Chip",
+      "kind": "chip",
+      "refersTo": "scope-chip",
+      "description": "The scope of the destinations, with a link dot and a battery dot for each computer.",
+      "html": "<button class=\"ds-scope\">All computers <i class=\"ds-on\"></i><i class=\"ds-bat\"></i><i class=\"ds-off\"></i><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M6 9l6 6 6-6\"/></svg></button>",
+      "css": ".ds-scope { display: inline-flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 6px 0 12px; background: #1F2335; color: #C0CAF5; border: 1px solid #292E42; border-radius: 10px; font: 600 14px Roboto, sans-serif; cursor: pointer; } .ds-scope i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; } .ds-on { background: #9ECE6A; } .ds-bat { background: #7DCFFF; margin-left: -7px; } .ds-off { border: 1.5px solid #8B94BE; box-sizing: border-box; } .ds-scope svg { color: #8B94BE; } .ds-scope:focus-visible { outline: 2px solid #7AA2F7; outline-offset: 2px; }"
+    },
+    {
+      "name": "Outlined Field",
+      "kind": "input",
+      "refersTo": "field-key",
+      "description": "A text field with the Send key at its end.",
+      "html": "<div class=\"ds-fieldrow\"><input class=\"ds-field\" placeholder=\"Write to codex\"><button class=\"ds-key\" aria-label=\"Send\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M4 12l16-8-6 16-2-6z\"/></svg></button></div>",
+      "css": ".ds-fieldrow { display: flex; gap: 8px; align-items: center; } .ds-field { flex: 1; min-height: 56px; padding: 0 16px; background: transparent; color: #C0CAF5; border: 1px solid #66709B; border-radius: 12px; font: 14px Roboto, sans-serif; } .ds-field::placeholder { color: #8B94BE; } .ds-field:focus { outline: none; border: 2px solid #7AA2F7; } .ds-key { width: 56px; height: 56px; border-radius: 12px; background: #7AA2F7; color: #16161E; border: 1px solid #7AA2F7; cursor: pointer; } .ds-key:disabled { background: #1F2335; color: #8B94BE; border-color: #292E42; } .ds-key:focus-visible { outline: 2px solid #7DCFFF; outline-offset: 2px; }"
+    },
+    {
+      "name": "Navigation Bar",
+      "kind": "nav",
+      "refersTo": "navigation-bar",
+      "description": "The 4 destinations. The Inbox shows the count of items that need the user.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-act\"><span class=\"ds-pill\">Inbox<b>2</b></span></a><a>Send</a><a>Control</a><a>Computers</a></nav>",
+      "css": ".ds-nav { display: flex; background: #1F2335; padding: 12px 0; font: 500 12px Roboto, sans-serif; } .ds-nav a { flex: 1; text-align: center; color: #8B94BE; min-height: 48px; display: flex; align-items: center; justify-content: center; cursor: pointer; } .ds-nav a.ds-act { color: #C0CAF5; font-weight: 700; } .ds-pill { position: relative; padding: 4px 16px; border-radius: 16px; background: #292E42; } .ds-pill b { position: absolute; top: -6px; right: -4px; min-width: 16px; height: 16px; border-radius: 8px; background: #F7768E; color: #16161E; font: 700 11px monospace; line-height: 16px; } .ds-nav a:focus-visible { outline: 2px solid #7AA2F7; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Master Layout of What Needs You",
+    "overview": "Flux for Android looks like the user's own Omarchy desktop. Tiles sit on the page with Hyprland gaps. The item that needs the user most takes the master tile, and the other items wait in the stack. Only the master tile carries the active border gradient of the computer, as the focused window does in Hyprland.\n\nThe app has no palette of its own. The colors come from the live Omarchy theme of the computer in scope, through a contrast guard. Tokyo Night is the fallback when no computer sent a theme. The token values in this file are the Tokyo Night reference set. The roles are the system, and the values change with the theme.\n\nThe density is that of a tiled desktop: 8 dp gaps, 12 dp corners, flat tiles, and no shadows. Mono sets what the computer says, such as window titles, prompts, keys, and data. Roboto sets what Flux says. The app rejects the category default of a device list, then a grid of feature cards for each device.",
+    "keyCharacteristics": [
+      "The colors are roles from the theme of the computer, not fixed values.",
+      "Every role pair reaches WCAG 2.2 AA in every theme: 4.5:1 for text, and 3:1 for icons and borders.",
+      "1 master tile with the `hyprland_active_border` gradient, and a stack of plain tiles.",
+      "Red means only \"needs you\" and errors.",
+      "Mono for computer data, Roboto for Flux text.",
+      "Flat tiles with 1 dp borders. Depth comes from tonal steps.",
+      "1 motion duration: 200 ms with the standard easing, and no motion when Remove animations is on."
+    ],
+    "rules": [
+      {
+        "name": "The Theme Owns the Values Rule",
+        "body": "Use a `Tn` role, never a fixed color. A new color pair must pass the guard in Tokyo Night, Tokyo Night Day, and a sample theme from `core/DebugTheme.kt`.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Red Rule",
+        "body": "Red means \"needs you\" or an error. The Destructive button kind is the 1 other use. A low battery is orange or yellow, never red.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Selection Color Rule",
+        "body": "A selected item takes `accent-tile` and a 2 dp accent border. No other color marks a selection.",
+        "section": "colors"
+      },
+      {
+        "name": "The Mono Is the Computer Rule",
+        "body": "Set text in mono only when it comes from the computer: window titles, prompts, commands, keys, file names, and data. Set Flux sentences, labels, and headings in Roboto.",
+        "section": "typography"
+      },
+      {
+        "name": "The Sentence Case Rule",
+        "body": "Write labels and headings in sentence case, as written. Do not use all caps or letter spacing for labels.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Tile Rule",
+        "body": "Do not add a shadow to a tile. To raise a tile, step its fill to `tile-hi` and its border to `line-hi`.",
+        "section": "elevation"
+      },
+      {
+        "name": "The One Active Window Rule",
+        "body": "Only the tile in the master position carries the active border: the master tile, or the empty Inbox tile in its place. The gradient is the `hyprland_active_border` colors of the theme at its angle. Without a theme border, it goes from the accent to cyan, corner to corner.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do take every color from a `Tn` role, and check new pairs with the contrast guard in Tokyo Night and Tokyo Night Day.",
+      "Do put the most urgent item in the master tile with its whole action, and keep its choices at thumb height on a phone.",
+      "Do keep the lines nearest the choices in an agent prompt, so that a one-tap choice never approves a command that the user cannot see.",
+      "Do use 8 dp gaps, a 10 dp gutter, and 12 dp corners for tiles.",
+      "Do set computer data in mono and Flux text in Roboto.",
+      "Do give every control a 48 by 48 dp target, a TalkBack role, and a state.",
+      "Do give state in words as well as in color, as the window title does.",
+      "Do use 200 ms with the standard easing for shell motion, and no motion when Remove animations is on."
+    ],
+    "donts": [
+      "Don't use red for anything other than \"needs you\", errors, and the Destructive button kind.",
+      "Don't put the active border gradient on any tile other than the tile in the master position.",
+      "Don't hard-code a color value in a screen.",
+      "Don't use `dim` for text that carries meaning.",
+      "Don't add shadows to tiles.",
+      "Don't build a device list, then a grid of feature cards for each device.",
+      "Don't change the layout or behavior of the pairing sheet or the fingerprint approval screen."
+    ]
+  }
+}

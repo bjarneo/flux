@@ -26,3 +26,7 @@ __pycache__/
 *.mobileprovision
 *.provisionprofile
 *.idsig
+# Design review captures, decision pages, and critiques. They are large and stay local.
+/.impeccable/review/
+/.impeccable/questions/
+/.impeccable/critique/
