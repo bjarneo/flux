@@ -5,17 +5,31 @@ import ".."
 // The phone camera as a webcam on this computer, and its settings. The
 // values come from state.webcam.config, so the panel follows changes that
 // are made on the phone. Each change sends only the changed key.
+// Without a webcam, the card is idle. With canStart, Start then shows.
 Card {
   id: root
   property var view: null
   property var webcam: null
   property bool settingsOpen: false
 
+  // idleTitle shows while no stream runs. With canStart, Start shows while
+  // the card is idle or failed, and emits start(). note is a line under the
+  // title or the error of an idle or failed card, for example the device
+  // to confirm on.
+  property string idleTitle: "The webcam is off"
+  property string note: ""
+  property bool canStart: false
+  signal start()
+
+  readonly property bool idle: !webcam
   readonly property var cam: webcam || ({})
   readonly property var config: cam.config || ({})
   readonly property var caps: cam.caps || ({})
   readonly property bool failed: !!cam.error
   readonly property bool live: !!cam.active && !failed
+
+  // The settings belong to a stream. They close when it ends.
+  onIdleChanged: if (idle) settingsOpen = false
 
   // The chips of each setting. fluxd keeps at most 16 values in a list, and
   // the card also shows at most 16. A number as a Repeater model makes that
@@ -163,15 +177,29 @@ Card {
         }
         Txt {
           width: parent.width
-          visible: !root.failed && (root.restarting || !root.cam.active)
+          visible: !root.idle && !root.failed && (root.restarting || !root.cam.active)
           text: root.restarting ? "Restarting…" : "Starting…"
           color: Theme.dim
+        }
+        Txt {
+          width: parent.width
+          visible: root.idle
+          text: root.idleTitle
+          color: Theme.dim
+          wrapMode: Text.Wrap
         }
         Txt {
           width: parent.width
           visible: root.failed
           text: root.cam.error || ""
           color: Theme.err
+          wrapMode: Text.Wrap
+        }
+        Txt {
+          width: parent.width
+          visible: (root.idle || root.failed) && root.note !== ""
+          text: root.note
+          color: Theme.dim
           wrapMode: Text.Wrap
         }
       }
@@ -182,7 +210,14 @@ Card {
         anchors.verticalCenter: parent.verticalCenter
         spacing: 8
         OutlineButton {
-          visible: !root.failed
+          objectName: "startButton"
+          visible: root.canStart && (root.idle || root.failed)
+          icon: "play"
+          text: "Start"
+          onClicked: root.start()
+        }
+        OutlineButton {
+          visible: !root.failed && !root.idle
           icon: root.settingsOpen ? "close" : "tune"
           text: root.settingsOpen ? "Close" : "Settings"
           onClicked: root.settingsOpen = !root.settingsOpen
@@ -198,7 +233,7 @@ Card {
 
     // Settings
     Rectangle {
-      visible: root.settingsOpen && !root.failed
+      visible: root.settingsOpen && !root.failed && !root.idle
       width: parent.width
       height: 1
       color: Theme.bg3
@@ -206,7 +241,7 @@ Card {
 
     GridLayout {
       id: settings
-      visible: root.settingsOpen && !root.failed
+      visible: root.settingsOpen && !root.failed && !root.idle
       width: parent.width
       columns: width >= 640 ? 2 : 1
       columnSpacing: 32
@@ -358,9 +393,9 @@ Card {
     }
 
     Item {
-      visible: root.settingsOpen && !root.failed
+      visible: root.settingsOpen && !root.failed && !root.idle
       width: parent.width
-      height: Math.max(resetButton.implicitHeight, note.implicitHeight)
+      height: Math.max(resetButton.implicitHeight, resetNote.implicitHeight)
       OutlineButton {
         id: resetButton
         anchors.verticalCenter: parent.verticalCenter
@@ -369,7 +404,7 @@ Card {
         onClicked: root.send({ reset: true })
       }
       Txt {
-        id: note
+        id: resetNote
         anchors.left: resetButton.right
         anchors.leftMargin: 14
         anchors.right: parent.right

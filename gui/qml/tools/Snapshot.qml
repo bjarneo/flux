@@ -293,6 +293,24 @@ Window {
       view.selectedId = pixel
       view.tab = "overview"
       view.unpair()
+    }],
+    // A phone that can start its camera and its mic when this computer
+    // asks. No stream runs, so both cards show Start.
+    ["55-stream-start", function () {
+      view.unpairTarget = null
+      mock.setState(function (s) {
+        s.webcam = null
+        s.mic = null
+        for (var i = 0; i < s.devices.length; i++)
+          if (s.devices[i].id === pixel) s.devices[i].plugins = s.devices[i].plugins.concat(["streamrequest"])
+      })
+      view.selectedId = pixel
+      view.tab = "overview"
+    }, function () { scrollToEnd() }],
+    // After Start, the camera card tells the user to confirm on the phone.
+    ["56-stream-asked", function () {}, function () {
+      findBy(camera(), "objectName", "startButton").clicked()
+      scrollToEnd()
     }]
   ]
 

@@ -22,6 +22,53 @@ Item {
   // The Browse PC sessions of the devices on this computer. An earlier
   // fluxd sends no list.
   readonly property var browse: view && view.backend && view.backend.state ? (view.backend.state.browse || []) : []
+  // The device can start its camera and its microphone when this computer
+  // asks. The device asks its user first. An earlier fluxd or app does not
+  // list streamrequest.
+  readonly property bool canAsk: online && !!dev.paired && Array.isArray(dev.plugins) && dev.plugins.indexOf("streamrequest") >= 0
+  // The ID of the device that got the last request of this window for the
+  // webcam and for the mic, or "". The card then tells the user to confirm
+  // on the device. The device removes its notification after 60 seconds,
+  // and the card then removes its note too. A stream of the kind also
+  // removes the note.
+  property string webcamAsked: ""
+  property string micAsked: ""
+
+  onWebcamChanged: if (webcam && !webcam.error) webcamAsked = ""
+  onMicChanged: if (mic && !mic.error) micAsked = ""
+
+  Timer { id: webcamWait; interval: 60000; onTriggered: root.webcamAsked = "" }
+  Timer { id: micWait; interval: 60000; onTriggered: root.micAsked = "" }
+
+  // Asks the device to start its camera or its mic. kind is "webcam" or
+  // "mic". The toast and the card tell the user to confirm on the device.
+  function askStream(kind) {
+    if (!view || !dev) return
+    var id = dev.id
+    var name = dev.name || "the device"
+    view.call(kind + ".start", { device: id }, function () {
+      if (kind === "mic") {
+        root.micAsked = id
+        micWait.restart()
+      } else {
+        root.webcamAsked = id
+        webcamWait.restart()
+      }
+      root.view.toast("Asked " + name + " to start " + (kind === "mic" ? "the mic" : "the webcam") + ". Confirm on " + name + ".")
+    })
+  }
+
+  // The line under an idle card: the device to confirm on, or "".
+  function confirmNote(asked) {
+    return asked !== "" && !!dev && asked === dev.id ? "Confirm on " + (dev.name || "the device") + "." : ""
+  }
+
+  // The title of an idle card: the request that waits, or that no stream
+  // of the kind runs. what is "the webcam" or "the mic".
+  function idleTitle(asked, what) {
+    if (confirmNote(asked) !== "") return "Asked " + (dev.name || "the device") + " to start " + what
+    return what.charAt(0).toUpperCase() + what.slice(1) + " is off"
+  }
 
   implicitHeight: grid.implicitHeight
 
@@ -230,9 +277,13 @@ Item {
     // settings are open.
     CameraCard {
       objectName: "cameraCard"
-      visible: !!root.webcam
+      visible: !!root.webcam || root.canAsk
       view: root.view
       webcam: root.webcam
+      canStart: root.canAsk
+      note: root.confirmNote(root.webcamAsked)
+      idleTitle: root.idleTitle(root.webcamAsked, "the webcam")
+      onStart: root.askStream("webcam")
       Layout.fillWidth: true
       Layout.fillHeight: true
       Layout.preferredWidth: 320
@@ -242,7 +293,7 @@ Item {
     // Phone microphone
     StreamCard {
       objectName: "micCard"
-      visible: !!root.mic
+      visible: !!root.mic || root.canAsk
       Layout.fillWidth: true
       Layout.fillHeight: true
       Layout.preferredWidth: 320
@@ -252,6 +303,11 @@ Item {
       title: root.mic ? (root.mic.fromName || "The phone") + " is live as " + (root.mic.source || "Flux Microphone") : ""
       detail: root.mic ? Math.round((root.mic.rate || 48000) / 1000) + " kHz · " + (root.mic.channels === 2 ? "stereo" : "mono") : ""
       onStop: root.view.call("mic.stop", {})
+      idle: !root.mic
+      canStart: root.canAsk
+      note: root.confirmNote(root.micAsked)
+      idleTitle: root.idleTitle(root.micAsked, "the mic")
+      onStart: root.askStream("mic")
     }
 
     // The devices that browse the files of this computer

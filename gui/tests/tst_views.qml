@@ -562,4 +562,116 @@ Item {
       verify(!line.visible)
     }
   }
+
+  TestCase {
+    name: "StreamStart"
+    when: mock.ready
+
+    function init() {
+      mock.state = mock.fixTimes(mock.fixture.state)
+      mock.requests = []
+      mock.failures = {}
+      mock.setState(function (s) { s.webcam = null; s.mic = null })
+    }
+
+    function cleanup() {
+      mock.failures = {}
+    }
+
+    function canAsk(on) {
+      mock.updateDevice(top.pixel, function (d) {
+        d.plugins = d.plugins.filter(function (p) { return p !== "streamrequest" })
+        if (on) d.plugins.push("streamrequest")
+        return d
+      })
+    }
+
+    function cards(view) {
+      var camera = null
+      var mic = null
+      tryVerify(function () {
+        camera = findBy(page(view), "objectName", "cameraCard")
+        mic = findBy(page(view), "objectName", "micCard")
+        return !!camera && !!mic
+      })
+      return { camera: camera, mic: mic }
+    }
+
+    function overview() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "overview"
+      return view
+    }
+
+    // A device that does not list streamrequest gets no Start, and the
+    // cards stay hidden without a stream.
+    function test_noStartWithoutTheFeature() {
+      var c = cards(overview())
+      verify(!c.camera.visible)
+      verify(!c.mic.visible)
+      canAsk(true)
+      verify(c.camera.visible)
+      verify(c.mic.visible)
+      mock.updateDevice(top.pixel, function (d) { d.online = false; return d })
+      verify(!c.camera.visible)
+      verify(!c.mic.visible)
+    }
+
+    function test_startAsksTheDevice() {
+      canAsk(true)
+      var view = overview()
+      var c = cards(view)
+      var start = findBy(c.camera, "objectName", "startButton")
+      verify(c.camera.idle)
+      verify(start.visible)
+      compare(c.camera.idleTitle, "The webcam is off")
+      start.clicked()
+      compare(requestsOf("webcam.start").length, 1)
+      compare(requestsOf("webcam.start")[0].params.device, top.pixel)
+      tryCompare(c.camera, "note", "Confirm on Pixel 8.")
+      compare(c.camera.idleTitle, "Asked Pixel 8 to start the webcam")
+      tryVerify(function () { var t = findBy(view, "message", "Asked Pixel 8 to start the webcam. Confirm on Pixel 8."); return !!t && t.visible })
+
+      // The stream starts on the phone after the tap. The card then has no
+      // Start button and no note.
+      mock.setState(function (s) { s.webcam = JSON.parse(JSON.stringify(mock.fixture.state.webcam)) })
+      verify(!start.visible)
+      compare(c.camera.note, "")
+
+      var micStart = findBy(c.mic, "objectName", "startButton")
+      verify(micStart.visible)
+      c.mic.start()
+      compare(requestsOf("mic.start").length, 1)
+      compare(requestsOf("mic.start")[0].params.device, top.pixel)
+      tryCompare(c.mic, "note", "Confirm on Pixel 8.")
+      compare(c.mic.idleTitle, "Asked Pixel 8 to start the mic")
+      mock.setState(function (s) { s.mic = JSON.parse(JSON.stringify(mock.fixture.state.mic)) })
+      verify(!micStart.visible)
+    }
+
+    // A stream that failed ended, so Start shows next to the error.
+    function test_startAfterAnError() {
+      canAsk(true)
+      var c = cards(overview())
+      mock.setState(function (s) { s.mic = { error: "pw-cat is not installed", source: "Flux Microphone" } })
+      verify(c.mic.failed)
+      verify(findBy(c.mic, "objectName", "startButton").visible)
+      mock.setState(function (s) { s.webcam = { error: "The v4l2loopback module is not loaded", label: "Flux Camera" } })
+      verify(c.camera.failed)
+      verify(findBy(c.camera, "objectName", "startButton").visible)
+    }
+
+    // An error of fluxd shows in a toast, and the card does not wait.
+    function test_startErrorShowsInToast() {
+      canAsk(true)
+      var view = overview()
+      var c = cards(view)
+      var msg = "Pixel 8 got a request for the mic less than 3 seconds ago. Wait, then ask again"
+      mock.failures = { "mic.start": { code: "too_soon", message: msg } }
+      c.mic.start()
+      tryVerify(function () { var t = findBy(view, "message", msg); return !!t && t.visible })
+      compare(c.mic.note, "")
+    }
+  }
 }
