@@ -138,18 +138,20 @@ private val WindowTitleLine = 16.sp
  * The window-title line of an agent: a status dot, the status as 1 short
  * word in its color, and the [parts] in mono, such as the agent and the
  * project. For example: Needs input · codex · billing. The status comes
- * first, as on the Inbox tiles. TalkBack reads the parts, and the status as
- * the state.
+ * first, as on the Inbox tiles. From a font scale of 1.3, the parts start on
+ * a new line, so that the line does not wrap at a separator. TalkBack reads
+ * the parts, and the status as the state.
  */
 @Composable
 private fun WindowTitle(parts: List<String>, s: AgentStatus, modifier: Modifier = Modifier) {
     val label = statusLabel(s)
     val sub = Tn.sub
     val ink = statusInk(s)
-    val text = remember(parts, label, sub, ink) {
+    val split = LocalDensity.current.fontScale >= 1.3f
+    val text = remember(parts, label, sub, ink, split) {
         buildAnnotatedString {
             withStyle(SpanStyle(color = ink, fontWeight = FontWeight.Medium, fontFamily = FontFamily.Default)) { append(label) }
-            withStyle(SpanStyle(color = sub)) { for (p in parts) append(" · $p") }
+            if (parts.isNotEmpty()) withStyle(SpanStyle(color = sub)) { append((if (split) "\n" else " · ") + parts.joinToString(" · ")) }
         }
     }
     val line = with(LocalDensity.current) { WindowTitleLine.toDp() }

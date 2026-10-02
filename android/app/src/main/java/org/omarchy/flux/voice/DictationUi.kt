@@ -40,7 +40,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -92,6 +91,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import org.omarchy.flux.ui.Ic
 import org.omarchy.flux.ui.Mono
+import org.omarchy.flux.ui.Spinner
 import org.omarchy.flux.ui.Sym
 import org.omarchy.flux.ui.T
 import org.omarchy.flux.ui.TileGap
@@ -258,7 +258,7 @@ private fun MicKey(d: Dictation, onStart: () -> Boolean, modifier: Modifier = Mo
             when (phase) {
                 Dictation.Phase.Idle -> Sym(Ic.mic, tint = Tn.sub, size = 24.dp)
                 Dictation.Phase.Listening -> Sym(Ic.stop, tint = Tn.onAccent, size = 24.dp)
-                Dictation.Phase.Finishing -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Tn.magenta)
+                Dictation.Phase.Finishing -> Spinner(Modifier.size(20.dp), color = Tn.magenta)
             }
         }
     }

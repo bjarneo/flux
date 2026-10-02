@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -74,6 +73,7 @@ import org.omarchy.flux.ui.ChoiceChip
 import org.omarchy.flux.ui.FluxButton
 import org.omarchy.flux.ui.Ic
 import org.omarchy.flux.ui.Palette
+import org.omarchy.flux.ui.Spinner
 import org.omarchy.flux.ui.Sym
 import org.omarchy.flux.ui.T
 
@@ -249,7 +249,7 @@ fun SignatureMode(d: DeviceUi, strip: @Composable () -> Unit = {}, onHolding: (B
                     Still(p.image)
                     Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.inverseSurface) {
                         Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.inverseOnSurface)
+                            Spinner(Modifier.size(16.dp), color = MaterialTheme.colorScheme.inverseOnSurface)
                             Text("Finding the ink", color = MaterialTheme.colorScheme.inverseOnSurface)
                         }
                     }

@@ -24,7 +24,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -107,7 +106,7 @@ fun OmarchyPanel(d: DeviceUi, modifier: Modifier = Modifier) {
             !d.shortcutsSupported -> T("Update Flux on ${d.name} to move around Omarchy from here.", size = 13, color = Tn.sub)
             state?.error != null -> T(state.error, size = 13, color = Tn.red)
             state?.loaded != true -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = Tn.blue)
+                Spinner(Modifier.size(14.dp), color = Tn.blue)
                 T("Reading the shortcuts of ${d.name}", size = 13, color = Tn.sub)
             }
         }

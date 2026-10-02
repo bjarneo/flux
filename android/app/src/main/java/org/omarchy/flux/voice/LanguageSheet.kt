@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
@@ -47,6 +46,7 @@ import org.omarchy.flux.ui.FluxSheet
 import org.omarchy.flux.ui.Ic
 import org.omarchy.flux.ui.Mono
 import org.omarchy.flux.ui.SectionLabel
+import org.omarchy.flux.ui.Spinner
 import org.omarchy.flux.ui.Sym
 import org.omarchy.flux.ui.T
 import org.omarchy.flux.ui.Tile
@@ -154,7 +154,7 @@ fun LanguageSheet(
             when (models.load) {
                 SpeechModels.Load.Loading -> item {
                     Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Tn.magenta)
+                        Spinner(Modifier.size(18.dp), color = Tn.magenta)
                         T("Reading the languages of the speech recognizer", color = Tn.sub, size = 13)
                     }
                 }

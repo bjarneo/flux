@@ -508,7 +508,7 @@ fun FluxButton(
         contentPadding = PaddingValues(horizontal = if (kind == ButtonKind.Text) 12.dp else 18.dp, vertical = 10.dp),
     ) {
         if (busy) {
-            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = LocalContentColor.current)
+            Spinner(Modifier.size(18.dp), color = LocalContentColor.current)
             Spacer(Modifier.size(8.dp))
         } else if (icon != null) {
             Sym(icon, size = 18.dp)
@@ -546,7 +546,7 @@ fun FieldKey(
         contentAlignment = Alignment.Center,
     ) {
         if (busy) {
-            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Tn.blue)
+            Spinner(Modifier.size(18.dp), color = Tn.blue)
         } else {
             // The content can be a text label, such as Enter, so a key that is off also uses the second ink, which reaches 4.5:1.
             // An off key has no accent fill, and TalkBack reads it as disabled.
@@ -772,13 +772,27 @@ fun SquareButton(@DrawableRes icon: Int, description: String, onClick: () -> Uni
     ) { Sym(icon, description, size = 20.dp) }
 }
 
+/**
+ * A spinner for work that runs. With Remove animations on, Android stops
+ * the animation at its first frame, which draws only a dot. The spinner
+ * then shows a fixed ring of 3 quarters.
+ */
+@Composable
+fun Spinner(modifier: Modifier = Modifier, color: Color = Tn.blue, strokeWidth: Dp = 2.dp) {
+    if (LocalReduceMotion.current) {
+        CircularProgressIndicator(progress = { 0.75f }, modifier = modifier, color = color, strokeWidth = strokeWidth, trackColor = Color.Transparent)
+    } else {
+        CircularProgressIndicator(modifier, color = color, strokeWidth = strokeWidth)
+    }
+}
+
 /** A spinner in the place of a [SquareButton], for a read that runs. */
 @Composable
 fun SquareSpinner(description: String) {
     Box(
         Modifier.size(48.dp).semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
-    ) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Tn.blue) }
+    ) { Spinner(Modifier.size(18.dp), color = Tn.blue) }
 }
 
 /**

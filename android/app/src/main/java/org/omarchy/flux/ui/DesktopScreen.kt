@@ -33,7 +33,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -367,7 +366,7 @@ private fun StreamState(d: DeviceUi, status: DesktopSession.Status, modifier: Mo
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
         ) {
-            CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.dp, color = Tn.blue)
+            Spinner(Modifier.size(28.dp), color = Tn.blue)
             T(if (mine) status.message else "Connecting to ${d.name}…", size = 13, color = Tn.sub)
         }
         status.phase == DesktopSession.Phase.Error || status.phase == DesktopSession.Phase.Idle -> Box(

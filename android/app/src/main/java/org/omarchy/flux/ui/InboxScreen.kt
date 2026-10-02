@@ -53,7 +53,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -449,7 +448,7 @@ private fun InboxEmpty(state: UiState, notices: InboxNotices, actions: InboxActi
                 is EmptyMode.Paired -> PairedTile(m.name, notices.notify, actions)
                 EmptyMode.Connecting -> EmptyTile {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Tn.blue)
+                        Spinner(Modifier.size(20.dp), color = Tn.blue)
                         T(connectingTitle(notices.reach), Modifier.weight(1f), size = 22, weight = FontWeight.SemiBold)
                     }
                     T("What waits for you shows here when the connection is ready.", size = 14, color = Tn.sub, lineHeight = 1.35f)
@@ -700,7 +699,7 @@ private fun ColumnScope.AgentMaster(item: AgentItem, d: DeviceUi?, active: Boole
         if (sending || !fit.compact) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (sending) {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Tn.blue)
+                    Spinner(Modifier.size(18.dp), color = Tn.blue)
                     T("Sending", size = 13, color = Tn.sub)
                 }
                 Spacer(Modifier.weight(1f))

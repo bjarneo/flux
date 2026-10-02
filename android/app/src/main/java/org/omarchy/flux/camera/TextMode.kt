@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -69,6 +68,7 @@ import org.omarchy.flux.ui.ButtonKind
 import org.omarchy.flux.ui.FluxButton
 import org.omarchy.flux.ui.Ic
 import org.omarchy.flux.ui.Palette
+import org.omarchy.flux.ui.Spinner
 import org.omarchy.flux.ui.Sym
 import org.omarchy.flux.ui.T
 import org.omarchy.flux.ui.openAppSettings
@@ -214,7 +214,7 @@ fun TextMode(d: DeviceUi, strip: @Composable () -> Unit = {}, onHolding: (Boolea
                     Still(p.image)
                     Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.inverseSurface) {
                         Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.inverseOnSurface)
+                            Spinner(Modifier.size(16.dp), color = MaterialTheme.colorScheme.inverseOnSurface)
                             Text("Reading text", color = MaterialTheme.colorScheme.inverseOnSurface)
                         }
                     }
