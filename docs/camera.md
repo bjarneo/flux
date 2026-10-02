@@ -118,6 +118,75 @@ The virtual source exists only while the phone streams.
 After a stall of the network, it drops the oldest audio, so the delay does not grow.
 The journal then shows `dropped audio after a network stall` once for the stream.
 
+## Start from the computer
+
+The computer can ask a paired device to start its webcam or its mic.
+The device always asks you first.
+Its camera and its microphone turn on only after you tap start on the device, also while Flux is on its screen.
+
+To ask the device, run:
+
+```sh
+flux-cli webcam start
+flux-cli mic start
+```
+
+The command prints the device that got the request:
+
+```text
+Asked Pixel 8 to start the webcam. Confirm on Pixel 8.
+```
+
+To ask 1 device of many, give its name or its ID:
+
+```sh
+flux-cli --device "Pixel 8" webcam start
+flux-cli mic start --device "Pixel 8"
+```
+
+In the Flux window, open **Overview** and select **Start** on the **PHONE CAMERA** card or the **PHONE MICROPHONE** card.
+The cards show **Start** while no stream of that kind runs and the selected device can take the request.
+After the request, the card shows `Confirm on Pixel 8.` for 60 seconds, or until the stream starts.
+
+The device shows the request in 1 of 2 forms:
+
+| Flux on the device | What the device shows |
+| --- | --- |
+| On the screen | A prompt with the title `omarchy asks for the webcam` or `omarchy asks for the mic`, and the buttons **Start webcam** or **Start the mic**, and **Not now**. |
+| Not on the screen | A notification with the same title, the text `Tap to start the webcam.` or `Tap to start the mic.`, and a start action. The notification goes away after 60 seconds. |
+
+The title has the name of the computer, as `flux-cli status` shows it.
+A tap on start opens the Webcam screen or the Mic screen of that computer and starts the stream at once, with the saved settings.
+When a stream of that kind already runs to that computer, the request does nothing.
+
+`fluxd` refuses a request in these cases:
+
+| Case | Error code |
+| --- | --- |
+| No `--device`, and no paired, connected device can take the request. An earlier Flux app cannot take it. Update Flux on the device. | `no_device` |
+| No `--device`, and more than 1 device can take the request. The error lists the devices. Give `--device`. | `ambiguous` |
+| The device that `--device` names cannot take the request. | `not_supported` |
+| A stream of that kind runs. Stop it first, for example with `flux-cli webcam stop`. | `already_active` |
+| The same device got a request of the same kind less than 3 seconds ago. The device also ignores such a request. | `too_soon` |
+
+### Wire format
+
+`fluxd` sends a `flux.stream.request` packet to the device:
+
+```json
+{"type":"flux.stream.request","body":{"kind":"webcam"}}
+```
+
+`kind` is `webcam` or `mic`.
+The device ignores any other kind and any extra field.
+A device lists `flux.stream.request` in its incoming packet types only when it can stream both kinds.
+`fluxd` sends the packet only to a paired, connected device that lists it, the same as `flux.theme`.
+The state of such a device has `streamrequest` in its `plugins`.
+
+The packet only asks.
+It never starts the camera or the microphone.
+After the tap, the device starts the stream with its usual `flux.webcam` or `flux.mic` start packet, and `fluxd` handles it as each other start.
+
 ## Screen mirror
 
 The iPhone does not mirror its screen. See [Flux for iOS](ios.md#screen-mirror).

@@ -127,7 +127,7 @@ Each device in `devices` has these fields:
 | `pairKey` | The verification key of an open pairing: 16 uppercase hex digits. The apps show it in 4 groups of 4. |
 | `ip`, `addresses`, `lastSeen` | The address of the last link, the [extra addresses](#extra-addresses), and the Unix time of the last packet. |
 | `battery`, `notifications`, `conversations` | The phone data. A device that is not paired has none. |
-| `plugins` | The features that the device offers. |
+| `plugins` | The features that the device offers. `streamrequest` means that the device can start its camera and its microphone when this computer asks. |
 | `app` | The Flux program of the device: `android`, `android-debug`, `ios`, `macos`, or `fluxd`. An earlier app sends none. |
 | `appVersion` | The version of that program, such as `0.7.0`. |
 | `appUpdate` | The version of a newer Android app in the latest release, or an empty string. |
@@ -146,7 +146,7 @@ A device that is not paired shows only while it has a link.
 | Commands | `commands.add`, `commands.remove`, `commands.run` |
 | Notifications | `notification.dismiss`, `notification.dismissAll`, `notification.reply`, `notification.action`, `notify.send` |
 | Text messages | `sms.refresh`, `sms.thread`, `sms.send` |
-| Streams | `webcam.config`, `webcam.stop`, `mic.stop`, `screen.stop`, `desktop.stop`, `browse.stop` |
+| Streams | `webcam.start`, `webcam.config`, `webcam.stop`, `mic.start`, `mic.stop`, `screen.stop`, `desktop.stop`, `browse.stop` |
 | Approval | `approve.request`, `approve.wait`, `approve.enroll`, `approve.cancel` |
 | Settings and updates | `settings.set`, `update.install`, `update.sendApp` |
 
@@ -184,6 +184,7 @@ Without `device`, a method uses the only connected paired device.
 | `notification.action` | `device`, `id`, `action` |
 | `notify.send` | `device`, `title`, `body`. It shows a notification on the device. |
 | `sms.refresh`, `sms.thread`, `sms.send` | See [text messages](#text-messages). |
+| `webcam.start`, `mic.start` | An optional `device`. See [start a stream](#start-a-stream). |
 | `webcam.config` | `config`, or `reset` set to `true` |
 | `webcam.stop`, `mic.stop`, `screen.stop`, `desktop.stop` | None |
 | `browse.stop` | An optional `device`. Without `device`, it ends every Browse PC session. It returns `not_active` when no session ends. |
@@ -252,7 +253,10 @@ These codes need a step from the client:
 | `ambiguous` | The name matches more than 1 device. The message lists the device IDs. Send the ID. Without `device`, more than 1 paired device is connected. |
 | `unknown_method` | fluxd does not know the method, for example an earlier `fluxd`. |
 | `not_found` | No device, command, transfer, clipboard entry, or request has the name or the ID. |
-| `no_device` | No paired device is connected, and the request has no `device`. |
+| `no_device` | No paired device is connected, and the request has no `device`. For `webcam.start` and `mic.start`, no connected device can take the request. |
+| `not_supported` | The device cannot do the request, for example an earlier app. |
+| `already_active` | A stream of that kind runs. Stop it first. |
+| `too_soon` | The same request went to the same device less than 3 seconds ago. Wait, then send it again. |
 | `not_paired`, `offline` | The device is not paired, or it has no link now. |
 | `no_request` | No device with the name has an open pair request, or the open pairing has another `key`. |
 | `not_saved` | `pair.unpair` could not save `devices.json`. The device is unpaired only until fluxd restarts. |
@@ -261,6 +265,28 @@ These codes need a step from the client:
 
 The [herdr wire format](herdr.md#wire-format) uses the code `blocked` for a prompt to an agent that waits for a choice.
 That code comes in a `flux.herdr` packet on the link of the device, not on this socket.
+
+## Start a stream
+
+`webcam.start` and `mic.start` ask a device to start its camera or its microphone for this computer.
+The device asks its user first. The stream starts only after a tap on the device.
+
+```json
+{"id":9,"method":"webcam.start","params":{"device":"Pixel 8"}}
+{"id":9,"result":{"device":"DEVICE_ID","name":"Pixel 8"}}
+```
+
+The result names the device that got the request: the `device` ID and the `name`.
+It does not mean that the stream started.
+The stream shows in `webcam` or `mic` of a later state event.
+
+Without `device`, fluxd selects the only paired, connected device with `streamrequest` in its `plugins`.
+With no such device, the method returns `no_device`.
+With more than 1, it returns `ambiguous` with their names.
+A `device` that cannot take the request returns `not_supported`.
+While a stream of that kind runs, the method returns `already_active`.
+A second request of the same kind to the same device in 3 seconds returns `too_soon`.
+See [start from the computer](camera.md#start-from-the-computer).
 
 ## herdr
 

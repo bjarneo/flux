@@ -303,10 +303,12 @@ So `flux-cli commands add Open xdg-open "My File.pdf"` stores `xdg-open 'My File
 
 ```sh
 flux-cli webcam
+flux-cli webcam start
 flux-cli webcam set aspect=1:1 brightness=0.2
 flux-cli webcam reset
 flux-cli webcam stop
 flux-cli mic
+flux-cli mic start
 flux-cli mic stop
 flux-cli screen
 flux-cli screen stop
@@ -318,6 +320,22 @@ flux-cli approve
 ```
 
 Start camera, microphone, and screen capture on the phone.
+`flux-cli webcam start` and `flux-cli mic start` ask the phone to start its camera or its microphone.
+The phone asks you first, and the stream starts only after you tap start on the phone.
+On success, the command prints the device:
+
+```text
+Asked Pixel 8 to start the webcam. Confirm on Pixel 8.
+```
+
+Without `--device`, the command selects the only paired, connected device that can take the request.
+For these 2 commands, `--device NAME` can also come after `start`:
+
+```sh
+flux-cli webcam start --device "Pixel 8"
+```
+
+See [start from the computer](camera.md#start-from-the-computer) for what the phone shows and for the errors.
 `flux-cli desktop` shows whether a phone shows the screen of this computer, and `flux-cli desktop stop` ends it.
 `flux-cli browse` shows the devices that browse this computer with [Browse PC](features.md#browse-pc).
 `flux-cli browse stop` ends each session, or only the session of the device that `--device` names.
