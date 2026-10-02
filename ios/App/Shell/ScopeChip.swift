@@ -54,6 +54,9 @@ struct ScopeChip: View {
             .background(tileShape(TiledMetrics.chipCorner).fill(tn.tile))
             .overlay(tileShape(TiledMetrics.chipCorner).strokeBorder(tn.line, lineWidth: 1))
             .contentShape(tileShape(TiledMetrics.chipCorner))
+            // The chip draws 36 pt high to fit the navigation bar. The hit area is 44 pt high.
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
         }
         .accessibilityLabel(spoken)
         .accessibilityHint("Changes the scope")

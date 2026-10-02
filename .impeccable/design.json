@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-02T00:23:11+00:00",
-  "title": "Design System: Flux for Android",
+  "generatedAt": "2026-10-02T08:50:12+00:00",
+  "title": "Design System: Flux for Android, iOS, and macOS",
   "extensions": {
     "colorMeta": {
       "bg": {
@@ -367,7 +367,7 @@
       }
     },
     "themeSource": {
-      "description": "The live Omarchy theme of the computer in scope, from the flux.theme packet, through the contrast guard in paletteOf. Tokyo Night is the dark fallback and Tokyo Night Day the light fallback. The frontmatter colors are the Tokyo Night reference set.",
+      "description": "The live Omarchy theme of the computer in scope, from the flux.theme packet, through the contrast guard in paletteOf. Tokyo Night is the dark fallback and Tokyo Night Day the light fallback. The frontmatter colors are the Tokyo Night reference set. The Apple apps use the port in FluxKit, ThemePalette, with the same constants and fallback values.",
       "textContrast": 4.5,
       "nonTextContrast": 3.0,
       "textStep": 1.4,
@@ -377,7 +377,11 @@
         "android/app/src/main/java/org/omarchy/flux/theme/ThemePalette.kt",
         "android/app/src/main/java/org/omarchy/flux/ui/TiledKit.kt",
         "docs/omarchy.md#theme-packet",
-        "internal/desktop/theme.go"
+        "internal/desktop/theme.go",
+        "macos/Sources/FluxKit/Theme/ThemePalette.swift",
+        "macos/Sources/FluxKit/Theme/ThemeBook.swift",
+        "ios/App/Theme/ThemeKit.swift",
+        "macos/App/Theme/ThemeKit.swift"
       ]
     },
     "activeBorder": {
@@ -412,6 +416,11 @@
         "name": "reduce-motion",
         "value": "none",
         "purpose": "With Remove animations on, every transition is instant."
+      },
+      {
+        "name": "apple-standard",
+        "value": "200ms timingCurve(0.4, 0, 0.2, 1), nil with Reduce Motion",
+        "purpose": "Motion.standard on iOS and macOS: promote to master, Later, and the iOS swipe."
       }
     ],
     "breakpoints": [
@@ -434,12 +443,97 @@
       {
         "name": "action-max",
         "value": "600dp choice and action row width"
+      },
+      {
+        "name": "ios-wide",
+        "value": "600pt width: split Inbox, master 60% of the width. The tab bar stays."
+      },
+      {
+        "name": "ios-compact-master",
+        "value": "460pt height of the split master column"
+      },
+      {
+        "name": "macos-wide",
+        "value": "600pt width of the detail column: split Inbox, master 60% of the width"
+      },
+      {
+        "name": "macos-compact-master",
+        "value": "460pt height of the master column"
+      },
+      {
+        "name": "macos-window-min",
+        "value": "760 by 520pt main window, default 900 by 620pt"
+      },
+      {
+        "name": "macos-menu-panel",
+        "value": "360pt width of the menu bar panel"
       }
     ],
     "states": {
       "disabledAlpha": 0.55,
       "pressedBorder": "1dp accent",
       "selected": "accent-tile fill and 2dp accent border"
+    },
+    "platforms": {
+      "source": "The Swift code at apple-inbox 5b92d7d. No screen capture of the Apple apps exists yet.",
+      "shared": {
+        "palette": "ThemePalette in macos/Sources/FluxKit/Theme, read through @Environment(\\.tn) as ThemeColors",
+        "inbox": "InboxKind rank, InboxArrangement, and Inbox.agentPrompt in macos/Sources/FluxKit/Inbox",
+        "faces": "SF Pro for Flux text, SF Mono for computer data",
+        "secretClip": "Hidden text, in the body face",
+        "activeBorder": "2pt on the 12pt tile corner",
+        "preserved": "Pairing views and the approval prompt keep layout and behavior, and take only the accent and the light or dark mode"
+      },
+      "ios": {
+        "navigation": "TabView: Inbox with a badge, Send, Control, Computers. A NavigationStack in each tab.",
+        "metrics": {
+          "gap": "8pt",
+          "gutter": "10pt",
+          "tileCorner": "12pt",
+          "smallCorner": "8pt",
+          "chipCorner": "10pt",
+          "contentMax": "840pt",
+          "actionMax": "600pt",
+          "disabledAlpha": 0.55
+        },
+        "targets": {
+          "control": "44pt",
+          "button": "44pt",
+          "choiceRow": "48pt",
+          "stackTile": "48pt",
+          "toolRow": "56pt",
+          "masterTool": "128pt",
+          "mediaRound": "48pt, main 56pt"
+        },
+        "type": "System text styles with Dynamic Type from xSmall to the accessibility sizes",
+        "swipe": "30% of the width or 1000pt/s moves the master to the end of the stack",
+        "pressed": "Tile border to the accent. FluxButton at 70% alpha."
+      },
+      "macos": {
+        "navigation": "NavigationSplitView sidebar, 180 to 200pt: Inbox with a badge, Send, Control, Computers. Go menu: Command-1 to Command-4, Command-] Show the next item.",
+        "metrics": {
+          "gap": "8pt",
+          "gutter": "12pt",
+          "tileCorner": "12pt",
+          "smallCorner": "8pt",
+          "chipCorner": "10pt",
+          "contentMax": "840pt",
+          "actionMax": "600pt",
+          "disabledAlpha": 0.55
+        },
+        "targets": {
+          "button": "28pt",
+          "choiceRow": "36pt",
+          "stackTile": "36pt",
+          "toolRow": "44pt"
+        },
+        "type": "Fixed point sizes on the system font, 11pt to 20pt",
+        "master": "Actions directly under the content. No thumb push and no swipe.",
+        "button": "8pt corner, 13pt semibold, hover adds 6% of text, press at 80% alpha",
+        "pressed": "Tile at 80% alpha. The border does not change.",
+        "menuBarExtra": "Flux mark and the count 1 to 9+. Window style panel, 360pt: count line, compact master of all computers, next 3 items, a menu for each online computer, Open Flux, Settings, Quit Flux.",
+        "controlMasterTool": "Remote desktop"
+      }
     }
   },
   "components": [
@@ -526,7 +620,7 @@
   ],
   "narrative": {
     "northStar": "The Master Layout of What Needs You",
-    "overview": "Flux for Android looks like the user's own Omarchy desktop. Tiles sit on the page with Hyprland gaps. The item that needs the user most takes the master tile, and the other items wait in the stack. Only the master tile carries the active border gradient of the computer, as the focused window does in Hyprland.\n\nThe app has no palette of its own. The colors come from the live Omarchy theme of the computer in scope, through a contrast guard. Tokyo Night is the fallback when no computer sent a theme. The token values in this file are the Tokyo Night reference set. The roles are the system, and the values change with the theme.\n\nThe density is that of a tiled desktop: 8 dp gaps, 12 dp corners, flat tiles, and no shadows. Mono sets what the computer says, such as window titles, prompts, keys, and data. Roboto sets what Flux says. The app rejects the category default of a device list, then a grid of feature cards for each device.",
+    "overview": "Flux for Android looks like the user's own Omarchy desktop. Tiles sit on the page with Hyprland gaps. The item that needs the user most takes the master tile, and the other items wait in the stack. Only the master tile carries the active border gradient of the computer, as the focused window does in Hyprland.\n\nThe app has no palette of its own. The colors come from the live Omarchy theme of the computer in scope, through a contrast guard. Tokyo Night is the fallback when no computer sent a theme. The token values in this file are the Tokyo Night reference set. The roles are the system, and the values change with the theme.\n\nThe density is that of a tiled desktop: 8 dp gaps, 12 dp corners, flat tiles, and no shadows. Mono sets what the computer says, such as window titles, prompts, keys, and data. Roboto sets what Flux says. The app rejects the category default of a device list, then a grid of feature cards for each device.\n\nFlux for iOS and Flux for macOS use the same system. They share the token roles, the contrast guard, the Tokyo Night fallback, the Inbox rank, the window title with the state word first, and the one-tap rule for agent choices. The section \"Apple platforms\" of DESIGN.md gives only what differs. It comes from the Swift code, because no capture of the Apple apps exists yet.",
     "keyCharacteristics": [
       "The colors are roles from the theme of the computer, not fixed values.",
       "Every role pair reaches WCAG 2.2 AA in every theme: 4.5:1 for text, and 3:1 for icons and borders.",
@@ -534,7 +628,8 @@
       "Red means only \"needs you\" and errors.",
       "Mono for computer data, Roboto for Flux text.",
       "Flat tiles with 1 dp borders. Depth comes from tonal steps.",
-      "1 motion duration: 200 ms with the standard easing, and no motion when Remove animations is on."
+      "1 motion duration: 200 ms with the standard easing, and no motion when Remove animations is on.",
+      "The same roles and rules on Android, iOS, and macOS. Each platform keeps its own navigation, targets, and type scale."
     ],
     "rules": [
       {
@@ -571,6 +666,11 @@
         "name": "The One Active Window Rule",
         "body": "Only the tile in the master position carries the active border: the master tile, or the empty Inbox tile in its place. The gradient is the `hyprland_active_border` colors of the theme at its angle. Without a theme border, it goes from the accent to cyan, corner to corner.",
         "section": "elevation"
+      },
+      {
+        "name": "The Hidden Secret Rule",
+        "body": "In the Apple apps, a secret clip shows \"Hidden text\" in the body face. The event keeps no part of the secret.",
+        "section": "typography"
       }
     ],
     "dos": [
@@ -581,7 +681,9 @@
       "Do set computer data in mono and Flux text in Roboto.",
       "Do give every control a 48 by 48 dp target, a TalkBack role, and a state.",
       "Do give state in words as well as in color, as the window title does.",
-      "Do use 200 ms with the standard easing for shell motion, and no motion when Remove animations is on."
+      "Do use 200 ms with the standard easing for shell motion, and no motion when Remove animations is on.",
+      "Do take every color in the Apple apps from a `tn` role, as from a `Tn` role on Android.",
+      "Do give every control the target of its platform: 48 dp on Android, 44 pt on iOS, and 28 pt for a pointer on macOS."
     ],
     "donts": [
       "Don't use red for anything other than \"needs you\", errors, and the Destructive button kind.",
@@ -590,7 +692,10 @@
       "Don't use `dim` for text that carries meaning.",
       "Don't add shadows to tiles.",
       "Don't build a device list, then a grid of feature cards for each device.",
-      "Don't change the layout or behavior of the pairing sheet or the fingerprint approval screen."
+      "Don't change the layout or behavior of the pairing sheet or the fingerprint approval screen.",
+      "Don't change the layout or behavior of the Apple pairing views, the Face ID approval sheet, or the Touch ID approval window.",
+      "Don't show any part of a secret clip in the Apple apps. Show \"Hidden text\" in the body face.",
+      "Don't push the master actions to the bottom on the Mac. A pointer has no thumb zone."
     ]
   }
 }
