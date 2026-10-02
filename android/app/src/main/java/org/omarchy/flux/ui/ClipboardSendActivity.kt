@@ -13,9 +13,8 @@ import org.omarchy.flux.service.FluxService
 /**
  * The clipboard sender: no UI. It takes window focus, so Flux may read the
  * clipboard, sends it to each connected paired computer, and finishes. The
- * Quick Settings tile, the service notification, and the automatic reader
- * start it. It uses Theme.Flux.Invisible, which draws nothing but keeps a
- * focusable window.
+ * Quick Settings tile and the service notification start it. It uses
+ * Theme.Flux.Invisible, which draws nothing but keeps a focusable window.
  */
 class ClipboardSendActivity : ComponentActivity() {
     private var done = false
@@ -54,7 +53,7 @@ class ClipboardSendActivity : ComponentActivity() {
     }
 
     companion object {
-        /** True for a user action, which shows a toast. False for the automatic reader. */
+        /** True for a user action, which shows a toast. Both callers set it to true. */
         const val EXTRA_MANUAL = "flux.clip.manual"
 
         /** The read must not wait forever for window focus. */

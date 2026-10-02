@@ -239,31 +239,14 @@ If a sent message shows **Not sent**, the phone could not send it.
 Check the signal and the SMS app on the phone.
 Flux does not send messages to a group. Reply to a group on the phone.
 
-## Automatic clipboard sync stopped
+## A phone copy does not reach the computer
 
-A copy on the phone stops reaching the computer after a reboot, a Flux
-update, or an app kill.
-Android does not keep the log access, so the automatic sync ends.
+Android lets only the app on the screen read the clipboard.
+Flux sends a phone copy by itself only while Flux is on the screen.
+For a copy in another app, use the **Send clipboard** tile, the **Send clipboard** action on the service notification, **Send to computer**, or **Send with Flux**.
+See [send a copy from another app](features.md#send-a-copy-from-another-app).
 
-To resume it, open Flux and tap **Allow one-time access**.
-The status line under the switches of the **Sync** screen then shows **Automatic clipboard sync is on**.
-Flux checks the log access the first time that you leave the app after the automatic sync starts.
-If the access is off, the status line shows **Open Flux to resume automatic sync**.
-The service notification then shows **Open Flux to resume clipboard sync**.
-
-If the status line stays on **Only while Flux is open. Set up automatic sync**,
-**Automatic sync** is off, or Flux has no `READ_LOGS` permission or no overlay access.
-Tap the status line to open the setup sheet.
-If the sheet shows **Allow drawing over apps**, tap it.
-To give the overlay access with adb, run:
-
-```sh
-adb shell appops set org.omarchy.flux SYSTEM_ALERT_WINDOW allow
-```
-
-When Flux has both accesses, turn on **Automatic sync** at the end of the sheet.
-
-To give the log access again, follow [set up the automatic clipboard](android-setup.md#automatic-clipboard-sync).
+If the tile shows **Turn on Sync clipboard first**, open **Computers > Sync** and turn on **Sync clipboard**.
 
 A copy that its app marks as sensitive, for example a password, does not sync by itself.
 The **Send clipboard** tile does not send it either.

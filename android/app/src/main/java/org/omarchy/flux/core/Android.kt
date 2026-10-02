@@ -84,7 +84,7 @@ object Android {
      * returns null when the app has no focus. With [automatic], it reads
      * only plain text, and it returns null for a clip that the app marks as
      * sensitive, for example a password. A content address can stream
-     * without end, so the automatic sync does not read it on the main thread.
+     * without end, so the clipboard sync does not read it on the main thread.
      */
     fun clipboardText(context: Context, automatic: Boolean = false): String? {
         val cm = context.getSystemService(ClipboardManager::class.java) ?: return null
@@ -116,21 +116,13 @@ object Android {
     /**
      * The time that ClipboardService set on the current clip, in
      * milliseconds, or 0 when the clipboard is empty. The system sets a new
-     * time on each clip. The automatic sync drops a clip whose time matches
+     * time on each clip. The clipboard sync drops a clip whose time matches
      * the last clip that Flux sent, so 1 copy goes out once.
      */
     fun clipTimestamp(context: Context): Long {
         val cm = context.getSystemService(ClipboardManager::class.java) ?: return 0L
         return runCatching { cm.primaryClipDescription?.timestamp ?: 0L }.getOrDefault(0L)
     }
-
-    /** True when the phone lets Flux read the system log, for the automatic clipboard trigger. */
-    fun hasReadLogs(context: Context): Boolean =
-        androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_LOGS) ==
-            android.content.pm.PackageManager.PERMISSION_GRANTED
-
-    /** True when Flux may draw over other apps, for the automatic clipboard reader. */
-    fun canDrawOverlays(context: Context): Boolean = Settings.canDrawOverlays(context)
 
     /**
      * Puts text on the clipboard. It returns false when Android refuses the

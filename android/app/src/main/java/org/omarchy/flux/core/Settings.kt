@@ -15,22 +15,6 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("syncClipboard", true)
         set(v) = prefs.edit().putBoolean("syncClipboard", v).apply()
 
-    /**
-     * The automatic clipboard sync: Flux reads the system log for each copy
-     * in another app. It is off until the user turns it on in the setup
-     * sheet. While it is off, Flux starts no log reader, so Android shows no
-     * log access dialog. It works only while [syncClipboard] is on. An
-     * update from a version without the switch keeps the sync on, see
-     * [ClipGate.keepsAutoSync].
-     */
-    var autoClipboard: Boolean
-        get() = prefs.getBoolean("autoClipboard", false)
-        set(v) = prefs.edit().putBoolean("autoClipboard", v).apply()
-
-    /** True when the store holds [autoClipboard]. Without it, [FluxCore.init] sets the value once. */
-    val hasAutoClipboard: Boolean
-        get() = prefs.contains("autoClipboard")
-
     /** False after the user turns Flux off. Flux then starts no service and uses no network. */
     var enabled: Boolean
         get() = prefs.getBoolean("enabled", true)

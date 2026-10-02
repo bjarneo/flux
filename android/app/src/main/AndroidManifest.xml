@@ -40,15 +40,6 @@
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <!-- Android 12 and later: the pair sheet and the approval screen hide the windows of other apps. -->
     <uses-permission android:name="android.permission.HIDE_OVERLAY_WINDOWS" />
-    <!--
-        Automatic clipboard sync, opt in. The user grants both with adb.
-        READ_LOGS finds the copy signal in the system log. SYSTEM_ALERT_WINDOW
-        takes window focus for a moment, so Flux reads the new clip.
-        See docs/android-setup.md.
-    -->
-    <uses-permission android:name="android.permission.READ_LOGS"
-        tools:ignore="ProtectedPermissions" />
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
@@ -112,8 +103,7 @@
         <!--
             The clipboard sender: no UI. It takes window focus, reads the
             clipboard, sends it to each connected paired computer, and finishes.
-            The Quick Settings tile, the service notification, and the automatic
-            reader start it.
+            The Quick Settings tile and the service notification start it.
         -->
         <activity
             android:name=".ui.ClipboardSendActivity"

@@ -121,68 +121,6 @@ The text selection menu of any app has a **Send to computer** action.
 It sends the selected text to the computer that you pick.
 These paths need no setup and no extra permission.
 
-## Automatic clipboard sync
-
-The automatic sync sends each phone copy to the computer without the Flux app open.
-It is opt in, because it needs 2 permissions that you grant with adb.
-It stays off until you turn on **Automatic sync** in its setup sheet.
-
-Android 10 and later do not let a background app read the clipboard.
-Flux reads the copy signal from the system log with `READ_LOGS`.
-It then takes window focus for a moment with `SYSTEM_ALERT_WINDOW`, so it can read the new clip.
-While **Automatic sync** is off, Flux does not start the log reader, so Android shows no log access dialog.
-
-CAUTION: `READ_LOGS` gives Flux read access to all device logs. Grant it only if you accept this.
-
-To set up the automatic sync:
-
-1. Turn on **USB debugging** or **Wireless debugging**, as in [Install with adb](#install-with-adb).
-2. Grant the log access:
-
-   ```sh
-   adb shell pm grant org.omarchy.flux android.permission.READ_LOGS
-   ```
-
-3. Grant the overlay access:
-
-   ```sh
-   adb shell appops set org.omarchy.flux SYSTEM_ALERT_WINDOW allow
-   ```
-
-   The **Appear on top** switch in **Settings > Apps > Flux** does the same.
-
-4. Stop Flux, so it reads the log with the new access:
-
-   ```sh
-   adb shell am force-stop org.omarchy.flux
-   ```
-
-5. In Flux, open **Computers > Sync**.
-6. Tap the status line under the switches to open the setup sheet.
-7. Turn on **Automatic sync** at the end of the sheet.
-   The switch turns on only when Flux has both accesses.
-8. On Android 13 and later, tap **Allow one-time access**.
-
-The setup sheet shows the commands of steps 2 to 4 with a copy button.
-It also opens the overlay permission screen.
-To stop the automatic sync, open the sheet again and turn off **Automatic sync**.
-
-While **Sync clipboard** is on, the status line shows the state of the automatic sync.
-After you turn on **Automatic sync**, it shows **Automatic sync starts when you leave Flux**.
-Flux checks the log access the first time that you leave the app after the automatic sync starts.
-After this check, the status line shows **Automatic clipboard sync is on**.
-If the access is off, it shows **Open Flux to resume automatic sync**.
-
-Earlier versions of Flux started the automatic sync when both accesses were in place, with no switch.
-An update from such a version keeps **Automatic sync** on when Flux has both accesses.
-A new install starts with **Automatic sync** off, also when you ran the adb commands before the first start.
-
-Android does not keep the log access.
-It ends after each reboot, Flux update, or app kill.
-Open Flux once and tap **Allow one-time access** to resume the sync.
-When an update finishes, the installer offers **Open**, and that tap is enough.
-The service notification shows **Open Flux to resume clipboard sync** while the access is off.
-
 ## How Flux for Android is set up
 
 ### Distribution
@@ -241,8 +179,6 @@ The other permissions need no prompt.
 | `USE_BIOMETRIC` | [Fingerprint approval](approvals.md) of `sudo` and polkit | No prompt |
 | `HIDE_OVERLAY_WINDOWS` | The pair sheet and the approval screen hide the windows of other apps on Android 12 and later | No prompt |
 | `REQUEST_INSTALL_PACKAGES` | [Updates that the computer sends](android.md#update-the-app) | Android asks to allow **Install unknown apps** at the first update |
-| `READ_LOGS` | The [automatic clipboard sync](#automatic-clipboard-sync) finds the copy signal in the system log | You grant it with adb. Flux reads the log only after you turn on **Automatic sync**. |
-| `SYSTEM_ALERT_WINDOW` | The [automatic clipboard sync](#automatic-clipboard-sync) takes window focus to read the new clip | You grant it with adb, or with **Appear on top** |
 
 Flux shows no permission dialog before the first pairing.
 Keep Flux open for the first pairing. Before you allow notifications, Android 13 and later show no notification for a pair request.

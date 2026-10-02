@@ -28,9 +28,7 @@ object Plugins {
 
     /**
      * The time that Flux last wrote the clipboard, from
-     * [SystemClock.elapsedRealtime]. The automatic reader ignores the log
-     * lines for [ClipGate.SELF_WRITE_MS] after this time, because a Flux
-     * write also makes the denial line.
+     * [SystemClock.elapsedRealtime]. The echo check uses it with [ECHO_MS].
      */
     @Volatile var selfWriteAt: Long = 0L
 
@@ -52,8 +50,8 @@ object Plugins {
     const val MAX_CLIPBOARD_TEXT = 256 * 1024
 
     /**
-     * The longest text that the automatic sync sends to the computers, in
-     * UTF-8 bytes. `fluxd` takes up to 1 MiB from a device.
+     * The longest phone text that Flux sends to the computers, in UTF-8
+     * bytes. `fluxd` takes up to 1 MiB from a device.
      */
     const val MAX_AUTO_TEXT = 1 shl 20
 
@@ -175,7 +173,7 @@ object Plugins {
             return false
         }
         lastRemoteClip = text
-        // The write makes the same denial line, so the reader ignores it.
+        // The clipboard listener also sees this write, so the echo check skips it.
         selfWriteAt = SystemClock.elapsedRealtime()
         main.post {
             if (!Android.setClipboard(core.app, text)) core.toast("Android did not take the text from $from")
@@ -218,10 +216,9 @@ object Plugins {
     }
 
     /**
-     * Called when the local clipboard changes, from the listener and from
-     * the automatic reader. It sends the new clip to each connected paired
-     * computer. A clip that its app marks as sensitive, for example a
-     * password, stays on the phone.
+     * The clipboard listener calls it while Flux is in front. It sends the
+     * new clip to each connected paired computer. A clip that its app marks
+     * as sensitive, for example a password, stays on the phone.
      */
     fun onLocalClipboard(core: FluxCore) {
         sendClipboardToAll(core, manual = false)
@@ -232,9 +229,9 @@ object Plugins {
      * main thread while a window of Flux has focus. [manual] is true for a
      * user action, for example the tile: it gives 1 result to [notify] and
      * sends the current clip again. [notify] can run on another thread, for
-     * example after an image transfer. The automatic path ([manual] false)
-     * reports nothing and drops a clip that it sent before and a clip that
-     * came from a computer. Both paths skip text that its app marks as
+     * example after an image transfer. With [manual] false, the listener
+     * path reports nothing and drops a clip that it sent before and a clip
+     * that came from a computer. Both paths skip text that its app marks as
      * sensitive.
      */
     fun sendClipboardToAll(core: FluxCore, manual: Boolean, notify: (String) -> Unit = {}): Boolean {

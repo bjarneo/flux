@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.FileProvider
 import org.omarchy.flux.net.Payload
@@ -83,8 +82,6 @@ object ClipImage {
         val uri = FileProvider.getUriForFile(core.app, authority(core.app), file)
         lastRemote = uri
         InboxFeed.clipReceived(d.id, d.identity.deviceName, null)
-        // The write makes the clipboard denial line, so the reader ignores it.
-        Plugins.selfWriteAt = SystemClock.elapsedRealtime()
         main.post { Android.setClipboardImage(core.app, uri) }
     }
 
@@ -109,7 +106,7 @@ object ClipImage {
      * another app goes out, because a file address opens a path with the
      * rights of Flux. Of the addresses of Flux, only [lastRemote] goes out,
      * so that the user can send an image from 1 computer to another. The
-     * automatic sync does not send [lastRemote] back.
+     * clipboard sync does not send [lastRemote] back.
      *
      * [manual] is true for Send clipboard. It also sends an image from a
      * computer that is still in the clipboard folder, because [lastRemote]

@@ -153,13 +153,4 @@ data class UiState(
     val themeScope: String? = null,
     /** The name of the theme of each computer that sent one, by device ID. */
     val computerThemes: Map<String, String> = emptyMap(),
-
-    /** The user turned on the automatic clipboard sync in its setup sheet. See [Settings.autoClipboard]. */
-    val autoClipboard: Boolean = false,
-    /** The state of the automatic clipboard sync. See [ClipWatch]. */
-    val clipAuto: ClipAutoState = ClipAutoState.Off,
-    /** Flux may read the system log, which the automatic clipboard reader needs. The user grants it with adb. */
-    val readLogs: Boolean = false,
-    /** Flux may draw over other apps, which the automatic clipboard reader needs. */
-    val overlayAccess: Boolean = false,
 )

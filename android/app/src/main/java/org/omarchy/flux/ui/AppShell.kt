@@ -213,7 +213,7 @@ fun FluxShell(
                                     onSwipe = { arrangement = arrangement.swipe(it) },
                                     onPromote = { arrangement = arrangement.promote(it) },
                                 )
-                                Tab.Send -> SendScreen(state, scope, picker, tools, onOpen = ::open, onSync = toSync, onPair = toComputers)
+                                Tab.Send -> SendScreen(state, scope, picker, tools, onOpen = ::open, onPair = toComputers)
                                 Tab.Control -> ControlScreen(state, scope, picker, onOpen = ::open, onPair = toComputers)
                                 Tab.Computers -> ComputersScreen(state, scope, onScope, onPair, onUnpair, onSync = toSync)
                             }

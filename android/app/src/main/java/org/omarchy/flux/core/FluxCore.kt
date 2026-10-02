@@ -85,8 +85,6 @@ object FluxCore {
     @Volatile private var callAccess = false
     @Volatile private var smsAccess = false
     @Volatile private var smsSupported = false
-    @Volatile private var readLogs = false
-    @Volatile private var overlayAccess = false
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state
@@ -116,10 +114,6 @@ object FluxCore {
         }
         trust = TrustStore(app)
         settings = Settings(app)
-        // Earlier versions had no switch for the automatic clipboard sync. An update keeps the sync of a user who set it up.
-        if (!settings.hasAutoClipboard) {
-            settings.autoClipboard = ClipGate.keepsAutoSync(installedBefore(), Android.hasReadLogs(app), Android.canDrawOverlays(app))
-        }
         // The trust store holds only entries with a readable certificate.
         for (t in trust.all()) {
             val identity = Identity(t.id, t.name, t.type, 8, emptyList(), emptyList())
@@ -140,12 +134,6 @@ object FluxCore {
         if (settings.enabled) startConnectGrace()
         publish()
     }
-
-    /** True when this install is an update over an earlier version, not a new install. */
-    private fun installedBefore(): Boolean = runCatching {
-        val info = app.packageManager.getPackageInfo(app.packageName, 0)
-        info.lastUpdateTime != info.firstInstallTime
-    }.getOrDefault(false)
 
     /**
      * Starts the time in which the paired computers that are not online show
@@ -177,8 +165,6 @@ object FluxCore {
         notificationAccess = Android.hasNotificationAccess(app)
         callAccess = Android.hasPhoneState(app)
         smsAccess = SmsSync.hasAccess(app)
-        readLogs = Android.hasReadLogs(app)
-        overlayAccess = Android.canDrawOverlays(app)
     }
 
     /** Reads all system flags again and publishes the state. */
@@ -448,10 +434,6 @@ object FluxCore {
                 computerTheme = ComputerThemes.current(),
                 themeScope = ComputerThemes.scope,
                 computerThemes = ComputerThemes.names(),
-                autoClipboard = settings.autoClipboard,
-                clipAuto = ClipWatch.uiState(settings.syncClipboard, settings.autoClipboard, readLogs, overlayAccess),
-                readLogs = readLogs,
-                overlayAccess = overlayAccess,
             )
         }
         _state.value = snapshot
@@ -550,8 +532,7 @@ object FluxCore {
         settings.enabled = on
         publish()
         if (on) {
-            // In the open app, the refresh also starts the automatic clipboard
-            // reader, because the log-access dialog can show now.
+            // In the open app, the refresh also reads the accesses and the network again.
             val action = if (foreground) org.omarchy.flux.service.FluxService.ACTION_REFRESH else null
             org.omarchy.flux.service.FluxService.start(app, action)
         } else {
@@ -568,22 +549,7 @@ object FluxCore {
 
     fun setSyncClipboard(on: Boolean) {
         settings.syncClipboard = on
-        // The automatic reader arms again on the next ACTION_REFRESH.
-        if (!on) ClipWatch.stop() else org.omarchy.flux.service.FluxService.start(app, org.omarchy.flux.service.FluxService.ACTION_REFRESH)
         sendIdentity()
-        publish()
-    }
-
-    /**
-     * Turns the automatic clipboard sync on or off. The setup sheet turns it
-     * on after the log access and the overlay access are in place. On, the
-     * next ACTION_REFRESH starts the log reader, and Android 13 and later
-     * then ask for log access. Off stops the reader.
-     */
-    fun setAutoClipboard(on: Boolean) {
-        settings.autoClipboard = on
-        if (!on) ClipWatch.stop() else org.omarchy.flux.service.FluxService.start(app, org.omarchy.flux.service.FluxService.ACTION_REFRESH)
-        refreshAccess()
         publish()
     }
 
