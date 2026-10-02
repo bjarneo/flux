@@ -28,7 +28,10 @@ final class WebcamBackgroundTests: XCTestCase {
     func testLeavingTheScreenStopsTheStreamWithANotice() throws {
         let webcam = WebcamPlugin()
         _ = try makeCore(plugins: [webcam])
-        webcam.start("computer")
+        // The stream task of start fails at once for an unknown computer, and
+        // on a slow runner that failure can end the session first. So the test
+        // holds the session without the task.
+        XCTAssertNotNil(webcam.beginAttempt("computer"))
         webcam.stopInBackground()
         settle()
         XCTAssertEqual(webcam.model.status.phase, .idle)

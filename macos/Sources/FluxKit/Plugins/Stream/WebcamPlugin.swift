@@ -117,7 +117,16 @@ public final class WebcamPlugin: FluxPlugin, @unchecked Sendable {
 
     /// Starts a stream to the computer. A running stream stops first.
     public func start(_ deviceId: String) {
-        guard let core else { return }
+        guard let core, let started = beginAttempt(deviceId) else { return }
+        Task { await self.run(core: core, deviceId: deviceId, name: started.name, id: started.id) }
+    }
+
+    /// Opens a new attempt for deviceId and shows that Flux waits for the
+    /// computer. It returns the number of the attempt and the name of the
+    /// computer, or nil without a core. `start` then runs the stream. The
+    /// tests use it to hold a session without the stream task.
+    func beginAttempt(_ deviceId: String) -> (id: Int, name: String)? {
+        guard let core else { return nil }
         stop(notify: true, status: StreamStatus())
         let id = lock.withLock { () -> Int in
             attempt += 1
@@ -127,7 +136,7 @@ public final class WebcamPlugin: FluxPlugin, @unchecked Sendable {
         let name = core.withDevice(deviceId) { $0.name } ?? "the computer"
         setStatus(StreamStatus(.connecting, "Waiting for \(name)…", deviceId: deviceId))
         ui { $0.cameraError = nil }
-        Task { await self.run(core: core, deviceId: deviceId, name: name, id: id) }
+        return (id, name)
     }
 
     /// Stops the stream and tells the computer.
