@@ -178,7 +178,12 @@ The phone turns on the camera or the microphone only after you tap Start on the 
 
 - While Flux is on the screen, a prompt shows the title `omarchy asks for the webcam` with **Start webcam** and **Not now**. For the mic, the prompt shows `omarchy asks for the mic` with **Start the mic**. The title names the computer.
 - While Flux is not on the screen, a notification shows the request. The notification has the same title, with the text `Tap to start the webcam.` or `Tap to start the mic.` below it. It has the action **Start webcam** or **Start the mic**. The notification uses the **Stream requests** channel.
-- Without the notification permission, the phone shows a request only while Flux is on the screen.
+- A tap on the notification opens Flux, and Flux shows the prompt. Only the action **Start webcam** or **Start the mic** starts the stream.
+- A new request of the same computer and kind replaces the notification and does not alert again.
+- When Flux comes on the screen, the prompt shows each open request, and the notifications of those requests go away.
+- Each computer has at most 1 open request of each kind. The prompt shows the newest request first. After you answer it, the prompt shows the next one.
+- **Start webcam** and **Start the mic** take a tap only 0.8 seconds after the prompt is fully open and Flux is in front. A touch that started earlier does nothing.
+- Without the notification permission, the phone shows a request only in the prompt. The prompt shows while Flux is on the screen, or when Flux comes on the screen within 60 seconds.
 - The prompt and the notification go away after 60 seconds.
 - A tap on Start opens the **Webcam** or **Mic** page of that computer, and the page starts the stream with the saved settings. On a locked phone, Android asks you to unlock it first.
 - When the page cannot start the stream in 60 seconds, for example while the computer is not reachable, it does not start it. Then press Start on the page.
@@ -190,10 +195,11 @@ The stream starts from the visible page with the start code of its Start button.
 Android lets an app use the camera and the microphone only while the app is visible or after an action of the user.
 The stream stops when the page closes or Flux goes to the background, as after a start on the page.
 
-Another app on the phone can open Flux with the extras of the notification.
-Only the one-time key of the notification starts the stream at once.
-Without the key, the page opens, and you press Start.
-The keys stay in memory, so after a restart of the Flux process, the notification opens only the page.
+Another app on the phone can start Flux with the extras of the Start action.
+Only the one-time key of the notification opens the page and starts the stream.
+An intent without a valid key opens no page and removes no notification.
+The keys stay in memory.
+When the Flux process starts again, it removes the notifications of the stream requests.
 
 The phone lists `flux.stream.request` in its incoming packet types.
 An earlier Flux for Android does not list it, so the computer sends no request to it.

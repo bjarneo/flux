@@ -153,7 +153,7 @@ The device shows the request in 1 of 2 forms:
 | Flux on the device | What the device shows |
 | --- | --- |
 | On the screen | A prompt with the title `omarchy asks for the webcam` or `omarchy asks for the mic`. The prompt has the buttons **Start webcam** or **Start the mic**, and **Not now**. |
-| Not on the screen | A notification with the text `Tap to start the webcam.` or `Tap to start the mic.` under the same title. The notification has a start action. |
+| Not on the screen | A notification with the text `Tap to start the webcam.` or `Tap to start the mic.` under the same title. On a Mac, the text starts with `Click`. The notification has a start action. |
 
 The title has the name of the computer, as `flux-cli status` shows it.
 The request ends after 60 seconds.
@@ -164,7 +164,7 @@ When a stream of that kind already runs to that computer, the request does nothi
 
 Each platform has its own limits:
 
-- Flux for Android waits up to 60 seconds until it can start the stream. It waits for the unlock of the phone and for the link. See [webcam and mic requests](android.md#webcam-and-mic-requests).
+- Flux for Android waits up to 60 seconds until it can start the stream. It waits for the unlock of the phone and for the link. A tap on the notification shows the prompt. Only the start action starts the stream. See [webcam and mic requests](android.md#webcam-and-mic-requests).
 - Flux for iOS waits up to 15 seconds until it can start the stream. A suspended Flux cannot remove the notification after 60 seconds. See [start a stream from the computer](ios.md#start-a-stream-from-the-computer).
 - Flux for macOS shows the prompt only while Flux is the active app. Else it shows the notification. See [start a stream from the computer](macos.md#start-a-stream-from-the-computer).
 
