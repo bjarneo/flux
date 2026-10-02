@@ -127,7 +127,28 @@ func sessionDaemon(t *testing.T, cfg *config.Config) (*Daemon, *Device) {
 // runs for each run.
 func fakeRecorder(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
+	// A recording writes "end" 0.3 seconds after it stops, also after the
+	// test ended. t.TempDir then fails with "directory not empty" when the
+	// write comes during its removal. So this folder has its own removal,
+	// which tries again for a short time.
+	dir, err := os.MkdirTemp("", "flux-recorder-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		deadline := time.Now().Add(2 * time.Second)
+		for {
+			err := os.RemoveAll(dir)
+			if err == nil {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Logf("remove %s: %v", dir, err)
+				return
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	})
 	mark := filepath.Join(dir, "recorded")
 	runs := filepath.Join(dir, "runs")
 	// A recording stops 0.3 seconds after SIGINT and then writes "end".
