@@ -231,6 +231,17 @@ func TestThemeGoesOneWay(t *testing.T) {
 	}
 }
 
+func TestStreamRequestGoesOneWay(t *testing.T) {
+	// The computer asks a device to start its camera or its microphone.
+	// It does not take such a request from a device.
+	if !slices.Contains(Outgoing, TypeFluxStreamRequest) {
+		t.Error("the computer must send the stream request")
+	}
+	if slices.Contains(Incoming, TypeFluxStreamRequest) {
+		t.Error("the computer must not take a stream request")
+	}
+}
+
 // TestIdentityApp checks the optional app fields. An earlier app sends
 // neither, and the JSON of an identity without them has no such keys.
 func TestIdentityApp(t *testing.T) {

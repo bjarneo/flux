@@ -2,12 +2,45 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"time"
 )
 
-// mic shows the phone microphone state, or stops it.
-func mic(args []string) error {
-	if first(args) == "stop" {
+// streamStart asks a device to start its camera or its microphone for this
+// computer. kind is "webcam" or "mic", and args starts with "start". The
+// device flag can also come after start. The device starts the stream only
+// after its user taps start, so streamStart tells the user to confirm.
+func streamStart(kind string, args []string, device string, out io.Writer) error {
+	rest, named := splitDevice(args)
+	if len(rest) > 1 {
+		return fmt.Errorf("unknown argument %q. Usage: flux-cli %s start [--device NAME]", rest[1], kind)
+	}
+	if named != "" {
+		device = named
+	}
+	var res struct {
+		Device string `json:"device"`
+		Name   string `json:"name"`
+	}
+	if err := callInto(kind+".start", map[string]any{"device": device}, &res); err != nil {
+		return err
+	}
+	what := "the webcam"
+	if kind == "mic" {
+		what = "the mic"
+	}
+	fmt.Fprintf(out, "Asked %s to start %s. Confirm on %s.\n", res.Name, what, res.Name)
+	return nil
+}
+
+// mic shows the phone microphone state, asks the phone to start it, or
+// stops it.
+func mic(args []string, device string) error {
+	switch first(args) {
+	case "start":
+		return streamStart("mic", args, device, os.Stdout)
+	case "stop":
 		return call("mic.stop", nil)
 	}
 	var s struct {
@@ -27,6 +60,7 @@ func mic(args []string) error {
 	switch {
 	case m == nil:
 		fmt.Println("No phone microphone. Start it in Flux for Android: Microphone, then Start.")
+		fmt.Println("To ask the phone from this computer, run: flux-cli mic start")
 	case m.Error != "":
 		fmt.Println("The phone microphone failed:", m.Error)
 	case m.Active:

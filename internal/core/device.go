@@ -224,6 +224,9 @@ func (dev *Device) plugins() []string {
 		{"findmyphone", dev.accepts(proto.TypeFindMyPhone)},
 		{"sms", dev.supports(proto.TypeSmsMessages)},
 		{"runcommand", dev.supports(proto.TypeRunCommandRequest)},
+		// The device can start its camera and its microphone when this
+		// computer asks, after a tap of its user.
+		{"streamrequest", dev.accepts(proto.TypeFluxStreamRequest)},
 	}
 	out := []string{}
 	for _, c := range checks {

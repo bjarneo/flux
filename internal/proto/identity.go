@@ -87,6 +87,13 @@ const (
 	// changes, only to a device that lists it as incoming. docs/omarchy.md
 	// describes the body.
 	TypeFluxTheme = "flux.theme"
+	// TypeFluxStreamRequest asks a device to start its camera or its
+	// microphone for this computer, {"kind": "webcam"} or {"kind": "mic"}.
+	// The packet only asks. The device starts the stream with flux.webcam
+	// or flux.mic only after its user taps start on the device. fluxd sends
+	// it only to a paired, connected device that lists it as incoming.
+	// docs/camera.md describes it.
+	TypeFluxStreamRequest = "flux.stream.request"
 )
 
 // Incoming lists the packet types that Flux accepts. The phone enables a
@@ -110,7 +117,7 @@ var Outgoing = []string{
 	TypeSmsConversation, TypeSftp, TypeFluxWebcam, TypeFluxDnd,
 	TypeFluxMic, TypeFluxScreen, TypeFluxApprove, TypeFluxHerdr,
 	TypeFluxClipboardImage, TypeFluxInput, TypeFluxDesktop, TypeFluxShortcuts,
-	TypeFluxTheme,
+	TypeFluxTheme, TypeFluxStreamRequest,
 }
 
 // Identity is the body of a flux.identity packet.

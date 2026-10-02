@@ -174,4 +174,9 @@ type sessionState struct {
 
 	// The turns of the stream sessions.
 	desktopTurn, micTurn, screenTurn, webcamTurn sessionTurn
+
+	// streamAsked is the time of the last request of this computer for
+	// the webcam or the microphone of a device, by the kind and the
+	// device ID.
+	streamAsked map[streamAsk]time.Time
 }

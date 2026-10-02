@@ -66,9 +66,12 @@ Commands:
   commands remove ID     Remove a command
   run ID                 Run a command on this computer
   webcam [stop]          Show the phone camera state, or stop the phone camera
+  webcam start           Ask the phone to start its camera as the webcam. You confirm
+                         on the phone
   webcam set KEY=VALUE…  Change the phone camera, for example: webcam set aspect=1:1 brightness=0.2
   webcam reset           Set the phone camera back to the neutral values
   mic [stop]             Show the phone microphone state, or stop the phone microphone
+  mic start              Ask the phone to start its microphone. You confirm on the phone
   screen [stop]          Show the phone screen mirror state, or stop the mirror
   desktop [stop]         Show whether a phone shows this screen, or stop it
   desktop on|off         Let a paired phone or Mac show this screen, or stop that
@@ -149,9 +152,9 @@ func main() {
 	case "run":
 		err = call("commands.run", map[string]any{"id": need(args, "ID")})
 	case "webcam":
-		err = webcam(args)
+		err = webcam(args, device)
 	case "mic":
-		err = mic(args)
+		err = mic(args, device)
 	case "screen":
 		err = screen(args)
 	case "desktop":
@@ -865,8 +868,12 @@ func shellQuote(w string) string {
 	return "'" + strings.ReplaceAll(w, "'", `'\''`) + "'"
 }
 
-func webcam(args []string) error {
+// webcam shows the phone camera state, asks the phone to start it, changes
+// its settings, or stops it.
+func webcam(args []string, device string) error {
 	switch first(args) {
+	case "start":
+		return streamStart("webcam", args, device, os.Stdout)
 	case "stop":
 		return call("webcam.stop", nil)
 	case "reset":
@@ -898,6 +905,7 @@ func webcam(args []string) error {
 	switch {
 	case w == nil:
 		fmt.Println("No phone camera. Start it in Flux for Android: Camera, then Webcam.")
+		fmt.Println("To ask the phone from this computer, run: flux-cli webcam start")
 	case w.Error != "":
 		fmt.Println("The phone camera failed:", w.Error)
 	case w.Active:

@@ -246,6 +246,14 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 	case "discover":
 		d.announce()
 		return ok, nil
+	case "webcam.start", "mic.start":
+		// The request picks its own device: only a device that accepts
+		// flux.stream.request counts.
+		id, name, err := d.requestStream(strings.TrimSuffix(method, ".start"), p.Device)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"device": id, "name": name}, nil
 	case "webcam.stop":
 		return ok, d.StopWebcam()
 	case "webcam.config":
