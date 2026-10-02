@@ -213,8 +213,8 @@ The theme engine is in `macos/Sources/FluxKit/Theme`, and the colors of the app 
 | Commands | Lists and runs the commands configured on the computer. |
 | Browse | Opens the shared folders of the computer read-only through SSH inside a `flux.tunnel`, and saves files to the Files app. |
 | Camera modes | Text, QR, Photo, Document, and Signature, like the Android app, from the camera, a picked photo, or a pasted image. A document has at most 30 pages. |
-| Webcam | Streams the front or back camera to the computer as a virtual webcam in H.264. **Also send the microphone** starts the microphone with it. It stops when Flux leaves the screen. The screen of the iPhone stays on while the webcam or the remote desktop streams and while the touchpad shows. |
-| Microphone | Streams the microphone as 48 kHz mono audio. It keeps streaming in the background and while the iPhone is locked. |
+| Webcam | Streams the front or back camera to the computer as a virtual webcam in H.264. **Also send the microphone** starts the microphone with it. It stops when Flux leaves the screen. The screen of the iPhone stays on while the webcam or the remote desktop streams and while the touchpad shows. `flux-cli webcam start` asks the iPhone to start it, see [Start a stream from the computer](#start-a-stream-from-the-computer). |
+| Microphone | Streams the microphone as 48 kHz mono audio. It keeps streaming in the background and while the iPhone is locked. `flux-cli mic start` asks the iPhone to start it, see [Start a stream from the computer](#start-a-stream-from-the-computer). |
 | Notifications | Shows notifications from `flux-cli notify`. Each computer can show 10 notifications at once, then 1 more each second. Only the first notification of a burst makes a sound. Each computer keeps at most 20 notifications in Notification Center, and a new one removes the oldest. Received links count toward these limits. |
 | Battery | Reports the battery of the iPhone. The scope chip, **Computers**, and the page of the computer show the battery of the computer. |
 | Ring | `flux-cli ring` rings the iPhone. |
@@ -228,11 +228,48 @@ The theme engine is in `macos/Sources/FluxKit/Theme`, and the colors of the app 
 
 Flux for iOS does not advertise notifications of other apps, SMS, calls, or the screen mirror.
 
+## Start a stream from the computer
+
+The computer can ask the iPhone to start the webcam or the microphone.
+The iPhone never turns on its camera or its microphone without a tap on the iPhone.
+The request only asks, also while Flux is on the screen.
+
+```sh
+flux-cli webcam start
+flux-cli --device iPhone mic start
+```
+
+The computer sends `flux.stream.request` with `{"kind": "webcam"}` or `{"kind": "mic"}`.
+The iPhone lists `flux.stream.request` in its incoming packet types, because it can stream both kinds.
+
+| Flux | What the iPhone shows |
+| --- | --- |
+| On the screen | A sheet with the title "omarchy asks for the webcam" or "omarchy asks for the mic", and the buttons **Start webcam** or **Start the mic**, and **Not now**. The sheet does not close with a swipe. |
+| Not on the screen | A notification with the same title and the text "Tap to start the webcam." or "Tap to start the mic.". The **Start webcam** or **Start the mic** action, or a tap on the notification, opens Flux and starts the stream. The action needs an unlocked iPhone. The notification shows only when Flux has notification access. |
+
+The prompt and the notification name the computer that asks.
+When a request waits and Flux comes on the screen, the sheet shows the request.
+
+A tap on start opens **Control > Webcam** or **Control > Mic** of that computer.
+The stream starts at once with the saved settings, the same as **Start webcam** or **Start microphone** on that screen.
+When Flux is not on the screen yet or the link is not back, the start waits up to 15 seconds.
+After that time, a message says that the stream did not start.
+
+Each request follows these rules:
+
+- A request ends after 60 seconds, and its notification goes away.
+- iOS suspends Flux soon after it leaves the screen, and a suspended Flux cannot remove a notification. A tap on a notification that is older than 60 seconds opens Flux and starts nothing.
+- When a stream of that kind already runs to that computer, the request does nothing.
+- The iPhone ignores a request of the same kind from the same computer that comes less than 3 seconds after the last request that it took.
+- An unpair ends the requests of the computer.
+
+The webcam stops when Flux leaves the screen, also after a start from a request.
+
 ## Limits of iOS
 
 | Limit | Effect |
 | --- | --- |
-| iOS suspends Flux soon after it leaves the screen | The link closes, and Flux connects again when it opens. Approvals, agent alerts, notifications, and clipboard changes reach the iPhone only while Flux runs. The microphone stream keeps running in the background. |
+| iOS suspends Flux soon after it leaves the screen | The link closes, and Flux connects again when it opens. Approvals, agent alerts, notifications, stream requests, and clipboard changes reach the iPhone only while Flux runs. The microphone stream keeps running in the background. |
 | Other apps' notifications, text messages, and calls | iOS gives apps no access to them. Flux does not advertise `notification.request`, `sms.*`, or `telephony`. |
 | Clipboard | iOS gives apps no event for a new copy, and it asks before each read of text that another app copied. Flux reads the clipboard only while it is on the screen. When Flux opens and when a computer connects, it reads only after the clipboard changed. A shortcut with **Send Text to Computer** sends a copy while Flux stays closed. Text and images from a computer stay on the iPhone and do not go to Universal Clipboard. |
 | Screenshots and photos | They go to the computer when Flux opens, not in the background. |

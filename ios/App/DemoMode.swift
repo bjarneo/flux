@@ -130,6 +130,7 @@ enum DemoMode {
         PacketType.fluxMic, PacketType.fluxScreen, PacketType.fluxApprove, PacketType.fluxHerdr,
         PacketType.fluxClipboardImage, PacketType.fluxInput, PacketType.fluxDesktop, PacketType.fluxShortcuts,
         PacketType.fluxTheme,
+        PacketType.fluxStreamRequest,
     ]
 
     private static func computer(id: String, name: String, type: String, ip: String, online: Bool) -> DeviceSnapshot {
