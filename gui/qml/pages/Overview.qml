@@ -29,33 +29,73 @@ Item {
   // The ID of the device that got the last request of this window for the
   // webcam and for the mic, or "". The card then tells the user to confirm
   // on the device. The device removes its notification after 60 seconds,
-  // and the card then removes its note too. A stream of the kind also
-  // removes the note.
+  // and the card then removes its note too. The next change of the stream
+  // state of the kind also removes the note, for example a stream that
+  // starts or a start that fails at once.
   property string webcamAsked: ""
   property string micAsked: ""
+  // The stream state of the kind at the time of the request, as JSON. fluxd
+  // sends at most 1 state every 100 ms, so a start that fails at once can
+  // come only as an error. A comparison with this value finds that change.
+  property string webcamSeen: ""
+  property string micSeen: ""
+  // The ID of the device that got a request of this window for the kind in
+  // the last 3 seconds, or "". fluxd refuses a second request in that time,
+  // so Start is inactive for that device. An error of the request makes
+  // Start active again at once.
+  property string webcamSent: ""
+  property string micSent: ""
+  // streamRequestGap in internal/core/streamrequest.go, in milliseconds.
+  readonly property int requestGap: 3000
 
-  onWebcamChanged: if (webcam && !webcam.error) webcamAsked = ""
-  onMicChanged: if (mic && !mic.error) micAsked = ""
+  onWebcamChanged: if (webcamAsked !== "" && JSON.stringify(webcam) !== webcamSeen) webcamAsked = ""
+  onMicChanged: if (micAsked !== "" && JSON.stringify(mic) !== micSeen) micAsked = ""
 
   Timer { id: webcamWait; interval: 60000; onTriggered: root.webcamAsked = "" }
   Timer { id: micWait; interval: 60000; onTriggered: root.micAsked = "" }
+  Timer { id: webcamGap; interval: root.requestGap; onTriggered: root.webcamSent = "" }
+  Timer { id: micGap; interval: root.requestGap; onTriggered: root.micSent = "" }
 
   // Asks the device to start its camera or its mic. kind is "webcam" or
   // "mic". The toast and the card tell the user to confirm on the device.
+  // A second request of the kind to the device in requestGap does nothing.
   function askStream(kind) {
     if (!view || !dev) return
+    // The view outlives this page, so the replies use it.
+    var v = view
+    var mic = kind === "mic"
     var id = dev.id
     var name = dev.name || "the device"
-    view.call(kind + ".start", { device: id }, function () {
-      if (kind === "mic") {
+    var gap = mic ? micGap : webcamGap
+    if ((mic ? micSent : webcamSent) === id) return
+    if (mic) micSent = id
+    else webcamSent = id
+    gap.restart()
+    v.call(kind + ".start", { device: id }, function () {
+      // The gap of fluxd starts before this reply. A restart here keeps
+      // Start inactive until that gap ends.
+      gap.restart()
+      if (mic) {
         root.micAsked = id
+        root.micSeen = JSON.stringify(root.mic)
         micWait.restart()
       } else {
         root.webcamAsked = id
+        root.webcamSeen = JSON.stringify(root.webcam)
         webcamWait.restart()
       }
-      root.view.toast("Asked " + name + " to start " + (kind === "mic" ? "the mic" : "the webcam") + ". Confirm on " + name + ".")
+      v.toast("Asked " + name + " to start " + (mic ? "the mic" : "the webcam") + ". Confirm on " + name + ".")
+    }, function (err) {
+      if (mic && root.micSent === id) root.micSent = ""
+      if (!mic && root.webcamSent === id) root.webcamSent = ""
+      v.toast(err.message || err.code || "Error")
     })
+  }
+
+  // True when Start can send a request to the device. sent is webcamSent
+  // or micSent.
+  function canSend(sent) {
+    return !dev || sent !== dev.id
   }
 
   // The line under an idle card: the device to confirm on, or "".
@@ -283,6 +323,7 @@ Item {
       canStart: root.canAsk
       note: root.confirmNote(root.webcamAsked)
       idleTitle: root.idleTitle(root.webcamAsked, "the webcam")
+      startActive: root.canSend(root.webcamSent)
       onStart: root.askStream("webcam")
       Layout.fillWidth: true
       Layout.fillHeight: true
@@ -307,6 +348,7 @@ Item {
       canStart: root.canAsk
       note: root.confirmNote(root.micAsked)
       idleTitle: root.idleTitle(root.micAsked, "the mic")
+      startActive: root.canSend(root.micSent)
       onStart: root.askStream("mic")
     }
 

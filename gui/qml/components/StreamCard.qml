@@ -18,11 +18,14 @@ Card {
   // idle is true while no stream runs. The card then shows idleTitle. With
   // canStart, Start shows while the card is idle or failed, and emits
   // start(). note is a line under the title or the error of an idle or
-  // failed card, for example the device to confirm on.
+  // failed card, for example the device to confirm on. While startActive
+  // is false, Start is dim and does nothing, for example in the 3 seconds
+  // after a request.
   property bool idle: false
   property string idleTitle: ""
   property string note: ""
   property bool canStart: false
+  property bool startActive: true
   signal start()
 
   readonly property bool failed: !idle && !!stream && !!stream.error
@@ -107,6 +110,7 @@ Card {
           visible: root.canStart && (root.idle || root.failed)
           icon: "play"
           text: "Start"
+          active: root.startActive
           onClicked: root.start()
         }
         OutlineButton {
