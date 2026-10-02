@@ -133,7 +133,8 @@ flux-cli screen stop
 
 `flux-cli webcam start` and `flux-cli mic start` only ask.
 The stream starts after the user taps start on the phone.
-Tell the user to confirm on the phone, and check `webcam` or `mic` in `flux-cli status --json` before you report that the stream runs.
+Tell the user to confirm on the phone.
+Before you report that the stream runs, check `webcam` or `mic` in `flux-cli status --json`.
 
 The webcam needs `ffmpeg` and `v4l2loopback-dkms` with the matching kernel headers.
 The microphone needs PipeWire and `pw-cat`.

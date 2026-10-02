@@ -104,14 +104,14 @@ See [Flux for iOS](ios.md#features) and [Flux for macOS](macos.md#features).
 
 The computer can send files, links, text, and notifications to a paired device.
 Each app opens a link or a file from the computer only after a tap.
+Flux for Android installs no app that the computer sends, except a newer Flux with the signing key of the installed Flux, after your tap.
 
 The computer can ask a paired device to start its camera or its microphone.
 `flux-cli webcam start`, `flux-cli mic start`, and **Start** in the Flux window send the request.
-The device never turns on its camera or its microphone without a tap of its user on the device.
-This is true also while Flux is on the screen of the device. The tap is the consent.
+The device never turns on its camera or its microphone without a tap on the device, also while Flux is on its screen.
+The tap is the consent.
 `fluxd` sends at most 1 request of each kind to a device in 3 seconds, and the device ignores a request that comes sooner.
 See [start from the computer](camera.md#start-from-the-computer).
-Flux for Android installs no app that the computer sends, except a newer Flux with the signing key of the installed Flux, after your tap.
 
 ## Network ports
 

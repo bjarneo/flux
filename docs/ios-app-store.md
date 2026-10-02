@@ -119,7 +119,9 @@ Background mode: the app claims only the audio mode. It keeps the microphone str
 
 Remote control: the touchpad, keyboard, remote desktop, terminal, and agent screens send input to programs on the user's own computer, like an SSH client. The app asks for Face ID, Touch ID, or the passcode before these screens send input, and an unlock lasts 5 minutes. The app runs no downloaded code.
 
-Permissions: Local Network finds and connects to the computers. Camera scans text, codes, and pages, takes photos, and streams as a webcam. Microphone streams audio to the computer and records dictation. Speech Recognition turns dictation into text. Photos sends new screenshots and photos when the user turns that on. Face ID confirms input to the computer and approves sudo. Notifications show pairing requests, received files, notifications from the computer, approvals, and agent alerts.
+Permissions: Local Network finds and connects to the computers. Camera scans text, codes, and pages, takes photos, and streams as a webcam. Microphone streams audio to the computer and records dictation. Speech Recognition turns dictation into text. Photos sends new screenshots and photos when the user turns that on. Face ID confirms input to the computer and approves sudo. Notifications show pairing requests, received files, notifications from the computer, approvals, agent alerts, and stream requests.
+
+Stream requests: a paired computer can ask Flux to start the webcam or the microphone. Flux shows a prompt or a notification. It starts the stream only after the user taps Start webcam or Start the mic.
 ```
 
 ### Permission texts

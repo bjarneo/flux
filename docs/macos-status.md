@@ -78,7 +78,7 @@ The integrator merged each branch into `macos-client`, resolved the composition 
 
 | Direction | Packet types |
 | --- | --- |
-| Incoming | `flux.ping`, `flux.battery`, `flux.clipboard`, `flux.clipboard.connect`, `flux.share.request`, `flux.share.request.update`, `flux.notification`, `flux.runcommand`, `flux.mpris`, `flux.sftp`, `flux.webcam`, `flux.screen`, `flux.mic`, `flux.dnd`, `flux.approve`, `flux.input`, `flux.herdr`, `flux.desktop`, `flux.shortcuts` |
+| Incoming | `flux.ping`, `flux.battery`, `flux.clipboard`, `flux.clipboard.connect`, `flux.share.request`, `flux.share.request.update`, `flux.notification`, `flux.runcommand`, `flux.mpris`, `flux.sftp`, `flux.webcam`, `flux.screen`, `flux.mic`, `flux.dnd`, `flux.approve`, `flux.input`, `flux.herdr`, `flux.desktop`, `flux.shortcuts`, `flux.theme`, `flux.stream.request` |
 | Outgoing | `flux.ping`, `flux.battery`, `flux.clipboard`, `flux.clipboard.connect`, `flux.share.request`, `flux.share.request.update`, `flux.runcommand.request`, `flux.mpris.request`, `flux.sftp.request`, `flux.mousepad.request`, `flux.tunnel`, `flux.webcam`, `flux.screen`, `flux.mic`, `flux.dnd`, `flux.approve`, `flux.herdr`, `flux.desktop`, `flux.shortcuts` |
 
 A Mac without an internal battery announces `flux.battery` as incoming only.
@@ -149,4 +149,5 @@ Unless noted, the peer was the headless `fluxd` described above, driven with `fl
 | Camera Screen Region and denied-camera screen | Needs a manual selection and a revoked permission | Use **Screen Region** and revoke camera access |
 | Microphone and webcam timeouts when the computer never connects | Not exercised | Block the computer's connection and wait 10 seconds |
 | A real Omarchy computer over Wi-Fi | Every test used a loopback daemon on the Mac | Pair with an Omarchy computer on the same network, including Bonjour discovery and UDP broadcasts |
+| Stream request | No Mac build ran the prompt window, the notification action, or the start | Run `flux-cli webcam start` and `flux-cli mic start` with Flux active and with Flux in the background. Click start in the prompt and in the notification. Click **Not now** in the prompt |
 | Approval with the real root helper and PAM | Needs root on Linux | Run `sudo flux-cli approve setup` and `enroll` on an Omarchy computer, then `sudo true` |

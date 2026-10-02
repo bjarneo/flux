@@ -283,7 +283,10 @@ The stream shows in `webcam` or `mic` of a later state event.
 Without `device`, fluxd selects the only paired, connected device with `streamrequest` in its `plugins`.
 With no such device, the method returns `no_device`.
 With more than 1, it returns `ambiguous` with their names.
+
 A `device` that cannot take the request returns `not_supported`.
+A `device` that is not paired returns `not_paired`, and a `device` with no link now returns `offline`.
+A `fluxd` in headless mode returns `not_supported` for each request.
 While a stream of that kind runs, the method returns `already_active`.
 A second request of the same kind to the same device in 3 seconds returns `too_soon`.
 See [start from the computer](camera.md#start-from-the-computer).

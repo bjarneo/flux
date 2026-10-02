@@ -128,10 +128,10 @@ A computer that is not paired finds the Mac through Bonjour, and `fluxd` then co
 | Media | Controls the computer's players. The computer does not control the players on the Mac. |
 | Commands | Lists and runs the commands configured on the computer. |
 | Browse | Opens the computer's shared folders read-only through SSH inside a `flux.tunnel`, and downloads files. |
-| Webcam | Streams a Mac camera, including Continuity Camera, to the computer as a virtual webcam in H.264. Zoom is digital, and exposure is a software gain, because macOS gives apps no camera zoom or exposure control. **Also send the microphone** starts the microphone with the webcam. `flux-cli webcam start` asks the Mac to start it, see [Start a stream from the computer](#start-a-stream-from-the-computer). |
+| Webcam | Streams a Mac camera, including Continuity Camera, to the computer as a virtual webcam in H.264. Zoom is digital, and exposure is a software gain, because macOS gives apps no camera zoom or exposure control. **Also send the microphone** starts the microphone with the webcam. `flux-cli webcam start` asks the Mac to start it. See [Start a stream from the computer](#start-a-stream-from-the-computer). |
 | Screen mirror | Streams a display to a window on the computer in H.264, with the long side at most 1080 pixels. |
 | Camera modes | Text, QR, Photo, Document, and Signature, like the phone. Text, QR, Document, and Signature also read an opened, pasted, or dropped image or a screen region. To read an image, select **From Image**, then **Open Image…**, **Screen Region…**, or **Paste Image**. In Signature, **From Image** shows with the **Paper** source. Signature also accepts a drawn signature with the **Draw** source. |
-| Microphone | Streams the Mac microphone as 48 kHz mono audio. `flux-cli mic start` asks the Mac to start it, see [Start a stream from the computer](#start-a-stream-from-the-computer). |
+| Microphone | Streams the Mac microphone as 48 kHz mono audio. `flux-cli mic start` asks the Mac to start it. See [Start a stream from the computer](#start-a-stream-from-the-computer). |
 | Notifications | Shows notifications from `flux-cli notify`. Each computer can show 10 notifications at once, then 1 more each second. Only the first notification of a burst makes a sound. Each computer keeps at most 20 notifications in Notification Center, and a new one removes the oldest. Received links count toward these limits. |
 | Battery | A Mac with a battery reports it. The scope menu and **Computers** show the battery of each computer. |
 | Do Not Disturb | See [Focus](#focus). |
@@ -160,8 +160,8 @@ The Mac lists `flux.stream.request` in its incoming packet types, because it can
 
 | Flux | What the Mac shows |
 | --- | --- |
-| The active app | A prompt window over the other windows, with the title "omarchy asks for the webcam" or "omarchy asks for the mic", and the buttons **Not now** and **Start webcam** or **Start the mic**. |
-| Not the active app | A notification with the same title and the text "Tap to start the webcam." or "Tap to start the mic.". The **Start webcam** or **Start the mic** action, or a click on the notification, starts the stream. |
+| The active app | A prompt window over the other windows. The prompt has the title `omarchy asks for the webcam` or `omarchy asks for the mic`. It has the buttons **Not now** and **Start webcam** or **Start the mic**. |
+| Not the active app | A notification with the text `Tap to start the webcam.` or `Tap to start the mic.` under the same title. The **Start webcam** or **Start the mic** action, or a click on the notification, starts the stream. |
 
 The prompt and the notification name the computer that asks.
 When a request waits and Flux becomes the active app, the prompt window shows the request.
@@ -178,7 +178,7 @@ Each request follows these rules:
 
 - A request ends after 60 seconds, and its notification goes away.
 - When a stream of that kind already runs to that computer, the request does nothing.
-- The Mac ignores a request of the same kind from the same computer that comes less than 3 seconds after the last request that it took.
+- The Mac ignores a request of the same kind from the same computer that comes less than 3 seconds after the last request. An ignored request also counts as the last request.
 - An unpair ends the requests of the computer. A link that only drops keeps them.
 
 ## Inbox and navigation

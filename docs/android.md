@@ -176,14 +176,14 @@ flux-cli --device "Pixel 8" mic start
 The request only asks.
 The phone turns on the camera or the microphone only after you tap Start on the phone, also while Flux is on the screen.
 
-- While Flux is on the screen, a prompt shows **COMPUTER asks for the webcam** with **Start webcam** and **Not now**. For the mic, the prompt shows **COMPUTER asks for the mic** with **Start the mic**.
-- While Flux is not on the screen, a notification shows the same title and **Tap to start the webcam.** or **Tap to start the mic.** It has the action **Start webcam** or **Start the mic**. The notification uses the **Stream requests** channel.
+- While Flux is on the screen, a prompt shows the title `omarchy asks for the webcam` with **Start webcam** and **Not now**. For the mic, the prompt shows `omarchy asks for the mic` with **Start the mic**. The title names the computer.
+- While Flux is not on the screen, a notification shows the request. The notification has the same title, with the text `Tap to start the webcam.` or `Tap to start the mic.` below it. It has the action **Start webcam** or **Start the mic**. The notification uses the **Stream requests** channel.
 - Without the notification permission, the phone shows a request only while Flux is on the screen.
 - The prompt and the notification go away after 60 seconds.
 - A tap on Start opens the **Webcam** or **Mic** page of that computer, and the page starts the stream with the saved settings. On a locked phone, Android asks you to unlock it first.
 - When the page cannot start the stream in 60 seconds, for example while the computer is not reachable, it does not start it. Then press Start on the page.
 - While a stream of that kind runs to that computer, a request does nothing.
-- The phone ignores a request of the same kind from the same computer that comes less than 3 seconds after the last one.
+- The phone ignores a request of the same kind from the same computer that comes less than 3 seconds after the last request. An ignored request also counts as the last request.
 - The prompt refuses a tap while another app draws over Flux.
 
 The stream starts from the visible page with the start code of its Start button.
