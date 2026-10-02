@@ -8,6 +8,9 @@ import SwiftUI
 @MainActor
 enum StreamRequestFeature {
     private static var observer: NSObjectProtocol?
+    /// The start that waits for the link of its computer after a click on start.
+    private static var pending: PendingStart?
+    private static var timer: Task<Void, Never>?
 
     /// Lets the plugin show the prompt and start a stream after a click on start.
     static func install(model: AppModel) {
@@ -15,6 +18,7 @@ enum StreamRequestFeature {
         plugin.model.isAppActive = { NSApp.isActive }
         plugin.model.present = { StreamRequestWindow.shared.show(plugin, app: model) }
         plugin.model.open = { request in StreamRequestFeature.open(request, model: model) }
+        plugin.model.openPage = { computerId, kind in StreamRequestFeature.openPage(computerId, kind, model: model) }
         // A request that waits shows when Flux becomes the active app. A
         // click on the notification also makes Flux active, and its start
         // ends the request, so the check waits for that click first.
@@ -28,16 +32,56 @@ enum StreamRequestFeature {
         }
     }
 
+    /// The page of a stream: the webcam page or the microphone page.
+    static func card(_ kind: StreamRequest.Kind) -> MacCard {
+        kind == .webcam ? .stream : .mic
+    }
+
     /// Opens the webcam or the microphone page of the computer in a window
     /// and starts the stream with its start code and the saved settings.
+    /// While the link to the computer is down, the start waits up to
+    /// `PendingStart.wait`.
     static func open(_ request: StreamRequest, model: AppModel) {
-        switch request.kind {
-        case .webcam:
-            StreamWindows.shared.show(.stream, deviceId: request.computerId, app: model)
-            model.core.plugin(WebcamPlugin.self)?.start(request.computerId)
-        case .mic:
-            StreamWindows.shared.show(.mic, deviceId: request.computerId, app: model)
-            model.core.plugin(MicPlugin.self)?.start(request.computerId)
+        openPage(request.computerId, request.kind, model: model)
+        pending = PendingStart(request, now: .now)
+        timer?.cancel()
+        timer = Task {
+            try? await Task.sleep(for: PendingStart.wait)
+            guard !Task.isCancelled else { return }
+            check(model: model)
+        }
+        check(model: model)
+    }
+
+    /// Opens the webcam or the microphone page of the computer in a window
+    /// and starts nothing. The user then starts the stream on the page. A
+    /// computer that is not paired opens nothing.
+    static func openPage(_ computerId: String, _ kind: StreamRequest.Kind, model: AppModel) {
+        guard model.pairedDevice(computerId) != nil else { return }
+        StreamWindows.shared.show(card(kind), deviceId: computerId, app: model)
+    }
+
+    /// Starts the waiting stream when the computer is connected. It runs
+    /// after each change of the core state. An unpair ends the start at once.
+    static func check(model: AppModel) {
+        guard let p = pending else { return }
+        let device = model.pairedDevice(p.computerId)
+        // The camera of a Mac also works while Flux is not the active app.
+        let step = p.step(active: true, online: device?.online == true, now: .now)
+        guard step != .wait || device == nil else { return }
+        pending = nil
+        timer?.cancel()
+        timer = nil
+        guard device != nil else { return }
+        guard step == .start else {
+            model.show(p.failedText)
+            return
+        }
+        // A stream that the user started in the meantime keeps running.
+        guard model.core.plugin(StreamRequestPlugin.self)?.streams(p.kind, to: p.computerId) != true else { return }
+        switch p.kind {
+        case .webcam: model.core.plugin(WebcamPlugin.self)?.start(p.computerId)
+        case .mic: model.core.plugin(MicPlugin.self)?.start(p.computerId)
         }
     }
 }
@@ -157,7 +201,8 @@ final class StreamWindows: NSObject, NSWindowDelegate {
             return
         }
         let name = app.pairedDevice(deviceId)?.name ?? "the computer"
-        let host = NSHostingController(rootView: FeaturePage(card: card, deviceId: deviceId).themeWindow(app))
+        // The page shows the messages of the app, for example when a start does not reach the computer.
+        let host = NSHostingController(rootView: FeaturePage(card: card, deviceId: deviceId).modifier(ToastOverlay()).themeWindow(app))
         host.sizingOptions = [.minSize]
         let window = NSWindow(contentViewController: host)
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]

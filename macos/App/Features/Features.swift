@@ -131,6 +131,12 @@ enum FeatureHooks {
         StreamRequestFeature.install(model: model)
     }
 
+    /// Runs after each change of the core state.
+    static func stateChanged(_ state: CoreState, model: AppModel) {
+        // A stream that a click started waits for the link of its computer.
+        StreamRequestFeature.check(model: model)
+    }
+
     /// Files dropped on the Dock icon or opened with Flux.
     static func open(urls: [URL], model: AppModel) {
         ShareActions.open(urls: urls, model: model)

@@ -24,23 +24,34 @@ struct ContentView: View {
                 NavigationStack(path: $model.computersPath) { ComputersPage() }
             }
         }
-        .overlay(alignment: .bottom) {
-            if let toast = model.toast {
-                Text(toast)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(.regularMaterial, in: Capsule())
-                    .padding(.bottom, 16)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-        .animation(.default, value: model.toast)
+        .modifier(ToastOverlay())
         .sheet(item: Binding(
             get: { model.pairingSheet.flatMap { id in model.state.devices.first { $0.id == id } } },
             set: { model.pairingSheet = $0?.id }
         )) { device in
             PairRequestSheet(device: device)
         }
+    }
+}
+
+/// The message of `AppModel.show` at the bottom of a window. The main
+/// window and the stream page windows show it.
+struct ToastOverlay: ViewModifier {
+    @Environment(AppModel.self) private var model
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(alignment: .bottom) {
+                if let toast = model.toast {
+                    Text(toast)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(.regularMaterial, in: Capsule())
+                        .padding(.bottom, 16)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.default, value: model.toast)
     }
 }
 

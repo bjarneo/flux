@@ -1,39 +1,7 @@
 import FluxKit
 import SwiftUI
 
-/// A start that waits after a tap on start: the webcam needs Flux on the
-/// screen, and both streams need the link to the computer. A tap on the
-/// notification opens Flux, and the link can come back a moment later.
-struct PendingStart: Equatable {
-    /// How long a start waits for Flux on the screen and for the link.
-    static let wait: Duration = .seconds(15)
-
-    let kind: StreamRequest.Kind
-    let computerId: String
-    let computerName: String
-    let deadline: ContinuousClock.Instant
-
-    enum Step: Equatable {
-        case wait
-        case start
-        /// The link did not come back before the deadline.
-        case giveUp
-    }
-
-    /// The next step of the start.
-    func step(active: Bool, online: Bool, now: ContinuousClock.Instant) -> Step {
-        if active && online { return .start }
-        return now < deadline ? .wait : .giveUp
-    }
-
-    /// The message when the stream did not start.
-    var failedText: String {
-        switch kind {
-        case .webcam: return "The webcam did not start, because \(computerName) is not connected."
-        case .mic: return "The microphone did not start, because \(computerName) is not connected."
-        }
-    }
-
+extension PendingStart {
     /// The screen of the stream: the webcam mode of the camera screen, or
     /// the microphone screen, as under Control.
     static func route(_ kind: StreamRequest.Kind, computerId: String) -> FeatureRoute {
@@ -63,16 +31,15 @@ final class StreamRequestFeature {
         plugin.model.isAppActive = { [weak model] in model?.isActive == true }
         // The sheet shows the prompt by itself, see `StreamRequestRoot`.
         plugin.model.open = { request in StreamRequestFeature.shared.open(request) }
+        plugin.model.openPage = { computerId, kind in StreamRequestFeature.shared.openPage(computerId, kind) }
     }
 
     /// Opens the screen of the stream under Control and starts the stream
     /// when Flux is on the screen and the computer is connected.
     func open(_ request: StreamRequest) {
-        guard let model else { return }
-        model.tab = .control
-        model.controlPath = [.feature(PendingStart.route(request.kind, computerId: request.computerId))]
-        pending = PendingStart(kind: request.kind, computerId: request.computerId, computerName: request.computerName,
-                               deadline: ContinuousClock.now + PendingStart.wait)
+        guard model != nil else { return }
+        openPage(request.computerId, request.kind)
+        pending = PendingStart(request, now: .now)
         timer?.cancel()
         timer = Task { [weak self] in
             try? await Task.sleep(for: PendingStart.wait)
@@ -82,16 +49,28 @@ final class StreamRequestFeature {
         check()
     }
 
+    /// Opens the screen of the stream under Control and starts nothing.
+    /// The user then starts the stream on that screen. A computer that is
+    /// not paired opens nothing.
+    func openPage(_ computerId: String, _ kind: StreamRequest.Kind) {
+        guard let model, model.device(computerId)?.paired == true else { return }
+        model.tab = .control
+        model.controlPath = [.feature(PendingStart.route(kind, computerId: computerId))]
+    }
+
     /// Starts the waiting stream when Flux is on the screen and the computer
     /// is connected. It runs after each change of the core state and when
-    /// Flux comes on the screen.
+    /// Flux comes on the screen. An unpair ends the start at once.
     func check() {
         guard let p = pending, let model else { return }
-        let step = p.step(active: model.isActive, online: model.device(p.computerId)?.online == true, now: .now)
-        guard step != .wait else { return }
+        let device = model.device(p.computerId)
+        let paired = device?.paired == true
+        let step = p.step(active: model.isActive, online: device?.online == true, now: .now)
+        guard step != .wait || !paired else { return }
         pending = nil
         timer?.cancel()
         timer = nil
+        guard paired else { return }
         guard step == .start else {
             model.show(p.failedText)
             return

@@ -34,11 +34,13 @@ public struct StreamRequest: Sendable, Equatable, Identifiable {
             }
         }
 
-        /// The text of the notification.
-        public var notificationText: String {
+        /// The text of the notification. An iPhone asks for a tap, and a
+        /// Mac asks for a click.
+        public func notificationText(platform: FluxPlatform = .current) -> String {
+            let verb = platform == .mac ? "Click" : "Tap"
             switch self {
-            case .webcam: return "Tap to start the webcam."
-            case .mic: return "Tap to start the mic."
+            case .webcam: return "\(verb) to start the webcam."
+            case .mic: return "\(verb) to start the mic."
             }
         }
 
@@ -62,7 +64,7 @@ public struct StreamRequest: Sendable, Equatable, Identifiable {
 
     /// The shortest time between 2 requests of the same kind from the same
     /// computer. This device ignores a request that comes sooner after the
-    /// last request that it took.
+    /// last request, also when it ignored that last request.
     public static let minInterval: Duration = .seconds(3)
     /// The time after which an open request ends without an answer. The
     /// notification goes away then.
@@ -111,19 +113,23 @@ struct StreamRequestBook: Equatable {
     var lifetime = StreamRequest.lifetime
     /// The open requests, the oldest first.
     private(set) var requests: [StreamRequest] = []
-    /// The time of the last request that this device took, by request ID.
-    private var taken: [String: ContinuousClock.Instant] = [:]
+    /// The time of the last request, by request ID. An ignored request
+    /// counts too.
+    private var last: [String: ContinuousClock.Instant] = [:]
 
     /// Takes a request, or ignores it. `streaming` is true when a stream of
-    /// the kind already runs to the computer. An ignored request does not
-    /// move the time of the last request.
+    /// the kind already runs to the computer. An ignored request also moves
+    /// the time of the last request, so that a computer that repeats a
+    /// request faster than `StreamRequest.minInterval` shows 1 request only.
+    /// Android counts the requests in the same way.
     mutating func receive(_ kind: StreamRequest.Kind, computerId: String, computerName: String, streaming: Bool,
                           at now: ContinuousClock.Instant) -> Outcome {
         let id = StreamRequest.id(kind, computerId)
-        if let last = taken[id], now - last < StreamRequest.minInterval { return .tooSoon }
+        let previous = last[id]
+        last = last.filter { now - $0.value < StreamRequest.minInterval }
+        last[id] = now
+        if let previous, now - previous < StreamRequest.minInterval { return .tooSoon }
         if streaming { return .streaming }
-        taken = taken.filter { now - $0.value < StreamRequest.minInterval }
-        taken[id] = now
         let request = StreamRequest(computerId: computerId, computerName: computerName, kind: kind, received: now)
         requests.removeAll { $0.id == id }
         requests.append(request)
@@ -156,7 +162,55 @@ struct StreamRequestBook: Equatable {
         let gone = requests.filter { $0.computerId == computerId }
         requests.removeAll { $0.computerId == computerId }
         let ids = Set(StreamRequest.Kind.allCases.map { StreamRequest.id($0, computerId) })
-        taken = taken.filter { !ids.contains($0.key) }
+        last = last.filter { !ids.contains($0.key) }
         return gone
+    }
+}
+
+/// A start that waits after a tap or a click on start. Both streams need
+/// the link to the computer, and the webcam of an iPhone also needs Flux on
+/// the screen. A tap on the notification opens Flux, and the link can come
+/// back a moment later. The iPhone app and the Mac app use it.
+public struct PendingStart: Equatable, Sendable {
+    /// How long a start waits for Flux on the screen and for the link.
+    public static let wait: Duration = .seconds(15)
+
+    public let kind: StreamRequest.Kind
+    public let computerId: String
+    public let computerName: String
+    public let deadline: ContinuousClock.Instant
+
+    public init(kind: StreamRequest.Kind, computerId: String, computerName: String, deadline: ContinuousClock.Instant) {
+        self.kind = kind
+        self.computerId = computerId
+        self.computerName = computerName
+        self.deadline = deadline
+    }
+
+    /// The start of the request, with the deadline `wait` after `now`.
+    public init(_ request: StreamRequest, now: ContinuousClock.Instant) {
+        self.init(kind: request.kind, computerId: request.computerId, computerName: request.computerName, deadline: now + Self.wait)
+    }
+
+    public enum Step: Equatable, Sendable {
+        case wait
+        case start
+        /// The link did not come back before the deadline.
+        case giveUp
+    }
+
+    /// The next step of the start. A Mac gives true for `active`, because
+    /// its camera also works while Flux is not the active app.
+    public func step(active: Bool, online: Bool, now: ContinuousClock.Instant) -> Step {
+        if active && online { return .start }
+        return now < deadline ? .wait : .giveUp
+    }
+
+    /// The message when the stream did not start.
+    public var failedText: String {
+        switch kind {
+        case .webcam: return "The webcam did not start, because \(computerName) is not connected."
+        case .mic: return "The microphone did not start, because \(computerName) is not connected."
+        }
     }
 }

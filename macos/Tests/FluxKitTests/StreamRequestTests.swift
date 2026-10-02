@@ -41,8 +41,10 @@ final class StreamRequestTests: XCTestCase {
         XCTAssertEqual(StreamRequest.Kind.webcam.startLabel, "Start webcam")
         XCTAssertEqual(StreamRequest.Kind.mic.startLabel, "Start the mic")
         XCTAssertEqual(StreamRequest.notNowLabel, "Not now")
-        XCTAssertEqual(StreamRequest.Kind.webcam.notificationText, "Tap to start the webcam.")
-        XCTAssertEqual(StreamRequest.Kind.mic.notificationText, "Tap to start the mic.")
+        XCTAssertEqual(StreamRequest.Kind.webcam.notificationText(platform: .phone), "Tap to start the webcam.")
+        XCTAssertEqual(StreamRequest.Kind.mic.notificationText(platform: .phone), "Tap to start the mic.")
+        XCTAssertEqual(StreamRequest.Kind.webcam.notificationText(platform: .mac), "Click to start the webcam.")
+        XCTAssertEqual(StreamRequest.Kind.mic.notificationText(platform: .mac), "Click to start the mic.")
         XCTAssertEqual(StreamRequest.Kind.webcam.detail(computer: "omarchy", platform: .phone),
                        "Apps on omarchy see this iPhone as Flux Camera. The camera stays off until you select Start webcam.")
         XCTAssertEqual(StreamRequest.Kind.mic.detail(computer: "omarchy", platform: .mac),
@@ -70,21 +72,34 @@ final class StreamRequestTests: XCTestCase {
         var book = StreamRequestBook()
         _ = book.receive(.webcam, computerId: "pc1", computerName: "omarchy", streaming: false, at: at(0))
         XCTAssertEqual(book.receive(.webcam, computerId: "pc1", computerName: "omarchy", streaming: false, at: at(2.9)), .tooSoon)
-        XCTAssertEqual(book.requests.map(\.received), [at(0)], "the ignored request changes nothing")
-        guard case .opened(let next) = book.receive(.webcam, computerId: "pc1", computerName: "omarchy", streaming: false, at: at(3)) else {
+        XCTAssertEqual(book.requests.map(\.received), [at(0)], "the ignored request keeps the open request")
+        XCTAssertEqual(book.receive(.webcam, computerId: "pc1", computerName: "omarchy", streaming: false, at: at(3)), .tooSoon,
+                       "the limit counts from the ignored request at 2.9 seconds")
+        guard case .opened(let next) = book.receive(.webcam, computerId: "pc1", computerName: "omarchy", streaming: false, at: at(6)) else {
             return XCTFail("a request 3 seconds after the last one opens")
         }
         XCTAssertEqual(book.requests, [next], "it replaces the open request of the same computer and kind")
-        XCTAssertEqual(next.received, at(3))
+        XCTAssertEqual(next.received, at(6))
     }
 
-    func testAnIgnoredRequestDoesNotMoveTheLimit() {
+    func testAnIgnoredRequestMovesTheLimit() {
         var book = StreamRequestBook()
         _ = book.receive(.mic, computerId: "pc1", computerName: "omarchy", streaming: false, at: at(0))
         XCTAssertEqual(book.receive(.mic, computerId: "pc1", computerName: "omarchy", streaming: false, at: at(2)), .tooSoon)
-        guard case .opened = book.receive(.mic, computerId: "pc1", computerName: "omarchy", streaming: false, at: at(3.5)) else {
-            return XCTFail("the limit counts from the last request that the device took")
+        XCTAssertEqual(book.receive(.mic, computerId: "pc1", computerName: "omarchy", streaming: false, at: at(3.5)), .tooSoon,
+                       "the limit counts from the last request, also one that the device ignored, as on Android")
+        guard case .opened = book.receive(.mic, computerId: "pc1", computerName: "omarchy", streaming: false, at: at(6.5)) else {
+            return XCTFail("a request 3 seconds after the last ignored request opens")
         }
+    }
+
+    func testARequestThatRepeatsFasterShowsOnce() {
+        var book = StreamRequestBook()
+        var opened = 0
+        for second in stride(from: 0.0, to: 20.0, by: 2.0) {
+            if case .opened = book.receive(.webcam, computerId: "pc1", computerName: "omarchy", streaming: false, at: at(second)) { opened += 1 }
+        }
+        XCTAssertEqual(opened, 1, "a request every 2 seconds shows 1 time")
     }
 
     func testOtherKindsAndComputersDoNotWait() {
@@ -101,8 +116,10 @@ final class StreamRequestTests: XCTestCase {
         var book = StreamRequestBook()
         XCTAssertEqual(book.receive(.webcam, computerId: "pc1", computerName: "omarchy", streaming: true, at: at(0)), .streaming)
         XCTAssertTrue(book.requests.isEmpty)
-        guard case .opened = book.receive(.webcam, computerId: "pc1", computerName: "omarchy", streaming: false, at: at(1)) else {
-            return XCTFail("a request that the device ignored starts no limit")
+        XCTAssertEqual(book.receive(.webcam, computerId: "pc1", computerName: "omarchy", streaming: false, at: at(1)), .tooSoon,
+                       "a request that the device ignored also starts the limit")
+        guard case .opened = book.receive(.webcam, computerId: "pc1", computerName: "omarchy", streaming: false, at: at(4)) else {
+            return XCTFail("a request 3 seconds after the last one opens")
         }
     }
 
@@ -132,5 +149,33 @@ final class StreamRequestTests: XCTestCase {
         guard case .opened = book.receive(.webcam, computerId: "pc1", computerName: "omarchy", streaming: false, at: at(1)) else {
             return XCTFail("a computer that pairs again starts with no limit")
         }
+    }
+
+    // MARK: The start that waits
+
+    private func pending(_ kind: StreamRequest.Kind = .webcam, deadline: ContinuousClock.Instant) -> PendingStart {
+        PendingStart(kind: kind, computerId: "pc1", computerName: "omarchy", deadline: deadline)
+    }
+
+    func testTheStartWaitsForTheScreenAndTheLink() {
+        let now = ContinuousClock.now
+        let p = pending(deadline: now + .seconds(15))
+        XCTAssertEqual(p.step(active: true, online: true, now: now), .start)
+        XCTAssertEqual(p.step(active: false, online: true, now: now), .wait, "the camera of an iPhone needs Flux on the screen")
+        XCTAssertEqual(p.step(active: true, online: false, now: now), .wait, "the link comes back after Flux opens")
+        XCTAssertEqual(p.step(active: true, online: false, now: now + .seconds(15)), .giveUp)
+        XCTAssertEqual(p.step(active: true, online: true, now: now + .seconds(20)), .start, "a late link still starts")
+        XCTAssertEqual(PendingStart.wait, .seconds(15))
+    }
+
+    func testTheStartOfARequest() {
+        let r = StreamRequest(computerId: "pc1", computerName: "omarchy", kind: .mic, received: at(0))
+        XCTAssertEqual(PendingStart(r, now: at(2)), pending(.mic, deadline: at(17)))
+    }
+
+    func testTheTextWhenTheStreamDidNotStart() {
+        let now = ContinuousClock.now
+        XCTAssertEqual(pending(.webcam, deadline: now).failedText, "The webcam did not start, because omarchy is not connected.")
+        XCTAssertEqual(pending(.mic, deadline: now).failedText, "The microphone did not start, because omarchy is not connected.")
     }
 }

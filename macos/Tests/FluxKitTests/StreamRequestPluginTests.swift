@@ -81,6 +81,34 @@ final class StreamRequestPluginTests: XCTestCase {
         XCTAssertTrue(plugin.model.requests.isEmpty)
     }
 
+    func testAFreshTapOnTheNotificationStartsTheStream() throws {
+        let (plugin, opened) = try makePlugin()
+        var pages = 0
+        plugin.model.openPage = { _, _ in pages += 1 }
+        plugin.receive(.mic, computerId: "pc1", computerName: "omarchy")
+        plugin.startFromNotification("stream.mic.pc1", kind: .mic, computerId: "pc1")
+        XCTAssertEqual(opened.requests.map(\.id), ["stream.mic.pc1"])
+        XCTAssertEqual(pages, 0, "open opens the page and starts the stream")
+    }
+
+    func testALateTapOnTheNotificationOpensOnlyThePage() throws {
+        let (plugin, opened) = try makePlugin()
+        var pages: [String] = []
+        plugin.model.openPage = { computerId, kind in pages.append("\(kind.rawValue) \(computerId)") }
+        let t0 = ContinuousClock.now
+        plugin.receive(.webcam, computerId: "pc1", computerName: "omarchy", at: t0)
+        plugin.startFromNotification("stream.webcam.pc1", kind: .webcam, computerId: "pc1", at: t0 + .seconds(63))
+        XCTAssertTrue(opened.requests.isEmpty, "a tap after the 60 seconds starts no stream")
+        XCTAssertEqual(pages, ["webcam pc1"], "the page opens, and the user starts the stream there")
+        XCTAssertTrue(plugin.model.requests.isEmpty)
+
+        plugin.startFromNotification("stream.mic.pc1", kind: .mic, computerId: "pc1")
+        XCTAssertEqual(pages, ["webcam pc1", "mic pc1"], "a request that ended also opens only the page")
+        plugin.startFromNotification("stream.mic.pc1", kind: .mic, computerId: nil)
+        XCTAssertEqual(pages.count, 2, "a notification that does not name the computer opens nothing")
+        XCTAssertTrue(opened.requests.isEmpty)
+    }
+
     func testTheNewestRequestShowsFirst() throws {
         let (plugin, _) = try makePlugin()
         plugin.receive(.webcam, computerId: "pc1", computerName: "omarchy")
@@ -138,7 +166,7 @@ final class StreamRequestPluginTests: XCTestCase {
 
     func testTheNotificationStartsOnlyWithATap() {
         XCTAssertTrue(StreamRequestPlugin.startsStream(StreamRequestPlugin.startAction))
-        XCTAssertTrue(StreamRequestPlugin.startsStream(UNNotificationDefaultActionIdentifier), "the text says Tap to start")
+        XCTAssertTrue(StreamRequestPlugin.startsStream(UNNotificationDefaultActionIdentifier), "the text asks for a tap or a click")
         XCTAssertFalse(StreamRequestPlugin.startsStream(UNNotificationDismissActionIdentifier))
         XCTAssertFalse(StreamRequestPlugin.startsStream("other"))
 

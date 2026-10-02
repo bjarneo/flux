@@ -23,6 +23,11 @@ public final class StreamRequestModel {
     /// the stream with the start code of that feature. The plugin calls it
     /// only after a tap of the user on start. The app sets it.
     @ObservationIgnored public var open: (@MainActor (StreamRequest) -> Void)?
+    /// Opens the webcam or the microphone page of the computer and starts
+    /// nothing. The plugin calls it after a tap on a notification whose
+    /// request ended or is too old. The user then starts the stream on the
+    /// page. The app sets it, and opens only the page of a paired computer.
+    @ObservationIgnored public var openPage: (@MainActor (_ computerId: String, _ kind: StreamRequest.Kind) -> Void)?
 
     init() {}
 }
@@ -71,7 +76,11 @@ public final class StreamRequestPlugin: FluxPlugin, @unchecked Sendable {
             Notifier.shared.register(category: kind.notificationCategory,
                                      actions: Self.notificationActions(kind, platform: .current)) { [weak self] action, info, _ in
                 guard StreamRequestPlugin.startsStream(action), let id = info["id"] as? String, let self else { return }
-                DispatchQueue.main.async { MainActor.assumeIsolated { self.start(id) } }
+                // The category gives the kind. The computer must match the ID.
+                let computerId = (info["computer"] as? String).flatMap { StreamRequest.id(kind, $0) == id ? $0 : nil }
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated { self.startFromNotification(id, kind: kind, computerId: computerId) }
+                }
             }
         }
     }
@@ -83,8 +92,9 @@ public final class StreamRequestPlugin: FluxPlugin, @unchecked Sendable {
         return [UNNotificationAction(identifier: startAction, title: kind.startLabel, options: options)]
     }
 
-    /// True for the start action and for a tap on the notification itself,
-    /// whose text says "Tap to start". A dismissal starts nothing.
+    /// True for the start action and for a tap or a click on the
+    /// notification itself, whose text asks for it. A dismissal starts
+    /// nothing.
     static func startsStream(_ action: String) -> Bool {
         action == startAction || action == UNNotificationDefaultActionIdentifier
     }
@@ -124,26 +134,49 @@ public final class StreamRequestPlugin: FluxPlugin, @unchecked Sendable {
                 Notifier.shared.remove(id: r.id)
                 model.present?()
             } else {
-                Notifier.shared.post(id: r.id, category: kind.notificationCategory, title: r.title, body: kind.notificationText,
-                                     userInfo: ["id": r.id])
+                Notifier.shared.post(id: r.id, category: kind.notificationCategory, title: r.title, body: kind.notificationText(),
+                                     userInfo: ["id": r.id, "computer": r.computerId])
             }
         }
     }
 
     /// Starts the stream of an open request after a tap of the user on
-    /// start, in the prompt or in the notification. The request ends. A
-    /// request that ended or is too old starts nothing. When a stream of
-    /// the kind already runs to the computer, the request does nothing.
+    /// start in the prompt. The request ends. A request that ended or is
+    /// too old starts nothing. When a stream of the kind already runs to
+    /// the computer, the request does nothing. A tap on the notification
+    /// goes to `startFromNotification`.
     @MainActor
     public func start(_ id: String, at now: ContinuousClock.Instant = .now) {
-        guard let r = book.remove(id) else { return }
+        take(id, at: now)
+    }
+
+    /// Starts the stream of a request after a tap on its notification.
+    /// When the request ended or is too old, it only opens the page of the
+    /// computer, and the user starts the stream there. An example is a tap
+    /// near the end of the 60 seconds and a slow unlock of the iPhone.
+    /// `computerId` is nil when the notification does not name the
+    /// computer. Then a request that ended opens nothing.
+    @MainActor
+    func startFromNotification(_ id: String, kind: StreamRequest.Kind, computerId: String?,
+                               at now: ContinuousClock.Instant = .now) {
+        guard !take(id, at: now), let computerId else { return }
+        model.openPage?(computerId, kind)
+    }
+
+    /// Ends an open request and opens its stream, unless a stream of the
+    /// kind already runs to the computer. It returns false when the
+    /// request ended or is too old.
+    @MainActor
+    @discardableResult
+    private func take(_ id: String, at now: ContinuousClock.Instant) -> Bool {
+        guard let r = book.remove(id) else { return false }
         end([r])
         guard book.fresh(r, at: now) else {
             FluxLog.plugin.info("stream request: the \(r.kind.rawValue, privacy: .public) request of \(r.computerName, privacy: .public) is too old")
-            return
+            return false
         }
-        guard !streams(r.kind, to: r.computerId) else { return }
-        model.open?(r)
+        if !streams(r.kind, to: r.computerId) { model.open?(r) }
+        return true
     }
 
     /// Ends an open request without a stream: "Not now".

@@ -231,6 +231,7 @@ final class AppModel {
             notePaired(id)
         }
         for d in s.devices where d.pairState != .incoming { Notifier.shared.remove(id: "pair-\(d.id)") }
+        FeatureHooks.stateChanged(s, model: self)
     }
 
     /// The computers that are paired in `new` and were known but not paired in `old`.
