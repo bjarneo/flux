@@ -57,6 +57,11 @@ public enum PacketType {
     /// The computer sends its active Omarchy theme. docs/omarchy.md,
     /// section "Theme packet", describes the body.
     public static let fluxTheme = "flux.theme"
+    /// The computer asks this device to start its webcam or its
+    /// microphone, {"kind": "webcam"} or {"kind": "mic"}. The packet only
+    /// asks. The stream starts only after a tap of the user, see
+    /// `StreamRequestPlugin`.
+    public static let fluxStreamRequest = "flux.stream.request"
 }
 
 /// The body of a flux.identity packet.
