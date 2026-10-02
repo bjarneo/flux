@@ -330,7 +330,7 @@ The app follows the Hyprland master layout. The master tile holds the first item
 - **Wide window, 600 dp and more:** A navigation rail replaces the navigation bar. The Inbox splits: the master takes 60% of the width at full height, and the status line and the stack fill a column on the right. The choices sit directly under the prompt.
 - **Short window, under 480 dp high:** The top bar takes less height. Below 460 dp, the master is compact. Its inset is 12 dp, its gaps are 6 dp and 10 dp, the prompt is shorter, and Reply moves to the top row.
 - **Content width:** Screens other than the Inbox scroll in `CappedScrollColumn`. The content is at most 840 dp wide and stays in the center. Choice and action rows in the master are at most 600 dp wide.
-- **Destinations:** Inbox, Send, Control, and Computers. Send and Control open with 1 master tool, then groups of tool rows under section labels.
+- **Destinations:** Inbox, Send, Control, and Computers. Send and Control open with 1 master tool, then groups of tool rows under section labels. In Control, the agent rows come right after the master tool, because the user needs them most often.
 - **Rank:** The Inbox order is the order of `InboxKind` in `core/InboxModel.kt`: agent input, approval, pair request, media, clipboard, transfer, agent done, and agent working. What needs the user comes first.
 - **Targets:** Every control takes taps on at least 48 by 48 dp.
 
@@ -507,7 +507,7 @@ The Mac app follows the macOS 14 structure. The code is in `macos/App/`.
 
 - **Menu bar extra:** The Flux mark, then the count of items that need the user, from 1 to "9+". The mark has an offline form when no computer is connected. VoiceOver reads "Flux, 2 items need you". The extra uses the window style, so its panel reads the agent output when it opens.
 - **Menu bar panel:** 360 pt wide with a 12 pt inset. It shows a red dot and the count line, then the master item of all computers in the compact fit with its one-tap choices. Under it are the next 3 items as 36 pt rows on the small corner, a menu for each online computer, and Open Flux, Settings, and Quit Flux. The panel does not use the scope. A click on a row shows that item in the master of the main window. An item out of scope sets the scope to all computers.
-- **Destinations:** Send opens with the master tool Send clipboard. Control opens with the master tool Remote desktop.
+- **Destinations:** Send opens with the master tool Send clipboard. Control opens with the master tool Remote desktop, and the agents row comes right under it.
 - **Settings window:** It holds the theme under General, Theme, and the feature settings. It takes the theme surfaces.
 - **Feature windows:** The windows for agents, browse, camera, remote desktop, and touchpad keep their layout. They take the theme background, the accent, and the light or dark mode.
 - **Differences from Android:** A sidebar in the place of the navigation bar. No thumb push and no swipe. 28 pt pointer targets in the place of 48 dp touch targets. A hover state. Buttons on the 8 pt small corner. A pressed tile dims and keeps its border. A 12 pt gutter. The menu bar extra exists only on the Mac.

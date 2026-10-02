@@ -34,8 +34,8 @@ import org.omarchy.flux.screen.ScreenSession
 
 /**
  * The Control destination: the tools that act on the computer in scope.
- * The most used tool, the Omarchy panel, takes the master tile. The other
- * tools stack under it in compact rows, in groups. A tool shows when a
+ * The Omarchy panel takes the master tile. The agents come right under
+ * it, and the other tools stack under them in compact rows, in groups. A tool shows when a
  * computer in scope has the feature, and it is dimmed while no such
  * computer is online. With more than 1 computer online, a tap asks for the
  * computer.
@@ -80,11 +80,32 @@ fun ControlScreen(state: UiState, scope: String?, picker: TargetPicker, onOpen: 
     CappedScrollColumn {
         TargetLine(any, devices, "Acts on", onPair)
         Spacer(Modifier.height(TileGap))
-        // The Omarchy panel is the master tile. The other tools that act on the computer stack under it.
+        // The Omarchy panel is the master tile. The agents and the other tools that act on the computer stack under it.
         Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
             if (shows { it.shortcutsSupported }) {
                 MasterTool(Ic.grid, "Omarchy panel", "Workspaces, windows, and key bindings", enabled = canRun { it.shortcutsSupported }) {
                     open({ it.shortcutsSupported }, "Open the Omarchy panel of", OMARCHY_PAGE)
+                }
+            }
+            // The agents come right after the master tile, because they are the tool that the user needs most often.
+            if (shows { it.herdrSupported }) {
+                val scoped = devices.filter { it.paired && it.online && (scope == null || it.id == scope) }
+                val agents = scoped.sumOf { it.herdr?.agents?.size ?: 0 }
+                val blocked = scoped.sumOf { d -> d.herdr?.agents?.count { it.status == AgentStatus.Blocked } ?: 0 }
+                val terminals = scoped.sumOf { it.herdr?.panes?.size ?: 0 }
+                ToolRow(
+                    Ic.agent, "Agents and terminals",
+                    listOf(
+                        "$agents ${if (agents == 1) "agent" else "agents"}",
+                        "$terminals ${if (terminals == 1) "terminal" else "terminals"}",
+                    ).joinToString(" · "),
+                    enabled = canRun { it.herdrSupported }, badge = blocked,
+                ) { open({ it.herdrSupported }, "Show the agents of", AGENTS_PAGE) }
+                if (shows { it.herdr?.control == true }) {
+                    ToolRow(
+                        Ic.add, "New agent or terminal", "Start it in a herdr workspace",
+                        enabled = canRun { it.herdr?.let { h -> h.running && h.control } == true },
+                    ) { open({ it.herdr?.let { h -> h.running && h.control } == true }, "Start an agent on", NEW_PANE_PAGE) }
                 }
             }
             if (shows { it.inputSupported }) {
@@ -131,29 +152,6 @@ fun ControlScreen(state: UiState, scope: String?, picker: TargetPicker, onOpen: 
                         mirrorFor = d.id
                         askCapture.launch(context.getSystemService(MediaProjectionManager::class.java).createScreenCaptureIntent())
                     }
-                }
-            }
-        }
-        if (shows { it.herdrSupported }) {
-            SectionLabel("Agents")
-            val scoped = devices.filter { it.paired && it.online && (scope == null || it.id == scope) }
-            val agents = scoped.sumOf { it.herdr?.agents?.size ?: 0 }
-            val blocked = scoped.sumOf { d -> d.herdr?.agents?.count { it.status == AgentStatus.Blocked } ?: 0 }
-            val terminals = scoped.sumOf { it.herdr?.panes?.size ?: 0 }
-            Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
-                ToolRow(
-                    Ic.agent, "Agents and terminals",
-                    listOf(
-                        "$agents ${if (agents == 1) "agent" else "agents"}",
-                        "$terminals ${if (terminals == 1) "terminal" else "terminals"}",
-                    ).joinToString(" · "),
-                    enabled = canRun { it.herdrSupported }, badge = blocked,
-                ) { open({ it.herdrSupported }, "Show the agents of", AGENTS_PAGE) }
-                if (shows { it.herdr?.control == true }) {
-                    ToolRow(
-                        Ic.add, "New agent or terminal", "Start it in a herdr workspace",
-                        enabled = canRun { it.herdr?.let { h -> h.running && h.control } == true },
-                    ) { open({ it.herdr?.let { h -> h.running && h.control } == true }, "Start an agent on", NEW_PANE_PAGE) }
                 }
             }
         }

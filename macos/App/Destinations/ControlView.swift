@@ -4,7 +4,8 @@ import SwiftUI
 
 /// Control: the tools that act on the computer in scope. Remote desktop is
 /// the master tool, because the Omarchy panel needs the desktop window on
-/// the Mac. The touchpad and the remote desktop ask for Touch ID first.
+/// the Mac. The agents come right under it. The touchpad and the remote
+/// desktop ask for Touch ID first.
 struct ControlView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.tn) private var tn
@@ -39,6 +40,16 @@ struct ControlView: View {
                                enabled: ToolTarget.ready(desktop)) {
                         ToolTarget.run(desktop, title: "Show the screen of", ask: $ask) { d in
                             DesktopWindows.shared.open(d, app: model)
+                        }
+                    }
+                }
+                // The agents come right after the master tool, because they are the tool that the user needs most often.
+                if herdr != nil && (noPairing || hasHerdr) {
+                    ToolRow(icon: "brain", title: "Agents and terminals", line: agentsLine(herdrStates),
+                            badge: herdrStates.reduce(0) { $0 + $1.blocked },
+                            enabled: ToolTarget.ready(agents)) {
+                        ToolTarget.run(agents, title: "Open the agents of", ask: $ask) { d in
+                            AgentsWindows.shared.show(d.id, app: model)
                         }
                     }
                 }
@@ -80,16 +91,6 @@ struct ControlView: View {
                             enabled: ToolTarget.ready(stream)) {
                         ToolTarget.run(stream, title: "Stream to", ask: $ask) { d in
                             model.push(.card(.stream, d.id))
-                        }
-                    }
-                }
-                if herdr != nil && (noPairing || hasHerdr) {
-                    SectionLabel("Agents")
-                    ToolRow(icon: "brain", title: "Agents and terminals", line: agentsLine(herdrStates),
-                            badge: herdrStates.reduce(0) { $0 + $1.blocked },
-                            enabled: ToolTarget.ready(agents)) {
-                        ToolTarget.run(agents, title: "Open the agents of", ask: $ask) { d in
-                            AgentsWindows.shared.show(d.id, app: model)
                         }
                     }
                 }

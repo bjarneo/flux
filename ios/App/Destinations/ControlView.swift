@@ -2,8 +2,8 @@ import FluxKit
 import SwiftUI
 
 /// The Control destination: the tools that act on the computer in scope.
-/// The Omarchy panel takes the master position. The other tools stack
-/// under it in groups. A tool shows when a computer in scope has the
+/// The Omarchy panel takes the master position. The agents come right
+/// under it, and the other tools stack under them in groups. A tool shows when a computer in scope has the
 /// feature, and it is dimmed while no such computer is online. The tools
 /// that send input ask for Face ID or the passcode first. The approval
 /// setup is a trust setting, so it is on the page of each computer under
@@ -28,6 +28,21 @@ struct ControlView: View {
                     MasterTool(icon: "square.grid.3x3", title: "Omarchy panel", line: "Workspaces, windows, and key bindings",
                                enabled: TargetRun.enabled(model, can: canPanel)) {
                         open(canPanel, "Open the Omarchy panel of", lock: { "Use the Omarchy panel of \($0.name)." }) { .panel($0) }
+                    }
+                }
+                // The agents come right after the master tool, because they are the tool that the user needs most often.
+                if TargetRun.shows(model, can: canAgents) {
+                    ToolRow(icon: "brain", title: "Agents and terminals", line: agentsLine, badge: blockedAgents,
+                            enabled: TargetRun.enabled(model, can: canAgents)) {
+                        open(canAgents, "Show the agents of") { .agents($0) }
+                    }
+                    if TargetRun.shows(model, can: hasControl) {
+                        ToolRow(icon: "plus", title: "New agent or terminal", line: "Start it in a herdr workspace",
+                                enabled: TargetRun.enabled(model, can: canCreate)) {
+                            TargetRun.run(model, can: canCreate, title: "Start an agent on") { d in
+                                newPane = NewPaneItem(id: d.id)
+                            }
+                        }
                     }
                 }
                 if TargetRun.shows(model, can: canTouchpad) {
@@ -73,21 +88,6 @@ struct ControlView: View {
                     ToolRow(icon: "web.camera", title: "Webcam", line: "Use this iPhone as a webcam",
                             enabled: TargetRun.enabled(model, can: canWebcam)) {
                         open(canWebcam, "Stream the camera to") { .cameraMode($0, .webcam) }
-                    }
-                }
-                if TargetRun.shows(model, can: canAgents) {
-                    SectionLabel("Agents")
-                    ToolRow(icon: "brain", title: "Agents and terminals", line: agentsLine, badge: blockedAgents,
-                            enabled: TargetRun.enabled(model, can: canAgents)) {
-                        open(canAgents, "Show the agents of") { .agents($0) }
-                    }
-                    if TargetRun.shows(model, can: hasControl) {
-                        ToolRow(icon: "plus", title: "New agent or terminal", line: "Start it in a herdr workspace",
-                                enabled: TargetRun.enabled(model, can: canCreate)) {
-                            TargetRun.run(model, can: canCreate, title: "Start an agent on") { d in
-                                newPane = NewPaneItem(id: d.id)
-                            }
-                        }
                     }
                 }
             }
