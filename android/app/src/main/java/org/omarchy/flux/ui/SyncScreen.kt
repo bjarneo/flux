@@ -163,7 +163,7 @@ fun SyncScreen(state: UiState, onBack: () -> Unit) {
                 }
             },
         )
-        add(SyncItem("clipboard", Ic.paste, "Sync clipboard", "Copies text and images between this phone and the computers. A copy on this phone goes out while Flux is open, or when you tap Send clipboard.", state.syncClipboard) {
+        add(SyncItem("clipboard", Ic.paste, "Sync clipboard", "Copies text and images between this phone and the computers. A copy on this phone goes out while Flux is on the screen, or with Send clipboard in Quick Settings or the notification.", state.syncClipboard) {
             FluxCore.setSyncClipboard(!state.syncClipboard)
         })
         add(

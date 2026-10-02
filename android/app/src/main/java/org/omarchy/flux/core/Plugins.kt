@@ -50,8 +50,9 @@ object Plugins {
     const val MAX_CLIPBOARD_TEXT = 256 * 1024
 
     /**
-     * The longest phone text that Flux sends to the computers, in UTF-8
-     * bytes. `fluxd` takes up to 1 MiB from a device.
+     * The longest phone text that the clipboard listener, the tile, and the
+     * notification action send to the computers, in UTF-8 bytes. `fluxd`
+     * takes up to 1 MiB from a device.
      */
     const val MAX_AUTO_TEXT = 1 shl 20
 

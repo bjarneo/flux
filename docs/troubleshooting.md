@@ -243,10 +243,17 @@ Flux does not send messages to a group. Reply to a group on the phone.
 
 Android lets only the app on the screen read the clipboard.
 Flux sends a phone copy by itself only while Flux is on the screen.
-For a copy in another app, use the **Send clipboard** tile, the **Send clipboard** action on the service notification, **Send to computer**, or **Send with Flux**.
+For a copy in another app, use one of these paths:
+
+- The **Send clipboard** tile in Quick Settings.
+- The **Send clipboard** action on the service notification.
+- **Send to computer** in the text selection menu.
+- **Send with Flux** in the share sheet.
+
 See [send a copy from another app](features.md#send-a-copy-from-another-app).
 
-If the tile shows **Turn on Sync clipboard first**, open **Computers > Sync** and turn on **Sync clipboard**.
+If a tap on **Send clipboard** shows the message **Turn on Sync clipboard first**, open **Computers > Sync**.
+Then turn on **Sync clipboard**.
 
 A copy that its app marks as sensitive, for example a password, does not sync by itself.
 The **Send clipboard** tile does not send it either.

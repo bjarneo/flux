@@ -298,7 +298,6 @@ class FluxService : Service() {
                 PendingIntent.getActivity(
                     this, 2,
                     Intent(this, ClipboardSendActivity::class.java)
-                        .putExtra(ClipboardSendActivity.EXTRA_MANUAL, true)
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
                 ),

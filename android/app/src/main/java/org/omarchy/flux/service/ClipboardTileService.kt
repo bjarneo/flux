@@ -29,7 +29,6 @@ class ClipboardTileService : TileService() {
     override fun onClick() {
         super.onClick()
         val intent = Intent(this, ClipboardSendActivity::class.java)
-            .putExtra(ClipboardSendActivity.EXTRA_MANUAL, true)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         // API 34 and later refuse the Intent overload and need a PendingIntent.
         if (Build.VERSION.SDK_INT >= 34) {

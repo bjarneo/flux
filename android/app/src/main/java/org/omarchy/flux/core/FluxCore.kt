@@ -532,9 +532,7 @@ object FluxCore {
         settings.enabled = on
         publish()
         if (on) {
-            // In the open app, the refresh also reads the accesses and the network again.
-            val action = if (foreground) org.omarchy.flux.service.FluxService.ACTION_REFRESH else null
-            org.omarchy.flux.service.FluxService.start(app, action)
+            org.omarchy.flux.service.FluxService.start(app)
         } else {
             org.omarchy.flux.screen.ScreenSession.stop()
             app.stopService(android.content.Intent(app, org.omarchy.flux.service.FluxService::class.java))
