@@ -65,7 +65,7 @@ codesign -dv Flux.app 2>&1 | grep flags
 The output shows `flags=0x10002(adhoc,runtime)`.
 
 Flux keeps running in the menu bar after the window closes.
-Quit it from the menu bar item.
+Quit it from the menu bar panel.
 
 To start Flux when you log in, turn on **Settings > General > Open at login**.
 Flux then opens its window at each login.
@@ -76,7 +76,7 @@ When the setting shows an error, add Flux with **+** in **System Settings > Gene
 Without this setting, the clipboard does not sync after a restart until you open Flux.
 
 The app icon uses the Flux mark from the desktop and Android icons.
-**Settings > General > Appearance** sets the windows and the Dock icon: Automatic follows macOS, or choose Light or Dark.
+The theme sets the light or dark mode of the windows and the Dock icon, see [Theme](#theme).
 Finder and Launchpad keep the dark bundle icon.
 To change the icons, edit and run `swift macos/tools/render-icon.swift`.
 
@@ -84,7 +84,7 @@ To change the icons, edit and run `swift macos/tools/render-icon.swift`.
 
 1. Connect the Mac and the computer to the same local network.
 2. Open Flux on the Mac and allow access to the local network.
-3. Select the computer in the sidebar, then **Pair…**, then **Send request**.
+3. Open **Computers** in the sidebar, select the computer under **Available**, then **Pair…**, then **Send request**.
 4. Accept the request on the computer when it shows the same 16-character key, such as `5EE6 825F 974E D59A`.
 
 Compare all 16 characters.
@@ -92,8 +92,9 @@ Earlier versions of Flux show only 8 characters, so update Flux on all devices b
 
 You can also start from the computer with `flux-cli pair` and accept on the Mac.
 A request from the computer does not change the page that the window shows.
-The sidebar marks the computer, and a notification shows the key.
-Select the computer, compare the key, and select **Accept**.
+The Inbox shows the request, and a notification shows the key.
+To see the key, select **Compare the key** in the Inbox, or select the notification.
+Compare the key, then select **Accept**.
 Return does not accept a request.
 After the Mac accepts, the computer asks you to confirm the key.
 Select **Confirm** in the Flux window or in the notification, or type `y` at the `flux-cli pair` prompt.
@@ -113,7 +114,7 @@ It ignores phones, tablets, and other Macs, and it removes old pairings with the
 
 Flux searches the network for 10 seconds when it starts.
 It does not search all the time.
-If the sidebar shows **No computer found**, select **Search again**.
+If **Computers** shows **No computers found**, select **Search again**.
 After the search ends, the Mac still connects to a paired computer when that computer announces itself.
 A computer that is not paired finds the Mac through Bonjour, and `fluxd` then connects to the Mac.
 
@@ -121,7 +122,7 @@ A computer that is not paired finds the Mac through Bonjour, and `fluxd` then co
 
 | Feature | Mac behavior |
 | --- | --- |
-| Files, text, and links | Send from the device page, a drop on the window or Dock icon, **Open With**, or **Services > Send to Flux**. Received files go to `~/Downloads` or the folder in Settings, with the quarantine mark of a download, so Gatekeeper checks them when you open them. Flux refuses a file that leaves less than 256 MB free. A received file or link shows in a notification, and it opens only after a click. Flux never opens a received file by itself. |
+| Files, text, and links | Send from **Send**, a drop on **Send** or the Dock icon, **Open With**, or **Services > Send to Flux**. Received files go to `~/Downloads` or the folder in Settings, with the quarantine mark of a download, so Gatekeeper checks them when you open them. Flux refuses a file that leaves less than 256 MB free. A received file or link shows in a notification, and it opens only after a click. Flux never opens a received file by itself. |
 | Clipboard | Syncs text both ways by itself, also while the window is closed. A copy while no computer is connected goes out when a computer connects. Password manager entries are not synced automatically. Images do not sync to or from the Mac. See [Clipboard](#clipboard). |
 | Screenshots and photos | **Send new screenshots** watches the macOS screenshot folder. **Send new photos** sends new photos from the Photos library and needs full Photos access. 1 scan sends at most 50 images. The rest go with the next scan, for example after the next new image or the next connect. |
 | Media | Controls the computer's players. The computer does not control the players on the Mac. |
@@ -132,9 +133,9 @@ A computer that is not paired finds the Mac through Bonjour, and `fluxd` then co
 | Camera modes | Text, QR, Photo, Document, and Signature, like the phone. Text, QR, Document, and Signature also read an opened, pasted, or dropped image or a screen region. To read an image, select **From Image**, then **Open Image…**, **Screen Region…**, or **Paste Image**. In Signature, **From Image** shows with the **Paper** source. Signature also accepts a drawn signature with the **Draw** source. |
 | Microphone | Streams the Mac microphone as 48 kHz mono audio. |
 | Notifications | Shows notifications from `flux-cli notify`. Each computer can show 10 notifications at once, then 1 more each second. Only the first notification of a burst makes a sound. Each computer keeps at most 20 notifications in Notification Center, and a new one removes the oldest. Received links count toward these limits. |
-| Battery | A Mac with a battery reports it. The page shows the computer's battery. |
+| Battery | A Mac with a battery reports it. The scope menu and **Computers** show the battery of each computer. |
 | Do Not Disturb | See [Focus](#focus). |
-| Fingerprint approval | Approves `sudo` and polkit with Touch ID. See [approval](#approval). |
+| Fingerprint approval | Approves `sudo` and polkit with Touch ID. The Inbox shows each request, and **Review** opens the prompt. The setup is on the page of each computer in **Computers**. See [approval](#approval). |
 | Touchpad and keyboard | The trackpad, the mouse, and the keyboard of the Mac control the pointer and the keys of the Omarchy computer. The computer does not control the Mac. The computer needs `remote_input = true`. The Mac asks for Touch ID or its password before the touchpad opens. Control and Option together give the pointer back to the Mac. See [Touchpad and keyboard](remote-input.md#use-a-mac). |
 | Remote desktop | Shows the screen of the Omarchy computer in a window. The mouse over the video, the keys, the Omarchy panel, and dictation control the computer. The computer does not control the Mac. The computer needs `remote_desktop = true`, and `remote_input = true` for control. The Mac asks for Touch ID or its password before the window opens. See [Remote desktop](remote-desktop.md#use-a-mac). |
 | herdr agents | Shows the coding agents that herdr runs on the computer, their output in color, and notifications. Answers them after Touch ID or the password when the computer allows replies, with dictation on the Mac. See [herdr agents](herdr.md#use-a-mac). |
@@ -142,6 +143,74 @@ A computer that is not paired finds the Mac through Bonjour, and `fluxd` then co
 
 The Mac cannot mirror notifications from other apps, report calls, or send SMS, because macOS gives apps no access to them.
 Flux does not advertise those capabilities.
+
+## Inbox and navigation
+
+The window has a sidebar with 4 destinations: **Inbox**, **Send**, **Control**, and **Computers**.
+The Inbox row counts the items of all computers that need you.
+To open a destination from the keyboard, press Command-1 to Command-4, or use the **Go** menu.
+
+The scope menu in the toolbar shows **All computers** or 1 paired computer, with a link dot and a battery dot for each computer.
+The scope filters the Inbox, Send, and Control, and it picks the theme of the **Computer** setting.
+A click on a paired computer in **Computers** also sets the scope, and a second click sets **All computers** again.
+A new pairing sets the scope to the new computer and opens the Inbox.
+Each start of Flux begins with **All computers**.
+
+The Inbox shows what happens on the computers in scope, as a Hyprland master layout:
+
+- The item that comes first takes the master tile, in the active border of the theme. An agent that waits for input comes first, then an approval, then a pair request. What plays now, the last clip, the transfers, and the other agents follow.
+- The other items wait in the stack. A click on a stack tile moves it to the master tile.
+- **Later**, Command-], or **Show the next item** in the context menu moves the master item to the end of the stack. A new item that needs you takes the master tile back.
+- In a detail column of 600 pt or more, the master tile takes 60% of the width on the left, and the status line and the stack fill the column on the right. A narrower column shows the master tile above a stack of 2 columns.
+- A finished transfer, the last clip, and a paused player stay for 30 minutes.
+
+The master tile of an agent that waits shows its question with the numbered choices.
+The tile reads the output of the agent when it shows and when its window comes to the front.
+Choices show only for an output that came after that read.
+The question keeps the lines nearest the choices, because they hold the command that a choice approves, and the tile never cuts them.
+Each answer asks for Touch ID or the password first, see [Touch ID lock](#touch-id-lock).
+After an answer, the choices stay off until a new output comes.
+When the computer does not allow replies, set `herdr_control = true` on it.
+**Reply** and **Open** open the agent in the agents window.
+
+The master tile of an approval shows the request, and **Review** opens the Touch ID prompt.
+It never approves by itself.
+The master tile of a pair request opens the pairing page with **Compare the key**.
+It never pairs by itself.
+
+**Send** holds the tools that send to the computer in scope: the clipboard, files, text and links, the clipboard sync, the files of the computer, and the camera modes.
+**Control** holds the tools that act on the computer in scope: the remote desktop with the Omarchy panel, the touchpad and keyboard, the commands, the media, the microphone, the webcam and screen mirror, and the agents.
+When more than 1 computer can take a tool, Flux asks which one.
+The cards of the features open on a page of their own from **Send** and **Control**.
+The agents, browse, camera, remote desktop, and touchpad windows stay separate windows.
+
+**Computers** shows this Mac, the paired computers, and the computers to pair.
+The arrow on a paired computer opens its page, with the Touch ID approval and **Unpair**.
+
+The menu bar extra shows the Flux mark and the count of the items that need you.
+Its panel shows the master item of all computers with its one-tap choices, then the next 3 items, a menu for each online computer, **Open Flux**, **Settings…**, and **Quit Flux**.
+A click on a next item shows it first in the Inbox of the window.
+
+## Theme
+
+Flux follows the active Omarchy theme of the computer, as Flux for Android does.
+`fluxd` sends the theme in a `flux.theme` packet when the Mac connects and when the theme changes.
+Flux saves the theme of each computer, so the next start draws it at once.
+
+To change the theme, open **Settings > General > Theme**. The choices are:
+
+- **Computer**, the default: the theme of the computer in scope. In the scope of all computers, Flux uses the theme that changed most recently. Without a theme from the computer in scope, Flux uses Tokyo Night when macOS is dark and Tokyo Night Day when macOS is light. The line under the choices names the theme and the computer that sent it.
+- **System**: Tokyo Night when macOS is dark and Tokyo Night Day when macOS is light.
+- **Light**: Tokyo Night Day.
+- **Dark**: Tokyo Night.
+
+The theme sets the light or dark mode of all Flux windows and the Dock icon.
+The old **Appearance** setting becomes **Computer** for Automatic, and stays **Light** or **Dark**.
+A contrast guard maps the theme to the colors of the app, see [Flux for Android](android.md#theme).
+The window, the menu bar panel, the Settings window, and the feature windows take the theme background and the theme accent.
+The cards of the features and the agent output keep their own colors.
+The pairing view, the pair request sheet, and the Touch ID prompt keep their layout, and take only the theme accent and the light or dark mode.
+The theme engine is in `macos/Sources/FluxKit/Theme`.
 
 ## Clipboard
 
@@ -256,7 +325,13 @@ log stream --predicate 'subsystem == "org.omarchy.flux"'
 | `macos/Sources/FluxKit/Net` | UDP discovery, Bonjour, TCP links, TLS, payload transfers, and tunnels |
 | `macos/Sources/FluxKit/Core` | Devices, pairing, trust store, the plugin protocol, and notifications |
 | `macos/Sources/FluxKit/Plugins` | One folder per feature |
+| `macos/Sources/FluxKit/Theme` | The theme packet, the contrast guard, and the palettes |
+| `macos/Sources/FluxKit/Inbox` | The items of the Inbox, their order, and their texts |
 | `macos/App` | The SwiftUI app; `App/Features/Features.swift` lists the plugins and their views |
+| `macos/App/Theme` | The colors of the theme in SwiftUI and the shared components |
+| `macos/App/Shell` | The destinations, the sidebar, the Go menu, the scope menu, and the pages of the features |
+| `macos/App/Inbox` | The Inbox: the master tile, the stack, and the empty Inbox |
+| `macos/App/Destinations` | Send, Control, and Computers |
 | `macos/Tests/FluxKitTests` | Protocol and feature tests |
 | `macos/project.yml` | XcodeGen project with the Info.plist keys |
 

@@ -23,7 +23,7 @@ final class CameraWindows: NSObject, NSWindowDelegate {
             return
         }
         let model = CameraWindowModel(deviceId: device.id, app: app, mode: mode)
-        let hosting = NSHostingController(rootView: CameraView(model: model))
+        let hosting = NSHostingController(rootView: CameraView(model: model).themeWindow(app))
         hosting.sizingOptions = [.minSize]
         let window = NSWindow(contentViewController: hosting)
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]

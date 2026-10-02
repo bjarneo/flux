@@ -25,6 +25,7 @@ enum PluginRegistry {
             BatteryPlugin(),
             DndPlugin(),
             ApprovePlugin(),
+            ThemePlugin(),
         ]
     }
 }

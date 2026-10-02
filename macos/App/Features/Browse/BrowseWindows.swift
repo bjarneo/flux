@@ -16,15 +16,15 @@ final class BrowseWindows: NSObject, NSWindowDelegate {
     private weak var plugin: BrowsePlugin?
 
     /// Shows the browse window of a computer, and opens it when it is not open.
-    func show(_ deviceId: String, core: FluxCore) {
+    func show(_ deviceId: String, app: AppModel) {
         if let entry = open[deviceId] {
             entry.window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
-        guard let plugin = core.plugin(BrowsePlugin.self), let browser = plugin.browser(for: deviceId) else { return }
+        guard let plugin = app.core.plugin(BrowsePlugin.self), let browser = plugin.browser(for: deviceId) else { return }
         self.plugin = plugin
-        let hosting = NSHostingController(rootView: BrowseView(browser: browser))
+        let hosting = NSHostingController(rootView: BrowseView(browser: browser).themeWindow(app))
         hosting.sizingOptions = [.minSize]
         let window = NSWindow(contentViewController: hosting)
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]

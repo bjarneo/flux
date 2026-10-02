@@ -41,7 +41,7 @@ final class TouchpadWindows: NSObject, NSWindowDelegate {
     private func show(_ device: DeviceSnapshot, app: AppModel) {
         guard !front(device.id), let plugin = app.core.plugin(RemoteInputPlugin.self) else { return }
         let controller = TouchpadController(device: device, app: app, plugin: plugin)
-        let hosting = NSHostingController(rootView: TouchpadView(controller: controller))
+        let hosting = NSHostingController(rootView: TouchpadView(controller: controller).themeWindow(app))
         hosting.sizingOptions = [.minSize]
         let window = NSWindow(contentViewController: hosting)
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
