@@ -106,14 +106,18 @@ The volume keys work again as usual when you leave the touchpad or select the ic
 
 The trackpad, the mouse, and the keyboard of the Mac can control the pointer and the keys of the Omarchy computer.
 
-1. On the Mac, open the computer in Flux.
-2. In the **Touchpad and Keyboard** card, select **Open Touchpad…**.
-   The menu bar item also has **Touchpad and Keyboard…**.
+1. On the Mac, open **Control** in Flux.
+2. Select **Touchpad and keyboard**.
+   When more than 1 computer can take the input, select the computer.
+   While remote input is on, the menu of the computer in the menu bar panel also has **Touchpad and Keyboard…**.
 3. Confirm with Touch ID or the password of the Mac.
    The unlock stays valid for 5 minutes, until the Mac sleeps or locks.
    After that, the Mac asks again before it opens the touchpad. See [Touch ID lock](macos.md#touch-id-lock).
 
-The card shows **Off** and the steps above when `remote_input` is off on the computer.
+While `remote_input` is off on the computer, the tool is dimmed and its line shows `Off on <computer>`.
+To turn on remote input, run `flux-cli input on` on the computer.
+Or set `remote_input = true` in `~/.config/flux/config.toml`, then run `systemctl --user reload fluxd`.
+See [Turn on remote input](#turn-on-remote-input).
 
 ### Give the pointer to the computer
 
@@ -219,7 +223,7 @@ A packet holds 1 action:
 | --- | --- |
 | The phone or the Mac says that remote input is off | Run `flux-cli input on`, or turn on **Remote input** in the Flux window. |
 | The phone or the Mac says to update Flux on the computer | Install a `fluxd` that lists `flux.mousepad.request`. |
-| The Mac shows no **Touchpad and Keyboard** card | Connect the Mac to the computer. The card shows only for a `fluxd` that lists `flux.mousepad.request`. |
+| The Mac shows no **Touchpad and keyboard** tool in **Control** | Connect the Mac to the computer. The tool shows only when a computer in the scope has a `fluxd` that lists `flux.mousepad.request`. |
 | The Mac cursor does not come back | Press Control and Option together, then release them. Or press Command-Tab. |
 | The pointer does not move | Run `journalctl --user -u fluxd --no-pager \| grep "remote input"`. The compositor must offer `zwlr_virtual_pointer_manager_v1`. |
 | The keys do nothing | Run `flux-cli doctor` and install `wtype` if it is missing. |

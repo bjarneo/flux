@@ -262,8 +262,10 @@ Flux for macOS shows the same agents and sends the same replies as the phone.
 It shows up to 1000 lines of output.
 It does not start agents, close them, or open terminals.
 
-- The page of the computer has an **Agents** card. It lists the first agents and shows the number of blocked agents.
-- **Open Agents…** opens a window with the agent list on the left and the output of the selected agent on the right. The menu bar item has **Agents…** too.
+- **Control** has the **Agents and terminals** tool. Its line counts the agents and the terminals. Its badge shows the number of blocked agents.
+- The Inbox shows each agent that waits for input, works, or is done. See [Inbox and navigation](macos.md#inbox-and-navigation).
+- **Agents and terminals** opens a window with the agent list on the left and the output of the selected agent on the right. When more than 1 computer has agents, Flux asks which one.
+- **Reply** and **Open** on the master tile of the Inbox open the agent in that window. The menu of each computer in the menu bar panel has **Agents…** too.
 - The output uses the colors of Tokyo Night in dark mode and Tokyo Night Day in light mode.
 - The Mac does not yet fit the output of full-screen agents such as opencode, as the phone does.
 - Press Command-R to read the output again.
@@ -510,7 +512,7 @@ An app sends `answer` only after the user selects an action to type an answer.
 | A reply says that the agent waits for a choice | The agent shows a dialog. Pick a choice with the choice buttons or the key bar, then send the text again. |
 | The log says that the herdr socket belongs to another user | Another user listens on the herdr socket path. Set `HERDR_SOCKET_PATH` to a socket in a folder that only you can write to. |
 | The mic key is missing | The phone has no speech recognizer. Install Speech Recognition and Synthesis from Google, or another voice input app. |
-| The **Agents** card is missing on the Mac | Update `fluxd` and Flux for macOS. The card shows only when the computer accepts `flux.herdr`. |
+| The **Agents and terminals** tool is missing on the Mac | Update `fluxd` and Flux for macOS. The tool shows in **Control** only when a computer in the scope accepts `flux.herdr`. |
 | Dictation on the Mac says to allow Speech Recognition or the microphone | Select **Open Privacy Settings**, allow Flux, then start the dictation again. |
 | Dictation on the Mac sends the audio to Apple | The Mac has no speech model for the language. Add the language under **Dictation** in **System Settings > Keyboard**, or choose a language under **On this Mac**. |
 | Dictation says that Android downloads the speech model | Wait until the download is done, then start the dictation again. |

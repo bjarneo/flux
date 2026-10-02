@@ -163,14 +163,19 @@ The Enter key next to the mic key sends Enter.
 
 ## Use a Mac
 
-On the Mac, open the computer in Flux.
-In the **Remote Desktop** card, select **Open Remote Desktop…**.
-The menu bar item also has **Remote Desktop…**.
-The Mac asks for Touch ID or its password first. The unlock stays valid for 5 minutes, until the Mac sleeps or locks.
-After that, the Mac asks again before it opens the remote desktop. See [Touch ID lock](macos.md#touch-id-lock).
+1. On the Mac, open **Control** in Flux.
+2. Select **Remote desktop**.
+   When more than 1 computer can show its screen, select the computer.
+   While the remote desktop is on, the menu of the computer in the menu bar panel also has **Remote Desktop…**.
+3. Confirm with Touch ID or the password of the Mac.
+   The unlock stays valid for 5 minutes, until the Mac sleeps or locks.
+   After that, the Mac asks again before it opens the remote desktop. See [Touch ID lock](macos.md#touch-id-lock).
 
-The card shows **Off** and the steps to turn it on when the remote desktop is off on the computer.
-Without remote input, the window shows **View only**, and the mouse and the keys do nothing on the computer.
+While `remote_desktop` is off on the computer, the tool is dimmed and its line shows `Off on <computer>`.
+To turn on the remote desktop, run `flux-cli desktop on` on the computer.
+Or set `remote_desktop = true` in `~/.config/flux/config.toml`, then run `systemctl --user reload fluxd`.
+See [Turn on the remote desktop](#turn-on-the-remote-desktop).
+Without remote input, the tool and the window show **View only**, and the mouse and the keys do nothing on the computer.
 
 The window shows the monitor with the focus.
 The video keeps the shape of the monitor, with bars at the sides or at the top and the bottom.
@@ -337,7 +342,7 @@ A binding to a key code, such as `SUPER + code:10` for workspace 1, does not mat
 | The phone or the Mac says to update Flux on the computer | Install a `fluxd` that lists `flux.desktop`. |
 | The phone shows the screen, but a tap does nothing | Run `flux-cli input on`, or turn on **Remote input** in the Flux window. |
 | The Mac shows **View only** | Run `flux-cli input on`, or turn on **Remote input** in the Flux window. |
-| The Mac shows no **Remote Desktop** card | Connect the Mac to the computer. The card shows only for a `fluxd` that lists `flux.desktop`. |
+| The Mac shows no **Remote desktop** tool in **Control** | Connect the Mac to the computer. The tool shows only when a computer in the scope has a `fluxd` that lists `flux.desktop`. |
 | A Command shortcut goes to the Mac | Move the pointer over the video, then press the shortcut again. |
 | The screen capture stops | Run `journalctl --user -u fluxd --no-pager \| grep "remote desktop"` for the error of `gpu-screen-recorder`. |
 | The Mac or the phone says `list the monitors: exit status 22` | `gpu-screen-recorder` does not support the GPU. Install `wf-recorder`, then start the remote desktop again. |

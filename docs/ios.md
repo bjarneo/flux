@@ -224,7 +224,7 @@ The theme engine is in `macos/Sources/FluxKit/Theme`, and the colors of the app 
 | Remote desktop | Shows the screen of the computer, with touches, keys, the Omarchy panel, dictation, and a monitor picker. The computer needs `remote_desktop = true`, and `remote_input = true` for control. See [Remote desktop](remote-desktop.md). |
 | herdr agents | Shows the agents that herdr runs, their output in color fitted to the phone screen, and notifications for needs input and finished. Answers them, starts agents, and runs terminals when the computer allows it. See [herdr agents](herdr.md). |
 | Dictation | Each text field has a mic key: the agent replies, the touchpad, the remote desktop, **Text or link** in **Send > Text and links**, the scanned text, the shortcut search, the folder search and the task of a new agent, and the terminal command. Searches get the words in place of the search. Other fields get them at the end of the text. The iPhone dictates in its own languages. |
-| Face ID lock | Replies, new agents, terminals, the touchpad, and the remote desktop ask for Face ID, Touch ID, or the passcode. The unlock stays valid for 5 minutes, and it ends when the iPhone locks. An open touchpad or remote desktop asks again when Flux returns after the unlock ended. |
+| Face ID lock | Replies, new agents, terminals, the touchpad, the remote desktop, and the Omarchy panel ask for Face ID, Touch ID, or the passcode. The unlock stays valid for 5 minutes, and it ends when the iPhone locks. An open touchpad, remote desktop, or Omarchy panel asks again when Flux returns after the unlock ended. |
 
 Flux for iOS does not advertise notifications of other apps, SMS, calls, or the screen mirror.
 

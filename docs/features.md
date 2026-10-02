@@ -427,7 +427,7 @@ To allow it, turn on **Remote input** in the **Remote access** card of the Flux 
 flux-cli input on
 ```
 
-Then select **Touchpad and keyboard** in **Control** on the phone, or **Open Touchpad…** on the computer's page in Flux for macOS.
+Then select **Touchpad and keyboard** in **Control** on the phone or in Flux for macOS.
 See [Touchpad and keyboard](remote-input.md) for the gestures, the keys, and the slides.
 
 ## Remote desktop
@@ -441,7 +441,7 @@ flux-cli input on
 ```
 
 Then select **Remote desktop** in **Control** on the phone. The phone turns to landscape.
-In Flux for macOS, select **Open Remote Desktop…** on the computer's page.
+In Flux for macOS, select **Remote desktop** in **Control**.
 See [Remote desktop](remote-desktop.md) for the gestures, the monitors, and the stream.
 
 ## Dictation in text fields

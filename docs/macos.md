@@ -209,7 +209,8 @@ The old **Appearance** setting becomes **Computer** for Automatic, and stays **L
 A contrast guard maps the theme to the colors of the app, see [Flux for Android](android.md#theme).
 The window, the menu bar panel, the Settings window, and the feature windows take the theme background and the theme accent.
 The cards of the features and the agent output keep their own colors.
-The pairing view, the pair request sheet, and the Touch ID prompt keep their layout, and take only the theme accent and the light or dark mode.
+The pairing view keeps its layout. It shows on the theme background of the window, and takes the theme accent and the light or dark mode.
+The pair request sheet and the Touch ID prompt keep their layout and their own background, and take only the theme accent and the light or dark mode.
 The theme engine is in `macos/Sources/FluxKit/Theme`.
 
 ## Clipboard
