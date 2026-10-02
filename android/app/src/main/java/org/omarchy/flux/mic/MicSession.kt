@@ -102,6 +102,9 @@ object MicSession {
         }
     }
 
+    /** True while a stream to [deviceId] runs or starts. */
+    fun runsTo(deviceId: String): Boolean = _status.value.active && synchronized(lock) { this.deviceId == deviceId }
+
     /** Stops the stream. With [notify], the computer gets flux.mic "stop". */
     fun stop(core: FluxCore, notify: Boolean, status: Status = Status()) {
         val id = synchronized(lock) { attempt }

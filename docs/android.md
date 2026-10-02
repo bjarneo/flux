@@ -151,7 +151,7 @@ Flux for Android applies these limits to the network:
 - The Wi-Fi multicast lock is on only while the phone scans, before the first pairing, and while a paired computer is away.
 
 When you unpair a computer on either side, the phone stops the screen mirror, the webcam, the microphone, the remote desktop, and **Get files** for that computer.
-It also closes its approval request and removes its notifications.
+It also closes its approval request and its stream requests, and removes its notifications.
 When you start the screen mirror to a second computer, the mirror to the first computer stops.
 
 The phone accepts clipboard text of at most 256 KiB from a computer. Larger text shows a message, and the clipboard does not change.
@@ -163,6 +163,40 @@ A computer shows at most 10 notifications on the phone, and you can always remov
 A copy on the phone reaches the computer while Flux is on the screen.
 For a copy in another app, use a 1-tap path.
 See [send a copy from another app](features.md#send-a-copy-from-another-app).
+
+## Webcam and mic requests
+
+The computer can ask the phone to start the webcam or the mic:
+
+```sh
+flux-cli --device "Pixel 8" webcam start
+flux-cli --device "Pixel 8" mic start
+```
+
+The request only asks.
+The phone turns on the camera or the microphone only after you tap Start on the phone, also while Flux is on the screen.
+
+- While Flux is on the screen, a prompt shows **COMPUTER asks for the webcam** with **Start webcam** and **Not now**. For the mic, the prompt shows **COMPUTER asks for the mic** with **Start the mic**.
+- While Flux is not on the screen, a notification shows the same title and **Tap to start the webcam.** or **Tap to start the mic.** It has the action **Start webcam** or **Start the mic**. The notification uses the **Stream requests** channel.
+- Without the notification permission, the phone shows a request only while Flux is on the screen.
+- The prompt and the notification go away after 60 seconds.
+- A tap on Start opens the **Webcam** or **Mic** page of that computer, and the page starts the stream with the saved settings. On a locked phone, Android asks you to unlock it first.
+- When the page cannot start the stream in 60 seconds, for example while the computer is not reachable, it does not start it. Then press Start on the page.
+- While a stream of that kind runs to that computer, a request does nothing.
+- The phone ignores a request of the same kind from the same computer that comes less than 3 seconds after the last one.
+- The prompt refuses a tap while another app draws over Flux.
+
+The stream starts from the visible page with the start code of its Start button.
+Android lets an app use the camera and the microphone only while the app is visible or after an action of the user.
+The stream stops when the page closes or Flux goes to the background, as after a start on the page.
+
+Another app on the phone can open Flux with the extras of the notification.
+Only the one-time key of the notification starts the stream at once.
+Without the key, the page opens, and you press Start.
+The keys stay in memory, so after a restart of the Flux process, the notification opens only the page.
+
+The phone lists `flux.stream.request` in its incoming packet types.
+An earlier Flux for Android does not list it, so the computer sends no request to it.
 
 ## Build and install
 
@@ -288,6 +322,8 @@ The pages are:
 - `terminal:<pane>` for one herdr terminal. The sample terminals are `terminal:w1:p2` and `terminal:w3:p3`.
 - `camera:<mode>` for a camera mode: `text`, `qr`, `photo`, `document`, or `signature`. `camera:webcam` opens the `webcam` page.
 - `ring`, `pair`, and `unpair` for the ring overlay, the pairing sheet, and the unpair dialog.
+- `ask:webcam` and `ask:mic` for the prompt of a stream request from the first paired computer, over the Inbox. With `FLUX_DEMO=1`, Start on the prompt of the sample computer opens the page and does not start the stream.
+- `notify:webcam` and `notify:mic` for the notification of a stream request from the first paired computer. The notification shows also while Flux is on the screen, so open the notification shade to see it.
 - `<page>@offline` for the page of a paired computer that is not reachable. A destination with `@offline` shows that computer as the scope.
 - `<page>@connecting` for the same page while that computer still connects. For example, `inbox@connecting` shows the Inbox in the connecting state.
 - `empty` for the app with no computers.
@@ -296,6 +332,12 @@ The pages are:
 - `icon` for the launcher and notification icons.
 
 With `FLUX_DEMO=1`, the Inbox also shows a sample approval, 2 sample transfers, and a sample clip, and the sample computer shows the Omarchy panel. A tap on the sample approval does not open the approval screen.
+
+To show the prompt of a webcam request on an emulator, run:
+
+```bash
+ANDROID_SERIAL=emulator-5554 FLUX_DEMO=1 tools/shot.sh ask:webcam /tmp/ask-webcam.png
+```
 
 To draw the sample computer in a sample theme, set `FLUX_THEME` to `neon`, `tokyo-night`, `tokyo-night-day`, `catppuccin-latte`, `cotton-candy`, `futurism`, or `low-contrast`. The value `none` removes the theme:
 

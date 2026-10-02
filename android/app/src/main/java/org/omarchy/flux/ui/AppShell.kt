@@ -409,7 +409,7 @@ private fun DetailScreen(route: Route, state: UiState, current: () -> Nav, go: (
     val page = route.page
     when {
         page == "media" -> TiledMediaScreen(device, pop)
-        page == "mic" -> MicScreen(device, pop)
+        page == MIC_PAGE -> MicScreen(device, pop)
         page == "commands" -> TiledCommandsScreen(device, pop)
         page == AGENTS_PAGE -> TiledAgentsScreen(
             device, pop,

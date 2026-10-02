@@ -118,7 +118,7 @@ fun ControlScreen(state: UiState, scope: String?, picker: TargetPicker, onOpen: 
         SectionLabel("Stream")
         Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
             ToolRow(Ic.mic, "Mic", "Use this phone as a microphone", enabled = any !is Target.None) {
-                open({ true }, "Stream the mic to", "mic")
+                open({ true }, "Stream the mic to", MIC_PAGE)
             }
             ToolRow(Ic.videocamOutline, "Webcam", "Use this phone as a webcam", enabled = any !is Target.None) {
                 open({ true }, "Stream the camera to", WEBCAM_PAGE)

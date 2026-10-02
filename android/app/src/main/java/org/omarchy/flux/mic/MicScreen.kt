@@ -43,22 +43,27 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
+import org.omarchy.flux.core.StreamKind
 import org.omarchy.flux.ui.ButtonKind
 import org.omarchy.flux.ui.FluxButton
 import org.omarchy.flux.ui.Ic
 import org.omarchy.flux.ui.IconBadge
 import org.omarchy.flux.ui.NotReachable
+import org.omarchy.flux.ui.StartAfterTap
 import org.omarchy.flux.ui.T
 import org.omarchy.flux.ui.TileLabel
 import org.omarchy.flux.ui.TiledGutter
 import org.omarchy.flux.ui.TiledTopBar
 import org.omarchy.flux.ui.Tn
 import org.omarchy.flux.ui.openAppSettings
+import org.omarchy.flux.ui.rememberStreamStart
 
 /**
  * The Mic screen. Apps on the computer see this phone as Flux Microphone
  * while the stream runs. The stream stops when the screen closes or the
- * app goes to the background.
+ * app goes to the background. After a tap on Start in a stream request of
+ * the computer, the stream starts when the computer is reachable and Flux
+ * has the microphone permission.
  */
 @Composable
 fun MicScreen(d: DeviceUi, onBack: () -> Unit) {
@@ -74,6 +79,12 @@ fun MicScreen(d: DeviceUi, onBack: () -> Unit) {
             asked = true
             ask.launch(Manifest.permission.RECORD_AUDIO)
         }
+    }
+
+    // A tap on Start in a stream request starts the stream with the same path as Start the mic.
+    val startNow = rememberStreamStart(d.id, StreamKind.Mic)
+    StartAfterTap(startNow, ready = granted && d.online, StreamKind.Mic) {
+        if (!MicSession.runsTo(d.id)) MicSession.start(FluxCore, d.id)
     }
 
     val status by MicSession.status.collectAsState()

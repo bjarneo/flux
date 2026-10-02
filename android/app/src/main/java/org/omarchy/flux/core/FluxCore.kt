@@ -393,6 +393,7 @@ object FluxCore {
             if (browsing) Browse.close()
             Approvals.current.value?.takeIf { it.computerId == id }?.let { Approvals.clear(app, it.id) }
             Android.cancelFromComputer(app, id)
+            StreamRequests.forget(app, id)
         }
     }
 

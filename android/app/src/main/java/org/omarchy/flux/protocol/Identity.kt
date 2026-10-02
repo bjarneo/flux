@@ -75,6 +75,13 @@ object Types {
      * when the phone connects and when the theme changes.
      */
     const val FLUX_THEME = "flux.theme"
+
+    /**
+     * The computer asks this phone to start its webcam or its microphone,
+     * {"kind": "webcam"} or {"kind": "mic"}. The packet only asks. The
+     * phone starts a stream only after a tap of the user.
+     */
+    const val FLUX_STREAM_REQUEST = "flux.stream.request"
 }
 
 /** Packet types that the phone accepts. */
@@ -84,7 +91,7 @@ val INCOMING = listOf(
     Types.NOTIFICATION_ACTION, Types.FIND_MY_PHONE, Types.RUN_COMMAND, Types.MPRIS,
     Types.SFTP, Types.FLUX_TUNNEL, Types.FLUX_WEBCAM, Types.FLUX_DND,
     Types.FLUX_MIC, Types.FLUX_SCREEN, Types.FLUX_APPROVE, Types.FLUX_HERDR, Types.FLUX_INPUT,
-    Types.FLUX_DESKTOP, Types.FLUX_SHORTCUTS, Types.FLUX_THEME,
+    Types.FLUX_DESKTOP, Types.FLUX_SHORTCUTS, Types.FLUX_THEME, Types.FLUX_STREAM_REQUEST,
 )
 
 /** Packet types that the phone sends. */

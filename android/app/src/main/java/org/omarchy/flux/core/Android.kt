@@ -40,6 +40,7 @@ object Android {
     const val CHANNEL_APPROVE = "flux.approve"
     const val CHANNEL_AGENT_INPUT = "flux.agents.input"
     const val CHANNEL_AGENT_DONE = "flux.agents.done"
+    const val CHANNEL_STREAM = "flux.stream"
     private const val TAG_AGENT = "agent"
     const val ID_SERVICE = 1
     const val ID_PAIR = 2
@@ -201,6 +202,9 @@ object Android {
         })
         nm.createNotificationChannel(NotificationChannel(CHANNEL_AGENT_DONE, "Agents that finish", NotificationManager.IMPORTANCE_DEFAULT).apply {
             description = "A coding agent in herdr on a computer finished its work"
+        })
+        nm.createNotificationChannel(NotificationChannel(CHANNEL_STREAM, "Stream requests", NotificationManager.IMPORTANCE_HIGH).apply {
+            description = "A computer asks to start the webcam or the mic of this phone"
         })
     }
 

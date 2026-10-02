@@ -36,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -64,6 +65,7 @@ import org.omarchy.flux.camera.CameraRationale
 import org.omarchy.flux.camera.rememberCameraPermission
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
+import org.omarchy.flux.core.StreamKind
 import org.omarchy.flux.mic.MicSession
 import org.omarchy.flux.mic.MicSettings
 import org.omarchy.flux.ui.ButtonKind
@@ -74,27 +76,32 @@ import org.omarchy.flux.ui.Mono
 import org.omarchy.flux.ui.NotReachable
 import org.omarchy.flux.ui.Palette
 import org.omarchy.flux.ui.PermissionNotice
+import org.omarchy.flux.ui.StartAfterTap
 import org.omarchy.flux.ui.Sym
 import org.omarchy.flux.ui.T
 import org.omarchy.flux.ui.TileLabel
 import org.omarchy.flux.ui.TiledGutter
 import org.omarchy.flux.ui.TiledTopBar
 import org.omarchy.flux.ui.Tn
+import org.omarchy.flux.ui.rememberStreamStart
 
 /**
  * The Webcam screen of 1 computer, in the Stream band of Control. A stream
- * that runs keeps its Stop button, also when the link drops.
+ * that runs keeps its Stop button, also when the link drops. After a tap
+ * on Start in a stream request of the computer, the stream starts when the
+ * computer is reachable and the camera is ready.
  */
 @Composable
 fun WebcamScreen(d: DeviceUi, onBack: () -> Unit) {
     val status by WebcamSession.status.collectAsState()
     val live = status.active
+    val startNow = rememberStreamStart(d.id, StreamKind.Webcam)
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.padding(horizontal = TiledGutter)) { TiledTopBar("Webcam", onBack, context = d.name) }
         if (!d.online && !live) {
             Box(Modifier.padding(horizontal = TiledGutter)) { NotReachable(d, "The webcam controls") }
         } else {
-            WebcamPanel(d.id)
+            WebcamPanel(d.id, startNow)
         }
     }
 }
@@ -103,10 +110,12 @@ fun WebcamScreen(d: DeviceUi, onBack: () -> Unit) {
  * The webcam of the phone. The phone camera becomes a webcam named Flux
  * Camera on the computer. The preview shows what the computer gets, with
  * the same shape, mirror, and colors. The settings open below the
- * preview, so the preview shows each change.
+ * preview, so the preview shows each change. While [startNow] is true,
+ * the panel starts the stream with the saved settings, as Start webcam
+ * does.
  */
 @Composable
-fun WebcamPanel(deviceId: String) {
+fun WebcamPanel(deviceId: String, startNow: MutableState<Boolean>) {
     val permission = rememberCameraPermission()
     if (!permission.granted) {
         CameraRationale(onAllow = permission.request, onSettings = permission.openSettings, onPhoto = null, what = "use this phone as a webcam")
@@ -159,6 +168,10 @@ fun WebcamPanel(deviceId: String) {
     }
     LaunchedEffect(config) { controller.apply(config) }
     LaunchedEffect(rotation) { controller.extraRotation = rotation }
+    // A tap on Start in a stream request starts the stream with the same path as Start webcam.
+    StartAfterTap(startNow, ready = cameraError == null, StreamKind.Webcam, key = config) {
+        if (!WebcamSession.runsTo(deviceId)) controller.goLive(deviceId)
+    }
 
     // The stream stops when the app goes to the background, and the camera
     // closes, so that other apps can use it. The microphone that the webcam

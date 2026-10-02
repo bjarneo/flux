@@ -1,5 +1,7 @@
 package org.omarchy.flux.ui
 
+import org.omarchy.flux.core.StreamKind
+
 /** The 4 destinations of the navigation bar. [key] is also the debug page name. */
 enum class Tab(val key: String, val label: String) {
     Inbox("inbox", "Inbox"),
@@ -51,6 +53,21 @@ const val OMARCHY_PAGE = "omarchy"
 /** The webcam of 1 computer, in the Stream band of Control. */
 const val WEBCAM_PAGE = "webcam"
 
+/** The mic of 1 computer, in the Stream band of Control. */
+const val MIC_PAGE = "mic"
+
+/** The page of a stream of [kind]. A stream request opens it. */
+fun streamPage(kind: StreamKind): String = when (kind) {
+    StreamKind.Webcam -> WEBCAM_PAGE
+    StreamKind.Mic -> MIC_PAGE
+}
+
+/** Debug builds only: the page prefix that shows the prompt of a stream request, such as ask:webcam. */
+const val ASK_PAGE = "ask:"
+
+/** Debug builds only: the page prefix that shows the notification of a stream request, such as notify:mic. */
+const val NOTIFY_PAGE = "notify:"
+
 /** The sync switches. They apply to every computer, so the page has no computer. */
 const val SYNC_PAGE = "sync"
 
@@ -62,6 +79,9 @@ data class Nav(val tab: Tab = Tab.Inbox, val stack: List<Route> = emptyList()) {
     val dest: Dest get() = stack.lastOrNull()?.let { Dest.Detail(it, stack.size, tab) } ?: Dest.Root(tab)
 
     fun push(r: Route): Nav = copy(stack = stack + r)
+
+    /** Opens [r] above the current screen. When [r] is on top already, the state stays. */
+    fun open(r: Route): Nav = if (stack.lastOrNull() == r) this else push(r)
 
     /** Replaces the top screen, so that Back skips the old one. */
     fun replaceTop(r: Route): Nav = copy(stack = stack.dropLast(1) + r)
@@ -114,7 +134,8 @@ data class Nav(val tab: Tab = Tab.Inbox, val stack: List<Route> = emptyList()) {
             SYNC_PAGE -> Nav(Tab.Computers, listOf(Route(null, SYNC_PAGE))) to null
             // The old computer page is now the Control destination of 1 computer.
             "home" -> Nav(Tab.Control) to deviceId
-            else -> {
+            // The prompt of a stream request shows over the Inbox. The notification shows in the shade.
+            else -> if (page.startsWith(ASK_PAGE) || page.startsWith(NOTIFY_PAGE)) Nav(Tab.Inbox) to null else {
                 val agents = Route(deviceId, AGENTS_PAGE)
                 val stack = when {
                     page.startsWith(AGENT_PAGE) || page.startsWith(TERMINAL_PAGE) || page == NEW_PANE_PAGE -> listOf(agents, Route(deviceId, page))
