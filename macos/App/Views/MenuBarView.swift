@@ -20,9 +20,11 @@ private struct MenuBarPanel: View {
     @Environment(AppModel.self) private var model
     @Environment(\.tn) private var tn
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         let all = model.inboxItems(now: now)
+        let scoped = Inbox.inScope(all, scope: model.scope)
         let arranged = model.arrangement.arrange(all)
         let online = model.connectedPaired
         VStack(alignment: .leading, spacing: 10) {
@@ -62,7 +64,7 @@ private struct MenuBarPanel: View {
             HStack(spacing: 4) {
                 Button("Open Flux") { showMain() }
                     .keyboardShortcut("o")
-                SettingsLink { Text("Settings…") }
+                Button("Settings…") { showSettings() }
                     .keyboardShortcut(",")
                 Spacer(minLength: 8)
                 Button("Quit Flux") { NSApp.terminate(nil) }
@@ -73,13 +75,21 @@ private struct MenuBarPanel: View {
         .padding(12)
         .frame(width: 360)
         .fixedSize(horizontal: false, vertical: true)
-        .onChange(of: all.map(\.key), initial: true) { model.inboxChanged(all: all) }
+        .onChange(of: [all.map(\.key), scoped.map(\.key)], initial: true) { model.inboxChanged(all: all, scoped: scoped) }
     }
 
     /// Opens the main window and brings Flux to the front.
     private func showMain() {
         openWindow(id: "main")
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// Brings Flux to the front and opens the Settings window. A click in
+    /// the menu bar panel does not make Flux the active app, so without
+    /// this step the Settings window can open behind other apps.
+    private func showSettings() {
+        NSApp.activate(ignoringOtherApps: true)
+        openSettings()
     }
 
     /// Moves the item to the master position of the Inbox and shows it. An

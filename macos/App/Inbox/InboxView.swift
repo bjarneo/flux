@@ -48,7 +48,8 @@ private struct InboxBody: View {
             }
         }
         .animation(Motion.standard(reduceMotion), value: arranged.map(\.key))
-        .onChange(of: all.map(\.key), initial: true) { model.inboxChanged(all: all) }
+        // A change of the scope changes the scoped items, so it syncs the order too.
+        .onChange(of: [all.map(\.key), scoped.map(\.key)], initial: true) { model.inboxChanged(all: all, scoped: scoped) }
         // A paused player stays for 30 minutes after it played last.
         .onChange(of: PlayStamp(ids: playing, minute: Int(now.timeIntervalSince1970 / 60)), initial: true) {
             let next = Inbox.notePlaying(model.playedAt, devices: model.state.devices,

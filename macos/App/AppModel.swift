@@ -151,15 +151,24 @@ final class AppModel {
         Inbox.items(core: core, devices: state.devices, now: now, playedAt: playedAt)
     }
 
+    /// Sets the computer in scope. The order of the Inbox syncs with the
+    /// items of the new scope at once, so that a pin set after the change stays.
     func setScope(_ id: String?) {
+        guard id != scope else { return }
         scope = id
+        let all = inboxItems(now: Date())
+        inboxChanged(all: all, scoped: Inbox.inScope(all, scope: id))
     }
 
     /// Keeps the order of the Inbox and the prompts of the agents that wait.
-    /// The window shows the scope and the menu bar panel shows all
-    /// computers, so the order follows the items of all computers.
-    func inboxChanged(all: [InboxItem]) {
-        let next = arrangement.sync(all)
+    /// The order syncs with the items in scope, as on Android. A new item in
+    /// scope that needs the user removes the pin. The menu bar panel shows
+    /// all computers in the same order, so a deferred item stays deferred
+    /// while it is on a computer. The prompts follow all computers.
+    func inboxChanged(all: [InboxItem], scoped: [InboxItem]) {
+        var next = arrangement.sync(scoped)
+        let present = Set(all.map(\.key))
+        next.deferred = arrangement.deferred.filter { present.contains($0) }
         if next != arrangement { arrangement = next }
         var keys = Set<String>()
         for item in all {

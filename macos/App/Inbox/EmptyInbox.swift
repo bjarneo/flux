@@ -141,7 +141,8 @@ private struct Paragraph: View {
 
 /// The guide before the first pairing: what Flux is, how to set up Flux
 /// on the Omarchy computer, and the computers to pair. When this Mac found
-/// a computer, the pair step comes first.
+/// a computer, the pair step comes first. When macOS blocks the local
+/// network for Flux, the Local Network notice comes before the steps.
 private struct PairGuide: View {
     static let installGuide = URL(string: "https://github.com/bjarneo/flux/blob/master/docs/install.md")!
     static let setupCommand = "flux-cli setup"
@@ -150,9 +151,17 @@ private struct PairGuide: View {
 
     var body: some View {
         let available = model.available.filter(\.online)
+        let localNetworkOff = model.state.localNetworkDenied && !model.state.devices.contains(where: \.online)
         VStack(alignment: .leading, spacing: 10) {
             Heading("Pair your Omarchy computer")
             Paragraph("Flux lets this Mac answer agents, approve sudo, and send files to your Omarchy computer.")
+            if localNetworkOff {
+                LocalNetworkNotice()
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .tiledTile(fill: tn.tile, border: tn.yellow, padding: 0)
+                    .padding(.top, 6)
+            }
             if available.isEmpty {
                 GuideStep("1. Set up Flux on the computer") {
                     Paragraph("Install the Flux package on the computer. Then start fluxd for your desktop user:")
