@@ -321,6 +321,28 @@ final class InboxModelTests: XCTestCase {
         XCTAssertEqual(received.deviceIds, ["a"])
     }
 
+    func testAClipOfASecretKeepsNoText() throws {
+        let c = try XCTUnwrap(ClipEvent.sent(to: [(id: "a", name: "desk")], text: "s3cret\nvalue", secret: true))
+        XCTAssertTrue(c.secret)
+        XCTAssertFalse(c.image)
+        XCTAssertEqual(c.preview, "Hidden text")
+        XCTAssertFalse(c.preview.contains("s3cret"), "the event keeps no part of the secret")
+        let item = InboxItem(.clip(c), computer: "desk")
+        XCTAssertEqual(item.stackTitle, "Hidden text")
+        XCTAssertEqual(item.masterTitle, "Sent to desk")
+
+        let direct = ClipEvent(deviceIds: ["a"], computer: "desk", sent: true, preview: "s3cret", secret: true)
+        XCTAssertEqual(direct.preview, "Hidden text", "the init drops the text of a secret")
+        XCTAssertEqual(InboxItem(.clip(direct), computer: "desk").stackTitle, "Hidden text")
+
+        let image = try XCTUnwrap(ClipEvent.sent(to: [(id: "a", name: "desk")], text: nil, secret: true))
+        XCTAssertFalse(image.secret, "an image has no text to hide")
+        XCTAssertTrue(image.image)
+        let plain = try XCTUnwrap(ClipEvent.sent(to: [(id: "a", name: "desk")], text: "hello"))
+        XCTAssertFalse(plain.secret)
+        XCTAssertEqual(plain.preview, "hello")
+    }
+
     // MARK: Text of the items
 
     func testItemTexts() {

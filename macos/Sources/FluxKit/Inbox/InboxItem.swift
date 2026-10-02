@@ -171,7 +171,9 @@ public extension InboxItem {
             return r.kind == .approve ? "Approve \(r.service)" : "Enroll \(FluxPlatform.current.deviceNoun)"
         case .pair: return computer
         case .transfer(let t): return t.name
-        case .clip(let c): return c.image ? "An image" : c.preview
+        case .clip(let c):
+            if c.image { return "An image" }
+            return c.secret ? ClipEvent.hiddenText : c.preview
         case .media(_, let player): return player.title.isEmpty ? "Unknown title" : player.title
         }
     }

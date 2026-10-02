@@ -120,10 +120,14 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
     /// Counts the output parses of each computer, so that an older parse
     /// that ends late does not replace a newer output.
     @MainActor private var parses: [String: Int] = [:]
-    /// Counts the reads and the parses of each prompt of the Inbox, by
-    /// `HerdrModel.promptKey`, as `reads` and `parses` do for the window.
+    /// The number of the last read and of the last parse of each prompt of
+    /// the Inbox, by `HerdrModel.promptKey`, as `reads` and `parses` do for
+    /// the window. Each number comes from `promptSeq` and is not used again,
+    /// also after `keepPrompts` drops a prompt. A late timeout or parse of a
+    /// dropped prompt then does not match a new read of the same agent.
     @MainActor private var promptReads: [String: Int] = [:]
-    @MainActor private var promptParses: [String: Int] = [:]
+    @MainActor private(set) var promptParses: [String: Int] = [:]
+    @MainActor private var promptSeq = 0
 
     @MainActor
     public init() { model = HerdrModel() }
@@ -176,9 +180,9 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
             }
             var promptParse: Int?
             if model.prompts[key] != nil {
-                let n = (promptParses[key] ?? 0) + 1
-                promptParses[key] = n
-                promptParse = n
+                promptSeq += 1
+                promptParses[key] = promptSeq
+                promptParse = promptSeq
             }
             guard windowParse != nil || promptParse != nil else { return }
             // A @Sendable closure cannot capture a var.
@@ -235,7 +239,7 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
     /// shows another pane now. `window` and `prompt` are the numbers of the
     /// parse for each place, or nil when the place did not want it.
     @MainActor
-    private func show(_ out: HerdrOutput, deviceId: String, window: Int?, prompt: Int?) {
+    func show(_ out: HerdrOutput, deviceId: String, window: Int?, prompt: Int?) {
         if let window, parses[deviceId] == window, model.outputs[deviceId]?.pane == out.pane {
             model.outputs[deviceId] = out
             advanceFirstTask(deviceId)
@@ -307,7 +311,8 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
             model.prompts[key]?.error = "\(computerName(deviceId)) is not reachable"
             return
         }
-        let token = (promptReads[key] ?? 0) + 1
+        promptSeq += 1
+        let token = promptSeq
         promptReads[key] = token
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: Self.readTimeout)

@@ -57,6 +57,31 @@ final class HerdrPromptTests: XCTestCase {
     }
 
     @MainActor
+    func testAParseFromBeforeADropDoesNotFillTheNewPrompt() async throws {
+        let plugin = HerdrPlugin()
+        let key = HerdrModel.promptKey("pc", pane: "w5:p1")
+        plugin.readPrompt("pc", pane: "w5:p1")
+        plugin.receive(packet(#"{"kind":"output","pane":"w5:p1","text":"old"}"#), deviceId: "pc", computer: "desk")
+        let old = try XCTUnwrap(plugin.promptParses[key])
+        // The agent works, so the Inbox drops its prompt. Then the agent waits again.
+        plugin.keepPrompts([])
+        XCTAssertNil(plugin.model.prompts[key])
+        plugin.readPrompt("pc", pane: "w5:p1")
+        plugin.receive(packet(#"{"kind":"output","pane":"w5:p1","text":"new"}"#), deviceId: "pc", computer: "desk")
+        let new = try XCTUnwrap(plugin.promptParses[key])
+        XCTAssertNotEqual(old, new, "a parse number is not used again after a drop")
+        // The parses run in detached tasks.
+        var waited = 0
+        while plugin.model.prompts[key]?.lines.isEmpty ?? true, waited < 40 {
+            try await Task.sleep(for: .milliseconds(50))
+            waited += 1
+        }
+        XCTAssertEqual(plugin.model.prompts[key]?.lines.map { $0.text }, ["new"])
+        plugin.show(HerdrOutput(pane: "w5:p1"), deviceId: "pc", window: nil, prompt: old)
+        XCTAssertEqual(plugin.model.prompts[key]?.lines.map { $0.text }, ["new"], "a late parse of the old prompt changes nothing")
+    }
+
+    @MainActor
     func testAnOutputThatNobodyAskedForIsDropped() async throws {
         let plugin = HerdrPlugin()
         plugin.receive(packet(#"{"kind":"output","pane":"w5:p1","text":"x"}"#), deviceId: "pc", computer: "desk")
