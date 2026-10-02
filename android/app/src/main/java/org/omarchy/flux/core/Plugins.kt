@@ -138,6 +138,7 @@ object Plugins {
             Types.FLUX_DESKTOP -> org.omarchy.flux.desktop.DesktopSession.onPacket(core, d, p)
             Types.FLUX_SHORTCUTS -> d.shortcuts = Shortcuts.merge(d.shortcuts, p)
             Types.FLUX_THEME -> ComputerThemes.onPacket(core, d, p)
+            Types.FLUX_STREAM_REQUEST -> StreamRequests.onPacket(core, d, p)
             Types.SMS_REQUEST, Types.SMS_REQUEST_CONVERSATIONS, Types.SMS_REQUEST_CONVERSATION -> SmsSync.onPacket(core, d, p)
         }
     }

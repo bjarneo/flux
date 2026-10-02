@@ -120,6 +120,9 @@ object WebcamSession {
         }
     }
 
+    /** True while a stream to [deviceId] runs or starts. */
+    fun runsTo(deviceId: String): Boolean = _status.value.active && synchronized(lock) { this.deviceId == deviceId }
+
     /**
      * Starts the stream again with a new frame size: "stop", then a new
      * "start" with a new port. It does nothing when no stream runs.

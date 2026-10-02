@@ -3,6 +3,7 @@ package org.omarchy.flux.ui
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import org.omarchy.flux.core.StreamKind
 
 class NavTest {
     @Test
@@ -79,5 +80,20 @@ class NavTest {
             Nav(Tab.Control, listOf(Route("pc", AGENTS_PAGE), Route("pc", NEW_PANE_PAGE))) to null,
             Nav.debug(NEW_PANE_PAGE, "pc"),
         )
+        assertEquals("the prompt of a stream request shows over the Inbox", Nav(Tab.Inbox) to null, Nav.debug("${ASK_PAGE}webcam", "pc"))
+        assertEquals(Nav(Tab.Inbox) to null, Nav.debug("${NOTIFY_PAGE}mic", "pc"))
+    }
+
+    @Test
+    fun aStreamRequestOpensItsPageAboveTheCurrentScreen() {
+        val webcam = Route("pc", streamPage(StreamKind.Webcam))
+        assertEquals(Route("pc", WEBCAM_PAGE), webcam)
+        assertEquals(Route("pc", MIC_PAGE), Route("pc", streamPage(StreamKind.Mic)))
+        val agent = Nav(Tab.Control, listOf(Route("pc", AGENTS_PAGE)))
+        assertEquals(Nav(Tab.Control, listOf(Route("pc", AGENTS_PAGE), webcam)), agent.open(webcam))
+        assertEquals(Nav(Tab.Inbox, listOf(webcam)), Nav().open(webcam))
+        val open = Nav(Tab.Control, listOf(webcam))
+        assertEquals("the page that shows already stays", open, open.open(webcam))
+        assertEquals(Nav(Tab.Control, listOf(webcam, Route("desk", WEBCAM_PAGE))), open.open(Route("desk", WEBCAM_PAGE)))
     }
 }
