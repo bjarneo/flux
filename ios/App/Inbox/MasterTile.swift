@@ -527,8 +527,9 @@ struct ClipMaster: View {
                     .foregroundStyle(tn.text)
                     .lineLimit(2)
                     .accessibilityAddTraits(.isHeader)
-                if c.image {
-                    Text("An image")
+                if c.image || c.secret {
+                    // A secret shows only a fixed text, in the body face.
+                    Text(c.image ? "An image" : ClipEvent.hiddenText)
                         .font(.subheadline)
                         .foregroundStyle(tn.text)
                 } else {

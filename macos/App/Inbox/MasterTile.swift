@@ -451,8 +451,9 @@ private struct ClipMaster: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(tn.text)
                 .lineLimit(2)
-            if clip.image {
-                Text("An image")
+            if clip.image || clip.secret {
+                // A secret shows only a fixed text, in the body face, and the user cannot select it.
+                Text(clip.image ? "An image" : ClipEvent.hiddenText)
                     .font(.system(size: 13))
                     .foregroundStyle(tn.text)
             } else {
