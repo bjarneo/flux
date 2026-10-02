@@ -241,6 +241,17 @@ class InboxModelTest {
         )
         assertEquals("Bash command\nbin/migrate --apply\nApply the pending migration\nDo you want to proceed?", agentPrompt(lines))
         assertEquals("Apply the pending migration\nDo you want to proceed?", agentPrompt(lines, maxLines = 2))
+        // A short prompt drops the question, so that the command stays next to the choices.
+        assertEquals("Bash command\nbin/migrate --apply\nApply the pending migration", agentPrompt(lines, maxLines = 3, dropAsk = true))
+        assertEquals("bin/migrate --apply\nApply the pending migration", agentPrompt(lines, maxLines = 2, dropAsk = true))
+    }
+
+    @Test
+    fun aShortPromptKeepsALastLineThatIsNotAQuestion() {
+        val lines = listOf("Would you like to run the following command?", "", "$ bin/migrate --apply", "", "› 1. Yes, proceed (y)", "  2. No (esc)")
+        assertEquals("Would you like to run the following command?\n$ bin/migrate --apply", agentPrompt(lines, maxLines = 3, dropAsk = true))
+        // Without choices, nothing answers the question, so it stays.
+        assertEquals("Which file?", agentPrompt(listOf("Some work", "────", "", "Which file?", ""), maxLines = 3, dropAsk = true))
     }
 
     @Test

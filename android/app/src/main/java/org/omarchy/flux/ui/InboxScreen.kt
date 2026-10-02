@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -84,6 +85,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -591,7 +593,7 @@ private fun MasterHeader(item: InboxItem, canSwipe: Boolean, onSwipe: () -> Unit
             },
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            WindowTitle(item, size = 13)
+            WindowTitle(item, size = 13, maxLines = windowTitleLines(LocalDensity.current.fontScale))
             T(item.computer, size = 12, color = Tn.sub, family = Mono, maxLines = 1)
         }
         if (canSwipe) FluxButton("Later", onSwipe, kind = ButtonKind.Text)
@@ -610,19 +612,14 @@ private fun ColumnScope.Push(fit: MasterFit) {
 }
 
 /**
- * The size of the prompt in the master: the number of output lines, and the
- * most lines that they take on screen. The prompt gets shorter as the font
- * scale goes up and in a compact master, so that the choices and Reply stay
- * in view. It keeps the last lines, because they hold the question. Reply
- * and Open show the full output.
+ * True when the prompt of the master is short: in a compact master and from
+ * a font scale of 1.15. A short prompt has 3 output lines in place of 4,
+ * and drops the question line that the choices ask, see [agentPrompt]. The
+ * lines nearest the choices always show in full, because they hold the
+ * command that a choice approves. A one-tap choice must never approve a
+ * command that the user cannot see. Reply and Open show the full output.
  */
-private fun promptSize(fontScale: Float, compact: Boolean): Pair<Int, Int> = when {
-    compact -> 1 to 2
-    fontScale >= 1.75f -> 1 to 3
-    fontScale >= 1.5f -> 2 to 4
-    fontScale >= 1.15f -> 3 to 6
-    else -> 4 to 8
-}
+private fun shortPrompt(fontScale: Float, compact: Boolean): Boolean = compact || fontScale >= 1.15f
 
 @Composable
 private fun ColumnScope.AgentMaster(item: AgentItem, d: DeviceUi?, active: Boolean, fit: MasterFit, header: MasterHeaderSlot, actions: InboxActions) {
@@ -648,8 +645,11 @@ private fun ColumnScope.AgentMaster(item: AgentItem, d: DeviceUi?, active: Boole
     // After an answer, the choices wait for the next output, so that a second tap does not answer the next question.
     var answered by remember(item.key) { mutableStateOf<HerdrOutput?>(null) }
     val choices = if (blocked && fresh) out.choices else emptyList()
-    val (promptLines, promptMax) = promptSize(LocalDensity.current.fontScale, fit.compact)
-    val prompt = remember(out?.lines, promptLines) { out?.lines?.let { lines -> agentPrompt(lines.map { it.text }, promptLines) }.orEmpty() }
+    val fontScale = LocalDensity.current.fontScale
+    val short = shortPrompt(fontScale, fit.compact)
+    val prompt = remember(out?.lines, short) {
+        out?.lines?.let { lines -> agentPrompt(lines.map { it.text }, if (short) 3 else 4, dropAsk = short) }.orEmpty()
+    }
     val context = LocalContext.current
     var lockError by remember(item.key) { mutableStateOf<String?>(null) }
     // The number of the last reply before this tile answered. The tile shows only the replies
@@ -678,7 +678,7 @@ private fun ColumnScope.AgentMaster(item: AgentItem, d: DeviceUi?, active: Boole
     Column(verticalArrangement = Arrangement.spacedBy(fit.gap)) {
         // A compact master shows Reply in the top row, so that it shows with the choices.
         header { if (fit.compact) replyButton() }
-        T(a.title.ifEmpty { a.project.ifEmpty { pane } }, size = 20, weight = FontWeight.SemiBold, maxLines = if (fit.compact) 1 else 3)
+        T(a.title.ifEmpty { a.project.ifEmpty { pane } }, size = 20, weight = FontWeight.SemiBold, maxLines = if (fit.compact) 1 else if (fontScale >= 1.5f) 2 else 3)
         when {
             !blocked -> T(
                 if (item.kind == InboxKind.AgentDone) "The agent is done and waits for the next prompt." else "The agent works. Open it to read the output.",
@@ -686,7 +686,8 @@ private fun ColumnScope.AgentMaster(item: AgentItem, d: DeviceUi?, active: Boole
             )
             out?.error != null && !out.loading -> T(out.error, size = 13, color = Tn.red)
             !fresh -> PromptSkeleton()
-            prompt.isNotEmpty() -> T(prompt, size = 14, family = Mono, lineHeight = 1.35f, maxLines = promptMax)
+            // The prompt never gets cut on screen, so that the command shows in full.
+            prompt.isNotEmpty() -> T(prompt, size = 14, family = Mono, lineHeight = 1.35f)
         }
     }
     Push(fit)
@@ -841,27 +842,48 @@ private fun RoundIcon(@DrawableRes icon: Int, description: String, enabled: Bool
 // ───────────────────────── Window title ─────────────────────────
 
 /**
- * The window title of an item in mono, as Hyprland shows a window: a dot
- * in the color of the state, the source of the item, and the state as a
- * short word, for example "codex · billing · Needs input". The source gets
- * shorter to fit the line, and the state always shows, so that the state
- * does not depend on the color. TalkBack does not read the line. The tile
- * gives the source and the state.
+ * The window title of an item: a dot in the color of the state, the state
+ * as a short word in that color, and the source of the item in mono, as
+ * Hyprland shows a window. For example: "Needs input · codex · billing".
+ * The state comes first, so that a line that is too long cuts only the end
+ * of the source, and the state does not depend on the color. An empty
+ * source shows no separator. The line takes [minLines] to [maxLines] lines.
+ * TalkBack does not read the line. The tile gives the source and the state.
  */
 @Composable
-private fun WindowTitle(item: InboxItem, size: Int, modifier: Modifier = Modifier) {
+private fun WindowTitle(item: InboxItem, size: Int, modifier: Modifier = Modifier, minLines: Int = 1, maxLines: Int = 1) {
     val source = windowSource(item)
-    Row(modifier.clearAndSetSemantics {}, verticalAlignment = Alignment.CenterVertically) {
-        Dot(kindColor(item), if (size < 13) 7.dp else 8.dp)
-        Spacer(Modifier.width(8.dp))
-        if (source.isNotEmpty()) {
-            T(source.joinToString(" · "), Modifier.weight(1f, fill = false), size = size, color = Tn.sub, family = Mono, maxLines = 1)
-            // No-break spaces, so that the separator keeps its width at the end of the source.
-            T(" · ", size = size, color = Tn.sub, family = Mono, maxLines = 1)
+    val state = stateWord(item)
+    val color = kindColor(item)
+    val sub = Tn.sub
+    val text = remember(source, state, color, sub) {
+        buildAnnotatedString {
+            withStyle(SpanStyle(color = color, fontWeight = FontWeight.Medium)) { append(state) }
+            if (source.isNotEmpty()) withStyle(SpanStyle(color = sub, fontFamily = Mono)) { append(" · " + source.joinToString(" · ")) }
         }
-        T(stateWord(item), size = size, color = kindColor(item), weight = FontWeight.Medium, family = Mono, maxLines = 1)
+    }
+    val lineHeight = (size * 1.35f).sp
+    val line = with(LocalDensity.current) { lineHeight.toDp() }
+    Row(modifier.clearAndSetSemantics {}, verticalAlignment = Alignment.Top) {
+        // The dot stays at the middle of the first line when the line wraps.
+        Box(Modifier.height(line), contentAlignment = Alignment.Center) { Dot(color, if (size < 13) 7.dp else 8.dp) }
+        Spacer(Modifier.width(8.dp))
+        BasicText(
+            text,
+            style = TextStyle(fontSize = size.sp, lineHeight = lineHeight),
+            maxLines = maxLines,
+            minLines = minLines,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
+
+/**
+ * The lines of the window title at the font scale [fontScale]: 1 line, or
+ * 2 lines from a font scale of 1.3, where a narrow tile cannot show the
+ * state and the source on 1 line.
+ */
+private fun windowTitleLines(fontScale: Float): Int = if (fontScale >= 1.3f) 2 else 1
 
 /** The source of an item for its window title, without the computer: for example the agent and its project. It can be empty. */
 private fun windowSource(item: InboxItem): List<String> = when (item) {
@@ -875,8 +897,9 @@ private fun windowSource(item: InboxItem): List<String> = when (item) {
 
 /**
  * A tile of the stack: the window title, the title, and 1 line about the
- * computer. Each line takes 1 line at most, so that the tiles of 1 row
- * have the same height at each font size. A tap moves the tile to the
+ * computer. Each line takes 1 line at most. From a font scale of 1.3, the
+ * window title takes 2 lines in every tile. So the tiles of 1 row have the
+ * same height at each font size. A tap moves the tile to the
  * master tile. A player tile also plays and pauses.
  */
 @Composable
@@ -894,7 +917,10 @@ private fun StackTile(item: InboxItem, modifier: Modifier, onPromote: () -> Unit
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             // TalkBack reads the source here and the state from the tile.
-            Box(Modifier.semantics { if (source.isNotEmpty()) contentDescription = source }) { WindowTitle(item, size = 12) }
+            val titleLines = windowTitleLines(LocalDensity.current.fontScale)
+            Box(Modifier.semantics { if (source.isNotEmpty()) contentDescription = source }) {
+                WindowTitle(item, size = 12, minLines = titleLines, maxLines = titleLines)
+            }
             T(stackTitle(item), size = 14, weight = FontWeight.SemiBold, maxLines = 1)
             T(stackLine(item), size = 12, color = Tn.sub, maxLines = 1)
         }
@@ -926,7 +952,7 @@ private fun stateWord(item: InboxItem): String = when (item) {
         TransferState.Failed -> "Failed"
     }
     is ClipItem -> "Clipboard"
-    is MediaItem -> if (item.player.playing) "Now playing" else "Paused"
+    is MediaItem -> if (item.player.playing) "Playing" else "Paused"
 }
 
 /** The color of the state dot and the state word. Red marks only what needs the user and errors. */

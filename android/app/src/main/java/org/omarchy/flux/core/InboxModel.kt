@@ -299,18 +299,26 @@ private const val PROMPT_SCAN_LINES = 40
  * Finds the question of an agent in its output lines: the lines above the
  * first numbered choice, up to [maxLines] lines that are not empty. A rule
  * line ends the question. Without choices, it gives the last lines that
- * are not empty.
+ * are not empty. The lines nearest the choices stay, because they hold the
+ * command that a choice approves. With [dropAsk], the last line above the
+ * choices goes away when it ends with a question mark, because the choices
+ * ask the same question. The command then gets that line.
  */
-fun agentPrompt(lines: List<String>, maxLines: Int = 4): String {
+fun agentPrompt(lines: List<String>, maxLines: Int = 4, dropAsk: Boolean = false): String {
     val from = maxOf(0, lines.size - PROMPT_SCAN_LINES)
-    val start = (lines.size - 1 downTo from).firstOrNull { firstChoice.matches(lines[it]) } ?: lines.size
+    val choice = (lines.size - 1 downTo from).firstOrNull { firstChoice.matches(lines[it]) }
     val out = ArrayList<String>()
-    var i = start - 1
+    var i = (choice ?: lines.size) - 1
+    var ask = dropAsk && choice != null
     while (i >= from && out.size < maxLines) {
         val t = lines[i].trim()
         i--
         if (t.isEmpty()) continue
         if (ruleLine.matches(t)) break
+        if (ask) {
+            ask = false
+            if (t.endsWith("?")) continue
+        }
         out.add(0, t)
     }
     return out.joinToString("\n")

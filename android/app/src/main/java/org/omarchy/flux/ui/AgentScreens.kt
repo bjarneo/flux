@@ -65,6 +65,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
@@ -134,10 +135,11 @@ private val WindowTitleSize = 12.sp
 private val WindowTitleLine = 16.sp
 
 /**
- * The mono window-title line of an agent: a status dot, the [parts], such
- * as the agent and the project, and the status as 1 short word in its
- * color. For example: codex · billing · Needs input. TalkBack reads the
- * parts, and the status as the state.
+ * The window-title line of an agent: a status dot, the status as 1 short
+ * word in its color, and the [parts] in mono, such as the agent and the
+ * project. For example: Needs input · codex · billing. The status comes
+ * first, as on the Inbox tiles. TalkBack reads the parts, and the status as
+ * the state.
  */
 @Composable
 private fun WindowTitle(parts: List<String>, s: AgentStatus, modifier: Modifier = Modifier) {
@@ -146,8 +148,8 @@ private fun WindowTitle(parts: List<String>, s: AgentStatus, modifier: Modifier 
     val ink = statusInk(s)
     val text = remember(parts, label, sub, ink) {
         buildAnnotatedString {
-            withStyle(SpanStyle(color = sub)) { for (p in parts) append("$p · ") }
-            withStyle(SpanStyle(color = ink, fontWeight = FontWeight.Medium)) { append(label) }
+            withStyle(SpanStyle(color = ink, fontWeight = FontWeight.Medium, fontFamily = FontFamily.Default)) { append(label) }
+            withStyle(SpanStyle(color = sub)) { for (p in parts) append(" · $p") }
         }
     }
     val line = with(LocalDensity.current) { WindowTitleLine.toDp() }
