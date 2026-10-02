@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -593,7 +594,7 @@ private fun MasterHeader(item: InboxItem, canSwipe: Boolean, onSwipe: () -> Unit
             },
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            WindowTitle(item, size = 13, maxLines = windowTitleLines(LocalDensity.current.fontScale))
+            WindowTitle(item, size = 13, split = splitTitle(LocalDensity.current.fontScale))
             T(item.computer, size = 12, color = Tn.sub, family = Mono, maxLines = 1)
         }
         if (canSwipe) FluxButton("Later", onSwipe, kind = ButtonKind.Text)
@@ -847,43 +848,49 @@ private fun RoundIcon(@DrawableRes icon: Int, description: String, enabled: Bool
  * Hyprland shows a window. For example: "Needs input · codex · billing".
  * The state comes first, so that a line that is too long cuts only the end
  * of the source, and the state does not depend on the color. An empty
- * source shows no separator. The line takes [minLines] to [maxLines] lines.
- * TalkBack does not read the line. The tile gives the source and the state.
+ * source shows no separator.
+ *
+ * With [split], the state and the source take 1 line each, so that a large
+ * font does not wrap the line at a separator. The state then gets smaller
+ * to fit its line, and it never gets cut. With [keepLines], the source line
+ * shows also when it is empty, so that the tiles of 1 row keep the same
+ * height. TalkBack does not read the title. The tile gives the source and
+ * the state.
  */
 @Composable
-private fun WindowTitle(item: InboxItem, size: Int, modifier: Modifier = Modifier, minLines: Int = 1, maxLines: Int = 1) {
+private fun WindowTitle(item: InboxItem, size: Int, modifier: Modifier = Modifier, split: Boolean = false, keepLines: Boolean = false) {
     val source = windowSource(item)
     val state = stateWord(item)
     val color = kindColor(item)
     val sub = Tn.sub
-    val text = remember(source, state, color, sub) {
-        buildAnnotatedString {
-            withStyle(SpanStyle(color = color, fontWeight = FontWeight.Medium)) { append(state) }
-            if (source.isNotEmpty()) withStyle(SpanStyle(color = sub, fontFamily = Mono)) { append(" · " + source.joinToString(" · ")) }
-        }
-    }
     val lineHeight = (size * 1.35f).sp
     val line = with(LocalDensity.current) { lineHeight.toDp() }
-    Row(modifier.clearAndSetSemantics {}, verticalAlignment = Alignment.Top) {
-        // The dot stays at the middle of the first line when the line wraps.
-        Box(Modifier.height(line), contentAlignment = Alignment.Center) { Dot(color, if (size < 13) 7.dp else 8.dp) }
-        Spacer(Modifier.width(8.dp))
-        BasicText(
-            text,
-            style = TextStyle(fontSize = size.sp, lineHeight = lineHeight),
-            maxLines = maxLines,
-            minLines = minLines,
-            overflow = TextOverflow.Ellipsis,
-        )
+    val dot = if (size < 13) 7.dp else 8.dp
+    Column(modifier.clearAndSetSemantics {}) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.height(line), contentAlignment = Alignment.Center) { Dot(color, dot) }
+            Spacer(Modifier.width(8.dp))
+            if (split) {
+                T(state, size = size, color = color, weight = FontWeight.Medium, maxLines = 1, fit = true)
+            } else {
+                val text = remember(source, state, color, sub) {
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(color = color, fontWeight = FontWeight.Medium)) { append(state) }
+                        if (source.isNotEmpty()) withStyle(SpanStyle(color = sub, fontFamily = Mono)) { append(" · " + source.joinToString(" · ")) }
+                    }
+                }
+                BasicText(text, style = TextStyle(fontSize = size.sp, lineHeight = lineHeight), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        if (split && (source.isNotEmpty() || keepLines)) {
+            // The source starts under the state word. A blank keeps the height of the line.
+            T(source.joinToString(" · ").ifEmpty { " " }, Modifier.padding(start = dot + 8.dp), size = size, color = sub, family = Mono, maxLines = 1)
+        }
     }
 }
 
-/**
- * The lines of the window title at the font scale [fontScale]: 1 line, or
- * 2 lines from a font scale of 1.3, where a narrow tile cannot show the
- * state and the source on 1 line.
- */
-private fun windowTitleLines(fontScale: Float): Int = if (fontScale >= 1.3f) 2 else 1
+/** True from a font scale of 1.3, where a narrow tile cannot show the state and the source on 1 line. See [WindowTitle]. */
+private fun splitTitle(fontScale: Float): Boolean = fontScale >= 1.3f
 
 /** The source of an item for its window title, without the computer: for example the agent and its project. It can be empty. */
 private fun windowSource(item: InboxItem): List<String> = when (item) {
@@ -898,36 +905,37 @@ private fun windowSource(item: InboxItem): List<String> = when (item) {
 /**
  * A tile of the stack: the window title, the title, and 1 line about the
  * computer. Each line takes 1 line at most. From a font scale of 1.3, the
- * window title takes 2 lines in every tile. So the tiles of 1 row have the
- * same height at each font size. A tap moves the tile to the
+ * window title takes 2 lines in every tile, see [WindowTitle]. So the tiles
+ * of 1 row have the same height at each font size. A tap moves the tile to the
  * master tile. A player tile also plays and pauses.
  */
 @Composable
 private fun StackTile(item: InboxItem, modifier: Modifier, onPromote: () -> Unit) {
     val state = stateWord(item)
     val source = windowSource(item).joinToString(", ")
-    Row(
+    Box(
         modifier.fillMaxWidth().heightIn(min = 48.dp).clip(TileShape).background(Tn.tile)
             .border(1.dp, if (item.kind.needsYou) Tn.red else Tn.line, TileShape)
             .clickable(onClickLabel = "Show it first", role = Role.Button, onClick = onPromote)
             .semantics { stateDescription = state }
             .padding(horizontal = 12.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            // TalkBack reads the source here and the state from the tile.
-            val titleLines = windowTitleLines(LocalDensity.current.fontScale)
+        val media = item is MediaItem
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            // TalkBack reads the source here and the state from the tile. The title takes the full width, also next to the play button.
             Box(Modifier.semantics { if (source.isNotEmpty()) contentDescription = source }) {
-                WindowTitle(item, size = 12, minLines = titleLines, maxLines = titleLines)
+                WindowTitle(item, size = 12, split = splitTitle(LocalDensity.current.fontScale), keepLines = true)
             }
-            T(stackTitle(item), size = 14, weight = FontWeight.SemiBold, maxLines = 1)
-            T(stackLine(item), size = 12, color = Tn.sub, maxLines = 1)
+            // The 2 lines under the title leave space for the play button.
+            val room = if (media) Modifier.padding(end = 40.dp) else Modifier
+            T(stackTitle(item), room, size = 14, weight = FontWeight.SemiBold, maxLines = 1)
+            T(stackLine(item), room, size = 12, color = Tn.sub, maxLines = 1)
         }
         if (item is MediaItem) {
             val playing = item.player.playing
+            // The button sits next to the 2 lines and reaches into the padding, so that the tile keeps the height of the other tiles.
             Box(
-                Modifier.size(48.dp).clip(CircleShape)
+                Modifier.align(Alignment.BottomEnd).offset(x = 10.dp, y = 8.dp).size(48.dp).clip(CircleShape)
                     .clickable(onClickLabel = if (playing) "Pause" else "Play", role = Role.Button) {
                         Plugins.mediaAction(FluxCore, item.deviceId, "PlayPause")
                     },
