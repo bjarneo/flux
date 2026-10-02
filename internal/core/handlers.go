@@ -118,7 +118,13 @@ func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 	case proto.TypeFluxHerdr:
 		d.handleHerdr(dev, l, p)
 	case proto.TypeMousepadRequest:
-		d.handleMousepad(dev, p)
+		d.handleMousepadLink(dev, l, p)
+	case proto.TypeFluxInputRequestV2:
+		d.handleInputApproval(dev, l, p)
+	case proto.TypeOmarchyThemeSelect:
+		d.handleOhmTheme(dev, l, p)
+	case proto.TypeWallpaperOriginal:
+		d.handleOriginalWallpaper(dev, l, p)
 	case proto.TypeSmsMessages:
 		d.handleSms(dev, p)
 	case proto.TypeTelephony:

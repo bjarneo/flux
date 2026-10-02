@@ -73,7 +73,8 @@ const (
 	// input and whether it shows its screen on the phone, {"enabled":
 	// bool, "desktop": bool}. fluxd sends it after the link starts and
 	// after a setting changes.
-	TypeFluxInput = "flux.input"
+	TypeFluxInput          = "flux.input"
+	TypeFluxInputRequestV2 = "flux.input.request.v2"
 	// TypeFluxDesktop starts and stops the stream of this screen to the
 	// phone. Both sides send it.
 	TypeFluxDesktop = "flux.desktop"
@@ -86,7 +87,11 @@ const (
 	// border. fluxd sends it after the link starts and after the theme
 	// changes, only to a device that lists it as incoming. docs/omarchy.md
 	// describes the body.
-	TypeFluxTheme = "flux.theme"
+	TypeFluxTheme            = "flux.theme"
+	TypeWallpaperOriginal    = "flux.wallpaper.v2"
+	TypeOmarchyTheme         = "flux.omarchy_theme"
+	TypeOmarchyThemeSelect   = "flux.omarchy_theme.select"
+	TypeOmarchyThemeSelected = "flux.omarchy_theme.selected"
 	// TypeFluxStreamRequest asks a device to start its camera or its
 	// microphone for this computer, {"kind": "webcam"} or {"kind": "mic"}.
 	// The packet only asks. The device starts the stream with flux.webcam
@@ -105,7 +110,7 @@ var Incoming = []string{
 	TypeSmsMessages, TypeTelephony,
 	TypeFluxTunnel, TypeFluxWebcam, TypeFluxDnd, TypeFluxMic, TypeFluxScreen,
 	TypeFluxApprove, TypeFluxHerdr, TypeFluxClipboardImage, TypeMousepadRequest,
-	TypeFluxDesktop, TypeFluxShortcuts,
+	TypeFluxDesktop, TypeFluxShortcuts, TypeWallpaperOriginal, TypeOmarchyThemeSelect, TypeFluxInputRequestV2,
 }
 
 // Outgoing lists the packet types that Flux sends.
@@ -117,7 +122,7 @@ var Outgoing = []string{
 	TypeSmsConversation, TypeSftp, TypeFluxWebcam, TypeFluxDnd,
 	TypeFluxMic, TypeFluxScreen, TypeFluxApprove, TypeFluxHerdr,
 	TypeFluxClipboardImage, TypeFluxInput, TypeFluxDesktop, TypeFluxShortcuts,
-	TypeFluxTheme, TypeFluxStreamRequest,
+	TypeFluxTheme, TypeFluxStreamRequest, TypeWallpaperOriginal, TypeOmarchyTheme, TypeOmarchyThemeSelected,
 }
 
 // Identity is the body of a flux.identity packet.

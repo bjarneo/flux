@@ -229,6 +229,16 @@ func (d *Daemon) Unpair(dev *Device) error {
 // d.mu. Their buttons no longer reach the device. It logs and returns the
 // error of devices.json. The caller holds d.mu.
 func (d *Daemon) dropTrustLocked(dev *Device) ([]uint32, error) {
+	d.revokeOhmThemesLocked(dev)
+	if r := d.inputRequests[dev.link]; r != nil {
+		r.dead.Store(true)
+		r.cancel()
+		if r.timer != nil {
+			r.timer.Stop()
+		}
+		delete(d.inputRequests, dev.link)
+		go d.finishRevokedInput(r)
+	}
 	dev.Paired, dev.PairedAt, dev.badTrust = false, "", false
 	dev.Addresses = nil
 	dev.seenIP, dev.seenPort = "", 0

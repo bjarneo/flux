@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"bufio"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -36,7 +38,10 @@ type Pointer struct {
 	idle *time.Timer
 	// output is the monitor that MoveTo positions on, or empty for the
 	// monitor that the compositor selects.
-	output string
+	output      string
+	quarantined atomic.Bool
+	abortMu     sync.Mutex
+	live        map[*wlConn]bool
 }
 
 // NewPointer returns a pointer that connects to $WAYLAND_DISPLAY.
@@ -52,26 +57,38 @@ const absExtent = 1<<16 - 1
 // MoveTo moves the pointer to x and y on the monitor of the pointer. The
 // values go from 0 at the top left corner to 1 at the bottom right corner.
 func (p *Pointer) MoveTo(x, y float64) error {
+	return p.MoveToContext(context.Background(), x, y)
+}
+
+func (p *Pointer) MoveToContext(ctx context.Context, x, y float64) error {
 	pos := func(v float64) uint32 { return uint32(math.Round(max(0, min(1, v)) * absExtent)) }
-	return p.do(func(w *wlConn, ptr uint32, t uint32) [][]byte {
+	return p.doContext(ctx, func(w *wlConn, ptr uint32, t uint32) [][]byte {
 		return [][]byte{w.msg(ptr, vpMotionAbsolute, t, pos(x), pos(y), uint32(absExtent), uint32(absExtent)), w.msg(ptr, vpFrame)}
 	})
 }
 
 // Move moves the pointer by dx and dy in logical pixels.
 func (p *Pointer) Move(dx, dy float64) error {
-	return p.do(func(w *wlConn, ptr uint32, t uint32) [][]byte {
+	return p.MoveContext(context.Background(), dx, dy)
+}
+
+func (p *Pointer) MoveContext(ctx context.Context, dx, dy float64) error {
+	return p.doContext(ctx, func(w *wlConn, ptr uint32, t uint32) [][]byte {
 		return [][]byte{w.msg(ptr, vpMotion, t, fixed(dx), fixed(dy)), w.msg(ptr, vpFrame)}
 	})
 }
 
 // Button presses or releases a button, such as BtnLeft.
 func (p *Pointer) Button(button uint32, pressed bool) error {
+	return p.ButtonContext(context.Background(), button, pressed)
+}
+
+func (p *Pointer) ButtonContext(ctx context.Context, button uint32, pressed bool) error {
 	state := uint32(0)
 	if pressed {
 		state = 1
 	}
-	return p.do(func(w *wlConn, ptr uint32, t uint32) [][]byte {
+	return p.doContext(ctx, func(w *wlConn, ptr uint32, t uint32) [][]byte {
 		return [][]byte{w.msg(ptr, vpButton, t, button, state), w.msg(ptr, vpFrame)}
 	})
 }
@@ -79,7 +96,11 @@ func (p *Pointer) Button(button uint32, pressed bool) error {
 // Scroll scrolls like 2 fingers on a touchpad. A positive dy scrolls down,
 // and a positive dx scrolls right.
 func (p *Pointer) Scroll(dx, dy float64) error {
-	return p.do(func(w *wlConn, ptr uint32, t uint32) [][]byte {
+	return p.ScrollContext(context.Background(), dx, dy)
+}
+
+func (p *Pointer) ScrollContext(ctx context.Context, dx, dy float64) error {
+	return p.doContext(ctx, func(w *wlConn, ptr uint32, t uint32) [][]byte {
 		msgs := [][]byte{w.msg(ptr, vpAxisSource, uint32(axisSourceFinger))}
 		if dy != 0 {
 			msgs = append(msgs, w.msg(ptr, vpAxis, t, uint32(axisVertical), fixed(dy)))
@@ -106,32 +127,97 @@ func (p *Pointer) closeLocked() {
 	if p.conn == nil {
 		return
 	}
+	_ = p.conn.c.SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
 	_ = p.conn.write(p.conn.msg(p.ptr, vpDestroy))
 	p.conn.close()
+	p.abortMu.Lock()
+	delete(p.live, p.conn)
+	p.abortMu.Unlock()
 	p.conn = nil
 }
 
 // do sends the messages of build. After a failed write, it connects again
 // and sends them once more.
 func (p *Pointer) do(build func(w *wlConn, ptr uint32, t uint32) [][]byte) error {
-	p.mu.Lock()
+	return p.doContext(context.Background(), build)
+}
+
+func (p *Pointer) doContext(ctx context.Context, build func(w *wlConn, ptr uint32, t uint32) [][]byte) error {
+	for !p.mu.TryLock() {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
 	defer p.mu.Unlock()
 	t := uint32(time.Now().UnixMilli())
 	var err error
 	for range 2 {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if p.quarantined.Load() {
+			return net.ErrClosed
+		}
 		if p.conn == nil || p.conn.failed() != nil {
 			p.closeLocked()
-			if p.conn, p.ptr, err = dialPointer(p.output); err != nil {
+			if p.conn, p.ptr, err = dialPointerRegistered(ctx, p.output, p.registerConnection); err != nil {
 				return err
 			}
 		}
-		if err = p.conn.write(build(p.conn, p.ptr, t)...); err == nil {
+		connection := p.conn
+		stop := context.AfterFunc(ctx, func() { connection.close() })
+		deadline := time.Now().Add(2 * time.Second)
+		if limit, ok := ctx.Deadline(); ok && limit.Before(deadline) {
+			deadline = limit
+		}
+		_ = connection.c.SetWriteDeadline(deadline)
+		err = connection.write(build(connection, p.ptr, t)...)
+		stop()
+		if err == nil {
 			p.armIdle()
 			return nil
 		}
 		p.closeLocked()
 	}
 	return err
+}
+
+func (p *Pointer) registerConnection(w *wlConn) error {
+	p.abortMu.Lock()
+	defer p.abortMu.Unlock()
+	if p.quarantined.Load() {
+		return net.ErrClosed
+	}
+	if p.live == nil {
+		p.live = map[*wlConn]bool{}
+	}
+	for prior := range p.live {
+		if prior.failed() != nil {
+			delete(p.live, prior)
+		}
+	}
+	if len(p.live) >= 4 {
+		return errors.New("too many active pointer sockets")
+	}
+	p.live[w] = true
+	return nil
+}
+
+// Tombstone before closing sockets, including a connection still in setup.
+// This never acquires the mutex held by a pointer writer.
+func (p *Pointer) Quarantine() {
+	p.quarantined.Store(true)
+	p.abortMu.Lock()
+	var connections []*wlConn
+	for w := range p.live {
+		connections = append(connections, w)
+	}
+	p.abortMu.Unlock()
+	for _, w := range connections {
+		w.close()
+	}
 }
 
 func (p *Pointer) armIdle() {
@@ -185,15 +271,35 @@ const displayID = 1
 // an output name, the absolute motion of the pointer maps to that monitor.
 // It returns the connection and the object ID of the pointer.
 func dialPointer(output string) (*wlConn, uint32, error) {
-	w, err := dialWayland()
+	return dialPointerContext(context.Background(), output)
+}
+
+func dialPointerContext(ctx context.Context, output string) (*wlConn, uint32, error) {
+	return dialPointerRegistered(ctx, output, nil)
+}
+
+func dialPointerRegistered(ctx context.Context, output string, register func(*wlConn) error) (*wlConn, uint32, error) {
+	w, err := dialWaylandContext(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
+	if register != nil {
+		if err := register(w); err != nil {
+			w.close()
+			return nil, 0, err
+		}
+	}
+	stop := context.AfterFunc(ctx, w.close)
+	defer stop()
 	fail := func(err error) (*wlConn, uint32, error) {
 		w.close()
 		return nil, 0, err
 	}
-	_ = w.c.SetReadDeadline(time.Now().Add(3 * time.Second))
+	deadline := time.Now().Add(3 * time.Second)
+	if limit, ok := ctx.Deadline(); ok && limit.Before(deadline) {
+		deadline = limit
+	}
+	_ = w.c.SetDeadline(deadline)
 
 	registry := w.newID()
 	var manager wlGlobal
@@ -309,6 +415,10 @@ type wlConn struct {
 
 // dialWayland connects to the socket of $WAYLAND_DISPLAY.
 func dialWayland() (*wlConn, error) {
+	return dialWaylandContext(context.Background())
+}
+
+func dialWaylandContext(ctx context.Context) (*wlConn, error) {
 	name := os.Getenv("WAYLAND_DISPLAY")
 	if name == "" {
 		name = "wayland-0"
@@ -321,10 +431,11 @@ func dialWayland() (*wlConn, error) {
 		}
 		path = filepath.Join(dir, name)
 	}
-	c, err := net.DialUnix("unix", nil, &net.UnixAddr{Name: path, Net: "unix"})
+	raw, err := (&net.Dialer{}).DialContext(ctx, "unix", path)
 	if err != nil {
 		return nil, fmt.Errorf("connect to the Wayland display: %w", err)
 	}
+	c := raw.(*net.UnixConn)
 	return &wlConn{c: c, r: bufio.NewReader(c), nextID: displayID + 1}, nil
 }
 

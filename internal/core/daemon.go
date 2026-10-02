@@ -50,10 +50,23 @@ type Daemon struct {
 	clip clipboard
 	// input moves the pointer and types for the phone. It is nil in a
 	// headless daemon. inputQ holds the actions in order.
-	input    inputBackend
-	inputQ   chan inputAction
-	notifier *desktop.Notifier
-	media    *desktop.Media
+	input             inputBackend
+	inputQ            chan inputAction
+	inputRequests     map[*lan.Link]*inputApproval
+	inputUsed         map[*lan.Link]map[string]bool
+	inputEarlyClosed  map[uint32]time.Time
+	inputOwner        *inputApproval
+	inputEffects      sync.Mutex
+	inputCleanup      chan struct{}
+	inputQuarantined  bool
+	inputNotify       inputApprovalNotifier
+	inputStatusWriter func(context.Context, *lan.Link, *proto.Packet) error
+	wallpapers        wallpaperCoordinator
+	themes            themeBackend
+	themeMu           sync.Mutex
+	ohmThemeRequests  map[*lan.Link]*ohmThemeRequestBook
+	notifier          *desktop.Notifier
+	media             *desktop.Media
 	// callPlayers are the players that a call pauses. It is the desktop
 	// media when media control works, else nil.
 	callPlayers callMedia
@@ -249,6 +262,7 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 		clipDir: filepath.Join(config.RuntimeDir(), "clipboard"),
 		input:   desktop.NewInput(),
 		inputQ:  make(chan inputAction, inputQueue),
+		themes:  desktop.NewThemes(),
 		subs:    map[int]func(string, any){},
 		dirty:   make(chan struct{}, 1),
 		ctx:     ctx,
@@ -264,6 +278,7 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 		d.binDir = filepath.Dir(exe)
 	}
 	if opts.Headless {
+		d.themes = nil
 		d.clip = &memClipboard{}
 		// A headless daemon can share the runtime folder with the daemon of
 		// the desktop, so it keeps its clipboard images in its own folder.
@@ -286,6 +301,8 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 		if n, err := desktop.NewNotifier(); err == nil {
 			d.notifier = n
 			n.OnAction(d.onNotificationAction)
+			n.OnAction(d.onInputApprovalAction)
+			n.OnClosed(d.onInputApprovalClosed)
 		} else {
 			d.logf("notifications off: %v", err)
 		}
@@ -440,6 +457,8 @@ func (d *Daemon) Run() error {
 	removeClipImages(d.clipDir)
 	go d.clip.Watch(ctx, d.onLocalClipboard, d.onLocalImage)
 	go d.inputLoop(ctx)
+	go d.ohmThemeLoop(ctx)
+	go d.wallpaperLoop(ctx)
 	go d.publishLoop(ctx)
 	go d.discoveryLoop(ctx)
 	go d.batteryLoop(ctx)
@@ -472,11 +491,17 @@ func (d *Daemon) Run() error {
 
 func (d *Daemon) closeLinks() {
 	d.mu.Lock()
-	defer d.mu.Unlock()
+	var links []*lan.Link
 	for _, dev := range d.devices {
 		if dev.link != nil {
-			dev.link.Close()
+			d.revokeOhmThemesLocked(dev)
+			links = append(links, dev.link)
 		}
+	}
+	d.mu.Unlock()
+	for _, l := range links {
+		d.revokeInputLink(l, true)
+		l.Abort()
 	}
 }
 
@@ -825,6 +850,7 @@ func (d *Daemon) onLink(l *lan.Link) {
 	if stopped {
 		note = dev.pairLinkEndedLocked()
 	}
+	d.revokeOhmThemesLocked(dev)
 	dev.link = l
 	dev.ignored = 0
 	dev.setIdentity(l.Identity)
@@ -864,7 +890,8 @@ func (d *Daemon) onLink(l *lan.Link) {
 		e.Close()
 	}
 	if old != nil && old != l {
-		old.Close()
+		d.revokeInputLink(old, true)
+		old.Abort()
 	}
 	d.logf("link up: %s (%s) paired=%v", name, ip, paired)
 	if unpair {
@@ -965,6 +992,7 @@ func (d *Daemon) receive(dev *Device, l *lan.Link) {
 	d.mu.Lock()
 	current := dev.link == l
 	if current {
+		d.revokeOhmThemesLocked(dev)
 		dev.link = nil
 		dev.LastSeen = time.Now()
 	}
@@ -977,6 +1005,7 @@ func (d *Daemon) receive(dev *Device, l *lan.Link) {
 	}
 	name := dev.Name
 	d.mu.Unlock()
+	d.revokeInputLink(l, true)
 	d.closeNotes(note)
 	d.logf("link down: %s: %v", name, err)
 	if stopped {
@@ -1063,6 +1092,7 @@ func (d *Daemon) onPairedLink(dev *Device, l *lan.Link) {
 	d.mu.Unlock()
 	d.sendBattery(l)
 	d.sendCommandList(l)
+	d.sendOhmThemeCatalog(dev, l)
 	d.sendConnectClipboard(l)
 	if notifications {
 		d.requestNotifications(dev, l)

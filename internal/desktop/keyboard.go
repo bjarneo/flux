@@ -5,9 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unicode/utf8"
@@ -66,7 +68,14 @@ func runWtype(ctx context.Context, args []string, stdin string) error {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "wtype", args...)
 	// The kernel stops wtype when fluxd exits.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL, Setpgid: true}
+	cmd.WaitDelay = 250 * time.Millisecond
+	cmd.Cancel = func() error {
+		if cmd.Process == nil {
+			return os.ErrProcessDone
+		}
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
 	cmd.Stdin = strings.NewReader(stdin)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -95,8 +104,10 @@ type Input struct {
 
 	// monitor positions the pointer on 1 monitor for MoveTo. The
 	// compositor maps its absolute motion to that monitor.
-	mu      sync.Mutex
-	monitor *Pointer
+	mu           sync.Mutex
+	monitor      *Pointer
+	monitorAbort atomic.Pointer[Pointer]
+	quarantined  atomic.Bool
 }
 
 // NewInput returns the input of the desktop.
@@ -106,16 +117,45 @@ func NewInput() *Input { return &Input{Pointer: NewPointer()} }
 // "eDP-1". The values go from 0 at the top left corner to 1 at the bottom
 // right corner.
 func (in *Input) MoveTo(monitor string, x, y float64) error {
-	in.mu.Lock()
+	return in.MoveToContext(context.Background(), monitor, x, y)
+}
+
+func (in *Input) MoveToContext(ctx context.Context, monitor string, x, y float64) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if in.quarantined.Load() {
+		return errors.New("input is quarantined")
+	}
+	for !in.mu.TryLock() {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
 	if in.monitor == nil || in.monitor.output != monitor {
 		if in.monitor != nil {
-			in.monitor.Close()
+			in.monitor.Quarantine()
 		}
 		in.monitor = NewMonitorPointer(monitor)
+		in.monitorAbort.Store(in.monitor)
 	}
 	p := in.monitor
 	in.mu.Unlock()
-	return p.MoveTo(x, y)
+	if in.quarantined.Load() {
+		p.Quarantine()
+		return errors.New("input is quarantined")
+	}
+	return p.MoveToContext(ctx, x, y)
+}
+
+func (in *Input) Quarantine() {
+	in.quarantined.Store(true)
+	in.Pointer.Quarantine()
+	if monitor := in.monitorAbort.Load(); monitor != nil {
+		monitor.Quarantine()
+	}
 }
 
 // Close removes the virtual pointers.
@@ -127,4 +167,11 @@ func (in *Input) Close() {
 		in.monitor.Close()
 		in.monitor = nil
 	}
+}
+
+func (k Keyboard) TypeContext(ctx context.Context, text string, mods []string) error {
+	return k.Type(ctx, text, mods)
+}
+func (k Keyboard) KeyContext(ctx context.Context, name string, mods []string) error {
+	return k.Key(ctx, name, mods)
 }

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"flux/internal/desktop"
+	"flux/internal/lan"
 	"flux/internal/proto"
 )
 
@@ -210,6 +211,9 @@ type shortcutJob struct {
 func (d *Daemon) handleShortcuts(dev *Device, l streamLink, p *proto.Packet) {
 	var b shortcutBody
 	if p.Decode(&b) != nil {
+		return
+	}
+	if link, ok := l.(*lan.Link); ok && inputApprovalPeer(link) {
 		return
 	}
 	if msg := d.shortcutRefusal(dev); msg != "" {

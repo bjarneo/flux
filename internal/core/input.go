@@ -79,14 +79,15 @@ type mousepadBody struct {
 
 // inputAction is 1 step for the input backend.
 type inputAction struct {
-	kind    string // move, moveTo, button, scroll, type, or key
-	dx, dy  float64
-	x, y    float64 // the position for moveTo, from 0 to 1
-	monitor string  // the monitor for moveTo
-	button  uint32
-	pressed bool
-	text    string // the text for type, the key name for key
-	mods    []string
+	approval *inputApproval
+	kind     string // move, moveTo, button, scroll, type, or key
+	dx, dy   float64
+	x, y     float64 // the position for moveTo, from 0 to 1
+	monitor  string  // the monitor for moveTo
+	button   uint32
+	pressed  bool
+	text     string // the text for type, the key name for key
+	mods     []string
 
 	// dev is the device that sent the action, link is its link at that
 	// time, and gen is the input generation. The action runs only while
@@ -293,6 +294,19 @@ func linkClosed(l *lan.Link) bool {
 	}
 }
 
+func (d *Daemon) handleMousepadLink(dev *Device, l *lan.Link, p *proto.Packet) {
+	if inputApprovalPeer(l) {
+		d.handleApprovedMousepad(dev, l, p)
+		return
+	}
+	d.mu.Lock()
+	current := dev.Paired && dev.link == l
+	d.mu.Unlock()
+	if current {
+		d.handleMousepad(dev, p)
+	}
+}
+
 // inputLoop runs the input actions in order until ctx ends. It releases a
 // button that it pressed when the device that pressed it is no longer
 // allowed, for example when its link drops during a drag.
@@ -319,7 +333,15 @@ func (d *Daemon) inputLoop(ctx context.Context) {
 		case <-check:
 			d.releaseHeld(held)
 		case a := <-d.inputQ:
-			err := d.runQueued(ctx, a, held)
+			var err error
+			if a.approval != nil {
+				err = d.runApprovedInput(a)
+				if err != nil {
+					d.endInputApproval(a.approval)
+				}
+			} else {
+				err = d.runQueued(ctx, a, held)
+			}
 			// Log a failure once, not for each motion.
 			if msg := errString(err); msg != lastErr {
 				if err != nil {
@@ -425,7 +447,7 @@ func (d *Daemon) runInput(ctx context.Context, a inputAction) error {
 // and whether it shows its screen on the phone.
 func (d *Daemon) sendInputState(l *lan.Link) {
 	d.mu.Lock()
-	on := d.cfg.RemoteInput && d.input != nil
+	on := d.cfg.RemoteInput && d.input != nil && !inputApprovalPeer(l)
 	desktop := d.cfg.RemoteDesktop && !d.opts.Headless
 	d.mu.Unlock()
 	_ = l.Send(proto.New(proto.TypeFluxInput, map[string]any{"enabled": on, "desktop": desktop}))
@@ -449,7 +471,11 @@ func (d *Daemon) inputChanged() {
 	desktop := d.cfg.RemoteDesktop
 	d.desktopErr = ""
 	var stop context.CancelFunc
+	var revoke []*inputApproval
 	if !d.cfg.RemoteInput {
+		for _, r := range d.inputRequests {
+			revoke = append(revoke, r)
+		}
 		// A new generation drops the actions that a loop already took.
 		d.sessions.inputGen++
 	drain:
@@ -465,6 +491,9 @@ func (d *Daemon) inputChanged() {
 	}
 	wake := d.inputWakeLocked()
 	d.mu.Unlock()
+	for _, r := range revoke {
+		d.endInputApproval(r)
+	}
 	if stop != nil {
 		stop()
 	}

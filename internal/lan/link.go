@@ -2,6 +2,7 @@ package lan
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -143,6 +144,69 @@ func (l *Link) Send(p *proto.Packet) error {
 		return err
 	}
 	return nil
+}
+
+// SendWithin bounds both serializer admission and the TLS write itself.
+func (l *Link) SendWithin(ctx context.Context, p *proto.Packet) error {
+	return l.SendWithinCurrent(ctx, p, nil)
+}
+
+// The optional authorization runs after serializer admission, immediately
+// before touching the TLS writer. It must only perform short local checks.
+func (l *Link) SendWithinCurrent(ctx context.Context, p *proto.Packet, allowed func() bool) error {
+	line, err := p.Marshal()
+	if err != nil {
+		return err
+	}
+	for !l.wmu.TryLock() {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	defer l.wmu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	select {
+	case <-l.done:
+		return net.ErrClosed
+	default:
+	}
+	if allowed != nil && !allowed() {
+		return context.Canceled
+	}
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		deadline = time.Now().Add(3 * time.Second)
+	}
+	_ = l.conn.SetWriteDeadline(deadline)
+	finished := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() { _ = l.conn.SetWriteDeadline(time.Now()); close(finished) })
+	_, err = l.conn.Write(line)
+	if !stop() {
+		<-finished
+	}
+	_ = l.conn.SetWriteDeadline(time.Time{})
+	if err != nil {
+		l.Abort()
+	}
+	return err
+}
+
+// Abort skips the TLS close-notify writer so cancellation cannot wait on it.
+func (l *Link) Abort() {
+	// Interrupt an already entered graceful TLS Close before waiting on once.
+	// The socket close is idempotent; only closing done needs the shared once.
+	if l.conn != nil {
+		_ = l.conn.NetConn().Close()
+	}
+	l.once.Do(func() {
+		if l.done != nil {
+			close(l.done)
+		}
+	})
 }
 
 // Receive reads packets and calls handle for each one until the link

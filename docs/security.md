@@ -86,6 +86,22 @@ This check protects the app only, and `fluxd` cannot see it.
 The settings in `config.toml` are the checks that `fluxd` makes.
 So turn on `remote_input`, `remote_desktop`, `herdr_control`, and `herdr_terminals` only when you trust each paired device.
 
+## Optional OhmLauncher capabilities
+
+A paired client that advertises the [OhmLauncher extensions](ohmlauncher.md) can
+read the installed theme palettes and the current theme's image album, choose an
+installed theme, and synchronize the active background as an original image.
+These are distinct from `share_home`: they expose the theme catalog and the
+canonical active background, never a peer-supplied filesystem path. Unpairing
+revokes this access and any queued commit.
+
+A client advertising `flux.input.request.v2` needs explicit approval on the
+computer for a temporary pointer and keyboard lease. It cannot use the persistent
+`remote_input` setting to bypass this consent. The lease expires after five
+minutes, grants no shortcuts or desktop commands, and does not change the saved
+setting. **Remote input off** also revokes a current lease. See the integration
+page for cancellation and notification action requirements.
+
 ## What a device sends to the computer
 
 Flux for Android has 6 switches that share data of the device with the computers.
