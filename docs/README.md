@@ -48,6 +48,8 @@ A paired device can also connect through [Tailscale](tailscale.md) away from tha
 | [iOS on the App Store](ios-app-store.md) | Store text, keywords, screenshots, review notes, privacy, and open items for the iPhone app |
 | [macOS client plan](macos-plan.md) | Decisions, phases, and checklists for the Mac app |
 | [macOS client status](macos-status.md) | Build plan, current state, and what was verified against `fluxd` |
+| [Windows prototype](../windows/README.md) | Current Windows features, build instructions, live checks, and known limits |
+| [Windows parity audit](WINDOWS_PARITY.md) | Current Windows capabilities, gaps, and the checks for matching the newer clients |
 | [Marketing videos](../marketing/README.md) | Video source, phone captures, music timing, render, and mux |
 
 Return to the [project README](../README.md).
