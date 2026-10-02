@@ -26,6 +26,7 @@ enum PluginRegistry {
             MicPlugin(),
             ApprovePlugin(),
             ThemePlugin(),
+            StreamRequestPlugin(),
         ]
     }
 }
@@ -158,6 +159,7 @@ struct FeatureRoot: ViewModifier {
 @MainActor
 enum FeatureOverlays {
     static let layers: [AnyView] = [
+        AnyView(OverlayLayer(modifier: StreamRequestRoot())),
         AnyView(OverlayLayer(modifier: ApproveRoot())),
         AnyView(OverlayLayer(modifier: RingRoot())),
     ]
@@ -167,6 +169,7 @@ enum FeatureOverlays {
         model.pairSheetDevice != nil
             || ApprovePresenter.shared.state.isPresented
             || model.core.plugin(RingPlugin.self)?.model.ringing != nil
+            || (model.isActive && model.core.plugin(StreamRequestPlugin.self)?.model.current != nil)
     }
 }
 
@@ -181,11 +184,14 @@ enum FeatureHooks {
         AgentsFeature.didLaunch(model: model)
         BrowseFeature.didLaunch()
         ApproveFeature.didLaunch(model: model)
+        StreamRequestFeature.didLaunch(model: model)
     }
 
     /// Runs after each change of the core state.
     static func stateChanged(_ state: CoreState, model: AppModel) {
         QueuedShares.shared.stateChanged(state)
+        // A stream that a tap started waits for the link of its computer.
+        StreamRequestFeature.shared.check()
     }
 
     /// Runs when the app comes on the screen or leaves it.
@@ -202,6 +208,10 @@ enum FeatureHooks {
         if active { ShareFeature.shared.openPendingLink() }
         // iOS turns off the camera of an app that leaves the screen.
         if !active { model.core.plugin(WebcamPlugin.self)?.stopInBackground() }
+        // A suspended app runs no timer, so the old stream requests end here.
+        if active { model.core.plugin(StreamRequestPlugin.self)?.expire() }
+        // A tap on a stream request in a notification opened Flux.
+        if active { StreamRequestFeature.shared.check() }
     }
 
     /// Runs when an App Intent starts or ends, and when the app comes on the

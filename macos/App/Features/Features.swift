@@ -26,6 +26,7 @@ enum PluginRegistry {
             DndPlugin(),
             ApprovePlugin(),
             ThemePlugin(),
+            StreamRequestPlugin(),
         ]
     }
 }
@@ -127,6 +128,7 @@ enum FeatureHooks {
         AgentsFeature.didLaunch(model: model)
         ShareServices.install(model: model)
         ApprovePromptWindow.install(model: model)
+        StreamRequestFeature.install(model: model)
     }
 
     /// Files dropped on the Dock icon or opened with Flux.
