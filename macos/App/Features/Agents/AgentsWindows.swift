@@ -89,7 +89,7 @@ final class AgentsWindows: NSObject, NSWindowDelegate {
         }
         guard let plugin = app.core.plugin(HerdrPlugin.self) else { return }
         let model = AgentsWindowModel(deviceId: deviceId, app: app, plugin: plugin, selection: pane)
-        let hosting = NSHostingController(rootView: AgentsView(model: model))
+        let hosting = NSHostingController(rootView: AgentsView(model: model).themeWindow(app))
         hosting.sizingOptions = [.minSize]
         let window = NSWindow(contentViewController: hosting)
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]

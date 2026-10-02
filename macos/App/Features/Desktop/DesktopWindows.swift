@@ -55,7 +55,7 @@ final class DesktopWindows: NSObject, NSWindowDelegate {
         // The stream of another computer stops with its window.
         entry?.window.close()
         let controller = DesktopController(device: device, app: app, plugin: plugin, input: input)
-        let hosting = NSHostingController(rootView: DesktopView(controller: controller))
+        let hosting = NSHostingController(rootView: DesktopView(controller: controller).themeWindow(app))
         hosting.sizingOptions = [.minSize]
         let window = NSWindow(contentViewController: hosting)
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]

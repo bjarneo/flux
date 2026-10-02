@@ -7,9 +7,12 @@ import SwiftUI
 @MainActor
 final class ApprovePromptWindow {
     private static var window: NSWindow?
+    /// The app model, for the tint and the light or dark mode of the theme.
+    private static weak var app: AppModel?
 
     /// Lets the plugin bring the prompt to the front for each new request.
     static func install(model: AppModel) {
+        app = model
         guard let plugin = model.core.plugin(ApprovePlugin.self) else { return }
         plugin.model.present = { show(plugin) }
     }
@@ -29,7 +32,8 @@ final class ApprovePromptWindow {
     private static let size = NSSize(width: 460, height: 440)
 
     private static func make(_ plugin: ApprovePlugin) -> NSWindow {
-        let host = NSHostingController(rootView: ApprovePromptView(plugin: plugin) { window?.orderOut(nil) })
+        // The prompt keeps its layout and its colors. It takes only the tint and the light or dark mode of the theme.
+        let host = NSHostingController(rootView: ApprovePromptView(plugin: plugin) { window?.orderOut(nil) }.themeWindow(app, surfaces: false))
         host.sizingOptions = []
         let w = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable], backing: .buffered, defer: false)
         w.contentViewController = host

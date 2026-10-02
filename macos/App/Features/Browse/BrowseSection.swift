@@ -8,7 +8,7 @@ struct BrowseQuickAction: View {
 
     var body: some View {
         if device.accepts(PacketType.sftpRequest) {
-            Tile(title: "Browse Files", systemImage: "folder") { BrowseWindows.shared.show(device.id, core: model.core) }
+            Tile(title: "Browse Files", systemImage: "folder") { BrowseWindows.shared.show(device.id, app: model) }
                 .help("Browse \(device.name) read-only and download files to this Mac")
         }
     }
@@ -21,7 +21,7 @@ struct BrowseMenuItem: View {
 
     var body: some View {
         if device.accepts(PacketType.sftpRequest) {
-            Button("Browse Files…") { BrowseWindows.shared.show(device.id, core: model.core) }
+            Button("Browse Files…") { BrowseWindows.shared.show(device.id, app: model) }
         }
     }
 }

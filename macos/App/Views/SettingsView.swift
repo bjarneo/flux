@@ -4,9 +4,10 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
-    @AppStorage(AppAppearance.key) private var appearance = AppAppearance.automatic
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
+        @Bindable var model = model
         TabView {
             Form {
                 Section {
@@ -27,12 +28,15 @@ struct SettingsView: View {
                 }
                 LoginItemSection()
                 Section {
-                    Picker("Appearance", selection: $appearance) {
-                        ForEach(AppAppearance.allCases) { Text($0.label).tag($0) }
+                    Picker("Theme", selection: $model.themeMode) {
+                        ForEach(ThemeMode.allCases) { Text($0.label).tag($0) }
                     }
-                    .pickerStyle(.segmented)
+                    .pickerStyle(.radioGroup)
+                    Text("Computer: \(computerLine)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 } footer: {
-                    Text("Sets the windows and the Dock icon. Automatic follows the appearance of macOS. Finder keeps the dark icon.")
+                    Text("Computer draws the Omarchy theme of the computer in scope. System follows the appearance of macOS with Tokyo Night. The theme also picks the light or dark Dock icon. Finder keeps the dark icon.")
                 }
             }
             .formStyle(.grouped)
@@ -43,7 +47,24 @@ struct SettingsView: View {
                 .tabItem { Label("Features", systemImage: "square.grid.2x2") }
         }
         .frame(width: 520, height: 520)
-        .onChange(of: appearance) { AppearanceController.shared.apply() }
+    }
+
+    /// The theme that the Computer choice draws now, and the computer that sent it.
+    private var computerLine: String {
+        let theme = model.computerTheme
+        return ThemeMode.computerLine(
+            theme: theme,
+            themeComputer: theme.flatMap { t in model.state.devices.first { $0.id == t.deviceId }?.name },
+            scopeComputer: model.pairedDevice(model.scope)?.name,
+            systemDark: systemDark
+        )
+    }
+
+    /// The light or dark mode of macOS. While the theme sets the mode of
+    /// the windows, the window cannot tell it, so the setting of macOS does.
+    private var systemDark: Bool {
+        if model.nightMode == .system { return scheme == .dark }
+        return UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark"
     }
 }
 
