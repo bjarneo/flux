@@ -177,10 +177,13 @@ class WebcamController(context: Context) : WebcamSession.Listener {
         encoder = null
     }
 
-    /** Stops everything. The controller cannot start again. */
+    /**
+     * Stops everything. The controller cannot start again. A stream that
+     * another controller started keeps running.
+     */
     fun release() {
         main.removeCallbacks(sendConfig)
-        stopLive()
+        WebcamSession.stopOwnedBy(FluxCore, this)
         // Free an encoder that the stream did not free.
         onEnded()
         orientation.disable()

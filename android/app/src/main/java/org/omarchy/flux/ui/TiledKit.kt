@@ -52,6 +52,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -61,9 +62,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -587,12 +591,22 @@ fun LineSkeleton(
 /**
  * A bottom sheet of the app. It opens in full, and Back or a tap on the
  * scrim closes it. The pairing sheet is not a [FluxSheet], see
- * [TiledPairSheet].
+ * [TiledPairSheet]. [onFullyOpen] gets true when the sheet is fully open
+ * and does not move, and false when it moves again.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FluxSheet(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+fun FluxSheet(
+    onDismiss: () -> Unit,
+    onFullyOpen: (Boolean) -> Unit = {},
+    content: @Composable ColumnScope.() -> Unit,
+) {
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val report by rememberUpdatedState(onFullyOpen)
+    LaunchedEffect(sheet) {
+        snapshotFlow { sheet.currentValue == SheetValue.Expanded && sheet.targetValue == SheetValue.Expanded }
+            .collect { report(it) }
+    }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheet,

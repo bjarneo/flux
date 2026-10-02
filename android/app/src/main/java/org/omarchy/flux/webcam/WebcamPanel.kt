@@ -149,13 +149,17 @@ fun WebcamPanel(deviceId: String, startNow: MutableState<Boolean>) {
         if (on && !hasMicPermission()) askMic.launch(Manifest.permission.RECORD_AUDIO)
         else MicSettings.setWithWebcam(context.applicationContext, on)
     }
+    // The status can be of the stream of another Webcam page, for example
+    // while a stream request opens the page of another computer above this
+    // one. This page starts and stops only the microphone to its computer.
     LaunchedEffect(status.phase, withMic) {
-        val live = status.phase == WebcamSession.Phase.Live
+        val own = WebcamSession.runsTo(deviceId)
+        val live = own && status.phase == WebcamSession.Phase.Live
         if (live && withMic && hasMicPermission() && !MicSession.status.value.active) {
             MicSession.start(FluxCore, deviceId)
             micByWebcam = true
-        } else if ((!status.active || !withMic) && micByWebcam) {
-            MicSession.stop(FluxCore, notify = true)
+        } else if ((!own || !withMic) && micByWebcam) {
+            if (MicSession.runsTo(deviceId)) MicSession.stop(FluxCore, notify = true)
             micByWebcam = false
         }
     }
@@ -163,7 +167,7 @@ fun WebcamPanel(deviceId: String, startNow: MutableState<Boolean>) {
     DisposableEffect(controller) {
         onDispose {
             controller.release()
-            if (micByWebcam) MicSession.stop(FluxCore, notify = true)
+            if (micByWebcam && MicSession.runsTo(deviceId)) MicSession.stop(FluxCore, notify = true)
         }
     }
     LaunchedEffect(config) { controller.apply(config) }

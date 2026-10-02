@@ -145,6 +145,18 @@ object WebcamSession {
         end(core, notify, status, id)
     }
 
+    /**
+     * Stops the stream when [listener] runs it, and tells the computer.
+     * Without a stream, the status goes back to idle, as after [stop]. A
+     * Webcam page that closes stops only its own stream. The page of
+     * another computer can run the stream already, for example after a
+     * stream request opened that page above it.
+     */
+    fun stopOwnedBy(core: FluxCore, listener: Listener) {
+        val id = synchronized(lock) { attempt.takeIf { this.listener == null || this.listener === listener } } ?: return
+        end(core, notify = true, Status(), id)
+    }
+
     /** Stops the stream when it goes to [deviceId], for example after an unpair. */
     fun stopFor(core: FluxCore, deviceId: String, message: String) {
         val id = synchronized(lock) { attempt.takeIf { this.deviceId == deviceId } } ?: return

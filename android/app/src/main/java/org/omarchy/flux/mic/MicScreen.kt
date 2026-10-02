@@ -104,7 +104,8 @@ fun MicScreen(d: DeviceUi, onBack: () -> Unit) {
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            if (MicSession.status.value.active) MicSession.stop(FluxCore, notify = true)
+            // The page of another computer can run the stream already, for example after a stream request opened that page above this one.
+            if (MicSession.runsTo(d.id)) MicSession.stop(FluxCore, notify = true)
         }
     }
     val view = LocalView.current

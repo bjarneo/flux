@@ -86,20 +86,58 @@ class StreamRequestTest {
 
     @Test
     fun aRunningStreamMakesTheRequestDoNothing() {
-        assertEquals(StreamDelivery.None, streamDelivery(running = true, onScreen = true, canNotify = true))
-        assertEquals(StreamDelivery.None, streamDelivery(running = true, onScreen = false, canNotify = true))
+        val book = StreamRequestBook()
+        assertEquals(StreamOutcome.Running, book.receive("pc", "omarchy", StreamKind.Webcam, running = true, now = 1_000))
+        assertTrue(book.requests.isEmpty())
+        assertEquals("a request while the stream runs counts for the limit", StreamOutcome.TooSoon, book.receive("pc", "omarchy", StreamKind.Webcam, running = false, now = 2_000))
     }
 
     @Test
-    fun fluxOnTheScreenShowsThePrompt() {
-        assertEquals(StreamDelivery.Prompt, streamDelivery(running = false, onScreen = true, canNotify = true))
-        assertEquals("the prompt needs no notification permission", StreamDelivery.Prompt, streamDelivery(running = false, onScreen = true, canNotify = false))
+    fun theBookKeepsEachOpenRequestTheNewestLast() {
+        val book = StreamRequestBook()
+        val webcam = StreamRequest("pc", "omarchy", StreamKind.Webcam, 1_000)
+        val mic = StreamRequest("pc", "omarchy", StreamKind.Mic, 1_500)
+        val desk = StreamRequest("desk", "desk", StreamKind.Webcam, 2_000)
+        assertEquals(StreamOutcome.Opened(webcam), book.receive("pc", "omarchy", StreamKind.Webcam, running = false, now = 1_000))
+        assertEquals(StreamOutcome.Opened(mic), book.receive("pc", "omarchy", StreamKind.Mic, running = false, now = 1_500))
+        assertEquals(StreamOutcome.Opened(desk), book.receive("desk", "desk", StreamKind.Webcam, running = false, now = 2_000))
+        assertEquals("a request of another kind or computer does not replace the open one", listOf(webcam, mic, desk), book.requests)
+        assertEquals("the answer ends 1 request", mic, book.remove("pc", StreamKind.Mic))
+        assertNull(book.remove("pc", StreamKind.Mic))
+        assertEquals("the prompt then shows the next one", listOf(webcam, desk), book.requests)
     }
 
     @Test
-    fun fluxNotOnTheScreenShowsANotificationOnlyWithThePermission() {
-        assertEquals(StreamDelivery.Notification, streamDelivery(running = false, onScreen = false, canNotify = true))
-        assertEquals(StreamDelivery.None, streamDelivery(running = false, onScreen = false, canNotify = false))
+    fun aNewRequestReplacesTheOpenOneOfTheSameKindAndComputer() {
+        val book = StreamRequestBook()
+        book.receive("pc", "omarchy", StreamKind.Webcam, running = false, now = 1_000)
+        book.receive("desk", "desk", StreamKind.Webcam, running = false, now = 2_000)
+        val again = StreamRequest("pc", "omarchy", StreamKind.Webcam, 5_000)
+        assertEquals(StreamOutcome.Opened(again), book.receive("pc", "omarchy", StreamKind.Webcam, running = false, now = 5_000))
+        assertEquals(listOf(StreamRequest("desk", "desk", StreamKind.Webcam, 2_000), again), book.requests)
+    }
+
+    @Test
+    fun aRequestEndsAfterItsLifetime() {
+        val book = StreamRequestBook(lifetimeMs = 60_000)
+        book.receive("pc", "omarchy", StreamKind.Webcam, running = false, now = 1_000)
+        book.receive("pc", "omarchy", StreamKind.Mic, running = false, now = 30_000)
+        assertTrue(book.expire(60_999).isEmpty())
+        assertEquals(listOf(StreamRequest("pc", "omarchy", StreamKind.Webcam, 1_000)), book.expire(61_000))
+        val mic = book.requests.single()
+        assertTrue(book.fresh(mic, 89_999))
+        assertFalse(book.fresh(mic, 90_000))
+    }
+
+    @Test
+    fun anUnpairEndsTheRequestsAndTheLimitOfTheComputer() {
+        val book = StreamRequestBook()
+        book.receive("pc", "omarchy", StreamKind.Webcam, running = false, now = 1_000)
+        book.receive("desk", "desk", StreamKind.Mic, running = false, now = 1_000)
+        assertEquals(listOf(StreamRequest("pc", "omarchy", StreamKind.Webcam, 1_000)), book.forget("pc"))
+        assertEquals(listOf(StreamRequest("desk", "desk", StreamKind.Mic, 1_000)), book.requests)
+        assertTrue(book.receive("pc", "omarchy", StreamKind.Webcam, running = false, now = 1_100) is StreamOutcome.Opened)
+        assertEquals(StreamOutcome.TooSoon, book.receive("desk", "desk", StreamKind.Mic, running = false, now = 1_100))
     }
 
     @Test
@@ -136,6 +174,17 @@ class StreamRequestTest {
         val gone = keys.issue("pc", StreamKind.Mic, 300_000)
         keys.forget("pc")
         assertFalse("an unpair removes the keys", keys.redeem(gone, "pc", StreamKind.Mic, 300_001))
+    }
+
+    @Test
+    fun anAnswerInThePromptRemovesTheKeyOfTheNotification() {
+        var n = 0
+        val keys = StreamStartKeys(validMs = 120_000) { "key${n++}" }
+        val webcam = keys.issue("pc", StreamKind.Webcam, 0)
+        val mic = keys.issue("pc", StreamKind.Mic, 0)
+        keys.drop("pc", StreamKind.Webcam)
+        assertFalse(keys.redeem(webcam, "pc", StreamKind.Webcam, 1))
+        assertTrue("the key of the other kind stays", keys.redeem(mic, "pc", StreamKind.Mic, 1))
     }
 
     @Test

@@ -107,6 +107,8 @@ object FluxCore {
         if (initialized) return
         initialized = true
         app = context.applicationContext
+        // The keys of the stream request notifications were in the memory of the last process.
+        StreamRequests.removeStale(app)
         local = LocalCertificate.loadOrCreate(File(app.filesDir, "identity")) { e ->
             Log.e(TAG, "the identity of this phone did not load. Flux made a new one.", e)
             Android.createChannels(app)

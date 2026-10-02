@@ -208,7 +208,8 @@ object Android {
         })
     }
 
-    private fun openApp(context: Context): PendingIntent = PendingIntent.getActivity(
+    /** Opens Flux on its current screen. */
+    fun openApp(context: Context): PendingIntent = PendingIntent.getActivity(
         context, 0, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
@@ -306,7 +307,12 @@ object Android {
         val id = agentId(deviceId, agent.pane)
         val blocked = agent.status == AgentStatus.Blocked
         val where = agent.project.ifEmpty { agent.workspace }.ifEmpty { agent.pane }
+        // The action and the identifier make this PendingIntent differ from
+        // each other PendingIntent of Flux, also when the hash of the pane
+        // is the same as another request code.
         val open = Intent(context, MainActivity::class.java)
+            .setAction(MainActivity.ACTION_OPEN_AGENT)
+            .setIdentifier("$deviceId|${agent.pane}")
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             .putExtra(MainActivity.EXTRA_DEVICE, deviceId)
             .putExtra(MainActivity.EXTRA_PANE, agent.pane)

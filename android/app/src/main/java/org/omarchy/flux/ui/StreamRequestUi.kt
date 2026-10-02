@@ -2,6 +2,7 @@ package org.omarchy.flux.ui
 
 import android.app.Activity
 import android.app.KeyguardManager
+import android.os.SystemClock
 import android.view.MotionEvent
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.Arrangement
@@ -15,7 +16,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -45,13 +48,31 @@ import kotlin.coroutines.resume
  * of this phone. Start is the consent of the user. The prompt hides the
  * windows of other apps, and it refuses a tap while another app draws over
  * it, because an overlay can hide the prompt so that the user taps Start.
+ *
+ * The computer chooses when the prompt shows. So Start takes a tap only
+ * [StreamRequests.ARM_MS] after the sheet is fully open and Flux is in
+ * front, and only a tap that starts after that time. A tap that the user
+ * already makes when the prompt shows does not start the stream.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun StreamRequestSheet(r: StreamRequest, onStart: () -> Unit, onDismiss: () -> Unit) {
     HideOverlays()
+    var fullyOpen by remember { mutableStateOf(false) }
+    val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
+    val inFront = lifecycle.isAtLeast(Lifecycle.State.RESUMED)
+    // The uptime from which Start takes a tap. MotionEvent.getEventTime uses the same clock.
+    var armedAt by remember { mutableLongStateOf(Long.MAX_VALUE) }
+    LaunchedEffect(fullyOpen, inFront) {
+        armedAt = Long.MAX_VALUE
+        if (!fullyOpen || !inFront) return@LaunchedEffect
+        delay(StreamRequests.ARM_MS)
+        armedAt = SystemClock.uptimeMillis()
+    }
     // The sheet has its own window, so the touch check of MainActivity does not see its touches.
     var obscured by remember { mutableStateOf(false) }
+    // The uptime of the last touch down that no tap used yet. A click of TalkBack has no touch.
+    var downAt by remember { mutableLongStateOf(Long.MAX_VALUE) }
     val icon = when (r.kind) {
         StreamKind.Webcam -> Ic.videocam
         StreamKind.Mic -> Ic.micFill
@@ -60,12 +81,15 @@ fun StreamRequestSheet(r: StreamRequest, onStart: () -> Unit, onDismiss: () -> U
         StreamKind.Webcam -> "The camera stays off until you tap Start webcam. Flux then opens the Webcam page and streams to ${r.computer}."
         StreamKind.Mic -> "The microphone stays off until you tap Start the mic. Flux then opens the Mic page and streams to ${r.computer}."
     }
-    FluxSheet(onDismiss) {
+    FluxSheet(onDismiss, onFullyOpen = { fullyOpen = it }) {
         Column(
             Modifier.fillMaxWidth()
                 .motionEventSpy { ev ->
                     when (ev.actionMasked) {
-                        MotionEvent.ACTION_DOWN -> obscured = Overlays.obscured(ev)
+                        MotionEvent.ACTION_DOWN -> {
+                            downAt = ev.eventTime
+                            obscured = Overlays.obscured(ev)
+                        }
                         MotionEvent.ACTION_UP -> obscured = obscured || Overlays.obscured(ev)
                     }
                 }
@@ -85,10 +109,18 @@ fun StreamRequestSheet(r: StreamRequest, onStart: () -> Unit, onDismiss: () -> U
                 FluxButton(
                     r.kind.startLabel(),
                     {
-                        if (obscured) FluxCore.toast("Another app draws over Flux. Close that app, then try again.") else onStart()
+                        val down = downAt
+                        downAt = Long.MAX_VALUE
+                        when {
+                            // The finger was down before Start was ready.
+                            down < armedAt -> Unit
+                            obscured -> FluxCore.toast("Another app draws over Flux. Close that app, then try again.")
+                            else -> onStart()
+                        }
                     },
                     Modifier.weight(1f).fillMaxHeight(),
                     icon = icon,
+                    enabled = armedAt != Long.MAX_VALUE,
                 )
             }
         }
