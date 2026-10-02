@@ -18,6 +18,10 @@ public final class HerdrModel {
     public internal(set) var actions: [String: HerdrAction] = [:]
     /// The first task of the last new agent on a computer.
     public internal(set) var firstTasks: [String: FirstTask] = [:]
+    /// The output that the Inbox reads for the question of 1 agent, by
+    /// `promptKey`. It is apart from `outputs`, so that the Inbox and an
+    /// agent screen do not replace each other's output.
+    public internal(set) var prompts: [String: HerdrOutput] = [:]
 
     /// Notify when an agent on a computer needs input. It applies to all computers.
     public var inputAlerts = true {
@@ -56,6 +60,12 @@ public final class HerdrModel {
     public func reply(_ deviceId: String, pane: String) -> HerdrReply? {
         replies[deviceId].flatMap { $0.pane == pane ? $0 : nil }
     }
+
+    /// The key of the prompt of `pane` on a computer in `prompts`.
+    public nonisolated static func promptKey(_ deviceId: String, pane: String) -> String { deviceId + "|" + pane }
+
+    /// The output that the Inbox read for `pane` on a computer, or nil before the first read.
+    public func prompt(_ deviceId: String, pane: String) -> HerdrOutput? { prompts[Self.promptKey(deviceId, pane: pane)] }
 }
 
 /// flux.herdr in both directions. fluxd sends the coding agents that herdr
@@ -110,6 +120,10 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
     /// Counts the output parses of each computer, so that an older parse
     /// that ends late does not replace a newer output.
     @MainActor private var parses: [String: Int] = [:]
+    /// Counts the reads and the parses of each prompt of the Inbox, by
+    /// `HerdrModel.promptKey`, as `reads` and `parses` do for the window.
+    @MainActor private var promptReads: [String: Int] = [:]
+    @MainActor private var promptParses: [String: Int] = [:]
 
     @MainActor
     public init() { model = HerdrModel() }
@@ -149,16 +163,31 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
             alert(alerts, deviceId: deviceId, computer: computer)
             advanceFirstTask(deviceId)
         case "output":
-            // Only the pane on screen keeps its output. The check reads the
-            // pane before the parse, and the parse of up to 1 MiB of text
-            // runs off the main actor.
-            guard let pane = p.body["pane"]?.string, !pane.isEmpty, model.outputs[deviceId]?.pane == pane else { return }
-            let parse = (parses[deviceId] ?? 0) + 1
-            parses[deviceId] = parse
+            // Only the pane on screen and the prompts of the Inbox keep
+            // their output. The check reads the pane before the parse, and
+            // the parse of up to 1 MiB of text runs off the main actor.
+            guard let pane = p.body["pane"]?.string, !pane.isEmpty else { return }
+            let key = HerdrModel.promptKey(deviceId, pane: pane)
+            var windowParse: Int?
+            if model.outputs[deviceId]?.pane == pane {
+                let n = (parses[deviceId] ?? 0) + 1
+                parses[deviceId] = n
+                windowParse = n
+            }
+            var promptParse: Int?
+            if model.prompts[key] != nil {
+                let n = (promptParses[key] ?? 0) + 1
+                promptParses[key] = n
+                promptParse = n
+            }
+            guard windowParse != nil || promptParse != nil else { return }
+            // A @Sendable closure cannot capture a var.
+            let window = windowParse
+            let prompt = promptParse
             let body = p.body
             Task.detached { [weak self] in
                 guard let out = HerdrWire.output(body) else { return }
-                await self?.show(out, deviceId: deviceId, parse: parse)
+                await self?.show(out, deviceId: deviceId, window: window, prompt: prompt)
             }
         case "sent":
             // A newer fluxd sends back the number of the reply. A late answer
@@ -179,8 +208,11 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
             guard sent.error == nil else { return }
             Task { @MainActor [weak self] in
                 try? await Task.sleep(for: Self.rereadDelay)
-                guard let self, self.model.outputs[deviceId]?.pane == sent.pane else { return }
-                self.read(deviceId, pane: sent.pane)
+                guard let self else { return }
+                if self.model.outputs[deviceId]?.pane == sent.pane { self.read(deviceId, pane: sent.pane) }
+                if self.model.prompts[HerdrModel.promptKey(deviceId, pane: sent.pane)] != nil {
+                    self.readPrompt(deviceId, pane: sent.pane)
+                }
             }
         case "created", "closed":
             guard let done = HerdrWire.done(p.body), var action = model.actions[deviceId],
@@ -198,13 +230,20 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
         }
     }
 
-    /// Shows a parsed output, unless a newer output of the computer came
-    /// or the window shows another pane now.
+    /// Shows a parsed output in the window and in the prompt of the Inbox.
+    /// Each place skips it when a newer output came, or when the window
+    /// shows another pane now. `window` and `prompt` are the numbers of the
+    /// parse for each place, or nil when the place did not want it.
     @MainActor
-    private func show(_ out: HerdrOutput, deviceId: String, parse: Int) {
-        guard parses[deviceId] == parse, model.outputs[deviceId]?.pane == out.pane else { return }
-        model.outputs[deviceId] = out
-        advanceFirstTask(deviceId)
+    private func show(_ out: HerdrOutput, deviceId: String, window: Int?, prompt: Int?) {
+        if let window, parses[deviceId] == window, model.outputs[deviceId]?.pane == out.pane {
+            model.outputs[deviceId] = out
+            advanceFirstTask(deviceId)
+        }
+        let key = HerdrModel.promptKey(deviceId, pane: out.pane)
+        if let prompt, promptParses[key] == prompt, model.prompts[key] != nil {
+            model.prompts[key] = out
+        }
     }
 
     // MARK: Requests
@@ -252,6 +291,42 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
     public func closeOutput(_ deviceId: String, pane: String) {
         if model.outputs[deviceId]?.pane == pane { model.outputs[deviceId] = nil }
         if model.replies[deviceId]?.pane == pane { model.replies[deviceId] = nil }
+    }
+
+    /// Asks the computer for the output of `pane` for the Inbox. The answer
+    /// goes to `HerdrModel.prompts`. The old lines stay until it comes.
+    @MainActor
+    public func readPrompt(_ deviceId: String, pane: String) {
+        let key = HerdrModel.promptKey(deviceId, pane: pane)
+        var out = model.prompts[key] ?? HerdrOutput(pane: pane)
+        out.loading = true
+        out.error = nil
+        model.prompts[key] = out
+        guard core?.send(HerdrWire.read(pane: pane), to: deviceId) == true else {
+            model.prompts[key]?.loading = false
+            model.prompts[key]?.error = "\(computerName(deviceId)) is not reachable"
+            return
+        }
+        let token = (promptReads[key] ?? 0) + 1
+        promptReads[key] = token
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.readTimeout)
+            guard let self, token == self.promptReads[key], self.model.prompts[key]?.loading == true else { return }
+            self.model.prompts[key]?.loading = false
+            self.model.prompts[key]?.error = "\(self.computerName(deviceId)) did not answer"
+        }
+    }
+
+    /// Drops each prompt whose key is not in `keys`. The apps call it when
+    /// the Inbox items change, with the `HerdrModel.promptKey` of each agent
+    /// that waits.
+    @MainActor
+    public func keepPrompts(_ keys: Set<String>) {
+        for key in Array(model.prompts.keys) where !keys.contains(key) {
+            model.prompts[key] = nil
+            promptReads[key] = nil
+            promptParses[key] = nil
+        }
     }
 
     /// Sends key presses to the agent in `pane`, for example "2" to select

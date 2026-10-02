@@ -121,8 +121,8 @@ Both hosts use the [shared QML views](qml.md).
 ## Theme and desktop integration
 
 The desktop reads `~/.local/state/omarchy/current/theme/colors.toml` and follows theme changes.
-Flux for Android follows the active Omarchy theme of the computer, light or dark, through the [theme packet](#theme-packet).
-See [the theme of Flux for Android](android.md#theme) for the contrast guard and the fallback.
+Flux for Android, Flux for iOS, and Flux for macOS follow the active Omarchy theme of the computer, light or dark, through the [theme packet](#theme-packet).
+For the contrast guard and the fallback, see the theme of [Flux for Android](android.md#theme), [Flux for iOS](ios.md#theme), and [Flux for macOS](macos.md#theme).
 
 `dist/hyprland.lua` supplies floating-window rules and the `SUPER + ALT + P` shortcut for `flux-cli open`.
 `dist/omarchy-menu.jsonc` supplies a Flux item for the Trigger menu.
@@ -133,6 +133,7 @@ The package does not merge these examples into your desktop configuration.
 
 `fluxd` sends the active Omarchy theme to a device in a `flux.theme` packet.
 Only a paired device that lists `flux.theme` in its incoming types gets the packet.
+Flux for iOS and Flux for macOS list `flux.theme` from the version that adds `ThemePlugin` to FluxKit.
 `fluxd` sends it at these times:
 
 - When a paired device connects, and when a pairing completes.
@@ -184,7 +185,7 @@ In this case, the last value of a key wins, and a value can be without quotes.
 The `border` field is missing when the file has no `hyprland_active_border`, or when a part of the value does not parse.
 Then a device starts the border with `accent`.
 Omarchy draws a solid `accent` border in Hyprland when the file has no `hyprland_active_border`.
-Flux for Android draws a gradient from `accent` to `cyan`.
+The Flux apps draw a gradient from `accent` to `cyan`.
 A part of the border value can be `rgba(rrggbbaa)`, `rgb(rrggbb)`, `#rrggbb`, `#rrggbbaa`, `0xaarrggbb`, `rgba(r,g,b,a)`, or the name of a color in `colors`, such as `accent`.
 
 A theme can have colors with low contrast.

@@ -54,6 +54,9 @@ public enum PacketType {
     /// An image that was copied, as the payload, with
     /// {"mime": type}. Both sides send it.
     public static let fluxClipboardImage = "flux.clipboard.image"
+    /// The computer sends its active Omarchy theme. docs/omarchy.md,
+    /// section "Theme packet", describes the body.
+    public static let fluxTheme = "flux.theme"
 }
 
 /// The body of a flux.identity packet.

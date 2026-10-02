@@ -19,6 +19,25 @@ public struct FileTransfer: Identifiable, Sendable, Equatable {
     public var state = State.running
     /// The file on this Mac: the saved file, or the file that goes out.
     public var file: URL?
+    /// The start time and the end time. `ended` is nil while the transfer runs.
+    public var started: Date
+    public var ended: Date?
+
+    // The init is in the struct body, so that it replaces the memberwise
+    // init. In an extension, both inits would match the calls in SharePlugin.
+    public init(id: UUID = UUID(), deviceId: String, name: String, incoming: Bool, size: Int64, bytes: Int64 = 0,
+                state: State = .running, file: URL? = nil, started: Date = Date(), ended: Date? = nil) {
+        self.id = id
+        self.deviceId = deviceId
+        self.name = name
+        self.incoming = incoming
+        self.size = size
+        self.bytes = bytes
+        self.state = state
+        self.file = file
+        self.started = started
+        self.ended = ended
+    }
 
     /// The part that is done, from 0 to 1, or nil when the size is unknown.
     public var fraction: Double? {
@@ -64,6 +83,7 @@ public final class ShareModel {
                 t.file = file
                 t.name = file.lastPathComponent
             }
+            t.ended = Date()
         }
     }
 
