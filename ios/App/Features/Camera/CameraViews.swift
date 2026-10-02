@@ -26,6 +26,8 @@ struct CameraTile: View {
 struct CameraScreen: View {
     @Environment(AppModel.self) private var model
     let deviceId: String
+    /// The mode at the start. Send and Control open the screen in a mode.
+    var mode: CameraMode = .text
     @State private var screen: CameraScreenModel?
 
     var body: some View {
@@ -41,7 +43,7 @@ struct CameraScreen: View {
         .navigationTitle("Camera")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            if screen == nil { screen = CameraScreenModel(deviceId: deviceId, app: model, mode: .text) }
+            if screen == nil { screen = CameraScreenModel(deviceId: deviceId, app: model, mode: mode) }
         }
         .onDisappear {
             screen?.close()

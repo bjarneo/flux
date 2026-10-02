@@ -3,7 +3,6 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
-    @AppStorage(AppAppearance.key) private var appearance = AppAppearance.automatic
     @State private var name = ""
     @FocusState private var editingName: Bool
 
@@ -40,18 +39,6 @@ struct SettingsView: View {
                 Text("This iPhone")
             } footer: {
                 Text("Computers show this name. While Flux is off, it uses no network and computers do not see this iPhone.")
-            }
-            Section {
-                Picker("Appearance", selection: $appearance) {
-                    ForEach(AppAppearance.allCases) { Text($0.label).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
-            } header: {
-                Text("Appearance")
-            } footer: {
-                Text("Automatic follows the appearance of iOS.")
             }
             FeatureSettings()
             Section("About") {

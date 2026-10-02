@@ -35,9 +35,34 @@ final class DemoModeTests: XCTestCase {
 
     func testRendersTheDemoScreens() throws {
         let app = try TestApp.model(demo: true, plugins: PluginRegistry.make())
-        try ScreenRender.render(NavigationStack { ComputersView() }.environment(app), name: "demo-01-computers")
-        try ScreenRender.render(NavigationStack { DeviceView(deviceId: DemoMode.computers[0].id) }.environment(app),
-                                name: "demo-02-computer")
+        try ScreenRender.render(NavigationStack { InboxView() }.modifier(ThemeRoot()).environment(app), name: "demo-01-inbox")
+        try ScreenRender.render(NavigationStack { SendView() }.modifier(ThemeRoot()).environment(app), name: "demo-02-send")
+        try ScreenRender.render(NavigationStack { ControlView() }.modifier(ThemeRoot()).environment(app), name: "demo-03-control")
+        try ScreenRender.render(NavigationStack { ComputersView() }.modifier(ThemeRoot()).environment(app), name: "demo-04-computers")
         XCTAssertFalse(app.core.isRunning)
+    }
+
+    func testTheDemoInboxHasTheSampleItems() throws {
+        let items = DemoMode.inboxItems(now: Date())
+        XCTAssertEqual(items.map(\.kind), [.agentInput, .approval, .media, .clipboard, .transfer, .agentDone])
+        XCTAssertEqual(Inbox.needsYou(items), 2)
+        XCTAssertEqual(DemoMode.inboxItems(now: Date()).map(\.key), items.map(\.key), "the keys stay the same")
+        XCTAssertEqual(DemoMode.output.choices.map(\.key), ["1", "2", "3"])
+        XCTAssertEqual(Inbox.agentPrompt(DemoMode.output.lines.map(\.text)),
+                       "Bash command\nbin/migrate --apply\nApply the pending migration\nDo you want to proceed?")
+    }
+
+    func testTheDemoThemeIsOnTheLaptop() throws {
+        DemoMode.themeName = "neon"
+        defer { DemoMode.themeName = nil }
+        let app = try TestApp.model(demo: true)
+        XCTAssertEqual(app.computerTheme?.name, "neon")
+        app.themeMode = .computer
+        XCTAssertEqual(app.nightMode, .dark, "the windows take the dark mode of neon")
+        app.setScope(DemoMode.computers[1].id)
+        XCTAssertNil(app.computerTheme, "the desktop sent no theme")
+        app.setScope(nil)
+        DemoMode.themeName = nil
+        XCTAssertNil(app.computerTheme)
     }
 }

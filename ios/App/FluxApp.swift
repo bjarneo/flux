@@ -133,7 +133,8 @@ struct RootView: View {
     var body: some View {
         switch starter.launch {
         case .ready(let model):
-            ContentView().environment(model)
+            // The model must wrap ThemeRoot, which reads it.
+            ContentView().modifier(ThemeRoot()).environment(model)
         case .failed(let message):
             ContentUnavailableView("Flux could not start", systemImage: "exclamationmark.triangle", description: Text(message))
         }

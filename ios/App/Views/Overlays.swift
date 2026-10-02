@@ -1,3 +1,4 @@
+import FluxKit
 import SwiftUI
 import UIKit
 
@@ -14,13 +15,14 @@ enum Overlays {
     static func install(model: AppModel) {
         guard windows.isEmpty,
               let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
-        let style = AppAppearance(rawValue: UserDefaults.standard.string(forKey: AppAppearance.key) ?? "")?.style ?? .unspecified
+        // The first style. Then `AppearanceController` follows the theme.
+        let style = model.nightMode.style
         let layers = [AnyView(PairOverlay())] + FeatureOverlays.layers
         for (index, layer) in layers.enumerated() {
             let window = OverlayWindow(windowScene: scene)
             window.windowLevel = .alert + CGFloat(index + 1)
             window.overrideUserInterfaceStyle = style
-            let host = UIHostingController(rootView: layer.environment(model))
+            let host = UIHostingController(rootView: layer.modifier(ThemeRoot()).environment(model))
             host.view.backgroundColor = .clear
             window.rootViewController = host
             window.isHidden = false

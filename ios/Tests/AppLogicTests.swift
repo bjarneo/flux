@@ -126,10 +126,11 @@ final class AppLogicTests: XCTestCase {
     }
 
     func testAppearanceStyles() {
-        XCTAssertEqual(AppAppearance.automatic.style, .unspecified)
-        XCTAssertEqual(AppAppearance.light.style, .light)
-        XCTAssertEqual(AppAppearance.dark.style, .dark)
-        XCTAssertEqual(AppAppearance(rawValue: "dark"), .dark, "the stored value is the raw value")
+        XCTAssertEqual(ThemeMode.system.style, .unspecified)
+        XCTAssertEqual(ThemeMode.light.style, .light)
+        XCTAssertEqual(ThemeMode.dark.style, .dark)
+        XCTAssertEqual(ThemeMode(key: "automatic"), .computer, "the old Automatic reads as Computer")
+        XCTAssertEqual(ThemeMode(key: "dark"), .dark, "the stored value is the raw value")
     }
 
     func testBatteryTexts() {

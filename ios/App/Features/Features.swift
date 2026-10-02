@@ -25,6 +25,7 @@ enum PluginRegistry {
             WebcamPlugin(),
             MicPlugin(),
             ApprovePlugin(),
+            ThemePlugin(),
         ]
     }
 }
@@ -62,6 +63,13 @@ enum FeatureRoute: Hashable {
     case camera(String)
     case mic(String)
     case approve(String)
+    case share(String)
+    case commands(String)
+    case nowPlaying(String)
+    /// The Omarchy panel on its own screen, from Control.
+    case panel(String)
+    /// The camera screen in 1 mode, from Send and Control.
+    case cameraMode(String, CameraMode)
 }
 
 /// The screen of a feature route.
@@ -79,6 +87,11 @@ struct FeatureDestination: View {
         case .camera(let id): CameraScreen(deviceId: id)
         case .mic(let id): MicScreen(deviceId: id)
         case .approve(let id): ApproveScreen(deviceId: id)
+        case .share(let id): ShareScreen(deviceId: id)
+        case .commands(let id): CommandsScreen(deviceId: id)
+        case .nowPlaying(let id): NowPlayingScreen(deviceId: id)
+        case .panel(let id): OmarchyPanelScreen(deviceId: id)
+        case .cameraMode(let id, let mode): CameraScreen(deviceId: id, mode: mode)
         }
     }
 }
