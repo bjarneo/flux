@@ -149,5 +149,6 @@ Unless noted, the peer was the headless `fluxd` described above, driven with `fl
 | Camera Screen Region and denied-camera screen | Needs a manual selection and a revoked permission | Use **Screen Region** and revoke camera access |
 | Microphone and webcam timeouts when the computer never connects | Not exercised | Block the computer's connection and wait 10 seconds |
 | A real Omarchy computer over Wi-Fi | Every test used a loopback daemon on the Mac | Pair with an Omarchy computer on the same network, including Bonjour discovery and UDP broadcasts |
+| The Flux ports | The checks above ran before the port change. No Mac build ran with UDP port 12100, link ports 12100 to 12108, and transfer ports 12070 to 12099 | Pair with a `fluxd` that uses these ports, then send a file, open **Browse**, and start the microphone |
 | Stream request | No Mac build ran the prompt window, the notification action, or the start | Run `flux-cli webcam start` and `flux-cli mic start` with Flux active and with Flux in the background. Click start in the prompt and in the notification. Click **Not now** in the prompt |
 | Approval with the real root helper and PAM | Needs root on Linux | Run `sudo flux-cli approve setup` and `enroll` on an Omarchy computer, then `sudo true` |

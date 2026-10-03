@@ -117,7 +117,7 @@ final class ClipImageTests: XCTestCase {
     }
 
     private func packet(_ body: [String: Any?], size: Int64) -> Packet {
-        Packet(PacketType.fluxClipboardImage, body, payloadSize: size, payloadPort: 1739)
+        Packet(PacketType.fluxClipboardImage, body, payloadSize: size, payloadPort: 12070)
     }
 
     private func json(_ s: String) -> NSDictionary? {
