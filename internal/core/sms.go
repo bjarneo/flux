@@ -1,6 +1,7 @@
 package core
 
 import (
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -28,6 +29,36 @@ const (
 // maxSmsSend is the longest text message in characters that fluxd sends.
 // It is about 10 SMS parts.
 const maxSmsSend = 1600
+
+// smsSendWait is the time that the phone has to report a sent text
+// message. After it, the entry in the outbox shows as failed. The tests
+// make it shorter.
+var smsSendWait = 60 * time.Second
+
+// maxOutbox is the largest number of entries in the outbox of 1 device. A
+// new entry removes the oldest entry.
+const maxOutbox = 50
+
+// smsClockSlack is the largest time in seconds that the clock of the phone
+// can be behind the clock of the computer. A message of the phone that is
+// older than its entry by more than this is a different message.
+const smsClockSlack = 120
+
+// OutboxMessage is a text message that fluxd sent through the phone and
+// that the phone has not reported yet. Thread is the newest conversation
+// with only Address, or -1 for a new conversation. Failed is true when the
+// phone did not report the message in smsSendWait.
+type OutboxMessage struct {
+	Thread   int64  `json:"thread"`
+	Address  string `json:"address"`
+	Body     string `json:"body"`
+	Time     int64  `json:"time"` // seconds
+	Outgoing bool   `json:"outgoing"`
+	Pending  bool   `json:"pending"`
+	Failed   bool   `json:"failed"`
+
+	seq int64 // the number of the entry in the outbox of the device
+}
 
 // SmsMessage is one text message.
 type SmsMessage struct {
@@ -178,6 +209,7 @@ func (d *Daemon) handleSms(dev *Device, p *proto.Packet) {
 		}
 	}
 	pruneConversations(dev.conversations, maxConversations)
+	confirmOutboxLocked(dev, msgs)
 	if b.ThreadID != nil {
 		answer := *b.ThreadID
 		for _, ch := range dev.threadWait[answer] {
@@ -230,7 +262,8 @@ func (d *Daemon) stopWait(dev *Device, thread int64, ch chan []SmsMessage) {
 }
 
 // SendSms sends a text message through the phone. A reply to a known
-// conversation goes out on the SIM of that conversation.
+// conversation goes out on the SIM of that conversation. The message
+// stays in the outbox of the device until the phone reports it.
 func (d *Daemon) SendSms(dev *Device, addresses []string, body string) error {
 	list := make([]map[string]string, 0, len(addresses))
 	clean := make([]string, 0, len(addresses))
@@ -256,7 +289,121 @@ func (d *Daemon) SendSms(dev *Device, addresses []string, body string) error {
 	if sub >= 0 {
 		b["subID"] = sub
 	}
-	return d.send(dev, proto.New(proto.TypeSmsRequest, b))
+	// The entry comes before the request, so that a fast report of the
+	// phone finds it.
+	seq := d.addOutbox(dev, clean[0], body)
+	if err := d.send(dev, proto.New(proto.TypeSmsRequest, b)); err != nil {
+		d.dropOutbox(dev, seq)
+		return err
+	}
+	time.AfterFunc(smsSendWait, func() { d.failOutbox(dev, seq) })
+	return nil
+}
+
+// addOutbox adds a pending entry to the outbox of the device for a text
+// message to address. It returns the number of the entry.
+func (d *Daemon) addOutbox(dev *Device, address, body string) int64 {
+	d.mu.Lock()
+	dev.outboxSeq++
+	e := OutboxMessage{
+		Thread: conversationThread(dev.conversations, address), Address: address, Body: body,
+		Time: time.Now().Unix(), Outgoing: true, Pending: true, seq: dev.outboxSeq,
+	}
+	dev.outbox = append(dev.outbox, e)
+	if n := len(dev.outbox) - maxOutbox; n > 0 {
+		dev.outbox = slices.Delete(dev.outbox, 0, n)
+	}
+	d.mu.Unlock()
+	d.markDirty()
+	return e.seq
+}
+
+// dropOutbox removes the entry seq from the outbox of the device.
+func (d *Daemon) dropOutbox(dev *Device, seq int64) {
+	d.mu.Lock()
+	n := len(dev.outbox)
+	dev.outbox = slices.DeleteFunc(dev.outbox, func(e OutboxMessage) bool { return e.seq == seq })
+	changed := len(dev.outbox) != n
+	d.mu.Unlock()
+	if changed {
+		d.markDirty()
+	}
+}
+
+// failOutbox marks the entry seq as failed when the phone has not
+// reported it.
+func (d *Daemon) failOutbox(dev *Device, seq int64) {
+	d.mu.Lock()
+	i := slices.IndexFunc(dev.outbox, func(e OutboxMessage) bool { return e.seq == seq })
+	changed := i >= 0 && dev.outbox[i].Pending
+	if changed {
+		dev.outbox[i].Pending, dev.outbox[i].Failed = false, true
+	}
+	d.mu.Unlock()
+	if changed {
+		d.markDirty()
+	}
+}
+
+// confirmOutboxLocked removes the entries of the outbox that the phone
+// reports in msgs. A failed entry also goes, because the message of the
+// phone then shows its real state. The caller holds d.mu.
+func confirmOutboxLocked(dev *Device, msgs []SmsMessage) {
+	if len(dev.outbox) == 0 {
+		return
+	}
+	dev.outbox = slices.DeleteFunc(dev.outbox, func(e OutboxMessage) bool {
+		return slices.ContainsFunc(msgs, e.reportedBy)
+	})
+}
+
+// reportedBy reports whether m from the phone is the message of the entry.
+func (e OutboxMessage) reportedBy(m SmsMessage) bool {
+	if !m.Outgoing || m.Body != e.Body || m.Time < e.Time-smsClockSlack {
+		return false
+	}
+	if e.Thread >= 0 {
+		return m.Thread == e.Thread
+	}
+	return len(m.Addresses) == 1 && samePhone(m.Addresses[0], e.Address)
+}
+
+// conversationThread returns the thread of the newest conversation with
+// only this address, or -1.
+func conversationThread(convos map[int64]*Conversation, address string) int64 {
+	thread, newest := int64(-1), int64(-1)
+	for _, c := range convos {
+		if c.ms <= newest || !slices.Equal(c.Addresses, []string{address}) {
+			continue
+		}
+		thread, newest = c.Thread, c.ms
+	}
+	return thread
+}
+
+// phoneChars matches an address that has only the characters of a phone
+// number.
+var phoneChars = regexp.MustCompile(`^[0-9+\-(). ]+$`)
+
+// samePhone reports whether 2 addresses name the same person. Phone
+// numbers match on their last 8 digits, so that +47 912 34 567 matches
+// 91234567. Other addresses match without case.
+func samePhone(a, b string) bool {
+	da, db := digitsOf(a), digitsOf(b)
+	if len(da) < 3 || len(db) < 3 || !phoneChars.MatchString(a) || !phoneChars.MatchString(b) {
+		return strings.EqualFold(a, b)
+	}
+	return da[max(0, len(da)-8):] == db[max(0, len(db)-8):]
+}
+
+// digitsOf returns the ASCII digits of s.
+func digitsOf(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, s)
 }
 
 // conversationSim returns the SIM of the newest conversation with exactly

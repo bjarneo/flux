@@ -70,6 +70,29 @@ To add an icon, add its name and codepoint to `icons` in `Fmt.qml`. The
 codepoints are in the Nerd Fonts `glyphnames.json`, under the `md-` names.
 The package depends on `ttf-font-nerd`, which every Nerd Font provides.
 
+## Colors
+
+`Theme.qml` turns the text of `colors.toml` into color tokens.
+A contrast guard checks each token against the colors that it sits on, with the rules of [Flux for Android](android.md#theme).
+The guard moves only the lightness of a color, toward `fg` first, so the hue of the theme stays.
+A color that meets its needs stays as it is.
+
+| Token | Use | Contrast |
+| --- | --- | --- |
+| `bg`, `bg2`, `bg3` | The page, a card or the sidebar, and a raised surface or the border of a card. | The theme values without a change. |
+| `fg` | Body text. | 4.5:1 on `bg`, `bg2`, and `bg3`. 1.4:1 on `dim`. |
+| `dim` | Secondary text and icons. | 4.5:1 on `bg` and `bg2`. 3:1 on `bg3`. |
+| `accent`, `ok`, `warn`, `err`, `alt` | Actions and states, as text and as icons. | 4.5:1 on `bg` and `bg2`. 3:1 on a fill with 18% of the color. `accent` also reaches 4.5:1 on its selection fill. |
+| `edge` | The border of a field, a button, a chip, a switch, and a dashed button. | 3:1 on `bg` and `bg2`. |
+
+Use `edge` for the border of a control, and `bg3` for the border of a card.
+To check a change in a stock theme, render the screens in that theme:
+
+```sh
+mkdir -p /tmp/shots
+QT_QPA_PLATFORM=offscreen gui/app/build/flux-gui --snapshot /tmp/shots "" theme=/usr/share/omarchy/themes/rose-pine/colors.toml
+```
+
 ## Backend contract
 
 Every host implements these members.
@@ -188,10 +211,10 @@ QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software QML_XHR_ALLOW_FILE_READ=1 \
 ## View tests
 
 `gui/tests/tst_views.qml` checks the views with the mock backend. It covers
-the device switch in Messages, the pair requests, the key format, the
-errors from fluxd, the list limits, the text from a phone, and the
-**Start** buttons of the camera and the mic. To run the
-tests from the repository root:
+the device switch in Messages, the outbox of sent messages, the pair
+requests, the key format, the errors from fluxd, the list limits, the text
+from a phone, the contrast rules of the theme, and the **Start** buttons of
+the camera and the mic. To run the tests from the repository root:
 
 ```sh
 make test-gui

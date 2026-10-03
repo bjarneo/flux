@@ -10,7 +10,7 @@ Item {
   property bool fillHeight: true
   readonly property var dev: view ? view.dev : null
   // The page stays when the user selects another device. A new device ID
-  // resets the thread, the messages, and the outbox of the earlier device.
+  // resets the thread and the messages of the earlier device.
   readonly property string devId: dev ? dev.id : ""
   readonly property bool online: !!dev && !!dev.online
   readonly property var convos: dev && dev.conversations ? dev.conversations : []
@@ -37,17 +37,19 @@ Item {
   // number of its last message, until that conversation appears.
   property bool composing: false
   property string sentTo: ""
-  // The sent messages that the phone has not reported yet:
-  // {device, thread, address, body, time, outgoing, pending, failed}. A
-  // new conversation has thread -1.
-  property var outbox: []
+  // The sent messages that the phone has not reported yet, from the
+  // outbox of the device in fluxd: {thread, address, body, time, outgoing,
+  // pending, failed}. A new conversation has thread -1. fluxd marks an
+  // entry as failed after 60 seconds. The text changes only when an entry
+  // changes, so another state event does not build the thread again.
+  readonly property string outboxText: JSON.stringify(dev && dev.outbox ? dev.outbox : [])
+  readonly property var outbox: JSON.parse(outboxText)
   // The phone sends a text message to 1 address, so a group gets no reply.
   readonly property bool group: !composing && addresses(selected).length > 1
   readonly property var shown: {
     var extra = outbox.filter(function (e) {
-      if (e.device !== devId) return false
       if (composing) return e.thread < 0 && samePhone(e.address, sentTo)
-      return inThread(e, selected)
+      return selectedDev === devId && inThread(e, selected)
     })
     return composing ? extra : messages.concat(extra)
   }
@@ -118,7 +120,6 @@ Item {
     view.call("sms.thread", { device: devId, thread: c.thread }, function (result) {
       if (!life.alive) return
       var msgs = result.messages || []
-      root.confirm(devId, c, msgs)
       // The user can open another thread before the answer comes.
       if (!root.showing(devId, c)) return
       root.messages = msgs
@@ -139,20 +140,6 @@ Item {
   // Loads the first conversation when no thread is selected.
   function loadFirst() {
     if (!selected && !composing && convos.length > 0) load(convos[0])
-  }
-
-  // Removes the sent messages that the phone now reports in the thread.
-  function confirm(devId, c, msgs) {
-    var keep = outbox.filter(function (e) {
-      if (e.device !== devId || !inThread(e, c)) return true
-      for (var i = 0; i < msgs.length; i++) {
-        var m = msgs[i]
-        // The clocks of the phone and the computer can differ a little.
-        if (m.outgoing && m.body === e.body && m.time >= e.time - 120) return false
-      }
-      return true
-    })
-    if (keep.length !== outbox.length) outbox = keep
   }
 
   function compose() {
@@ -191,14 +178,14 @@ Item {
     if (c && selectedDev !== dev.id) return
     var devId = dev.id
     var list = c ? addresses(c) : [target]
-    var entry = { device: devId, thread: c ? c.thread : -1, address: list[0], body: text, time: Math.floor(Date.now() / 1000), outgoing: true, pending: true, failed: false }
     var life = root.life
     var v = view
     sendError = ""
+    // fluxd keeps the message in the outbox of the device until the phone
+    // reports it.
     v.call("sms.send", { device: devId, addresses: list, body: text }, function () {
       if (!life.alive || root.devId !== devId) return
-      if (entry.thread < 0) root.sentTo = entry.address
-      root.outbox = root.outbox.concat([entry])
+      if (!c) root.sentTo = target
       draft.clear()
       refreshTimer.restart()
     }, function (err) {
@@ -224,24 +211,6 @@ Item {
     }
   }
 
-  // A sent message that the phone does not report in 60 seconds shows as
-  // not sent.
-  Timer {
-    interval: 5000
-    repeat: true
-    running: root.outbox.some(function (e) { return !e.failed })
-    onTriggered: {
-      var now = Math.floor(Date.now() / 1000)
-      var changed = false
-      var next = root.outbox.map(function (e) {
-        if (e.failed || now - e.time < 60) return e
-        changed = true
-        return Object.assign({}, e, { pending: false, failed: true })
-      })
-      if (changed) root.outbox = next
-    }
-  }
-
   onShownChanged: {
     var life = root.life
     Qt.callLater(function () { if (life.alive) thread.positionViewAtEnd() })
@@ -264,7 +233,6 @@ Item {
     composing = false
     sentTo = ""
     threadOpen = false
-    outbox = []
     draft.clear()
     to.clear()
     // The conversations of the new device can change after this handler,

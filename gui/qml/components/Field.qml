@@ -1,7 +1,7 @@
 import QtQuick
 import ".."
 
-// A one-line text field with a bg fill and a bg3 border.
+// A one-line text field with a bg fill and an edge border.
 Rectangle {
   id: root
   property alias text: input.text
@@ -17,7 +17,7 @@ Rectangle {
   implicitWidth: 200
   color: Theme.bg
   border.width: 1
-  border.color: input.activeFocus ? Theme.accent : Theme.bg3
+  border.color: input.activeFocus ? Theme.accent : Theme.edge
 
   TextInput {
     id: input

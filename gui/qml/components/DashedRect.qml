@@ -5,7 +5,7 @@ import ".."
 // A rectangle with a dashed border, like a CSS dashed border.
 Item {
   id: root
-  property color color: Theme.bg3
+  property color color: Theme.edge
   property real lineWidth: 1
   property color fill: "transparent"
 

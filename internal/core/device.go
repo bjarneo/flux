@@ -103,6 +103,12 @@ type Device struct {
 	// once. fluxd handles them after the user confirms the pairing, and
 	// drops them when the pairing ends in another way.
 	confirmQueue []*proto.Packet
+
+	// outbox holds the text messages that fluxd sent through the device
+	// and that the device has not reported yet, the oldest first.
+	// outboxSeq numbers the entries.
+	outbox    []OutboxMessage
+	outboxSeq int64
 }
 
 // Battery is the battery state of a device.
@@ -153,6 +159,9 @@ func (dev *Device) setIdentity(id proto.Identity) {
 	}
 	if !dev.supports(proto.TypeSmsMessages) && len(dev.conversations) > 0 {
 		dev.conversations = map[int64]*Conversation{}
+	}
+	if !dev.supports(proto.TypeSmsMessages) {
+		dev.outbox = nil
 	}
 }
 
@@ -273,6 +282,10 @@ type DeviceView struct {
 	// "" when fluxd knows no certificate. It tells 2 devices with the same
 	// name apart.
 	Fingerprint string `json:"fingerprint"`
+
+	// Outbox lists the text messages that fluxd sent through the device
+	// and that the device has not reported yet, the oldest first.
+	Outbox []OutboxMessage `json:"outbox"`
 }
 
 func (dev *Device) view() DeviceView {
@@ -304,5 +317,10 @@ func (dev *Device) view() DeviceView {
 		v.Addresses = []string{}
 	}
 	v.Conversations = sortedConversations(dev.conversations)
+	// A timer of the outbox changes an entry in place.
+	v.Outbox = slices.Clone(dev.outbox)
+	if v.Outbox == nil {
+		v.Outbox = []OutboxMessage{}
+	}
 	return v
 }

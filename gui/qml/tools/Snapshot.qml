@@ -311,7 +311,25 @@ Window {
     ["56-stream-asked", function () {}, function () {
       findBy(camera(), "objectName", "startButton").clicked()
       scrollToEnd()
-    }]
+    }],
+    // 2 sent messages in the outbox of fluxd: 1 that the phone did not
+    // report in 60 seconds, and 1 on its way. The wait lets the toast of
+    // the step before go.
+    ["57-messages-outbox", function () {
+      var now = Math.floor(Date.now() / 1000)
+      mock.setState(function (s) {
+        for (var i = 0; i < s.devices.length; i++)
+          if (s.devices[i].id === pixel) s.devices[i].outbox = [
+            { thread: 1, address: "+4791234567", body: "Yes, we come at 5", time: now - 90, outgoing: true, pending: false, failed: true },
+            { thread: 1, address: "+4791234567", body: "Do you need anything from the shop?", time: now - 5, outgoing: true, pending: true, failed: false }
+          ]
+      })
+      view.selectedId = pixel
+      view.tab = "messages"
+    }, function () {
+      var p = pageItem()
+      p.open(p.convos.filter(function (c) { return c.thread === 1 })[0])
+    }, 2500]
   ]
 
   function pageItem() {

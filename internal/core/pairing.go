@@ -237,6 +237,7 @@ func (d *Daemon) dropTrustLocked(dev *Device) ([]uint32, error) {
 	notes := slices.Collect(maps.Values(dev.notifDesktop))
 	dev.notifDesktop = map[string]uint32{}
 	dev.conversations = map[int64]*Conversation{}
+	dev.outbox = nil
 	if dev.link != nil {
 		dev.link.SetPaired(false)
 	}

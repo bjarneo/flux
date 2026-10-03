@@ -67,6 +67,17 @@ QtObject {
     }
     var result = {}
     if (method === "sms.thread") result = { messages: fixTimes((fixture.threads || {})[String(params.thread)] || []) }
+    else if (method === "sms.send") {
+      // Like fluxd, the message waits in the outbox of the device until the
+      // phone reports it. The thread is the conversation with only the
+      // address, or -1.
+      updateDevice(params.device, function (d) {
+        var address = (params.addresses || [])[0] || ""
+        var c = (d.conversations || []).find(function (x) { return (x.addresses || []).length === 1 && x.addresses[0] === address })
+        d.outbox = (d.outbox || []).concat([{ thread: c ? c.thread : -1, address: address, body: params.body, time: Math.floor(Date.now() / 1000), outgoing: true, pending: true, failed: false }])
+        return d
+      })
+    }
     else if (method === "notification.dismissAll") {
       var n = 0
       updateDevice(params.device, function (d) {

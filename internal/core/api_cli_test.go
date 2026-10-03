@@ -174,12 +174,14 @@ func TestSnapshotHidesDataOfUnpairedDevice(t *testing.T) {
 	dev.battery = &Battery{Charge: 50}
 	dev.notifications = []*PhoneNotification{{ID: "n1", Title: "Code 1234"}}
 	dev.conversations = map[int64]*Conversation{1: {}}
+	dev.outbox = []OutboxMessage{{Thread: 1, Body: "On my way", Pending: true}}
 	var s struct {
 		Devices []struct {
 			ID            string            `json:"id"`
 			Battery       *Battery          `json:"battery"`
 			Notifications []json.RawMessage `json:"notifications"`
 			Conversations []json.RawMessage `json:"conversations"`
+			Outbox        []json.RawMessage `json:"outbox"`
 		} `json:"devices"`
 	}
 	if err := json.Unmarshal(d.Snapshot(), &s); err != nil {
@@ -188,7 +190,7 @@ func TestSnapshotHidesDataOfUnpairedDevice(t *testing.T) {
 	if len(s.Devices) != 1 || s.Devices[0].ID != "phone1" {
 		t.Fatalf("devices %+v", s.Devices)
 	}
-	if v := s.Devices[0]; v.Battery != nil || len(v.Notifications) != 0 || len(v.Conversations) != 0 {
+	if v := s.Devices[0]; v.Battery != nil || len(v.Notifications) != 0 || len(v.Conversations) != 0 || v.Outbox == nil || len(v.Outbox) != 0 {
 		t.Fatalf("the state of an unpaired device has phone data: %+v", v)
 	}
 }

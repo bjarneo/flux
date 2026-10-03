@@ -149,7 +149,7 @@ Item {
           anchors.fill: parent
           visible: !root.adding
           lineWidth: 1.5
-          color: addArea.containsMouse ? Theme.dim : Theme.bg3
+          color: addArea.containsMouse ? Theme.dim : Theme.edge
           Row {
             anchors.centerIn: parent
             spacing: 6

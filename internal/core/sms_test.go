@@ -1,13 +1,19 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"log"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	"flux/internal/config"
 	"flux/internal/proto"
 )
 
@@ -297,5 +303,179 @@ func TestSendSmsLength(t *testing.T) {
 	}
 	if err := d.SendSms(dev, []string{"+4791234567"}, strings.Repeat("é", maxSmsSend)); !errors.As(err, &e) || e.Code != "offline" {
 		t.Fatalf("message at the limit: %v", err)
+	}
+}
+
+func TestSamePhone(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want bool
+	}{
+		{"+47 912 34 567", "91234567", true},
+		{"+4791234567", "004791234567", true},
+		{"+4791234567", "+4791234568", false},
+		{"72345", "72345", true},
+		{"72345", "072345", false},
+		{"Telenor", "telenor", true},
+		{"Telenor", "Telia", false},
+		{"12", "12", true},
+		{"a@b.no", "A@B.NO", true},
+	}
+	for _, c := range cases {
+		if got := samePhone(c.a, c.b); got != c.want {
+			t.Errorf("samePhone(%q, %q) = %v, want %v", c.a, c.b, got, c.want)
+		}
+	}
+}
+
+// smsDaemon returns a daemon with a paired phone that has a link, and the
+// packets that the phone gets on that link.
+func smsDaemon(t *testing.T) (*Daemon, *Device, chan *proto.Packet) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	desk, phone, _, phoneID := linkPair(t, ctx)
+	d := &Daemon{cfg: &config.Config{}, devices: map[string]*Device{}, logger: log.New(io.Discard, "", 0)}
+	dev := newDevice(phoneID)
+	dev.Name, dev.Paired, dev.link = "Pixel 8", true, desk
+	dev.Outgoing = []string{proto.TypeSmsMessages}
+	d.devices[dev.ID] = dev
+	return d, dev, packets(phone)
+}
+
+// outboxOf returns the outbox of the device in the state of the daemon.
+func outboxOf(t *testing.T, d *Daemon) []OutboxMessage {
+	t.Helper()
+	var s struct {
+		Devices []struct {
+			Outbox []OutboxMessage `json:"outbox"`
+		} `json:"devices"`
+	}
+	if err := json.Unmarshal(d.Snapshot(), &s); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Devices) != 1 {
+		t.Fatalf("%d devices in the state", len(s.Devices))
+	}
+	if s.Devices[0].Outbox == nil {
+		t.Fatal("the state has no outbox list")
+	}
+	return s.Devices[0].Outbox
+}
+
+// TestSmsOutbox checks that a sent text message stays in the outbox of the
+// device until the phone reports it.
+func TestSmsOutbox(t *testing.T) {
+	d, dev, fromDesk := smsDaemon(t)
+	now := time.Now()
+	d.handleSms(dev, smsPacket(map[string]any{"messages": []any{
+		wireMessage(1, 12, now.Add(-time.Hour).UnixMilli(), 1, 1, addr("+4791234567", "Kari")),
+	}}))
+	if got := outboxOf(t, d); len(got) != 0 {
+		t.Fatalf("outbox before a send: %+v", got)
+	}
+
+	if _, err := d.Call(context.Background(), "sms.send", mustJSON(map[string]any{"device": dev.ID, "addresses": []string{"+4791234567"}, "body": "On my way"})); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case p := <-fromDesk:
+		if p.Type != proto.TypeSmsRequest {
+			t.Fatalf("the phone got %s", p.Type)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the phone got no request")
+	}
+	got := outboxOf(t, d)
+	if len(got) != 1 {
+		t.Fatalf("outbox after a send: %+v", got)
+	}
+	if e := got[0]; e.Thread != 12 || e.Address != "+4791234567" || e.Body != "On my way" || !e.Outgoing || !e.Pending || e.Failed || e.Time < now.Unix() {
+		t.Fatalf("entry %+v", e)
+	}
+
+	// A received message, another text, and an old message with the same
+	// text are not the sent message.
+	d.handleSms(dev, smsPacket(map[string]any{"messages": []any{
+		wireMessage(2, 12, now.UnixMilli(), 1, 0, addr("+4791234567", "Kari")),
+		wireMessage(3, 12, now.UnixMilli(), 2, 1, addr("+4791234567", "Kari")),
+	}}))
+	old := wireMessage(4, 12, now.Add(-(smsClockSlack+10)*time.Second).UnixMilli(), 2, 1, addr("+4791234567", "Kari"))
+	old["body"] = "On my way"
+	d.handleSms(dev, smsPacket(map[string]any{"messages": []any{old}}))
+	if got := outboxOf(t, d); len(got) != 1 {
+		t.Fatalf("a different message removed the entry: %+v", got)
+	}
+
+	// The phone reports the message on its way. The clock of the phone is a
+	// minute behind.
+	sent := wireMessage(5, 12, now.Add(-time.Minute).UnixMilli(), 4, 1, addr("+4791234567", "Kari"))
+	sent["body"] = "On my way"
+	d.handleSms(dev, smsPacket(map[string]any{"threadID": 12, "messages": []any{sent}}))
+	if got := outboxOf(t, d); len(got) != 0 {
+		t.Fatalf("the reported message stays in the outbox: %+v", got)
+	}
+}
+
+// TestSmsOutboxNewNumber checks that a message to a number without a
+// conversation has thread -1, and that the report of the phone matches
+// the number in another format.
+func TestSmsOutboxNewNumber(t *testing.T) {
+	d, dev, _ := smsDaemon(t)
+	if err := d.SendSms(dev, []string{"+47 912 34 567"}, "Hello"); err != nil {
+		t.Fatal(err)
+	}
+	got := outboxOf(t, d)
+	if len(got) != 1 || got[0].Thread != -1 || got[0].Address != "+47 912 34 567" {
+		t.Fatalf("outbox %+v", got)
+	}
+	sent := wireMessage(1, 30, time.Now().UnixMilli(), 2, 1, addr("91234567", ""))
+	sent["body"] = "Hello"
+	d.handleSms(dev, smsPacket(map[string]any{"messages": []any{sent}}))
+	if got := outboxOf(t, d); len(got) != 0 {
+		t.Fatalf("the reported message stays in the outbox: %+v", got)
+	}
+}
+
+// TestSmsOutboxFails checks that an entry that the phone does not report
+// in smsSendWait shows as failed, and that a late report removes it.
+func TestSmsOutboxFails(t *testing.T) {
+	old := smsSendWait
+	smsSendWait = 50 * time.Millisecond
+	t.Cleanup(func() { smsSendWait = old })
+	d, dev, _ := smsDaemon(t)
+	if err := d.SendSms(dev, []string{"+4791234567"}, "Are you there?"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the failed entry", func() bool {
+		return field(d, func() bool { return len(dev.outbox) == 1 && dev.outbox[0].Failed })
+	})
+	if e := outboxOf(t, d)[0]; e.Pending || !e.Failed {
+		t.Fatalf("entry %+v", e)
+	}
+	late := wireMessage(1, 12, time.Now().UnixMilli(), 2, 1, addr("+4791234567", ""))
+	late["body"] = "Are you there?"
+	d.handleSms(dev, smsPacket(map[string]any{"messages": []any{late}}))
+	if got := outboxOf(t, d); len(got) != 0 {
+		t.Fatalf("the late report did not remove the entry: %+v", got)
+	}
+}
+
+// TestSmsOutboxLimits checks that a send that fails leaves no entry, and
+// that the outbox keeps the newest maxOutbox entries.
+func TestSmsOutboxLimits(t *testing.T) {
+	d, dev := approveDaemon()
+	dev.conversations = map[int64]*Conversation{}
+	if err := d.SendSms(dev, []string{"+4791234567"}, "Hi"); errCode(err) != "offline" {
+		t.Fatalf("send without a link: %v", err)
+	}
+	if len(dev.outbox) != 0 {
+		t.Fatalf("a send that failed left an entry: %+v", dev.outbox)
+	}
+	for i := range maxOutbox + 5 {
+		d.addOutbox(dev, "+4791234567", fmt.Sprint(i))
+	}
+	if len(dev.outbox) != maxOutbox || dev.outbox[0].Body != "5" || dev.outbox[maxOutbox-1].Body != fmt.Sprint(maxOutbox+4) {
+		t.Fatalf("%d entries, first %q", len(dev.outbox), dev.outbox[0].Body)
 	}
 }

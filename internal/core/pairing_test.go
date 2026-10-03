@@ -675,6 +675,7 @@ func TestUnpairClosesLink(t *testing.T) {
 	dev.battery = &Battery{Charge: 80}
 	dev.notifications = []*PhoneNotification{{ID: "1"}}
 	dev.conversations = map[int64]*Conversation{1: {}}
+	dev.outbox = []OutboxMessage{{Thread: 1, Body: "On my way", Pending: true}}
 	d.mu.Unlock()
 
 	if err := d.Unpair(dev); err != nil {
@@ -685,7 +686,7 @@ func TestUnpairClosesLink(t *testing.T) {
 	}
 	waitClosed(t, onDesk)
 	d.mu.Lock()
-	left := dev.battery != nil || len(dev.notifications) > 0 || len(dev.conversations) > 0 || dev.Paired
+	left := dev.battery != nil || len(dev.notifications) > 0 || len(dev.conversations) > 0 || len(dev.outbox) > 0 || dev.Paired
 	d.mu.Unlock()
 	if left || pinned(t, d, dev.ID) != nil {
 		t.Fatal("the device keeps its trust or its data after Unpair")

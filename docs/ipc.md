@@ -127,6 +127,7 @@ Each device in `devices` has these fields:
 | `pairKey` | The verification key of an open pairing: 16 uppercase hex digits. The apps show it in 4 groups of 4. |
 | `ip`, `addresses`, `lastSeen` | The address of the last link, the [extra addresses](#extra-addresses), and the Unix time of the last packet. |
 | `battery`, `notifications`, `conversations` | The phone data. A device that is not paired has none. |
+| `outbox` | The text messages that `sms.send` sent through the device and that the device did not report yet. See [the outbox](#outbox). A device that is not paired has an empty list. |
 | `plugins` | The features that the device offers. `streamrequest` means that the device can start its camera and its microphone when this computer asks. |
 | `app` | The Flux program of the device: `android`, `android-debug`, `ios`, `macos`, or `fluxd`. An earlier app sends none. |
 | `appVersion` | The version of that program, such as `0.7.0`. |
@@ -361,6 +362,33 @@ A phone that does not answer in 8 seconds returns the `timeout` error.
 The result means that the request went to the phone.
 The phone reports the sent message, and the conversation changes in a later state event.
 Flux for Android sends a text message to 1 address. More addresses return the `unsupported` error.
+
+### Outbox
+
+fluxd adds each text message that `sms.send` sends to the `outbox` list of the device, the oldest first.
+The window shows the entries in the thread, with **Sending…** or **Not sent** under each one.
+
+```json
+{"thread":12,"address":"+15550100123","body":"On my way","time":1790000000,"outgoing":true,"pending":true,"failed":false}
+```
+
+| Field | Value |
+| --- | --- |
+| `thread` | The thread of the newest conversation with only this address, or `-1` when no conversation has the address. |
+| `address`, `body` | The address and the text of the message. |
+| `time` | The Unix time of the send, from the clock of the computer. |
+| `outgoing` | Always `true`, so that a client can show the entry as a message of `sms.thread`. |
+| `pending`, `failed` | `pending` is `true` while fluxd waits for the phone. After 60 seconds without a report, `pending` changes to `false` and `failed` changes to `true`. |
+
+fluxd removes an entry when the phone reports a sent message with the same text in the same thread.
+For an entry with thread `-1`, the address of the message must match: a phone number matches on its last 8 digits.
+A message from the phone that is more than 120 seconds older than the entry does not count, because the clocks of the 2 devices can differ.
+A late report also removes a failed entry.
+
+fluxd keeps at most 50 entries for each device. A new entry removes the oldest one.
+An unpair removes all entries of the device.
+A device that stops offering its text messages also loses its entries.
+fluxd keeps the outbox only in memory, so a restart of fluxd also removes the entries.
 
 ## Extra addresses
 

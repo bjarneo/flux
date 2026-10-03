@@ -251,7 +251,7 @@ If the switch stays off, open **Settings > Apps > Flux > Permissions** on the ph
 If Android shows **Restricted setting**, open **Settings > Apps > Flux**, open the menu, and select **Allow restricted settings**.
 Then turn on **Text messages** again.
 
-If a sent message shows **Not sent**, the phone could not send it.
+If a sent message shows **Not sent**, the phone could not send it, or the phone did not report it in 60 seconds.
 Check the signal and the SMS app on the phone.
 Flux does not send messages to a group. Reply to a group on the phone.
 

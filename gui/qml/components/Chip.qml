@@ -13,7 +13,7 @@ Rectangle {
   implicitHeight: label.implicitHeight + 12
   color: selected ? Theme.accent : (area.containsMouse && active ? Theme.alpha(Theme.fg, 0.06) : "transparent")
   border.width: selected ? 0 : 1
-  border.color: Theme.bg3
+  border.color: Theme.edge
   opacity: active ? 1 : 0.4
 
   Txt {

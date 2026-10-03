@@ -52,6 +52,18 @@ Item {
     return null
   }
 
+  // The first visible item with item[prop] === value, or null. Each
+  // message of a thread has a hidden "Sending…" line.
+  function findVisibleBy(item, prop, value) {
+    if (!item || !item.visible) return null
+    if (item[prop] === value) return item
+    for (var i = 0; i < item.children.length; i++) {
+      var r = findVisibleBy(item.children[i], prop, value)
+      if (r) return r
+    }
+    return null
+  }
+
   function requestsOf(method) {
     return mock.requests.filter(function (r) { return r.method === method })
   }
@@ -98,6 +110,78 @@ Item {
     function test_nameKey() {
       compare(Fmt.nameKey(" Pixel  8 "), "pixel 8")
       compare(Fmt.nameKey("Pixel\u202E 8\u200B"), "pixel 8")
+    }
+  }
+
+  TestCase {
+    name: "Theme"
+
+    // Stock Omarchy themes with low contrast: 2 light themes and a dark
+    // theme.
+    readonly property var themes: ({
+      "rose-pine": 'background = "#faf4ed"\ndark_background = "#ede7e1"\nselection = "#dfdad9"\nforeground = "#575279"\naccent = "#56949f"\ngreen = "#286983"\nyellow = "#ea9d34"\nred = "#b4637a"\nmagenta = "#907aa9"\n',
+      "catppuccin-latte": 'background = "#eff1f5"\ndark_background = "#e3e4e8"\nselection = "#ccd0da"\nforeground = "#4c4f69"\naccent = "#1e66f5"\ngreen = "#40a02b"\nyellow = "#df8e1d"\nred = "#d20f39"\nmagenta = "#ea76cb"\n',
+      "miasma": 'background = "#222222"\ndark_background = "#191919"\nselection = "#383838"\nforeground = "#c2c2b0"\naccent = "#78824b"\ngreen = "#5f875f"\nyellow = "#b36d43"\nred = "#685742"\nmagenta = "#bb7744"\n'
+    })
+
+    function cleanup() {
+      Theme.load("")
+    }
+
+    function atLeast(name, what, c, against, need) {
+      var r = Theme.contrast(c, against)
+      verify(r >= need, name + ": " + what + " " + c + " on " + against + " is " + r.toFixed(2) + ", needs " + need)
+    }
+
+    // Checks each role pair of the contrast rules in Theme.qml.
+    function checkRules(name) {
+      var T = Theme
+      var i
+      var surfaces = [T.bg, T.bg2]
+      for (i = 0; i < 3; i++) atLeast(name, "fg", T.fg, [T.bg, T.bg2, T.bg3][i], 4.5)
+      atLeast(name, "fg", T.fg, T.dim, 1.4)
+      for (i = 0; i < 2; i++) atLeast(name, "dim", T.dim, surfaces[i], 4.5)
+      atLeast(name, "dim", T.dim, T.bg3, 3)
+      var fills = ["accent", "ok", "warn", "err", "alt"]
+      for (var k = 0; k < fills.length; k++) {
+        var c = T[fills[k]]
+        for (i = 0; i < 2; i++) atLeast(name, fills[k], c, surfaces[i], 4.5)
+        atLeast(name, fills[k], c, T.mix(T.bg2, c, 0.18), 3)
+        atLeast(name, fills[k], c, T.mix(T.bg, c, 0.16), 3)
+      }
+      atLeast(name, "accent", T.accent, T.mix(T.bg2, T.accent, 0.18), 4.5)
+      for (i = 0; i < 2; i++) atLeast(name, "edge", T.edge, surfaces[i], 3)
+    }
+
+    function test_defaultsMeetTheRules() {
+      Theme.load("")
+      checkRules("Tokyo Night")
+      // A color that meets its needs stays as it is.
+      verify(Qt.colorEqual(Theme.accent, "#7aa2f7"))
+      verify(Qt.colorEqual(Theme.ok, "#9ece6a"))
+      verify(Qt.colorEqual(Theme.bg3, "#292e42"))
+    }
+
+    function test_lowContrastThemesMeetTheRules() {
+      for (var name in themes) {
+        Theme.load(themes[name])
+        checkRules(name)
+      }
+    }
+
+    function test_guardKeepsTheSurfacesAndPassingColors() {
+      Theme.load(themes["miasma"])
+      // The surfaces come from the theme without a change.
+      verify(Qt.colorEqual(Theme.bg, "#222222"))
+      verify(Qt.colorEqual(Theme.bg2, "#191919"))
+      verify(Qt.colorEqual(Theme.bg3, "#383838"))
+      // The foreground passes, so it stays.
+      verify(Qt.colorEqual(Theme.fg, "#c2c2b0"))
+      // The red of miasma fails, and the guard makes it lighter.
+      verify(Theme.luminance(Theme.err) > Theme.luminance("#685742"))
+      Theme.load(themes["rose-pine"])
+      // In a light theme, the guard makes a color darker.
+      verify(Theme.luminance(Theme.warn) < Theme.luminance("#ea9d34"))
     }
   }
 
@@ -182,6 +266,55 @@ Item {
       compare(sent.length, 1)
       compare(sent[0].params.device, top.other)
       compare(sent[0].params.addresses, ["+4790011223"])
+    }
+
+    // fluxd keeps the outbox, so a sent message keeps its state when the
+    // user opens another tab and comes back.
+    function test_outboxStaysAfterTabChange() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "messages"
+      tryVerify(function () { return !!page(view) && page(view).loaded })
+      var p = page(view)
+      compare(p.selected.thread, 1)
+      findBy(p, "placeholder", "Text message via Pixel 8").text = "On my way"
+      p.send()
+      var sent = requestsOf("sms.send")
+      compare(sent.length, 1)
+      compare(sent[0].params.addresses, ["+4791234567"])
+      tryVerify(function () { return !!findVisibleBy(p, "text", "Sending…") })
+      compare(p.outbox.length, 1)
+      compare(p.outbox[0].thread, 1)
+
+      // The phone does not report the message, and fluxd marks it as failed.
+      mock.updateDevice(top.pixel, function (d) {
+        d.outbox[0].pending = false
+        d.outbox[0].failed = true
+        return d
+      })
+      view.tab = "notifications"
+      tryVerify(function () { return !!page(view) && page(view) !== p })
+      view.tab = "messages"
+      tryVerify(function () { return !!page(view) && page(view).loaded && page(view).selected.thread === 1 })
+      p = page(view)
+      tryVerify(function () { return !!findVisibleBy(p, "text", "Not sent") })
+      compare(p.shown[p.shown.length - 1].body, "On my way")
+
+      // A state event that changes no entry keeps the list of the page.
+      var before = p.outbox
+      mock.updateDevice(top.pixel, function (d) {
+        d.battery = { charge: 12, charging: false }
+        return d
+      })
+      verify(p.outbox === before)
+
+      // The phone reports the message, and fluxd removes the entry.
+      mock.updateDevice(top.pixel, function (d) {
+        d.outbox = []
+        return d
+      })
+      compare(p.outbox.length, 0)
+      tryVerify(function () { return !findVisibleBy(p, "text", "Not sent") })
     }
 
     function test_sendRefusesThreadOfOtherDevice() {
