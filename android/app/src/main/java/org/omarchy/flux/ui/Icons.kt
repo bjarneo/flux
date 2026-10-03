@@ -123,6 +123,7 @@ object Ic {
     val inbox = R.drawable.ic_inbox
     val devices = R.drawable.ic_devices
     val expand = R.drawable.ic_expand_more
+    val openFull = R.drawable.ic_open_in_full
     val star = R.drawable.ic_star
     val starFill = R.drawable.ic_star_fill
 }

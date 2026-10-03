@@ -254,7 +254,7 @@ def main():
         send("flux.runcommand", {"commandList": json.dumps(commands), "canAddCommand": True})
         send("flux.mpris", {"playerList": ["spotify"], "supportAlbumArtPayload": False})
         # The touchpad screen works. The peer prints the input that it gets.
-        send("flux.input", {"enabled": True, "desktop": desktop})
+        send("flux.input", {"enabled": True, "desktop": desktop, "keyRepeat": True})
         if args.theme:
             send("flux.theme", theme_body(args.theme))
         if args.send_file:

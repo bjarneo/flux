@@ -65,6 +65,8 @@ import org.omarchy.flux.scan.ScanBlock
 import org.omarchy.flux.scan.TextAssembly
 import org.omarchy.flux.scan.TextReader
 import org.omarchy.flux.ui.ButtonKind
+import org.omarchy.flux.ui.FieldEditor
+import org.omarchy.flux.ui.FieldKeys
 import org.omarchy.flux.ui.FluxButton
 import org.omarchy.flux.ui.Ic
 import org.omarchy.flux.ui.Palette
@@ -292,23 +294,41 @@ private fun ResultControls(d: DeviceUi, text: String, onText: (String) -> Unit, 
         field = TextFieldValue(e.text, TextRange(e.cursor))
         onText(e.text)
     }
+    // After Clear, the empty field stays, so that the user can write or dictate the text.
+    var cleared by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(false) }
+    fun change(v: TextFieldValue) {
+        field = v
+        onText(v.text)
+    }
     Column(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (text.isEmpty()) {
+        if (text.isEmpty() && !cleared) {
             T("No text found. Move closer, or add light.", Modifier.fillMaxWidth().padding(vertical = 12.dp), color = Palette.secondary, align = TextAlign.Center)
         } else {
             VoiceField(voice) { m ->
                 OutlinedTextField(
                     value = value,
-                    onValueChange = {
-                        field = it
-                        onText(it.text)
-                    },
+                    onValueChange = ::change,
                     modifier = m.heightIn(min = 120.dp, max = 260.dp),
+                    trailingIcon = {
+                        FieldKeys(text.isNotEmpty(), {
+                            cleared = true
+                            change(TextFieldValue())
+                        }, { editing = true })
+                    },
                     minLines = 4,
                 )
+            }
+        }
+        if (editing) {
+            FieldEditor("Scanned text", value, ::change, onDismiss = { editing = false }, context = d.name) {
+                FluxButton("Send to ${d.name}", {
+                    editing = false
+                    onSend()
+                }, icon = Ic.send, enabled = text.isNotBlank() && d.online)
             }
         }
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(8.dp)) {

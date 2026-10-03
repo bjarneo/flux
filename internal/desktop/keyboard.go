@@ -32,13 +32,17 @@ func (Keyboard) Type(ctx context.Context, text string, mods []string) error {
 		return nil
 	}
 	// wtype reads the text from stdin, so the text is not in the process list.
-	return runWtype(ctx, append(modArgs(mods), "-"), text)
+	return runWtype(ctx, append(modArgs(mods), "-"), text, utf8.RuneCountInString(text))
 }
 
 // Key presses and releases the key with the XKB name, such as "Return",
-// while it holds the modifiers mods. It stops when ctx ends.
-func (Keyboard) Key(ctx context.Context, name string, mods []string) error {
-	return runWtype(ctx, append(modArgs(mods), "-k", name), "")
+// times times, while it holds the modifiers mods. It stops when ctx ends.
+func (Keyboard) Key(ctx context.Context, name string, mods []string, times int) error {
+	args := modArgs(mods)
+	for range max(1, times) {
+		args = append(args, "-k", name)
+	}
+	return runWtype(ctx, args, "", max(1, times))
 }
 
 // modArgs returns the wtype arguments that press mods. wtype releases the
@@ -54,14 +58,16 @@ func modArgs(mods []string) []string {
 }
 
 // wtypeTimeout returns the longest time that wtype can take for a text of
-// n characters. wtype waits about 4 ms for each character. A compositor
+// n characters, or for n key presses. wtype waits about 4 ms for each character. A compositor
 // that does not answer then does not stop the next keys.
 func wtypeTimeout(n int) time.Duration {
 	return 5*time.Second + time.Duration(n)*5*time.Millisecond
 }
 
-func runWtype(ctx context.Context, args []string, stdin string) error {
-	timeout := wtypeTimeout(utf8.RuneCountInString(stdin))
+// runWtype runs wtype with the args and the text on stdin. n is the number
+// of characters or key presses, for the timeout.
+func runWtype(ctx context.Context, args []string, stdin string, n int) error {
+	timeout := wtypeTimeout(n)
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "wtype", args...)

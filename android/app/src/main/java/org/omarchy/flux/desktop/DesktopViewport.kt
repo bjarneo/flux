@@ -60,10 +60,34 @@ data class DesktopViewport(
     /** Moves the view by ([dx], [dy]) view pixels. */
     fun pan(dx: Float, dy: Float): DesktopViewport = copy(offsetX = offsetX + dx, offsetY = offsetY + dy).clamped()
 
-    /** Returns the viewport for a new view or video size, at scale 1. */
-    fun resized(viewWidth: Float, viewHeight: Float, videoWidth: Int, videoHeight: Int): DesktopViewport =
-        if (viewWidth == this.viewWidth && viewHeight == this.viewHeight && videoWidth == this.videoWidth && videoHeight == this.videoHeight) this
-        else DesktopViewport(viewWidth, viewHeight, videoWidth, videoHeight)
+    /**
+     * Returns the viewport for a new view or video size. A new video size,
+     * or a new width and a new height together, as on a rotation, start
+     * again at scale 1. A view that changes only 1 side, for example when
+     * the phone keyboard or a panel opens, keeps the size of the video on
+     * the screen, from scale 1 up. The position [focus] on the video keeps its place in
+     * proportion to the view, so that it stays in view. A focus outside the
+     * view, or no focus, uses the point at the center of the view.
+     */
+    fun resized(viewWidth: Float, viewHeight: Float, videoWidth: Int, videoHeight: Int, focus: Pair<Float, Float>? = null): DesktopViewport {
+        if (viewWidth == this.viewWidth && viewHeight == this.viewHeight && videoWidth == this.videoWidth && videoHeight == this.videoHeight) return this
+        val next = DesktopViewport(viewWidth, viewHeight, videoWidth, videoHeight)
+        val sameVideo = videoWidth == this.videoWidth && videoHeight == this.videoHeight
+        val bothSides = viewWidth != this.viewWidth && viewHeight != this.viewHeight
+        if (!sameVideo || bothSides || this.viewWidth <= 0f || this.viewHeight <= 0f || viewWidth <= 0f || viewHeight <= 0f) return next
+        // The place of a point of the video on the old view, from 0 to 1.
+        fun place(p: Pair<Float, Float>) =
+            ((fitLeft + p.first * fitWidth) * scale + offsetX) / this.viewWidth to ((fitTop + p.second * fitHeight) * scale + offsetY) / this.viewHeight
+        val shown = focus?.takeIf { place(it).let { (x, y) -> x in 0f..1f && y in 0f..1f } }
+        val (u, v) = shown ?: toVideo(this.viewWidth / 2, this.viewHeight / 2, clamp = true)!!
+        val (fx, fy) = place(u to v).let { (x, y) -> x.coerceIn(0f, 1f) to y.coerceIn(0f, 1f) }
+        val s = (pixel / next.fit).coerceIn(1f, MAX_SCALE)
+        return next.copy(
+            scale = s,
+            offsetX = fx * viewWidth - (next.fitLeft + u * next.fitWidth) * s,
+            offsetY = fy * viewHeight - (next.fitTop + v * next.fitHeight) * s,
+        ).clamped()
+    }
 
     /**
      * Keeps the video on the view. A video that is smaller than the view

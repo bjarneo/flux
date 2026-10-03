@@ -175,6 +175,8 @@ private struct AgentReplyControls: View {
     @State private var lockError: String?
     @State private var voiceError: String?
     @State private var dictation = Dictation()
+    /// True while the prompt shows in the large editor.
+    @State private var expanded = false
     @FocusState private var focused: Bool
 
     private var plugin: HerdrPlugin? { model.core.plugin(HerdrPlugin.self) }
@@ -202,13 +204,22 @@ private struct AgentReplyControls: View {
                 PaneKey(label: "enter", name: "Enter", accent: agent.status == .blocked && choices.isEmpty) { keys("enter") }
             }
             HStack(alignment: .bottom, spacing: 6) {
-                TextField("Write to \(agent.agent)", text: $text, axis: .vertical)
-                    .lineLimit(1...4)
-                    .focused($focused)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 11)
-                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color(.separator).opacity(0.5)))
+                HStack(alignment: .bottom, spacing: 0) {
+                    TextField("Write to \(agent.agent)", text: $text, axis: .vertical)
+                        .lineLimit(1...4)
+                        .focused($focused)
+                        .padding(.leading, 12)
+                        .padding(.trailing, 4)
+                        .padding(.vertical, 11)
+                    HStack(spacing: 0) {
+                        ClearKey(text: $text)
+                        ExpandKey(isPresented: $expanded)
+                    }
+                    .padding(.trailing, 2)
+                    .padding(.bottom, 4)
+                }
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color(.separator).opacity(0.5)))
                 if Dictation.available {
                     Button {
                         if dictating { dictation.stop() } else { dictate() }
@@ -254,6 +265,10 @@ private struct AgentReplyControls: View {
                         .accessibilityHint("Types the text into the dialog of \(agent.agent)")
                 }
             }
+        }
+        .sheet(isPresented: $expanded) {
+            FieldEditor(title: "Write to \(agent.agent)", text: $text, actionLabel: "Send",
+                        actionEnabled: !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, onAction: send)
         }
         // A prompt that the computer accepted leaves the field.
         .onChange(of: reply) { _, r in

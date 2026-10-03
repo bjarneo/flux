@@ -252,6 +252,7 @@ private fun FolderPicker(
             placeholder = { T("Search, or type a path such as ~/Code/app", color = Tn.sub, size = 13) },
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Tn.blue, unfocusedBorderColor = Tn.dim),
             leadingIcon = { Sym(Ic.search, tint = Tn.dim, size = 20.dp) },
+            trailingIcon = if (query.isEmpty()) null else { { ClearKey({ onQuery("") }, "Clear the search") } },
             textStyle = TextStyle(color = Tn.text, fontFamily = Mono, fontSize = 14.sp),
             shape = TileShape,
             singleLine = true,
@@ -420,6 +421,8 @@ private fun TerminalControls(d: DeviceUi, pane: String, reply: HerdrReply?) {
     val context = LocalContext.current
     var field by rememberSaveable(d.id, pane, stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue()) }
     var lockError by remember { mutableStateOf<String?>(null) }
+    // True while the large editor of the field shows.
+    var editing by remember { mutableStateOf(false) }
     // Only an input with the text of the field empties the field.
     var sentText by remember { mutableStateOf(false) }
     LaunchedEffect(reply) {
@@ -471,6 +474,7 @@ private fun TerminalControls(d: DeviceUi, pane: String, reply: HerdrReply?) {
                 onValueChange = { field = it },
                 modifier = m,
                 placeholder = { T("Type a command", color = Tn.sub, family = Mono) },
+                trailingIcon = { FieldKeys(field.text.isNotEmpty(), { field = TextFieldValue() }, { editing = true }) },
                 textStyle = TextStyle(color = Tn.text, fontFamily = Mono, fontSize = 14.sp),
                 shape = TileShape,
                 singleLine = true,
@@ -479,6 +483,23 @@ private fun TerminalControls(d: DeviceUi, pane: String, reply: HerdrReply?) {
                 ),
                 keyboardActions = KeyboardActions(onSend = { send() }),
             )
+        }
+        if (editing) {
+            FieldEditor(
+                title = "Type a command",
+                value = field,
+                onValueChange = { field = it },
+                onDismiss = { editing = false },
+                context = d.name,
+                placeholder = "A command for the terminal",
+                mono = true,
+                keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
+            ) {
+                FluxButton("Run", {
+                    editing = false
+                    send()
+                }, icon = Ic.send, busy = sending)
+            }
         }
         val problem = lockError ?: reply?.error
         if (problem != null) T(problem, Modifier.padding(horizontal = 4.dp), size = 12, color = Tn.red)

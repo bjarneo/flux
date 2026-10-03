@@ -295,6 +295,7 @@ private fun ShortcutSheet(all: List<Shortcut>, pins: List<String>, onRun: (Short
                     modifier = m,
                     placeholder = { T("Search, for example workspace or browser", color = Tn.sub) },
                     leadingIcon = { Sym(Ic.search, tint = Tn.sub, size = 20.dp) },
+                    trailingIcon = if (query.isEmpty()) null else { { ClearKey({ query = "" }, "Clear the search") } },
                     singleLine = true,
                     textStyle = TextStyle(color = Tn.text, fontSize = 14.sp),
                     shape = TileShape,

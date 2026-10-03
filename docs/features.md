@@ -463,3 +463,22 @@ Tap the mic key to start, and tap it again to stop.
 To talk only while you hold the key, press and hold it.
 All fields use the same dictation language.
 See [herdr agents](herdr.md#dictate-a-reply) for the panel, the languages, and the model downloads.
+
+## Clear and expand text fields
+
+Each text field of the app shows a clear key while it has text.
+A field for a longer text also has an expand key. It opens a large editor of the same text on the full screen.
+
+| Field | Clear key | Expand key |
+| --- | --- | --- |
+| Reply to a herdr agent | Empties the field | Editor with **Send** |
+| Command of a herdr terminal | Empties the field | Editor with **Run** |
+| Folder search when you start a herdr agent | Empties the search | None |
+| Text field of the touchpad and the remote desktop | Deletes the typed text on the computer | Draft editor with **Type** |
+| Scanned text in the text mode of the camera | Empties the field | Editor with **Send to** the computer |
+| Search of **All shortcuts** in the Omarchy panel | Empties the search | None |
+| Search of the dictation language picker | Empties the search | None |
+
+The editor keeps the text when you close it, and **Clear** empties it.
+On a phone in landscape with the keyboard open, the editor moves its keys to the top row, so that the text keeps the room.
+See [Type on the phone](remote-input.md#type-on-the-phone) for the type field and the draft editor.

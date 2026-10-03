@@ -37,9 +37,13 @@ public struct TextEdit: Equatable, Sendable {
 /// The type field of the phone: what the computer has, and what each
 /// change of the field sends. The keyboard can change the text before the
 /// cursor, so each change goes out as backspaces and new text. The app
-/// leaves out the text that the keyboard still composes at the end.
+/// leaves out the text that the keyboard still composes at the end. The
+/// field keeps all text since the last reset, so that its clear key can
+/// delete that text on the computer.
 public struct TypeBuffer: Sendable {
-    /// A field with more characters than this empties after a word, so that it stays short.
+    /// With `restart`, a field with more characters than this empties after
+    /// a word. A clear or an edit then needs at most about this many
+    /// Backspace packets, for a fluxd that presses 1 key for each packet.
     public static let restartLength = 48
 
     /// The text of the field that the computer has.
@@ -59,13 +63,15 @@ public struct TypeBuffer: Sendable {
 
     /// Handles the new text of the field, without the text that the
     /// keyboard composes. `composing` is true while the keyboard composes.
-    public mutating func change(_ text: String, composing: Bool, modsHeld: Bool) -> Change {
+    /// With `restart`, a long field empties after a word, see
+    /// `restartLength`. Use it for a computer without keyRepeat.
+    public mutating func change(_ text: String, composing: Bool, modsHeld: Bool, restart: Bool = false) -> Change {
         let edit = TextEdit.between(sent, text)
         if modsHeld && !edit.text.isEmpty {
             sent = ""
             return .shortcut(edit.text)
         }
-        if !composing && text.count > Self.restartLength && text.hasSuffix(" ") {
+        if restart && !composing && text.count > Self.restartLength && text.hasSuffix(" ") {
             sent = ""
             return .edit(backspaces: edit.backspaces, text: edit.text, clear: true)
         }
@@ -73,7 +79,23 @@ public struct TypeBuffer: Sendable {
         return .edit(backspaces: edit.backspaces, text: edit.text, clear: false)
     }
 
-    /// Forgets the text, for example after Enter.
+    /// Forgets the text and returns the Backspace presses that delete it
+    /// on the computer: 1 for each code point, as `TextEdit` counts them.
+    public mutating func clear() -> Int {
+        defer { sent = "" }
+        return sent.unicodeScalars.count
+    }
+
+    /// Removes the last character, for the Backspace key of the key rows.
+    /// It returns the Backspace presses that delete it on the computer: 1
+    /// for each code point, as `TextEdit` counts them. It returns 0 when the
+    /// computer has no text from the field.
+    public mutating func dropLast() -> Int {
+        guard let last = sent.popLast() else { return 0 }
+        return last.unicodeScalars.count
+    }
+
+    /// Forgets the text, for example after Enter or a click.
     public mutating func reset() { sent = "" }
 }
 

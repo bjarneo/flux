@@ -520,6 +520,7 @@ struct LanguagePicker: View {
             // and its panel does not open this picker again.
             VoiceBar(language: .constant(""), picker: false, onText: { query = DictationText.query($0) }) {
                 TextField("Search", text: $query)
+                    .fieldKeys(text: $query)
                     .voiceFieldStyle()
             }
             List {

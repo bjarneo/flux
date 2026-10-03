@@ -46,13 +46,64 @@ final class DesktopTouchTests: XCTestCase {
         XCTAssertEqual(fit.pan(dx: 50, dy: 50).offset, .zero, "a fitted video does not move")
     }
 
-    func testResizeStartsAtScaleOne() {
+    func testResizeOfOneSideKeepsTheZoom() {
         let z = fit.zoom(3, focus: .zero)
         XCTAssertEqual(z.resized(view: fit.view, video: fit.video), z, "the same sizes keep the zoom")
-        let r = z.resized(view: CGSize(width: 300, height: 400), video: fit.video)
-        XCTAssertEqual(r.scale, 1)
-        XCTAssertEqual(r.offset, .zero)
+        // A panel at the side takes 100 points of the width.
+        let r = z.resized(view: CGSize(width: 300, height: 300), video: fit.video)
+        XCTAssertEqual(r.pixel, z.pixel, accuracy: 1e-9, "the video keeps its size on the screen")
+        XCTAssertEqual(r.scale, 4, accuracy: 1e-9)
+        XCTAssertEqual(r.toVideo(CGPoint(x: 150, y: 150))?.x ?? -1, 1.0 / 6, accuracy: 1e-9,
+                       "the point at the center keeps its place where the video allows it")
         XCTAssertNil(DesktopViewport(view: .zero, video: fit.video).toVideo(.zero), "no view yet")
+    }
+
+    func testRotationStartsAtScaleOne() {
+        let z = fit.zoom(3, focus: CGPoint(x: 200, y: 150))
+        let r = z.resized(view: CGSize(width: 300, height: 400), video: fit.video, focus: point(0.5, 0.5))
+        XCTAssertEqual(r, DesktopViewport(view: CGSize(width: 300, height: 400), video: fit.video),
+                       "both sides change, so the video fits the view again")
+        XCTAssertEqual(r.scale, 1)
+    }
+
+    func testNewVideoOrFirstViewStartsAtScaleOne() {
+        let z = fit.zoom(3, focus: .zero)
+        let video = z.resized(view: fit.view, video: CGSize(width: 1920, height: 1080))
+        XCTAssertEqual(video.scale, 1)
+        XCTAssertEqual(video.offset, .zero)
+        let first = DesktopViewport(view: .zero, video: fit.video).resized(view: fit.view, video: fit.video)
+        XCTAssertEqual(first, fit)
+        let gone = z.resized(view: .zero, video: fit.video)
+        XCTAssertEqual(gone.scale, 1)
+    }
+
+    func testKeyboardKeepsTheTappedPointInView() {
+        // The keyboard takes the bottom half of the view.
+        let short = CGSize(width: 400, height: 150)
+        let center = fit.resized(view: short, video: fit.video)
+        XCTAssertEqual(center.scale, 1.5, accuracy: 1e-9, "the video keeps its width, so the text keeps its size")
+        XCTAssertEqual(center.pixel, fit.pixel, accuracy: 1e-9)
+        assertPoint(center.toVideo(CGPoint(x: 200, y: 75)), 0.5, 0.5)
+
+        let field = point(0.5, 0.9)
+        let r = fit.resized(view: short, video: fit.video, focus: field)
+        let y = r.videoFrame.minY + field.y * r.videoFrame.height
+        XCTAssertTrue((0...short.height).contains(y), "a field near the bottom stays in view at \(y)")
+        XCTAssertGreaterThan(y, 75, "the field stays in the lower part of the view")
+
+        // The keyboard hides: the view comes back to the first fit.
+        let back = r.resized(view: fit.view, video: fit.video, focus: field)
+        XCTAssertEqual(back.scale, 1, accuracy: 1e-9)
+        XCTAssertEqual(back.videoFrame.minX, fit.fitRect.minX, accuracy: 1e-9)
+        XCTAssertEqual(back.videoFrame.minY, fit.fitRect.minY, accuracy: 1e-9)
+    }
+
+    func testResizeKeepsTheScaleInItsLimits() {
+        let z = fit.zoom(6, focus: CGPoint(x: 200, y: 150))
+        let r = z.resized(view: CGSize(width: 100, height: 300), video: fit.video)
+        XCTAssertEqual(r.scale, DesktopViewport.maxScale, "a smaller view cannot zoom past the limit")
+        let wide = fit.resized(view: CGSize(width: 800, height: 300), video: fit.video)
+        XCTAssertEqual(wide.scale, 1, "a wider view fits the video")
     }
 
     // MARK: Taps

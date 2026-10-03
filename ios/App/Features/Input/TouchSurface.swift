@@ -6,7 +6,8 @@ import UIKit.UIGestureRecognizerSubclass
 /// A view that reports its fingers and takes the keys of a hardware
 /// keyboard, for the touchpad and the remote desktop. Each finger has a
 /// number that grows, so the lowest number is the earliest finger. A touch
-/// makes the view the first responder, so that the keys go to it.
+/// makes the view the first responder, so that the keys go to it, unless
+/// `keepsFocus` says that a text field keeps the keyboard.
 final class TouchSurfaceView: UIView {
     /// Gets the fingers on the view after each touch event, by number. No
     /// fingers means that the last one lifted.
@@ -18,6 +19,10 @@ final class TouchSurfaceView: UIView {
     var onKey: ((UIKey) -> Bool)?
     /// Gets the new size of the view.
     var onSize: ((CGSize) -> Void)?
+    /// True when a text field keeps the keyboard. On the remote desktop, a
+    /// touch then keeps the keyboard of the iPhone, so that the user can
+    /// click a field on the computer and type at once.
+    var keepsFocus: (() -> Bool)?
 
     private var numbers: [ObjectIdentifier: Int] = [:]
     private var points: [Int: CGPoint] = [:]
@@ -40,7 +45,7 @@ final class TouchSurfaceView: UIView {
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        if !isFirstResponder { becomeFirstResponder() }
+        if !isFirstResponder && keepsFocus?() != true { becomeFirstResponder() }
         for t in touches {
             let n = nextNumber
             nextNumber += 1

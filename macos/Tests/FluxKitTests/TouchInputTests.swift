@@ -51,15 +51,50 @@ final class TouchInputTests: XCTestCase {
                        "a backspace with a held modifier is no shortcut")
     }
 
-    func testTypeBufferStartsAgainAfterALongLine() {
+    func testTypeBufferStartsAgainAfterALongLineOnlyWithRestart() {
         var b = TypeBuffer()
         let long = String(repeating: "word ", count: 9)
         XCTAssertEqual(long.count, 45)
-        _ = b.change(long, composing: false, modsHeld: false)
-        XCTAssertEqual(b.change(long + "abcd", composing: false, modsHeld: false), .edit(backspaces: 0, text: "abcd", clear: false))
-        XCTAssertEqual(b.change(long + "abcd ", composing: true, modsHeld: false), .edit(backspaces: 0, text: " ", clear: false),
+        _ = b.change(long, composing: false, modsHeld: false, restart: true)
+        XCTAssertEqual(b.change(long + "abcd", composing: false, modsHeld: false, restart: true), .edit(backspaces: 0, text: "abcd", clear: false))
+        XCTAssertEqual(b.change(long + "abcd ", composing: true, modsHeld: false, restart: true), .edit(backspaces: 0, text: " ", clear: false),
                        "the field keeps its text while the keyboard composes")
-        XCTAssertEqual(b.change(long + "abcd ", composing: false, modsHeld: false), .edit(backspaces: 0, text: "", clear: true))
+        XCTAssertEqual(b.change(long + "abcd ", composing: false, modsHeld: false, restart: true), .edit(backspaces: 0, text: "", clear: true),
+                       "a fluxd without keyRepeat gets at most about 50 Backspace packets")
+        XCTAssertEqual(b.sent, "")
+        XCTAssertEqual(b.clear(), 0)
+    }
+
+    func testTypeBufferKeepsALongLine() {
+        var b = TypeBuffer()
+        let long = String(repeating: "word ", count: 30)
+        XCTAssertEqual(b.change(long, composing: false, modsHeld: false), .edit(backspaces: 0, text: long, clear: false))
+        XCTAssertEqual(b.change(long + "abcd ", composing: false, modsHeld: false), .edit(backspaces: 0, text: "abcd ", clear: false))
+        XCTAssertEqual(b.sent, long + "abcd ", "the field keeps its text, so that the clear key can delete it")
+    }
+
+    func testTypeBufferClearDeletesTheSentText() {
+        var b = TypeBuffer()
+        XCTAssertEqual(b.clear(), 0)
+        _ = b.change("hi 👍🏽", composing: false, modsHeld: false)
+        XCTAssertEqual(b.clear(), 5, "1 Backspace for each code point, as TextEdit counts them")
+        XCTAssertEqual(b.sent, "")
+        XCTAssertEqual(b.change("a", composing: false, modsHeld: false), .edit(backspaces: 0, text: "a", clear: false))
+    }
+
+    func testTypeBufferDropsTheLastCharacter() {
+        var b = TypeBuffer()
+        XCTAssertEqual(b.dropLast(), 0, "no text: the Backspace key goes to the computer as it is")
+        _ = b.change("a👍🏽bc", composing: false, modsHeld: false)
+        XCTAssertEqual(b.dropLast(), 1)
+        XCTAssertEqual(b.dropLast(), 1)
+        XCTAssertEqual(b.dropLast(), 2, "1 Backspace for each code point, as TextEdit counts them")
+        XCTAssertEqual(b.sent, "a")
+        _ = b.change("abc", composing: false, modsHeld: false)
+        XCTAssertEqual(b.dropLast(), 1)
+        XCTAssertEqual(b.sent, "ab")
+        XCTAssertEqual(b.change("ab", composing: false, modsHeld: false), .edit(backspaces: 0, text: "", clear: false), "the field follows with no new key")
+        b.reset()
         XCTAssertEqual(b.sent, "")
     }
 

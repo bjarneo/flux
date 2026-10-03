@@ -63,9 +63,31 @@ public struct DesktopViewport: Equatable, Sendable {
         return v.clamped()
     }
 
-    /// The viewport for a new view or video size, at scale 1. The same sizes keep the zoom.
-    public func resized(view: CGSize, video: CGSize) -> DesktopViewport {
-        view == self.view && video == self.video ? self : DesktopViewport(view: view, video: video)
+    /// The viewport for a new view or video size. The same sizes keep the
+    /// zoom. When 1 side of the view changes, for example when the keyboard
+    /// or a panel shows, the video keeps its size on the screen, so that the
+    /// text stays readable. The video point `focus` then keeps its place as
+    /// a part of the view, so that a tapped field stays in view. Without
+    /// `focus`, the point at the center of the view keeps its place. A new
+    /// video, a first view, or a view with 2 new sides, as after a
+    /// rotation, starts at scale 1.
+    public func resized(view: CGSize, video: CGSize, focus: DesktopPoint? = nil) -> DesktopViewport {
+        if view == self.view && video == self.video { return self }
+        var next = DesktopViewport(view: view, video: video)
+        let fitScale = DesktopGeometry(view: view, video: video).scale
+        let oneSide = (view.width == self.view.width) != (view.height == self.view.height)
+        guard video == self.video, oneSide, self.view.width > 0, self.view.height > 0, pixel > 0, fitScale > 0 else { return next }
+        next.scale = min(max(pixel / fitScale, 1), Self.maxScale)
+        let center = CGPoint(x: self.view.width / 2, y: self.view.height / 2)
+        guard let at = focus ?? toVideo(center, clamp: true) else { return next }
+        // The part of the old view where the focus shows.
+        let old = videoFrame
+        let partX = min(max((old.minX + at.x * old.width) / self.view.width, 0), 1)
+        let partY = min(max((old.minY + at.y * old.height) / self.view.height, 0), 1)
+        let f = next.fitRect
+        next.offset = CGPoint(x: partX * view.width - (f.minX + at.x * f.width) * next.scale,
+                              y: partY * view.height - (f.minY + at.y * f.height) * next.scale)
+        return next.clamped()
     }
 
     /// Keeps the video on the view. A video that is smaller than the view

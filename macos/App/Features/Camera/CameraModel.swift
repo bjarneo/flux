@@ -142,6 +142,8 @@ final class TextScan {
 
     private(set) var phase = Phase.live
     var text = ""
+    /// True when the scan found text. The editor stays after the user clears the text.
+    private(set) var found = false
     @ObservationIgnored private let camera: CameraController
     @ObservationIgnored private let output: CameraOutput
 
@@ -175,12 +177,14 @@ final class TextScan {
                 text = ""
                 output.say("Cannot read the image")
             }
+            found = !text.isEmpty
             phase = .result(image)
         }
     }
 
     func retake() {
         text = ""
+        found = false
         phase = .live
     }
 

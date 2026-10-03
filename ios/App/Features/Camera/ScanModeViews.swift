@@ -39,7 +39,7 @@ struct TextModeView: View {
 
     private var result: some View {
         VStack(spacing: 12) {
-            if scan.text.isEmpty {
+            if !scan.found {
                 Text("No text found. Move closer or add light.")
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
@@ -53,6 +53,10 @@ struct TextModeView: View {
                 }
             }
             HStack {
+                if scan.found {
+                    Button("Clear", systemImage: "xmark.circle", role: .destructive) { scan.text = "" }
+                        .disabled(scan.text.isEmpty)
+                }
                 Spacer()
                 Button("Retake", systemImage: "arrow.counterclockwise", action: scan.retake)
                 if !scan.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

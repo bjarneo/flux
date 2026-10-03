@@ -179,7 +179,7 @@ private struct DesktopKeys: View {
                     picking = true
                 },
                 field: {
-                    TypeField(target: controller, placeholder: "Type on \(controller.name)")
+                    RemoteTypeField(target: controller)
                 },
                 send: {
                     Button { controller.key(.enter) } label: {

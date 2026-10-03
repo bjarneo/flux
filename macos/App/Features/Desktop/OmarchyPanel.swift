@@ -276,6 +276,7 @@ private struct AllShortcuts: View {
             Text("All Shortcuts · \(shortcuts.count)").font(.headline)
             VoiceBar(language: $language, onText: { query = DictationText.query($0) }) {
                 TextField("Search, for example workspace or browser", text: $query)
+                    .fieldKeys(text: $query)
                     .voiceFieldStyle()
             }
             List(found) { s in

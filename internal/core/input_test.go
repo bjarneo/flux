@@ -41,7 +41,10 @@ func (f *fakeInput) Scroll(dx, dy float64) error { return f.add("scroll %g %g", 
 func (f *fakeInput) Type(_ context.Context, text string, mods []string) error {
 	return f.add("type %q %s", text, strings.Join(mods, "+"))
 }
-func (f *fakeInput) Key(_ context.Context, name string, mods []string) error {
+func (f *fakeInput) Key(_ context.Context, name string, mods []string, times int) error {
+	if times > 1 {
+		return f.add("key %s %s x%d", name, strings.Join(mods, "+"), times)
+	}
 	return f.add("key %s %s", name, strings.Join(mods, "+"))
 }
 func (f *fakeInput) MoveTo(monitor string, x, y float64) error {
@@ -88,6 +91,11 @@ func TestInputActions(t *testing.T) {
 		{`{"specialKey":12}`, []inputAction{{kind: "key", text: "Return"}}},
 		{`{"specialKey":2,"shift":true,"ctrl":true}`, []inputAction{{kind: "key", text: "Tab", mods: []string{"ctrl", "shift"}}}},
 		{`{"specialKey":99}`, nil},
+		{`{"specialKey":1,"repeat":40}`, []inputAction{{kind: "key", text: "BackSpace", count: 40}}},
+		{`{"specialKey":1,"repeat":1}`, []inputAction{{kind: "key", text: "BackSpace"}}},
+		{`{"specialKey":1,"repeat":-5}`, []inputAction{{kind: "key", text: "BackSpace"}}},
+		{`{"specialKey":1,"repeat":100000,"ctrl":true}`, []inputAction{{kind: "key", text: "BackSpace", mods: []string{"ctrl"}, count: maxKeyRepeat}}},
+		{`{"key":"a","repeat":3}`, []inputAction{{kind: "type", text: "a"}}},
 		{`{"key":"c","ctrl":true}`, []inputAction{{kind: "type", text: "c", mods: []string{"ctrl"}}}},
 		{`{"key":" ","super":true}`, []inputAction{{kind: "type", text: " ", mods: []string{"logo"}}}},
 		{`{"key":"hei\u0000 på\ndeg"}`, []inputAction{{kind: "type", text: "hei pådeg"}}},
@@ -162,9 +170,31 @@ func TestHandleMousepad(t *testing.T) {
 	d.handleMousepad(dev, mousepad(`{"singleclick":true}`))
 	d.handleMousepad(dev, mousepad(`{"key":"ls"}`))
 	d.handleMousepad(dev, mousepad(`{"specialKey":12}`))
-	want := []string{"move 4 2", "button 0x110 true", "button 0x110 false", `type "ls" `, "key Return "}
+	d.handleMousepad(dev, mousepad(`{"specialKey":1,"repeat":3}`))
+	want := []string{"move 4 2", "button 0x110 true", "button 0x110 false", `type "ls" `, "key Return ", "key BackSpace  x3"}
 	if got := in.wait(t, len(want)); !reflect.DeepEqual(got, want) {
 		t.Fatalf("calls %q, want %q", got, want)
+	}
+}
+
+// The presses of a repeated key count toward the limit of the queue, as
+// characters of text do.
+func TestInputQueueLimitsRepeatedKeys(t *testing.T) {
+	d := &Daemon{
+		cfg:    &config.Config{RemoteInput: true},
+		input:  &fakeInput{},
+		inputQ: make(chan inputAction, inputQueue),
+		logger: log.New(io.Discard, "", 0),
+	}
+	dev := inputDevice("phone", "Pixel 8")
+	for range maxInputBacklog/maxKeyRepeat + 2 {
+		d.handleMousepad(dev, mousepad(`{"specialKey":1,"repeat":4096}`))
+	}
+	if n := len(d.inputQ); n != maxInputBacklog/maxKeyRepeat {
+		t.Fatalf("the queue holds %d actions", n)
+	}
+	if d.sessions.inputText != maxInputBacklog {
+		t.Fatalf("the queue counts %d presses", d.sessions.inputText)
 	}
 }
 

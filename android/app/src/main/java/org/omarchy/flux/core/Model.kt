@@ -89,6 +89,8 @@ data class DeviceUi(
     val inputSupported: Boolean = false,
     /** True when remote input is on at the computer, or null before it tells. */
     val remoteInput: Boolean? = null,
+    /** True when the computer reads repeat with a special key, see RemoteInput.keys. */
+    val keyRepeat: Boolean = false,
     /** True when the computer can stream its screen to this phone. */
     val desktopSupported: Boolean = false,
     /** True when the remote desktop is on at the computer, or null before it tells. */

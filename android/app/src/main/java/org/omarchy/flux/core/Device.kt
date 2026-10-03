@@ -70,6 +70,9 @@ class Device(private val core: FluxCore, var identity: Identity) {
     /** True when the computer accepts remote input, or null before it tells. */
     var remoteInput: Boolean? = null
 
+    /** True when the computer reads repeat with a special key. */
+    var keyRepeat = false
+
     /** True when the computer shows its screen on this phone, or null before it tells. */
     var remoteDesktop: Boolean? = null
 
@@ -128,6 +131,7 @@ class Device(private val core: FluxCore, var identity: Identity) {
         herdrAction = herdrAction,
         inputSupported = Types.MOUSEPAD_REQUEST in identity.incoming,
         remoteInput = remoteInput,
+        keyRepeat = keyRepeat,
         desktopSupported = Types.FLUX_DESKTOP in identity.incoming,
         remoteDesktop = remoteDesktop,
         shortcutsSupported = Types.FLUX_SHORTCUTS in identity.incoming,

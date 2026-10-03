@@ -116,7 +116,7 @@ The output screen then shows the reply controls:
 
 - When the agent is blocked, the phone shows the numbered choices of the dialog as buttons. A tap sends the number of the choice.
 - The key bar sends Esc, Tab, Up, Down, and Enter.
-- The text field sends a prompt to the agent.
+- The text field sends a prompt to the agent. The clear key empties the field. The expand key opens a large editor with **Send** for a long prompt.
 - When the agent waits for a choice, `fluxd` refuses the text with the message `The agent waits for a choice. Pick a choice first.` A digit or Enter in the text can select a choice of the dialog, for example an approval. Pick a choice with the buttons or the key bar first.
 - After this refusal, the message shows **Send as answer** next to it while the field holds the same text. Select it when the agent asks a question that needs free text, for example an answer that is not in the choices. The app sends the same text again with `"answer": true`. `fluxd` checks that the agent still waits, types the text on one line, and presses Enter. The iPhone and the Mac show the same action.
 
@@ -190,6 +190,7 @@ The phone can read and type in each of them.
 Select a terminal to see its output and to type in it:
 
 - Type a command in the field, then select **Run**. The phone types the command and presses Enter.
+- The clear key empties the field. The expand key opens a large editor with **Run** for a long command.
 - To speak a command, select the mic key next to **Run**. The command goes in at the cursor without the capital and the period of a sentence. Read it, then select **Run**.
 - The key bar sends Esc, Tab, Ctrl-C, Ctrl-D, Up, Down, and Enter.
 - The screen reads the output again every 3 seconds. A read waits while the last read still loads.

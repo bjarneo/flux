@@ -62,13 +62,95 @@ final class RemoteKeysTests: XCTestCase {
         XCTAssertEqual(sent.count, count)
     }
 
-    func testBackspaces() {
+    private var backspace: Int { RemoteInput.Key.backspace.rawValue }
+
+    func testFieldEditsAndClearSendBackspaces() {
         let k = keys()
-        k.backspaces(3)
-        XCTAssertEqual(sent.count, 3)
-        XCTAssertTrue(sent.allSatisfy { $0.int("specialKey") == RemoteInput.Key.backspace.rawValue })
-        k.backspaces(0)
-        XCTAssertEqual(sent.count, 3)
+        XCTAssertFalse(k.fieldChanged(shown: "abc", stable: "abc", composing: false))
+        XCTAssertEqual(sent.last?.string("key"), "abc")
+        XCTAssertEqual(k.fieldText, "abc")
+        sent = []
+        XCTAssertFalse(k.fieldChanged(shown: "ab", stable: "ab", composing: false))
+        XCTAssertEqual(sent.count, 1)
+        XCTAssertEqual(sent.last?.int("specialKey"), backspace)
+        sent = []
+        k.clearTyped()
+        XCTAssertEqual(sent.count, 2, "a fluxd without keyRepeat gets 1 packet for each Backspace")
+        XCTAssertTrue(sent.allSatisfy { $0.int("specialKey") == backspace && !$0.has("repeat") })
+        XCTAssertEqual(k.fieldText, "")
+        sent = []
+        k.clearTyped()
+        XCTAssertTrue(sent.isEmpty, "an empty field deletes nothing")
+    }
+
+    func testClearUsesRepeatWhenTheComputerCan() {
+        sent = []
+        let k = RemoteKeys(workspaceKeys: true, send: { [unowned self] in self.sent.append($0) }, canRepeat: { true })
+        _ = k.fieldChanged(shown: "hello", stable: "hello", composing: false)
+        sent = []
+        k.clearTyped()
+        XCTAssertEqual(sent.count, 1)
+        XCTAssertEqual(sent.first?.int("specialKey"), backspace)
+        XCTAssertEqual(sent.first?.int("repeat"), 5)
+    }
+
+    func testBackspaceKeyDeletesTheLastCharacterOfTheField() {
+        let k = keys()
+        _ = k.fieldChanged(shown: "a👍🏽", stable: "a👍🏽", composing: false)
+        sent = []
+        k.key(.backspace)
+        XCTAssertEqual(sent.count, 2, "1 Backspace for each code point of the character")
+        XCTAssertEqual(k.fieldText, "a")
+        sent = []
+        k.key(.backspace)
+        k.key(.backspace)
+        XCTAssertEqual(sent.count, 2, "an empty field sends the key as it is")
+        XCTAssertEqual(k.fieldText, "")
+    }
+
+    func testOtherInputEndsTheField() {
+        let k = keys()
+        _ = k.fieldChanged(shown: "abc", stable: "abc", composing: false)
+        k.key(.left)
+        XCTAssertEqual(k.fieldText, "", "an arrow moves the cursor of the computer")
+        sent = []
+        k.clearTyped()
+        XCTAssertTrue(sent.isEmpty, "the computer keeps the text")
+        _ = k.fieldChanged(shown: "abc", stable: "abc", composing: false)
+        k.endTyping()
+        sent = []
+        k.clearTyped()
+        XCTAssertTrue(sent.isEmpty)
+    }
+
+    func testOldComputerStartsTheFieldAgainAfterAWord() {
+        let k = keys()
+        let long = String(repeating: "word ", count: 10)
+        XCTAssertTrue(k.fieldChanged(shown: long, stable: long, composing: false), "the field empties after a word")
+        XCTAssertEqual(k.fieldText, "")
+        sent = []
+        k.clearTyped()
+        XCTAssertTrue(sent.isEmpty, "a clear never needs more than about 50 Backspace packets")
+        let new = RemoteKeys(workspaceKeys: true, send: { _ in }, canRepeat: { true })
+        XCTAssertFalse(new.fieldChanged(shown: long, stable: long, composing: false), "a fluxd with keyRepeat keeps the text")
+    }
+
+    func testDraftTypesLinesAndEmpties() {
+        let k = keys()
+        _ = k.fieldChanged(shown: "x", stable: "x", composing: false)
+        k.mods.ctrl = true
+        k.draft = "Hi\nthere"
+        sent = []
+        k.typeDraft()
+        XCTAssertEqual(sent.map { $0.string("key") }, ["Hi", nil, "there"])
+        XCTAssertEqual(sent[1].bool("shift"), true)
+        XCTAssertNil(sent[0].bool("ctrl"), "the sticky modifiers turn off")
+        XCTAssertEqual(k.draft, "")
+        XCTAssertEqual(k.fieldText, "")
+        sent = []
+        k.draft = "  \n "
+        k.typeDraft()
+        XCTAssertTrue(sent.isEmpty, "a blank draft types nothing")
     }
 }
 

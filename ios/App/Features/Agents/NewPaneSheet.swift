@@ -32,6 +32,8 @@ struct NewPaneSheet: View {
     @State private var query = ""
     @State private var newWorkspace = false
     @State private var task = ""
+    /// True while the task shows in the large editor.
+    @State private var expandedTask = false
     @State private var lockError: String?
     /// Only a create from this sheet counts. Its number is higher than the
     /// last action at the tap.
@@ -112,12 +114,25 @@ struct NewPaneSheet: View {
                 if run != nil && run != NewPane.shellChoice {
                     SheetLabel("Task").padding(.top, 8)
                     VoiceField(enabled: !busy, onText: { task = DictationText.append(task, $0) }) {
-                        TextField("Optional. Sent when the agent is ready.", text: $task, axis: .vertical)
-                            .lineLimit(2...6)
-                            .padding(12)
-                            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
-                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color(.separator).opacity(0.5)))
-                            .disabled(busy)
+                        HStack(alignment: .bottom, spacing: 0) {
+                            TextField("Optional. Sent when the agent is ready.", text: $task, axis: .vertical)
+                                .lineLimit(2...6)
+                                .padding(.leading, 12)
+                                .padding(.trailing, 4)
+                                .padding(.vertical, 12)
+                            HStack(spacing: 0) {
+                                ClearKey(text: $task)
+                                ExpandKey(isPresented: $expandedTask)
+                            }
+                            .padding(.trailing, 2)
+                            .padding(.bottom, 4)
+                        }
+                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color(.separator).opacity(0.5)))
+                        .disabled(busy)
+                        .sheet(isPresented: $expandedTask) {
+                            FieldEditor(title: "Task", text: $task)
+                        }
                     }
                     if task.utf8.count > HerdrWire.maxPrompt {
                         Text("The task is too long. The limit is 16 KB.").font(.caption).foregroundStyle(.red)

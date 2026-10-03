@@ -30,6 +30,8 @@ final class DesktopController: RemoteKeyTarget {
     /// The panel that shows, or nil.
     var panel: Panel?
     var mods = RemoteInput.Mods()
+    var fieldText = ""
+    var draft = ""
     var optionIsAlt: Bool {
         didSet { defaults.set(optionIsAlt, forKey: optionIsAltKey) }
     }

@@ -117,6 +117,11 @@ The `faillock` setting of PAM on the computer limits them, as for the keyboard o
 The pointer of the computer goes to the position of each touch.
 The stream shows the pointer.
 
+When the keys or the phone keyboard open, the video keeps its size on the phone.
+The point of your last tap stays in view, for example the text field that you tapped.
+Pinch to see more of the screen.
+A rotation of the phone shows the full screen again.
+
 ## Move around Omarchy
 
 Select the grid button to show the Omarchy panel.
@@ -150,6 +155,16 @@ Unlock the computer on the remote desktop, then open the panel again.
 Select the keyboard button to show the keys.
 The keys and the text field work as on the [touchpad](remote-input.md#type-on-the-phone).
 In landscape, the keys show at the right of the video.
+While the phone keyboard is open, the keys scroll, and the text field shows at their bottom.
+
+To type in a field of the computer, follow these steps:
+
+1. Tap the field on the video.
+2. Tap the text field of the keys and type. The computer types each word.
+3. To delete what you typed, select the clear key of the text field.
+
+A tap on the video starts the text field again, so that the clear key deletes only the text of the field that you tapped last.
+To write and correct a longer text before the computer gets it, select the expand key of the text field.
 
 To use a Super shortcut, select **super**, then type the key in the text field.
 For example, select **super**, then type `w` to close the window.
@@ -294,7 +309,7 @@ It moves the pointer through a `zwlr_virtual_pointer_v1` pointer for the monitor
 `fluxd` ignores a position when the phone shows no remote desktop.
 See the [wire format of remote input](remote-input.md#how-it-works).
 
-`fluxd` sends `flux.input` with `{"enabled": bool, "desktop": bool}` after the link starts and after a setting changes.
+`fluxd` sends `flux.input` with `{"enabled": bool, "desktop": bool, "keyRepeat": true}` after the link starts and after a setting changes.
 The phone uses `desktop` to show the **Remote desktop** tile as on or off.
 
 ### Omarchy panel

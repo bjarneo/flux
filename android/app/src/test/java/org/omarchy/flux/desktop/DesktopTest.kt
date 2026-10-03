@@ -152,9 +152,43 @@ class DesktopTest {
     }
 
     @Test
-    fun resizeStartsAtScaleOne() {
+    fun aNewVideoStartsAtScaleOne() {
         val v = DesktopViewport(1000f, 625f, 1920, 1200).zoom(3f, 10f, 10f)
         assertTrue(v.resized(1000f, 625f, 1920, 1200) === v)
+        assertEquals(1f, v.resized(1000f, 625f, 2560, 1440).scale, 0.001f)
+        assertEquals(1f, DesktopViewport(0f, 0f, 1920, 1200).resized(1000f, 625f, 1920, 1200).scale, 0.001f)
+    }
+
+    @Test
+    fun theKeyboardKeepsTheTappedPointInView() {
+        val v = DesktopViewport(1000f, 625f, 1920, 1200)
+        // The keyboard takes the lower half: the video keeps its size.
+        val small = v.resized(1000f, 300f, 1920, 1200, focus = 0.5f to 0.9f)
+        assertEquals(v.pixel, small.pixel, 0.001f)
+        val (x, y) = small.toVideo(500f, 270f)!!
+        assertEquals(0.5f, x, 0.001f)
+        assertEquals(0.9f, y, 0.001f)
+        // Without a focus, the center stays in the center.
+        val centered = v.resized(1000f, 300f, 1920, 1200)
+        assertEquals(0.5f, centered.toVideo(500f, 150f)!!.second, 0.001f)
+        // A focus out of view uses the center.
+        val zoomed = v.zoom(2f, 500f, 312.5f)
+        val center = zoomed.toVideo(500f, 312.5f)!!
+        val moved = zoomed.resized(1000f, 300f, 1920, 1200, focus = 0.9f to 0.9f).toVideo(500f, 150f)!!
+        assertEquals(center.first, moved.first, 0.001f)
+        assertEquals(center.second, moved.second, 0.001f)
+        // The keyboard closes: the view is as before.
+        assertEquals(1f, small.resized(1000f, 625f, 1920, 1200).scale, 0.001f)
+    }
+
+    @Test
+    fun aResizeKeepsTheZoom() {
+        val v = DesktopViewport(1000f, 625f, 1920, 1200).zoom(3f, 500f, 300f)
+        val wide = v.resized(800f, 625f, 1920, 1200)
+        assertEquals(v.pixel, wide.pixel, 0.001f)
+        // A larger view does not go under scale 1.
+        assertEquals(1f, DesktopViewport(1000f, 300f, 1920, 1200).resized(1000f, 1250f, 1920, 1200).scale, 0.001f)
+        // A rotation changes both sides and starts again at scale 1.
         assertEquals(1f, v.resized(625f, 1000f, 1920, 1200).scale, 0.001f)
     }
 }

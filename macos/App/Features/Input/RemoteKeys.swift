@@ -20,6 +20,10 @@ protocol RemoteKeyTarget: AnyObject {
     var mods: RemoteInput.Mods { get set }
     /// The name of the computer, for the labels.
     var name: String { get }
+    /// The text that waits in the type field: the rest after the last word that went out.
+    var fieldText: String { get set }
+    /// The text of the draft editor. It stays after the editor closes.
+    var draft: String { get set }
     func send(_ packets: [Packet])
 }
 
@@ -61,6 +65,19 @@ extension RemoteKeyTarget {
     func fieldReturn(_ value: String) {
         text(value)
         key(.enter)
+    }
+
+    /// True when the draft has text to type.
+    var canTypeDraft: Bool { keysReady && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    /// Types the draft on the computer: each line as text, and Shift+Enter
+    /// between the lines. The sticky modifiers clear, and the draft empties.
+    func typeDraft() {
+        guard canTypeDraft else { return }
+        let packets = RemoteInput.draft(draft)
+        mods = .init()
+        draft = ""
+        send(packets)
     }
 
     private func takeMods() -> RemoteInput.Mods {
@@ -174,6 +191,37 @@ class RemoteKeyView: NSView, NSTextInputClient {
 
     private static func plain(_ string: Any) -> String {
         (string as? NSAttributedString)?.string ?? (string as? String) ?? ""
+    }
+}
+
+/// The type field of the touchpad and the remote desktop, with the clear
+/// key and the expand key. The clear key empties the field. Only the text
+/// after the last word is in the field, so no keys go to the computer. The
+/// expand key opens the draft editor: the text goes to the computer only at
+/// Type, so the spelling of this Mac can correct it first.
+struct RemoteTypeField: View {
+    let target: any RemoteKeyTarget
+    @State private var drafting = false
+
+    var body: some View {
+        // The body reads the text, so that the field updates when the clear key empties it.
+        let _ = target.fieldText
+        let text = Binding(get: { target.fieldText }, set: { target.fieldText = $0 })
+        TypeField(target: target, placeholder: "Type on \(target.name)", text: text)
+            .frame(maxWidth: .infinity)
+            .fieldKeys(text: text, expandHelp: "Write a longer text, then type it on \(target.name)") { drafting = true }
+            .voiceFieldStyle()
+            .sheet(isPresented: $drafting) {
+                FieldEditor(
+                    title: "Type on \(target.name)",
+                    text: Binding(get: { target.draft }, set: { target.draft = $0 }),
+                    hint: "Each line break goes as Shift+Enter. A draft holds at most \(RemoteInput.maxDraftLines) lines.",
+                    limit: RemoteInput.maxDraft,
+                    lineLimit: RemoteInput.maxDraftLines,
+                    doneTitle: "Close",
+                    action: FieldEditorAction(title: "Type", enabled: { target.canTypeDraft }) { target.typeDraft() }
+                ) { drafting = false }
+            }
     }
 }
 

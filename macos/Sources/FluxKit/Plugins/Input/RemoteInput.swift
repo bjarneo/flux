@@ -88,6 +88,92 @@ public enum RemoteInput {
         Packet(PacketType.mousepadRequest, mods.fields.merging(["specialKey": k.rawValue]) { $1 })
     }
 
+    /// The most presses that 1 packet with `repeat` asks for. fluxd uses the same limit.
+    public static let maxRepeat = 4096
+
+    /// The packets that press `k` `count` times. With `repeat`, 1 packet
+    /// asks fluxd to press the key up to `maxRepeat` times. Send `repeat`
+    /// only to a computer whose flux.input has keyRepeat, see
+    /// `RemoteInputModel.canRepeat(_:)`. An older fluxd presses the key 1
+    /// time for each packet.
+    public static func keys(_ k: Key, count: Int, mods: Mods = Mods(), repeat repeats: Bool) -> [Packet] {
+        guard count > 0 else { return [] }
+        guard repeats else { return Array(repeating: key(k, mods: mods), count: count) }
+        var out: [Packet] = []
+        var left = count
+        while left > 0 {
+            let n = min(left, maxRepeat)
+            var body = mods.fields.merging(["specialKey": k.rawValue]) { $1 }
+            if n > 1 { body["repeat"] = n }
+            out.append(Packet(PacketType.mousepadRequest, body))
+            left -= n
+        }
+        return out
+    }
+
+    // MARK: Draft
+
+    /// The longest draft, in characters. wtype types about 250 characters
+    /// each second, so a full draft takes about 16 seconds.
+    public static let maxDraft = 4000
+
+    /// The most lines of a draft. Each line break is 1 packet, and the
+    /// queue of fluxd drops packets when it holds 256 actions.
+    public static let maxDraftLines = 100
+
+    /// Cuts a draft to `maxDraftLines` lines and `maxDraft` characters.
+    /// The text after the last line that fits goes away.
+    public static func limitDraft(_ text: String) -> String {
+        var breaks = 0
+        var end = text.endIndex
+        for i in text.indices where text[i].isNewline {
+            breaks += 1
+            if breaks == maxDraftLines {
+                end = i
+                break
+            }
+        }
+        return String(text[..<end].prefix(maxDraft))
+    }
+
+    /// The most Unicode scalars in 1 text packet. fluxd uses the same limit.
+    static let maxText = 4096
+
+    /// The packets that type a draft: each line as text, and Shift+Enter
+    /// between 2 lines, so that a chat or a form keeps the text in 1
+    /// message. Empty text gives no packets.
+    public static func draft(_ text: String) -> [Packet] {
+        let lines = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+            .split(separator: "\n", omittingEmptySubsequences: false)
+        guard lines != [""] else { return [] }
+        var out: [Packet] = []
+        for (i, line) in lines.enumerated() {
+            if i > 0 { out.append(key(.enter, mods: Mods(shift: true))) }
+            for part in chunks(String(line)) { out.append(self.text(part)) }
+        }
+        return out
+    }
+
+    /// Splits text into parts of at most `maxText` Unicode scalars. A
+    /// character stays in 1 part.
+    static func chunks(_ text: String) -> [String] {
+        var out: [String] = []
+        var part = ""
+        var scalars = 0
+        for c in text {
+            let n = c.unicodeScalars.count
+            if scalars + n > maxText && !part.isEmpty {
+                out.append(part)
+                part = ""
+                scalars = 0
+            }
+            part.append(c)
+            scalars += n
+        }
+        if !part.isEmpty { out.append(part) }
+        return out
+    }
+
     private static func round(_ v: Double) -> Double { v.isFinite ? (v * 100).rounded() / 100 : 0 }
 
     // MARK: Remote desktop

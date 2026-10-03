@@ -75,8 +75,9 @@ const (
 	TypeFluxClipboardImage = "flux.clipboard.image"
 	// TypeFluxInput tells the phone whether this computer accepts remote
 	// input and whether it shows its screen on the phone, {"enabled":
-	// bool, "desktop": bool}. fluxd sends it after the link starts and
-	// after a setting changes.
+	// bool, "desktop": bool, "keyRepeat": true}. keyRepeat tells that a
+	// special key can have a repeat count. fluxd sends it after the link
+	// starts and after a setting changes.
 	TypeFluxInput = "flux.input"
 	// TypeFluxDesktop starts and stops the stream of this screen to the
 	// phone. Both sides send it.

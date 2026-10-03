@@ -36,6 +36,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -121,9 +123,14 @@ fun DesktopScreen(d: DeviceUi, onBack: () -> Unit) {
     // In landscape, a rail at the side holds the buttons, so that the video has the full height.
     val wide = ready && landscape
     val shown = panel.takeIf { control }
+    // A click, a dictation, or the Omarchy panel can move the cursor of the computer, so the type field then starts again.
+    // It also starts again when the keys hide.
+    val typing = remember(d.id) { RemoteTyping() }
+    LaunchedEffect(shown) { if (shown != Panel.Keys) typing.end() }
     // Dictation types its words on the computer. A dictation right after another starts with a space.
     var afterVoice by remember { mutableStateOf(false) }
     val voice = rememberVoiceTyping { spoken ->
+        typing.end()
         sendInput(d, RemoteInput.text(if (afterVoice) " $spoken" else spoken))
         afterVoice = true
     }
@@ -189,12 +196,18 @@ fun DesktopScreen(d: DeviceUi, onBack: () -> Unit) {
                         }
                     }
                     Column(Modifier.weight(1f).fillMaxHeight()) {
-                        RemoteDesktop(d, monitor, hint = shown == null && !wide)
+                        RemoteDesktop(d, monitor, hint = shown == null && !wide, onClick = typing::end)
                     }
                     if (wide) {
                         when (shown) {
                             Panel.Omarchy -> OmarchyPanel(d, Modifier.width(300.dp).fillMaxHeight().padding(8.dp))
-                            Panel.Keys -> KeyPanel(d, ::sendKey, Modifier.width(300.dp).align(Alignment.Bottom).padding(8.dp), voice)
+                            // The keys panel is wider, so that the type field keeps room for the text next to its keys.
+                            // With the phone keyboard open, the panel scrolls, and the type field at its bottom shows.
+                            Panel.Keys -> KeyPanel(
+                                d, typing, ::sendKey,
+                                Modifier.width(320.dp).align(Alignment.Bottom).verticalScroll(rememberScrollState(), reverseScrolling = true).padding(8.dp),
+                                voice,
+                            )
                             null -> Unit
                         }
                     }
@@ -202,7 +215,7 @@ fun DesktopScreen(d: DeviceUi, onBack: () -> Unit) {
                 if (!wide) {
                     when (shown) {
                         Panel.Omarchy -> OmarchyPanel(d, gutter.padding(top = TileGap, bottom = 10.dp).heightIn(max = 380.dp))
-                        Panel.Keys -> KeyPanel(d, ::sendKey, gutter.padding(top = TileGap, bottom = 10.dp), voice)
+                        Panel.Keys -> KeyPanel(d, typing, ::sendKey, gutter.padding(top = TileGap, bottom = 10.dp), voice)
                         null -> Unit
                     }
                 }
@@ -270,9 +283,10 @@ private fun sendInput(d: DeviceUi, p: Packet) {
 /**
  * The video of the computer screen, with its gestures. The stream runs
  * while the app shows. [hint] shows the gestures under the video.
+ * [onClick] runs for each click and each drag on the computer.
  */
 @Composable
-private fun ColumnScope.RemoteDesktop(d: DeviceUi, monitor: String?, hint: Boolean) {
+private fun ColumnScope.RemoteDesktop(d: DeviceUi, monitor: String?, hint: Boolean, onClick: () -> Unit) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val selected by rememberUpdatedState(monitor)
     DisposableEffect(d.id, lifecycle) {
@@ -314,13 +328,20 @@ private fun ColumnScope.RemoteDesktop(d: DeviceUi, monitor: String?, hint: Boole
     // The video keeps its place before the size is known, so that its surface is ready for the first frame.
     val videoW = status.width.takeIf { it > 0 } ?: 16
     val videoH = status.height.takeIf { it > 0 } ?: 10
-    // A new size starts a new viewport at scale 1, and the gestures start again with it.
-    val viewport = remember(box, videoW, videoH) { mutableStateOf(DesktopViewport(box.width.toFloat(), box.height.toFloat(), videoW, videoH)) }
-    val vp = viewport.value
+    // The position of the last click on the video. When the keyboard or a panel makes the view smaller, it stays in view.
+    var focus by remember(d.id) { mutableStateOf<Pair<Float, Float>?>(null) }
+    val viewport = remember { mutableStateOf(DesktopViewport(0f, 0f, videoW, videoH)) }
+    // A new view size keeps the zoom, and a new video size starts at scale 1, see DesktopViewport.resized.
+    val vp = viewport.value.resized(box.width.toFloat(), box.height.toFloat(), videoW, videoH, focus)
+    SideEffect { viewport.value = vp }
     val density = LocalDensity.current
+    val clicked by rememberUpdatedState { p: Pair<Float, Float> ->
+        focus = p
+        if (control) onClick()
+    }
     // The gestures work only on a live video. Over a wait or an error, a tap must not click on the computer.
     val gestures = if (live && status.width > 0) {
-        Modifier.desktopGestures(viewport, { viewport.value = it }, { send(it) }) { haptic.performHapticFeedback(HapticFeedbackType.LongPress) }
+        Modifier.desktopGestures(viewport, { viewport.value = it }, { send(it) }, { clicked(it) }) { haptic.performHapticFeedback(HapticFeedbackType.LongPress) }
     } else {
         Modifier
     }
@@ -415,12 +436,14 @@ private class Tap(val time: Long, val point: Offset, val position: Pair<Float, F
  * The gestures of the remote desktop. A tap clicks. A finger that holds
  * still clicks the right button, or drags when it then moves. 2 fingers
  * scroll, and a tap with 2 fingers clicks the right button. A pinch zooms,
- * and 1 finger moves the zoomed view. [onHold] runs when a finger holds.
+ * and 1 finger moves the zoomed view. [onClick] gets the position of each
+ * click and each drag start. [onHold] runs when a finger holds.
  */
 private fun Modifier.desktopGestures(
     viewport: State<DesktopViewport>,
     onViewport: (DesktopViewport) -> Unit,
     send: (Packet) -> Unit,
+    onClick: (Pair<Float, Float>) -> Unit,
     onHold: () -> Unit,
 ): Modifier = pointerInput(viewport) {
     val slop = viewConfiguration.touchSlop
@@ -472,7 +495,10 @@ private fun Modifier.desktopGestures(
                     val p = (down.firstOrNull { it.id == first.id } ?: down[0]).position
                     if (mode == Touch.Held && (p - start).getDistance() >= slop) {
                         mode = Touch.Drag
-                        video(start, clamp = true)?.let { (x, y) -> send(RemoteInput.holdAt(true, x, y)) }
+                        video(start, clamp = true)?.let { (x, y) ->
+                            onClick(x to y)
+                            send(RemoteInput.holdAt(true, x, y))
+                        }
                     }
                     if (mode == Touch.Drag && p != last) video(p, clamp = true)?.let { (x, y) -> send(RemoteInput.at(x, y)) }
                     last = p
@@ -513,12 +539,19 @@ private fun Modifier.desktopGestures(
                 val now = SystemClock.uptimeMillis()
                 val prev = lastTap
                 val at = if (prev != null && now - prev.time < DOUBLE_TAP_MS && (start - prev.point).getDistance() < doubleTap) prev.position else position
+                onClick(at)
                 send(RemoteInput.clickAt(RemoteInput.Click.Left, at.first, at.second))
                 lastTap = Tap(now, start, at)
             }
-            Touch.Held -> video(start)?.let { (x, y) -> send(RemoteInput.clickAt(RemoteInput.Click.Right, x, y)) }
+            Touch.Held -> video(start)?.let { (x, y) ->
+                onClick(x to y)
+                send(RemoteInput.clickAt(RemoteInput.Click.Right, x, y))
+            }
             Touch.Drag -> video(last, clamp = true)?.let { (x, y) -> send(RemoteInput.holdAt(false, x, y)) }
-            Touch.Multi -> video(startCentroid)?.let { (x, y) -> send(RemoteInput.clickAt(RemoteInput.Click.Right, x, y)) }
+            Touch.Multi -> video(startCentroid)?.let { (x, y) ->
+                onClick(x to y)
+                send(RemoteInput.clickAt(RemoteInput.Click.Right, x, y))
+            }
             else -> Unit
         }
     }

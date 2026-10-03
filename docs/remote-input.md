@@ -84,11 +84,26 @@ Flux sends each word after the keyboard stops composing it.
 A correction from the keyboard replaces the word on the computer.
 **Send** on the keyboard presses Enter.
 
+The field keeps the text that it typed since the last click, key, or dictation.
+To delete that text on the computer, select the clear key at the end of the field.
+The computer gets 1 Backspace for each character.
+A click, a key of the key rows, Enter, or a dictation can move the cursor of the computer.
+After each of them, the field starts again empty, and the text stays on the computer.
+
+To write a longer text first, select the expand key at the start of the field.
+The draft editor opens on the full screen.
+Write and correct the text there with the phone keyboard, then select **Type**.
+The computer types the whole text at its cursor.
+Each line break goes as Shift+Enter, so that a chat box keeps the lines in 1 message.
+The close button keeps the draft for later, and **Clear** empties it.
+A draft holds at most 4000 characters and 100 lines.
+
 To dictate, select the mic key next to the field.
 The phone changes your speech to text on the device, and the computer types it at the cursor.
 The Enter key next to the mic key sends Enter.
 
 The key rows send Escape, Tab, the arrow keys, Backspace, and Enter.
+While the field has text, Backspace deletes the last character of the field and of the computer.
 **ctrl**, **alt**, **shift**, and **super** hold for the next key or letter.
 For example, select **ctrl**, then type `c` to send Ctrl+C.
 Select **super**, then type a space to open the Omarchy launcher.
@@ -172,6 +187,12 @@ The field at the bottom sends each word after you type a space.
 Return sends the rest of the field and presses Enter.
 Backspace in the empty field presses Backspace on the computer.
 The field does not correct the spelling and does not change quotes or dashes.
+The clear key at the end of the field empties the field.
+The field holds only the text that did not go to the computer yet, so the clear key sends no keys.
+
+To write a longer text first, select the expand key next to the field.
+The draft editor works as on the phone.
+Command-Return selects **Type**.
 
 To dictate, select the mic key next to the field.
 The Mac changes your speech to text, and the computer types it at the cursor.
@@ -186,9 +207,10 @@ A presenter remote that sends Page Up and Page Down works the same way.
 
 The phone and the Mac send `flux.mousepad.request` packets.
 `fluxd` runs them only while `remote_input` is on.
-After the link starts and after the setting changes, `fluxd` sends `flux.input` with `{"enabled": true}` or `{"enabled": false}`.
+After the link starts and after the setting changes, `fluxd` sends `flux.input` with `{"enabled": true, "keyRepeat": true}` or `{"enabled": false, "keyRepeat": true}`.
+`keyRepeat` tells the phone and the Mac that `fluxd` reads `repeat`.
 
-The actions wait in 1 queue of at most 256 actions and 16384 characters of text.
+The actions wait in 1 queue of at most 256 actions, and of at most 16384 characters of text and repeated key presses.
 A packet goes into the queue with all of its actions, or `fluxd` drops it.
 4 places of the queue stay free for a button release, so a full queue does not keep a button down.
 Before each action, `fluxd` checks again that `remote_input` is on, that the device is paired, and that its link is the same.
@@ -214,6 +236,7 @@ A packet holds 1 action:
 | `singlehold`, `singlerelease` | Press or release the left button. |
 | `key` | Type the text. Control characters are removed. |
 | `specialKey` | Press a key: 1 Backspace, 2 Tab, 4 Left, 5 Up, 6 Right, 7 Down, 8 Page Up, 9 Page Down, 10 Home, 11 End, 12 Enter, 13 Delete, 14 Escape, 21 to 32 F1 to F12. |
+| `repeat` with `specialKey` | Press the key that many times in 1 `wtype` run, at most 4096 times. The clear key of the type field uses it. Without `keyRepeat` in `flux.input`, the phone sends 1 packet for each press, and the type field starts again after 48 characters at the end of a word, so that a clear never fills the queue. |
 | `ctrl`, `alt`, `shift`, `super` | Hold the modifier for `key` or `specialKey`. |
 | `x`, `y` | Move the pointer to this position of the [remote desktop](remote-desktop.md) first. The values go from 0 to 1 across the monitor. |
 

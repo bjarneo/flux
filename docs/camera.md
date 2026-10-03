@@ -13,6 +13,8 @@ The iPhone has the same modes with Apple's Vision and VisionKit. See [Flux for i
 
 To add words to scanned text, select the mic key next to the text field and speak.
 The words go in at the cursor on the Android phone and at the end of the text on the iPhone and the Mac.
+To empty the scanned text, select the clear key of the text field, or **Clear** on the iPhone and the Mac.
+On the Android phone, the expand key opens the text in a large editor.
 
 Scanned text and documents use the desktop `scan_dir`.
 Photos use `photo_dir`.

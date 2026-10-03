@@ -43,7 +43,8 @@ final class TouchpadController {
         self.deviceId = deviceId
         self.app = app
         send = RemoteInputSender.make(deviceId: deviceId, app: app, input: input)
-        keys = RemoteKeys(workspaceKeys: app.device(deviceId).map(DesktopPlugin.shortcutsSupported) ?? false, send: send)
+        keys = RemoteKeys(workspaceKeys: app.device(deviceId).map(DesktopPlugin.shortcutsSupported) ?? false, send: send,
+                          canRepeat: { [weak input] in input?.model.canRepeat(deviceId) ?? false })
         // Keys can move the cursor of the computer, so the next dictation starts with no space.
         keys.willSend = { [weak self] in self?.spoken.moved() }
     }
@@ -65,11 +66,13 @@ final class TouchpadController {
         guard leftHeld != down else { return }
         leftHeld = down
         spoken.moved()
+        keys.endTyping()
         send(RemoteInput.hold(down))
     }
 
     func rightClick() {
         spoken.moved()
+        keys.endTyping()
         send(RemoteInput.click(.right))
     }
 
@@ -77,6 +80,8 @@ final class TouchpadController {
     /// after another starts with a space.
     func typeSpoken(_ words: String) {
         guard let text = spoken.text(words) else { return }
+        // The words go to the cursor of the computer, so the type field ends.
+        keys.endTyping()
         send(RemoteInput.text(text))
     }
 
@@ -106,12 +111,14 @@ final class TouchpadController {
             case .move(let dx, let dy): send(RemoteInput.move(dx: dx, dy: dy))
             case .scroll(let dx, let dy): send(RemoteInput.scroll(dx: dx, dy: dy))
             case .click(let c):
-                // A click can move the cursor of the computer.
+                // A click can move the cursor of the computer, so the type field ends.
                 spoken.moved()
+                keys.endTyping()
                 send(RemoteInput.click(c))
             case .hold(let down):
                 if down { HoldFeedback.play() }
                 spoken.moved()
+                keys.endTyping()
                 send(RemoteInput.hold(down))
             }
         }
@@ -186,11 +193,7 @@ private struct TouchpadContent: View {
                 KeyRows(keys: controller.keys)
                 // A dictation types its words on the computer.
                 VoiceField(onText: { controller.typeSpoken($0) }) {
-                    TypeField(keys: controller.keys, placeholder: "Type on \(model.device(deviceId)?.name ?? "the computer")")
-                        .frame(height: 44)
-                        .padding(.horizontal, 12)
-                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
-                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color(.separator).opacity(0.5)))
+                    TypeFieldBox(keys: controller.keys, name: model.device(deviceId)?.name ?? "the computer")
                 }
             }
         }

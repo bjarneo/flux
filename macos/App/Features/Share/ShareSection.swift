@@ -9,6 +9,7 @@ struct ShareSection: View {
     let device: DeviceSnapshot
     @State private var text = ""
     @State private var dropping = false
+    @State private var editing = false
 
     var body: some View {
         if let share = model.core.plugin(SharePlugin.self) {
@@ -27,9 +28,16 @@ struct ShareSection: View {
                 }) {
                     TextField("Text or link", text: $text, prompt: Text("Text or link"))
                         .labelsHidden()
+                        .fieldKeys(text: $text) { editing = true }
                         .voiceFieldStyle()
                         .onSubmit { sendText(share) }
                         .disabled(!device.online)
+                        .sheet(isPresented: $editing) {
+                            // The editor checks the text at each change.
+                            let canSend = { device.online && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                            FieldEditor(title: "Text or link", text: $text,
+                                        action: FieldEditorAction(title: "Send", enabled: canSend) { sendText(share) }) { editing = false }
+                        }
                 } send: {
                     let canSend = device.online && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)

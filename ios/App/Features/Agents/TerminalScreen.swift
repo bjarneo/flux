@@ -108,6 +108,8 @@ private struct TerminalControls: View {
     /// The number of the last input with the text of the field. Only its
     /// answer empties the field.
     @State private var sentSeq = -1
+    /// True while the command shows in the large editor.
+    @State private var expanded = false
 
     private var plugin: HerdrPlugin? { model.core.plugin(HerdrPlugin.self) }
 
@@ -127,16 +129,21 @@ private struct TerminalControls: View {
             HStack(alignment: .top, spacing: 6) {
                 // A dictation puts a command in the field. It waits there for Run, so a command still needs Face ID.
                 VoiceField(onText: { text = DictationText.append(text, DictationText.command($0), sentences: false) }) {
-                    TextField("Type a command", text: $text)
-                        .font(.body.monospaced())
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .submitLabel(.send)
-                        .onSubmit(run)
-                        .padding(.horizontal, 12)
-                        .frame(height: 44)
-                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
-                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color(.separator).opacity(0.5)))
+                    HStack(spacing: 0) {
+                        TextField("Type a command", text: $text)
+                            .font(.body.monospaced())
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .submitLabel(.send)
+                            .onSubmit(run)
+                        ClearKey(text: $text)
+                        ExpandKey(isPresented: $expanded)
+                    }
+                    .padding(.leading, 12)
+                    .padding(.trailing, 2)
+                    .frame(height: 44)
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color(.separator).opacity(0.5)))
                 }
                 Button(action: run) {
                     Group {
@@ -160,6 +167,9 @@ private struct TerminalControls: View {
         }
         .onChange(of: reply) { _, r in
             if let r, r.seq == sentSeq, !r.sending, r.error == nil { text = "" }
+        }
+        .sheet(isPresented: $expanded) {
+            FieldEditor(title: "Command", text: $text, monospaced: true, corrects: false, actionLabel: "Run", onAction: run)
         }
     }
 

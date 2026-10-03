@@ -23,6 +23,8 @@ final class TouchpadController: RemoteKeyTarget {
     /// True while the pad has the keyboard focus, so that keys go to the computer.
     var padFocused = false
     var mods = RemoteInput.Mods()
+    var fieldText = ""
+    var draft = ""
     var optionIsAlt: Bool {
         didSet { defaults.set(optionIsAlt, forKey: optionIsAltKey) }
     }

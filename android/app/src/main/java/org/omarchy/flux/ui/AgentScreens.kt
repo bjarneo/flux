@@ -626,6 +626,8 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
     val context = LocalContext.current
     var field by rememberSaveable(d.id, agent.pane, stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue()) }
     var lockError by remember { mutableStateOf<String?>(null) }
+    // True while the large editor of the field shows.
+    var editing by remember { mutableStateOf(false) }
     // The text of the last Send. When fluxd refuses it because the agent
     // waits for a choice, Send as answer sends the same text again.
     var lastPrompt by rememberSaveable(d.id, agent.pane) { mutableStateOf("") }
@@ -713,6 +715,11 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
             ),
         )
         val sendingPrompt = reply?.sending == true && reply.action == "prompt"
+        fun sendPrompt() {
+            val t = field.text
+            lastPrompt = t
+            guarded { HerdrSync.sendPrompt(FluxCore, d.id, agent.pane, t) }
+        }
         DictationBar(
             dictation,
             canDictate = canDictate,
@@ -727,6 +734,7 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
                     onValueChange = { field = it },
                     modifier = m,
                     placeholder = { T("Write to ${agent.agent}", color = Tn.sub) },
+                    trailingIcon = { FieldKeys(field.text.isNotEmpty(), { field = TextFieldValue() }, { editing = true }) },
                     textStyle = TextStyle(color = Tn.text, fontSize = 14.sp),
                     shape = TileShape,
                     maxLines = 4,
@@ -736,16 +744,27 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
             send = {
                 FieldKey(
                     "Send",
-                    onClick = {
-                        val t = field.text
-                        lastPrompt = t
-                        guarded { HerdrSync.sendPrompt(FluxCore, d.id, agent.pane, t) }
-                    },
+                    onClick = ::sendPrompt,
                     enabled = field.text.isNotBlank(),
                     busy = sendingPrompt,
                 ) { Sym(Ic.send, size = 22.dp) }
             },
         )
+        if (editing) {
+            FieldEditor(
+                title = "Write to ${agent.agent}",
+                value = field,
+                onValueChange = { field = it },
+                onDismiss = { editing = false },
+                context = d.name,
+                keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+            ) {
+                FluxButton("Send", {
+                    editing = false
+                    sendPrompt()
+                }, icon = Ic.send, enabled = field.text.isNotBlank() && !sendingPrompt)
+            }
+        }
         val problem = lockError ?: voiceError ?: dictation.error ?: reply?.error
         // fluxd refused the text of the field as a prompt, because the agent
         // waits for a choice. The agent can take the same text as the answer

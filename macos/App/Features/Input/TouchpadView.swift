@@ -47,7 +47,7 @@ struct TouchpadView: View {
             .frame(minHeight: 200)
             RemoteKeyRows(target: controller)
             VoiceBar(language: controller.app.dictationLanguage, onText: { controller.typeSpoken($0) }) {
-                TypeField(target: controller, placeholder: "Type on \(controller.name)")
+                RemoteTypeField(target: controller)
             } send: {
                 Button { controller.key(.enter) } label: {
                     Image(systemName: "return")

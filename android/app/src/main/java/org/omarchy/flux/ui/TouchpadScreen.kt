@@ -29,6 +29,7 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,6 +53,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -63,7 +65,8 @@ import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.RemoteInput
 import org.omarchy.flux.core.Shortcuts
-import org.omarchy.flux.core.TextEdit
+import org.omarchy.flux.core.TypeMirror
+import org.omarchy.flux.protocol.Packet
 import org.omarchy.flux.voice.VoiceField
 import org.omarchy.flux.voice.VoiceTyping
 import org.omarchy.flux.voice.rememberVoiceTyping
@@ -80,6 +83,9 @@ private const val SCROLL_SPEED = 1.2f
  * gets the backspace.
  */
 private const val SENTINEL = "​"
+
+/** The length after which the type field starts again for a computer without repeat, see [RemoteTyping.change]. */
+private const val RESTART_LENGTH = 48
 
 /**
  * The touchpad and the keyboard for a computer. The computer runs the
@@ -134,16 +140,19 @@ fun TouchpadScreen(d: DeviceUi, onBack: () -> Unit) {
 @Composable
 private fun Touchpad(d: DeviceUi) {
     val haptic = LocalHapticFeedback.current
-    fun send(p: org.omarchy.flux.protocol.Packet) {
+    fun send(p: Packet) {
         if (!RemoteInput.send(FluxCore, d.id, p)) FluxCore.toast("${d.name} is not reachable")
     }
+    // A click or a dictation moves the cursor of the computer, so the type field starts again.
+    val typing = remember(d.id) { RemoteTyping() }
     // Dictation types its words on the computer. A dictation right after another starts with a space.
     var afterVoice by remember { mutableStateOf(false) }
     val voice = rememberVoiceTyping { spoken ->
+        typing.end()
         send(RemoteInput.text(if (afterVoice) " $spoken" else spoken))
         afterVoice = true
     }
-    fun sendKey(p: org.omarchy.flux.protocol.Packet) {
+    fun sendKey(p: Packet) {
         afterVoice = false
         send(p)
     }
@@ -154,9 +163,15 @@ private fun Touchpad(d: DeviceUi) {
                 .touchpad(
                     onMove = { dx, dy -> send(RemoteInput.move(dx, dy)) },
                     onScroll = { dx, dy -> send(RemoteInput.scroll(dx, dy)) },
-                    onClick = { send(RemoteInput.click(it)) },
+                    onClick = {
+                        typing.end()
+                        send(RemoteInput.click(it))
+                    },
                     onHold = { down ->
-                        if (down) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (down) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            typing.end()
+                        }
                         send(RemoteInput.hold(down))
                     },
                 ),
@@ -168,10 +183,16 @@ private fun Touchpad(d: DeviceUi) {
             )
         }
         KeyRow(Modifier.heightIn(min = 52.dp), gap = TileGap) {
-            HoldButton("Left button", Modifier.weight(1f)) { down -> send(RemoteInput.hold(down)) }
-            PadKey("right", "Right button", Modifier.weight(1f)) { send(RemoteInput.click(RemoteInput.Click.Right)) }
+            HoldButton("Left button", Modifier.weight(1f)) { down ->
+                if (down) typing.end()
+                send(RemoteInput.hold(down))
+            }
+            PadKey("right", "Right button", Modifier.weight(1f)) {
+                typing.end()
+                send(RemoteInput.click(RemoteInput.Click.Right))
+            }
         }
-        KeyPanel(d, ::sendKey, voice = voice)
+        KeyPanel(d, typing, ::sendKey, voice = voice)
     }
 }
 
@@ -180,17 +201,22 @@ private fun Touchpad(d: DeviceUi) {
  * arrows, the modifiers, Backspace, and Enter. A modifier holds for the
  * next key or text. With [voice], a mic key next to the field dictates,
  * and the Enter key moves next to the field, so that the panel has 1
- * Enter key.
+ * Enter key. [typing] holds the text of the field and the draft.
  */
 @Composable
 fun KeyPanel(
     d: DeviceUi,
-    send: (org.omarchy.flux.protocol.Packet) -> Unit,
+    typing: RemoteTyping,
+    send: (Packet) -> Unit,
     modifier: Modifier = Modifier,
     voice: VoiceTyping? = null,
 ) {
     var mods by remember { mutableStateOf(RemoteInput.Mods()) }
     fun key(k: RemoteInput.Key) {
+        // Backspace deletes the last character of the field, so that the field keeps the text of the computer.
+        if (k == RemoteInput.Key.Backspace && !mods.any && typing.backspace(d.keyRepeat, send)) return
+        // Another key can move the cursor of the computer, so the field starts again.
+        typing.end()
         send(RemoteInput.key(k, mods))
         mods = RemoteInput.Mods()
     }
@@ -210,7 +236,7 @@ fun KeyPanel(
             if (voice == null) PadKey(RemoteInput.Key.Enter.label, "Enter", Modifier.weight(1f)) { key(RemoteInput.Key.Enter) }
         }
         if (voice == null) {
-            TypeField(d, mods, onSend = send, onModsUsed = { mods = RemoteInput.Mods() }, onEnter = { key(RemoteInput.Key.Enter) }, Modifier.fillMaxWidth())
+            TypeField(d, typing, mods, onSend = send, onModsUsed = { mods = RemoteInput.Mods() }, onEnter = { key(RemoteInput.Key.Enter) }, Modifier.fillMaxWidth())
         } else {
             VoiceField(
                 voice,
@@ -221,89 +247,181 @@ fun KeyPanel(
                     }
                 },
             ) { m ->
-                TypeField(d, mods, onSend = send, onModsUsed = { mods = RemoteInput.Mods() }, onEnter = { key(RemoteInput.Key.Enter) }, m, 56.dp)
+                TypeField(d, typing, mods, onSend = send, onModsUsed = { mods = RemoteInput.Mods() }, onEnter = { key(RemoteInput.Key.Enter) }, m, 56.dp)
             }
         }
+    }
+    if (typing.editing) {
+        FieldEditor(
+            title = "Type on ${d.name}",
+            value = typing.draft,
+            onValueChange = { v ->
+                val text = RemoteInput.draftLines(v.text)
+                typing.draft = if (text == v.text) v else TextFieldValue(text, TextRange(text.length))
+            },
+            onDismiss = { typing.editing = false },
+            placeholder = "Write and correct the text here. It goes to ${d.name} when you select Type.",
+            keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+            maxLength = RemoteInput.MAX_DRAFT,
+            hint = "Each line break goes as Shift+Enter. A draft holds at most ${RemoteInput.MAX_DRAFT_LINES} lines.",
+        ) {
+            FluxButton("Type", {
+                mods = RemoteInput.Mods()
+                typing.typeDraft(send)
+            }, icon = Ic.keyboard, enabled = typing.draft.text.isNotBlank())
+        }
+    }
+}
+
+/** The empty type field: the sentinel with the cursor after it. */
+private val EmptyField = TextFieldValue(SENTINEL, TextRange(SENTINEL.length))
+
+/**
+ * The type field of the keys and the draft of 1 screen. The field holds
+ * the text that it typed on the computer since the last click, key, or
+ * dictation, so that Clear can delete that text there. See [TypeMirror].
+ * The draft goes to the computer only when the user selects Type.
+ */
+@Stable
+class RemoteTyping {
+    var input by mutableStateOf(EmptyField)
+        private set
+    private val mirror = TypeMirror()
+
+    /** The text of the draft editor. */
+    var draft by mutableStateOf(TextFieldValue(""))
+
+    /** True while the draft editor shows. */
+    var editing by mutableStateOf(false)
+
+    /** The text of the field, with the text that the keyboard composes. */
+    val text: String get() = input.text.removePrefix(SENTINEL)
+
+    /** Forgets the text of the field. The computer keeps the text. */
+    fun end() {
+        mirror.reset()
+        input = EmptyField
+    }
+
+    /**
+     * Sends a change of the field to the computer as backspaces and new
+     * text. A word goes only after the keyboard stops composing it. With
+     * [repeat], 1 packet holds the backspaces. While [mods] holds a
+     * modifier, new text goes as a shortcut, and [shortcut] can turn it
+     * into another packet. It returns true when the shortcut used the
+     * modifiers.
+     */
+    fun change(
+        v: TextFieldValue,
+        mods: RemoteInput.Mods,
+        repeat: Boolean,
+        shortcut: (String) -> Packet?,
+        send: (Packet) -> Unit,
+    ): Boolean {
+        val composing = v.composition
+        val stable = if (composing != null && composing.end == v.text.length) v.text.substring(0, composing.start) else v.text
+        if (!stable.startsWith(SENTINEL)) {
+            val rest = stable.replace(SENTINEL, "")
+            if (rest.isEmpty() && mirror.sent.isEmpty()) {
+                // Backspace in the empty field deletes the sentinel: the computer gets the backspace.
+                send(RemoteInput.key(RemoteInput.Key.Backspace))
+                input = EmptyField
+                return false
+            }
+            // The keyboard replaced the text or deleted the sentinel at the start. The rest is the new text.
+            return change(TextFieldValue(SENTINEL + rest, TextRange(SENTINEL.length + rest.length)), mods, repeat, shortcut, send)
+        }
+        val body = stable.substring(SENTINEL.length)
+        val line = body.indexOf('\n')
+        if (line >= 0) {
+            // A line break, for example from a paste, presses Enter.
+            change(TextFieldValue(SENTINEL + body.substring(0, line), TextRange(SENTINEL.length + line)), mods, repeat, shortcut, send)
+            send(RemoteInput.key(RemoteInput.Key.Enter))
+            end()
+            return false
+        }
+        return when (val c = mirror.change(body, mods.any)) {
+            is TypeMirror.Change.Shortcut -> {
+                // A shortcut such as ctrl+c. The letter does not stay in the field.
+                send(shortcut(c.text) ?: RemoteInput.text(c.text, mods))
+                input = EmptyField
+                true
+            }
+            is TypeMirror.Change.Edit -> {
+                RemoteInput.keys(RemoteInput.Key.Backspace, c.backspaces, repeat).forEach(send)
+                if (c.text.isNotEmpty()) send(RemoteInput.text(c.text))
+                // A computer without repeat gets 1 packet for each backspace, and it drops packets after
+                // 256 waiting actions. For it, a long line starts again after a word, so that Clear stays short.
+                if (!repeat && composing == null && body.length > RESTART_LENGTH && body.endsWith(" ")) end() else input = v
+                false
+            }
+        }
+    }
+
+    /** Deletes the text of the field on the computer, then empties the field. */
+    fun clear(repeat: Boolean, send: (Packet) -> Unit) {
+        RemoteInput.keys(RemoteInput.Key.Backspace, mirror.clear(), repeat).forEach(send)
+        input = EmptyField
+    }
+
+    /**
+     * The Backspace key of the keys: it deletes the last character of the
+     * field, also on the computer. It returns false when the field is empty.
+     */
+    fun backspace(repeat: Boolean, send: (Packet) -> Unit): Boolean {
+        val body = text
+        if (body.isEmpty()) return false
+        val shorter = body.substring(0, body.offsetByCodePoints(body.length, -1))
+        change(TextFieldValue(SENTINEL + shorter, TextRange(SENTINEL.length + shorter.length)), RemoteInput.Mods(), repeat, { null }, send)
+        return true
+    }
+
+    /** Types the draft on the computer, then empties the draft and closes the editor. */
+    fun typeDraft(send: (Packet) -> Unit) {
+        end()
+        RemoteInput.draft(draft.text).forEach(send)
+        draft = TextFieldValue("")
+        editing = false
     }
 }
 
 /**
  * The text field for the phone keyboard. Each change goes to the computer
- * as backspaces and new text, see [TextEdit]. The field sends a word only
- * after the keyboard stops composing it.
+ * as backspaces and new text, see [RemoteTyping.change]. The key at the
+ * start opens the draft editor, and the key at the end deletes the text
+ * of the field on the computer.
  */
 @Composable
 private fun TypeField(
     d: DeviceUi,
+    typing: RemoteTyping,
     mods: RemoteInput.Mods,
-    onSend: (org.omarchy.flux.protocol.Packet) -> Unit,
+    onSend: (Packet) -> Unit,
     onModsUsed: () -> Unit,
     onEnter: () -> Unit,
     modifier: Modifier = Modifier,
     height: Dp = 48.dp,
 ) {
-    val empty = TextFieldValue(SENTINEL, TextRange(SENTINEL.length))
-    var field by remember { mutableStateOf(empty) }
-    // The text after the sentinel that the computer has.
-    var sent by remember { mutableStateOf("") }
-
-    fun reset() {
-        field = empty
-        sent = ""
-    }
-
-    fun change(v: TextFieldValue) {
-        val composing = v.composition
-        val stable = if (composing != null && composing.end == v.text.length) v.text.substring(0, composing.start) else v.text
-        if (!stable.startsWith(SENTINEL)) {
-            // The keyboard deleted the sentinel: 1 backspace more than the text.
-            repeat(sent.codePointCount(0, sent.length) + 1) { onSend(RemoteInput.key(RemoteInput.Key.Backspace)) }
-            reset()
-            return
-        }
-        val body = stable.substring(SENTINEL.length)
-        val edit = TextEdit.between(sent, body)
-        if (mods.any && edit.text.isNotEmpty()) {
-            // A shortcut such as ctrl+c. The letter does not stay in the field.
-            // Omarchy binds super and a digit to a key code, which the keys of
-            // the phone cannot press, so the computer switches the workspace.
-            val workspace = if (d.shortcutsSupported) Shortcuts.forDigit(edit.text, mods) else null
-            onSend(workspace ?: RemoteInput.text(edit.text, mods))
-            onModsUsed()
-            reset()
-            return
-        }
-        repeat(edit.backspaces) { onSend(RemoteInput.key(RemoteInput.Key.Backspace)) }
-        if (edit.text.isNotEmpty()) onSend(RemoteInput.text(edit.text))
-        sent = body
-        // A long line starts again after a word, so the field stays short.
-        field = if (composing == null && body.length > 48 && body.endsWith(" ")) {
-            sent = ""
-            empty
-        } else {
-            v
-        }
-    }
-
+    // Omarchy binds super and a digit to a key code, which the keys of the phone cannot press, so the computer switches the workspace.
+    fun shortcut(text: String): Packet? = if (d.shortcutsSupported) Shortcuts.forDigit(text, mods) else null
     BasicTextField(
-        value = field,
-        onValueChange = ::change,
+        value = typing.input,
+        onValueChange = { if (typing.change(it, mods, d.keyRepeat, ::shortcut, onSend)) onModsUsed() },
         modifier = modifier.height(height).clip(TileShape).background(Tn.tile).border(1.dp, Tn.line, TileShape),
         textStyle = TextStyle(color = Tn.text, fontSize = 15.sp),
         cursorBrush = SolidColor(Tn.blue),
         singleLine = true,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-        keyboardActions = KeyboardActions(onSend = {
-            onEnter()
-            reset()
-        }),
+        // Enter ends the text of the field, see KeyPanel.
+        keyboardActions = KeyboardActions(onSend = { onEnter() }),
         decorationBox = { inner ->
-            Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Sym(Ic.keyboard, tint = Tn.sub, size = 20.dp)
+            Row(Modifier.fillMaxSize().padding(end = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                ExpandKey({ typing.editing = true }, "Open the draft editor")
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    if (field.text == SENTINEL) T("Type on ${d.name}", color = Tn.sub, maxLines = 1)
+                    if (typing.text.isEmpty()) T("Type on ${d.name}", color = Tn.sub, maxLines = 1)
                     inner()
                 }
+                if (typing.text.isNotEmpty()) ClearKey({ typing.clear(d.keyRepeat, onSend) }, "Clear the text on ${d.name}")
             }
         },
     )
