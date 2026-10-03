@@ -28,10 +28,13 @@ import javax.net.ssl.SSLSocket
 private const val TAG = "FluxLan"
 
 /** The UDP port for identity broadcasts. */
-const val UDP_PORT = 1716
+const val UDP_PORT = 12100
 
-/** The TCP port range for links. */
-val TCP_PORTS = 1716..1764
+/**
+ * The TCP port range for links. The phone listens on the first free port,
+ * and it connects to a computer only on a port in this range.
+ */
+val TCP_PORTS = 12100..12108
 
 /**
  * The time for the plain identity, the TLS handshake, and the identity after
@@ -89,7 +92,7 @@ class LanBackend(
     var tcpPort = 0
         private set
 
-    /** True when this app owns UDP 1716 and hears broadcasts. */
+    /** True when this app owns [UDP_PORT] and hears broadcasts. */
     var listeningUdp = false
         private set
 
