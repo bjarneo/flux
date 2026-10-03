@@ -120,6 +120,7 @@ import org.omarchy.flux.core.TransferItem
 import org.omarchy.flux.core.TransferState
 import org.omarchy.flux.core.UiState
 import org.omarchy.flux.core.agentPrompt
+import org.omarchy.flux.core.choicesOpen
 import org.omarchy.flux.core.inboxItems
 import org.omarchy.flux.core.needsYou
 
@@ -692,7 +693,7 @@ private fun ColumnScope.AgentMaster(item: AgentItem, d: DeviceUi?, active: Boole
     }
     Push(fit)
     Column(Modifier.widthIn(max = ActionWidth).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(fit.choiceGap)) {
-        for (c in choices) ChoiceRow(c, enabled = item.control && !sending && out !== answered) { answer(c.key) }
+        for (c in choices) ChoiceRow(c, enabled = item.control && choicesOpen(out, answered, sending)) { answer(c.key) }
         val problem = lockError ?: reply?.error
         if (problem != null) T(problem, size = 13, color = Tn.red)
         if (blocked && !item.control) T("To answer from this phone, set herdr_control = true on ${item.computer}.", size = 13, color = Tn.sub)

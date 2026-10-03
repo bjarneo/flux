@@ -13,6 +13,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -46,11 +48,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -61,6 +67,9 @@ import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.Plugins
 
 // ───────────────────────── Pairing ─────────────────────────
+
+/** The text of a group of the pairing key. The pair sheet measures it to choose the number of rows. */
+private val PairKeyStyle = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Medium, fontFamily = Mono)
 
 /**
  * The pairing sheet: the verification key, 1 box for each group of 4
@@ -103,16 +112,28 @@ fun TiledPairSheet(name: String, key: String, waiting: Boolean, onCancel: () -> 
                         size = 13, color = Tn.sub,
                     )
                 }
-                Row(
-                    Modifier.semantics(mergeDescendants = true) { contentDescription = "Code ${PairKey.display(key)}" },
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    for (group in PairKey.groups(key)) {
-                        Box(
-                            Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(6.dp)).background(Tn.bg)
-                                .border(1.dp, Tn.lineHi, RoundedCornerShape(6.dp)),
-                            contentAlignment = Alignment.Center,
-                        ) { T(group, size = 18, color = Tn.yellow, weight = FontWeight.Medium, family = Mono, maxLines = 1) }
+                // The 4 groups share 1 row. At a large font size, the groups go to 2 rows, and a box grows with its text.
+                val groups = PairKey.groups(key)
+                val measurer = rememberTextMeasurer()
+                val density = LocalDensity.current
+                BoxWithConstraints(Modifier.semantics(mergeDescendants = true) { contentDescription = "Code ${PairKey.display(key)}" }) {
+                    // The widest group with 8 dp of space on each side.
+                    val box = groups.maxOf { measurer.measure(it, PairKeyStyle).size.width } + with(density) { 16.dp.roundToPx() }
+                    val perRow = PairKey.perRow(box, constraints.maxWidth, with(density) { 8.dp.roundToPx() })
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for (row in groups.chunked(perRow)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                for (group in row) {
+                                    Box(
+                                        Modifier.weight(1f).heightIn(min = 44.dp).clip(RoundedCornerShape(6.dp)).background(Tn.bg)
+                                            .border(1.dp, Tn.lineHi, RoundedCornerShape(6.dp)),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        T(group, Modifier.padding(vertical = 6.dp), size = 18, color = Tn.yellow, weight = FontWeight.Medium, family = Mono)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(TileGap)) {

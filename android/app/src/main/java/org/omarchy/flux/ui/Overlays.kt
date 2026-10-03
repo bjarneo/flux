@@ -64,4 +64,13 @@ object PairKey {
 
     /** Returns the groups of 4 digits, 1 for each box of the pair sheet. */
     fun groups(key: String): List<String> = display(key).split(" ")
+
+    /**
+     * Returns the number of boxes in 1 row of the pair sheet: 4, 2, or 1.
+     * Each box needs [box] pixels for its group. The row has [width]
+     * pixels and [gap] pixels between 2 boxes. At a large font size, the
+     * groups go to more rows, so that all 16 digits show.
+     */
+    fun perRow(box: Int, width: Int, gap: Int): Int =
+        listOf(4, 2).firstOrNull { n -> box * n + gap * (n - 1) <= width } ?: 1
 }

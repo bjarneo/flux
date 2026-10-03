@@ -100,6 +100,15 @@ data class HerdrOutput(
 }
 
 /**
+ * True when the choices of [out] take a tap. The choices take no tap while
+ * a reply is [sending]. After an answer to the output [answered], the
+ * choices wait for the next output that is not loading. Thus a second tap
+ * does not answer the next question.
+ */
+fun choicesOpen(out: HerdrOutput?, answered: HerdrOutput?, sending: Boolean): Boolean =
+    !sending && (answered == null || (out !== answered && out?.loading == false))
+
+/**
  * The last reply to a pane. [action] is "keys" or "prompt". [sending] is
  * true until the computer answers. [seq] is different for each reply, so
  * the UI sees each answer. [code] is the code of the [error], such as

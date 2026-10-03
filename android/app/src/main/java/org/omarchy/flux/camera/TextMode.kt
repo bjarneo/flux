@@ -148,7 +148,10 @@ fun TextMode(d: DeviceUi, strip: @Composable () -> Unit = {}, onHolding: (Boolea
                 .build()
         }
     }
-    val live = granted && phase == ScanPhase.Live
+    // True from the shutter until the photo is ready. An unbind stops a photo
+    // that is not ready, so the camera and its preview stay until then.
+    var shooting by remember { mutableStateOf(false) }
+    val live = granted && (phase == ScanPhase.Live || shooting)
     DisposableEffect(live) {
         if (live) {
             val main = ContextCompat.getMainExecutor(context)
@@ -165,17 +168,20 @@ fun TextMode(d: DeviceUi, strip: @Composable () -> Unit = {}, onHolding: (Boolea
     var previewView by remember { mutableStateOf<PreviewView?>(null) }
     fun capture() {
         val frozen = previewView?.bitmap
+        shooting = true
         phase = ScanPhase.Reading(frozen)
         controller.takePicture(
             ContextCompat.getMainExecutor(context),
             object : ImageCapture.OnImageCapturedCallback() {
                 override fun onCaptureSuccess(image: ImageProxy) {
+                    shooting = false
                     val still = runCatching { upright(image) }.getOrNull()
                     image.close()
                     if (still != null) readStill(still) else phase = ScanPhase.Result(frozen, "")
                 }
 
                 override fun onError(exception: ImageCaptureException) {
+                    shooting = false
                     // Fall back to the preview frame, which has a lower resolution.
                     if (frozen != null) readStill(frozen) else phase = ScanPhase.Live
                 }
@@ -198,20 +204,21 @@ fun TextMode(d: DeviceUi, strip: @Composable () -> Unit = {}, onHolding: (Boolea
                 .clip(RoundedCornerShape(28.dp)).background(Palette.pad),
             contentAlignment = Alignment.Center,
         ) {
+            // The preview stays under the frozen frame until the photo is ready.
+            if (live) {
+                AndroidView(
+                    factory = { ctx ->
+                        PreviewView(ctx).apply {
+                            scaleType = PreviewView.ScaleType.FILL_CENTER
+                            this.controller = controller
+                            previewView = this
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
             when (val p = phase) {
-                ScanPhase.Live -> {
-                    AndroidView(
-                        factory = { ctx ->
-                            PreviewView(ctx).apply {
-                                scaleType = PreviewView.ScaleType.FILL_CENTER
-                                this.controller = controller
-                                previewView = this
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                    TextBoxes(blocks)
-                }
+                ScanPhase.Live -> TextBoxes(blocks)
                 is ScanPhase.Reading -> {
                     Still(p.image)
                     Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.inverseSurface) {

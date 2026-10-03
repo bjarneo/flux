@@ -148,6 +148,21 @@ class HerdrTest {
     }
 
     @Test
+    fun choicesWaitForTheNextOutputAfterAnAnswer() {
+        val question = HerdrOutput("w1:p1", loading = false)
+        assertTrue("no answer yet", choicesOpen(question, answered = null, sending = false))
+        assertFalse("a reply sends", choicesOpen(question, answered = null, sending = true))
+        assertFalse("the answered output", choicesOpen(question, answered = question, sending = false))
+        // The read after the answer keeps the old lines on screen while it loads.
+        val reading = question.copy(loading = true)
+        assertFalse("the next output loads", choicesOpen(reading, answered = question, sending = false))
+        val next = reading.copy(loading = false)
+        assertTrue("the next output", choicesOpen(next, answered = question, sending = false))
+        assertFalse("the next output while a reply sends", choicesOpen(next, answered = question, sending = true))
+        assertFalse("no output after an answer", choicesOpen(null, answered = question, sending = false))
+    }
+
+    @Test
     fun terminalKeys() {
         assertTrue("ctrl+c" in HERDR_TERMINAL_KEYS)
         assertTrue("ctrl+z" in HERDR_TERMINAL_KEYS)

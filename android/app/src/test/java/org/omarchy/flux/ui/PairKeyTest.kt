@@ -21,6 +21,14 @@ class PairKeyTest {
     }
 
     @Test
+    fun theGroupsGoToMoreRowsWhenTheyDoNotFit() {
+        assertEquals(4, PairKey.perRow(box = 60, width = 300, gap = 8))
+        assertEquals("the 4 boxes fill the row exactly", 4, PairKey.perRow(box = 75, width = 324, gap = 8))
+        assertEquals("a large font size", 2, PairKey.perRow(box = 100, width = 330, gap = 8))
+        assertEquals("a very narrow row", 1, PairKey.perRow(box = 200, width = 330, gap = 8))
+    }
+
+    @Test
     fun theUnlockEndsAtItsTime() {
         assertTrue(ReplyLock.unlocked(now = 1_000, until = 1_001))
         assertFalse(ReplyLock.unlocked(now = 1_001, until = 1_001))

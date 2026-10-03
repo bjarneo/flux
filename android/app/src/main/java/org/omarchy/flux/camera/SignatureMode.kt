@@ -141,7 +141,10 @@ fun SignatureMode(d: DeviceUi, strip: @Composable () -> Unit = {}, onHolding: (B
                 .build()
         }
     }
-    val live = permission.granted && phase == SignPhase.Live
+    // True from the shutter until the photo is ready. An unbind stops a photo
+    // that is not ready, so the camera and its preview stay until then.
+    var shooting by remember { mutableStateOf(false) }
+    val live = permission.granted && (phase == SignPhase.Live || shooting)
     DisposableEffect(live) {
         if (live) controller.bindToLifecycle(lifecycleOwner)
         onDispose { controller.unbind() }
@@ -156,11 +159,13 @@ fun SignatureMode(d: DeviceUi, strip: @Composable () -> Unit = {}, onHolding: (B
             frame.left, frame.top, frame.right, frame.bottom,
             view.width, view.height, image.width, image.height, pad = 0.05f,
         )
+        shooting = true
         phase = SignPhase.Working(frozen)
         controller.takePicture(
             ContextCompat.getMainExecutor(context),
             object : ImageCapture.OnImageCapturedCallback() {
                 override fun onCaptureSuccess(image: ImageProxy) {
+                    shooting = false
                     val still = runCatching { upright(image) }.getOrNull()
                     image.close()
                     val source = still ?: frozen
@@ -168,6 +173,7 @@ fun SignatureMode(d: DeviceUi, strip: @Composable () -> Unit = {}, onHolding: (B
                 }
 
                 override fun onError(exception: ImageCaptureException) {
+                    shooting = false
                     // Fall back to the preview frame, which has a lower resolution.
                     if (frozen != null) {
                         cut(frozen, cropOf(frozen))
@@ -226,18 +232,21 @@ fun SignatureMode(d: DeviceUi, strip: @Composable () -> Unit = {}, onHolding: (B
                 .clip(RoundedCornerShape(28.dp)).background(Palette.pad),
             contentAlignment = Alignment.Center,
         ) {
+            // The preview stays under the frozen frame until the photo is ready.
+            if (live) {
+                AndroidView(
+                    factory = { ctx ->
+                        PreviewView(ctx).apply {
+                            scaleType = PreviewView.ScaleType.FILL_CENTER
+                            this.controller = controller
+                            previewView = this
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
             when (val p = phase) {
                 SignPhase.Live -> {
-                    AndroidView(
-                        factory = { ctx ->
-                            PreviewView(ctx).apply {
-                                scaleType = PreviewView.ScaleType.FILL_CENTER
-                                this.controller = controller
-                                previewView = this
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                    )
                     GuideFrame()
                     T(
                         "Sign with a dark pen. Fit the signature in the frame.",

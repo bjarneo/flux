@@ -148,7 +148,7 @@ Flux for Android applies these limits to the network:
 - A file, stream, or tunnel port takes only the paired computer from the address of its link. Other connections close, and the port waits for the computer.
 - The phone sends its identity to a stored address only when the address is on a network of the phone or on Tailscale.
 - The phone finds a computer that sleeps or loses power in 90 seconds or less. While data waits for the computer, it finds it in 30 seconds.
-- The Wi-Fi multicast lock is on only while the phone scans, before the first pairing, and while a paired computer is away.
+- The Wi-Fi multicast lock is on while the phone scans and before the first pairing. While a paired computer is away, the lock is on for only 3 minutes after an event. The events are: Flux starts, the phone joins a network, a computer disconnects, the screen comes on, and you open Flux or tap **Retry**. A computer finds the phone at its last address without the lock.
 
 When you unpair a computer on either side, the phone stops the screen mirror, the webcam, the microphone, the remote desktop, and **Get files** for that computer.
 It also closes its approval request and its stream requests, and removes its notifications.

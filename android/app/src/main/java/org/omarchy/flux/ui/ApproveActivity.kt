@@ -19,7 +19,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -160,23 +162,30 @@ class ApproveActivity : FragmentActivity() {
     @Composable
     private fun AskView(r: ApproveRequest, working: Boolean) {
         val scheme = MaterialTheme.colorScheme
+        // At a large font size, the request scrolls. The warning, Approve, and Deny stay on screen below it.
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            IconBadge(R.drawable.ic_fingerprint, size = 88.dp)
-            Spacer(Modifier.height(4.dp))
-            Text(ApproveMessage.question(r), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
-            val details = buildList {
-                if (r.kind == ApproveRequest.Kind.Approve) {
-                    if (r.tty.isNotEmpty()) add("Terminal: ${r.tty}")
-                    if (r.rhost.isNotEmpty()) add("From: ${r.rhost}")
-                    add("Asked at ${SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(r.time * 1000))} by ${r.computerName}")
-                } else {
-                    add("Flux makes a key for ${r.computerName}. Each approval then needs your fingerprint.")
+            Column(
+                Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                IconBadge(R.drawable.ic_fingerprint, size = 88.dp)
+                Spacer(Modifier.height(4.dp))
+                Text(ApproveMessage.question(r), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+                val details = buildList {
+                    if (r.kind == ApproveRequest.Kind.Approve) {
+                        if (r.tty.isNotEmpty()) add("Terminal: ${r.tty}")
+                        if (r.rhost.isNotEmpty()) add("From: ${r.rhost}")
+                        add("Asked at ${SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(r.time * 1000))} by ${r.computerName}")
+                    } else {
+                        add("Flux makes a key for ${r.computerName}. Each approval then needs your fingerprint.")
+                    }
+                }
+                for (d in details) {
+                    Text(d, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant, textAlign = TextAlign.Center)
                 }
             }
             val replaces = remember(r.computerId, r.kind) { r.kind == ApproveRequest.Kind.Enroll && ApproveKeys.has(r.computerId) }
-            for (d in details) {
-                Text(d, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant, textAlign = TextAlign.Center)
-            }
             if (replaces) {
                 Text(
                     "This replaces the current approval key for ${r.computerName}.",

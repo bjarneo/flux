@@ -94,6 +94,14 @@ object FluxCore {
     val listenPort: StateFlow<Int> = _listenPort
     private val _toasts = MutableSharedFlow<String>(extraBufferCapacity = 16)
     val toasts: SharedFlow<String> = _toasts
+    private val _rediscovered = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /**
+     * Sends a value after each [rediscover]. The service then holds the
+     * Wi-Fi multicast lock for a short time, so that a computer can find
+     * the phone.
+     */
+    val rediscovered: SharedFlow<Unit> = _rediscovered
     private val _newPairing = MutableStateFlow<String?>(null)
 
     /**
@@ -250,6 +258,7 @@ object FluxCore {
         if (b != null) {
             startConnectGrace()
             b.broadcast()
+            _rediscovered.tryEmit(Unit)
         }
         publish()
     }

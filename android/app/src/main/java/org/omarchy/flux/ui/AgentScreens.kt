@@ -92,6 +92,7 @@ import org.omarchy.flux.core.HerdrOutput
 import org.omarchy.flux.core.HerdrReply
 import org.omarchy.flux.core.HerdrSync
 import org.omarchy.flux.core.HerdrTerminal
+import org.omarchy.flux.core.choicesOpen
 import org.omarchy.flux.mic.MicSession
 import org.omarchy.flux.voice.Dictation
 import org.omarchy.flux.voice.DictationBar
@@ -640,6 +641,16 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
         ReplyLock.run(context, action) { lockError = it }
     }
     fun keys(vararg k: String) = guarded { HerdrSync.sendKeys(FluxCore, d.id, agent.pane, k.toList()) }
+    // After an answer, the choices wait for the next output, so that a second tap does not answer the next question.
+    var answered by remember(d.id, agent.pane) { mutableStateOf<HerdrOutput?>(null) }
+    fun answer(key: String) = guarded {
+        answered = out
+        HerdrSync.sendKeys(FluxCore, d.id, agent.pane, listOf(key))
+    }
+    // After a reply that failed, the screen reads the output again. The choices then show the question that waits now.
+    LaunchedEffect(reply) {
+        if (answered != null && reply != null && !reply.sending && reply.error != null && !isDemo(d.id)) HerdrSync.read(FluxCore, d.id, agent.pane)
+    }
 
     // Dictation: the phone turns speech into text at the cursor of the field.
     // The text waits there for Send, so a prompt still needs the phone lock.
@@ -704,7 +715,8 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
     // The grid gap keeps 8 dp between the choices, so that a tap does not hit the next choice.
     Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
         val choices = if (agent.status == AgentStatus.Blocked) out?.choices.orEmpty() else emptyList()
-        for (c in choices) ChoiceTile(c) { keys(c.key) }
+        val open = choicesOpen(out, answered, reply?.sending == true)
+        for (c in choices) ChoiceTile(c, open) { answer(c.key) }
         KeyBar(
             listOf(
                 BarKey("esc", "Escape") { keys("esc") },
@@ -807,15 +819,16 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
     }
 }
 
-/** A numbered choice of a dialog. A tap sends its digit. */
+/** A numbered choice of a dialog. A tap sends its digit. A choice that is not [enabled] takes no tap. */
 @Composable
-private fun ChoiceTile(c: AgentChoice, onClick: () -> Unit) {
+private fun ChoiceTile(c: AgentChoice, enabled: Boolean, onClick: () -> Unit) {
     // The agent marks 1 choice with its cursor. The tile shows it in the selection color.
     Tile(
         Modifier.fillMaxWidth().heightIn(min = 48.dp), onClick,
         accent = Tn.blue,
         container = choiceFill(c.selected),
         border = choiceBorder(c.selected),
+        enabled = enabled,
         padding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.Center,
     ) {
