@@ -152,12 +152,15 @@ func fakeRecorder(t *testing.T) string {
 	mark := filepath.Join(dir, "recorded")
 	runs := filepath.Join(dir, "runs")
 	// A recording stops 0.3 seconds after SIGINT and then writes "end".
+	// A test sends SIGINT as soon as it sees the line in runs or the mark,
+	// so the trap and the sleep start first. The sleep writes nothing to
+	// the stream, so it cannot hold the stream open after the shell exits.
 	script := "#!/bin/sh\n" +
-		"echo \"$1\" >> " + runs + "\n" +
-		"if [ \"$1\" = --list-monitors ]; then echo 'DP-1|1920x1080'; exit 0; fi\n" +
-		"/usr/bin/touch " + mark + "\n" +
+		"if [ \"$1\" = --list-monitors ]; then echo \"$1\" >> " + runs + "; echo 'DP-1|1920x1080'; exit 0; fi\n" +
 		"trap '/usr/bin/kill $pid; /usr/bin/sleep 0.3; echo end >> " + runs + "; exit 0' INT\n" +
-		"/usr/bin/sleep 10 & pid=$!\n" +
+		"/usr/bin/sleep 10 >/dev/null & pid=$!\n" +
+		"echo \"$1\" >> " + runs + "\n" +
+		"/usr/bin/touch " + mark + "\n" +
 		"wait $pid\n"
 	if err := os.WriteFile(filepath.Join(dir, desktopRecorder), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
