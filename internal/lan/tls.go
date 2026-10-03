@@ -8,13 +8,15 @@ import (
 	"errors"
 )
 
-// The port ranges of the Flux protocol.
+// The ports of the Flux protocol. Discovery uses UDPPort. A device listens
+// for links on a port from MinTCPPort to MaxTCPPort, and for a payload, a
+// tunnel, or a stream on a port from MinPayloadPort to MaxPayloadPort.
 const (
-	UDPPort         = 1716
-	MinTCPPort      = 1716
-	MaxTCPPort      = 1764
-	MinPayloadPort  = 1739
-	MaxPayloadPort  = 1764
+	UDPPort         = 12100
+	MinTCPPort      = 12100
+	MaxTCPPort      = 12108
+	MinPayloadPort  = 12070
+	MaxPayloadPort  = 12099
 	maxIdentitySize = 64 << 10
 )
 

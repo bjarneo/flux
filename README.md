@@ -4,7 +4,7 @@ Connect your Omarchy desktop to an Android phone, an iPhone, or a Mac over your 
 Share files, clipboard text, and clipboard images, read phone notifications, control media, and use your phone as a camera or microphone.
 
 Flux includes a CLI, a background daemon, a native Qt window, an Omarchy shell plugin, a native Android app, a native iOS app, and a native macOS app.
-`fluxd` listens on 1 TCP port from 1716 to 1764 and on UDP port 1716, and it also opens the connections to the devices itself.
+`fluxd` listens on 1 TCP port from 12100 to 12108 and on UDP port 12100, and it also opens the connections to the devices itself.
 So Flux works with the default Omarchy firewall, which blocks inbound traffic, and needs no new inbound rule.
 See [security](docs/security.md) for what a paired device can do and which settings limit it.
 

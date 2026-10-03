@@ -54,8 +54,8 @@ The routes are the same for each of them.
 
 `fluxd` also listens on all network interfaces:
 
-- TCP on the first free port from 1716 to 1764, for links that a device opens after it gets the UDP identity of `fluxd`.
-- UDP on port 1716, for the identity broadcasts of the devices.
+- TCP on the first free port from 12100 to 12108, for links that a device opens after it gets the UDP identity of `fluxd`.
+- UDP on port 12100, for the identity broadcasts of the devices.
 
 The default Omarchy firewall blocks inbound traffic to these ports and permits mDNS.
 The desktop opens each link itself, so Flux needs no new inbound desktop firewall rule for these routes.
@@ -63,10 +63,11 @@ Without such a firewall, each host that reaches the ports can open a link and se
 See [security](security.md#network-ports) and the [limits below](#limits-for-devices-that-are-not-paired).
 Wi-Fi client isolation can still block communication between devices.
 
-A payload server for a device without `flux.tunnel` listens on the local address of the link.
+A payload server for a device without `flux.tunnel` listens on the first free port from 12070 to 12099 on the local address of the link.
 It accepts connections from the address of the link until 1 of them shows the certificate of the device, or for 20 seconds.
 A received payload fails when the device sends nothing for 60 seconds.
 `fluxd` connects to a payload, tunnel, or stream port of the device from the local address of the link, because the phone accepts only that address.
+It connects only to a port from 12070 to 12099.
 
 ## Pairing and trust
 
@@ -100,7 +101,7 @@ Any host on the network can send identities and open links.
 | Outgoing connections at the same time | 16 to devices without a trust entry or an open pairing. Dials to the other devices do not count. |
 | Devices from UDP and mDNS | 64 that are not paired. A new device replaces the device with the oldest report. |
 | Pair requests | 1 for each device in 2 seconds, 1 notification for each device, and 4 open requests, 2 of them from 1 address. After a pairing in state `incoming` or `confirm` ends with a pair false, a reject, or a timeout, or an `incoming` request ends with its link, 30 seconds before a new request of the device counts. |
-| Ports from discovery | 1716 to 1764 |
+| Ports from discovery | 12100 to 12108 |
 
 A daemon that runs with `-tcp-port` on another port accepts any port from discovery, because its test peers use other ports too.
 

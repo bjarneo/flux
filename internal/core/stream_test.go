@@ -11,7 +11,7 @@ import (
 )
 
 func TestMicStartCheck(t *testing.T) {
-	b := micStart{State: "start", Port: 1739}
+	b := micStart{State: "start", Port: 12070}
 	if err := b.check(); err != nil {
 		t.Fatalf("defaults: %v", err)
 	}
@@ -21,10 +21,10 @@ func TestMicStartCheck(t *testing.T) {
 	bad := []micStart{
 		{Port: 0},
 		{Port: 70000},
-		{Port: 1739, Format: "f32le"},
-		{Port: 1739, Rate: 4000},
-		{Port: 1739, Rate: 192000},
-		{Port: 1739, Channels: 6},
+		{Port: 12070, Format: "f32le"},
+		{Port: 12070, Rate: 4000},
+		{Port: 12070, Rate: 192000},
+		{Port: 12070, Channels: 6},
 	}
 	for _, b := range bad {
 		if err := b.check(); err == nil {

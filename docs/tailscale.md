@@ -102,7 +102,7 @@ flux-cli --device "Pixel 8" addresses remove pixel-8
 - `fluxd` dials every 30 seconds while the device is offline. It also dials 2 seconds after a link drops, and at once when you add an address.
 - `fluxd` closes a link when sent data gets no acknowledgment for 30 seconds. So an old link does not stay open after the phone leaves the Wi-Fi.
 - When mDNS reports the phone, `fluxd` dials the extra addresses too. Avahi can report an old address from its cache.
-- `fluxd` uses the TCP port of the device from the last link. A device without a known port gets port 1716.
+- `fluxd` uses the TCP port of the device from the last link. A device without a known port, or with a port from before the port change, gets port 12100.
 - UDP and mDNS do not change the address or the port of a paired device, because any host on the network can send them. The address changes only when a link shows the pinned certificate.
 - Payloads, tunnels, and streams use the address of the link, so they also go through Tailscale.
 
@@ -117,7 +117,7 @@ Scripts can change the list with the `addresses.add` and `addresses.remove` [IPC
 
 An extra address can be any host name or IP address that routes to the phone.
 Use the same command for another VPN, such as WireGuard.
-The desktop must be able to open TCP connections to the phone on ports 1716 to 1764.
+The desktop must be able to open TCP connections to the phone on ports 12070 to 12108.
 
 ## Access and security
 
@@ -128,9 +128,9 @@ Other devices in your tailnet can reach the Flux ports of the phone.
 Flux for Android takes a connection from a device that is not paired only while Flux is on the screen or while it scans.
 In that time, another device in the tailnet can send a pair request, as a device on the local network can.
 A paired computer connects at any time.
-To stop the other devices, use Tailscale access controls to limit TCP ports 1716 to 1764 on the phone to the desktop.
+To stop the other devices, use Tailscale access controls to limit TCP ports 12070 to 12108 on the phone to the desktop.
 
-`fluxd` also listens on 1 TCP port from 1716 to 1764 and on UDP port 1716 on all interfaces, also `tailscale0`.
+`fluxd` also listens on 1 TCP port from 12100 to 12108 and on UDP port 12100 on all interfaces, also `tailscale0`.
 The default Omarchy firewall blocks this inbound traffic, and Flux does not need it.
 Do not add a rule such as `ufw allow in on tailscale0` for Flux.
 With such a rule, each device in the tailnet can open a link to `fluxd` and send a pair request.
@@ -160,7 +160,7 @@ See [network ports](security.md#network-ports).
 3. Check that the Flux port of the phone answers:
 
    ```sh
-   timeout 3 bash -c '</dev/tcp/pixel-8/1716' && echo "port 1716 answers"
+   timeout 3 bash -c '</dev/tcp/pixel-8/12100' && echo "port 12100 answers"
    ```
 
 4. If the port does not answer, open Flux for Android and check that it runs.

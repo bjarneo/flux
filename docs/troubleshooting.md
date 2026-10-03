@@ -145,7 +145,7 @@ See [check a release](install.md#check-a-release) to check the files by hand.
    ```
 
 Guest Wi-Fi and client isolation can block devices on the same access point.
-`fluxd` listens on 1 TCP port from 1716 to 1764 and on UDP port 1716, but it does not need inbound traffic.
+`fluxd` listens on 1 TCP port from 12100 to 12108 and on UDP port 12100, but it does not need inbound traffic.
 It finds the devices through mDNS and opens the connections itself.
 So a new inbound desktop firewall rule is not the default fix.
 See [network ports](security.md#network-ports).
@@ -186,6 +186,18 @@ When the old app announces itself, `fluxd` logs `runs a Flux app older than 0.8`
 Install the latest app from the [releases](https://github.com/bjarneo/flux/releases/latest).
 On Android, [install it with adb](android-setup.md#install-with-adb).
 `adb install -r` keeps the app data, so the phone stays paired.
+
+## A device does not find the computer after an update
+
+`fluxd` uses UDP port 12100 and TCP ports 12070 to 12108.
+A Flux app from before the port change uses the ports 1716 to 1764.
+On an Android phone, an iPhone, or a Mac, such an app does not find the computer, and `fluxd` does not connect to it.
+`flux-cli update --phone` cannot send it the new app, because it needs a connection.
+
+Install the latest app on each device from the [releases](https://github.com/bjarneo/flux/releases/latest).
+On Android, [install it with adb](android-setup.md#install-with-adb).
+`adb install -r` keeps the app data, so the phone stays paired.
+On an iPhone, [install the release with a sideload tool](ios.md#install-a-release-with-a-sideload-tool).
 
 ## A pairing from the computer stops after the phone accepts
 

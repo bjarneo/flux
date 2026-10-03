@@ -12,7 +12,7 @@ func FuzzUnmarshal(f *testing.F) {
 	for _, seed := range []string{
 		`{"id":1727260000000,"type":"flux.ping","body":{"message":"hi"}}`,
 		`{"id":"1727260000000","type":"flux.pair","body":{"pair":true,"timestamp":1790000000}}`,
-		`{"id":1.5e12,"type":"flux.share.request","body":{"filename":"a.jpg"},"payloadSize":3,"payloadTransferInfo":{"port":1739}}`,
+		`{"id":1.5e12,"type":"flux.share.request","body":{"filename":"a.jpg"},"payloadSize":3,"payloadTransferInfo":{"port":12070}}`,
 		`{"type":"flux.tunnel","body":null}`,
 		`{"type":""}`,
 		`{"id":"x","type":"flux.ping"}`,
@@ -41,7 +41,7 @@ func FuzzUnmarshal(f *testing.F) {
 // link setup do, and checks the cleaned fields.
 func FuzzIdentity(f *testing.F) {
 	for _, seed := range []string{
-		`{"type":"flux.identity","body":{"deviceId":"9f1c0e5b7a2d4c3e8b6a1f0d2c4e6a8b","deviceName":"Pixel 8","deviceType":"phone","protocolVersion":8,"tcpPort":1716}}`,
+		`{"type":"flux.identity","body":{"deviceId":"9f1c0e5b7a2d4c3e8b6a1f0d2c4e6a8b","deviceName":"Pixel 8","deviceType":"phone","protocolVersion":8,"tcpPort":12100}}`,
 		`{"type":"flux.identity","body":{"deviceId":"9f1c0e5b7a2d4c3e8b6a1f0d2c4e6a8b","deviceName":"\u001bc\r\nPixel","deviceType":"\u001b]52;c;aGk=\u0007","targetDeviceId":"x","targetProtocolVersion":"8"}}`,
 		`{"type":"flux.identity","body":{"deviceId":"short","deviceName":"\u202eevil","app":"android","appVersion":"0.7.0"}}`,
 		`{"type":"flux.identity","body":{"targetProtocolVersion":8.9,"incomingCapabilities":["flux.ping"]}}`,

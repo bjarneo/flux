@@ -28,10 +28,10 @@ const (
 var payloadIdle = 60 * time.Second
 
 // SendWithPayload sends a packet with a payload. It opens a payload server
-// on a port from 1739 to 1764 on the local address of the link, announces
-// the port in the packet, and streams r to the device that connects. The
-// payload server is the TLS server. progress receives the number of bytes
-// sent so far.
+// on a port from MinPayloadPort to MaxPayloadPort on the local address of
+// the link, announces the port in the packet, and streams r to the device
+// that connects. The payload server is the TLS server. progress receives
+// the number of bytes sent so far.
 //
 // A peer that opens tunnels gets the payload through a tunnel instead, so
 // the payload passes a firewall on this computer.
@@ -238,8 +238,8 @@ func (l *Link) checkPeer(tc *tls.Conn) error {
 	return nil
 }
 
-// listenPayload listens on the first free port from 1739 to 1764 on host.
-// An empty host listens on every interface.
+// listenPayload listens on the first free port from MinPayloadPort to
+// MaxPayloadPort on host. An empty host listens on every interface.
 func listenPayload(ctx context.Context, host string) (net.Listener, int, error) {
 	lc := net.ListenConfig{}
 	for port := MinPayloadPort; port <= MaxPayloadPort; port++ {
