@@ -94,6 +94,19 @@ public final class LanBackend: @unchecked Sendable {
     /// The most device IDs that the dial interval remembers.
     static let maxDialTargets = 256
 
+    /// The TCP keepalive of fluxd: the first probe after 10 idle seconds,
+    /// then 1 probe each 5 seconds. After 3 probes without an answer, the
+    /// kernel closes the link. The Darwin default waits 2 hours, so a link
+    /// that a network change broke stays open, and no new dial starts.
+    /// The kernel sends the probes, so they also go while iOS suspends Flux.
+    static let keepAliveIdle: SocketOptionValue = 10
+    static let keepAliveInterval: SocketOptionValue = 5
+    static let keepAliveCount: SocketOptionValue = 3
+    /// Darwin names the idle time `TCP_KEEPALIVE`.
+    static let tcpKeepIdle = NIOBSDSocket.Option(rawValue: TCP_KEEPALIVE)
+    static let tcpKeepInterval = NIOBSDSocket.Option(rawValue: TCP_KEEPINTVL)
+    static let tcpKeepCount = NIOBSDSocket.Option(rawValue: TCP_KEEPCNT)
+
     public init(tls: FluxTLS, config: LanConfig, identity: @escaping @Sendable (Int) -> Identity, delegate: LanBackendDelegate) {
         self.tls = tls
         self.config = config
@@ -189,6 +202,9 @@ public final class LanBackend: @unchecked Sendable {
         let bootstrap = ServerBootstrap(group: group)
             .serverChannelOption(.socketOption(.so_reuseaddr), value: 1)
             .childChannelOption(.socketOption(.so_keepalive), value: 1)
+            .childChannelOption(.tcpOption(Self.tcpKeepIdle), value: Self.keepAliveIdle)
+            .childChannelOption(.tcpOption(Self.tcpKeepInterval), value: Self.keepAliveInterval)
+            .childChannelOption(.tcpOption(Self.tcpKeepCount), value: Self.keepAliveCount)
             .childChannelOption(.socketOption(.tcp_nodelay), value: 1)
             .childChannelInitializer { [weak self] ch in
                 ch.eventLoop.makeCompletedFuture {
@@ -303,6 +319,9 @@ public final class LanBackend: @unchecked Sendable {
         ClientBootstrap(group: group)
             .connectTimeout(.seconds(5))
             .channelOption(.socketOption(.so_keepalive), value: 1)
+            .channelOption(.tcpOption(Self.tcpKeepIdle), value: Self.keepAliveIdle)
+            .channelOption(.tcpOption(Self.tcpKeepInterval), value: Self.keepAliveInterval)
+            .channelOption(.tcpOption(Self.tcpKeepCount), value: Self.keepAliveCount)
             .channelOption(.socketOption(.tcp_nodelay), value: 1)
             .channelInitializer { [weak self] ch in
                 ch.eventLoop.makeCompletedFuture {

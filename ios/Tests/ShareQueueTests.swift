@@ -176,6 +176,16 @@ final class ShareQueueTests: XCTestCase {
         XCTAssertEqual(Set(ShareQueue.expired(queue.items(), now: t0.addingTimeInterval(ShareQueue.maxAge + 1)).map(\.id)), [a.id, b.id])
     }
 
+    func testATryThatALinkCutDoesNotCount() throws {
+        let queue = try makeQueue()
+        let a = try queue.add(text: "a", kind: .text, computerId: "a", created: t0, order: 0)
+        for _ in 0..<ShareQueue.maxTries { try queue.markFailed(a.id, message: "Not connected", counts: false) }
+        let item = try XCTUnwrap(queue.items().first)
+        XCTAssertEqual(item.failure, "Not connected", "the reason shows")
+        XCTAssertNil(item.failures, "a cut try does not count")
+        XCTAssertTrue(ShareQueue.expired(queue.items(), now: t0).isEmpty, "the item waits for the next link")
+    }
+
     func testDroppedText() {
         let file = QueuedShare(id: "1", computerId: "a", kind: .file, name: "a.txt", created: t0, order: 0)
         XCTAssertEqual(QueuedShares.droppedText([file]), "1 file that you shared did not go out in 5 tries or 7 days, so Flux removed it.")

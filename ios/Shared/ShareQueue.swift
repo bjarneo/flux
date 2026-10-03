@@ -193,11 +193,13 @@ struct ShareQueue: Sendable {
         try? FileManager.default.removeItem(at: dir)
     }
 
-    /// Keeps a failed item with the reason, for the next try, and counts the try.
-    func markFailed(_ id: String, message: String) throws {
+    /// Keeps a failed item with the reason, for the next try. With counts,
+    /// the try adds to `failures`. A try that a closed link cut does not
+    /// count, so that interruptions do not make the item expire.
+    func markFailed(_ id: String, message: String, counts: Bool = true) throws {
         guard let dir = itemFolder(id), var item = items().first(where: { $0.id == id }) else { return }
         item.failure = message
-        item.failures = (item.failures ?? 0) + 1
+        if counts { item.failures = (item.failures ?? 0) + 1 }
         try JSONEncoder().encode(item).write(to: dir.appendingPathComponent(Self.entryName), options: .atomic)
     }
 

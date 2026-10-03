@@ -91,8 +91,8 @@ final class QueuedShares {
     /// while a drain runs makes it read the queue again when it ends.
     ///
     /// Nothing goes while Flux runs in the background only for an App
-    /// Intent. The links close when the action ends, and a transfer that
-    /// stops counts as a failed try. The items go when Flux opens.
+    /// Intent. The links close when the action ends and cut the transfers.
+    /// The items go when Flux opens.
     func drain() {
         guard queue != nil, let model, !model.runsOnlyForIntents else { return }
         if draining {
@@ -121,18 +121,22 @@ final class QueuedShares {
                 let files = ids.compactMap { id in byId[id].flatMap { item in queue.file(of: item).map { ($0, item) } } }
                 let byFile = Dictionary(files.map { ($0.0, $0.1) }, uniquingKeysWith: { a, _ in a })
                 let done = OSAllocatedUnfairLock(initialState: [QueuedShare]())
+                let core = model.core
+                let link = Self.openLink(computer, core: core)
                 do {
                     try await share.sendAndWait(files: files.map(\.0), to: computer) { url, error in
                         guard let item = byFile[url] else { return }
                         if let error {
-                            try? queue.markFailed(item.id, message: error.localizedDescription)
+                            let counts = QueuedShares.counts(start: link, now: QueuedShares.openLink(computer, core: core))
+                            try? queue.markFailed(item.id, message: error.localizedDescription, counts: counts)
                         } else {
                             queue.remove(item.id)
                             done.withLock { $0.append(item) }
                         }
                     }
                 } catch {
-                    for (_, item) in files { try? queue.markFailed(item.id, message: error.localizedDescription) }
+                    let counts = Self.counts(start: link, now: Self.openLink(computer, core: core))
+                    for (_, item) in files { try? queue.markFailed(item.id, message: error.localizedDescription, counts: counts) }
                 }
                 sent[computer, default: []] += done.withLock { $0 }
             case .text(let computer, let id):
@@ -145,7 +149,8 @@ final class QueuedShares {
                     queue.remove(id)
                     sent[computer, default: []].append(item)
                 } else {
-                    try? queue.markFailed(id, message: "Not connected")
+                    // The send fails only without an open link, so the try does not count.
+                    try? queue.markFailed(id, message: "Not connected", counts: false)
                 }
             }
             refresh()
@@ -155,6 +160,21 @@ final class QueuedShares {
             Notifier.shared.post(id: "share-queue-\(computer)", category: Self.notificationCategory,
                                  title: "Sent to \(name)", body: Self.sentText(items))
         }
+    }
+
+    /// The open link to the computer, or nil.
+    nonisolated static func openLink(_ computer: String, core: FluxCore) -> Link? {
+        core.withDevice(computer) { d in d.online ? d.link : nil } ?? nil
+    }
+
+    /// Reports whether a failed try counts toward `ShareQueue.maxTries`. It
+    /// counts only while the link from the start of the try is still open.
+    /// A link that closed cut the try, for example at the end of the
+    /// background time of Flux or after a network change. The item then
+    /// waits for the next link.
+    nonisolated static func counts(start: Link?, now: Link?) -> Bool {
+        guard let start, let now else { return false }
+        return start === now
     }
 
     /// For example "2 files that you shared did not go out in 5 tries or 7 days, so Flux removed them."

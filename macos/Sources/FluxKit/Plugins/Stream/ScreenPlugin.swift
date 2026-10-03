@@ -241,7 +241,11 @@ public final class ScreenPlugin: FluxPlugin, @unchecked Sendable {
                 end(notify: true, status: StreamStatus(.error, "The screen mirror stopped after the display changed", deviceId: deviceId), id: id)
             }
         }
-        if change(id, { $0.watch = timer }) { timer.resume() }
+        // libdispatch stops the process when it releases a timer that never
+        // started. A stop during the capture start ends the session, and the
+        // session then does not keep the timer, so cancel it before the start.
+        if !change(id, { $0.watch = timer }) { timer.cancel() }
+        timer.resume()
     }
 
     /// Stops the current attempt.
