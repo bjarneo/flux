@@ -40,11 +40,11 @@ See [status](macos-status.md) for the details of each check and [Flux for macOS]
 ### Network
 
 - [x] TLS 1.2 with both sides presenting a certificate, and the pin check after the handshake.
-- [x] UDP identity broadcasts and a receiver on port 1716.
-- [x] TCP listener on ports 1716 to 1764 and a dialer for UDP identities.
+- [x] UDP identity broadcasts and a receiver on port 12100.
+- [x] TCP listener on ports 12100 to 12108 and a dialer for UDP identities.
 - [x] Plain-text identity, then TLS on the same socket, then the identity again inside TLS.
 - [x] Links with packet framing and buffering before start.
-- [x] Payload server and client on ports 1739 to 1764.
+- [x] Payload server and client on ports 12070 to 12099.
 - [x] `flux.tunnel` listener with the pinned certificate.
 - [x] Bonjour publish and browse for `_flux._udp`.
 - [x] Test variables: `FLUX_DATA_DIR`, `FLUX_UDP_PORT`, `FLUX_PEER_UDP_PORT`, `FLUX_LOOPBACK`.

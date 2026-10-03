@@ -111,7 +111,7 @@ Paste this text into **Notes** in **App Review Information**, and complete the f
 ```text
 Flux connects the iPhone to the user's own Omarchy computer on the same local network. The computer runs fluxd, the Flux service for Omarchy. Flux has no account, no server of its own, and no analytics. It sends data only to computers that the user paired. The media screen loads album art from the web address that a player on the computer reports. [Name the screen recording or the demo switch here.]
 
-Pairing: the iPhone publishes the Bonjour service _flux._udp and listens on TCP ports 1716 to 1764. The computer connects to it. The user compares a 16-character key in 4 groups of 4 on both devices before the pairing. The key is the first 8 bytes of a SHA-256 hash of both public keys and the pairing time.
+Pairing: the iPhone publishes the Bonjour service _flux._udp and listens on TCP ports 12100 to 12108. The computer connects to it. The user compares a 16-character key in 4 groups of 4 on both devices before the pairing. The key is the first 8 bytes of a SHA-256 hash of both public keys and the pairing time.
 
 Encryption: each device makes a self-signed RSA 2048 certificate with its device ID as the common name, O=Omarchy, and OU=Flux. The links use TLS 1.2 through swift-nio-ssl. After the pairing, each side accepts only the certificate that it pinned, because the devices have no public certificate authority. The file browser uses SSH and SFTP through the Citadel library inside a TLS tunnel with the same certificates. Sudo approval signs with a P-256 key in the Secure Enclave through CryptoKit, and each signature needs Face ID or Touch ID. The links use sockets, not URL loading, and the app sets no App Transport Security exception.
 
