@@ -76,6 +76,9 @@ A sideload tool such as AltStore, SideStore, or Sideloadly signs it with your Ap
 The limits of a free Apple ID in the table above also apply.
 The window on the computer shows an update notice only for the Android app.
 To find a newer iPhone app, check `https://github.com/bjarneo/flux/releases`.
+Flux 0.10.1 and earlier use other ports, see [Pair an iPhone](#pair-an-iphone).
+An iPhone app of 0.10.1 or earlier cannot connect to a newer `fluxd`, and a newer iPhone app cannot connect to an earlier `fluxd`.
+Update the iPhone app and `fluxd` together.
 
 The share extension needs the App Group `group.org.omarchy.flux`.
 When the sideload tool cannot give the app this group, the share extension cannot queue files for the app.
@@ -112,8 +115,9 @@ iOS gives apps only the generic name "iPhone", so set a name there.
 Flux keeps its identity key and certificate out of iCloud and computer backups, so pair again after you restore a backup.
 
 The computer connects to the iPhone.
-The iPhone publishes `_flux._udp` through Bonjour and listens on TCP ports 1716 to 1764.
-It also sends its identity to each computer that it finds through Bonjour.
+The iPhone publishes `_flux._udp` through Bonjour and listens for links on 1 TCP port from 12100 to 12108.
+Transfers, tunnels, and streams use TCP ports 12070 to 12099 on the iPhone.
+It also sends its identity to UDP port 12100 of each computer that it finds through Bonjour.
 It sends no UDP broadcasts, because iOS needs a special entitlement for them.
 
 | Problem | Check |

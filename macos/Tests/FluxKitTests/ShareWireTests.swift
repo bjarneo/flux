@@ -49,13 +49,13 @@ final class ShareWireTests: XCTestCase {
     }
 
     func testCaptureCarriesTheExtraFields() {
-        let p = Packet.parse(ShareWire.capture(name: "shot.png", extra: ["photo": .bool(true), "screenshot": .bool(true)], size: 5, port: 1739).serialize())!
+        let p = Packet.parse(ShareWire.capture(name: "shot.png", extra: ["photo": .bool(true), "screenshot": .bool(true)], size: 5, port: 12070).serialize())!
         XCTAssertEqual(p.string("filename"), "shot.png")
         XCTAssertEqual(p.bool("open"), false)
         XCTAssertEqual(p.bool("photo"), true)
         XCTAssertEqual(p.bool("screenshot"), true)
         XCTAssertEqual(p.payloadSize, 5)
-        XCTAssertEqual(p.payloadPort, 1739)
+        XCTAssertEqual(p.payloadPort, 12070)
 
         let scan = ShareWire.scan("line 1\nline 2")
         XCTAssertEqual(scan.string("text"), "line 1\nline 2")
@@ -63,9 +63,9 @@ final class ShareWireTests: XCTestCase {
     }
 
     func testRequestPrefersTextThenURLThenFile() {
-        let both = Packet(PacketType.share, ["text": "hi", "url": "https://x.org", "filename": "a"], payloadSize: 3, payloadPort: 1739)
+        let both = Packet(PacketType.share, ["text": "hi", "url": "https://x.org", "filename": "a"], payloadSize: 3, payloadPort: 12070)
         XCTAssertEqual(ShareRequest(both), .text("hi"))
-        let url = Packet(PacketType.share, ["url": "https://x.org", "filename": "a"], payloadSize: 3, payloadPort: 1739)
+        let url = Packet(PacketType.share, ["url": "https://x.org", "filename": "a"], payloadSize: 3, payloadPort: 12070)
         XCTAssertEqual(ShareRequest(url), .url(URL(string: "https://x.org")!))
         let file = Packet.parse(#"{"id":1,"type":"flux.share.request","body":{"filename":"r.txt","open":false,"lastModified":1700000000123},"payloadSize":3,"payloadTransferInfo":{"tunnel":"t1"}}"#)!
         XCTAssertEqual(ShareRequest(file), .file(name: "r.txt", lastModified: 1_700_000_000_123))
@@ -73,7 +73,7 @@ final class ShareWireTests: XCTestCase {
     }
 
     func testRequestNamesAFileWithoutName() {
-        let p = Packet(PacketType.share, [:], payloadSize: 3, payloadPort: 1739)
+        let p = Packet(PacketType.share, [:], payloadSize: 3, payloadPort: 12070)
         XCTAssertEqual(ShareRequest(p, now: 42), .file(name: "file-42", lastModified: nil))
     }
 

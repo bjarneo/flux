@@ -6,7 +6,7 @@ import NIOSSL
 import NIOTLS
 
 /// The TCP port range for payload servers and tunnels.
-public let payloadPorts: ClosedRange<Int> = 1739...1764
+public let payloadPorts: ClosedRange<Int> = 12070...12099
 
 /// How long a tunnel listener waits for the computer.
 public let tunnelTimeout: TimeAmount = .seconds(30)

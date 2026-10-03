@@ -8,15 +8,15 @@ import NIOTLS
 /// Ports and discovery scope of the LAN backend.
 public struct LanConfig: Sendable {
     /// The UDP port that receives identity broadcasts.
-    public var udpPort = 1716
+    public var udpPort = 12100
     /// The UDP port of peers that this device announces itself to.
-    public var peerUDPPort = 1716
+    public var peerUDPPort = 12100
     /// The TCP port range for links.
-    public var tcpPorts: ClosedRange<Int> = 1716...1764
+    public var tcpPorts: ClosedRange<Int> = 12100...12108
     /// The TCP ports of computers that this device dials after a UDP
-    /// identity. fluxd listens on 1716 to 1764. In loopback mode the dial
+    /// identity. fluxd listens on 12100 to 12108. In loopback mode the dial
     /// goes to any port on 127.0.0.1, for a headless fluxd in a test.
-    public var peerTcpPorts: ClosedRange<Int> = 1716...1764
+    public var peerTcpPorts: ClosedRange<Int> = 12100...12108
     /// Announces only to 127.0.0.1, for tests against a headless fluxd.
     public var loopbackOnly = false
     /// Sends identities to broadcast addresses. iOS needs the multicast

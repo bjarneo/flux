@@ -28,7 +28,7 @@ final class PayloadServerTests: XCTestCase {
     private static let stranger = try! LocalCertificate.generate(deviceId: "8f1c0e5b7a2d4c3e8b6a1f0d2c4e6a8b")
 
     private func open() async throws -> PayloadServer {
-        try await PayloadServer.open(tls: FluxTLS(local: Self.phone), expected: Self.computer.certificateDER, ports: 41739...41764)
+        try await PayloadServer.open(tls: FluxTLS(local: Self.phone), expected: Self.computer.certificateDER, ports: 42070...42099)
     }
 
     /// Reads the stream until it has `count` bytes, then closes it.

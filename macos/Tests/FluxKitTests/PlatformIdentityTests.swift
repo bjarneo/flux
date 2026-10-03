@@ -44,16 +44,32 @@ final class PlatformIdentityTests: XCTestCase {
     /// address. This device dials only the ports of fluxd.
     func testUDPDialsOnlyFluxPorts() {
         let config = LanConfig()
-        XCTAssertTrue(LanBackend.dialAllowed(ip: "192.168.1.20", port: 1716, config: config))
-        XCTAssertTrue(LanBackend.dialAllowed(ip: "192.168.1.20", port: 1764, config: config))
-        for port in [0, 22, 443, 1715, 1765, 65535, 70000, -1, Int.max] {
+        XCTAssertTrue(LanBackend.dialAllowed(ip: "192.168.1.20", port: 12100, config: config))
+        XCTAssertTrue(LanBackend.dialAllowed(ip: "192.168.1.20", port: 12108, config: config))
+        // 1716 and 1764 are the link ports of earlier fluxd versions.
+        for port in [0, 22, 443, 1716, 1764, 12070, 12099, 12109, 65535, 70000, -1, Int.max] {
             XCTAssertFalse(LanBackend.dialAllowed(ip: "192.168.1.20", port: port, config: config), "\(port)")
         }
         var loopback = LanConfig()
         loopback.loopbackOnly = true
-        XCTAssertTrue(LanBackend.dialAllowed(ip: "127.0.0.1", port: 41716, config: loopback), "a test fluxd uses any port")
-        XCTAssertFalse(LanBackend.dialAllowed(ip: "192.168.1.20", port: 1716, config: loopback))
+        XCTAssertTrue(LanBackend.dialAllowed(ip: "127.0.0.1", port: 42100, config: loopback), "a test fluxd uses any port")
+        XCTAssertFalse(LanBackend.dialAllowed(ip: "192.168.1.20", port: 12100, config: loopback))
         XCTAssertFalse(LanBackend.dialAllowed(ip: "127.0.0.1", port: 70000, config: loopback))
+    }
+
+    /// Flux uses its own ports. The test variables still set the UDP ports.
+    func testFluxPorts() {
+        let config = LanConfig()
+        XCTAssertEqual(config.udpPort, 12100)
+        XCTAssertEqual(config.peerUDPPort, 12100)
+        XCTAssertEqual(config.tcpPorts, 12100...12108)
+        XCTAssertEqual(config.peerTcpPorts, 12100...12108)
+        XCTAssertEqual(payloadPorts, 12070...12099)
+        let env = LanConfig.fromEnvironment(["FLUX_UDP_PORT": "28731", "FLUX_PEER_UDP_PORT": "28716", "FLUX_LOOPBACK": "1"])
+        XCTAssertEqual(env.udpPort, 28731)
+        XCTAssertEqual(env.peerUDPPort, 28716)
+        XCTAssertTrue(env.loopbackOnly)
+        XCTAssertEqual(LanConfig.fromEnvironment([:]).udpPort, 12100)
     }
 
     #if os(iOS)

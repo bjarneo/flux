@@ -19,7 +19,7 @@ struct SettingsView: View {
                     LabeledContent("Device ID") { Text(model.state.deviceId).textSelection(.enabled).font(.caption.monospaced()) }
                     LabeledContent("Link port", value: model.state.tcpPort == 0 ? "–" : String(model.state.tcpPort))
                     if !model.state.listeningUdp {
-                        Text("Another app uses UDP port 1716. Flux still announces itself and computers can connect.")
+                        Text("Another app uses UDP port 12100. Flux still announces itself and computers can connect.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

@@ -28,10 +28,10 @@ final class ProtocolTests: XCTestCase {
     }
 
     func testPayloadRoundTrip() {
-        let port = Packet(PacketType.share, ["filename": "a.txt"], payloadSize: 12, payloadPort: 1739)
+        let port = Packet(PacketType.share, ["filename": "a.txt"], payloadSize: 12, payloadPort: 12070)
         let parsedPort = Packet.parse(port.serialize())
         XCTAssertEqual(parsedPort?.payloadSize, 12)
-        XCTAssertEqual(parsedPort?.payloadPort, 1739)
+        XCTAssertEqual(parsedPort?.payloadPort, 12070)
         XCTAssertNil(parsedPort?.payloadTunnel)
 
         let tunnel = Packet(PacketType.share, ["filename": "a.txt"], payloadSize: 12, payloadTunnel: "tok")
