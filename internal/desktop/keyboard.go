@@ -32,29 +32,32 @@ func (Keyboard) Type(ctx context.Context, text string, mods []string) error {
 		return nil
 	}
 	// wtype reads the text from stdin, so the text is not in the process list.
-	return runWtype(ctx, append(modArgs(mods), "-"), text, utf8.RuneCountInString(text))
+	return runWtype(ctx, withMods(mods, "-"), text, utf8.RuneCountInString(text))
 }
 
 // Key presses and releases the key with the XKB name, such as "Return",
 // times times, while it holds the modifiers mods. It stops when ctx ends.
 func (Keyboard) Key(ctx context.Context, name string, mods []string, times int) error {
-	args := modArgs(mods)
+	var keys []string
 	for range max(1, times) {
-		args = append(args, "-k", name)
+		keys = append(keys, "-k", name)
 	}
-	return runWtype(ctx, args, "", max(1, times))
+	return runWtype(ctx, withMods(mods, keys...), "", max(1, times))
 }
 
-// modArgs returns the wtype arguments that press mods. wtype releases the
-// modifiers when it exits.
-func modArgs(mods []string) []string {
-	var args []string
+// withMods returns the wtype arguments that press mods, run args, and then
+// release mods in the reverse order. Hyprland 0.56 keeps a modifier down
+// after wtype exits, so a modifier that wtype does not release changes
+// each later key into a shortcut.
+func withMods(mods []string, args ...string) []string {
+	var press, release []string
 	for _, m := range mods {
 		if wtypeMods[m] {
-			args = append(args, "-M", m)
+			press = append(press, "-M", m)
+			release = append([]string{"-m", m}, release...)
 		}
 	}
-	return args
+	return append(append(press, args...), release...)
 }
 
 // wtypeTimeout returns the longest time that wtype can take for a text of

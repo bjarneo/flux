@@ -556,3 +556,109 @@ func TestSendFilesNeedsPairing(t *testing.T) {
 		t.Errorf("SendClipboard with an image: %v", err)
 	}
 }
+
+// sendOverLink sends files with the names to a paired device on a real
+// link. Each file holds its name. It returns the transfers in the order of
+// the names, and the packets that reach the device.
+func sendOverLink(t *testing.T, names ...string) (*Daemon, []*Transfer, chan *proto.Packet) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	onDesk, onPhone, _, phoneID := linkPair(t, ctx)
+	d := testDaemon()
+	d.ctx = ctx
+	dev := &Device{ID: phoneID, Name: "phone", Paired: true, link: onDesk}
+	dir := t.TempDir()
+	var paths []string
+	for _, name := range names {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte(name), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		paths = append(paths, p)
+	}
+	fromDesk := packets(onPhone)
+	list, err := d.SendFiles(dev, paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d, list, fromDesk
+}
+
+// nextShare returns the file name of the next share packet from ch.
+func nextShare(t *testing.T, ch chan *proto.Packet) string {
+	t.Helper()
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case p := <-ch:
+			if p.Type != proto.TypeShare {
+				continue
+			}
+			var body struct {
+				Filename string `json:"filename"`
+			}
+			if err := p.Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			return body.Filename
+		case <-deadline:
+			t.Fatal("no share packet within 5 seconds")
+			return ""
+		}
+	}
+}
+
+// transferState returns the state and the error of tr.
+func transferState(d *Daemon, tr *Transfer) (string, string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return tr.State, tr.Error
+}
+
+// TestCancelQueuedTransfer checks that a queued file that the user cancels
+// does not go to the device, and that the next file still goes.
+func TestCancelQueuedTransfer(t *testing.T) {
+	d, list, fromDesk := sendOverLink(t, "a.txt", "b.txt", "c.txt")
+	// a.txt waits for the device, so b.txt and c.txt stay in the queue.
+	if name := nextShare(t, fromDesk); name != "a.txt" {
+		t.Fatalf("the device got %s first, want a.txt", name)
+	}
+	if err := d.CancelTransfer(list[1].ID); err != nil {
+		t.Fatal(err)
+	}
+	if state, _ := transferState(d, list[1]); state != "canceled" {
+		t.Fatalf("the canceled queued file is %s", state)
+	}
+	if err := d.CancelTransfer(list[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if name := nextShare(t, fromDesk); name != "c.txt" {
+		t.Fatalf("the device got %s after a.txt, want c.txt", name)
+	}
+	if state, _ := transferState(d, list[1]); state != "canceled" {
+		t.Fatalf("the canceled queued file is %s after the send loop passed it", state)
+	}
+}
+
+// TestCancelRunningTransfer checks that a cancel stops the file that waits
+// for the device, and that the next file starts at once.
+func TestCancelRunningTransfer(t *testing.T) {
+	d, list, fromDesk := sendOverLink(t, "a.txt", "b.txt")
+	if name := nextShare(t, fromDesk); name != "a.txt" {
+		t.Fatalf("the device got %s first, want a.txt", name)
+	}
+	if err := d.CancelTransfer(list[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	// Without the cancel, a.txt waits 30 seconds for a tunnel.
+	if name := nextShare(t, fromDesk); name != "b.txt" {
+		t.Fatalf("the device got %s after a.txt, want b.txt", name)
+	}
+	if state, msg := transferState(d, list[0]); state != "canceled" || msg != "" {
+		t.Fatalf("the canceled running file is %s with the error %q", state, msg)
+	}
+	if err := d.CancelTransfer("nope"); errCode(err) != "not_found" {
+		t.Fatalf("a cancel of an unknown transfer: %v", err)
+	}
+}

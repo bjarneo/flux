@@ -409,23 +409,26 @@ func (d *Daemon) Run() error {
 		return nil
 	}
 	mdns := lan.MDNSInfo{DeviceID: d.selfID, Name: d.Name(), Type: proto.DeviceType(), Protocol: proto.ProtocolVersion, Port: p.TCPPort(), Logf: d.logf}
-	if m, err := lan.StartMDNS(ctx, mdns, d.onMDNS); err != nil {
-		d.logf("mDNS off, UDP discovery only: %v", err)
-	} else {
-		d.mu.Lock()
-		d.mdns = m
-		var paired []string
-		for _, dev := range d.devices {
-			if dev.Paired && dev.link == nil {
-				paired = append(paired, dev.ID)
-			}
+	// StartMDNS returns an MDNS also with an error. The MDNS publishes this
+	// computer when Avahi starts later.
+	m, err := lan.StartMDNS(ctx, mdns, d.onMDNS)
+	if err != nil {
+		d.logf("mDNS off until Avahi starts, UDP discovery only: %v", err)
+	}
+	d.mu.Lock()
+	d.mdns = m
+	var paired []string
+	for _, dev := range d.devices {
+		if dev.Paired && dev.link == nil {
+			paired = append(paired, dev.ID)
 		}
-		d.mu.Unlock()
-		// The first dial round can come before mDNS runs, so resolve the
-		// paired devices now. A phone with a new address connects at once.
-		for _, id := range paired {
-			m.Refresh(id)
-		}
+	}
+	d.mu.Unlock()
+	// The first dial round can come before mDNS runs, so resolve the
+	// paired devices now. A phone with a new address connects at once.
+	// Refresh does nothing while Avahi does not run.
+	for _, id := range paired {
+		m.Refresh(id)
 	}
 
 	if dnd := desktop.NewDND(); dnd.Kind() != "" {

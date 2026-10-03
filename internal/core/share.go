@@ -186,19 +186,28 @@ func (d *Daemon) finishTransfer(t *Transfer, err error) {
 	d.markDirty()
 }
 
-// CancelTransfer stops a running transfer.
+// CancelTransfer stops a running transfer. A queued transfer does not
+// start, because the send loop skips a canceled transfer.
 func (d *Daemon) CancelTransfer(id string) error {
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	for _, t := range d.transfers {
-		if t.ID == id {
-			if t.cancel != nil && t.running() {
-				t.State = "canceled"
+		if t.ID != id {
+			continue
+		}
+		changed := t.running()
+		if changed {
+			t.State = "canceled"
+			if t.cancel != nil {
 				t.cancel()
 			}
-			return nil
 		}
+		d.mu.Unlock()
+		if changed {
+			d.markDirty()
+		}
+		return nil
 	}
+	d.mu.Unlock()
 	return apiErr("not_found", "No transfer with ID %s", id)
 }
 
@@ -389,6 +398,10 @@ func (d *Daemon) receiveFile(dev *Device, l *lan.Link, p *proto.Packet, name str
 	cancelOnLinkDown(ctx, l, cancel)
 	d.mu.Lock()
 	t.cancel = cancel
+	// A cancel before this point found no cancel function.
+	if t.State == "canceled" {
+		cancel()
+	}
 	dir := destDir(d.cfg, kind)
 	d.mu.Unlock()
 
@@ -771,7 +784,12 @@ func (d *Daemon) sendFile(l *lan.Link, t *Transfer, path string, info os.FileInf
 	cancelOnLinkDown(ctx, l, cancel)
 	d.mu.Lock()
 	t.cancel = cancel
+	// A cancel after the check of the send loop found no cancel function.
+	canceled := t.State == "canceled"
 	d.mu.Unlock()
+	if canceled {
+		return context.Canceled
+	}
 	p := proto.New(proto.TypeShare, map[string]any{
 		"filename":         filepath.Base(path),
 		"lastModified":     info.ModTime().UnixMilli(),

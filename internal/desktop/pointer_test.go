@@ -296,9 +296,14 @@ func TestStringArgument(t *testing.T) {
 	}
 }
 
-func TestModArgs(t *testing.T) {
-	got := strings.Join(modArgs([]string{"ctrl", "bogus", "logo"}), " ")
-	if got != "-M ctrl -M logo" {
-		t.Fatalf("modArgs %q", got)
+// TestWithMods checks that wtype releases each modifier that it presses,
+// in the reverse order, after the keys.
+func TestWithMods(t *testing.T) {
+	got := strings.Join(withMods([]string{"ctrl", "bogus", "logo"}, "-k", "c"), " ")
+	if got != "-M ctrl -M logo -k c -m logo -m ctrl" {
+		t.Fatalf("withMods %q", got)
+	}
+	if got := strings.Join(withMods(nil, "-"), " "); got != "-" {
+		t.Fatalf("withMods without modifiers %q", got)
 	}
 }

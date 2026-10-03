@@ -134,6 +134,9 @@ See [check a release](install.md#check-a-release) to check the files by hand.
    systemctl status avahi-daemon
    ```
 
+   If Avahi is inactive, start it with `sudo systemctl enable --now avahi-daemon`.
+   `fluxd` publishes the computer through Avahi again when Avahi starts or restarts, so `fluxd` needs no restart.
+
 4. Request discovery:
 
    ```sh

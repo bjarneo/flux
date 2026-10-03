@@ -20,15 +20,16 @@ const (
 	avahiServer   = "org.freedesktop.Avahi.Server"
 	avahiGroup    = "org.freedesktop.Avahi.EntryGroup"
 	avahiBrowser  = "org.freedesktop.Avahi.ServiceBrowser"
+	busName       = "org.freedesktop.DBus"
 	serviceType   = "_flux._udp"
 	ifaceUnspec   = int32(-1)
 	protoInet     = int32(0)
 	lookupNoFlags = uint32(0)
 )
 
-// The wait before the next attempt to connect to the system bus again. It
-// starts at mdnsRetryMin and doubles after each failure, up to
-// mdnsRetryMax.
+// The wait before the next attempt to connect to the system bus or to
+// publish through Avahi again. It starts at mdnsRetryMin and doubles after
+// each failure, up to mdnsRetryMax.
 const (
 	mdnsRetryMin = time.Second
 	mdnsRetryMax = time.Minute
@@ -41,8 +42,8 @@ type MDNSInfo struct {
 	Type     string
 	Protocol int
 	Port     int
-	// Logf receives a line when the system bus closes and when mDNS runs
-	// again. It can be nil.
+	// Logf receives a line when the system bus closes, when Avahi stops,
+	// and when mDNS runs again. It can be nil.
 	Logf func(format string, args ...any)
 }
 
@@ -65,8 +66,9 @@ type MDNS struct {
 	server dbus.BusObject
 }
 
-// avahi is 1 connection to Avahi, with the published service and the
-// browser.
+// avahi is 1 connection to the system bus. While Avahi runs, it also has
+// the published service and the browser. group is nil when Avahi does not
+// publish the service.
 type avahi struct {
 	conn    *dbus.Conn
 	server  dbus.BusObject
@@ -86,125 +88,219 @@ func (m *MDNS) Refresh(deviceID string) {
 	m.mu.Lock()
 	server := m.server
 	m.mu.Unlock()
+	if server == nil {
+		return
+	}
 	go resolve(server, ifaceUnspec, protoInet, deviceID, serviceType, "local", m.found)
+}
+
+// setServer sets the Avahi server for Refresh. A nil server stops Refresh
+// while Avahi does not run.
+func (m *MDNS) setServer(server dbus.BusObject) {
+	m.mu.Lock()
+	m.server = server
+	m.mu.Unlock()
 }
 
 // StartMDNS publishes this device and browses for other devices, and calls
 // found for each device that it resolves. The default ufw rules of Omarchy
 // let mDNS in, so this path works with a firewall that blocks all other
-// incoming traffic. It returns an error when Avahi is not available. When
-// the system bus closes later, StartMDNS connects again and publishes the
+// incoming traffic. When Avahi is not available, StartMDNS returns the
+// error, and the returned MDNS publishes the device when Avahi starts. When
+// the system bus closes or Avahi starts again later, the MDNS publishes the
 // device again.
 func StartMDNS(ctx context.Context, info MDNSInfo, found func(MDNSPeer)) (*MDNS, error) {
-	a, err := openAvahi(info)
-	if err != nil {
-		return nil, err
+	m := &MDNS{self: info.DeviceID, found: found}
+	a, err := dialBus()
+	if err == nil {
+		if err = a.publish(info, 0); err == nil {
+			m.server = a.server
+		}
 	}
-	m := &MDNS{self: info.DeviceID, found: found, server: a.server}
 	go m.run(ctx, info, a)
-	return m, nil
+	return m, err
 }
 
-// openAvahi connects to the system bus, publishes the service, and starts
-// the browser.
-func openAvahi(info MDNSInfo) (*avahi, error) {
+// dialBus connects to the system bus and receives the signals for mDNS:
+// a new owner of the Avahi name, and the devices that the browser finds.
+func dialBus() (*avahi, error) {
 	conn, err := dbus.ConnectSystemBus()
 	if err != nil {
 		return nil, err
 	}
-	server := conn.Object(avahiBus, "/")
-
-	var groupPath dbus.ObjectPath
-	if err := server.Call(avahiServer+".EntryGroupNew", 0).Store(&groupPath); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("avahi: %w", err)
+	// Add the match rules before the browser exists, so no ItemNew signal
+	// is lost.
+	rules := [][]dbus.MatchOption{
+		{dbus.WithMatchSender(busName), dbus.WithMatchInterface(busName), dbus.WithMatchMember("NameOwnerChanged"), dbus.WithMatchArg(0, avahiBus)},
+		{dbus.WithMatchInterface(avahiBrowser), dbus.WithMatchMember("ItemNew")},
 	}
-	group := conn.Object(avahiBus, groupPath)
+	for _, rule := range rules {
+		if err := conn.AddMatchSignal(rule...); err != nil {
+			conn.Close()
+			return nil, err
+		}
+	}
+	signals := make(chan *dbus.Signal, 32)
+	conn.Signal(signals)
+	return &avahi{conn: conn, server: conn.Object(avahiBus, "/"), signals: signals}, nil
+}
+
+// publish publishes the service through Avahi and starts the browser.
+// With dbus.FlagNoAutoStart in flags, the bus does not start Avahi for
+// the calls.
+func (a *avahi) publish(info MDNSInfo, flags dbus.Flags) error {
+	var groupPath dbus.ObjectPath
+	if err := a.server.Call(avahiServer+".EntryGroupNew", flags).Store(&groupPath); err != nil {
+		return fmt.Errorf("avahi: %w", err)
+	}
+	a.group = a.conn.Object(avahiBus, groupPath)
 	txt := [][]byte{
 		[]byte("id=" + info.DeviceID),
 		[]byte("name=" + info.Name),
 		[]byte("type=" + info.Type),
 		[]byte(fmt.Sprintf("protocol=%d", info.Protocol)),
 	}
-	if err := group.Call(avahiGroup+".AddService", 0, ifaceUnspec, protoInet, uint32(0),
-		info.DeviceID, serviceType, "", "", uint16(info.Port), txt).Err; err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("avahi add service: %w", err)
+	err := a.group.Call(avahiGroup+".AddService", flags, ifaceUnspec, protoInet, uint32(0),
+		info.DeviceID, serviceType, "", "", uint16(info.Port), txt).Err
+	if err != nil {
+		err = fmt.Errorf("avahi add service: %w", err)
+	} else if err = a.group.Call(avahiGroup+".Commit", flags).Err; err != nil {
+		err = fmt.Errorf("avahi commit: %w", err)
+	} else if err = a.server.Call(avahiServer+".ServiceBrowserNew", flags, ifaceUnspec, protoInet, serviceType, "", lookupNoFlags).Store(&a.browser); err != nil {
+		err = fmt.Errorf("avahi browse: %w", err)
 	}
-	if err := group.Call(avahiGroup+".Commit", 0).Err; err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("avahi commit: %w", err)
+	if err != nil {
+		// The connection stays open, so Avahi keeps the group until a
+		// call frees it.
+		a.unpublish()
 	}
-
-	// Add the match rule before the browser exists, so no ItemNew signal is
-	// lost.
-	if err := conn.AddMatchSignal(dbus.WithMatchInterface(avahiBrowser), dbus.WithMatchMember("ItemNew")); err != nil {
-		conn.Close()
-		return nil, err
-	}
-	signals := make(chan *dbus.Signal, 32)
-	conn.Signal(signals)
-	var browserPath dbus.ObjectPath
-	if err := server.Call(avahiServer+".ServiceBrowserNew", 0, ifaceUnspec, protoInet, serviceType, "", lookupNoFlags).Store(&browserPath); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("avahi browse: %w", err)
-	}
-	return &avahi{conn: conn, server: server, group: group, browser: browserPath, signals: signals}, nil
+	return err
 }
 
-// run resolves the devices that the browser of a finds until ctx ends.
-// When the system bus closes, run connects again. It waits before each
-// attempt, and the wait doubles after each failure.
+// unpublish frees the service and the browser of a, when Avahi still has
+// them. The bus does not start Avahi for the calls.
+func (a *avahi) unpublish() {
+	if a.group != nil {
+		_ = a.group.Call(avahiGroup+".Free", dbus.FlagNoAutoStart).Err
+	}
+	if a.browser != "" {
+		_ = a.conn.Object(avahiBus, a.browser).Call(avahiBrowser+".Free", dbus.FlagNoAutoStart).Err
+	}
+	a.group, a.browser = nil, ""
+}
+
+// run resolves the devices that the browser of a finds until ctx ends. a
+// is nil when the system bus is not connected. When the bus closes, run
+// connects again. When Avahi stops, run waits for it. When Avahi starts,
+// run publishes the service again at once. It waits before each other
+// attempt, and the wait doubles after each failure. A retry does not ask
+// the bus to start Avahi.
 func (m *MDNS) run(ctx context.Context, info MDNSInfo, a *avahi) {
 	logf := info.Logf
 	if logf == nil {
 		logf = func(string, ...any) {}
 	}
+	wait := mdnsRetryMin
 	for {
-		if watch(ctx, a.conn.Context().Done(), a.signals, func(sig *dbus.Signal) { m.itemNew(a, sig) }) {
-			_ = a.group.Call(avahiGroup+".Free", 0).Err
-			a.conn.Close()
-			return
-		}
-		a.conn.Close()
-		logf("mDNS: the system bus closed, connecting again")
-		for wait := mdnsRetryMin; ; wait = nextRetry(wait) {
+		if a == nil {
 			select {
 			case <-ctx.Done():
 				return
 			case <-time.After(wait):
 			}
+			wait = nextRetry(wait)
 			var err error
-			if a, err = openAvahi(info); err == nil {
-				break
+			if a, err = dialBus(); err != nil {
+				continue
 			}
 		}
-		m.mu.Lock()
-		m.server = a.server
-		m.mu.Unlock()
-		logf("mDNS: connected to the system bus again")
+		var retry <-chan time.Time
+		if a.group == nil {
+			if a.publish(info, dbus.FlagNoAutoStart) == nil {
+				wait = mdnsRetryMin
+				m.setServer(a.server)
+				logf("mDNS: connected to Avahi")
+			} else {
+				retry = time.After(wait)
+			}
+		}
+		switch watch(ctx, a.conn.Context().Done(), a.signals, retry, func(sig *dbus.Signal) { m.itemNew(a, sig) }) {
+		case ctxDone:
+			a.unpublish()
+			a.conn.Close()
+			return
+		case busClosed:
+			a.conn.Close()
+			a = nil
+			m.setServer(nil)
+			logf("mDNS: the system bus closed, connecting again")
+		case avahiStopped:
+			a.unpublish()
+			m.setServer(nil)
+			logf("mDNS: Avahi stopped, waiting for it to start again")
+		case avahiStarted:
+			// A publish after the stop can already use the new Avahi, so
+			// free that service before the next publish.
+			a.unpublish()
+			m.setServer(nil)
+			wait = mdnsRetryMin
+		case retryNow:
+			wait = nextRetry(wait)
+		}
 	}
 }
 
-// watch passes each signal to item until ctx ends or the bus connection
-// closes. godbus closes signals and closed when the connection closes. It
-// reports whether ctx ended.
-func watch(ctx context.Context, closed <-chan struct{}, signals <-chan *dbus.Signal, item func(*dbus.Signal)) bool {
+// watchEnd tells why watch returned.
+type watchEnd int
+
+const (
+	ctxDone      watchEnd = iota // the context ended
+	busClosed                    // the bus connection closed
+	avahiStopped                 // Avahi left the bus
+	avahiStarted                 // Avahi joined the bus
+	retryNow                     // the retry time came
+)
+
+// watch passes each signal to item until ctx ends, the bus connection
+// closes, Avahi stops or starts, or the time comes on retry. godbus closes
+// signals and closed when the connection closes. retry can be nil.
+func watch(ctx context.Context, closed <-chan struct{}, signals <-chan *dbus.Signal, retry <-chan time.Time, item func(*dbus.Signal)) watchEnd {
 	for {
 		select {
 		case <-ctx.Done():
-			return true
+			return ctxDone
 		case <-closed:
-			return false
+			return busClosed
+		case <-retry:
+			return retryNow
 		case sig, ok := <-signals:
 			if !ok {
-				return false
+				return busClosed
 			}
-			if sig != nil {
-				item(sig)
+			if sig == nil {
+				continue
 			}
+			if owner, ok := avahiOwner(sig); ok {
+				if owner == "" {
+					return avahiStopped
+				}
+				return avahiStarted
+			}
+			item(sig)
 		}
 	}
+}
+
+// avahiOwner returns the new owner of the Avahi name when sig is a
+// NameOwnerChanged signal of the bus for that name. An empty owner means
+// that Avahi stopped. Only the bus can send a signal as busName.
+func avahiOwner(sig *dbus.Signal) (string, bool) {
+	if sig.Sender != busName || sig.Name != busName+".NameOwnerChanged" || len(sig.Body) != 3 {
+		return "", false
+	}
+	name, _ := sig.Body[0].(string)
+	owner, ok := sig.Body[2].(string)
+	return owner, ok && name == avahiBus
 }
 
 // nextRetry returns the wait after wait: 2 times wait, up to mdnsRetryMax.
