@@ -13,8 +13,8 @@ import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLSocket
 import kotlin.random.Random
 
-/** The TCP port range for payload servers. */
-val PAYLOAD_PORTS = 1739..1764
+/** The TCP port range for payload, tunnel, and stream listeners. */
+val PAYLOAD_PORTS = 12070..12099
 
 /** The longest TLS handshake on a payload port. */
 private const val PAYLOAD_HANDSHAKE_MS = 10_000

@@ -39,6 +39,8 @@ import uuid
 
 PACKAGE = "org.omarchy.flux"
 FORWARD_PORT = 18716
+# The phone listens for links on the first free TCP port from 12100 to 12108.
+PHONE_LINK_PORT = 12100
 
 
 def sh(*args, data=None):
@@ -195,7 +197,7 @@ def main():
     phone_id = [l.split("=", 1)[1].strip() for l in phone_id.splitlines() if "commonName" in l][0]
     print(f"phone device ID {phone_id}")
 
-    sh(*adb, "forward", f"tcp:{FORWARD_PORT}", "tcp:1716")
+    sh(*adb, "forward", f"tcp:{FORWARD_PORT}", f"tcp:{PHONE_LINK_PORT}")
     raw = socket.create_connection(("127.0.0.1", FORWARD_PORT), timeout=10)
     desktop = args.desktop is not None
     raw.sendall(packet("flux.identity", make_identity(dev_id, target=phone_id, name=args.name, desktop=desktop)))

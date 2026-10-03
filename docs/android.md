@@ -68,6 +68,12 @@ To switch keys, uninstall the previous app first, which removes its local data a
 
 ## Update the app
 
+Flux uses UDP port 12100 and TCP ports 12070 to 12108.
+An earlier Flux for Android uses other ports and cannot connect to a `fluxd` with these ports.
+**Send to phone** then cannot reach the phone.
+Install the new APK from the GitHub releases once, as in [Install a release APK](#install-a-release-apk).
+The new app also cannot connect to an earlier `fluxd`, so update Flux on the computer too.
+
 When a newer Flux for Android exists, the Flux window on the computer shows **Flux for Android 0.7.0 is available**.
 The device card also shows the app version of the phone.
 To update the phone:

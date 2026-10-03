@@ -84,7 +84,7 @@ class TunnelTest {
 
         assertNull(sftp("""{"errorMessage":"no"}"""))
         // An offer without a tunnel has no way to connect.
-        assertNull(sftp("""{"ip":"192.168.1.5","port":1739,"user":"flux","password":"pw","path":"/","multiPaths":["/"],"pathNames":["Home"]}"""))
+        assertNull(sftp("""{"ip":"192.168.1.5","port":12070,"user":"flux","password":"pw","path":"/","multiPaths":["/"],"pathNames":["Home"]}"""))
         assertNull(sftp("""{"tunnel":"","user":"flux","password":"pw","multiPaths":["/"],"pathNames":["Home"]}"""))
         // The root lists must be present and have the same length.
         assertNull(sftp("""{"tunnel":"s1","user":"flux","password":"pw","path":"/"}"""))

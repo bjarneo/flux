@@ -31,8 +31,8 @@ class ClipImageTest {
 
     @Test
     fun incomingFollowsTheSyncSwitch() {
-        val on = Identity.self(id, "Pixel 8", 1716, clipboardImages = true)
-        val off = Identity.self(id, "Pixel 8", 1716, clipboardImages = false)
+        val on = Identity.self(id, "Pixel 8", 12100, clipboardImages = true)
+        val off = Identity.self(id, "Pixel 8", 12100, clipboardImages = false)
         assertTrue(Types.FLUX_CLIPBOARD_IMAGE in on.incoming)
         assertFalse(Types.FLUX_CLIPBOARD_IMAGE in off.incoming)
         // The phone can always send an image with Send clipboard.
@@ -42,12 +42,12 @@ class ClipImageTest {
 
     @Test
     fun packetCarriesTheTypeAndThePayload() {
-        val p = Packet(Types.FLUX_CLIPBOARD_IMAGE, bodyOf("mime" to "image/png"), payloadSize = 2048, payloadPort = 1739)
+        val p = Packet(Types.FLUX_CLIPBOARD_IMAGE, bodyOf("mime" to "image/png"), payloadSize = 2048, payloadPort = 12070)
         val line = p.serialize().trim()
         val back = Packet.parse(line)!!
         assertEquals(Types.FLUX_CLIPBOARD_IMAGE, back.type)
         assertEquals("image/png", back.string("mime"))
         assertEquals(2048L, back.payloadSize)
-        assertTrue(line.contains(""""payloadTransferInfo":{"port":1739}"""))
+        assertTrue(line.contains(""""payloadTransferInfo":{"port":12070}"""))
     }
 }

@@ -150,8 +150,12 @@ Both devices must be on the same local network, or use an [extra address](tailsc
 | Part | Port or name | Direction |
 | --- | --- | --- |
 | mDNS announcement | `_flux._udp` | The phone announces itself for as long as the service runs. `fluxd` finds the phone this way. |
-| UDP identity | UDP port 1716 | The phone listens for identities from computers and sends its own identity. |
-| TLS link | A TCP port from 1716 to 1764 | The phone accepts links and opens links to computers. |
+| UDP identity | UDP port 12100 | The phone listens for identities from computers and sends its own identity. |
+| TLS link | A TCP port from 12100 to 12108 | The phone accepts links and opens links to computers. |
+| File, stream, and tunnel connections | A TCP port from 12070 to 12099 | The phone listens, and the paired computer connects. |
+
+An earlier Flux for Android uses other ports and cannot connect to a `fluxd` with these ports.
+See [Update the app](android.md#update-the-app).
 
 When the app opens, the phone scans for computers for 10 seconds.
 A scan sends the identity over UDP and browses mDNS, then stops.
