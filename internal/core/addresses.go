@@ -134,6 +134,20 @@ func (d *Daemon) syncAddresses(dev *Device) []string {
 	return t.Addresses
 }
 
+// fixPortsLocked gives the default port to each device with a port that p
+// refuses, for example a port from before the port change of Flux. The
+// current app of the device listens on the first free port from
+// lan.MinTCPPort, and the next link records its real port. Without this
+// change, fluxd cannot dial an extra address of the device. The caller
+// holds d.mu.
+func (d *Daemon) fixPortsLocked(p *lan.Provider) {
+	for _, dev := range d.devices {
+		if dev.Port != 0 && !p.PeerPort(dev.Port) {
+			dev.Port = lan.MinTCPPort
+		}
+	}
+}
+
 // dialPort returns the TCP port that fluxd dials. A device with extra
 // addresses and no known port gets the default port. The caller holds
 // d.mu.

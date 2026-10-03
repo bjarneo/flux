@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net"
 	"os"
@@ -45,21 +46,7 @@ func doctor() {
 		}
 	}
 
-	// Phones send their identity to UDP port 1716. A second program on the
-	// port can take the identities that fluxd needs.
-	if others, err := udpHolders(discoveryPort); err != nil {
-		fmt.Printf("? Cannot run ss, so Flux cannot check UDP port %d\n", discoveryPort)
-	} else if len(others) == 0 {
-		fmt.Printf("✓ no other program uses UDP port %d\n", discoveryPort)
-	} else {
-		for _, name := range others {
-			fix := fmt.Sprintf("Stop it: pkill -x %s", name)
-			if name == "" {
-				name, fix = "a program of another user", fmt.Sprintf("Find it: sudo ss -ulnp 'sport = :%d'", discoveryPort)
-			}
-			check(false, "", fmt.Sprintf("%s also uses UDP port %d, so phones cannot always reach fluxd. %s", name, discoveryPort, fix))
-		}
-	}
+	checkDiscoveryPort(udpHolders, os.Stdout, check)
 
 	// Flux needs no open port. fluxd opens every connection, and mDNS
 	// finds the phones. The default ufw rules let mDNS in.
@@ -267,8 +254,33 @@ func shortName() string {
 	return fmt.Sprintf("- The short name flux runs %s, not flux-cli. Use flux-cli", p)
 }
 
-// discoveryPort is the UDP port that fluxd listens on for identities.
-const discoveryPort = 1716
+// discoveryPort is the UDP port that fluxd listens on for identities. It
+// is lan.UDPPort. The CLI does not import the lan package, because that
+// package needs D-Bus.
+const discoveryPort = 12100
+
+// checkDiscoveryPort checks that no other program listens on the UDP port
+// of discovery. Devices send their identity to that port, and a second
+// program on it can take the identities that fluxd needs. holders returns
+// the other programs on a port.
+func checkDiscoveryPort(holders func(port int) ([]string, error), w io.Writer, check func(ok bool, pass, fix string)) {
+	others, err := holders(discoveryPort)
+	if err != nil {
+		fmt.Fprintf(w, "? Cannot run ss, so Flux cannot check UDP port %d\n", discoveryPort)
+		return
+	}
+	if len(others) == 0 {
+		fmt.Fprintf(w, "✓ no other program uses UDP port %d\n", discoveryPort)
+		return
+	}
+	for _, name := range others {
+		fix := fmt.Sprintf("Stop it: pkill -x %s", name)
+		if name == "" {
+			name, fix = "a program of another user", fmt.Sprintf("Find it: sudo ss -ulnp 'sport = :%d'", discoveryPort)
+		}
+		check(false, "", fmt.Sprintf("%s also uses UDP port %d, so devices cannot always reach fluxd. %s", name, discoveryPort, fix))
+	}
+}
 
 // udpHolders returns the programs other than fluxd that listen on the UDP
 // port. The name of a program of another user is empty, because ss shows

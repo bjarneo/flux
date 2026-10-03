@@ -915,22 +915,22 @@ func TestDiscoveryKeepsPairedAddress(t *testing.T) {
 	d := &Daemon{devices: map[string]*Device{}}
 	phone := newDevice(id)
 	phone.Paired, phone.Name, phone.Type = true, "Pixel 8", "phone"
-	phone.IP, phone.Port, phone.Addresses = "192.168.1.20", 1716, []string{"pixel-8"}
+	phone.IP, phone.Port, phone.Addresses = "192.168.1.20", 12100, []string{"pixel-8"}
 	d.devices[id] = phone
 
-	d.onIdentity(proto.Identity{DeviceID: id, DeviceName: "Evil", DeviceType: "\x1b]52;c;aGk=\x07", TCPPort: 1739}, "192.168.1.66")
-	d.onMDNS(lan.MDNSPeer{DeviceID: id, Name: "Evil", IP: "192.168.1.67", Port: 1740, Protocol: 8})
-	if phone.IP != "192.168.1.20" || phone.Port != 1716 || phone.Name != "Pixel 8" || phone.Type != "phone" {
+	d.onIdentity(proto.Identity{DeviceID: id, DeviceName: "Evil", DeviceType: "\x1b]52;c;aGk=\x07", TCPPort: 12101}, "192.168.1.66")
+	d.onMDNS(lan.MDNSPeer{DeviceID: id, Name: "Evil", IP: "192.168.1.67", Port: 12102, Protocol: 8})
+	if phone.IP != "192.168.1.20" || phone.Port != 12100 || phone.Name != "Pixel 8" || phone.Type != "phone" {
 		t.Fatalf("discovery changed the paired device: %s:%d %q %q", phone.IP, phone.Port, phone.Name, phone.Type)
 	}
-	want := []string{"192.168.1.20:1716", "192.168.1.67:1740", "pixel-8:1716"}
+	want := []string{"192.168.1.20:12100", "192.168.1.67:12102", "pixel-8:12100"}
 	if got := phone.dialAddrs(time.Now()); !slices.Equal(got, want) {
 		t.Fatalf("dialAddrs = %v, want %v", got, want)
 	}
 
 	// A device that is not paired takes the address and a clean name.
 	other := strings.Repeat("b", 32)
-	d.onIdentity(proto.Identity{DeviceID: other, DeviceName: "Pixel\x1bc 7", DeviceType: "\x1b]52;c;aGk=\x07", TCPPort: 1716}, "192.168.1.30")
+	d.onIdentity(proto.Identity{DeviceID: other, DeviceName: "Pixel\x1bc 7", DeviceType: "\x1b]52;c;aGk=\x07", TCPPort: 12100}, "192.168.1.30")
 	if dev := d.devices[other]; dev.IP != "192.168.1.30" || dev.Name != "Pixelc 7" || dev.Type != "" {
 		t.Fatalf("unpaired device: %s %q %q", dev.IP, dev.Name, dev.Type)
 	}
@@ -949,7 +949,7 @@ func TestDiscoveredDevicesAreBounded(t *testing.T) {
 	d.devices[owed.ID] = owed
 	big := strings.Repeat("x", 60<<10)
 	for i := range 1000 {
-		d.onIdentity(proto.Identity{DeviceID: fmt.Sprintf("%032x", i), DeviceType: big, TCPPort: 1716}, "192.0.2.1")
+		d.onIdentity(proto.Identity{DeviceID: fmt.Sprintf("%032x", i), DeviceType: big, TCPPort: 12100}, "192.0.2.1")
 	}
 	if n := len(d.devices); n > maxDiscovered+2 {
 		t.Fatalf("%d devices after 1000 identities", n)

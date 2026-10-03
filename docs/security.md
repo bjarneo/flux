@@ -119,11 +119,13 @@ See [start from the computer](camera.md#start-from-the-computer).
 
 | Port | Use |
 | --- | --- |
-| The first free TCP port from 1716 to 1764 | Links from devices |
-| UDP 1716 | Identity broadcasts from devices |
+| The first free TCP port from 12100 to 12108 | Links from devices |
+| UDP 12100 | Identity broadcasts from devices |
 
 `flux-cli status` shows the TCP port in its first line.
-`fluxd` also publishes the `_flux._udp` service through Avahi, and it sends its identity to UDP port 1716 of the local networks.
+`fluxd` also publishes the `_flux._udp` service through Avahi, and it sends its identity to UDP port 12100 of the local networks.
+For a device without `flux.tunnel`, `fluxd` listens for a payload on a TCP port from 12070 to 12099 on the local address of the link.
+Flux and KDE Connect use different ports, so both can run on the same computer at the same time.
 
 `fluxd` opens the links to the devices itself, so Flux needs no inbound firewall rule.
 The default Omarchy firewall blocks inbound traffic to the Flux ports, and it lets mDNS in.
@@ -139,7 +141,8 @@ Without such a firewall, each host that reaches the computer can open a link to 
 The same is true for a rule that lets in the traffic of an interface, for example `ufw allow in on tailscale0`.
 The [limits below](#devices-that-are-not-paired) apply to such hosts.
 
-The Android phone, the iPhone, and the Mac also listen on TCP ports 1716 to 1764.
+The Android phone, the iPhone, and the Mac also listen on TCP ports 12100 to 12108 for links.
+They listen on TCP ports 12070 to 12099 for payloads, tunnels, and streams.
 Flux for Android takes a link from a computer that is not paired only while Flux is on the screen or while it scans.
 
 ## Album art

@@ -321,15 +321,20 @@ func TestHandshakeLimit(t *testing.T) {
 	}
 }
 
-// TestPeerPort checks the ports that discovery can make fluxd dial.
+// TestPeerPort checks the ports that discovery can make fluxd dial. The
+// ports of Flux apps from before the port change are outside the range.
 func TestPeerPort(t *testing.T) {
 	p := New(Config{Identity: func() proto.Identity { return proto.Identity{} }})
-	for port, want := range map[int]bool{MinTCPPort: true, MaxTCPPort: true, 22: false, 80: false, 1715: false, 1765: false, 0: false, 70000: false} {
-		if got := p.peerPort(port); got != want {
-			t.Errorf("peerPort(%d) = %v, want %v", port, got, want)
+	for port, want := range map[int]bool{
+		MinTCPPort: true, MinTCPPort + 1: true, MaxTCPPort: true,
+		MinTCPPort - 1: false, MaxTCPPort + 1: false, MinPayloadPort: false,
+		1716: false, 1764: false, 22: false, 80: false, 0: false, 70000: false,
+	} {
+		if got := p.PeerPort(port); got != want {
+			t.Errorf("PeerPort(%d) = %v, want %v", port, got, want)
 		}
 	}
-	if p := New(Config{Identity: func() proto.Identity { return proto.Identity{} }, FirstTCPPort: 28720}); !p.peerPort(28721) || p.peerPort(0) {
+	if p := New(Config{Identity: func() proto.Identity { return proto.Identity{} }, FirstTCPPort: 28720}); !p.PeerPort(28721) || p.PeerPort(0) {
 		t.Error("a provider with other ports must accept the ports of its peers")
 	}
 }

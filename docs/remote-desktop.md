@@ -268,7 +268,7 @@ To stop the stream of a phone that you do not trust, unpair the phone.
 
 ## How it works
 
-1. The phone opens a TLS listener and sends `flux.desktop` with `{"state": "start", "port": PORT, "maxSize": 1920}`.
+1. The phone opens a TLS listener on a port from 12070 to 12099 and sends `flux.desktop` with `{"state": "start", "port": PORT, "maxSize": 1920}`.
    The Mac does the same, with the longest side of its screen in pixels as `maxSize`.
 2. `fluxd` connects to the port and checks the pinned certificate of the phone.
    When `gpu-screen-recorder` lists no monitor, `fluxd` turns the displays on with `hyprctl` and lists them again for up to 3 seconds.

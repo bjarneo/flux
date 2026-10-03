@@ -71,6 +71,7 @@ systemctl --user edit fluxd
 ```
 
 `flux-cli doctor` shows which unit file systemd loads for `fluxd.service`, and whether its program exists.
+It also checks that no other program uses UDP port 12100, the discovery port of `fluxd`.
 
 When `fluxd` does not answer, `flux-cli` tells you the cause:
 

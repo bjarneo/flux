@@ -190,9 +190,9 @@ func TestDesktopStartsLeaveNoOrphan(t *testing.T) {
 	mark := fakeRecorder(t)
 	d, dev := sessionDaemon(t, &config.Config{RemoteDesktop: true})
 	first, second := newFakeStreamLink(), newFakeStreamLink()
-	d.handleDesktop(dev, first, desktopPacket(1740))
+	d.handleDesktop(dev, first, desktopPacket(12071))
 	ctx1 := first.waitDial(t)
-	d.handleDesktop(dev, second, desktopPacket(1741))
+	d.handleDesktop(dev, second, desktopPacket(12072))
 	ctx2 := second.waitDial(t)
 	waitDone(t, ctx1, "the first start")
 
@@ -228,7 +228,7 @@ func TestStopDesktopStopsAPendingStart(t *testing.T) {
 	fakeRecorder(t)
 	d, dev := sessionDaemon(t, &config.Config{RemoteDesktop: true})
 	l := newFakeStreamLink()
-	d.handleDesktop(dev, l, desktopPacket(1740))
+	d.handleDesktop(dev, l, desktopPacket(12071))
 	ctx := l.waitDial(t)
 	if err := d.StopDesktop(); err != nil {
 		t.Fatalf("StopDesktop: %v", err)
@@ -248,7 +248,7 @@ func TestDesktopChecksTheSwitchBeforeTheRecorder(t *testing.T) {
 	mark := fakeRecorder(t)
 	d, dev := sessionDaemon(t, &config.Config{RemoteDesktop: true})
 	l := newFakeStreamLink()
-	d.handleDesktop(dev, l, desktopPacket(1740))
+	d.handleDesktop(dev, l, desktopPacket(12071))
 	ctx := l.waitDial(t)
 	d.mu.Lock()
 	d.cfg.RemoteDesktop = false
@@ -273,7 +273,7 @@ func TestDesktopEndsAfterAnUnpair(t *testing.T) {
 	mark := fakeRecorder(t)
 	d, dev := sessionDaemon(t, &config.Config{RemoteDesktop: true})
 	l := newFakeStreamLink()
-	d.handleDesktop(dev, l, desktopPacket(1740))
+	d.handleDesktop(dev, l, desktopPacket(12071))
 	ctx := l.waitDial(t)
 	close(l.release)
 	waitFor(t, "the recorder starts", func() bool { return recorded(mark) })
@@ -318,9 +318,9 @@ func TestDesktopStartWaitsForTheOldRecorder(t *testing.T) {
 	d, dev := sessionDaemon(t, &config.Config{RemoteDesktop: true})
 	l := newFakeStreamLink()
 	close(l.release)
-	d.handleDesktop(dev, l, desktopPacket(1740))
+	d.handleDesktop(dev, l, desktopPacket(12071))
 	waitFor(t, "the first recorder", func() bool { return recorded(mark) })
-	d.handleDesktop(dev, l, desktopPacket(1741))
+	d.handleDesktop(dev, l, desktopPacket(12072))
 	waitFor(t, "the second recorder", func() bool {
 		_, records := recorderRuns(t, mark)
 		return records == 2
@@ -343,10 +343,10 @@ func TestDesktopOverlappingStartsWaitForTheOldRecorder(t *testing.T) {
 	d, dev := sessionDaemon(t, &config.Config{RemoteDesktop: true})
 	l := newFakeStreamLink()
 	close(l.release)
-	d.handleDesktop(dev, l, desktopPacket(1740))
+	d.handleDesktop(dev, l, desktopPacket(12071))
 	waitFor(t, "the first recorder", func() bool { return recorded(mark) })
-	d.handleDesktop(dev, l, desktopPacket(1741))
-	d.handleDesktop(dev, l, desktopPacket(1742))
+	d.handleDesktop(dev, l, desktopPacket(12072))
+	d.handleDesktop(dev, l, desktopPacket(12073))
 	waitFor(t, "the third recorder", func() bool {
 		_, records := recorderRuns(t, mark)
 		return records == 2
@@ -370,7 +370,7 @@ func TestDesktopStartFloodRunsOneRecorder(t *testing.T) {
 	d, dev := sessionDaemon(t, &config.Config{RemoteDesktop: true})
 	l := newFakeStreamLink()
 	for i := range 20 {
-		d.handleDesktop(dev, l, desktopPacket(1740+i))
+		d.handleDesktop(dev, l, desktopPacket(12071+i))
 	}
 	last := d.currentDesktop()
 	var ctx context.Context
@@ -396,7 +396,7 @@ func TestDesktopEndsWhenThePhoneClosesTheStream(t *testing.T) {
 	mark := fakeRecorder(t)
 	d, dev := sessionDaemon(t, &config.Config{RemoteDesktop: true})
 	l := newFakeStreamLink()
-	d.handleDesktop(dev, l, desktopPacket(1740))
+	d.handleDesktop(dev, l, desktopPacket(12071))
 	ctx := l.waitDial(t)
 	close(l.release)
 	phone := <-l.phones
@@ -409,7 +409,7 @@ func TestDesktopEndsWhenThePhoneClosesTheStream(t *testing.T) {
 func TestDesktopRefusesAStartWhenOff(t *testing.T) {
 	d, dev := sessionDaemon(t, &config.Config{})
 	l := newFakeStreamLink()
-	d.handleDesktop(dev, l, desktopPacket(1740))
+	d.handleDesktop(dev, l, desktopPacket(12071))
 	if s := d.currentDesktop(); s != nil {
 		t.Fatal("a start claimed the session with the switch off")
 	}
@@ -424,8 +424,8 @@ func TestStreamStartsReplaceTheOldSession(t *testing.T) {
 	d, dev := sessionDaemon(t, &config.Config{})
 	l := newFakeStreamLink()
 
-	m1 := d.claimMic(dev, l, &micStart{Port: 1740})
-	m2 := d.claimMic(dev, l, &micStart{Port: 1741})
+	m1 := d.claimMic(dev, l, &micStart{Port: 12071})
+	m2 := d.claimMic(dev, l, &micStart{Port: 12072})
 	if m1 == nil || m2 == nil || m1.ctx.Err() == nil {
 		t.Fatal("the second microphone start did not end the first")
 	}
@@ -433,7 +433,7 @@ func TestStreamStartsReplaceTheOldSession(t *testing.T) {
 		t.Fatalf("StopMic did not stop the pending start: %v", err)
 	}
 
-	s1 := d.claimScreen(dev, l, screenStart{Port: 1740})
+	s1 := d.claimScreen(dev, l, screenStart{Port: 12071})
 	if s1 == nil {
 		t.Fatal("the screen mirror did not start")
 	}
@@ -442,8 +442,8 @@ func TestStreamStartsReplaceTheOldSession(t *testing.T) {
 		t.Fatal("endScreen did not stop the pending start")
 	}
 
-	w1 := d.claimWebcam(dev, l, webcamStart{Port: 1740})
-	w2 := d.claimWebcam(dev, l, webcamStart{Port: 1741})
+	w1 := d.claimWebcam(dev, l, webcamStart{Port: 12071})
+	w2 := d.claimWebcam(dev, l, webcamStart{Port: 12072})
 	if w1 == nil || w2 == nil || w1.ctx.Err() == nil {
 		t.Fatal("the second webcam start did not end the first")
 	}
@@ -457,10 +457,10 @@ func TestStreamStartsReplaceTheOldSession(t *testing.T) {
 func TestScreenStartGap(t *testing.T) {
 	d, dev := sessionDaemon(t, &config.Config{})
 	l := newFakeStreamLink()
-	if d.claimScreen(dev, l, screenStart{Port: 1740}) == nil {
+	if d.claimScreen(dev, l, screenStart{Port: 12071}) == nil {
 		t.Fatal("the first start failed")
 	}
-	if d.claimScreen(dev, l, screenStart{Port: 1741}) != nil {
+	if d.claimScreen(dev, l, screenStart{Port: 12072}) != nil {
 		t.Fatal("a second start in the gap opened a window")
 	}
 	if got := l.states(); len(got) != 1 || !strings.Contains(got[0], "wait 3 seconds") {
@@ -472,7 +472,7 @@ func TestWebcamOffWhenHeadless(t *testing.T) {
 	d, dev := sessionDaemon(t, &config.Config{})
 	d.opts.Headless = true
 	l := newFakeStreamLink()
-	if d.claimWebcam(dev, l, webcamStart{Port: 1740}) != nil {
+	if d.claimWebcam(dev, l, webcamStart{Port: 12071}) != nil {
 		t.Fatal("a headless daemon started the webcam")
 	}
 	if got := l.states(); len(got) != 1 || !strings.Contains(got[0], "headless") {
@@ -496,7 +496,7 @@ func TestWebcamSettingsBelongToTheSession(t *testing.T) {
 	if d.webcamConfig != nil {
 		t.Fatal("settings without a session were kept")
 	}
-	if d.claimWebcam(dev, l, webcamStart{Port: 1740}) == nil {
+	if d.claimWebcam(dev, l, webcamStart{Port: 12071}) == nil {
 		t.Fatal("the webcam did not start")
 	}
 	report(other, settings)
@@ -551,7 +551,7 @@ func TestCleanWebcamConfig(t *testing.T) {
 func TestConfigureWebcamChecksSettings(t *testing.T) {
 	d, dev := sessionDaemon(t, &config.Config{})
 	l := newFakeStreamLink()
-	if d.claimWebcam(dev, l, webcamStart{Port: 1740}) == nil {
+	if d.claimWebcam(dev, l, webcamStart{Port: 12071}) == nil {
 		t.Fatal("the webcam did not start")
 	}
 	for _, c := range []string{

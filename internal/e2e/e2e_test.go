@@ -375,7 +375,7 @@ func TestTwoDaemons(t *testing.T) {
 	if res.Device != "beta" || !slices.Equal(res.Addresses, []string{"localhost"}) {
 		t.Fatalf("addresses.add returned %+v", res)
 	}
-	if err := alpha.client.Call("addresses.add", map[string]any{"device": "beta", "address": "localhost:1716"}, nil); err == nil {
+	if err := alpha.client.Call("addresses.add", map[string]any{"device": "beta", "address": "localhost:12100"}, nil); err == nil {
 		t.Fatal("addresses.add accepted an address with a port")
 	}
 	alpha.stop()

@@ -172,7 +172,8 @@ type Options struct {
 	// Headless turns off the desktop: clipboard, notifications, media,
 	// sound, and mDNS. Discovery uses loopback only. Tests use it.
 	Headless bool
-	// UDPPort and FirstTCPPort change the protocol ports. Zero means 1716.
+	// UDPPort and FirstTCPPort change the protocol ports. Zero means
+	// lan.UDPPort and lan.MinTCPPort.
 	UDPPort      int
 	FirstTCPPort int
 	// Version is the build version of fluxd.
@@ -397,6 +398,7 @@ func (d *Daemon) Run() error {
 	}
 	d.mu.Lock()
 	d.lan = p
+	d.fixPortsLocked(p)
 	d.mu.Unlock()
 	close(d.ready)
 	d.logf("fluxd %s listening on TCP %d as %q", d.selfID, p.TCPPort(), d.Name())
@@ -715,9 +717,10 @@ func (d *Daemon) resetDials() {
 // minutes. A paired device can also have extra addresses, for example a
 // Tailscale name. dialKnown tries the last address first, then the address
 // that discovery reported, then the extra addresses. It also sends a
-// unicast UDP identity from port 1716 to the last address of each paired
-// device. A device that answers from its port 1716 passes the firewall as
-// a reply. It also removes the devices that it no longer needs.
+// unicast UDP identity from lan.UDPPort to the same port at the last
+// address of each paired device. A device that answers from that port
+// passes the firewall as a reply. It also removes the devices that it no
+// longer needs.
 func (d *Daemon) dialKnown() {
 	type target struct {
 		ip    string

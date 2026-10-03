@@ -94,7 +94,7 @@ A name matches only a paired or connected device, and a paired device comes firs
 
 The desktop discovers phones through Avahi and mDNS.
 The desktop opens connections to the phone, including reverse payload tunnels.
-`fluxd` also listens on 1 TCP port from 1716 to 1764 and on UDP port 1716, but a connection does not need inbound traffic.
+`fluxd` also listens on 1 TCP port from 12100 to 12108 and on UDP port 12100, but a connection does not need inbound traffic.
 A missing connection does not require a new desktop firewall rule.
 Do not open the Flux ports in the firewall, because each host that reaches them can then send a pair request.
 Flux for Android takes a new computer only while Flux is on the screen or while it scans.
@@ -161,6 +161,8 @@ flux-cli version
 
 To send the latest Android app to a phone, run `flux-cli --device "Pixel 8" update --phone`.
 The user then installs it from the notification on the phone.
+A Flux app from before the port change to UDP 12100 cannot connect, so `update --phone` cannot reach it.
+See `docs/troubleshooting.md#a-device-does-not-find-the-computer-after-an-update`.
 `fluxd` checks GitHub once a day for a new release.
 `check_updates = false` in `config.toml` turns the check off.
 

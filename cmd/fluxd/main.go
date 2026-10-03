@@ -16,6 +16,7 @@ import (
 	"flux/internal/core"
 	"flux/internal/desktop"
 	"flux/internal/ipc"
+	"flux/internal/lan"
 )
 
 var version = "dev"
@@ -23,8 +24,8 @@ var version = "dev"
 func main() {
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	headless := flag.Bool("headless", false, "test mode: no desktop integration, discovery on loopback only")
-	udpPort := flag.Int("udp-port", 0, "UDP discovery port (default 1716)")
-	tcpPort := flag.Int("tcp-port", 0, "first TCP port to try (default 1716)")
+	udpPort := flag.Int("udp-port", 0, fmt.Sprintf("UDP discovery port (default %d)", lan.UDPPort))
+	tcpPort := flag.Int("tcp-port", 0, fmt.Sprintf("first TCP port to try (default %d)", lan.MinTCPPort))
 	flag.Parse()
 	// A running fluxd reads the version of a new binary, so the version
 	// comes before the off marker.

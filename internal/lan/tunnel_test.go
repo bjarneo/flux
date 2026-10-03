@@ -106,3 +106,30 @@ func TestDialFromLinkAddress(t *testing.T) {
 		}
 	}
 }
+
+// DialPeer and FetchPayload connect only to a port from MinPayloadPort to
+// MaxPayloadPort. They refuse the other ports before they connect, also
+// the ports of Flux apps from before the port change.
+func TestPayloadPortRange(t *testing.T) {
+	ctx := context.Background()
+	l := &Link{provider: &Provider{}, done: make(chan struct{})}
+	for _, port := range []int{MinPayloadPort - 1, MaxPayloadPort + 1, MinTCPPort, 1739, 1764, 0, -1} {
+		if _, err := l.DialPeer(ctx, port); err == nil || !strings.Contains(err.Error(), "outside") {
+			t.Errorf("DialPeer(%d) = %v, want a refusal", port, err)
+		}
+		p := &proto.Packet{PayloadSize: 1, PayloadTransferInfo: &proto.TransferInfo{Port: port}}
+		if port > 0 {
+			if _, err := l.FetchPayload(ctx, p); err == nil || !strings.Contains(err.Error(), "outside") {
+				t.Errorf("FetchPayload(%d) = %v, want a refusal", port, err)
+			}
+		}
+	}
+	ln, port, err := listenPayload(ctx, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ln.Close()
+	if port < MinPayloadPort || port > MaxPayloadPort {
+		t.Errorf("the payload server listens on %d, outside %d to %d", port, MinPayloadPort, MaxPayloadPort)
+	}
+}

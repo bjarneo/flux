@@ -42,7 +42,7 @@ func TestWebcamSettings(t *testing.T) {
 // also names the device by its ID.
 func TestPrintStatus(t *testing.T) {
 	var s State
-	raw := `{"self":{"name":"desk","type":"desktop","tcpPort":1716},"devices":[
+	raw := `{"self":{"name":"desk","type":"desktop","tcpPort":12100},"devices":[
 		{"id":"a1b2c3","name":"Pixel 8","type":"phone","online":true,"paired":true,"pairState":"paired","fingerprint":"71C0E5A93B2D8F46","appUpdate":"1.2.0"},
 		{"id":"d4e5f6","name":"Pixel 8","type":"phone","pairState":"none","fingerprint":""}]}`
 	if err := json.Unmarshal([]byte(raw), &s); err != nil {
@@ -66,7 +66,7 @@ func TestPrintStatus(t *testing.T) {
 // status and doctor tell the user to install the new app.
 func TestOldAppHint(t *testing.T) {
 	var s State
-	raw := `{"self":{"name":"desk","type":"desktop","tcpPort":1716},"devices":[
+	raw := `{"self":{"name":"desk","type":"desktop","tcpPort":12100},"devices":[
 		{"id":"a1b2c3","name":"Fairphone 5","type":"phone","paired":true,"pairState":"paired","oldApp":true},
 		{"id":"d4e5f6","name":"Pixel 8","type":"phone","online":true,"paired":true,"pairState":"paired"},
 		{"id":"a7b8c9","name":"Unpaired","type":"phone","pairState":"none","oldApp":true}]}`

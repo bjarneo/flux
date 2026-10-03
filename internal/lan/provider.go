@@ -44,7 +44,7 @@ type Config struct {
 	OnOldApp func(id proto.Identity, ip string)
 	Logf     func(format string, args ...any)
 	// UDPPort and FirstTCPPort change the protocol ports for tests. Zero
-	// means 1716.
+	// means UDPPort and MinTCPPort.
 	UDPPort      int
 	FirstTCPPort int
 	// LoopbackOnly sends broadcasts to 127.255.255.255 only. Tests use it,
@@ -126,10 +126,10 @@ func (p *Provider) TCPPort() int { return p.tcpPort }
 // UDPPort returns the port of the discovery socket.
 func (p *Provider) UDPPort() int { return p.udpPort }
 
-// peerPort reports whether a device can listen on port. Flux devices
+// PeerPort reports whether a device can listen on port. Flux devices
 // listen on a port from MinTCPPort to MaxTCPPort, so discovery cannot make
 // fluxd connect to another service.
-func (p *Provider) peerPort(port int) bool {
+func (p *Provider) PeerPort(port int) bool {
 	if port <= 0 || port > 65535 {
 		return false
 	}
@@ -153,15 +153,18 @@ func reuseAddr(_, _ string, c syscall.RawConn) error {
 	return serr
 }
 
-// Start opens the TCP listener on the first free port from 1716 to 1764
-// and the UDP discovery socket on port 1716.
+// Start opens the TCP listener on the first free port from MinTCPPort to
+// MaxTCPPort and the UDP discovery socket on UDPPort.
 func (p *Provider) Start(ctx context.Context) error {
 	lc := net.ListenConfig{KeepAliveConfig: keepAlive}
-	first, last, udpPort := p.cfg.FirstTCPPort, max(MaxTCPPort, p.cfg.FirstTCPPort+48), p.cfg.UDPPort
+	// With another first port, Start tries as many ports as the range of
+	// Flux has.
+	last := p.cfg.FirstTCPPort + MaxTCPPort - MinTCPPort
+	first, end, udpPort := p.cfg.FirstTCPPort, last, p.cfg.UDPPort
 	if p.cfg.FreePorts {
-		first, last, udpPort = 0, 0, 0
+		first, end, udpPort = 0, 0, 0
 	}
-	for port := first; port <= last; port++ {
+	for port := first; port <= end; port++ {
 		l, err := lc.Listen(ctx, "tcp", fmt.Sprintf(":%d", port))
 		if err == nil {
 			p.tcp = l.(*net.TCPListener)
@@ -170,7 +173,7 @@ func (p *Provider) Start(ctx context.Context) error {
 		}
 	}
 	if p.tcp == nil {
-		return fmt.Errorf("no free TCP port from %d to %d", p.cfg.FirstTCPPort, MaxTCPPort)
+		return fmt.Errorf("no free TCP port from %d to %d", p.cfg.FirstTCPPort, last)
 	}
 	ulc := net.ListenConfig{Control: reuseAddr}
 	uc, err := ulc.ListenPacket(ctx, "udp4", fmt.Sprintf(":%d", udpPort))
@@ -305,7 +308,7 @@ func (p *Provider) udpLoop(ctx context.Context) {
 			continue
 		}
 		var id proto.Identity
-		if pkt.Decode(&id) != nil || id.DeviceID == own || !proto.ValidDeviceID(id.DeviceID) || !p.peerPort(id.TCPPort) {
+		if pkt.Decode(&id) != nil || id.DeviceID == own || !proto.ValidDeviceID(id.DeviceID) || !p.PeerPort(id.TCPPort) {
 			continue
 		}
 		ip := from.IP.String()
@@ -383,7 +386,7 @@ func (p *Provider) DialAddrs(ctx context.Context, addrs []string, target proto.I
 	var ok []string
 	for _, a := range addrs {
 		_, port, err := net.SplitHostPort(a)
-		if n, _ := strconv.Atoi(port); err == nil && p.peerPort(n) && !slices.Contains(ok, a) {
+		if n, _ := strconv.Atoi(port); err == nil && p.PeerPort(n) && !slices.Contains(ok, a) {
 			ok = append(ok, a)
 		}
 	}
