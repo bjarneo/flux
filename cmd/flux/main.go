@@ -306,6 +306,7 @@ type State struct {
 		App        string `json:"app"`
 		AppVersion string `json:"appVersion"`
 		AppUpdate  string `json:"appUpdate"`
+		OldApp     bool   `json:"oldApp"`
 		Battery    *struct {
 			Charge   int  `json:"charge"`
 			Charging bool `json:"charging"`
@@ -376,6 +377,9 @@ func printStatus(w io.Writer, s *State) {
 		fmt.Fprintf(w, "  %-22s %s\n", "", id)
 		if d.AppUpdate != "" {
 			fmt.Fprintf(w, "  %-22s Flux for Android %s is available. To send it, run: flux-cli --device %s update --phone\n", "", d.AppUpdate, d.ID)
+		}
+		if d.Paired && d.OldApp {
+			fmt.Fprintf(w, "  %-22s %s\n", "", oldAppFix(d.Name))
 		}
 	}
 }

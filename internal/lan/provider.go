@@ -39,7 +39,10 @@ type Config struct {
 	// OnIdentity receives each identity seen by UDP. The daemon uses it to
 	// list devices that are not paired yet.
 	OnIdentity func(id proto.Identity, ip string)
-	Logf       func(format string, args ...any)
+	// OnOldApp receives each identity by UDP of an app from before Flux
+	// 0.8. Such an app cannot link, so the provider does not connect to it.
+	OnOldApp func(id proto.Identity, ip string)
+	Logf     func(format string, args ...any)
 	// UDPPort and FirstTCPPort change the protocol ports for tests. Zero
 	// means 1716.
 	UDPPort      int
@@ -298,7 +301,7 @@ func (p *Provider) udpLoop(ctx context.Context) {
 			continue
 		}
 		pkt, err := proto.Unmarshal(bytes.TrimSpace(buf[:n]))
-		if err != nil || pkt.Type != proto.TypeIdentity {
+		if err != nil || (pkt.Type != proto.TypeIdentity && pkt.Type != proto.TypeOldIdentity) {
 			continue
 		}
 		var id proto.Identity
@@ -306,6 +309,12 @@ func (p *Provider) udpLoop(ctx context.Context) {
 			continue
 		}
 		ip := from.IP.String()
+		if pkt.Type == proto.TypeOldIdentity {
+			if p.cfg.OnOldApp != nil {
+				p.cfg.OnOldApp(id, ip)
+			}
+			continue
+		}
 		if p.cfg.OnIdentity != nil {
 			p.cfg.OnIdentity(id, ip)
 		}

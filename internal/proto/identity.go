@@ -10,6 +10,10 @@ import (
 	"unicode"
 )
 
+// TypeOldIdentity is the identity type of the apps and daemons from before
+// Flux 0.8. They cannot link with this version.
+const TypeOldIdentity = "kdeconnect.identity"
+
 // Packet types that Flux uses.
 const (
 	TypeIdentity            = "flux.identity"

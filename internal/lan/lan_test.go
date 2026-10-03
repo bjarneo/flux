@@ -27,6 +27,9 @@ type peer struct {
 	pins  map[string]*x509.Certificate
 	// logs receives each log line of the provider.
 	logs chan string
+	// oldApps receives the device ID of each identity of an app from
+	// before Flux 0.8.
+	oldApps chan string
 }
 
 func newPeer(t *testing.T, ctx context.Context, name string, extraOutgoing ...string) *peer {
@@ -35,7 +38,7 @@ func newPeer(t *testing.T, ctx context.Context, name string, extraOutgoing ...st
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := &peer{id: id, cert: cert, links: make(chan *Link, 4), pins: map[string]*x509.Certificate{}, logs: make(chan string, 64)}
+	p := &peer{id: id, cert: cert, links: make(chan *Link, 4), pins: map[string]*x509.Certificate{}, logs: make(chan string, 64), oldApps: make(chan string, 4)}
 	p.prov = New(Config{
 		Cert: cert,
 		Identity: func() proto.Identity {
@@ -51,6 +54,12 @@ func newPeer(t *testing.T, ctx context.Context, name string, extraOutgoing ...st
 		},
 		HasLink: func(string) bool { return false },
 		OnLink:  func(l *Link) { p.links <- l },
+		OnOldApp: func(id proto.Identity, ip string) {
+			select {
+			case p.oldApps <- id.DeviceID:
+			default:
+			}
+		},
 		Logf: func(format string, args ...any) {
 			line := fmt.Sprintf(format, args...)
 			t.Log(line)
@@ -635,5 +644,77 @@ func TestTunnelPayload(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("the phone did not receive the payload")
+	}
+}
+
+// An app from before Flux 0.8 announces itself with the old identity
+// type. The provider reports it and does not connect to it.
+func TestOldAppIdentity(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	desk := newPeer(t, ctx, "desk")
+	const phoneID = "b8657d84254547ff8f465063b44b840d"
+
+	// The phone listener counts the connections of the desk.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	dials := make(chan struct{}, 4)
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			c.Close()
+			dials <- struct{}{}
+		}
+	}()
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	conn, err := net.DialUDP("udp", nil, desk.udpAddr())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	send := func(typ string) {
+		t.Helper()
+		line, err := proto.New(typ, proto.NewIdentity(phoneID, "phone", port)).Marshal()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := conn.Write(line); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	send(proto.TypeOldIdentity)
+	select {
+	case id := <-desk.oldApps:
+		if id != phoneID {
+			t.Fatalf("old app %q", id)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the old identity was not reported")
+	}
+	select {
+	case <-dials:
+		t.Fatal("the desk connected to an old app")
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	// A current identity gets a connection, and is not an old app.
+	send(proto.TypeIdentity)
+	select {
+	case <-dials:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the desk did not connect to a current identity")
+	}
+	select {
+	case id := <-desk.oldApps:
+		t.Fatalf("a current identity was reported as an old app: %s", id)
+	default:
 	}
 }

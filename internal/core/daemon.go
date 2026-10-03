@@ -386,6 +386,7 @@ func (d *Daemon) Run() error {
 		},
 		OnLink:       d.onLink,
 		OnIdentity:   d.onIdentity,
+		OnOldApp:     d.onOldApp,
 		Logf:         d.logf,
 		UDPPort:      d.opts.UDPPort,
 		FirstTCPPort: d.opts.FirstTCPPort,

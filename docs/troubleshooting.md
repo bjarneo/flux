@@ -171,6 +171,19 @@ When the name still matches more than 1 device, `flux-cli pair` returns the `amb
 See [pair and discover](cli.md#pair-and-discover) for the match rule of each command.
 Give the device ID in place of the name.
 
+## A paired phone stops connecting after an update
+
+Flux 0.8 changed the names on the network.
+A Flux app from before 0.8 cannot connect to `fluxd` 0.8 or later.
+`flux-cli update --phone` cannot send it the new app, because it needs a connection.
+The log of `fluxd` then shows `TLS handshake: EOF` for the phone every 30 seconds.
+
+When the old app announces itself, `fluxd` logs `runs a Flux app older than 0.8` once.
+`flux-cli status` and `flux-cli doctor` then name the phone.
+Install the latest app from the [releases](https://github.com/bjarneo/flux/releases/latest).
+On Android, [install it with adb](android-setup.md#install-with-adb).
+`adb install -r` keeps the app data, so the phone stays paired.
+
 ## A pairing from the computer stops after the phone accepts
 
 A pairing that you start on the computer can stop right after you accept on the phone.

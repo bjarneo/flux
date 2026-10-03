@@ -40,6 +40,9 @@ func doctor() {
 		check(s.Self.TCPPort > 0, fmt.Sprintf("fluxd listens on TCP %d", s.Self.TCPPort),
 			"fluxd has no TCP port. Check: journalctl --user -u fluxd")
 		checkVersion(s, check)
+		for _, fix := range oldAppProblems(&s) {
+			check(false, "", fix)
+		}
 	}
 
 	// Phones send their identity to UDP port 1716. A second program on the
