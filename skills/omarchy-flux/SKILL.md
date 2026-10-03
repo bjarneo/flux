@@ -46,7 +46,7 @@ Preserve existing changes.
 Use the configured Git remote for clone and release URLs.
 If no remote exists, ask for the repository URL before a remote operation.
 
-`flux-cli setup` returns 1 when the service step or the plugin step fails.
+`flux-cli setup` returns 1 when the service step, the plugin step, or the KDE Connect step fails.
 A missing system part does not change the exit code.
 Inspect its output and confirm the result with `flux-cli doctor` and `flux-cli status --json`.
 

@@ -216,13 +216,13 @@ rm ~/.local/bin/flux
 | --- | --- |
 | Package install or `sudo make install` | Installs the service, udev rule, desktop files, binaries, helper, plugin assets, and the [short name](#the-command-name) `flux`. |
 | `dist/post-install.sh` | Reloads udev. Loads the optional webcam module when no existing configuration controls it. Restarts a running `fluxd` of an earlier version, which does not restart by itself. It does not enable the user service for the accounts on the computer. |
-| `flux-cli setup` | Enables and starts the user service for the user who runs it. Removes a user unit that an earlier `flux-cli setup` of a checkout wrote, when a package unit exists. Copies and enables the shell plugin when the shell is available. |
+| `flux-cli setup` | Enables and starts the user service for the user who runs it. Removes a user unit that an earlier `flux-cli setup` of a checkout wrote, when a package unit exists. Copies and enables the shell plugin when the shell is available. Keeps KDE Connect off when it is installed, as [KDE Connect](troubleshooting.md#kde-connect) describes. |
 | `flux-cli setup --dry-run` | Prints the user setup actions without applying them. |
 | Each start of `fluxd` | Updates the files of an added plugin to the plugin of the same install. |
 | `flux-cli open` | Starts the user service when no `fluxd` answers, except after `flux-cli off`. |
 
 Setup reports missing system parts and their install commands.
-It returns 1 when the service step or the plugin step fails.
+It returns 1 when the service step, the plugin step, or the KDE Connect step fails.
 A missing system part does not change the exit code, so read the output.
 Use `flux-cli doctor` to verify the result.
 

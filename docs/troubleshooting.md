@@ -12,8 +12,8 @@ systemctl --user status fluxd
 journalctl --user -u fluxd -n 100 --no-pager
 ```
 
-`flux-cli setup` returns 1 when the service step or the plugin step fails.
-A missing system part does not change the exit code, so also read the list under `3. System parts` in its output.
+`flux-cli setup` returns 1 when the service step, the plugin step, or the KDE Connect step fails.
+A missing system part does not change the exit code, so also read the list under `4. System parts` in its output.
 
 ## flux runs another program
 
@@ -157,6 +157,24 @@ To read the Mac logs, run:
 ```sh
 log stream --predicate 'subsystem == "org.omarchy.flux"'
 ```
+
+## KDE Connect
+
+`kdeconnectd` also listens on UDP port 1716, and it can take the identities that phones send to `fluxd`.
+`pkill kdeconnectd` helps only until the next login.
+KDE Connect starts again from its autostart entry, or when a program calls it on D-Bus.
+
+`flux-cli setup` keeps KDE Connect off for your user.
+It writes 2 files and stops the running `kdeconnectd`:
+
+| File | Effect |
+| --- | --- |
+| `~/.config/autostart/org.kde.kdeconnect.daemon.desktop` | Hides the autostart entry of the package. |
+| `~/.local/share/dbus-1/services/org.kde.kdeconnect.service` | Runs `/bin/false` when a program calls KDE Connect on D-Bus. |
+
+Setup leaves a file that you wrote as it is.
+To use KDE Connect again, remove both files and log in again.
+`fluxd` writes a warning to its log when it finds `kdeconnectd` after it starts.
 
 ## The pairing keys differ
 

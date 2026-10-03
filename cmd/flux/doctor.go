@@ -51,7 +51,10 @@ func doctor() {
 	} else {
 		for _, name := range others {
 			fix := fmt.Sprintf("Stop it: pkill -x %s", name)
-			if name == "" {
+			switch name {
+			case "kdeconnectd":
+				fix = "To stop it and keep it off at login, run: flux-cli setup"
+			case "":
 				name, fix = "a program of another user", fmt.Sprintf("Find it: sudo ss -ulnp 'sport = :%d'", discoveryPort)
 			}
 			check(false, "", fmt.Sprintf("%s also uses UDP port %d, so phones cannot always reach fluxd. %s", name, discoveryPort, fix))

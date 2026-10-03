@@ -16,8 +16,8 @@ import (
 	"flux/internal/plugin"
 )
 
-// setup does the per-user part of the install: the fluxd service and the
-// omarchy-shell plugin. The system part (the udev rule and the kernel
+// setup does the per-user part of the install: the fluxd service, the
+// omarchy-shell plugin, and KDE Connect off. The system part (the udev rule and the kernel
 // module for the webcam) is done by post-install.sh, which the package runs as root. setup reports any
 // system part that is missing and prints the command that adds it. It
 // returns an error when a step fails, so that the exit code is 1.
@@ -63,7 +63,13 @@ func setup(args []string) error {
 		}
 	}
 
-	fmt.Println("3. System parts")
+	fmt.Println("3. KDE Connect")
+	if err := setupKDEConnect(systemKDEConnect(), dry); err != nil {
+		fmt.Println("  ✗", err)
+		failed++
+	}
+
+	fmt.Println("4. System parts")
 	setupSystemReport()
 	switch failed {
 	case 0:

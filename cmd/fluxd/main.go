@@ -77,6 +77,7 @@ func main() {
 	}
 	if !*headless {
 		go refreshPlugin(logger)
+		go warnKDEConnect(ctx, logger, desktop.SystemProcs{}, kdeConnectDelay)
 	}
 	unmark := markSelfRestart(logger)
 	defer unmark()
