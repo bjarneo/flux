@@ -246,6 +246,8 @@ class MainActivity : ComponentActivity() {
         if (!org.omarchy.flux.BuildConfig.DEBUG) return
         if (intent?.getBooleanExtra("flux.debug.demo", false) == true) {
             org.omarchy.flux.core.DebugDemo.on = true
+            org.omarchy.flux.core.DebugDemo.agentOutput =
+                intent.getStringExtra("flux.debug.output")
             FluxCore.publish()
         }
         intent?.getStringExtra("flux.debug.theme")?.let { org.omarchy.flux.core.DebugTheme.select(it) }

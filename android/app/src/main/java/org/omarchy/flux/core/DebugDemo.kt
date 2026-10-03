@@ -29,6 +29,9 @@ object DebugDemo {
 
     @Volatile var on = false
 
+    /** Debug-only ANSI sample for reproducible agent-output screenshots. */
+    @Volatile var agentOutput: String? = null
+
     fun isDemo(id: String?) = id != null && id.startsWith("demo-")
 
     fun devices(): List<DeviceUi> {
@@ -79,7 +82,7 @@ object DebugDemo {
                 herdrOutput = HerdrOutput(
                     pane = "w2:p1",
                     loading = false,
-                    lines = termLines(demoOutput),
+                    lines = termLines(agentOutput ?: demoOutput),
                 ),
             ),
             device(OFFLINE, "omarchy-desk", "desktop", "192.168.2.40", paired = true, online = false),

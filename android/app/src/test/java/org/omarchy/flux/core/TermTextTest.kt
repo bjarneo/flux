@@ -91,6 +91,60 @@ class TermTextTest {
 
     private val sidebar = 0x202033
 
+    /** Expanded V2 tabs at the left, including the selected tab's animated background. */
+    private fun tabsRow(tab: String, main: String, width: Int = 42): String =
+        cell(tab.take(3).padEnd(3), text, sidebar + 1) +
+            cell(tab.drop(3).padEnd(width - 3), text, sidebar) + main
+
+    @Test
+    fun dropsVerticalSessionTabsBeforeFittingPanels() {
+        val rows = listOf(
+            tabsRow("", blankRow()),
+            tabsRow(" 1 Fix alignment", plainRow("Questions")),
+            tabsRow("   flux", panelRow("Accept the license?", accent)),
+            tabsRow("", panelRow("1. Continue", accent)),
+            tabsRow(" + New session", panelRow("Build · Model", accent)),
+            tabsRow("", plainRow("esc interrupt")),
+        )
+        val screen = termLines(rows.joinToString("\n"))
+        val expected = termLines(listOf(
+            blankRow(), plainRow("Questions"), panelRow("Accept the license?", accent),
+            panelRow("1. Continue", accent), panelRow("Build · Model", accent),
+            plainRow("esc interrupt"),
+        ).joinToString("\n"))
+        assertEquals(expected, screen)
+        assertEquals(expected, fitLines(screen, 40))
+        val history = "Older plain history\n"
+        val withHistory = termLines(history + rows.joinToString("\n"))
+        assertEquals("Older plain history", withHistory.first().text)
+        for (indicator in listOf("?", "!", "⠋", " ")) {
+            val statusRows = rows.toMutableList()
+            statusRows[1] = tabsRow(" $indicator Fix alignment", plainRow("Questions"))
+            assertEquals(expected, termLines(statusRows.joinToString("\n")))
+        }
+    }
+
+    @Test
+    fun keepsPanelsThatMentionNewSession() {
+        val rows = listOf(
+            panelRow("1 Example"), panelRow("+ New session"),
+            panelRow("Other text"), panelRow("Build"),
+        ).joinToString("\n")
+        assertEquals(listOf("┃  1 Example", "┃  + New session", "┃  Other text", "┃  Build"),
+            termLines(rows).map { it.text })
+        val few = listOf(tabsRow(" 1 Title", plainRow("Hello")),
+            tabsRow(" + New session", plainRow("Build")))
+        assertTrue(termLines(few.joinToString("\n")).first().text.contains("1 Title"))
+    }
+
+    @Test
+    fun keepsHorizontalSessionTabs() {
+        val tabs = " 1 First  2 Second  + New session"
+        val rows = cell(tabs.padEnd(80), text, sidebar) + "\n" +
+            listOf(panelRow("Hello"), panelRow("Build")).joinToString("\n")
+        assertEquals(listOf(tabs, "  ┃  Hello", "  ┃  Build"), termLines(rows).map { it.text })
+    }
+
     /** A row of a wide opencode screen: [main] in 60 columns, a gap of 2, and [side] in a sidebar of 30 columns. */
     private fun wideRow(main: String, side: String, trimmed: Boolean = false): String {
         val bar = if (trimmed && side.isEmpty()) "" else cell("  ", white) + cell("  $side".let { if (trimmed) it else it.padEnd(30) }, text, sidebar)

@@ -359,6 +359,20 @@ ANDROID_SERIAL=emulator-5554 FLUX_DEMO=1 FLUX_THEME=catppuccin-latte tools/shot.
 
 Release builds ignore these extras.
 
+To reproduce terminal layout bugs without pairing the emulator, a debug build also
+accepts an ANSI sample in `flux.debug.output` while demo mode is on:
+
+```bash
+sample=$(< /path/to/sample.ansi)
+sample=${sample//\'/\'\\\'\'}
+adb -s emulator-5554 shell am start -n org.omarchy.flux/.ui.MainActivity \
+  --ez flux.debug.demo true --es flux.debug.page agent:w2:p1 \
+  --es flux.debug.output "'$sample'"
+```
+
+Use a small, non-private sample. This only changes the demo output; it sends no
+keys or prompts to a real agent. Omit the output extra to restore the default sample.
+
 ## Icons
 
 The app uses Material Symbols Rounded at the 24 dp optical size, under the Apache License 2.0. To add an icon, add its name to `ICONS` in `tools/fetch_icons.py`, run the script, and add the drawable to `Ic` in `ui/Icons.kt`:

@@ -74,6 +74,10 @@ This matters most for full-screen agents such as opencode, which draw panels acr
 - The phone removes the margin that all lines share, extra empty rows, scroll bars, and the half-block edges of boxes.
 - A panel, for example a message, a tool call, or a diff line in opencode, fills the width of the screen.
 - The phone removes the sidebar that opencode shows in a wide terminal, because its rows share the lines of the conversation. The status line at the bottom still shows the tokens and the cost.
+- The phone also removes the expanded vertical session tabs of OpenCode V2 when their
+  titles and **New session** row are visible. This keeps the conversation and
+  prompt at the left without changing the tab layout on the computer. Horizontal tabs
+  stay in the output. A compact or partially visible vertical rail is not detected yet.
 - A centered drawing, for example the opencode logo, moves to the left when that makes it fit.
 - When the agent colors suit a dark background and the phone uses the light theme, the phone inverts the lightness of these colors, so the text stays readable. It does the same for colors that suit a light background in the dark theme.
 

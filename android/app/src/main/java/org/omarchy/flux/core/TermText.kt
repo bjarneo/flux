@@ -267,7 +267,7 @@ private val edgeLine = Regex("^[╵╷╹╻]?(▀{8,}|▄{8,})[╵╷╹╻]?$"
  */
 fun tidyLines(lines: List<TermLine>): List<TermLine> {
     val out = ArrayList<TermLine>()
-    for (line in dropSidebar(lines)) {
+    for (line in dropSidebar(dropSessionTabs(lines))) {
         val trimmed = trimEnd(dropScrollBar(line))
         val text = trimmed.text
         when {
@@ -277,6 +277,43 @@ fun tidyLines(lines: List<TermLine>): List<TermLine> {
         }
     }
     return dropEmptyRows(dedent(out))
+}
+
+/** Drops the expanded OpenCode V2 session rail, without moving plain scrollback above it. */
+private fun dropSessionTabs(lines: List<TermLine>): List<TermLine> {
+    val marker = Regex("""^\s*\+ New session\s*$""")
+    for ((index, line) in lines.withIndex()) {
+        var col = 0
+        for (span in line.spans) {
+            if (span.style.bg == null || span.style.inverse) break
+            col += span.text.length
+        }
+        if (col !in 8..60 || !marker.matches(line.text.take(col))) continue
+        fun inRail(row: TermLine): Boolean {
+            var at = 0
+            for (span in row.spans) {
+                if (at >= col) return true
+                if (span.style.bg == null || span.style.inverse) return false
+                at += span.text.length
+            }
+            return at >= col
+        }
+        var start = index
+        var end = index + 1
+        while (start > 0 && inRail(lines[start - 1])) start--
+        while (end < lines.size && inRail(lines[end])) end++
+        if (end - start < SIDEBAR_MIN_ROWS) continue
+        val title = Regex("""^\s*(?:\d+|[!?●•·⠁-⣿])?\s+\S""")
+        val hasTitle = lines.subList(start, end).any {
+            val prefix = it.text.take(col)
+            !marker.matches(prefix) && title.containsMatchIn(prefix)
+        }
+        if (!hasTitle) continue
+        return lines.mapIndexed { i, row ->
+            if (i in start until end) dropColumns(row, col) else row
+        }
+    }
+    return lines
 }
 
 /** A sidebar starts at this column or later, see [dropSidebar]. */
