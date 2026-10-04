@@ -1,0 +1,178 @@
+# Plan: phone-first Herdr terminal after the Pixel trial
+
+Status: proposed follow-up; no changes to runtime behavior implemented by this document.
+
+This plan records the user's observations from the real Pixel trial of
+`feat/herdr-interactive-control`. It supersedes the desktop-size, separate-reader,
+and optional-control UX decisions in `herdr-interactive-plan.md` for the next iteration.
+The previous plan remains the implementation and verification history.
+
+## 1. What the user observed
+
+- The real connection works partially, but the experience is not the intended one.
+- Separate **Read / Terminal** choices are unwanted. The terminal should be the reading
+  and interaction surface, not an alternative to a phone-reflowed text reader.
+- Control should be the normal behavior when entering that terminal, not an optional
+  mode requiring a separate **Control** button on every visit.
+- Desktop-size rendering shrunk to fit the phone is not enough. The application must
+  redraw for a phone-sized terminal, as it does in the user's Termius experience.
+- The temporary desktop layout degradation during phone control is acceptable to the user.
+  Releasing phone control must return the desktop to its normal geometry.
+- OpenCode's background appears black on the phone, while other colors seem correct.
+  Termius shows the background the user expects from the PC. The cause is not confirmed.
+- Remote gesture scrolling works, but the user describes the current experience as very poor:
+  large or repeated finger movements produce only small, incremental scroll advances.
+  It feels insufficiently sensitive and requires too much effort to navigate a conversation.
+- Termius is the user's sensitivity reference: a modest finger movement scrolls responsively
+  and covers a useful amount of content. Flux should deliver a comparable experience.
+- Gesture improvement remains lower priority than geometry and the terminal-first flow,
+  but it is a substantial usability requirement, not a minor polish item.
+
+These are user-reported observations, not additional automated verification results.
+
+## 2. Intended experience
+
+1. Open the selected agent pane from Flux.
+2. Authenticate with the existing phone-unlock mechanism if necessary.
+3. Automatically request control of that terminal, without takeover of another controller.
+4. Give the PTY dimensions appropriate to the phone's available terminal area.
+5. Display the application's real redraw, with readable text and matching colors.
+6. On exit, backgrounding, lock, unlock expiry, or link loss, release control and recover
+   desktop geometry. Returning to the screen requires a new safe control session.
+
+Automatic control means the default flow, not bypassing authentication or permissions.
+An existing controller must produce a clear refusal, not an automatic takeover.
+Show a persistent, concise indication that the phone controls the pane and temporarily
+changes its size on the PC. Explain this consequence before the first acquisition.
+The user's acceptance of that consequence removes the need for a separate optional
+"Adapt to phone" mode in the normal flow.
+
+## 3. Priority 1: real PTY resize and desktop recovery
+
+Do not confuse local font scaling with a PTY resize. The agent must receive the new
+terminal dimensions and redraw its own interface; Flux must not hide or rebuild its tabs.
+
+### Verify the geometry contract first
+
+- Use a disposable Herdr session to measure the actual PTY size before, during, and after
+  control. `pane.layout` rectangles are not proof of actual PTY geometry.
+- Reproduce the user's Termius behavior and establish whether it attaches a whole Herdr
+  client or one pane terminal. Those paths may have different resize and recovery semantics.
+- Verify release, EOF, controller failure, and desktop window resizing during ownership.
+- Determine whether Herdr restores the current desktop geometry on release automatically.
+  Do not promise restoration based only on the previously confirmed size lock.
+
+### Minimal implementation path
+
+- Calculate columns and rows from the actual available phone area and measured cell metrics
+  at a readable font size. Do not shrink a desktop grid to tiny text by default.
+- Extend the additive terminal contract with validated control dimensions and, if needed,
+  a bounded resize message routed through the existing ordered bridge input queue.
+- Use the existing `Session.Resize` wrapper rather than a new transport or raw CLI JSON.
+- Handle orientation and available-area changes deliberately; debounce resize requests and
+  cancel active gestures when geometry changes. Define keyboard behavior before enabling IME.
+- Keep resize authority exclusive to the authenticated device's active controller.
+- Reuse release and process cleanup. If Herdr does not recover the desktop automatically,
+  design recovery using verified authoritative geometry, not a guessed layout rectangle.
+- Prefer the current desktop geometry on recovery if its window changed during phone control,
+  rather than blindly restoring a stale pre-connection size.
+
+Acceptance: the phone gets an application redraw suited to portrait use, and the PC returns
+to its normal geometry after every tested release/failure path. Neither neighboring panes
+nor personal Herdr settings are changed to fake that result.
+
+## 4. Priority 2: one terminal surface, control by default
+
+- Remove the **Read / Terminal** selector from the normal supported-pane flow.
+- Open a control stream after local authentication and wait for a usable rendered baseline
+  before accepting gestures or existing validated input controls.
+- Keep local zoom/pan for inspecting content, but make mobile PTY geometry the default.
+- Preserve reply drafts and existing input validation; removing the reader does not authorize
+  arbitrary ANSI input, Ctrl-C, or unrestricted keyboard passthrough.
+- Release pending acquisitions as well as active controllers if the screen leaves or locks.
+  A late unlock callback or open response must not acquire control for a closed screen.
+- Check authorization at each input, not only when the stream opens.
+- Decide the visible behavior for unavailable control, old daemons, and contention. Do not
+  silently restore the two-choice UX or claim observation is control.
+- Limit any legacy reader fallback to compatibility needs; do not delete code used by Apple
+  clients or other Android screens as a side effect of this UI change.
+
+Acceptance: opening a supported pane leads to the authenticated, phone-sized terminal
+without selecting a second view or pressing a separate Control button.
+
+## 5. Priority 3: background and terminal theme fidelity
+
+Investigate before choosing a fix:
+
+- Compare the same application's background in the PC, Termius, and Flux.
+- Determine whether OpenCode paints explicit background SGR values or uses the terminal's
+  default background through reset/default-color sequences.
+- Inspect whether Herdr's rendered frames retain explicit cell backgrounds or omit them.
+- Check xterm's default background and palette: the host page currently defaults to black.
+- Distinguish the terminal's default colors from Flux's UI theme. They need not be identical.
+- If default-color metadata is needed, identify an authoritative source and transport it
+  explicitly; do not infer the background from arbitrary frame text or invert colors.
+- Keep OSC clipboard operations, automatic link opening, and terminal-query replies disabled.
+
+Acceptance: explicit and default backgrounds match the reference in dark and light terminal
+themes, including blank cells and erased regions. The app chrome may keep its own theme.
+
+## 6. Priority 4: gesture refinement
+
+### Reported problem and expected result
+
+The user confirms that control gestures already cause remote scrolling. The problem is how
+little content moves relative to finger travel: repeated, exaggerated swipes are needed and
+the conversation advances a small amount at a time. The result feels laborious rather than
+like native terminal navigation. This observation does not establish whether the main cause
+is the movement threshold, event budget, gesture delivery, or OpenCode's wheel handling.
+
+Use Termius as the practical reference, on the same phone and conversation where possible.
+A normal short swipe should produce immediately perceptible, useful scrolling; a longer or
+faster swipe should cover substantially more content without requiring repeated exaggerated
+movements. Keep precision for small adjustments, rather than simply maximizing scroll speed.
+
+### Investigation and tuning
+
+- Measure finger travel, gesture duration, emitted wheel steps, rate-limited steps, and actual
+  application scroll movement. Distinguish low sensitivity from slow frame delivery or latency.
+- Review the current threshold of `max(cell height, 14 CSS px)` and its interaction with font
+  zoom, cell geometry, and phone density. A local font change should not unpredictably change
+  the effort needed to scroll the remote conversation.
+- Review the 30 events/second budget and burst of 10 against normal short and fast swipes.
+  Keep bounded input, but do not assume the original limits deliver adequate responsiveness.
+- Tune the movement-to-wheel mapping against real OpenCode behavior. Herdr's mouse-report
+  route sends one event per command: increasing `lines` alone does not multiply wheel events.
+- Check gesture event delivery and cancellation for lost movement or premature termination.
+- Start with a well-calibrated default rather than requiring the user to fix an unusable
+  default through settings. Add a sensitivity adjustment only if real device/app differences
+  demonstrate a need for it.
+- Do not add post-lift inertia without an explicit decision and safety review; responsive
+  scrolling during a swipe must not depend on continuing input after the user stops.
+
+Tune after geometry is corrected. Do not optimize against the old tiny desktop-size grid
+and assume those settings suit the new mobile layout.
+
+Retain the safety rules: correct cells after zoom/pan, margins rejected, no input replay,
+bounded wheel events, no universal arrow-key substitution, and no accidental remote taps
+or approvals. Revisit one-finger scrolling and two-finger local navigation with the user.
+
+Acceptance: on the Pixel, ordinary short, long, and fast swipes navigate a real OpenCode
+conversation comfortably, without excessive finger travel or repeated swipes for tiny advances.
+Compare directly with Termius and obtain the user's validation of sensitivity; static frames
+and gesture unit tests alone cannot establish that the experience is good.
+
+## 7. Verification and boundaries
+
+- Start with a disposable Herdr session and isolated daemon; keep the installed PC daemon intact.
+- Continue Pixel testing with the separate `org.omarchy.flux.dev` app, not the official app.
+- Validate real OpenCode conversation scrolling on phone and PC, not only static sample frames.
+- Test unlock expiry, lock/background during acquisition, rotation, link loss, agent exit,
+  competing controllers, and repeated connect/disconnect cycles.
+- Test Go protocol validation, permission revocation, resize ordering, and process cleanup;
+  Kotlin lifecycle, geometry, stale callbacks, and baseline handling; Android debug/release
+  builds and lint. Run Swift compatibility checks on Mac/CI for additive protocol changes.
+- Record real results and remaining limitations before marking this follow-up complete.
+
+No implementation, release, additional installation, chargeable agent prompt, or changes to
+personal sessions are authorized solely by this planning document.

@@ -1,5 +1,9 @@
 # Plan: an interactive Herdr agent terminal in Flux Android
 
+Follow-up after the real Pixel trial: [phone-first terminal plan](herdr-mobile-terminal-follow-up.md).
+That plan supersedes the separate-reader, optional-control, and desktop-size UX decisions below
+for the next iteration. This document retains the original implementation history.
+
 Date: 2026-10-03. Status: proposal only; no implementation or live-session testing.
 
 This document defines an initial integration using the Herdr 0.9.3 CLI bridge.
