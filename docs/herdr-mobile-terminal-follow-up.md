@@ -7,6 +7,21 @@ This plan records the user's observations from the real Pixel trial of
 and optional-control UX decisions in `herdr-interactive-plan.md` for the next iteration.
 The previous plan remains the implementation and verification history.
 
+### Platform scope and preserved behavior
+
+The interactive terminal and the replacement UX in this follow-up are Android-only.
+The current implementation still retains Android's reader and the Changes/review feature;
+the replacement described here has not yet been implemented.
+
+iOS keeps its existing read/output experience and existing actions. Do not replace its
+reader, add automatic control there, or delete shared read/diff operations it depends on.
+The Go bridge and additive protocol are reusable infrastructure, not an implemented iOS
+terminal client. No iOS interactive-terminal implementation is part of this follow-up.
+
+Preserve compatibility with existing Apple clients. Historical reads during an active
+terminal stream may still return cached output to avoid moving the controlled pane;
+that shared safety rule is not a replacement of the iOS reader.
+
 ## 1. What the user observed
 
 - The real connection works partially, but the experience is not the intended one.
@@ -32,8 +47,10 @@ These are user-reported observations, not additional automated verification resu
 
 ## 2. Intended experience
 
-1. Open the selected agent pane from Flux.
-2. Authenticate with the existing phone-unlock mechanism if necessary.
+1. Open the selected agent pane from Flux Android, directly on the Terminal tab.
+2. Automatically invoke the existing local authentication gate, using the phone's configured
+   supported authentication method (biometric or device credential), not fingerprint only.
+   Preserve its existing valid-unlock policy; do not silently bypass it or change its lifetime.
 3. Automatically request control of that terminal, without takeover of another controller.
 4. Give the PTY dimensions appropriate to the phone's available terminal area.
 5. Display the application's real redraw, with readable text and matching colors.
@@ -83,9 +100,20 @@ nor personal Herdr settings are changed to fake that result.
 
 ## 4. Priority 2: one terminal surface, control by default
 
-- Remove the **Read / Terminal** selector from the normal supported-pane flow.
+- In Android, replace the existing **Output** tab with **Terminal**, beside **Changes**.
+  The intended top-level choices are **Terminal / Changes**, not two nested selectors.
+- Remove the additional **Read / Terminal** selector. Keep **Changes**, its diff renderer,
+  file-path filtering, and validated review/reply actions; do not fold them into ANSI output.
+- Default to **Terminal** when opening a supported agent from the phone. Opening the agent
+  initiates authentication and control acquisition automatically, without a separate
+  **Control** button or another choice of view.
+- If authentication is cancelled or fails, do not acquire control, resize the PTY, or send
+  input. Show the result and allow an explicit retry; do not repeatedly trigger system prompts.
 - Open a control stream after local authentication and wait for a usable rendered baseline
   before accepting gestures or existing validated input controls.
+- Switching to **Changes** releases the terminal controller and recovers desktop geometry.
+  Returning to **Terminal** uses the same authenticated acquisition flow. Verify that diff
+  retrieval does not depend on the old Output tab or conflict with terminal history exclusion.
 - Keep local zoom/pan for inspecting content, but make mobile PTY geometry the default.
 - Preserve reply drafts and existing input validation; removing the reader does not authorize
   arbitrary ANSI input, Ctrl-C, or unrestricted keyboard passthrough.
@@ -97,8 +125,9 @@ nor personal Herdr settings are changed to fake that result.
 - Limit any legacy reader fallback to compatibility needs; do not delete code used by Apple
   clients or other Android screens as a side effect of this UI change.
 
-Acceptance: opening a supported pane leads to the authenticated, phone-sized terminal
-without selecting a second view or pressing a separate Control button.
+Acceptance: opening a supported Android agent leads to the authenticated, phone-sized terminal
+without selecting a second view or pressing a separate Control button. The visible tabs are
+**Terminal / Changes**, Changes still works, and iOS retains its existing read/output flow.
 
 ## 5. Priority 3: background and terminal theme fidelity
 
@@ -173,6 +202,8 @@ and gesture unit tests alone cannot establish that the experience is good.
   Kotlin lifecycle, geometry, stale callbacks, and baseline handling; Android debug/release
   builds and lint. Run Swift compatibility checks on Mac/CI for additive protocol changes.
 - Record real results and remaining limitations before marking this follow-up complete.
+- Verify the Android **Terminal / Changes** flow, authentication cancellation, diff retrieval,
+  controller release on tab changes, and compatibility with Apple's unchanged reader.
 
 No implementation, release, additional installation, chargeable agent prompt, or changes to
 personal sessions are authorized solely by this planning document.
