@@ -239,6 +239,43 @@ Phase 1. The MVP must still state that control acquires PTY size ownership.
 Fake-CLI tests: initial frame, EOF, errors, blocked stdin, excessive stderr,
 oversized records, invalid JSON, timeout, and absence of orphaned processes.
 
+### Phase 1 status (2026-10-03)
+
+Implemented in `internal/herdr/`, not yet wired into fluxd or the protocol:
+
+- `terminal_session.go`: `OpenSession` runs one
+  `herdr terminal session observe|control <target> --cols N --rows M`
+  subprocess. The CLI gets no session name and no socket argument; only
+  `HERDR_SOCKET_PATH` in its environment selects the session, and the
+  redirect variables are removed. Both the API socket and the derived
+  `*-client.sock` pass `CheckSocket` (Unix socket of this user) first.
+- Frames are validated before they could reach a phone: `ansi` encoding,
+  base64 bytes, and dimensions within 1..1000. A frame is never truncated:
+  an invalid record ends the stream with a clear error.
+- Input goes through one ordered queue of at most 128 commands, and only
+  the writer goroutine touches stdin. An observe stream refuses input and
+  resize. `SendScroll` fixes `source: wheel` and a caller-chosen `lines`;
+  Phase 2 fixes `lines: 1` as daemon policy.
+- `Close` queues `terminal.release`, closes stdin (the CLI detaches when
+  its input ends), waits 5 seconds, and then kills and reaps only the
+  subprocess that Flux started. `OpenSession` uses `exec.CommandContext`,
+  so the ctx of the link or daemon also ends the bridge.
+- `GetPane` (`pane.get`) returns `terminal_id` and the scroll state, so a
+  caller can pin terminal identity before it opens a stream.
+
+Fake-CLI tests in `terminal_session_test.go` cover: first record, attach
+refusal, EOF without `terminal.closed`, invalid JSON, oversized records,
+bad base64 and encoding, command order and validation, read-only observe,
+blocked stdin with a full input queue and a bounded kill, bounded stderr,
+the child environment and argv, `ClientSocketPath`, `CheckSocket`, and
+`GetPane`.
+
+Checks: `go test -race ./internal/herdr/`, `go vet ./internal/herdr/`,
+and `go build ./...` all pass.
+
+Not part of Phase 1: Flux protocol messages, permission checks, and any
+phone UI. Those are Phase 2 and Phase 3.
+
 ## 7. Phase 2: additive Flux contract
 
 The following names are proposals, not messages that Flux already supports.

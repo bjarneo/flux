@@ -231,6 +231,35 @@ func GetAgent(ctx context.Context, path, pane string) (Agent, error) {
 	return r.Agent, err
 }
 
+// PaneInfo is what pane.get reports about one pane: its stable identity
+// and the scroll state of its terminal.
+type PaneInfo struct {
+	ID          string     `json:"pane_id"`
+	TerminalID  string     `json:"terminal_id"`
+	WorkspaceID string     `json:"workspace_id"`
+	TabID       string     `json:"tab_id"`
+	Status      string     `json:"agent_status"`
+	Scroll      PaneScroll `json:"scroll"`
+}
+
+// PaneScroll is the terminal scroll state of a pane.
+type PaneScroll struct {
+	OffsetFromBottom    int `json:"offset_from_bottom"`
+	MaxOffsetFromBottom int `json:"max_offset_from_bottom"`
+	ViewportRows        int `json:"viewport_rows"`
+}
+
+// GetPane returns the identity and the scroll state of a pane. A caller
+// pins the terminal ID before it opens a terminal session, so a moved or
+// replaced pane cannot follow the ID of another terminal.
+func GetPane(ctx context.Context, path, pane string) (PaneInfo, error) {
+	var r struct {
+		Pane PaneInfo `json:"pane"`
+	}
+	err := Call(ctx, path, "pane.get", map[string]any{"pane_id": pane}, &r)
+	return r.Pane, err
+}
+
 // AgentKinds returns the agent kinds that herdr can detect and start.
 func AgentKinds(ctx context.Context, path string) ([]string, error) {
 	var r struct {
@@ -447,7 +476,7 @@ var errLineTooLong = errors.New("herdr: reply line is too long")
 func readReply(r *bufio.Reader) (response, error) {
 	var resp response
 	for {
-		line, err := readLine(r)
+		line, err := readLine(r, maxLine)
 		if err != nil {
 			return resp, err
 		}
@@ -461,12 +490,12 @@ func readReply(r *bufio.Reader) (response, error) {
 	}
 }
 
-// readLine reads one line of at most maxLine bytes.
-func readLine(r *bufio.Reader) ([]byte, error) {
+// readLine reads one line of at most max bytes.
+func readLine(r *bufio.Reader, max int) ([]byte, error) {
 	var line []byte
 	for {
 		chunk, err := r.ReadSlice('\n')
-		if len(line)+len(chunk) > maxLine {
+		if len(line)+len(chunk) > max {
 			return nil, errLineTooLong
 		}
 		line = append(line, chunk...)
