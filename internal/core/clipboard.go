@@ -80,8 +80,9 @@ func (d *Daemon) addClipLocked(e ClipEntry) {
 	all := append([]ClipEntry{e}, d.clipboard...)
 	kept := all[:0]
 	images, texts := 0, 0
+	limit := d.cfg.ClipLimit()
 	for i, c := range all {
-		drop := i >= maxClipboard
+		drop := i >= limit
 		if c.Image != "" {
 			images++
 			drop = drop || images > maxClipImages
@@ -103,6 +104,22 @@ func (d *Daemon) addClipLocked(e ClipEntry) {
 		kept = append(kept, c)
 	}
 	d.clipboard = kept
+}
+
+// trimClipboardLocked trims the clipboard history to the configured limit.
+func (d *Daemon) trimClipboardLocked() {
+	limit := d.cfg.ClipLimit()
+	if len(d.clipboard) <= limit {
+		return
+	}
+	kept := d.clipboard[:limit]
+	for _, c := range d.clipboard[limit:] {
+		if c.Image != "" {
+			os.Remove(c.Image)
+		}
+	}
+	d.clipboard = kept
+	d.markDirty()
 }
 
 // addClipImage saves an image in the runtime folder and adds it to the
@@ -582,4 +599,91 @@ func (d *Daemon) CopyClipImage(path string) error {
 		return errors.New("the file is not an image")
 	}
 	return d.clip.SetImage(data, mime)
+}
+
+// deleteClip removes an entry from the clipboard history and from saved
+// snippets.
+func (d *Daemon) deleteClip(id string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if id == "" {
+		return apiErr("bad_params", "id is empty")
+	}
+	found := false
+
+	var keptClip []ClipEntry
+	for _, e := range d.clipboard {
+		if e.ID == id {
+			found = true
+			if e.Image != "" {
+				os.Remove(e.Image)
+			}
+		} else {
+			keptClip = append(keptClip, e)
+		}
+	}
+	d.clipboard = keptClip
+
+	var keptSnippets []ClipEntry
+	var snippetImage string
+	snippetFound := false
+	for _, e := range d.snippets {
+		if e.ID == id {
+			found = true
+			snippetFound = true
+			snippetImage = e.Image
+		} else {
+			keptSnippets = append(keptSnippets, e)
+		}
+	}
+	if snippetFound {
+		if keptSnippets == nil {
+			keptSnippets = []ClipEntry{}
+		}
+		if err := saveJSON(filepath.Join(d.snippetsDir, "index.json"), keptSnippets); err != nil {
+			return err
+		}
+		d.snippets = keptSnippets
+		if snippetImage != "" {
+			os.Remove(snippetImage)
+		}
+	}
+
+	if !found {
+		return apiErr("not_found", "No clipboard entry with ID %s", id)
+	}
+	d.markDirty()
+	return nil
+}
+
+// clearClips removes all unpinned clipboard entries. When all is true, it
+// also removes all saved snippets.
+func (d *Daemon) clearClips(all bool) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	for _, e := range d.clipboard {
+		if e.Image != "" {
+			os.Remove(e.Image)
+		}
+	}
+	d.clipboard = nil
+	removeClipImages(d.clipDir)
+
+	if all {
+		for _, e := range d.snippets {
+			if e.Image != "" {
+				os.Remove(e.Image)
+			}
+		}
+		d.snippets = nil
+		if d.snippetsDir != "" {
+			if err := saveJSON(filepath.Join(d.snippetsDir, "index.json"), []ClipEntry{}); err != nil {
+				return err
+			}
+		}
+	}
+
+	d.markDirty()
+	return nil
 }

@@ -80,6 +80,8 @@ QtObject {
     }
     else if (method === "clipboard.search") result = clipboard.filter(e => ((e.text || "") + " " + (e.deviceName || "")).toLowerCase().indexOf((params.text || "").toLowerCase()) >= 0)
     else if (method === "clipboard.pin" || method === "clipboard.unpin") setState(function(s) { s.clipboard.forEach(e => { if (e.id === params.id) e.pinned = method === "clipboard.pin" }) })
+    else if (method === "clipboard.delete") setState(function(s) { s.clipboard = (s.clipboard || []).filter(e => e.id !== params.id) })
+    else if (method === "clipboard.clear") setState(function(s) { s.clipboard = params && params.all ? [] : (s.clipboard || []).filter(e => e.pinned) })
     else if (method === "device.settings.set") setState(function(s) {
       s.settings.deviceRules = s.settings.deviceRules || {}
       s.settings.deviceRules[params.device] = s.settings.deviceRules[params.device] || {}

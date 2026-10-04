@@ -312,3 +312,18 @@ func TestAskAccept(t *testing.T) {
 		}
 	}
 }
+
+func TestClipboardCommandArgs(t *testing.T) {
+	if err := clipboardCommand([]string{"delete"}); err == nil {
+		t.Fatal("clipboard delete without ID should fail")
+	}
+	if err := clipboardCommand([]string{"invalid"}); err == nil {
+		t.Fatal("invalid clipboard subcommand should fail")
+	}
+	if err := clipboardCommand([]string{"limit", "0"}); err == nil {
+		t.Fatal("clipboard limit 0 should fail")
+	}
+	if err := clipboardCommand([]string{"limit", "abc"}); err == nil {
+		t.Fatal("clipboard limit abc should fail")
+	}
+}

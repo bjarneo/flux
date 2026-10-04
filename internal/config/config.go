@@ -70,11 +70,32 @@ type Config struct {
 	GUI string `toml:"gui,omitempty"`
 	// ApproveTimeout is how long an approval waits for the phone, in
 	// seconds, from 5 to 120. Zero means 20.
-	ApproveTimeout    int                        `toml:"approve_timeout,omitempty"`
+	ApproveTimeout int `toml:"approve_timeout,omitempty"`
+	// ClipboardLimit is the number of clipboard history entries that fluxd
+	// keeps, from 1 to 500. Zero means the default of 50.
+	ClipboardLimit    int                        `toml:"clipboard_limit,omitempty"`
 	Commands          []Command                  `toml:"commands"`
 	Devices           map[string]map[string]bool `toml:"devices,omitempty"`
 	NotificationRules []NotificationRule         `toml:"notification_rules,omitempty"`
 	AutomationRules   []AutomationRule           `toml:"automation_rules,omitempty"`
+}
+
+const (
+	// DefaultClipboardLimit is the default number of clipboard entries that fluxd keeps.
+	DefaultClipboardLimit = 50
+	// MaxClipboardLimit is the largest allowed clipboard history limit.
+	MaxClipboardLimit = 500
+)
+
+// ClipLimit returns the configured clipboard history limit, or 50 by default.
+func (c *Config) ClipLimit() int {
+	if c == nil || c.ClipboardLimit <= 0 {
+		return DefaultClipboardLimit
+	}
+	if c.ClipboardLimit > MaxClipboardLimit {
+		return MaxClipboardLimit
+	}
+	return c.ClipboardLimit
 }
 
 // ConfigDir returns ~/.config/flux, or $XDG_CONFIG_HOME/flux.

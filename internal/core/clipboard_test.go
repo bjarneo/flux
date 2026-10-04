@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -467,5 +468,173 @@ func TestConnectClipboardCopyTime(t *testing.T) {
 	waitIdle(t, d, &d.content.clipQ)
 	if clip.text != "new phone text" {
 		t.Errorf("clipboard has %q, want the new phone text", clip.text)
+	}
+}
+
+func TestDeleteClip(t *testing.T) {
+	d, _ := clipDaemon(t, true)
+	d.snippetsDir = t.TempDir()
+
+	d.addClipLocked(ClipEntry{Text: "text 1", Dir: "out"})
+	textID := d.clipboard[0].ID
+	if err := d.addClipImage(ClipEntry{Dir: "in"}, testPNG(1), "image/png"); err != nil {
+		t.Fatal(err)
+	}
+	imageID := d.clipboard[0].ID
+
+	if len(d.clipboard) != 2 || clipFiles(t, d.clipDir) != 1 {
+		t.Fatalf("expected 2 entries and 1 file, got %d entries, %d files", len(d.clipboard), clipFiles(t, d.clipDir))
+	}
+
+	// Delete image entry.
+	if err := d.deleteClip(imageID); err != nil {
+		t.Fatalf("deleteClip image: %v", err)
+	}
+	if len(d.clipboard) != 1 || d.clipboard[0].ID != textID {
+		t.Fatalf("expected 1 entry left, got %+v", d.clipboard)
+	}
+	if n := clipFiles(t, d.clipDir); n != 0 {
+		t.Errorf("image file not deleted, count: %d", n)
+	}
+
+	// Delete text entry.
+	if err := d.deleteClip(textID); err != nil {
+		t.Fatalf("deleteClip text: %v", err)
+	}
+	if len(d.clipboard) != 0 {
+		t.Fatalf("expected 0 entries left, got %+v", d.clipboard)
+	}
+
+	// Delete unknown ID returns not_found error.
+	err := d.deleteClip("missing")
+	var apiErr *Error
+	if !errors.As(err, &apiErr) || apiErr.Code != "not_found" {
+		t.Errorf("delete missing ID: want not_found error, got %v", err)
+	}
+
+	// Delete pinned entry.
+	d.addClipLocked(ClipEntry{Text: "pinned text", Dir: "out"})
+	pinnedID := d.clipboard[0].ID
+	if _, err := d.pinClip(pinnedID, 0); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.snippets) != 1 {
+		t.Fatalf("expected 1 snippet, got %d", len(d.snippets))
+	}
+	if err := d.deleteClip(pinnedID); err != nil {
+		t.Fatalf("deleteClip pinned: %v", err)
+	}
+	if len(d.clipboard) != 0 || len(d.snippets) != 0 {
+		t.Fatalf("expected 0 clips and 0 snippets, got %d clips, %d snippets", len(d.clipboard), len(d.snippets))
+	}
+}
+
+func TestClearClips(t *testing.T) {
+	d, _ := clipDaemon(t, true)
+	d.snippetsDir = t.TempDir()
+
+	d.addClipLocked(ClipEntry{Text: "clip 1", Dir: "out"})
+	id1 := d.clipboard[0].ID
+	d.addClipLocked(ClipEntry{Text: "clip 2", Dir: "out"})
+	if err := d.addClipImage(ClipEntry{Dir: "in"}, testPNG(1), "image/png"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Pin clip 1 as snippet.
+	if _, err := d.pinClip(id1, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(d.clipboard) != 3 || len(d.snippets) != 1 || clipFiles(t, d.clipDir) != 1 {
+		t.Fatalf("setup failed: %d clips, %d snippets, %d files", len(d.clipboard), len(d.snippets), clipFiles(t, d.clipDir))
+	}
+
+	// Clear unpinned clipboard history only.
+	if err := d.clearClips(false); err != nil {
+		t.Fatalf("clearClips(false): %v", err)
+	}
+	if len(d.clipboard) != 0 {
+		t.Errorf("expected empty clipboard, got %d entries", len(d.clipboard))
+	}
+	if n := clipFiles(t, d.clipDir); n != 0 {
+		t.Errorf("expected 0 clip files, got %d", n)
+	}
+	if len(d.snippets) != 1 {
+		t.Errorf("expected snippets preserved, got %d", len(d.snippets))
+	}
+
+	// Clear all including snippets.
+	if err := d.clearClips(true); err != nil {
+		t.Fatalf("clearClips(true): %v", err)
+	}
+	if len(d.snippets) != 0 {
+		t.Errorf("expected empty snippets, got %d", len(d.snippets))
+	}
+
+	// Test via Call API.
+	d.addClipLocked(ClipEntry{Text: "call test", Dir: "out"})
+	callID := d.clipboard[0].ID
+	if _, err := d.Call(t.Context(), "clipboard.delete", []byte(fmt.Sprintf(`{"id":%q}`, callID))); err != nil {
+		t.Fatalf("Call clipboard.delete: %v", err)
+	}
+	if len(d.clipboard) != 0 {
+		t.Errorf("expected empty clipboard after API delete")
+	}
+
+	d.addClipLocked(ClipEntry{Text: "call test 2", Dir: "out"})
+	if _, err := d.Call(t.Context(), "clipboard.clear", []byte(`{}`)); err != nil {
+		t.Fatalf("Call clipboard.clear: %v", err)
+	}
+	if len(d.clipboard) != 0 {
+		t.Errorf("expected empty clipboard after API clear")
+	}
+}
+
+func TestClipboardLimitSetting(t *testing.T) {
+	d, _ := clipDaemon(t, true)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	// Default is 50.
+	if d.cfg.ClipLimit() != config.DefaultClipboardLimit {
+		t.Errorf("default limit %d, want %d", d.cfg.ClipLimit(), config.DefaultClipboardLimit)
+	}
+
+	// Change limit to 5.
+	if err := d.setSetting("clipboardLimit", 5); err != nil {
+		t.Fatalf("setSetting clipboardLimit 5: %v", err)
+	}
+	if d.cfg.ClipLimit() != 5 {
+		t.Errorf("limit %d, want 5", d.cfg.ClipLimit())
+	}
+
+	// Add 8 entries.
+	for i := range 8 {
+		d.addClipLocked(ClipEntry{Text: fmt.Sprint("item ", i), Dir: "out"})
+	}
+	if len(d.clipboard) != 5 {
+		t.Fatalf("expected 5 items kept, got %d", len(d.clipboard))
+	}
+	// The newest entry is "item 7".
+	if d.clipboard[0].Text != "item 7" {
+		t.Errorf("top item %q, want 'item 7'", d.clipboard[0].Text)
+	}
+
+	// Reduce limit to 3. It should trim immediately.
+	if err := d.setSetting("clipboardLimit", 3); err != nil {
+		t.Fatalf("setSetting clipboardLimit 3: %v", err)
+	}
+	if len(d.clipboard) != 3 {
+		t.Fatalf("expected 3 items after trim, got %d", len(d.clipboard))
+	}
+
+	// Invalid limits.
+	if err := d.setSetting("clipboardLimit", 0); err == nil {
+		t.Errorf("limit 0 should fail")
+	}
+	if err := d.setSetting("clipboardLimit", 501); err == nil {
+		t.Errorf("limit 501 should fail")
+	}
+	if err := d.setSetting("clipboardLimit", "not a number"); err == nil {
+		t.Errorf("string limit should fail")
 	}
 }

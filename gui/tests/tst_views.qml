@@ -605,6 +605,30 @@ Item {
       compare(requestsOf("clipboard.send").length, 1)
       tryVerify(function () { var t = findBy(view, "message", msg); return !!t && t.visible })
     }
+
+    function test_clipboardDeleteCallsApi() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.tab = "clipboard"
+      tryVerify(function () { return (mock.state.clipboard || []).length > 0 })
+      var id = mock.state.clipboard[0].id
+      view.call("clipboard.delete", { id: id })
+      tryVerify(function () { return (mock.state.clipboard || []).filter(function (e) { return e.id === id }).length === 0 })
+    }
+
+    function test_clipboardClearCallsApi() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.tab = "clipboard"
+      tryVerify(function () { return (mock.state.clipboard || []).length > 0 })
+      view.call("clipboard.clear", {})
+      tryVerify(function () { return (mock.state.clipboard || []).filter(function (e) { return !e.pinned }).length === 0 })
+    }
+
+    function test_clipboardLimitSetting() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.tab = "clipboard"
+      view.call("settings.set", { key: "clipboardLimit", value: 25 })
+      tryCompare(mock.state.settings, "clipboardLimit", 25)
+    }
   }
 
   TestCase {

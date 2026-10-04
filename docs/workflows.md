@@ -54,6 +54,18 @@ The saved text or image stays after a restart.
 Select **Saved snippets** to show saved entries only.
 The search field searches the full text, including text outside the preview.
 Select **Unsave** to delete the saved copy.
+Select **Delete** beside an entry to remove it from both history and saved snippets.
+Select **Clear history** in the header to clear all unpinned entries, or **Clear snippets** when viewing saved snippets.
+Select a **History limit** chip (`10`, `25`, `50`, `100`) to configure how many history entries `fluxd` keeps.
+
+The CLI also manages clipboard history:
+
+```sh
+flux-cli clipboard clear
+flux-cli clipboard clear --all
+flux-cli clipboard delete CLIP_ID
+flux-cli clipboard limit 100
+```
 
 The CLI lists entries with their IDs:
 

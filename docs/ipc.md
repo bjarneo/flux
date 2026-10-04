@@ -199,6 +199,7 @@ Without `device`, a method uses the only connected paired device.
 
 `settings.set` takes these keys with a boolean `value`: `autoClipboard`, `notifications`, `shareHome`, `pauseMediaOnCall`, `syncDnd`, `herdr`, `herdrControl`, `herdrTerminals`, `remoteInput`, `remoteDesktop`, and `checkUpdates`.
 `name` and `downloadDir` take a string.
+`clipboardLimit` takes an integer between 1 and 500 (default 50).
 To turn the release check off or on over IPC, send:
 
 ```json
@@ -325,6 +326,8 @@ The [workflow controls](workflows.md) expose these additional IPC methods:
 | Method | Parameters |
 | --- | --- |
 | `transfer.retry`, `transfer.cancel` | `id` identifies a transfer. |
+| `clipboard.delete` | `id` identifies a history entry or saved snippet to delete. |
+| `clipboard.clear` | Optional `all` to also remove saved snippets. |
 | `clipboard.pin` | `id` identifies a history entry. Optional `expires` is a Unix timestamp in seconds. |
 | `clipboard.unpin` | `id` identifies a saved snippet. |
 | `clipboard.search` | `text` contains the query. The result is an array of matching entries. |

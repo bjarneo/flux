@@ -47,6 +47,19 @@ Item {
     Row {
       spacing: 8
       OutlineButton { text: root.savedOnly ? "Show all" : "Saved snippets"; onClicked: root.savedOnly = !root.savedOnly }
+      OutlineButton {
+        id: clearBtn
+        icon: "trash"
+        text: root.savedOnly ? "Clear snippets" : "Clear history"
+        visible: root.savedOnly ? root.allEntries.some(e => e.pinned) : root.allEntries.some(e => !e.pinned)
+        onClicked: {
+          if (root.savedOnly) {
+            root.view.call("clipboard.clear", { all: true }, function () { root.view.toast("Saved snippets cleared") })
+          } else {
+            root.view.call("clipboard.clear", {}, function () { root.view.toast("Clipboard history cleared") })
+          }
+        }
+      }
     }
     Txt { width: parent.width; text: "Saved snippets stay after a restart."; color: Theme.dim; font.pixelSize: 11; wrapMode: Text.Wrap }
 
@@ -124,14 +137,23 @@ Item {
           }
           OutlineButton {
             id: copy
-          icon: "copy"
-          text: "Copy"
-          padX: 12
-          padY: 5
-          fontSize: 12
-          // fluxd copies the full text or the image of the entry. The row
-          // can have only the start of a long text.
-          onClicked: root.view.call("clipboard.copy", { id: modelData.id }, function () { root.view.toast("Copied to the clipboard") })
+            icon: "copy"
+            text: "Copy"
+            padX: 12
+            padY: 5
+            fontSize: 12
+            // fluxd copies the full text or the image of the entry. The row
+            // can have only the start of a long text.
+            onClicked: root.view.call("clipboard.copy", { id: modelData.id }, function () { root.view.toast("Copied to the clipboard") })
+          }
+          OutlineButton {
+            id: remove
+            icon: "trash"
+            text: "Delete"
+            padX: 12
+            padY: 5
+            fontSize: 12
+            onClicked: root.view.call("clipboard.delete", { id: modelData.id }, function () { root.view.toast("Entry deleted") })
           }
         }
       }

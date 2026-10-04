@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"flux/internal/config"
 )
 
 func transferCommand(args []string) error {
@@ -37,6 +39,32 @@ func printCall(method string, params any) error {
 	}
 	fmt.Println(string(result))
 	return nil
+}
+
+func clipboardCommand(args []string) error {
+	if len(args) == 0 {
+		return printCall("clipboard.search", nil)
+	}
+	switch args[0] {
+	case "clear":
+		all := len(args) > 1 && args[1] == "--all"
+		return call("clipboard.clear", map[string]any{"all": all})
+	case "delete", "remove":
+		if len(args) < 2 {
+			return fmt.Errorf("give a clipboard entry ID")
+		}
+		return call("clipboard.delete", map[string]any{"id": args[1]})
+	case "limit":
+		if len(args) == 1 {
+			return printSetting("clipboardLimit")
+		}
+		limit, err := strconv.Atoi(args[1])
+		if err != nil || limit < 1 || limit > config.MaxClipboardLimit {
+			return fmt.Errorf("give a limit between 1 and %d", config.MaxClipboardLimit)
+		}
+		return call("settings.set", map[string]any{"key": "clipboardLimit", "value": limit})
+	}
+	return fmt.Errorf("use: flux-cli clipboard [clear [--all]|delete ID|limit [N]]")
 }
 
 func snippetCommand(args []string) error {
