@@ -107,6 +107,8 @@ data class DeviceUi(
     val herdrReply: HerdrReply? = null,
     /** The last new agent, new terminal, or close from this phone. */
     val herdrAction: HerdrAction? = null,
+    /** The terminal session of the pane that this phone streams. */
+    val herdrTerminal: HerdrTerminalSession? = null,
     /** True when the computer can take the touchpad and the keyboard of this phone. */
     val inputSupported: Boolean = false,
     /** True when remote input is on at the computer, or null before it tells. */

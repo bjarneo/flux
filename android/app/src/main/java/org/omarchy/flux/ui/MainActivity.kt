@@ -246,8 +246,9 @@ class MainActivity : ComponentActivity() {
         if (!org.omarchy.flux.BuildConfig.DEBUG) return
         if (intent?.getBooleanExtra("flux.debug.demo", false) == true) {
             org.omarchy.flux.core.DebugDemo.on = true
-            org.omarchy.flux.core.DebugDemo.agentOutput =
-                intent.getStringExtra("flux.debug.output")
+            org.omarchy.flux.core.DebugDemo.agentOutput = intent.getStringExtra("flux.debug.output")
+            org.omarchy.flux.core.DebugDemo.terminalSample = intent.getStringExtra("flux.debug.terminal")
+            org.omarchy.flux.core.DebugDemo.terminalGrid = intent.getStringExtra("flux.debug.terminal_grid")
             FluxCore.publish()
         }
         intent?.getStringExtra("flux.debug.theme")?.let { org.omarchy.flux.core.DebugTheme.select(it) }
@@ -287,6 +288,13 @@ class MainActivity : ComponentActivity() {
 internal fun isDemo(id: String?): Boolean =
     org.omarchy.flux.BuildConfig.DEBUG && org.omarchy.flux.core.DebugDemo.on && org.omarchy.flux.core.DebugDemo.isDemo(id) &&
         id in setOf(org.omarchy.flux.core.DebugDemo.PC, org.omarchy.flux.core.DebugDemo.OFFLINE, org.omarchy.flux.core.DebugDemo.NEW)
+
+/** Debug builds only: the first-run page that `flux.debug.page` asks for. */
+private fun debugFirstRunMode(request: String): DebugFirstRun.Mode = when (request) {
+    "firstrun" -> DebugFirstRun.Mode.FirstRun
+    "paired" -> DebugFirstRun.Mode.Paired
+    else -> DebugFirstRun.Mode.Off
+}
 
 /** What the Inbox shows about the notification permission. */
 enum class NotifyAsk {
@@ -401,11 +409,7 @@ fun FluxRoot(activity: MainActivity) {
         welcome = null
         // With the demo, "firstrun" shows the Inbox before the first pairing, with the sample computer to pair.
         // "paired" pairs that sample computer, so that the Inbox shows the success state of a new pairing.
-        val firstRun = when (request) {
-            "firstrun" -> DebugFirstRun.Mode.FirstRun
-            "paired" -> DebugFirstRun.Mode.Paired
-            else -> DebugFirstRun.Mode.Off
-        }
+        val firstRun = debugFirstRunMode(request)
         if (firstRun != DebugFirstRun.mode) {
             DebugFirstRun.mode = firstRun
             FluxCore.publish()

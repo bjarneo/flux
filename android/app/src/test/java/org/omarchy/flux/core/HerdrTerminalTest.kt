@@ -1,0 +1,104 @@
+package org.omarchy.flux.core
+
+import kotlinx.serialization.json.JsonPrimitive
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.omarchy.flux.protocol.Packet
+import org.omarchy.flux.protocol.str
+
+class HerdrTerminalTest {
+    private fun body(line: String) = Packet.parse("""{"id":1,"type":"flux.herdr","body":$line}""")!!.body
+
+    @Test
+    fun parsesTerminalOpened() {
+        val s = parseHerdrTerminalOpened(
+            body("""{"kind":"terminal_opened","request":7,"pane":"w1:p1","mode":"control","session":"ts1","width":120,"height":40}"""),
+        )!!
+        assertEquals("w1:p1", s.pane)
+        assertEquals("control", s.mode)
+        assertEquals(7L, s.request)
+        assertEquals("ts1", s.session)
+        assertEquals(120, s.width)
+        assertEquals(40, s.height)
+        assertTrue(s.open)
+        assertFalse(s.sending)
+        assertNull(s.error)
+    }
+
+    @Test
+    fun parsesRefusedTerminalOpen() {
+        val s = parseHerdrTerminalOpened(
+            body("""{"kind":"terminal_opened","request":2,"pane":"w1:p1","mode":"observe","error":"replies are off on this computer"}"""),
+        )!!
+        assertFalse("a refused open has no stream", s.open)
+        assertEquals("replies are off on this computer", s.error)
+        assertEquals("", s.session)
+    }
+
+    @Test
+    fun terminalFrameNeedsASession() {
+        val f = parseHerdrTerminalFrame(
+            body("""{"kind":"terminal_frame","session":"ts1","seq":3,"full":false,"width":80,"height":24,"bytes":"aGVsbG8="}"""),
+        )!!
+        assertEquals("ts1", f.session)
+        assertEquals(3L, f.seq)
+        assertEquals(80, f.width)
+        assertEquals(24, f.height)
+        assertEquals("aGVsbG8=", f.bytes)
+        assertNull("a frame without a session is dropped", parseHerdrTerminalFrame(body("""{"kind":"terminal_frame","bytes":"aGk="}""")))
+        assertNull("an output is not a frame", parseHerdrTerminalFrame(body("""{"kind":"output","pane":"w1:p1"}""")))
+    }
+
+    @Test
+    fun parsesTerminalClosed() {
+        val c = parseHerdrTerminalClosed(
+            body("""{"kind":"terminal_closed","session":"ts1","code":"agent_ended","reason":"the agent left the pane","request":4}"""),
+        )!!
+        assertEquals("ts1", c.session)
+        assertEquals("agent_ended", c.code)
+        assertEquals("the agent left the pane", c.reason)
+    }
+
+    @Test
+    fun buildsTerminalBodies() {
+        assertEquals(
+            "terminal_open",
+            herdrTerminalOpenBody("w1:p1", "observe", 3).str("kind"),
+        )
+        assertEquals("w1:p1", herdrTerminalOpenBody("w1:p1", "observe", 3).str("pane"))
+        assertEquals("observe", herdrTerminalOpenBody("w1:p1", "observe", 3).str("mode"))
+        assertEquals(JsonPrimitive(3L), herdrTerminalOpenBody("w1:p1", "observe", 3)["request"])
+
+        val release = herdrTerminalReleaseBody("ts1", 9)
+        assertEquals("terminal_release", release.str("kind"))
+        assertEquals("ts1", release.str("session"))
+        assertEquals(JsonPrimitive(9L), release["request"])
+
+        val scroll = herdrTerminalScrollBody("ts1", "up", 20, 10)
+        assertEquals("terminal_scroll", scroll.str("kind"))
+        assertEquals("up", scroll.str("direction"))
+        assertEquals(JsonPrimitive(20), scroll["column"])
+        assertEquals(JsonPrimitive(10), scroll["row"])
+
+        val mouse = herdrTerminalMouseBody("ts1", "down", "left", 5, 6)
+        assertEquals("terminal_mouse", mouse.str("kind"))
+        assertEquals("down", mouse.str("action"))
+        assertEquals("left", mouse.str("button"))
+        assertEquals(JsonPrimitive(5), mouse["column"])
+        assertEquals(JsonPrimitive(6), mouse["row"])
+    }
+
+    @Test
+    fun parsesBridgeCapabilities() {
+        val s = parseHerdrState(
+            body("""{"kind":"state","enabled":true,"running":true,"bridge":["observe","control","scroll","mouse"],"agents":[]}"""),
+        )!!
+        assertTrue(s.terminalStream)
+        assertEquals(listOf("observe", "control", "scroll", "mouse"), s.bridge)
+        val old = parseHerdrState(body("""{"kind":"state","enabled":true,"running":true}"""))!!
+        assertFalse("a computer without the bridge has no terminal", old.terminalStream)
+    }
+}

@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="xterm.css">
+<style>
+  html, body { margin: 0; padding: 0; background: #000; }
+  #screen { margin: 0; }
+</style>
+</head>
+<body>
+<div id="screen"></div>
+<script src="xterm.js"></script>
+<script>
+(function () {
+  // The terminal shows the frames of one herdr pane. Flux feeds ANSI
+  // bytes and fixes the grid size; no input goes back to the app here,
+  // so this page never answers terminal queries by itself.
+  var term = new Terminal({
+    cols: 80,
+    rows: 24,
+    scrollback: 0,
+    disableStdin: true,
+    convertEol: false,
+    cursorBlink: false,
+    fontFamily: "monospace",
+    fontSize: 13,
+    theme: { background: "#000000" }
+  });
+  term.open(document.getElementById("screen"));
+  // Herdr renders absolute cell runs and expects host autowrap off.
+  term.write("\u001b[?7l");
+
+  // The grid keeps the size of the pane on the computer, so it can be
+  // wider and taller than the view. Shrink the font until the whole
+  // grid fits; the user zooms and pans over it like over a picture of
+  // the screen. Flux passes the real view size in CSS pixels, because
+  // the layout viewport of the WebView is not the visible area.
+  function fit(availW, availH) {
+    availW = availW || (window.visualViewport ? window.visualViewport.width : window.innerWidth);
+    availH = availH || (window.visualViewport ? window.visualViewport.height : window.innerHeight);
+    // Monospace fallback per font pixel, when the probe cannot measure.
+    var cellW = 0.62;
+    var cellH = 1.25;
+    var probe = document.createElement("span");
+    probe.style.position = "absolute";
+    probe.style.left = "-9999px";
+    probe.style.top = "0";
+    probe.style.whiteSpace = "pre";
+    probe.style.fontFamily = term.options.fontFamily;
+    probe.style.fontSize = "100px";
+    probe.textContent = "MMMMMMMMMM";
+    document.body.appendChild(probe);
+    var rect = probe.getBoundingClientRect();
+    probe.remove();
+    var w = rect.width / 1000;
+    var h = rect.height / 100;
+    if (w > 0.4 && w < 0.9) cellW = w;
+    if (h > 0.9 && h < 1.8) cellH = h;
+    var size = Math.min(
+      availW / (cellW * term.cols),
+      availH / (cellH * term.rows)
+    );
+    term.options.fontSize = Math.max(3, Math.min(13, Math.floor(size)));
+    window.scrollTo(0, 0);
+  }
+
+  window.FluxTerminal = {
+    reset: function (cols, rows, availW, availH) {
+      term.reset();
+      term.resize(cols, rows);
+      term.write("\u001b[?7l");
+      fit(availW, availH);
+    },
+    write: function (base64) {
+      var raw = atob(base64);
+      var bytes = new Uint8Array(raw.length);
+      for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+      term.write(bytes);
+    },
+    theme: function (json) {
+      term.options.theme = JSON.parse(json);
+    }
+  };
+
+  fit();
+  if (window.FluxBridge && window.FluxBridge.ready) {
+    window.FluxBridge.ready(term.cols, term.rows);
+  }
+})();
+</script>
+</body>
+</html>

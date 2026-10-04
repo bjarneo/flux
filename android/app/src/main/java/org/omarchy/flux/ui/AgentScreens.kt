@@ -319,12 +319,24 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
     val closer = rememberPaneCloser(d, pane, onBack)
     val title = agent?.project?.ifEmpty { null } ?: agent?.agent ?: pane
     val context = listOfNotNull(agent?.agent?.takeIf { it != title }, d.name).joinToString(" · ")
+    // The live terminal needs the herdr bridge of the computer. It is
+    // read-only here; a later phase adds control. A debug sample opens
+    // the terminal at once, for screenshots.
+    val sample = if (isDemo(d.id)) terminalDebugSample() else null
+    val stream = sample != null || (d.herdr?.terminalStream == true && d.online && agent != null && !demo)
+    var mode by rememberSaveable { mutableStateOf(if (sample != null) "terminal" else "read") }
     Column(Modifier.fillMaxSize().imePadding().padding(horizontal = TiledGutter)) {
         TiledTopBar(title, onBack, context = context) {
             if (out?.loading == true && out.lines.isNotEmpty()) {
                 SquareSpinner("Reading the output")
             } else if (d.online && agent != null && !demo) {
                 SquareButton(Ic.refresh, "Refresh", { HerdrSync.read(FluxCore, d.id, pane) })
+            }
+        }
+        if (stream) {
+            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ChoiceChip("Read", mode == "read", { mode = "read" }, role = Role.Tab)
+                ChoiceChip("Terminal", mode == "terminal", { mode = "terminal" }, role = Role.Tab)
             }
         }
         when {
@@ -340,7 +352,9 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
                 header = {
                     Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
                         if (agent != null) AgentHeader(agent, closer.takeIf { d.herdr?.control == true })
-                        if (d.herdr?.review == true) {
+                        // Output and Changes read the reflowed text; the live
+                        // terminal draws the pane itself, so no review choice.
+                        if (d.herdr?.review == true && !(stream && mode == "terminal")) {
                             Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(TileGap)) {
                                 ChoiceChip("Output", !review, {
                                     review = false
@@ -358,7 +372,9 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
                         }
                     }
                 },
-                output = { m -> AgentOutput(out, m) },
+                output = { m ->
+                    if (stream && mode == "terminal") TerminalOutput(d, pane, sample, m) else AgentOutput(out, m)
+                },
                 controls = {
                     if (agent != null && d.herdr?.control == true) {
                         ReplyControls(d, agent, out.takeUnless { review }, d.herdrReply?.takeIf { it.pane == pane },
@@ -494,6 +510,35 @@ private fun FillColumn(
 
 /** How close to the end the output must be, in pixels, to follow new lines. */
 private const val FOLLOW_SLACK_PX = 48
+
+/**
+ * The live terminal of the pane and the state of its stream. The
+ * terminal draws at the size that the pane has on the computer, so it
+ * may be wider than the phone: pinch to zoom and drag to pan. A [sample]
+ * draws that screen instead, for screenshots.
+ */
+@Composable
+private fun TerminalOutput(d: DeviceUi, pane: String, sample: TerminalSample?, modifier: Modifier = Modifier) {
+    val session = d.herdrTerminal?.takeIf { it.pane == pane }
+    Column(modifier) {
+        val banner = when {
+            sample != null -> null
+            session == null || session.sending -> "Connecting to the terminal of $pane…"
+            session.error != null -> session.error
+            session.open -> null
+            else -> "The terminal stream ended (${session.reason.ifEmpty { session.code }})."
+        }
+        if (banner != null) {
+            T(banner, Modifier.fillMaxWidth().padding(vertical = 6.dp), size = 12, color = Tn.sub)
+        }
+        HerdrTerminalView(
+            session,
+            onReady = { HerdrSync.terminalOpen(FluxCore, d.id, pane, "observe") },
+            modifier = Modifier.weight(1f),
+            sample = sample,
+        )
+    }
+}
 
 /**
  * The output of an agent or a terminal as a small terminal: dark, mono,

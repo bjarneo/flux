@@ -70,11 +70,16 @@ data class HerdrState(
     val workspaces: List<HerdrWorkspace> = emptyList(),
     val kinds: List<String> = emptyList(),
     val review: Boolean = false,
+    /** The terminal-session actions of the herdr bridge, such as "observe" and "control". */
+    val bridge: List<String> = emptyList(),
 ) {
     /** The agents with [AgentStatus.Blocked] first, then done, working, idle, and unknown. */
     val sorted: List<HerdrAgent> get() = sortAgents(agents)
 
     val blocked: Int get() = agents.count { it.status == AgentStatus.Blocked }
+
+    /** True when the herdr bridge can stream the terminal of a pane. */
+    val terminalStream: Boolean get() = "observe" in bridge
 
     fun agent(pane: String): HerdrAgent? = agents.firstOrNull { it.pane == pane }
 
@@ -230,6 +235,7 @@ fun parseHerdrState(body: JsonObject): HerdrState? {
         HerdrWorkspace(id, o.str("label").orEmpty().ifEmpty { id }, o.str("cwd").orEmpty())
     }
     val kinds = (body["kinds"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.takeIf { k -> k.isNotEmpty() } }
+    val bridge = (body["bridge"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.takeIf { k -> k.isNotEmpty() } }
     val enabled = body.bool("enabled") ?: true
     val control = enabled && (body.bool("control") ?: false)
     val terminals = control && (body.bool("terminals") ?: false)
@@ -243,6 +249,7 @@ fun parseHerdrState(body: JsonObject): HerdrState? {
         workspaces = if (control) workspaces else emptyList(),
         kinds = if (control) kinds else emptyList(),
         review = enabled && (body.bool("review") ?: false),
+        bridge = bridge,
     )
 }
 
@@ -310,6 +317,109 @@ fun parseHerdrSent(body: JsonObject): HerdrSent? {
         body.str("code")?.takeIf { it.isNotEmpty() },
     )
 }
+
+/**
+ * One terminal-session stream of a pane: the live terminal of the pane
+ * on the computer. [mode] is "observe" for a stream that only shows the
+ * terminal, and "control" for one that also sends gestures and keys.
+ * [session] names the stream after the computer opened it, and [width]
+ * and [height] are its terminal cells, which are the cells that the pane
+ * has on the computer. [sending] is true while the open waits for its
+ * answer, [open] is true while the stream runs, and [error] is why the
+ * open failed. [code] and [reason] are how the stream ended, such as
+ * "released", "bridge", or "agent_ended".
+ */
+data class HerdrTerminalSession(
+    val pane: String,
+    val mode: String,
+    val request: Long = 0,
+    val sending: Boolean = true,
+    val session: String = "",
+    val width: Int = 0,
+    val height: Int = 0,
+    val open: Boolean = false,
+    val error: String? = null,
+    val code: String = "",
+    val reason: String = "",
+)
+
+/** One event of a terminal session, in the order that the computer sent it. */
+sealed class HerdrTerminalEvent {
+    /** The stream opened with this grid of terminal cells. */
+    data class Opened(val session: String, val width: Int, val height: Int) : HerdrTerminalEvent()
+
+    /** One frame of the terminal screen: base64 ANSI bytes. */
+    data class Frame(val session: String, val seq: Long, val width: Int, val height: Int, val bytes: String) :
+        HerdrTerminalEvent()
+
+    /** The stream ended. */
+    data class Closed(val session: String, val code: String, val reason: String) : HerdrTerminalEvent()
+}
+
+/**
+ * Parses the body of a terminal_opened packet: the answer to a
+ * terminal_open. It returns null for another body. The answer with an
+ * [HerdrTerminalSession.error] refused the open.
+ */
+fun parseHerdrTerminalOpened(body: JsonObject): HerdrTerminalSession? {
+    if (body.str("kind") != "terminal_opened") return null
+    val pane = body.str("pane")?.takeIf { it.isNotEmpty() } ?: return null
+    val error = body.str("error")?.takeIf { it.isNotEmpty() }
+    val session = body.str("session").orEmpty()
+    return HerdrTerminalSession(
+        pane = pane,
+        mode = body.str("mode").orEmpty().ifEmpty { "observe" },
+        request = body.long("request") ?: 0,
+        sending = false,
+        session = session,
+        width = body.long("width")?.toInt() ?: 0,
+        height = body.long("height")?.toInt() ?: 0,
+        open = error == null && session.isNotEmpty(),
+        error = error,
+    )
+}
+
+/** Parses the body of a terminal_frame packet. It returns null for another body. */
+fun parseHerdrTerminalFrame(body: JsonObject): HerdrTerminalEvent.Frame? {
+    if (body.str("kind") != "terminal_frame") return null
+    val session = body.str("session")?.takeIf { it.isNotEmpty() } ?: return null
+    val bytes = body.str("bytes") ?: return null
+    return HerdrTerminalEvent.Frame(
+        session, body.long("seq") ?: 0, body.long("width")?.toInt() ?: 0,
+        body.long("height")?.toInt() ?: 0, bytes,
+    )
+}
+
+/** Parses the body of a terminal_closed packet. It returns null for another body. */
+fun parseHerdrTerminalClosed(body: JsonObject): HerdrTerminalEvent.Closed? {
+    if (body.str("kind") != "terminal_closed") return null
+    val session = body.str("session")?.takeIf { it.isNotEmpty() } ?: return null
+    return HerdrTerminalEvent.Closed(
+        session, body.str("code").orEmpty(), body.str("reason").orEmpty(),
+    )
+}
+
+/** The body of a terminal_open: a stream of [mode] on [pane]. */
+fun herdrTerminalOpenBody(pane: String, mode: String, request: Long): JsonObject =
+    bodyOf("kind" to "terminal_open", "pane" to pane, "mode" to mode, "request" to request)
+
+/** The body of a terminal_release of [session]. */
+fun herdrTerminalReleaseBody(session: String, request: Long): JsonObject =
+    bodyOf("kind" to "terminal_release", "session" to session, "request" to request)
+
+/** The body of one wheel step at the zero-based cell ([column], [row]). */
+fun herdrTerminalScrollBody(session: String, direction: String, column: Int, row: Int): JsonObject =
+    bodyOf(
+        "kind" to "terminal_scroll", "session" to session, "direction" to direction,
+        "column" to column, "row" to row,
+    )
+
+/** The body of one pointer event at the zero-based cell ([column], [row]). */
+fun herdrTerminalMouseBody(session: String, action: String, button: String, column: Int, row: Int): JsonObject =
+    bodyOf(
+        "kind" to "terminal_mouse", "session" to session, "action" to action, "button" to button,
+        "column" to column, "row" to row,
+    )
 
 /** The key names that fluxd accepts in a keys packet. */
 val HERDR_KEYS: Set<String> = setOf("enter", "esc", "tab", "shift+tab", "up", "down", "left", "right", "backspace", "space", "y", "n") +
