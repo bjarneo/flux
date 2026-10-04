@@ -1,10 +1,13 @@
 # Plan: an interactive Herdr agent terminal in Flux Android
 
 Follow-up after the real Pixel trial: [phone-first terminal plan](herdr-mobile-terminal-follow-up.md).
-That plan supersedes the separate-reader, optional-control, and desktop-size UX decisions below
-for the next iteration. This document retains the original implementation history.
+That plan is now the active plan for the next iteration and has precedence where the two differ.
+It supersedes the desktop-size, separate-reader, and optional-control UX decisions below.
+The interactive terminal replaces the reader on Android only; iOS keeps its read/output flow.
+This document retains the original implementation history and the verified phase results.
 
-Date: 2026-10-03. Status: proposal only; no implementation or live-session testing.
+Date: 2026-10-03. Status: Phases 0-4 are implemented and recorded below. The follow-up plan
+above is the active plan for what comes next; this document is history and the verified record.
 
 This document defines an initial integration using the Herdr 0.9.3 CLI bridge.
 It does not authorize installations, Pixel changes, or control of personal agent sessions.
@@ -20,6 +23,10 @@ Open an agent from Android and control only its terminal:
 - Initially retain desktop dimensions and use local zoom/pan on Android.
 - Keep the existing phone-reflowed reading view as a separate alternative.
 - Leave the PC's OpenCode configuration and vertical session tabs unchanged.
+
+Two bullets above are superseded by the follow-up: the phone gets PTY dimensions of its
+own instead of desktop dimensions, and the terminal is the only surface instead of a
+separate reader. Both apply to Android only; iOS keeps its existing read/output flow.
 
 The interactive terminal retains OpenCode's own tabs: they belong to its screen.
 Hiding them or rebuilding them horizontally is outside the MVP. Do not break the mapping
@@ -99,6 +106,8 @@ Delivery order:
 
 Initially exclude mobile resize, raw keyboard input, automatic control reacquisition,
 terminal images, unlimited history synchronization, and tab rearrangement.
+The follow-up makes phone-driven PTY resize with desktop recovery its priority 1, and
+control by default on entry its priority 2; the other exclusions stand.
 
 ## 4. Proposed architecture
 
@@ -436,7 +445,8 @@ terminal's job, and a maintained emulator handles them once.
   pinch zoom and drag pan over it.
 - The agent screen now has a **Read / Terminal** choice. Terminal is
   read-only in this phase; the reply controls and the reading view stay as
-  they were.
+  they were. The follow-up replaces this choice on Android with a
+  **Terminal / Changes** pair and keeps Changes; iOS keeps the reader.
 - Debug builds accept `flux.debug.terminal` (an ANSI sample) and
   `flux.debug.terminal_grid` ("120x40") next to `flux.debug.output`, so
   screenshots need no pairing.
@@ -492,7 +502,10 @@ Never perform background takeover or automatically reacquire control after recon
 The terminal screen now has explicit control, and the gestures follow the
 contract above. The phone asks for control with a **Control** button
 behind the existing phone lock (`ReplyLock`, valid five minutes), and
-**Stop** closes the controller before the phone watches again.
+**Stop** closes the controller before the phone watches again. The
+follow-up changes this flow: entering the terminal acquires control
+automatically behind the same local authentication, without a separate
+button.
 
 - The daemon changes the mode of a stream by replacing its bridge: one
   CLI stream cannot change its mode, so a `terminal_open` in another
@@ -538,9 +551,11 @@ Not part of Phase 4, as the plan says: remote taps and clicks, raw
 typing and the IME, and mobile resize. The phone keeps the size that the
 pane has on the computer; herdr gives the controller a size lock at that
 size, so a phone-driven resize would also resize the computer and needs
-its own design first. The lifecycle cases of the test plan (rotation,
-backgrounding, IME) use the same mechanisms as the touchpad screen and
-still take the manual tests of section 11.
+its own design first. The follow-up takes that design as its priority 1:
+phone-sized PTY geometry while controlling, with verified recovery of the
+desktop geometry on every release path. The lifecycle cases of the test
+plan (rotation, backgrounding, IME) use the same mechanisms as the
+touchpad screen and still take the manual tests of section 11.
 
 ### Existing input
 
