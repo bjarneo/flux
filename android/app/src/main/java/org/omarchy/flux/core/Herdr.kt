@@ -257,10 +257,14 @@ object HerdrSync {
     /** Handles terminal_opened, the answer to a terminal_open. The core lock is held. */
     private fun onTerminalOpened(d: Device, body: JsonObject) {
         val opened = parseHerdrTerminalOpened(body) ?: return
-        val old = d.herdrTerminal
-        if (old == null || old.pane != opened.pane) return
-        // A late answer to an earlier open does not open a stream.
-        if (old.request != 0L && opened.request != 0L && old.request != opened.request) return
+        // The screen that asked can be gone by now. Its session is
+        // released at once: it would otherwise run for nobody.
+        if (staleTerminalAnswer(d.herdrTerminal, opened)) {
+            if (opened.open) {
+                d.send(Packet(Types.FLUX_HERDR, herdrTerminalReleaseBody(opened.session, ++terminalSeq)))
+            }
+            return
+        }
         d.herdrTerminal = opened
         if (opened.open) terminalSink?.invoke(HerdrTerminalEvent.Opened(opened.session, opened.width, opened.height))
     }

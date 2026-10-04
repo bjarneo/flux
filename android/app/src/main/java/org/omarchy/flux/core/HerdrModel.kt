@@ -349,11 +349,28 @@ sealed class HerdrTerminalEvent {
     data class Opened(val session: String, val width: Int, val height: Int) : HerdrTerminalEvent()
 
     /** One frame of the terminal screen: base64 ANSI bytes. */
-    data class Frame(val session: String, val seq: Long, val width: Int, val height: Int, val bytes: String) :
-        HerdrTerminalEvent()
+    data class Frame(
+        val session: String,
+        val seq: Long,
+        val width: Int,
+        val height: Int,
+        val bytes: String,
+        val full: Boolean = false,
+    ) : HerdrTerminalEvent()
 
     /** The stream ended. */
     data class Closed(val session: String, val code: String, val reason: String) : HerdrTerminalEvent()
+}
+
+/**
+ * True when a terminal_opened answers an open that the phone does not
+ * wait for any more: its screen is gone, watches another pane, or the
+ * answer is older than the current open. The caller releases such a
+ * session at once, so its stream never runs for nobody.
+ */
+fun staleTerminalAnswer(waiting: HerdrTerminalSession?, opened: HerdrTerminalSession): Boolean {
+    if (waiting == null || waiting.pane != opened.pane) return true
+    return waiting.request != 0L && opened.request != 0L && waiting.request != opened.request
 }
 
 /**
@@ -386,7 +403,7 @@ fun parseHerdrTerminalFrame(body: JsonObject): HerdrTerminalEvent.Frame? {
     val bytes = body.str("bytes") ?: return null
     return HerdrTerminalEvent.Frame(
         session, body.long("seq") ?: 0, body.long("width")?.toInt() ?: 0,
-        body.long("height")?.toInt() ?: 0, bytes,
+        body.long("height")?.toInt() ?: 0, bytes, body.bool("full") == true,
     )
 }
 

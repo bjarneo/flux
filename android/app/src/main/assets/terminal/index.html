@@ -5,12 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="xterm.css">
 <style>
-  html, body { margin: 0; padding: 0; background: #000; }
+  html, body { margin: 0; padding: 0; background: #000; overflow: hidden; }
+  #stage { position: absolute; left: 0; top: 0; }
   #screen { margin: 0; }
 </style>
 </head>
 <body>
-<div id="screen"></div>
+<div id="stage"><div id="screen"></div></div>
 <script src="xterm.js"></script>
 <script>
 (function () {
@@ -33,13 +34,55 @@
   term.write("\u001b[?7l");
 
   // The grid keeps the size of the pane on the computer, so it can be
-  // wider and taller than the view. Shrink the font until the whole
-  // grid fits; the user zooms and pans over it like over a picture of
-  // the screen. Flux passes the real view size in CSS pixels, because
-  // the layout viewport of the WebView is not the visible area.
-  function fit(availW, availH) {
-    availW = availW || (window.visualViewport ? window.visualViewport.width : window.innerWidth);
-    availH = availH || (window.visualViewport ? window.visualViewport.height : window.innerHeight);
+  // wider and taller than the view. The page shrinks the font until the
+  // whole grid fits, and the app then zooms and pans over it. Flux
+  // passes the real view size in CSS pixels, because the layout viewport
+  // of a WebView is not its visible area.
+  var availW = 0;
+  var availH = 0;
+  var fitFont = 13;
+  var panX = 0;
+  var panY = 0;
+
+  // The real cell of the drawn grid, and where it starts. The app maps
+  // its touches to cells with these numbers, so they come from the
+  // rendering itself and not from an estimate of the font.
+  function measure() {
+    var r = document.querySelector(".xterm-screen").getBoundingClientRect();
+    return { w: r.width / term.cols, h: r.height / term.rows, left: r.left, top: r.top };
+  }
+
+  function report() {
+    if (!(window.FluxBridge && window.FluxBridge.geometry)) return;
+    var m = measure();
+    if (m.w <= 0 || m.h <= 0) return;
+    window.FluxBridge.geometry(m.w, m.h, m.left, m.top, term.cols, term.rows, term.options.fontSize);
+  }
+
+  // The grid is centered while it fits the view and pans within the
+  // view when it does not, so it can never leave the screen.
+  function clampPan(p, avail, grid) {
+    if (grid <= avail) return (avail - grid) / 2;
+    return Math.min(0, Math.max(avail - grid, p));
+  }
+
+  function place() {
+    var m = measure();
+    panX = clampPan(panX, availW, m.w * term.cols);
+    panY = clampPan(panY, availH, m.h * term.rows);
+    var stage = document.getElementById("stage");
+    stage.style.left = panX + "px";
+    stage.style.top = panY + "px";
+  }
+
+  function settled(fn) {
+    // The grid dimensions land with the next render after a font change.
+    requestAnimationFrame(function () { fn(); report(); });
+  }
+
+  function fit(w, h) {
+    availW = w || availW;
+    availH = h || availH;
     // Monospace fallback per font pixel, when the probe cannot measure.
     var cellW = 0.62;
     var cellH = 1.25;
@@ -54,24 +97,28 @@
     document.body.appendChild(probe);
     var rect = probe.getBoundingClientRect();
     probe.remove();
-    var w = rect.width / 1000;
-    var h = rect.height / 100;
-    if (w > 0.4 && w < 0.9) cellW = w;
-    if (h > 0.9 && h < 1.8) cellH = h;
+    var w2 = rect.width / 1000;
+    var h2 = rect.height / 100;
+    if (w2 > 0.4 && w2 < 0.9) cellW = w2;
+    if (h2 > 0.9 && h2 < 1.8) cellH = h2;
     var size = Math.min(
       availW / (cellW * term.cols),
       availH / (cellH * term.rows)
     );
-    term.options.fontSize = Math.max(3, Math.min(13, Math.floor(size)));
+    fitFont = Math.max(3, Math.min(13, Math.floor(size)));
+    term.options.fontSize = fitFont;
+    panX = 0;
+    panY = 0;
     window.scrollTo(0, 0);
+    settled(place);
   }
 
   window.FluxTerminal = {
-    reset: function (cols, rows, availW, availH) {
+    reset: function (cols, rows, w, h) {
       term.reset();
       term.resize(cols, rows);
       term.write("\u001b[?7l");
-      fit(availW, availH);
+      fit(w, h);
     },
     write: function (base64) {
       var raw = atob(base64);
@@ -81,8 +128,46 @@
     },
     theme: function (json) {
       term.options.theme = JSON.parse(json);
+    },
+    // Zoom keeps the cell under the focal point where it is, so the
+    // content follows the fingers of a pinch. The font never goes below
+    // the fit: the whole grid stays reachable.
+    zoom: function (font, fx, fy) {
+      var before = measure();
+      var cx = (fx - before.left) / before.w;
+      var cy = (fy - before.top) / before.h;
+      term.options.fontSize = Math.max(fitFont, Math.min(24, Math.round(font)));
+      settled(function () {
+        var after = measure();
+        panX = fx - cx * after.w;
+        panY = fy - cy * after.h;
+        place();
+      });
+    },
+    pan: function (dx, dy) {
+      panX += dx;
+      panY += dy;
+      place();
+      report();
     }
   };
+
+  // The touches drive the app: one finger scrolls the terminal of the
+  // computer while it is controlled and pans the view otherwise, and two
+  // fingers zoom and pan locally. The page keeps the browser from
+  // scrolling or zooming any of them, and hands the touches over.
+  var actions = { touchstart: "down", touchmove: "move", touchend: "up", touchcancel: "cancel" };
+  Object.keys(actions).forEach(function (name) {
+    document.addEventListener(name, function (e) {
+      e.preventDefault();
+      if (!(window.FluxBridge && window.FluxBridge.touch)) return;
+      var changed = e.changedTouches;
+      for (var i = 0; i < changed.length; i++) {
+        var t = changed[i];
+        window.FluxBridge.touch(actions[name], t.identifier, t.clientX, t.clientY);
+      }
+    }, { passive: false });
+  });
 
   fit();
   if (window.FluxBridge && window.FluxBridge.ready) {

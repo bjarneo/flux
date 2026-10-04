@@ -514,28 +514,105 @@ private const val FOLLOW_SLACK_PX = 48
 /**
  * The live terminal of the pane and the state of its stream. The
  * terminal draws at the size that the pane has on the computer, so it
- * may be wider than the phone: pinch to zoom and drag to pan. A [sample]
- * draws that screen instead, for screenshots.
+ * may be wider than the phone: pinch to zoom and drag to pan. With
+ * **Control** the drags scroll the conversation of the pane on the
+ * computer too, after the phone lock confirms it. A [sample] draws that
+ * screen instead, for screenshots.
  */
 @Composable
 private fun TerminalOutput(d: DeviceUi, pane: String, sample: TerminalSample?, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
     val session = d.herdrTerminal?.takeIf { it.pane == pane }
+    val controlling = session?.open == true && session.mode == "control" && !session.sending
+    val requesting = session?.sending == true && session.mode == "control"
+
+    // Control needs a person that holds the unlocked phone. When the
+    // unlock ends, the phone goes back to watching and sends no input.
+    LaunchedEffect(controlling) {
+        while (controlling) {
+            if (!ReplyLock.valid()) {
+                HerdrSync.terminalOpen(FluxCore, d.id, pane, "observe")
+                break
+            }
+            kotlinx.coroutines.delay(15_000)
+        }
+    }
+    // The same when the app goes to the back. The stream itself ends
+    // with the screen: the phone must not keep a terminal open that
+    // nobody looks at.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val live by rememberUpdatedState(controlling)
+    DisposableEffect(lifecycle, d.id, pane) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP && live) {
+                HerdrSync.terminalOpen(FluxCore, d.id, pane, "observe")
+            }
+        }
+        lifecycle.addObserver(observer)
+        onDispose {
+            lifecycle.removeObserver(observer)
+            HerdrSync.terminalRelease(FluxCore, d.id)
+        }
+    }
     Column(modifier) {
-        val banner = when {
-            sample != null -> null
-            session == null || session.sending -> "Connecting to the terminal of $pane…"
+        val state = when {
+            requesting -> "Asking for control of $pane…"
+            session == null || session.sending ->
+                if (sample != null) "Watching $pane: the phone sends nothing to it."
+                else "Connecting to the terminal of $pane…"
             session.error != null -> session.error
-            session.open -> null
+            controlling -> "Controlling $pane: swipes scroll the conversation on the computer too."
+            session.open -> "Watching $pane: the phone sends nothing to it."
             else -> "The terminal stream ended (${session.reason.ifEmpty { session.code }})."
         }
-        if (banner != null) {
-            T(banner, Modifier.fillMaxWidth().padding(vertical = 6.dp), size = 12, color = Tn.sub)
+        if (state != null) {
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                T(state, Modifier.weight(1f), size = 12, color = Tn.sub)
+                when {
+                    sample != null -> FluxButton(
+                        "Control",
+                        { FluxCore.toast("A sample terminal takes no control") },
+                    )
+                    session == null || session.sending -> Unit
+                    controlling -> FluxButton(
+                        "Stop",
+                        { HerdrSync.terminalOpen(FluxCore, d.id, pane, "observe") },
+                        kind = ButtonKind.Tonal,
+                    )
+                    else -> FluxButton(
+                        "Control",
+                        {
+                            // A control stream sends input to the
+                            // computer, so a person must hold the phone.
+                            ReplyLock.run(
+                                context,
+                                action = { HerdrSync.terminalOpen(FluxCore, d.id, pane, "control") },
+                                title = "Control a terminal",
+                                purpose = "control terminals",
+                                onError = { FluxCore.toast(it) },
+                            )
+                        },
+                    )
+                }
+            }
         }
         HerdrTerminalView(
             session,
             onReady = { HerdrSync.terminalOpen(FluxCore, d.id, pane, "observe") },
             modifier = Modifier.weight(1f),
             sample = sample,
+            control = controlling,
+            onWheel = { column, row, direction ->
+                // The gesture already waits for control and a drawn
+                // screen. The session id comes from the current state.
+                val t = d.herdrTerminal?.takeIf { it.pane == pane && it.open }
+                if (t != null) {
+                    HerdrSync.terminalScroll(FluxCore, d.id, t.session, direction, column, row)
+                }
+            },
         )
     }
 }

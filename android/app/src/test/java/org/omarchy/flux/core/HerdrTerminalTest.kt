@@ -39,6 +39,20 @@ class HerdrTerminalTest {
     }
 
     @Test
+    fun staleTerminalAnswersAreReleased() {
+        val waiting = HerdrTerminalSession(pane = "w1:p1", mode = "observe", request = 3)
+        val answer = waiting.copy(request = 3, session = "ts1", sending = false, open = true)
+        assertFalse(staleTerminalAnswer(waiting, answer))
+        // The screen is gone or now watches another pane.
+        assertTrue(staleTerminalAnswer(null, answer))
+        assertTrue(staleTerminalAnswer(waiting.copy(pane = "w2:p2"), answer))
+        // An answer that is older than the open the phone waits for.
+        assertTrue(staleTerminalAnswer(waiting, answer.copy(request = 2)))
+        // Without request numbers the pane decides.
+        assertFalse(staleTerminalAnswer(waiting.copy(request = 0), answer.copy(request = 0)))
+    }
+
+    @Test
     fun terminalFrameNeedsASession() {
         val f = parseHerdrTerminalFrame(
             body("""{"kind":"terminal_frame","session":"ts1","seq":3,"full":false,"width":80,"height":24,"bytes":"aGVsbG8="}"""),
@@ -48,6 +62,12 @@ class HerdrTerminalTest {
         assertEquals(80, f.width)
         assertEquals(24, f.height)
         assertEquals("aGVsbG8=", f.bytes)
+        assertEquals(false, f.full)
+        // Only a full frame draws a baseline that input may follow.
+        val full = parseHerdrTerminalFrame(
+            body("""{"kind":"terminal_frame","session":"ts1","seq":1,"full":true,"width":80,"height":24,"bytes":"aGVsbG8="}"""),
+        )!!
+        assertEquals(true, full.full)
         assertNull("a frame without a session is dropped", parseHerdrTerminalFrame(body("""{"kind":"terminal_frame","bytes":"aGk="}""")))
         assertNull("an output is not a frame", parseHerdrTerminalFrame(body("""{"kind":"output","pane":"w1:p1"}""")))
     }

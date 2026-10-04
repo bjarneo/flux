@@ -22,9 +22,11 @@ import org.omarchy.flux.core.HerdrTerminalSession
  * from the network, so the terminal content never reaches a browser and
  * no terminal query goes back to the program.
  *
- * This view is read-only: it sends no input to the pane. Pinch to zoom
- * and drag to pan around the terminal grid. With [sample] it draws that
- * screen instead of opening a stream, for screenshots.
+ * The touches of the page come back here: one finger scrolls the
+ * terminal of the computer while [control] is on and pans the view
+ * otherwise, two fingers zoom and pan locally, and a wheel step goes out
+ * through [onWheel]. With [sample] the view draws that screen instead of
+ * opening a stream, for screenshots.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -33,11 +35,15 @@ fun HerdrTerminalView(
     onReady: () -> Unit,
     modifier: Modifier = Modifier,
     sample: TerminalSample? = null,
+    control: Boolean = false,
+    onWheel: (column: Int, row: Int, direction: String) -> Unit = { _, _, _ -> },
 ) {
     val feeder = remember { TerminalFeeder() }
     feeder.onReady = {
         if (sample != null) feeder.draw(sample) else onReady()
     }
+    feeder.onWheel = onWheel
+    feeder.control = control
     DisposableEffect(feeder) {
         HerdrSync.terminalSink = feeder
         onDispose {
@@ -47,7 +53,8 @@ fun HerdrTerminalView(
     }
     AndroidView(
         modifier = modifier.semantics {
-            contentDescription = "The terminal of ${session?.pane ?: "the pane"}, read only"
+            contentDescription = "The terminal of ${session?.pane ?: "the pane"}" +
+                if (control) ", controlled from this phone" else ", watching only"
         },
         factory = { context ->
             WebView(context).apply {
@@ -59,11 +66,11 @@ fun HerdrTerminalView(
                 clearCache(true)
                 // The page needs no network at all.
                 settings.blockNetworkLoads = true
-                // Pinch to zoom and drag to pan the terminal grid.
-                settings.setSupportZoom(true)
-                settings.builtInZoomControls = true
-                settings.displayZoomControls = false
-                // The terminal is read-only here, so a tap must not
+                // The gestures of the terminal are its own, so the
+                // browser scrolls and zooms nothing here.
+                settings.setSupportZoom(false)
+                settings.builtInZoomControls = false
+                // The terminal takes no keys here, so a tap must not
                 // open the keyboard.
                 isFocusable = false
                 isFocusableInTouchMode = false
@@ -79,7 +86,8 @@ fun HerdrTerminalView(
 /**
  * Hands terminal events to the WebView on its main thread. The stream
  * delivers the events in order, and so does the handler, so the terminal
- * always sees the grid of a frame before the frame itself.
+ * always sees the grid of a frame before the frame itself. The touches
+ * of the page arrive here too and become wheel steps, zoom, and pan.
  */
 private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -92,9 +100,34 @@ private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
     @Volatile
     var onReady: (() -> Unit)? = null
 
+    /** Called on the main thread for each wheel step of a gesture. */
+    @Volatile
+    var onWheel: ((column: Int, row: Int, direction: String) -> Unit)? = null
+
     private var ready = false
     private var cols = 0
     private var rows = 0
+
+    /** True after a full frame drew the screen: only then may input go out. */
+    private var baseline = false
+
+    /** The touches of the page, in CSS pixels. Main thread only. */
+    val gestures = TerminalGestures(
+        onWheel = { column, row, direction ->
+            // The gesture is already control-only. A screen that has no
+            // baseline yet takes no input either.
+            if (baseline) onWheel?.invoke(column, row, direction)
+        },
+        onFont = { size, x, y -> eval("FluxTerminal.zoom($size, $x, $y)") },
+        onPan = { dx, dy -> eval("FluxTerminal.pan($dx, $dy)") },
+    )
+
+    /** True while the phone controls the terminal. Main thread. */
+    var control: Boolean
+        get() = gestures.control
+        set(value) {
+            gestures.control = value
+        }
 
     /** The JS page finished loading. Any thread. */
     fun pageReady() {
@@ -112,17 +145,34 @@ private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
             val view = webView ?: return@post
             if (!ready) return@post
             when (event) {
-                is HerdrTerminalEvent.Opened -> resize(view, event.width, event.height)
+                is HerdrTerminalEvent.Opened -> {
+                    baseline = false
+                    gestures.reset()
+                    resize(view, event.width, event.height)
+                }
                 is HerdrTerminalEvent.Frame -> {
                     // A frame draws into its own grid, so a new size of
                     // the terminal resets it first.
                     if (event.width != cols || event.height != rows) resize(view, event.width, event.height)
+                    if (event.full) baseline = true
                     view.evaluateJavascript("FluxTerminal.write('${event.bytes}')", null)
                 }
                 // The screen shows the reason; the terminal keeps its
                 // last screen until a new stream opens.
                 is HerdrTerminalEvent.Closed -> Unit
             }
+        }
+    }
+
+    /** One touch of the page, in CSS pixels. Any thread. */
+    fun touch(action: String, id: Int, x: Double, y: Double) {
+        handler.post { gestures.touch(action, id, x, y) }
+    }
+
+    /** The grid of the page as it draws it. Any thread. */
+    fun geometry(cellW: Double, cellH: Double, originX: Double, originY: Double, cols: Int, rows: Int, font: Int) {
+        handler.post {
+            gestures.geometry = TerminalGeometry(cellW, cellH, originX, originY, cols, rows, font)
         }
     }
 
@@ -136,6 +186,11 @@ private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
         val cssW = view.width / density
         val cssH = view.height / density
         view.evaluateJavascript("FluxTerminal.reset($width, $height, $cssW, $cssH)", null)
+    }
+
+    /** Runs one call in the page. Main thread. */
+    private fun eval(js: String) {
+        webView?.evaluateJavascript(js, null)
     }
 
     /** Draws a sample screen instead of a stream. Any thread. */
@@ -156,7 +211,10 @@ private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
         handler.post {
             webView = null
             onReady = null
+            onWheel = null
             ready = false
+            baseline = false
+            gestures.reset()
         }
     }
 }
@@ -166,6 +224,16 @@ private class TerminalBridge(private val feeder: TerminalFeeder) {
     @JavascriptInterface
     fun ready(cols: Int, rows: Int) {
         feeder.pageReady()
+    }
+
+    @JavascriptInterface
+    fun touch(action: String, id: Int, x: Double, y: Double) {
+        feeder.touch(action, id, x, y)
+    }
+
+    @JavascriptInterface
+    fun geometry(cellW: Double, cellH: Double, originX: Double, originY: Double, cols: Int, rows: Int, font: Int) {
+        feeder.geometry(cellW, cellH, originX, originY, cols, rows, font)
     }
 }
 
