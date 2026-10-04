@@ -14,6 +14,7 @@ __pycache__/
 /dist/arch/pkg/
 /dist/arch/*.pkg.tar.*
 /dist/aur/
+/dist/release/
 *.jks
 *.keystore
 .DS_Store

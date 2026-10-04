@@ -3,6 +3,13 @@ import XCTest
 
 /// The users of the iPhone audio session: the microphone stream, dictation, and the ring.
 final class AudioSessionTests: XCTestCase {
+    func testDesktopAudioCanShareDictation() {
+        var users = AudioUsers()
+        XCTAssertEqual(users.add(.desktop), .playback)
+        XCTAssertEqual(users.add(.dictation), .playAndRecord)
+        XCTAssertFalse(users.remove(.desktop))
+        XCTAssertTrue(users.remove(.dictation))
+    }
     func testTheFirstUserSetsTheCategoryAndTheLastOneDeactivates() {
         var users = AudioUsers()
         XCTAssertEqual(users.add(.mic), .playAndRecord)

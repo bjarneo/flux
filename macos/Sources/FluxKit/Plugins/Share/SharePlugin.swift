@@ -15,6 +15,7 @@ import UserNotifications
 /// its notification.
 public final class SharePlugin: FluxPlugin, @unchecked Sendable {
     private weak var core: FluxCore?
+    private let resumable = ResumableTransfer()
     public let model: ShareModel
     /// Opens a received file after the user asks for it. On macOS, nil
     /// opens it with the default app. On iOS the app sets it, for example
@@ -39,8 +40,8 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
         model = ShareModel(downloadFolder: Self.defaultFolder)
     }
 
-    public let incoming = [PacketType.share, PacketType.shareUpdate]
-    public let outgoing = [PacketType.share, PacketType.shareUpdate, PacketType.fluxTunnel]
+    public let incoming = [PacketType.share, PacketType.shareUpdate, PacketType.fluxTransfer]
+    public let outgoing = [PacketType.share, PacketType.shareUpdate, PacketType.fluxTunnel, PacketType.fluxTransfer]
 
     public func attach(core: FluxCore) {
         self.core = core
@@ -130,6 +131,24 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
     /// file goes to the download folder. A share.request.update only
     /// announces a batch, so it needs no action. The core lock is held.
     public func handle(_ packet: Packet, from device: Device) {
+        if packet.type == PacketType.fluxTransfer {
+            guard let core, let certificate = device.certificate,
+                  ["offer", "chunk"].contains(packet.string("action") ?? "") else { return }
+            let id = device.id, from = device.name, folder = downloadFolder
+            Task.detached { [self] in
+                do {
+                    if let saved = try await resumable.receive(packet, device: id, certificate: certificate, core: core, folder: folder) {
+                        Notifier.shared.post(id: "share-\(UUID().uuidString)", category: Self.fileCategory,
+                                             title: "Received \(saved.lastPathComponent)", body: "From \(from)", userInfo: ["path": saved.path])
+                        let transfer = FileTransfer(id: UUID(), deviceId: id, name: saved.lastPathComponent, incoming: true, size: packet.long("size") ?? 0)
+                        ui { $0.start(transfer); $0.finish(transfer.id, file: saved, error: nil) }
+                    }
+                } catch {
+                    core.send(Packet(PacketType.fluxTransfer, ["action": "error", "id": packet.string("id"), "error": error.localizedDescription]), to: id)
+                }
+            }
+            return
+        }
         guard let core, packet.type == PacketType.share, let request = ShareRequest(packet) else { return }
         let from = device.name
         switch request {

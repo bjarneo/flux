@@ -18,6 +18,27 @@ import java.io.IOException
 
 class DesktopTest {
     @Test
+    fun muteRestoresTheSelectedVolume() {
+        DesktopSession.setVolume(0.3f)
+        DesktopSession.toggleMute()
+        assertEquals(0f, DesktopSession.volume.value, 0.0001f)
+        DesktopSession.toggleMute()
+        assertEquals(0.3f, DesktopSession.volume.value, 0.0001f)
+        DesktopSession.setVolume(1f)
+    }
+    @Test
+    fun audioIsOptInAndFramesStaySeparate() {
+        assertFalse(DesktopPackets.start(1742).has("audio"))
+        assertEquals(true, DesktopPackets.start(1742, audio = true).bool("audio"))
+        val data = byteArrayOf(1, 2, 3, 4)
+        val reader = FrameReader(ByteArrayInputStream(frames(Frame.AUDIO to data, Frame.KEY to byteArrayOf(0, 0, 1, 0x65))))
+        val audio = reader.next()!!
+        assertTrue(audio.isAudio)
+        assertFalse(audio.isConfig || audio.isKey || audio.isFormat)
+        assertArrayEquals(data, audio.data.copyOf(audio.length))
+        assertTrue(reader.next()!!.isKey)
+    }
+    @Test
     fun capabilityIsInBothLists() {
         assertTrue(Types.FLUX_DESKTOP in INCOMING)
         assertTrue(Types.FLUX_DESKTOP in OUTGOING)

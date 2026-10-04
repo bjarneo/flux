@@ -96,6 +96,7 @@ object Plugins {
             Types.CLIPBOARD -> receiveClipboard(core, d, p.string("content"), null)
             Types.CLIPBOARD_CONNECT -> receiveClipboard(core, d, p.string("content"), p.long("timestamp") ?: 0L)
             Types.SHARE -> Share.receive(core, d, p)
+            Types.FLUX_TRANSFER -> ResumableTransfer.receive(core, d, p)
             Types.SHARE_UPDATE -> Unit
             Types.NOTIFICATION -> {
                 if (p.bool("isCancel") == true) {

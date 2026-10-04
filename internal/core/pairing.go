@@ -208,6 +208,7 @@ func (d *Daemon) Unpair(dev *Device) error {
 	name := dev.Name
 	d.mu.Unlock()
 	d.closeNotes(append(notes, note)...)
+	d.clearDeviceOutbox(dev.ID)
 	d.markDirty()
 	if l != nil {
 		if err := l.Send(proto.New(proto.TypePair, map[string]any{"pair": false})); err != nil {
@@ -295,6 +296,7 @@ func (d *Daemon) handlePair(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.closeNotes(append(notes, note)...)
 		switch {
 		case paired:
+			d.clearDeviceOutbox(dev.ID)
 			// The device unpaired. The link ends, so no session of the
 			// device outlives the pairing.
 			l.Close()
@@ -333,6 +335,7 @@ func (d *Daemon) handlePair(dev *Device, l *lan.Link, p *proto.Packet) {
 		// The device lost its trust and asks again. Treat it as a new
 		// request, so the user confirms the key again.
 		notes, _ = d.dropTrustLocked(dev)
+		defer d.clearDeviceOutbox(dev.ID)
 	}
 	ip := l.IP()
 	refuse := ""

@@ -195,13 +195,28 @@ private struct MonitorChip: View {
 
 /// The buttons of the panels and the dictation, and in landscape the monitor chip.
 private struct DesktopButtons: View {
-    let controller: DesktopController
+    @Bindable var controller: DesktopController
     let showsMonitor: Bool
 
     var body: some View {
         if showsMonitor {
             MonitorChip(controller: controller)
         }
+        Menu {
+            Button(controller.audioOn ? "Stop desktop audio" : "Start desktop audio") { controller.toggleAudio() }
+            if controller.audioOn {
+                Button(controller.audioVolume == 0 ? "Unmute" : "Mute") { controller.toggleMute() }
+                Picker("Volume", selection: $controller.audioVolume) {
+                    Text("25%").tag(0.25)
+                    Text("50%").tag(0.5)
+                    Text("75%").tag(0.75)
+                    Text("100%").tag(1.0)
+                }
+            }
+        } label: {
+            Image(systemName: controller.audioOn && controller.audioVolume > 0 ? "speaker.wave.2" : "speaker.slash")
+        }
+        .accessibilityLabel("Desktop audio")
         if controller.control {
             if controller.shortcutsSupported {
                 RailButton(systemImage: "square.grid.2x2", name: "Omarchy panel", on: controller.panel == .omarchy) { controller.toggle(.omarchy) }

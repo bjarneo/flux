@@ -69,6 +69,7 @@ data class HerdrState(
     val panes: List<HerdrTerminal> = emptyList(),
     val workspaces: List<HerdrWorkspace> = emptyList(),
     val kinds: List<String> = emptyList(),
+    val review: Boolean = false,
 ) {
     /** The agents with [AgentStatus.Blocked] first, then done, working, idle, and unknown. */
     val sorted: List<HerdrAgent> get() = sortAgents(agents)
@@ -92,6 +93,9 @@ data class HerdrOutput(
     val lines: List<TermLine> = emptyList(),
     val truncated: Boolean = false,
     val error: String? = null,
+    val request: Long? = null,
+    val view: String = "ansi",
+    val path: String = "",
 ) {
     val text: String = lines.joinToString("\n") { it.text }
 
@@ -238,6 +242,7 @@ fun parseHerdrState(body: JsonObject): HerdrState? {
         panes = if (terminals) panes else emptyList(),
         workspaces = if (control) workspaces else emptyList(),
         kinds = if (control) kinds else emptyList(),
+        review = enabled && (body.bool("review") ?: false),
     )
 }
 
@@ -277,6 +282,9 @@ fun parseHerdrOutput(body: JsonObject): HerdrOutput? {
         lines = if (error == null) tidyLines(parseAnsi(text, HERDR_MAX_LINES)) else emptyList(),
         truncated = (body.bool("truncated") ?: false) || cut,
         error = error,
+        request = body.long("request"),
+        view = body.str("view") ?: "ansi",
+        path = body.str("path").orEmpty(),
     )
 }
 

@@ -39,6 +39,14 @@ final class DesktopController {
     /// True after the stream stopped because Flux left the screen.
     private(set) var paused = false
     var voiceError: String?
+    var audioOn = false
+    private var previousAudioVolume: Double = 1
+    var audioVolume: Double = 1 {
+        didSet { if audioVolume > 0 { previousAudioVolume = audioVolume }; plugin.setAudioVolume(Float(audioVolume)) }
+    }
+
+    func toggleAudio() { audioOn.toggle(); start() }
+    func toggleMute() { audioVolume = audioVolume == 0 ? previousAudioVolume : 0 }
 
     /// The shape of the video before the computer tells its size.
     static let placeholderSize = CGSize(width: 16, height: 10)
@@ -97,7 +105,7 @@ final class DesktopController {
     func start() {
         guard ready else { return }
         paused = false
-        plugin.start(deviceId, monitor: monitor, maxSize: Self.maxSize)
+        plugin.start(deviceId, monitor: monitor, maxSize: Self.maxSize, audio: audioOn)
     }
 
     /// Shows the next monitor of the computer.

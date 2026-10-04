@@ -100,13 +100,22 @@ Window {
       var icon = Qt.resolvedUrl("../../../macos/App/Assets.xcassets/AppIcon.appiconset/icon_256x256.png").toString()
       mock.setState(function (s) {
         s.webcam = mock.fixture.state.webcam
+        s.clipboard[0].pinned = true
         if (icon.indexOf("file://") === 0)
           s.clipboard.splice(1, 0, { id: "c0", text: "", image: icon.substring(7), dir: "in", device: pixel, time: Math.floor(Date.now() / 1000) - 300 })
       })
       view.tab = "clipboard"
     }],
     ["14-files", function () { view.tab = "files" }],
-    ["15-notifications", function () { view.tab = "notifications" }],
+    ["15-notifications", function () {
+      mock.setState(function(s) {
+        s.settings.notificationRules = [
+          { id: "rule1", app: "A notification app with a long display name", mode: "mute", until: Math.floor(Date.now() / 1000) + 3600 },
+          { id: "rule2", app: "Calendar", mode: "silent", until: Math.floor(Date.now() / 1000) - 1 }
+        ]
+      })
+      view.tab = "notifications"
+    }],
     ["16-messages", function () { view.tab = "messages" }],
     ["17-commands", function () { view.tab = "commands" }],
     ["18-commands-form", function () { view.tab = "commands" }, function () {

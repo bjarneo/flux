@@ -34,6 +34,9 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Slider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -52,6 +55,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -107,6 +112,9 @@ private enum class Panel { Omarchy, Keys }
  */
 @Composable
 fun DesktopScreen(d: DeviceUi, onBack: () -> Unit) {
+    val audio by DesktopSession.audio.collectAsState()
+    val volume by DesktopSession.volume.collectAsState()
+    val audioText = Tn.text
     val status by DesktopSession.status.collectAsState()
     // The screen shows and takes input only after the phone lock, see rememberRemoteUnlock.
     val unlocked = rememberRemoteUnlock(
@@ -143,6 +151,9 @@ fun DesktopScreen(d: DeviceUi, onBack: () -> Unit) {
         panel = if (panel == p) null else p
     }
     val buttons: @Composable () -> Unit = {
+        if (ready) {
+            TextButton(onClick = { DesktopSession.setAudio(FluxCore, d.id, !audio) }) { Text(if (audio) "Audio off" else "Audio on", color = audioText) }
+        }
         if (ready && status.deviceId == d.id && status.monitors.size > 1) {
             val next = status.monitors[(status.monitors.indexOf(status.monitor) + 1) % status.monitors.size]
             // The key shows the monitor on screen. A tap shows the next monitor.
@@ -167,6 +178,12 @@ fun DesktopScreen(d: DeviceUi, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().then(if (wide) Modifier.displayCutoutPadding() else Modifier).imePadding()) {
         if (!wide) {
             Box(gutter) { TiledTopBar("Remote desktop", onBack, context = d.name) { buttons() } }
+        }
+        if (audio && ready) {
+            Row(gutter.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = DesktopSession::toggleMute) { Text(if (volume == 0f) "Unmute" else "Mute", color = audioText) }
+                Slider(value = volume, onValueChange = DesktopSession::setVolume, modifier = Modifier.weight(1f).semantics { contentDescription = "Remote audio volume" })
+            }
         }
         when {
             !d.online -> Box(gutter) { NotReachable(d, "The screen and the controls") }

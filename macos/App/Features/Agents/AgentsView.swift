@@ -139,6 +139,9 @@ private struct AgentDetail: View {
     let model: AgentsWindowModel
     let pane: String
     let name: String
+    @State private var review = false
+    @State private var reviewPath = ""
+    @State private var appliedReviewPath = ""
 
     private struct Refresh: Equatable {
         var online: Bool
@@ -154,9 +157,26 @@ private struct AgentDetail: View {
                 AgentHeader(agent: agent, loading: out?.loading == true && !(out?.lines.isEmpty ?? true)) {
                     model.plugin.read(model.deviceId, pane: pane)
                 }
+                if model.herdr?.review == true {
+                    Picker("Agent view", selection: $review) {
+                        Text("Output").tag(false)
+                        Text("Changes").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: review) {
+                        if review { appliedReviewPath = reviewPath }
+                        model.plugin.read(model.deviceId, pane: pane, review: review, path: appliedReviewPath)
+                    }
+                    if review {
+                        TextField("File path, or leave empty for all changes", text: $reviewPath)
+                            .onSubmit { appliedReviewPath = reviewPath; model.plugin.read(model.deviceId, pane: pane, review: true, path: appliedReviewPath) }
+                        Text("Replies include the selected review path.").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
                 AgentOutput(output: out)
                 if model.herdr?.control == true {
-                    ReplyControls(model: model, agent: agent, output: out, name: name)
+                    ReplyControls(model: model, agent: agent, output: review ? nil : out, name: name,
+                                  reviewReady: !review || (out?.loading == false && out?.error == nil))
                 } else {
                     Text("To answer from this Mac, set herdr_control = true on \(name).")
                         .font(.caption)
@@ -171,7 +191,7 @@ private struct AgentDetail: View {
         .task(id: Refresh(online: model.device?.online == true, status: agent?.status, visible: model.visible)) {
             guard model.visible, model.device?.online == true, agent != nil else { return }
             // A new status reads at once. Only the polls wait for the last read.
-            model.plugin.read(model.deviceId, pane: pane)
+            model.plugin.read(model.deviceId, pane: pane, review: review, path: appliedReviewPath)
             while agent?.status == .working {
                 try? await Task.sleep(for: workingRefresh)
                 if Task.isCancelled { return }

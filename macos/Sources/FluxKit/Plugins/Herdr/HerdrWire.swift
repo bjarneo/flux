@@ -85,6 +85,7 @@ public struct HerdrState: Sendable, Equatable {
     public var panes: [HerdrTerminal]
     public var workspaces: [HerdrWorkspace]
     public var kinds: [String]
+    public var review: Bool
 
     public init(
         enabled: Bool,
@@ -94,7 +95,8 @@ public struct HerdrState: Sendable, Equatable {
         terminals: Bool = false,
         panes: [HerdrTerminal] = [],
         workspaces: [HerdrWorkspace] = [],
-        kinds: [String] = []
+        kinds: [String] = [],
+        review: Bool = false
     ) {
         self.enabled = enabled
         self.running = running
@@ -104,6 +106,7 @@ public struct HerdrState: Sendable, Equatable {
         self.panes = panes
         self.workspaces = workspaces
         self.kinds = kinds
+        self.review = review
     }
 
     /// The agents with `blocked` first, then done, working, idle, and
@@ -133,16 +136,23 @@ public struct HerdrOutput: Sendable, Equatable {
     }
     public var truncated: Bool
     public var error: String?
+    public var request: Int?
+    public var view: String
+    public var path: String
     public private(set) var text = ""
     /// The numbered choices of the dialog at the end of the output.
     public private(set) var choices: [AgentChoice] = []
 
-    public init(pane: String, loading: Bool = true, lines: [TermLine] = [], truncated: Bool = false, error: String? = nil) {
+    public init(pane: String, loading: Bool = true, lines: [TermLine] = [], truncated: Bool = false, error: String? = nil,
+                request: Int? = nil, view: String = "ansi", path: String = "") {
         self.pane = pane
         self.loading = loading
         self.lines = lines
         self.truncated = truncated
         self.error = error
+        self.request = request
+        self.view = view
+        self.path = path
         derive()
     }
 
@@ -150,6 +160,17 @@ public struct HerdrOutput: Sendable, Equatable {
         let plain = lines.map(\.text)
         text = plain.joined(separator: "\n")
         choices = AgentChoice.find(plain)
+    }
+}
+
+struct HerdrViewRead: Sendable, Equatable {
+    let request: Int
+    let view: String
+    let path: String
+
+    func accepts(request: Int?, view: String, path: String, supportsReview: Bool) -> Bool {
+        guard let request else { return !supportsReview && self.view == "ansi" && view == "ansi" && path.isEmpty }
+        return self.request == request && self.view == view && self.path == path
     }
 }
 
@@ -351,7 +372,8 @@ public enum HerdrWire {
             terminals: terminals,
             panes: terminals ? panes : [],
             workspaces: control ? workspaces : [],
-            kinds: control ? kinds : []
+            kinds: control ? kinds : [],
+            review: enabled && (body["review"]?.bool ?? false)
         )
     }
 
@@ -371,7 +393,10 @@ public enum HerdrWire {
             loading: false,
             lines: error == nil ? TermText.lines(text) : [],
             truncated: (body["truncated"]?.bool ?? false) || cut,
-            error: error
+            error: error,
+            request: body["request"]?.int,
+            view: body["view"]?.string ?? "ansi",
+            path: body["path"]?.string ?? ""
         )
     }
 

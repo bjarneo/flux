@@ -6,10 +6,10 @@ This page tells what a paired device can do on the computer and what the network
 It also tells which setting turns a feature off, when one exists.
 A paired device is an Android phone, an iPhone, or a Mac that you paired with `fluxd`.
 
-`fluxd` treats each paired device the same.
-Each setting in `~/.config/flux/config.toml` applies to every paired device.
-Flux has no setting for 1 device.
-To take the access of 1 device away, [unpair it](#unpair-a-device).
+Global settings in `~/.config/flux/config.toml` apply to every paired device.
+The [per-device access settings](workflows.md#per-device-access) can restrict a feature for one device.
+A device restriction cannot enable a feature that the global settings disable.
+To remove all access for one device, [unpair it](#unpair-a-device).
 
 ## Pair only with your own device
 

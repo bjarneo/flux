@@ -247,6 +247,11 @@ func (d *Daemon) handleNotification(dev *Device, l *lan.Link, p *proto.Packet) {
 		n.Time = time.Now().Unix()
 	}
 	d.mu.Lock()
+	mode := d.notificationModeLocked(dev.ID, n.App, time.Now())
+	if mode == "mute" {
+		d.mu.Unlock()
+		return
+	}
 	_, seen := dev.notifDesktop[b.ID]
 	dev.notifications = removeNotification(dev.notifications, b.ID)
 	dev.notifications = append([]*PhoneNotification{n}, dev.notifications...)
@@ -276,7 +281,8 @@ func (d *Daemon) showNotification(dev *Device, n *PhoneNotification) {
 		d.mu.Lock()
 		// A newer packet for the same notification, a cancel, an unpair, or
 		// the switch makes this packet old.
-		current := dev.Paired && d.cfg.Notifications && findNotification(dev.notifications, n.ID) == n
+		mode := d.notificationModeLocked(dev.ID, n.App, time.Now())
+		current := dev.Paired && d.cfg.Notifications && mode != "mute" && findNotification(dev.notifications, n.ID) == n
 		replaces, name := dev.notifDesktop[n.ID], dev.Name
 		d.mu.Unlock()
 		if !current {
@@ -296,6 +302,7 @@ func (d *Daemon) showNotification(dev *Device, n *PhoneNotification) {
 		id := d.notify(desktop.Notification{
 			AppName: app + " · " + name, Title: n.Title, Body: n.Text,
 			Actions: actions, ReplacesID: replaces,
+			Silent: mode == "silent",
 		})
 		if id == 0 {
 			return

@@ -320,6 +320,24 @@ The helper connects only to `/run/user/<uid>/flux/fluxd.sock`. It does not read 
 
 ## Clipboard
 
+The [workflow controls](workflows.md) expose these additional IPC methods:
+
+| Method | Parameters |
+| --- | --- |
+| `transfer.retry`, `transfer.cancel` | `id` identifies a transfer. |
+| `clipboard.pin` | `id` identifies a history entry. Optional `expires` is a Unix timestamp in seconds. |
+| `clipboard.unpin` | `id` identifies a saved snippet. |
+| `clipboard.search` | `text` contains the query. The result is an array of matching entries. |
+| `device.settings` | `device` selects the paired device. |
+| `device.settings.set` | `device`, `key`, and `value`. A null value removes the override. |
+| `notification.rule.add` | `config` contains `app`, `mode`, and optional `device`, `until`, `start`, and `end`. |
+| `notification.rule.remove`, `automation.remove` | `id` identifies the rule. |
+| `automation.add` | `config` contains `event`, `command`, and optional `device`, `below`, `cooldown`, and `disabled`. |
+
+The settings snapshot includes `deviceRules`, `notificationRules`, and `automationRules`.
+Clipboard entries include `pinned` and optional `expires` for saved snippets.
+Queued transfers use `waiting` while the device is offline or a retry waits.
+
 Each `clipboard` entry has an `id`, and `text` or an `image` with the path of a PNG, JPEG, GIF, or WebP file.
 The text of an image entry is empty.
 The state holds only the first 1024 bytes of a longer text.

@@ -53,6 +53,7 @@ type Notification struct {
 	Timeout    time.Duration
 	ReplacesID uint32
 	Category   string
+	Silent     bool
 }
 
 // Notifier shows notifications through org.freedesktop.Notifications on
@@ -253,6 +254,9 @@ func (n *Notifier) Show(note Notification) (uint32, error) {
 		keys = append(keys, a.Key)
 	}
 	hints := map[string]dbus.Variant{"urgency": dbus.MakeVariant(note.Urgency)}
+	if note.Silent {
+		hints["suppress-sound"] = dbus.MakeVariant(true)
+	}
 	if note.Category != "" {
 		hints["category"] = dbus.MakeVariant(note.Category)
 	}

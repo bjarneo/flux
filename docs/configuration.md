@@ -74,6 +74,7 @@ The ID stays the same after each reload and restart, so `flux-cli run ID` keeps 
 A change of the name or the command gives a new ID.
 To keep an ID, write it in the `id` field.
 Use the [CLI](cli.md#desktop-commands) or the Phone commands page to add commands without editing TOML.
+The [workflow controls](workflows.md) describe `[devices]`, `[[notification_rules]]`, and `[[automation_rules]]`.
 
 ## Data paths
 

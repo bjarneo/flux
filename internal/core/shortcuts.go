@@ -261,7 +261,7 @@ func (d *Daemon) shortcutRefusal(dev *Device) string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	switch {
-	case !d.cfg.RemoteInput || d.input == nil:
+	case !d.cfg.RemoteInput || d.input == nil || !d.permittedLocked(dev.ID, "remoteInput"):
 		return "Remote input is off. Turn it on in the Flux window, or run: flux-cli input on"
 	case !dev.Paired:
 		return dev.Name + " is not paired with " + d.nameLocked()

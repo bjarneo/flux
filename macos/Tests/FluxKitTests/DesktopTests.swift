@@ -6,6 +6,15 @@ import XCTest
 
 @MainActor
 final class DesktopTests: XCTestCase {
+    func testAudioIsOptInAndFramesStaySeparate() throws {
+        XCTAssertFalse(DesktopPackets.start(port: 1742).has("audio"))
+        XCTAssertEqual(DesktopPackets.start(port: 1742, audio: true).bool("audio"), true)
+        var reader = DesktopFrameReader()
+        let result = try reader.push(frames([(DesktopFrame.audio, [1, 2, 3, 4]), (DesktopFrame.key, [0, 0, 1, 0x65])]))
+        XCTAssertTrue(result[0].isAudio)
+        XCTAssertFalse(result[0].isConfig || result[0].isKey || result[0].isFormat)
+        XCTAssertTrue(result[1].isKey)
+    }
     private func roundTrip(_ p: Packet) throws -> Packet { try XCTUnwrap(Packet.parse(p.serialize())) }
 
     private func frames(_ list: [(UInt8, [UInt8])]) -> [UInt8] {

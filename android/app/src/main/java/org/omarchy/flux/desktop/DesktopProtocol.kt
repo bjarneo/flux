@@ -21,9 +21,10 @@ object DesktopPackets {
     /** The longest side of the stream that the phone asks for, in pixels. */
     const val MAX_SIZE = 1920
 
-    fun start(port: Int, monitor: String? = null, maxSize: Int = MAX_SIZE): Packet {
+    fun start(port: Int, monitor: String? = null, maxSize: Int = MAX_SIZE, audio: Boolean = false): Packet {
         val fields = mutableListOf<Pair<String, Any?>>("state" to "start", "port" to port, "maxSize" to maxSize)
         if (!monitor.isNullOrEmpty()) fields += "monitor" to monitor
+        if (audio) fields += "audio" to true
         return Packet(Types.FLUX_DESKTOP, bodyOf(*fields.toTypedArray()))
     }
 
@@ -67,6 +68,7 @@ class Frame(val flags: Int, val data: ByteArray, val length: Int = data.size) {
     val isConfig: Boolean get() = flags and CONFIG != 0
     val isKey: Boolean get() = flags and KEY != 0
     val isFormat: Boolean get() = flags and FORMAT != 0
+    val isAudio: Boolean get() = flags == AUDIO
 
     /** The width and the height of a [FORMAT] frame. */
     fun size(): Pair<Int, Int>? {
@@ -84,6 +86,7 @@ class Frame(val flags: Int, val data: ByteArray, val length: Int = data.size) {
 
         /** The video size: the width and the height as 2 big-endian 16-bit numbers. */
         const val FORMAT = 4
+        const val AUDIO = 8
     }
 }
 

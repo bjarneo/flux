@@ -85,7 +85,7 @@ func (d *Daemon) handleBrowseRequest(dev *Device, l *lan.Link, p *proto.Packet) 
 		return
 	}
 	d.mu.Lock()
-	allowed := d.cfg.ShareHome && dev.Paired
+	allowed := d.cfg.ShareHome && dev.Paired && d.permittedLocked(dev.ID, "shareHome")
 	downloads := d.cfg.DownloadPath()
 	d.mu.Unlock()
 	if !allowed {
@@ -139,9 +139,9 @@ func (d *Daemon) startBrowse(dev *Device, l interface{ Done() <-chan struct{} },
 	fsys.allowed = func() bool {
 		d.mu.Lock()
 		defer d.mu.Unlock()
-		return d.cfg.ShareHome && dev.Paired && d.sessions.browse[n] == s && ctx.Err() == nil
+		return d.cfg.ShareHome && dev.Paired && d.permittedLocked(dev.ID, "shareHome") && d.sessions.browse[n] == s && ctx.Err() == nil
 	}
-	d.watchSession(ctx, cancel, dev, l, func() bool { return d.cfg.ShareHome })
+	d.watchSession(ctx, cancel, dev, l, func() bool { return d.cfg.ShareHome && d.permittedLocked(dev.ID, "shareHome") })
 
 	go func() {
 		defer d.dropBrowse(n, s)

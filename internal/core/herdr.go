@@ -166,6 +166,7 @@ type agentHistory struct {
 // when Terminals is false. Workspaces and Kinds are empty when Control is
 // false.
 type herdrView struct {
+	Review     bool             `json:"review"`
 	Enabled    bool             `json:"enabled"`
 	Running    bool             `json:"running"`
 	Control    bool             `json:"control"`
@@ -178,6 +179,7 @@ type herdrView struct {
 
 func (d *Daemon) herdrViewLocked() herdrView {
 	v := herdrView{
+		Review:  d.cfg.Herdr,
 		Enabled: d.cfg.Herdr, Running: d.cfg.Herdr && d.herdrRunning,
 		Control: d.herdrControlLocked(), Terminals: d.herdrTerminalsLocked(),
 		Agents: d.herdrAgents, Panes: d.herdrTerms, Workspaces: d.herdrPlaces, Kinds: d.herdrKinds,
@@ -209,6 +211,7 @@ func herdrStatePacket(v herdrView) *proto.Packet {
 	return proto.New(proto.TypeFluxHerdr, map[string]any{
 		"kind": "state", "enabled": v.Enabled, "running": v.Running, "control": v.Control,
 		"terminals": v.Terminals, "agents": v.Agents, "panes": v.Panes, "workspaces": v.Workspaces, "kinds": v.Kinds,
+		"review": v.Review,
 	})
 }
 
@@ -606,16 +609,17 @@ func (d *Daemon) herdrChanged() {
 // and accepts flux.herdr.
 func (d *Daemon) sendHerdr() {
 	d.mu.Lock()
-	p := herdrStatePacket(d.herdrViewLocked())
 	var links []*lan.Link
+	packets := map[*lan.Link]*proto.Packet{}
 	for _, dev := range d.devices {
 		if dev.Paired && dev.link != nil && dev.accepts(proto.TypeFluxHerdr) {
 			links = append(links, dev.link)
+			packets[dev.link] = herdrStatePacket(d.herdrViewForLocked(dev.ID))
 		}
 	}
 	d.mu.Unlock()
 	for _, l := range links {
-		_ = l.Send(p)
+		_ = l.Send(packets[l])
 	}
 	d.markDirty()
 }
@@ -642,22 +646,55 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 		// packet. The answer carries the same number, so the phone matches
 		// a late answer to its packet.
 		Request json.RawMessage `json:"request"`
+		Path    string          `json:"path"`
 	}
 	if p.Decode(&body) != nil {
 		return
 	}
 	req := herdrRequest(body.Request)
+	if body.Kind != "request" {
+		d.mu.Lock()
+		v := d.herdrViewForLocked(dev.ID)
+		terminal := d.herdrTerminalLocked(body.Pane) || (body.Kind == "create" && body.What == "terminal")
+		d.mu.Unlock()
+		read := body.Kind == "read" || body.Kind == "diff"
+		if !v.Enabled || (!read && !v.Control) || ((body.Kind == "input" || terminal) && !v.Terminals) {
+			kind := "sent"
+			if read {
+				kind = "output"
+			}
+			if body.Kind == "diff" {
+				kind = "diff"
+			}
+			if body.Kind == "create" {
+				kind = "created"
+			}
+			if body.Kind == "close" {
+				kind = "closed"
+			}
+			failed := proto.New(proto.TypeFluxHerdr, map[string]any{"kind": kind, "pane": body.Pane, "action": body.Kind, "what": body.What, "error": "This feature is off for this device"})
+			if body.Kind == "read" {
+				failed = viewResponse(failed, reviewRead{format: body.Format, path: body.Path, request: req})
+			}
+			d.herdrSend(dev, l, withRequest(failed, req))
+			return
+		}
+	}
 	switch body.Kind {
 	case "request":
 		// The phone opened its agent list. When herdr was not running,
 		// fluxd tries to connect again now.
 		d.wakeHerdr()
 		d.mu.Lock()
-		state := herdrStatePacket(d.herdrViewLocked())
+		state := herdrStatePacket(d.herdrViewForLocked(dev.ID))
 		d.mu.Unlock()
 		_ = l.Send(state)
 	case "read":
-		d.readHerdrOnce(dev, l, body.Pane, body.Lines, body.Format == "ansi", func(p *proto.Packet) { _ = l.Send(p) })
+		if body.Format == "diff" || req != "" {
+			d.readHerdrView(dev, l, reviewRead{pane: body.Pane, path: body.Path, format: body.Format, lines: body.Lines, request: req})
+		} else {
+			d.readHerdrOnce(dev, l, body.Pane, body.Lines, body.Format == "ansi", func(p *proto.Packet) { _ = l.Send(p) })
+		}
 	case "keys", "prompt", "input", "close":
 		failed := map[string]any{"kind": "sent", "pane": body.Pane, "action": body.Kind, "error": "fluxd could not send the reply"}
 		if body.Kind == "close" {
@@ -697,7 +734,7 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 			// The phone opens the new pane at once, so it must know the
 			// pane before the answer.
 			d.mu.Lock()
-			state := herdrStatePacket(d.herdrViewLocked())
+			state := herdrStatePacket(d.herdrViewForLocked(dev.ID))
 			d.mu.Unlock()
 			d.herdrSend(dev, l, state, withRequest(reply, req))
 		}()

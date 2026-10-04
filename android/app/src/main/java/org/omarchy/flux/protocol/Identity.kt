@@ -82,6 +82,7 @@ object Types {
      * phone starts a stream only after a tap of the user.
      */
     const val FLUX_STREAM_REQUEST = "flux.stream.request"
+    const val FLUX_TRANSFER = "flux.transfer"
 }
 
 /** Packet types that the phone accepts. */
@@ -91,7 +92,7 @@ val INCOMING = listOf(
     Types.NOTIFICATION_ACTION, Types.FIND_MY_PHONE, Types.RUN_COMMAND, Types.MPRIS,
     Types.SFTP, Types.FLUX_TUNNEL, Types.FLUX_WEBCAM, Types.FLUX_DND,
     Types.FLUX_MIC, Types.FLUX_SCREEN, Types.FLUX_APPROVE, Types.FLUX_HERDR, Types.FLUX_INPUT,
-    Types.FLUX_DESKTOP, Types.FLUX_SHORTCUTS, Types.FLUX_THEME, Types.FLUX_STREAM_REQUEST,
+    Types.FLUX_DESKTOP, Types.FLUX_SHORTCUTS, Types.FLUX_THEME, Types.FLUX_STREAM_REQUEST, Types.FLUX_TRANSFER,
 )
 
 /** Packet types that the phone sends. */
@@ -100,7 +101,7 @@ val OUTGOING = listOf(
     Types.SHARE_UPDATE, Types.NOTIFICATION, Types.RUN_COMMAND_REQUEST, Types.MPRIS_REQUEST,
     Types.SFTP_REQUEST, Types.TELEPHONY, Types.FLUX_TUNNEL, Types.FLUX_WEBCAM, Types.FLUX_DND,
     Types.FLUX_MIC, Types.FLUX_SCREEN, Types.FLUX_APPROVE, Types.FLUX_HERDR, Types.FLUX_CLIPBOARD_IMAGE,
-    Types.MOUSEPAD_REQUEST, Types.FLUX_DESKTOP, Types.FLUX_SHORTCUTS,
+    Types.MOUSEPAD_REQUEST, Types.FLUX_DESKTOP, Types.FLUX_SHORTCUTS, Types.FLUX_TRANSFER,
 )
 
 /**

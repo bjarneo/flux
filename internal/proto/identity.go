@@ -99,6 +99,7 @@ const (
 	// it only to a paired, connected device that lists it as incoming.
 	// docs/camera.md describes it.
 	TypeFluxStreamRequest = "flux.stream.request"
+	TypeFluxTransfer      = "flux.transfer"
 )
 
 // Incoming lists the packet types that Flux accepts. The phone enables a
@@ -110,7 +111,7 @@ var Incoming = []string{
 	TypeSmsMessages, TypeTelephony,
 	TypeFluxTunnel, TypeFluxWebcam, TypeFluxDnd, TypeFluxMic, TypeFluxScreen,
 	TypeFluxApprove, TypeFluxHerdr, TypeFluxClipboardImage, TypeMousepadRequest,
-	TypeFluxDesktop, TypeFluxShortcuts,
+	TypeFluxDesktop, TypeFluxShortcuts, TypeFluxTransfer,
 }
 
 // Outgoing lists the packet types that Flux sends.
@@ -121,7 +122,7 @@ var Outgoing = []string{
 	TypeSmsRequest, TypeSmsConversations,
 	TypeSmsConversation, TypeSftp, TypeFluxWebcam, TypeFluxDnd,
 	TypeFluxMic, TypeFluxScreen, TypeFluxApprove, TypeFluxHerdr,
-	TypeFluxClipboardImage, TypeFluxInput, TypeFluxDesktop, TypeFluxShortcuts,
+	TypeFluxClipboardImage, TypeFluxInput, TypeFluxDesktop, TypeFluxShortcuts, TypeFluxTransfer,
 	TypeFluxTheme, TypeFluxStreamRequest,
 }
 

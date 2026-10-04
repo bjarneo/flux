@@ -14,6 +14,9 @@ Item {
     if (!dev) return all
     return all.filter(t => !t.device || t.device === dev.id)
   }
+  readonly property var pending: transfers.filter(t => ["waiting", "queued", "active"].indexOf(t.state) >= 0)
+  readonly property real pendingBytes: pending.reduce((n, t) => n + (t.size || 0), 0)
+  readonly property real pendingDone: pending.reduce((n, t) => n + (t.done || 0), 0)
 
   implicitHeight: col.implicitHeight
 
@@ -27,12 +30,8 @@ Item {
       if (note !== "") view.toast("Flux sends only files on this computer.")
       return
     }
-    if (!online) {
-      view.toast(view.devName + " is offline")
-      return
-    }
     view.call("share.files", { device: dev.id, paths: paths }, function () {
-      var sending = paths.length === 1 ? "Sending 1 file to " + root.view.devName : "Sending " + paths.length + " files to " + root.view.devName
+      var sending = "Queued " + paths.length + " items for " + root.view.devName
       root.view.toast(note !== "" ? sending + ". " + note : sending)
     })
   }
@@ -57,7 +56,7 @@ Item {
       if (life.alive) root.picking = false
       if (!paths || paths.length === 0) return
       v.call("share.files", { device: id, paths: paths }, function () {
-        v.toast(paths.length === 1 ? "Sending 1 file to " + name : "Sending " + paths.length + " files to " + name)
+        v.toast("Queued " + paths.length + " items for " + name)
       })
     })
   }
@@ -66,6 +65,7 @@ Item {
     var pct = t.size > 0 ? Math.floor(100 * (t.done || 0) / t.size) : 0
     if (t.state === "active") return pct + "%" + (t.rate > 0 ? " · " + Fmt.rate(t.rate) : "")
     if (t.state === "done") return t.dir === "out" ? "sent" : "done"
+    if (t.state === "waiting") return "waiting"
     return t.state || ""
   }
 
@@ -107,7 +107,7 @@ Item {
           width: Math.min(implicitWidth, zone.width - 32)
           horizontalAlignment: Text.AlignHCenter
           wrapMode: Text.Wrap
-          text: "Drop files to send to " + (root.view ? root.view.devName : "")
+          text: "Drop files or folders for " + (root.view ? root.view.devName : "")
           font.pixelSize: 16
           font.weight: Font.DemiBold
         }
@@ -152,6 +152,24 @@ Item {
     Item { width: 1; height: 22 }
 
     Txt {
+      width: parent.width
+      text: "Folders use ZIP archives. Queued files stay in the outbox until the device connects."
+      color: Theme.dim
+      wrapMode: Text.Wrap
+    }
+
+    Item { width: 1; height: 12 }
+
+    Txt {
+      visible: root.pending.length > 0
+      width: parent.width
+      text: root.pending.length + " pending · " + Fmt.bytes(root.pendingDone) + " of " + Fmt.bytes(root.pendingBytes)
+      color: Theme.dim
+    }
+
+    Item { width: 1; height: root.pending.length > 0 ? 12 : 0 }
+
+    Txt {
       visible: root.transfers.length === 0
       text: "No transfers yet."
       color: Theme.dim
@@ -175,12 +193,12 @@ Item {
           readonly property real barWidth: compact ? 0 : Math.max(80, Math.min(260, inner - 28 - 110 - 48 - 120))
           readonly property real progress: modelData.size > 0 ? (modelData.done || 0) / modelData.size : (modelData.state === "done" ? 1 : 0)
           width: col.width
-          implicitHeight: nameCol.implicitHeight + 26
+          implicitHeight: nameCol.implicitHeight + 26 + (actions.visible ? actions.implicitHeight + 18 : 0)
 
           // The direction: received from the device, or sent to it.
           Icon {
             x: 19
-            anchors.verticalCenter: parent.verticalCenter
+            y: 13
             name: row.incoming ? "tray-down" : "tray-up"
             size: 20
             color: row.incoming ? Theme.ok : Theme.accent
@@ -189,12 +207,13 @@ Item {
             id: nameCol
             x: 19 + 28 + 16
             width: row.compact ? row.inner - 28 - 16 - 16 - row.statusWidth : row.inner - 28 - 16 - row.barWidth - 16 - 16 - 110
-            anchors.verticalCenter: parent.verticalCenter
+            y: 13
             spacing: row.compact ? 3 : 0
             // A name from the phone can hide its real extension with bidi
             // controls, so the row shows them as codes.
             Txt { width: parent.width; text: Fmt.showControls(modelData.name); elide: Text.ElideMiddle }
             Txt { width: parent.width; text: Fmt.bytes(modelData.size); color: Theme.dim; font.pixelSize: 11 }
+            Txt { visible: !!modelData.error; width: parent.width; text: modelData.error || ""; color: Theme.warn; font.pixelSize: 11; wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight }
             Bar {
               visible: row.compact
               width: parent.width
@@ -205,7 +224,7 @@ Item {
           Bar {
             visible: !row.compact
             x: nameCol.x + nameCol.width + 16
-            anchors.verticalCenter: parent.verticalCenter
+            y: nameCol.y + nameCol.implicitHeight / 2 - height / 2
             width: row.barWidth
             height: 5
             value: row.progress
@@ -213,7 +232,7 @@ Item {
           Txt {
             anchors.right: parent.right
             anchors.rightMargin: 19
-            anchors.verticalCenter: parent.verticalCenter
+            y: nameCol.y + nameCol.implicitHeight / 2 - height / 2
             width: row.statusWidth
             horizontalAlignment: Text.AlignRight
             // A narrow row shows the percent and leaves out the rate.
@@ -225,8 +244,27 @@ Item {
           MouseArea {
             anchors.fill: parent
             acceptedButtons: Qt.RightButton
-            enabled: modelData.state === "active" || modelData.state === "queued"
+            enabled: modelData.state === "active" || modelData.state === "queued" || modelData.state === "waiting"
             onClicked: root.view.call("transfer.cancel", { id: modelData.id }, function () { root.view.toast("Canceled " + Fmt.showControls(modelData.name)) })
+          }
+          Row {
+            id: actions
+            visible: ["waiting", "queued", "active"].indexOf(modelData.state) >= 0
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.margins: 12
+            spacing: 8
+            OutlineButton {
+              visible: modelData.state === "waiting"
+              text: "Retry now"
+              fontSize: 11
+              onClicked: root.view.call("transfer.retry", { id: modelData.id })
+            }
+            OutlineButton {
+              text: "Cancel"
+              fontSize: 11
+              onClicked: root.view.call("transfer.cancel", { id: modelData.id })
+            }
           }
         }
       }

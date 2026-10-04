@@ -165,18 +165,21 @@ func (d *Daemon) Snapshot() json.RawMessage {
 		"transfers": transfers,
 		"commands":  commands,
 		"settings": map[string]any{
-			"autoClipboard":    d.cfg.AutoClipboard,
-			"notifications":    d.cfg.Notifications,
-			"shareHome":        d.cfg.ShareHome,
-			"pauseMediaOnCall": d.cfg.PauseMediaOnCall,
-			"downloadDir":      d.cfg.DownloadPath(),
-			"syncDnd":          d.cfg.SyncDnd,
-			"herdr":            d.cfg.Herdr,
-			"herdrControl":     d.cfg.HerdrControl,
-			"herdrTerminals":   d.cfg.HerdrTerminals,
-			"remoteInput":      d.cfg.RemoteInput,
-			"remoteDesktop":    d.cfg.RemoteDesktop,
-			"checkUpdates":     d.cfg.CheckUpdates,
+			"autoClipboard":     d.cfg.AutoClipboard,
+			"notifications":     d.cfg.Notifications,
+			"shareHome":         d.cfg.ShareHome,
+			"pauseMediaOnCall":  d.cfg.PauseMediaOnCall,
+			"downloadDir":       d.cfg.DownloadPath(),
+			"syncDnd":           d.cfg.SyncDnd,
+			"herdr":             d.cfg.Herdr,
+			"herdrControl":      d.cfg.HerdrControl,
+			"herdrTerminals":    d.cfg.HerdrTerminals,
+			"remoteInput":       d.cfg.RemoteInput,
+			"remoteDesktop":     d.cfg.RemoteDesktop,
+			"checkUpdates":      d.cfg.CheckUpdates,
+			"deviceRules":       d.cfg.Devices,
+			"notificationRules": d.cfg.NotificationRules,
+			"automationRules":   d.cfg.AutomationRules,
 		},
 		"webcam":  d.webcamViewLocked(),
 		"mic":     d.micViewLocked(),
@@ -228,6 +231,7 @@ type params struct {
 	Value     any             `json:"value"`
 	Config    json.RawMessage `json:"config"`
 	Reset     bool            `json:"reset"`
+	Expires   int64           `json:"expires"`
 }
 
 // Call runs one API method.
@@ -284,8 +288,16 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 			return nil, apiErr("bad_params", "text is empty")
 		}
 		return ok, d.clip.Set(p.Text)
+	case "clipboard.pin":
+		return d.pinClip(p.ID, p.Expires)
+	case "clipboard.unpin":
+		return ok, d.unpinClip(p.ID)
+	case "clipboard.search":
+		return d.searchClips(p.Text), nil
 	case "transfer.cancel":
 		return ok, d.CancelTransfer(p.ID)
+	case "transfer.retry":
+		return ok, d.retryTransfer(p.ID)
 	case "commands.add":
 		return d.addCommand(p.Name, p.Command)
 	case "commands.remove":
@@ -298,6 +310,14 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		return ok, d.runLocal(c)
 	case "settings.set":
 		return ok, d.setSetting(p.Key, p.Value)
+	case "notification.rule.add":
+		return d.addNotificationRule(p.Config)
+	case "notification.rule.remove":
+		return ok, d.removeNotificationRule(p.ID)
+	case "automation.add":
+		return d.addAutomation(p.Config)
+	case "automation.remove":
+		return ok, d.removeAutomation(p.ID)
 	case "update.install":
 		return ok, d.installUpdate()
 	}
@@ -341,6 +361,13 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		return nil, apiErr("not_paired", "%s is not paired", name)
 	}
 	switch method {
+	case "device.settings":
+		d.mu.Lock()
+		result := mustJSON(d.cfg.Devices[dev.ID])
+		d.mu.Unlock()
+		return result, nil
+	case "device.settings.set":
+		return ok, d.setDevicePolicy(dev, p.Key, p.Value)
 	case "addresses.add", "addresses.remove":
 		change := d.AddAddress
 		if method == "addresses.remove" {
@@ -410,6 +437,7 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 
 // deviceMethods are the methods of Call that act on a device.
 var deviceMethods = map[string]bool{
+	"device.settings": true, "device.settings.set": true,
 	"pair.request": true, "pair.accept": true, "pair.reject": true, "pair.unpair": true,
 	"addresses.add": true, "addresses.remove": true,
 	"ring": true, "ping": true,
@@ -558,6 +586,9 @@ func (d *Daemon) setSetting(key string, value any) error {
 	if key == "checkUpdates" {
 		d.wakeRelease()
 	}
+	if key == "shareHome" {
+		d.policiesChanged()
+	}
 	d.markDirty()
 	return nil
 }
@@ -585,6 +616,7 @@ func (d *Daemon) Reload() error {
 		// An image that is on its way to the phones stops.
 		d.stopClipSend()
 	}
+	d.policiesChanged()
 	return nil
 }
 

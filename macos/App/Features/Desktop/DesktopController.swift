@@ -48,6 +48,14 @@ final class DesktopController: RemoteKeyTarget {
     /// True after a click on a view-only screen, to explain it.
     var viewOnlyNotice = false
     var voiceError: String?
+    var audioOn = false
+    private var previousAudioVolume: Double = 1
+    var audioVolume: Double = 1 {
+        didSet { if audioVolume > 0 { previousAudioVolume = audioVolume }; plugin.setAudioVolume(Float(audioVolume)) }
+    }
+
+    func toggleAudio() { audioOn.toggle(); start() }
+    func toggleMute() { audioVolume = audioVolume == 0 ? previousAudioVolume : 0 }
 
     init(device: DeviceSnapshot, app: AppModel, plugin: DesktopPlugin, input: RemoteInputPlugin) {
         deviceId = device.id
@@ -102,7 +110,7 @@ final class DesktopController: RemoteKeyTarget {
             return
         }
         paused = false
-        plugin.start(deviceId, monitor: monitor, maxSize: Self.maxSize())
+        plugin.start(deviceId, monitor: monitor, maxSize: Self.maxSize(), audio: audioOn)
     }
 
     /// Shows another monitor of the computer.

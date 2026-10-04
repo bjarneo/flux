@@ -9,6 +9,12 @@ Item {
   property bool checked: false
   property bool active: true
   signal toggled(bool checked)
+  activeFocusOnTab: active
+  Accessible.role: Accessible.CheckBox
+  Accessible.name: text
+  Accessible.checked: checked
+  Keys.onSpacePressed: if (active) toggled(!checked)
+  Keys.onReturnPressed: if (active) toggled(!checked)
 
   implicitWidth: box.width + 10 + label.implicitWidth
   implicitHeight: Math.max(box.height, label.implicitHeight)
@@ -20,8 +26,8 @@ Item {
     width: 34
     height: 18
     color: root.checked ? Theme.alpha(Theme.accent, 0.18) : "transparent"
-    border.width: 1
-    border.color: root.checked ? Theme.accent : Theme.edge
+    border.width: root.activeFocus ? 2 : 1
+    border.color: root.checked || root.activeFocus ? Theme.accent : Theme.edge
     Rectangle {
       anchors.verticalCenter: parent.verticalCenter
       x: root.checked ? parent.width - width - 3 : 3

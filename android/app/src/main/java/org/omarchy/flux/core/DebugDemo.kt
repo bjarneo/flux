@@ -58,6 +58,7 @@ object DebugDemo {
                     enabled = true,
                     running = true,
                     control = true,
+                    review = true,
                     agents = listOf(
                         HerdrAgent("w1:p1", "claude", AgentStatus.Working, "Refactor the sync loop", "flux", "flux"),
                         HerdrAgent("w2:p1", "codex", AgentStatus.Blocked, "Run the database migration", "billing", "billing"),

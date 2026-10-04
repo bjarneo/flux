@@ -85,6 +85,7 @@ type mousepadBody struct {
 
 // inputAction is 1 step for the input backend.
 type inputAction struct {
+	device  string
 	kind    string // move, moveTo, button, scroll, type, or key
 	dx, dy  float64
 	x, y    float64 // the position for moveTo, from 0 to 1
@@ -227,7 +228,7 @@ func (d *Daemon) handleMousepad(dev *Device, p *proto.Packet) {
 		return
 	}
 	d.mu.Lock()
-	on := d.cfg.RemoteInput && d.input != nil
+	on := d.cfg.RemoteInput && d.input != nil && d.permittedLocked(dev.ID, "remoteInput")
 	if !on {
 		warn := !dev.inputRefused
 		dev.inputRefused = true
@@ -248,6 +249,7 @@ func (d *Daemon) handleMousepad(dev *Device, p *proto.Packet) {
 	var actions []inputAction
 	text, releases := 0, true
 	for _, a := range inputActions(b) {
+		a.device = dev.ID
 		if a.kind == "moveTo" {
 			// A position is on the remote desktop that the phone shows.
 			if monitor == "" {
@@ -302,7 +304,7 @@ func (d *Daemon) inputWakeLocked() chan struct{} {
 // device is paired and has the same link. d.mu must be held.
 func (d *Daemon) inputAllowedLocked(a inputAction) bool {
 	return d.cfg.RemoteInput && d.input != nil && a.gen == d.sessions.inputGen &&
-		a.dev != nil && a.dev.Paired && a.link != nil && a.dev.link == a.link && !linkClosed(a.link)
+		a.dev != nil && a.dev.Paired && d.permittedLocked(a.dev.ID, "remoteInput") && a.link != nil && a.dev.link == a.link && !linkClosed(a.link)
 }
 
 func linkClosed(l *lan.Link) bool {
@@ -422,6 +424,14 @@ func errString(err error) string {
 }
 
 func (d *Daemon) runInput(ctx context.Context, a inputAction) error {
+	if a.device != "" {
+		d.mu.Lock()
+		allowed := d.cfg.RemoteInput && d.permittedLocked(a.device, "remoteInput")
+		d.mu.Unlock()
+		if !allowed {
+			return nil
+		}
+	}
 	in := d.input
 	switch a.kind {
 	case "move":
@@ -445,8 +455,8 @@ func (d *Daemon) runInput(ctx context.Context, a inputAction) error {
 // that it can send repeat with a special key.
 func (d *Daemon) sendInputState(l *lan.Link) {
 	d.mu.Lock()
-	on := d.cfg.RemoteInput && d.input != nil
-	desktop := d.cfg.RemoteDesktop && !d.opts.Headless
+	on := d.cfg.RemoteInput && d.input != nil && d.permittedLocked(l.DeviceID(), "remoteInput")
+	desktop := d.cfg.RemoteDesktop && !d.opts.Headless && d.permittedLocked(l.DeviceID(), "remoteDesktop")
 	d.mu.Unlock()
 	_ = l.Send(proto.New(proto.TypeFluxInput, map[string]any{"enabled": on, "desktop": desktop, "keyRepeat": true}))
 }

@@ -45,13 +45,15 @@ const (
 
 // DesktopView is the remote desktop state for the window.
 type DesktopView struct {
-	Active  bool   `json:"active"`
-	To      string `json:"to"`
-	ToName  string `json:"toName"`
-	Monitor string `json:"monitor"`
-	Width   int    `json:"width"`
-	Height  int    `json:"height"`
-	Error   string `json:"error,omitempty"`
+	Audio      bool   `json:"audio"`
+	AudioError string `json:"audioError,omitempty"`
+	Active     bool   `json:"active"`
+	To         string `json:"to"`
+	ToName     string `json:"toName"`
+	Monitor    string `json:"monitor"`
+	Width      int    `json:"width"`
+	Height     int    `json:"height"`
+	Error      string `json:"error,omitempty"`
 }
 
 type desktopSession struct {
@@ -72,6 +74,7 @@ type desktopSession struct {
 }
 
 type desktopStart struct {
+	Audio   bool   `json:"audio"`
 	State   string `json:"state"`
 	Port    int    `json:"port"`
 	Monitor string `json:"monitor"`
@@ -367,7 +370,7 @@ func (d *Daemon) desktopRefusal(dev *Device) error {
 	switch {
 	case d.opts.Headless:
 		return errors.New("the remote desktop is off in headless mode")
-	case !d.cfg.RemoteDesktop:
+	case !d.cfg.RemoteDesktop || !d.permittedLocked(dev.ID, "remoteDesktop"):
 		return fmt.Errorf("the remote desktop is off on %s. Turn it on in the Flux window, or run: flux-cli desktop on", d.nameLocked())
 	case !dev.Paired:
 		return fmt.Errorf("%s is not paired with %s", dev.Name, d.nameLocked())
@@ -407,7 +410,7 @@ func (d *Daemon) claimDesktop(dev *Device, l streamLink) *desktopSession {
 	if old != nil {
 		old.cancel()
 	}
-	d.watchSession(ctx, cancel, dev, l, func() bool { return d.cfg.RemoteDesktop })
+	d.watchSession(ctx, cancel, dev, l, func() bool { return d.cfg.RemoteDesktop && d.permittedLocked(dev.ID, "remoteDesktop") })
 	d.markDirty()
 	return s
 }
@@ -506,7 +509,11 @@ func (d *Daemon) runDesktop(s *desktopSession, b desktopStart) {
 		}
 		_ = l.Send(proto.New(proto.TypeFluxDesktop, map[string]any{
 			"state": "live", "monitor": mon.Name, "monitors": names, "width": w, "height": h,
+			"audio": b.Audio,
 		}))
+		if b.Audio {
+			go d.runDesktopAudio(ctx, s, tc)
+		}
 		notice := d.notify(desktop.Notification{
 			AppName: "Flux", Title: dev.Name + " shows this screen",
 			Body:    "The phone sees " + mon.Name + ".",

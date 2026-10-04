@@ -83,11 +83,19 @@ func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 	case proto.TypeBattery:
 		d.handleBattery(dev, p)
 	case proto.TypeClipboard, proto.TypeClipboardConnect:
+		if !d.permitted(dev.ID, "clipboard") {
+			return
+		}
 		d.handleClipboard(dev, p)
 	case proto.TypeFluxClipboardImage:
+		if !d.permitted(dev.ID, "clipboard") {
+			return
+		}
 		d.handleClipboardImage(dev, l, p)
 	case proto.TypeShare:
 		d.handleShare(dev, l, p)
+	case proto.TypeFluxTransfer:
+		d.handleResumable(dev, l, p)
 	case proto.TypeShareUpdate:
 		// The totals of a multi-file share. Flux counts files as they arrive.
 	case proto.TypeNotification:
@@ -156,6 +164,7 @@ func (d *Daemon) handleBattery(dev *Device, p *proto.Packet) {
 	alert := dev.lowBatteryAlert(body.Threshold == 1, body.Charge, body.Charging)
 	name := dev.Name
 	d.mu.Unlock()
+	d.emitAutomation(automationEvent{Kind: "battery.low", Device: dev.ID, Charge: body.Charge, Charging: body.Charging})
 	if alert {
 		d.notifyAsync(desktop.Notification{AppName: "Flux", Title: name + " battery is low", Body: strconv.Itoa(body.Charge) + "% left", Urgency: 2})
 	}

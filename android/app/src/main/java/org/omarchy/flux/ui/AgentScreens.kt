@@ -30,6 +30,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedTextField
@@ -68,6 +70,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Constraints
@@ -283,6 +286,14 @@ private fun TerminalTile(t: HerdrTerminal, onClick: () -> Unit) {
  */
 @Composable
 fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
+    var review by rememberSaveable(d.id, pane) { mutableStateOf(false) }
+    var reviewPath by rememberSaveable(d.id, pane) { mutableStateOf("") }
+    var appliedReviewPath by rememberSaveable(d.id, pane) { mutableStateOf("") }
+    val reviewText = Tn.text
+    fun readReview() {
+        appliedReviewPath = reviewPath
+        HerdrSync.read(FluxCore, d.id, pane, review = true, path = appliedReviewPath)
+    }
     val agent = d.herdr?.agent(pane)
     val status = agent?.status
     val demo = isDemo(d.id)
@@ -291,14 +302,14 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
     val loading by rememberUpdatedState(d.herdrOutput?.takeIf { it.pane == pane }?.loading == true)
     // The polls stop when the agent is gone.
     val alive = agent != null || d.herdr == null
-    LaunchedEffect(d.id, pane, d.online, status, alive) {
+    LaunchedEffect(d.id, pane, d.online, status, alive, review, appliedReviewPath) {
         if (!d.online || demo || !alive) return@LaunchedEffect
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             // A new status reads at once. Only the polls wait for the last read.
-            HerdrSync.read(FluxCore, d.id, pane)
+            HerdrSync.read(FluxCore, d.id, pane, review = review, path = appliedReviewPath)
             while (status == AgentStatus.Working) {
                 delay(WORKING_REFRESH_MS)
-                if (!loading) HerdrSync.read(FluxCore, d.id, pane)
+                if (!loading) HerdrSync.read(FluxCore, d.id, pane, review = review, path = appliedReviewPath)
             }
         }
     }
@@ -326,11 +337,32 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
             )
             else -> PaneLayout(
                 Modifier.weight(1f),
-                header = { if (agent != null) AgentHeader(agent, closer.takeIf { d.herdr?.control == true }) },
+                header = {
+                    Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
+                        if (agent != null) AgentHeader(agent, closer.takeIf { d.herdr?.control == true })
+                        if (d.herdr?.review == true) {
+                            Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(TileGap)) {
+                                ChoiceChip("Output", !review, {
+                                    review = false
+                                    HerdrSync.read(FluxCore, d.id, pane, review = false)
+                                }, Modifier.weight(1f), role = Role.Tab)
+                                ChoiceChip("Changes", review, { review = true; readReview() }, Modifier.weight(1f), role = Role.Tab)
+                            }
+                            if (review) OutlinedTextField(
+                                value = reviewPath, onValueChange = { reviewPath = it }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                                placeholder = { T("File path, or leave empty for all changes", color = reviewText) },
+                                textStyle = TextStyle(color = reviewText, fontSize = 14.sp), shape = TileShape,
+                                keyboardActions = KeyboardActions(onDone = { readReview() }),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done, autoCorrectEnabled = false),
+                            )
+                        }
+                    }
+                },
                 output = { m -> AgentOutput(out, m) },
                 controls = {
                     if (agent != null && d.herdr?.control == true) {
-                        ReplyControls(d, agent, out, d.herdrReply?.takeIf { it.pane == pane })
+                        ReplyControls(d, agent, out.takeUnless { review }, d.herdrReply?.takeIf { it.pane == pane },
+                            if (review) appliedReviewPath else null, reviewReady = !review || (out?.loading == false && out.error == null))
                     } else if (agent != null) {
                         T(
                             "To answer from this phone, set herdr_control = true on ${d.name}.",
@@ -623,7 +655,7 @@ internal fun rememberPaneCloser(d: DeviceUi, pane: String, onClosed: () -> Unit)
  * lock first, see [ReplyLock].
  */
 @Composable
-private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, reply: HerdrReply?) {
+private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, reply: HerdrReply?, reviewPath: String? = null, reviewReady: Boolean = true) {
     val context = LocalContext.current
     var field by rememberSaveable(d.id, agent.pane, stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue()) }
     var lockError by remember { mutableStateOf<String?>(null) }
@@ -632,6 +664,8 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
     // The text of the last Send. When fluxd refuses it because the agent
     // waits for a choice, Send as answer sends the same text again.
     var lastPrompt by rememberSaveable(d.id, agent.pane) { mutableStateOf("") }
+    var lastDraft by rememberSaveable(d.id, agent.pane) { mutableStateOf("") }
+    var lastReviewPath by rememberSaveable(d.id, agent.pane) { mutableStateOf<String?>(null) }
     // A prompt that the computer accepted leaves the field.
     LaunchedEffect(reply) {
         if (reply != null && reply.action == "prompt" && !reply.sending && reply.error == null) field = TextFieldValue()
@@ -728,7 +762,10 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
         )
         val sendingPrompt = reply?.sending == true && reply.action == "prompt"
         fun sendPrompt() {
-            val t = field.text
+            if (!reviewReady) return
+            lastDraft = field.text
+            lastReviewPath = reviewPath
+            val t = if (reviewPath != null) "Review feedback for ${reviewPath.ifBlank { "the working tree" }}:\n${field.text}" else field.text
             lastPrompt = t
             guarded { HerdrSync.sendPrompt(FluxCore, d.id, agent.pane, t) }
         }
@@ -757,7 +794,7 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
                 FieldKey(
                     "Send",
                     onClick = ::sendPrompt,
-                    enabled = field.text.isNotBlank(),
+                    enabled = field.text.isNotBlank() && reviewReady,
                     busy = sendingPrompt,
                 ) { Sym(Ic.send, size = 22.dp) }
             },
@@ -774,7 +811,7 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
                 FluxButton("Send", {
                     editing = false
                     sendPrompt()
-                }, icon = Ic.send, enabled = field.text.isNotBlank() && !sendingPrompt)
+                }, icon = Ic.send, enabled = field.text.isNotBlank() && !sendingPrompt && reviewReady)
             }
         }
         val problem = lockError ?: voiceError ?: dictation.error ?: reply?.error
@@ -782,7 +819,7 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
         // waits for a choice. The agent can take the same text as the answer
         // to its question, for example an answer that is not in the choices.
         val canAnswer = reply != null && problem == reply.error && reply.code == HERDR_BLOCKED && reply.action == "prompt" &&
-            !reply.sending && lastPrompt.isNotBlank() && field.text == lastPrompt
+            !reply.sending && lastPrompt.isNotBlank() && field.text == lastDraft && reviewPath == lastReviewPath
         if (problem != null) {
             Column(Modifier.padding(horizontal = 4.dp)) {
                 T(problem, size = 12, color = Tn.red, lineHeight = 1.3f)

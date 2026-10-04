@@ -237,8 +237,9 @@ flux-cli notify "Backup done" "412 files, 2.1 GB"
 
 `flux-cli ring` rings only a phone or a tablet.
 `flux-cli url` sends only an `http` or `https` URL with a host. The device shows the link in a notification and opens it after a tap.
-`flux-cli send` starts transfers and returns their count.
+`flux-cli send` queues files or folder archives and returns the transfer count.
 Inspect `transfers` in `flux-cli status --json` for completion.
+See [workflow controls](workflows.md) for the outbox, saved snippets, notification rules, device settings, and automation commands.
 `flux-cli clip` without text sends the desktop clipboard.
 When the clipboard holds an image, the command sends the image and returns when the transfer ends.
 See [clipboard images](features.md#clipboard-images).

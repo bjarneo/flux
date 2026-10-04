@@ -38,13 +38,20 @@ type Daemon struct {
 	devices map[string]*Device
 
 	clipboard     []ClipEntry
+	snippets      []ClipEntry
+	snippetsDir   string
 	lastLocalClip time.Time
 	// clipDir holds the images of the clipboard history. clipSend stops
 	// the image that fluxd sends to the phones, when a newer copy replaces
 	// it.
-	clipDir   string
-	clipSend  context.CancelFunc
-	transfers []*Transfer
+	clipDir       string
+	clipSend      context.CancelFunc
+	transfers     []*Transfer
+	outbox        *outbox
+	resumeMu      sync.Mutex
+	resumeReplies map[string]chan resumeMessage
+	resumeDir     string
+	automationQ   chan automationEvent
 
 	opts Options
 	clip clipboard
@@ -131,7 +138,8 @@ type Daemon struct {
 	logger *log.Logger
 
 	// herdrJobs keeps the herdr work that runs for the phones.
-	herdrJobs herdrJobs
+	herdrJobs  herdrJobs
+	reviewJobs map[herdrReadKey]*reviewReadJob
 
 	// content holds the workers and the limits of shares, the clipboard,
 	// notifications, media, calls, and Do Not Disturb.
@@ -259,6 +267,7 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 		herdrWake:   make(chan struct{}, 1),
 		dndWake:     make(chan struct{}, 1),
 		releaseWake: make(chan struct{}, 1),
+		automationQ: make(chan automationEvent, 128),
 	}
 	d.ready = make(chan struct{})
 	if exe, err := os.Executable(); err == nil {
@@ -301,6 +310,15 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 		// theme loads now.
 		d.themePath = desktop.ThemePath()
 		d.reloadTheme()
+	}
+	d.resumeDir = filepath.Join(config.DataDir(), "incoming")
+	d.snippetsDir = filepath.Join(config.DataDir(), "snippets")
+	if err := d.loadSnippets(); err != nil {
+		return nil, err
+	}
+	d.resumeReplies = map[string]chan resumeMessage{}
+	if err := d.loadOutbox(); err != nil {
+		return nil, err
 	}
 	return d, nil
 }
@@ -403,6 +421,9 @@ func (d *Daemon) Run() error {
 	close(d.ready)
 	d.logf("fluxd %s listening on TCP %d as %q", d.selfID, p.TCPPort(), d.Name())
 	go d.releaseLoop(ctx)
+	go d.outboxLoop(ctx)
+	go d.snippetLoop(ctx)
+	go d.automationLoop(ctx)
 	if d.opts.Headless {
 		go d.publishLoop(ctx)
 		go d.discoveryLoop(ctx)
@@ -1063,6 +1084,7 @@ func logType(t string) string {
 // onPairedLink sends the packets that a paired device expects after it
 // connects.
 func (d *Daemon) onPairedLink(dev *Device, l *lan.Link) {
+	d.emitAutomation(automationEvent{Kind: "device.connected", Device: dev.ID})
 	d.mu.Lock()
 	notifications := dev.supports(proto.TypeNotification)
 	dnd, input := dev.accepts(proto.TypeFluxDnd), dev.accepts(proto.TypeFluxInput)
@@ -1086,7 +1108,7 @@ func (d *Daemon) onPairedLink(dev *Device, l *lan.Link) {
 	}
 	if herdr {
 		d.mu.Lock()
-		state := herdrStatePacket(d.herdrViewLocked())
+		state := herdrStatePacket(d.herdrViewForLocked(dev.ID))
 		d.mu.Unlock()
 		_ = l.Send(state)
 	}

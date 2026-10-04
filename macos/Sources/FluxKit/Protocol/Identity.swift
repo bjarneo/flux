@@ -49,6 +49,7 @@ public enum PacketType {
     /// The computer sends its Hyprland key bindings and
     /// workspaces, and runs them for this device. Both sides send it.
     public static let fluxShortcuts = "flux.shortcuts"
+    public static let fluxTransfer = "flux.transfer"
     /// The computer asks this device to approve sudo with a fingerprint.
     public static let fluxApprove = "flux.approve"
     /// An image that was copied, as the payload, with

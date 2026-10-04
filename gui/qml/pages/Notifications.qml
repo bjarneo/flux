@@ -16,6 +16,15 @@ Item {
   // A card shows at most this number of action buttons. fluxd keeps the
   // same number of actions, so each action that it keeps has a button.
   readonly property int maxActions: 8
+  property double now: Date.now() / 1000
+  Timer { interval: 1000; running: true; repeat: true; onTriggered: root.now = Date.now() / 1000 }
+
+  function ruleText(rule) {
+    var text = rule.app + ": " + rule.mode
+    if (rule.until) text += rule.until <= now ? " · Expired" : " · Until " + new Date(rule.until * 1000).toLocaleString(Qt.locale(), Locale.ShortFormat)
+    if (rule.start && rule.end) text += " · " + rule.start + " to " + rule.end
+    return text
+  }
 
   implicitHeight: list.implicitHeight
 
@@ -29,6 +38,18 @@ Item {
     id: list
     width: Math.min(parent.width, 760)
     spacing: 10
+
+    Repeater {
+      model: root.view && root.view.backend && root.view.backend.state.settings ?
+        (root.view.backend.state.settings.notificationRules || []).filter(r => !r.device || (root.dev && r.device === root.dev.id)) : []
+      delegate: Row {
+        required property var modelData
+        width: list.width
+        spacing: 8
+        Txt { width: Math.max(0, parent.width - removeRule.width - parent.spacing); anchors.verticalCenter: parent.verticalCenter; text: root.ruleText(modelData); color: Theme.dim; wrapMode: Text.Wrap }
+        OutlineButton { id: removeRule; anchors.verticalCenter: parent.verticalCenter; text: "Remove rule"; fontSize: 11; onClicked: root.view.call("notification.rule.remove", { id: modelData.id }) }
+      }
+    }
 
     Item {
       visible: root.clearable > 0
@@ -151,7 +172,13 @@ Item {
             width: parent.width
             spacing: 8
             topPadding: 8
-            visible: card.replyable || card.actions.length > 0
+            visible: true
+            OutlineButton {
+              text: "Mute app for 1 hour"
+              fontSize: 11
+              padY: 4
+              onClicked: root.view.call("notification.rule.add", { config: { device: root.dev.id, app: modelData.app, mode: "mute", until: Math.floor(Date.now() / 1000) + 3600 } })
+            }
             OutlineButton {
               visible: card.replyable && !card.replying
               icon: "reply"

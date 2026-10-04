@@ -124,7 +124,7 @@ func trimTransfers(list []*Transfer) []*Transfer {
 	}
 	drop := make(map[*Transfer]bool, extra)
 	for i := len(list) - 1; i >= 0 && len(drop) < extra; i-- {
-		if !list[i].running() {
+		if !list[i].running() && list[i].State != "waiting" {
 			drop[list[i]] = true
 		}
 	}
@@ -136,6 +136,8 @@ func trimTransfers(list []*Transfer) []*Transfer {
 	}
 	return out
 }
+
+func (d *Daemon) trimTransfersLocked() { d.transfers = trimTransfers(d.transfers) }
 
 // progress updates the byte count and the rate. It publishes at most 4
 // updates per second.
@@ -173,6 +175,7 @@ func (d *Daemon) progress(t *Transfer) func(int64) {
 
 func (d *Daemon) finishTransfer(t *Transfer, err error) {
 	d.mu.Lock()
+	received := err == nil && t.Dir == "in" && t.State != "done"
 	switch {
 	case err == nil:
 		t.State, t.Done = "done", t.Size
@@ -182,13 +185,20 @@ func (d *Daemon) finishTransfer(t *Transfer, err error) {
 		t.State, t.Error = "failed", err.Error()
 	}
 	t.Rate = 0
+	d.trimTransfersLocked()
 	d.mu.Unlock()
+	if received {
+		d.emitAutomation(automationEvent{Kind: "file.received", Device: t.Device, Path: t.Path})
+	}
 	d.markDirty()
 }
 
 // CancelTransfer stops a running transfer. A queued transfer does not
 // start, because the send loop skips a canceled transfer.
 func (d *Daemon) CancelTransfer(id string) error {
+	if found, err := d.cancelOutbox(id); found {
+		return err
+	}
 	d.mu.Lock()
 	for _, t := range d.transfers {
 		if t.ID != id {
@@ -716,6 +726,10 @@ func (d *Daemon) SendFiles(dev *Device, paths []string) ([]*Transfer, error) {
 			return nil, apiErr("bad_params", "%s is not an absolute path. Give the full path of each file", p)
 		}
 	}
+	return d.queueFiles(dev, paths)
+}
+
+func (d *Daemon) sendFilesNow(dev *Device, paths []string) ([]*Transfer, error) {
 	d.mu.Lock()
 	l := dev.link
 	var err error

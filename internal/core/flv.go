@@ -18,6 +18,7 @@ const (
 	frameConfig byte = 1 // the SPS and the PPS
 	frameKey    byte = 2 // a frame that a decoder can start at
 	frameFormat byte = 4 // the video size: width and height as 2 big-endian uint16
+	frameAudio  byte = 8 // 48 kHz stereo, signed 16-bit little-endian PCM
 )
 
 // maxTag is the largest FLV tag that flvReader accepts.

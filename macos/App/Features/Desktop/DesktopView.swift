@@ -81,6 +81,11 @@ private struct DesktopBar: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 8)
+            Button(controller.audioOn ? "Audio off" : "Audio on") { controller.toggleAudio() }
+            if controller.audioOn {
+                Button(controller.audioVolume == 0 ? "Unmute" : "Mute") { controller.toggleMute() }
+                Slider(value: $controller.audioVolume, in: 0...1).frame(width: 90).accessibilityLabel("Remote audio volume")
+            }
             if let status, status.monitors.count > 1 {
                 Picker("Monitor", selection: Binding(get: { status.monitor }, set: { controller.show(monitor: $0) })) {
                     ForEach(status.monitors, id: \.self) { Text($0).tag($0) }

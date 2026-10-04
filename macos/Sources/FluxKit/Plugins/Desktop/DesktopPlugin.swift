@@ -74,6 +74,10 @@ public final class DesktopPlugin: FluxPlugin, @unchecked Sendable {
     public let outgoing = [PacketType.fluxDesktop, PacketType.fluxShortcuts]
     public let model: DesktopModel
     public let video = DesktopVideo()
+    private let audioOutput = DesktopAudio()
+    private var audioRequested = false
+
+    public func setAudioVolume(_ volume: Float) { audioOutput.setVolume(volume) }
 
     private weak var core: FluxCore?
     private let lock = NSLock()
@@ -105,12 +109,13 @@ public final class DesktopPlugin: FluxPlugin, @unchecked Sendable {
     /// Starts the stream from the computer. A running stream stops first.
     /// `monitor` selects a monitor of the computer, and `maxSize` is the
     /// longest side of the stream in pixels.
-    public func start(_ deviceId: String, monitor: String? = nil, maxSize: Int = DesktopPackets.defaultSize) {
+    public func start(_ deviceId: String, monitor: String? = nil, maxSize: Int = DesktopPackets.defaultSize, audio: Bool = false) {
         guard let core else { return }
         stop()
         let name = core.locked { core.device(deviceId)?.name } ?? "the computer"
         let id = lock.withLock {
             self.deviceId = deviceId
+            audioRequested = audio
             attempt += 1
             show(.init(.connecting, "Waiting for \(name)…", deviceId: deviceId, monitor: monitor ?? ""))
             return attempt
@@ -132,6 +137,10 @@ public final class DesktopPlugin: FluxPlugin, @unchecked Sendable {
     // MARK: Packets
 
     public func handle(_ packet: Packet, from device: Device) {
+        if packet.type == PacketType.fluxDesktop && packet.string("state") == "audio" {
+            if attempt(for: device) != nil, let message = packet.string("message") { core?.toast(message) }
+            return
+        }
         if packet.type == PacketType.fluxShortcuts {
             let id = device.id
             let model = model
@@ -234,7 +243,7 @@ public final class DesktopPlugin: FluxPlugin, @unchecked Sendable {
             server.close()
             throw CancellationError()
         }
-        guard core.send(DesktopPackets.start(port: server.port, monitor: monitor, maxSize: maxSize), to: deviceId) else {
+        guard core.send(DesktopPackets.start(port: server.port, monitor: monitor, maxSize: maxSize, audio: lock.withLock { audioRequested }), to: deviceId) else {
             server.close()
             throw FluxError("Not connected to \(name)")
         }
@@ -254,7 +263,9 @@ public final class DesktopPlugin: FluxPlugin, @unchecked Sendable {
             for try await buffer in inbound {
                 guard lock.withLock({ attempt == id }) else { return }
                 for frame in try reader.push(buffer.readableBytesView) {
-                    if let size = frame.size {
+                    if frame.isAudio {
+                        if lock.withLock({ attempt == id && audioRequested }) { audioOutput.feed(frame.data) }
+                    } else if let size = frame.size {
                         showSize(size.width, size.height, id)
                     } else if frame.isConfig {
                         if let sets = DesktopH264.parameterSets(frame.data), !video.configure(sps: sets.sps, pps: sets.pps) {
@@ -283,6 +294,7 @@ public final class DesktopPlugin: FluxPlugin, @unchecked Sendable {
             return (deviceId, server, stream)
         }
         guard let taken else { return }
+        audioOutput.stop()
         taken.server?.close()
         taken.stream?.channel.channel.close(promise: nil)
         video.reset()

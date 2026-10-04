@@ -111,6 +111,8 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
     /// timeout does not replace a newer answer. A read of 1 computer does
     /// not cancel the read timeout of another computer.
     @MainActor private var reads: [String: Int] = [:]
+    @MainActor private var reviews: [String: String] = [:]
+    @MainActor private var viewReads: [String: HerdrViewRead] = [:]
     @MainActor private var replies = 0
     /// Counts the creates and the closes, so that a late timeout does not
     /// replace a newer one.
@@ -173,13 +175,13 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
             guard let pane = p.body["pane"]?.string, !pane.isEmpty else { return }
             let key = HerdrModel.promptKey(deviceId, pane: pane)
             var windowParse: Int?
-            if model.outputs[deviceId]?.pane == pane {
+            if model.outputs[deviceId]?.pane == pane && acceptsView(deviceId, pane: pane, request: p.int("request"), view: p.string("view") ?? "ansi", path: p.string("path") ?? "") {
                 let n = (parses[deviceId] ?? 0) + 1
                 parses[deviceId] = n
                 windowParse = n
             }
             var promptParse: Int?
-            if model.prompts[key] != nil {
+            if model.prompts[key] != nil && p.string("view") != "diff" && p.int("request") == nil {
                 promptSeq += 1
                 promptParses[key] = promptSeq
                 promptParse = promptSeq
@@ -240,7 +242,8 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
     /// parse for each place, or nil when the place did not want it.
     @MainActor
     func show(_ out: HerdrOutput, deviceId: String, window: Int?, prompt: Int?) {
-        if let window, parses[deviceId] == window, model.outputs[deviceId]?.pane == out.pane {
+        if let window, parses[deviceId] == window, model.outputs[deviceId]?.pane == out.pane,
+           acceptsView(deviceId, pane: out.pane, request: out.request, view: out.view, path: out.path) {
             model.outputs[deviceId] = out
             advanceFirstTask(deviceId)
         }
@@ -252,6 +255,12 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
 
     // MARK: Requests
 
+    @MainActor
+    private func acceptsView(_ deviceId: String, pane: String, request: Int?, view: String, path: String) -> Bool {
+        guard let expected = viewReads[deviceId + ":" + pane] else { return true }
+        return expected.accepts(request: request, view: view, path: path, supportsReview: model.states[deviceId]?.review == true)
+    }
+
     /// Asks the computer for its agent list now.
     @MainActor
     public func request(_ deviceId: String) {
@@ -261,18 +270,26 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
     /// Asks the computer for the recent output of `pane`. The output of the
     /// last read stays on screen until the answer comes.
     @MainActor
-    public func read(_ deviceId: String, pane: String) {
-        var out = model.output(deviceId, pane: pane) ?? HerdrOutput(pane: pane)
+    public func read(_ deviceId: String, pane: String, review: Bool? = nil, path: String = "") {
+        let key = deviceId + ":" + pane
+        if review == true { reviews[key] = path }
+        if review == false { reviews[key] = nil }
+        let mode = reviews[key] == nil ? "ansi" : "diff"
+        let selectedPath = reviews[key] ?? ""
+        let token = reads[deviceId, default: 0] + 1
+        reads[deviceId] = token
+        viewReads[key] = HerdrViewRead(request: token, view: mode, path: selectedPath)
+        let previous = model.output(deviceId, pane: pane)
+        var out = previous.flatMap { $0.view == mode && $0.path == selectedPath ? $0 : nil } ?? HerdrOutput(pane: pane)
         out.loading = true
         out.error = nil
         model.outputs[deviceId] = out
-        guard core?.send(HerdrWire.read(pane: pane), to: deviceId) == true else {
+        let packet = Packet(PacketType.fluxHerdr, ["kind": "read", "pane": pane, "format": mode, "path": selectedPath, "request": token, "lines": 1000])
+        guard core?.send(packet, to: deviceId) == true else {
             model.outputs[deviceId]?.loading = false
             model.outputs[deviceId]?.error = "\(computerName(deviceId)) is not reachable"
             return
         }
-        let token = reads[deviceId, default: 0] + 1
-        reads[deviceId] = token
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: Self.readTimeout)
             guard let self, token == self.reads[deviceId], let out = self.model.output(deviceId, pane: pane), out.loading else { return }
@@ -293,6 +310,8 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
     /// Forgets the output and the last reply when the window stops showing the agent.
     @MainActor
     public func closeOutput(_ deviceId: String, pane: String) {
+        reviews[deviceId + ":" + pane] = nil
+        viewReads[deviceId + ":" + pane] = nil
         if model.outputs[deviceId]?.pane == pane { model.outputs[deviceId] = nil }
         if model.replies[deviceId]?.pane == pane { model.replies[deviceId] = nil }
     }
@@ -350,8 +369,11 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
     /// action where the user chose to type an answer.
     @MainActor
     public func sendPrompt(_ deviceId: String, pane: String, _ text: String, answer: Bool = false) {
-        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        var t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
+        if !answer, let path = reviews[deviceId + ":" + pane] {
+            t = "Review feedback for \(path.isEmpty ? "the working tree" : path):\n" + t
+        }
         guard t.utf8.count <= HerdrWire.maxPrompt else {
             replies += 1
             model.replies[deviceId] = HerdrReply(pane: pane, action: "prompt", seq: replies, sending: false,

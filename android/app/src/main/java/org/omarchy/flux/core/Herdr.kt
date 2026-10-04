@@ -46,6 +46,8 @@ object HerdrSync {
 
     /** Counts the reads, so that a late timeout does not replace a newer read. The core lock guards it. */
     private var reads = 0L
+    private val reviews = HashMap<String, String>()
+    private val readRequests = HashMap<String, HerdrReadRequest>()
 
     /** Counts the replies, so that a late timeout does not replace a newer reply. The core lock guards it. */
     private var replies = 0L
@@ -103,7 +105,10 @@ object HerdrSync {
      */
     fun onOutput(d: Device, out: HerdrOutput) {
         // Only the pane on screen keeps its output.
-        if (d.herdrOutput?.pane == out.pane) d.herdrOutput = out
+        if (d.herdrOutput?.pane != out.pane) return
+        val expected = readRequests[key(d.id, out.pane)]
+        if (expected != null && !expected.accepts(out, d.herdr?.review == true)) return
+        d.herdrOutput = out
     }
 
     /** Asks the computer for its agent list now. */
@@ -115,25 +120,33 @@ object HerdrSync {
      * Asks the computer for the recent output of [pane]. The output of the
      * last read stays on screen until the answer comes.
      */
-    fun read(core: FluxCore, id: String, pane: String) {
+    fun read(core: FluxCore, id: String, pane: String, review: Boolean? = null, path: String = "") {
         val token = core.locked {
             val d = core.device(id) ?: return@locked null
-            val old = d.herdrOutput?.takeIf { it.pane == pane }
+            val reviewKey = key(id, pane)
+            if (review == true) reviews[reviewKey] = path
+            if (review == false) reviews.remove(reviewKey)
+            val view = if (reviews.containsKey(reviewKey)) "diff" else "ansi"
+            val selectedPath = reviews[reviewKey].orEmpty()
+            val request = HerdrReadRequest(++reads, view, selectedPath)
+            readRequests[reviewKey] = request
+            val old = d.herdrOutput?.takeIf { it.pane == pane && it.view == view && it.path == selectedPath }
             d.herdrOutput = (old ?: HerdrOutput(pane)).copy(loading = true, error = null)
             val sent = d.send(
-                Packet(Types.FLUX_HERDR, bodyOf("kind" to "read", "pane" to pane, "lines" to HERDR_READ_LINES, "format" to "ansi")),
+                Packet(Types.FLUX_HERDR, bodyOf("kind" to "read", "pane" to pane, "lines" to HERDR_READ_LINES,
+                    "format" to view, "path" to selectedPath, "request" to request.id)),
             )
             if (!sent) {
                 d.herdrOutput = d.herdrOutput?.copy(loading = false, error = "${d.identity.deviceName} is not reachable")
                 return@locked null
             }
-            ++reads
+            request.id
         } ?: return
         core.scheduler.schedule({
             core.locked {
                 val d = core.device(id) ?: return@locked
                 val out = d.herdrOutput
-                if (token == reads && out != null && out.pane == pane && out.loading) {
+                if (token == readRequests[key(id, pane)]?.id && out != null && out.pane == pane && out.loading) {
                     d.herdrOutput = out.copy(loading = false, error = "${d.identity.deviceName} did not answer")
                 }
             }
@@ -143,6 +156,8 @@ object HerdrSync {
     /** Forgets the output and the last reply when the agent screen closes. */
     fun closeOutput(core: FluxCore, id: String, pane: String) {
         core.locked {
+            reviews.remove(key(id, pane))
+            readRequests.remove(key(id, pane))
             val d = core.device(id) ?: return@locked
             if (d.herdrOutput?.pane == pane) d.herdrOutput = null
             if (d.herdrReply?.pane == pane) d.herdrReply = null

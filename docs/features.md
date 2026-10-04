@@ -88,6 +88,8 @@ Pair your devices again.
 
 ## Files, clipboard, and links
 
+The [workflow controls](workflows.md) add an offline desktop outbox, folder archives, and saved clipboard snippets.
+
 Use the Files and Clipboard pages in the desktop window, or run:
 
 ```sh

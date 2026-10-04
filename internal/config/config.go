@@ -70,8 +70,11 @@ type Config struct {
 	GUI string `toml:"gui,omitempty"`
 	// ApproveTimeout is how long an approval waits for the phone, in
 	// seconds, from 5 to 120. Zero means 20.
-	ApproveTimeout int       `toml:"approve_timeout,omitempty"`
-	Commands       []Command `toml:"commands"`
+	ApproveTimeout    int                        `toml:"approve_timeout,omitempty"`
+	Commands          []Command                  `toml:"commands"`
+	Devices           map[string]map[string]bool `toml:"devices,omitempty"`
+	NotificationRules []NotificationRule         `toml:"notification_rules,omitempty"`
+	AutomationRules   []AutomationRule           `toml:"automation_rules,omitempty"`
 }
 
 // ConfigDir returns ~/.config/flux, or $XDG_CONFIG_HOME/flux.
@@ -142,6 +145,9 @@ func Load() (*Config, error) {
 	}
 	if _, err := toml.Decode(string(data), c); err != nil {
 		return nil, fmt.Errorf("%s: %w", Path(), err)
+	}
+	if err := c.ValidateRules(); err != nil {
+		return nil, err
 	}
 	setCommandIDs(c.Commands)
 	return c, nil

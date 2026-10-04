@@ -48,6 +48,8 @@ See [IPC](ipc.md) for the socket.
 
 ## Show the screen
 
+The remote desktop also supports [computer audio](workflows.md#remote-desktop-audio), with local mute and volume controls.
+
 On the phone, open **Control** and select **Remote desktop**.
 The phone asks for its screen lock first. The unlock stays valid for 5 minutes.
 A phone without a screen lock cannot open the remote desktop.
@@ -296,10 +298,12 @@ Each frame on the stream has this form:
 | Field | Size | Content |
 | --- | --- | --- |
 | Length | 4 bytes, big-endian | The size of the data |
-| Flags | 1 byte | 1: the SPS and the PPS. 2: a key frame. 4: the video size. 0: another frame. |
+| Flags | 1 byte | 1: the SPS and the PPS. 2: a key frame. 4: the video size. 8: an audio frame. 0: another video frame. |
 | Data | Length bytes | H.264 NAL units with 4-byte start codes, or 2 big-endian 16-bit numbers for the width and the height |
 
-The first frame is the video size.
+Audio frames contain 20 ms of stereo, 48 kHz, signed 16-bit little-endian PCM.
+The start packet must request `audio: true` to receive audio frames.
+The first video frame is the video size.
 A config frame can come again before a key frame, when the key frame has another SPS and PPS.
 The receiver then uses the newest one.
 Each frame comes whole, so the phone can decode it when its last byte arrives.

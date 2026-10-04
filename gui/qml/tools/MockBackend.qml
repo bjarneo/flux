@@ -78,6 +78,14 @@ QtObject {
         return d
       })
     }
+    else if (method === "clipboard.search") result = clipboard.filter(e => ((e.text || "") + " " + (e.deviceName || "")).toLowerCase().indexOf((params.text || "").toLowerCase()) >= 0)
+    else if (method === "clipboard.pin" || method === "clipboard.unpin") setState(function(s) { s.clipboard.forEach(e => { if (e.id === params.id) e.pinned = method === "clipboard.pin" }) })
+    else if (method === "device.settings.set") setState(function(s) {
+      s.settings.deviceRules = s.settings.deviceRules || {}
+      s.settings.deviceRules[params.device] = s.settings.deviceRules[params.device] || {}
+      s.settings.deviceRules[params.device][params.key] = params.value
+    })
+    else if (method === "transfer.cancel") setState(function(s) { s.transfers.forEach(t => { if (t.id === params.id) t.state = "canceled" }) })
     else if (method === "notification.dismissAll") {
       var n = 0
       updateDevice(params.device, function (d) {

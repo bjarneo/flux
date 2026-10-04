@@ -8,6 +8,8 @@ public enum AudioUse: Sendable, Hashable {
     case dictation
     /// The ring of a computer that looks for the iPhone.
     case ring
+    /// The audio of a remote desktop.
+    case desktop
 }
 
 /// The categories that Flux gives the audio session.
@@ -22,7 +24,7 @@ enum AudioCategory: Sendable, Equatable {
     /// The category for the uses: the microphone stream plays and records,
     /// and so does a ring while a dictation records.
     static func needed(for uses: Set<AudioUse>) -> AudioCategory {
-        if uses.contains(.mic) || uses.isSuperset(of: [.dictation, .ring]) { return .playAndRecord }
+        if uses.contains(.mic) || (uses.contains(.dictation) && !uses.isDisjoint(with: [.ring, .desktop])) { return .playAndRecord }
         return uses.contains(.dictation) ? .record : .playback
     }
 
@@ -31,7 +33,7 @@ enum AudioCategory: Sendable, Equatable {
         switch self {
         case .playAndRecord: return true
         case .record: return uses.isSubset(of: [.dictation])
-        case .playback: return uses.isSubset(of: [.ring])
+        case .playback: return uses.isSubset(of: [.ring, .desktop])
         }
     }
 }

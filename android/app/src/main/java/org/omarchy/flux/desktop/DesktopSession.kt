@@ -38,6 +38,22 @@ object DesktopSession {
 
     private val _status = MutableStateFlow(Status())
     val status: StateFlow<Status> = _status
+    private val _audio = MutableStateFlow(false)
+    val audio: StateFlow<Boolean> = _audio
+    private val _volume = MutableStateFlow(1f)
+    val volume: StateFlow<Float> = _volume
+    private var previousVolume = 1f
+
+    fun setVolume(value: Float) {
+        if (!value.isFinite()) return
+        _volume.value = value.coerceIn(0f, 1f)
+        if (_volume.value > 0f) previousVolume = _volume.value
+    }
+    fun toggleMute() { setVolume(if (_volume.value == 0f) previousVolume else 0f) }
+    fun setAudio(core: FluxCore, deviceId: String, enabled: Boolean) {
+        _audio.value = enabled
+        start(core, deviceId, _status.value.monitor.ifEmpty { null })
+    }
 
     private val lock = Any()
     private var run: Run? = null
@@ -45,7 +61,7 @@ object DesktopSession {
 
     /** Starts the stream from [deviceId]. A running stream stops first. [monitor] selects a monitor of the computer. */
     fun start(core: FluxCore, deviceId: String, monitor: String? = null) {
-        val next = Run(core, deviceId, monitor)
+        val next = Run(core, deviceId, monitor, _audio.value)
         val old = synchronized(lock) {
             val old = run
             run = next
@@ -88,6 +104,10 @@ object DesktopSession {
 
     /** Handles flux.desktop from the computer. The core lock is held, so the work moves to [FluxCore.io]. */
     fun onPacket(core: FluxCore, d: Device, p: Packet) {
+        if (p.string("state") == "audio" && _status.value.deviceId == d.id) {
+            p.string("message")?.let { core.toast(it) }
+            return
+        }
         val reply = DesktopReply.parse(p) ?: return
         if (_status.value.deviceId != d.id) return
         val name = d.identity.deviceName
@@ -127,7 +147,7 @@ object DesktopSession {
     }
 
     /** 1 stream: its thread, its sockets, and its decoder. */
-    private class Run(val core: FluxCore, val deviceId: String, val monitor: String?) {
+    private class Run(val core: FluxCore, val deviceId: String, val monitor: String?, val wantsAudio: Boolean) {
         val thread = Thread(::work, "flux-desktop").apply { isDaemon = true }
         @Volatile var stopped = false
         @Volatile var surface: Surface? = null
@@ -137,6 +157,8 @@ object DesktopSession {
         // The decoder and its surface belong to the thread.
         private var decoder: VideoDecoder? = null
         private var decoderSurface: Surface? = null
+        private var audio: DesktopAudio? = null
+        private var audioFailed = false
 
         fun stop(notify: Boolean) {
             if (stopped) return
@@ -155,7 +177,7 @@ object DesktopSession {
                 if (Types.FLUX_DESKTOP !in d.identity.incoming) error("Update Flux on $name to show its screen")
                 val ssl = PinnedStream.accept(core, d, CONNECT_TIMEOUT_MS, { srv ->
                     if (stopped) runCatching { srv.close() } else server = srv
-                }) { port -> DesktopPackets.start(port, monitor) }
+                }) { port -> DesktopPackets.start(port, monitor, audio = wantsAudio) }
                 server = null
                 socket = ssl
                 if (stopped) {
@@ -170,6 +192,7 @@ object DesktopSession {
                     ended(this, e.message ?: "The connection to $name closed")
                 }
             } finally {
+                runCatching { audio?.close() }
                 decoder?.release()
                 decoder = null
                 runCatching { socket?.close() }
@@ -185,6 +208,17 @@ object DesktopSession {
                 // The pairing can end while the stream runs.
                 if (core.device(deviceId)?.paired != true) error("The computer is no longer paired")
                 when {
+                    f.isAudio -> {
+                        if (wantsAudio && !audioFailed) {
+                            try {
+                                if (audio == null) audio = DesktopAudio()
+                                audio?.feed(f.data, f.length, _volume.value)
+                            } catch (e: Exception) {
+                                audioFailed = true
+                                core.toast("Desktop audio failed: ${e.message}")
+                            }
+                        }
+                    }
                     f.isFormat -> f.size()?.let {
                         size = it
                         setSize(this, it.first, it.second)

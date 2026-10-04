@@ -41,6 +41,8 @@ const maxClipText = 16 << 20
 
 // ClipEntry is one clipboard history entry.
 type ClipEntry struct {
+	Pinned  bool  `json:"pinned,omitempty"`
+	Expires int64 `json:"expires,omitempty"`
 	// ID identifies the entry for clipboard.copy.
 	ID   string `json:"id"`
 	Text string `json:"text"`
@@ -140,8 +142,7 @@ func (d *Daemon) addClipImageIf(e ClipEntry, data []byte, mime string, ok func()
 // clipPreviewLocked returns the clipboard history for the state. A long text
 // holds only its first maxClipPreview bytes.
 func (d *Daemon) clipPreviewLocked() []ClipEntry {
-	out := make([]ClipEntry, len(d.clipboard))
-	copy(out, d.clipboard)
+	out := d.clipEntriesLocked()
 	for i := range out {
 		if len(out[i].Text) > maxClipPreview {
 			out[i].Size = len(out[i].Text)
@@ -228,7 +229,7 @@ func (d *Daemon) onLocalClipboard(text string) {
 	}
 	// The text replaces an image that is still on its way.
 	d.stopClipSend()
-	links := d.pairedLinks()
+	links := d.featureLinks("clipboard")
 	switch {
 	case !fits && len(links) > 0:
 		d.logf("clipboard: did not sync a text of %d bytes", len(text))
@@ -258,7 +259,7 @@ func (d *Daemon) onLocalImage(data []byte, mime string) {
 	auto := d.cfg.AutoClipboard
 	var targets []target
 	for _, dev := range d.devices {
-		if dev.Paired && dev.link != nil && dev.accepts(proto.TypeFluxClipboardImage) {
+		if dev.Paired && dev.link != nil && dev.accepts(proto.TypeFluxClipboardImage) && d.permittedLocked(dev.ID, "clipboard") {
 			targets = append(targets, target{dev, dev.link})
 		}
 	}
@@ -274,7 +275,7 @@ func (d *Daemon) onLocalImage(data []byte, mime string) {
 		defer cancel()
 		for _, t := range targets {
 			d.mu.Lock()
-			ok := t.dev.Paired && t.dev.link == t.l && d.cfg.AutoClipboard
+			ok := t.dev.Paired && t.dev.link == t.l && d.cfg.AutoClipboard && d.permittedLocked(t.dev.ID, "clipboard")
 			d.mu.Unlock()
 			if !ok || ctx.Err() != nil {
 				continue
@@ -296,6 +297,7 @@ func (d *Daemon) onLocalImage(data []byte, mime string) {
 func (d *Daemon) sendConnectClipboard(l *lan.Link) {
 	d.mu.Lock()
 	text, ts, auto := d.content.lastClip, d.lastLocalClip.UnixMilli(), d.cfg.AutoClipboard
+	auto = auto && d.permittedLocked(l.DeviceID(), "clipboard")
 	d.mu.Unlock()
 	if !auto || text == "" || ts <= 0 {
 		return
@@ -311,7 +313,7 @@ func (d *Daemon) sendConnectClipboard(l *lan.Link) {
 func (d *Daemon) setClipboard(dev *Device, text string, needAuto bool) {
 	d.runContent(&d.content.clipQ, 0, func() {
 		d.mu.Lock()
-		ok := dev.Paired && (!needAuto || d.cfg.AutoClipboard)
+		ok := dev.Paired && (!needAuto || (d.cfg.AutoClipboard && d.permittedLocked(dev.ID, "clipboard")))
 		d.mu.Unlock()
 		if !ok {
 			return
@@ -423,7 +425,7 @@ func (d *Daemon) handleClipboardImage(dev *Device, l *lan.Link, p *proto.Packet)
 // come while fluxd saves the image.
 func (d *Daemon) receiveClipImage(dev *Device, f *clipFetch, data []byte) {
 	d.mu.Lock()
-	paired, name, stale := dev.Paired, dev.Name, f.stale
+	paired, name, stale := dev.Paired && d.permittedLocked(dev.ID, "clipboard"), dev.Name, f.stale
 	d.mu.Unlock()
 	mime := clipImageType(data)
 	if mime == "" {
@@ -436,7 +438,7 @@ func (d *Daemon) receiveClipImage(dev *Device, f *clipFetch, data []byte) {
 	// current runs under d.mu. It is false after an unpair or after a newer
 	// text or image of the device. The image then stays out of the history
 	// and does not replace the job of the newer text in the worker.
-	current := func() bool { return dev.Paired && !f.stale }
+	current := func() bool { return dev.Paired && !f.stale && d.permittedLocked(dev.ID, "clipboard") }
 	d.mu.Lock()
 	if current() {
 		d.lastClipAt = time.Now()
@@ -480,6 +482,9 @@ func fetchAll(ctx context.Context, l *lan.Link, p *proto.Packet) ([]byte, error)
 // SendClipboard sends text to a device. Empty text sends the local
 // clipboard: its image, or else its text.
 func (d *Daemon) SendClipboard(dev *Device, text string) error {
+	if !d.permitted(dev.ID, "clipboard") {
+		return apiErr("disabled", "Clipboard access is off for this device")
+	}
 	if text == "" {
 		img, err := d.clip.GetImage()
 		if err != nil {
@@ -537,7 +542,7 @@ func (d *Daemon) CopyClip(id string) error {
 	d.mu.Lock()
 	var e ClipEntry
 	found := false
-	for _, c := range d.clipboard {
+	for _, c := range d.clipEntriesLocked() {
 		if c.ID == id {
 			e, found = c, true
 			break
@@ -558,7 +563,7 @@ func (d *Daemon) CopyClip(id string) error {
 func (d *Daemon) CopyClipImage(path string) error {
 	d.mu.Lock()
 	found := false
-	for _, e := range d.clipboard {
+	for _, e := range d.clipEntriesLocked() {
 		if e.Image != "" && e.Image == path {
 			found = true
 			break

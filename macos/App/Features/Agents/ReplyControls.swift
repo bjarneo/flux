@@ -10,6 +10,7 @@ struct ReplyControls: View {
     let agent: HerdrAgent
     let output: HerdrOutput?
     let name: String
+    var reviewReady = true
     @State private var lockError: String?
     @State private var voiceError: String?
     @State private var picking = false
@@ -82,7 +83,7 @@ struct ReplyControls: View {
                     }
                 },
                 send: {
-                    let canSend = !(model.drafts[agent.pane] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !sendingPrompt
+                    let canSend = !(model.drafts[agent.pane] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !sendingPrompt && reviewReady
                     let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
                     Button(action: send) {
                         ZStack {
@@ -163,6 +164,7 @@ struct ReplyControls: View {
     }
 
     private func send() {
+        guard reviewReady else { return }
         let text = model.drafts[agent.pane] ?? ""
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, reply?.sending != true || reply?.action != "prompt" else { return }
         let deviceId = model.deviceId

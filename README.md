@@ -19,6 +19,8 @@ https://github.com/user-attachments/assets/4b8445fe-6734-4100-b200-92f57e1b353a
 | Task | Guide |
 | --- | --- |
 | Send files, clipboard text and images, and links between devices | [Everyday use](docs/features.md) |
+| Queue files offline, send folder archives, and save clipboard snippets | [Workflow controls](docs/workflows.md) |
+| Set device access, notification rules, and local automation | [Workflow controls](docs/workflows.md#per-device-access) |
 | Read notifications, send SMS, control media, and run desktop commands from your phone | [CLI reference](docs/cli.md) |
 | Sync Do Not Disturb and pause media during calls | [Phone integration](docs/features.md#calls) |
 | Scan text, send photos, and use the phone as a webcam or microphone | [Camera and streams](docs/camera.md) |

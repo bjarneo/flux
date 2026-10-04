@@ -313,6 +313,52 @@ Item {
       Layout.preferredWidth: 320
     }
 
+    Card {
+      Layout.fillWidth: true
+      Layout.preferredWidth: 320
+      implicitHeight: access.implicitHeight + 38
+      Column {
+        id: access
+        x: 19; y: 19
+        width: parent.width - 38
+        spacing: 14
+        Txt { text: "Device access"; font.weight: Font.DemiBold }
+        Txt { width: parent.width; text: "Global feature switches also apply."; color: Theme.dim; wrapMode: Text.Wrap }
+        Repeater {
+          model: [
+            { key: "clipboard", label: "Clipboard sync" },
+            { key: "notifications", label: "Notifications" },
+            { key: "shareHome", label: "Shared folders" },
+            { key: "remoteInput", label: "Remote input" },
+            { key: "remoteDesktop", label: "Remote desktop" },
+            { key: "herdr", label: "Agent output" },
+            { key: "herdrControl", label: "Agent control" },
+            { key: "herdrTerminals", label: "Agent terminals" }
+          ]
+          delegate: Column {
+            required property var modelData
+            width: access.width
+            spacing: 4
+            readonly property var settings: root.view && root.view.backend ? (root.view.backend.state.settings || {}) : ({})
+            readonly property var rules: root.dev && settings.deviceRules ? (settings.deviceRules[root.dev.id] || {}) : ({})
+            readonly property string globalKey: modelData.key === "clipboard" ? "autoClipboard" : modelData.key
+            readonly property bool needsAgents: modelData.key === "herdrControl" || modelData.key === "herdrTerminals"
+            readonly property bool globalOn: settings[globalKey] === true && (!needsAgents || settings.herdr === true) && (modelData.key !== "herdrTerminals" || settings.herdrControl === true)
+            readonly property string accessState: !globalOn ? "Off globally" :
+              needsAgents && rules.herdr === false ? "Agent output access is off" :
+              modelData.key === "herdrTerminals" && rules.herdrControl === false ? "Agent control access is off" : ""
+            Toggle {
+              text: modelData.label
+              active: !!root.dev
+              checked: rules[modelData.key] !== false
+              onToggled: function(value) { root.view.call("device.settings.set", { device: root.dev.id, key: modelData.key, value: value }) }
+            }
+            Txt { visible: text !== ""; width: parent.width; text: parent.accessState; color: Theme.dim; font.pixelSize: 11; wrapMode: Text.Wrap }
+          }
+        }
+      }
+    }
+
     // Phone camera, with its settings. The card spans the grid while the
     // settings are open.
     CameraCard {

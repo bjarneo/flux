@@ -39,6 +39,9 @@ When herdr runs, `flux-cli doctor` prints this line:
 
 ## See your agents
 
+The agent screen also has a **Changes** view for Git diffs and review feedback.
+See [Agent diff review](workflows.md#agent-diff-review).
+
 1. Start herdr on the computer.
 2. Open Flux for Android. An agent that waits for input shows first in the **Inbox**, with its question and its choices.
 3. To see all agents, open **Control** and select **Agents and terminals**.
