@@ -260,6 +260,38 @@ func GetPane(ctx context.Context, path, pane string) (PaneInfo, error) {
 	return r.Pane, err
 }
 
+// PaneLayout is the size of one pane in its tab, in terminal cells.
+type PaneLayout struct {
+	Width  int
+	Height int
+}
+
+// GetLayout returns the size of the pane in its tab. fluxd opens a
+// terminal session at this size, so watching a pane does not resize the
+// terminal that the desktop shows.
+func GetLayout(ctx context.Context, path, pane string) (PaneLayout, error) {
+	var r struct {
+		Layout struct {
+			Panes []struct {
+				PaneID string `json:"pane_id"`
+				Rect   struct {
+					Width  int `json:"width"`
+					Height int `json:"height"`
+				} `json:"rect"`
+			} `json:"panes"`
+		} `json:"layout"`
+	}
+	if err := Call(ctx, path, "pane.layout", map[string]any{"pane_id": pane}, &r); err != nil {
+		return PaneLayout{}, err
+	}
+	for _, p := range r.Layout.Panes {
+		if p.PaneID == pane {
+			return PaneLayout{Width: p.Rect.Width, Height: p.Rect.Height}, nil
+		}
+	}
+	return PaneLayout{}, fmt.Errorf("herdr: pane %s has no layout", pane)
+}
+
 // AgentKinds returns the agent kinds that herdr can detect and start.
 func AgentKinds(ctx context.Context, path string) ([]string, error) {
 	var r struct {

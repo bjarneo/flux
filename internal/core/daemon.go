@@ -131,6 +131,15 @@ type Daemon struct {
 	herdrHistory map[string]agentHistory
 	herdrWake    chan struct{}
 
+	// herdrStreams is the terminal session of each phone by session ID.
+	// herdrBridge reports whether the installed herdr has the CLI
+	// bridge of terminal sessions, and herdrBin is that CLI.
+	// herdrStreamSeq numbers the sessions of this daemon.
+	herdrStreams   map[string]*herdrTerminal
+	herdrStreamSeq int
+	herdrBridge    bool
+	herdrBin       string
+
 	subs   map[int]func(event string, data any)
 	nextID int
 	dirty  chan struct{}

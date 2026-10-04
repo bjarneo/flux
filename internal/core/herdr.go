@@ -171,10 +171,35 @@ type herdrView struct {
 	Running    bool             `json:"running"`
 	Control    bool             `json:"control"`
 	Terminals  bool             `json:"terminals"`
+	Bridge     []string         `json:"bridge"`
 	Agents     []HerdrAgent     `json:"agents"`
 	Panes      []HerdrTerminal  `json:"panes"`
 	Workspaces []HerdrWorkspace `json:"workspaces"`
 	Kinds      []string         `json:"kinds"`
+}
+
+// herdrBridgeCaps are the terminal-session actions of a herdr that has
+// the CLI bridge of terminal sessions.
+var herdrBridgeCaps = []string{"observe", "control", "scroll", "mouse"}
+
+// herdrBridgeOK reports whether the herdr version has the CLI bridge of
+// terminal sessions. The bridge is not part of the API protocol, so the
+// protocol number alone cannot say it exists.
+func herdrBridgeOK(version string) bool {
+	var v [3]int
+	parts := strings.Split(version, ".")
+	if len(parts) < 3 {
+		return false
+	}
+	for i := range v {
+		head, _, _ := strings.Cut(parts[i], "-")
+		n, err := strconv.Atoi(head)
+		if err != nil {
+			return false
+		}
+		v[i] = n
+	}
+	return slices.Compare(v[:], []int{0, 9, 3}) >= 0
 }
 
 func (d *Daemon) herdrViewLocked() herdrView {
@@ -183,6 +208,9 @@ func (d *Daemon) herdrViewLocked() herdrView {
 		Enabled: d.cfg.Herdr, Running: d.cfg.Herdr && d.herdrRunning,
 		Control: d.herdrControlLocked(), Terminals: d.herdrTerminalsLocked(),
 		Agents: d.herdrAgents, Panes: d.herdrTerms, Workspaces: d.herdrPlaces, Kinds: d.herdrKinds,
+	}
+	if v.Running && d.herdrBridge {
+		v.Bridge = herdrBridgeCaps
 	}
 	if !v.Enabled || v.Agents == nil {
 		v.Agents = []HerdrAgent{}
@@ -195,6 +223,9 @@ func (d *Daemon) herdrViewLocked() herdrView {
 	}
 	if !v.Control || v.Kinds == nil {
 		v.Kinds = []string{}
+	}
+	if v.Bridge == nil {
+		v.Bridge = []string{}
 	}
 	return v
 }
@@ -210,7 +241,8 @@ func (d *Daemon) herdrTerminalsLocked() bool { return d.herdrControlLocked() && 
 func herdrStatePacket(v herdrView) *proto.Packet {
 	return proto.New(proto.TypeFluxHerdr, map[string]any{
 		"kind": "state", "enabled": v.Enabled, "running": v.Running, "control": v.Control,
-		"terminals": v.Terminals, "agents": v.Agents, "panes": v.Panes, "workspaces": v.Workspaces, "kinds": v.Kinds,
+		"terminals": v.Terminals, "bridge": v.Bridge, "agents": v.Agents,
+		"panes": v.Panes, "workspaces": v.Workspaces, "kinds": v.Kinds,
 		"review": v.Review,
 	})
 }
@@ -257,6 +289,9 @@ func (d *Daemon) herdrSession(ctx context.Context, logged *string) error {
 		return fmt.Errorf("herdr %s uses API protocol %d, and Flux needs %d or newer", pong.Version, pong.Protocol, herdr.MinProtocol)
 	}
 	d.logf("herdr %s: following its agents", pong.Version)
+	d.mu.Lock()
+	d.herdrBridge = herdrBridgeOK(pong.Version)
+	d.mu.Unlock()
 	*logged = ""
 	// This herdr can have other agent kinds than the last one.
 	d.herdrKindsDue()
@@ -569,6 +604,12 @@ func (d *Daemon) setHerdr(running bool, live herdrLive) {
 		}
 	}
 	d.herdrRunning, d.herdrAgents, d.herdrTerms, d.herdrPlaces, d.herdrKinds = running, live.Agents, live.Terminals, live.Workspaces, live.Kinds
+	if !running {
+		d.herdrBridge = false
+	}
+	for _, t := range d.pruneHerdrStreamsLocked(running) {
+		go d.stopHerdrTerminal(t, t.stop)
+	}
 	d.mu.Unlock()
 	d.sendHerdr()
 }
@@ -642,9 +683,18 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 		Cwd       string   `json:"cwd"`
 		Workspace string   `json:"workspace"`
 		Answer    bool     `json:"answer"`
-		// Request is the number of a keys, prompt, input, create, or close
-		// packet. The answer carries the same number, so the phone matches
-		// a late answer to its packet.
+		// Terminal-session fields. Session names the stream, and column
+		// and row are zero-based cells of its viewport.
+		Session   string `json:"session"`
+		Mode      string `json:"mode"`
+		Direction string `json:"direction"`
+		Action    string `json:"action"`
+		Button    string `json:"button"`
+		Column    int    `json:"column"`
+		Row       int    `json:"row"`
+		// Request is the number of a keys, prompt, input, create, close,
+		// terminal_open, or terminal_release packet. The answer carries
+		// the same number, so the phone matches a late answer.
 		Request json.RawMessage `json:"request"`
 		Path    string          `json:"path"`
 	}
@@ -658,7 +708,11 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 		terminal := d.herdrTerminalLocked(body.Pane) || (body.Kind == "create" && body.What == "terminal")
 		d.mu.Unlock()
 		read := body.Kind == "read" || body.Kind == "diff"
-		if !v.Enabled || (!read && !v.Control) || ((body.Kind == "input" || terminal) && !v.Terminals) {
+		// A terminal stream checks its pane and mode in herdrTerminalOpen
+		// and answers with terminal_opened or terminal_closed, so the
+		// generic refusal below cannot cover its kinds.
+		stream := strings.HasPrefix(body.Kind, "terminal_")
+		if !stream && (!v.Enabled || (!read && !v.Control) || ((body.Kind == "input" || terminal) && !v.Terminals)) {
 			kind := "sent"
 			if read {
 				kind = "output"
@@ -738,6 +792,14 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 			d.mu.Unlock()
 			d.herdrSend(dev, l, state, withRequest(reply, req))
 		}()
+	case "terminal_open":
+		go d.herdrTerminalOpen(dev, l, req, body.Pane, body.Mode)
+	case "terminal_scroll":
+		d.herdrTerminalScroll(dev, l, body.Session, body.Direction, body.Column, body.Row)
+	case "terminal_mouse":
+		d.herdrTerminalMouse(dev, l, body.Session, body.Action, body.Button, body.Column, body.Row)
+	case "terminal_release":
+		d.herdrTerminalRelease(dev, l, req, body.Session)
 	default:
 		d.logf("%s: unknown flux.herdr kind %q", d.nameOf(dev), body.Kind)
 	}
@@ -1046,7 +1108,14 @@ func (d *Daemon) readAgentOutput(ctx context.Context, pane string, lines int, an
 func (d *Daemon) readAgentHistory(ctx context.Context, pane string, lines int) ([]string, bool) {
 	d.mu.Lock()
 	last, ok := d.herdrHistory[pane]
+	streamed := d.herdrStreamedLocked(pane)
 	d.mu.Unlock()
+	if streamed {
+		// A terminal session shows the live terminal. herdr scrolls it
+		// to collect the history, which would move the stream and the
+		// screen of the desktop, so the phone gets the last history.
+		return last.lines, last.truncated
+	}
 	if ok && !last.at.IsZero() && time.Since(last.at) < herdrHistoryTTL && last.asked >= lines {
 		return last.lines, last.truncated
 	}
