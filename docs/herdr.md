@@ -89,10 +89,19 @@ pane, exactly as the program draws it on the computer. The phone changes nothing
 in it: the sidebar, the tabs, and the panels are the ones of the program. The
 terminal keeps the size that the pane has on the computer, the phone fits that
 grid on its screen, and pinch zoom and drag pan over it. The colors are the
-colors of the program in both themes.
+colors of the program in both themes. A computer with herdr 0.9.3 or newer
+offers this choice.
 
-This choice shows the terminal only: the phone sends no keys, no text, and no
-gestures to it yet. A computer with herdr 0.9.3 or newer offers it.
+**Control** under the terminal sends the drags over it to the pane: one finger
+scrolls the conversation, and the computer shows the same position right away.
+A drag is wheel input and nothing else: the phone sends no text and no keys from
+this screen. Control asks for the phone lock first, it lasts while the phone
+stays unlocked and in front, and it changes what the computer shows, so the
+screen says so while it is on. **Stop** goes back to watching. A computer also
+needs `herdr_control` for this.
+
+While a phone controls a terminal, herdr holds its size: the computer cannot
+resize that pane until the phone stops. The phone never resizes it on its own.
 
 ## Notifications
 

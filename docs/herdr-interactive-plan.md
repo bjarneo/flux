@@ -483,6 +483,61 @@ Never perform background takeover or automatically reacquire control after recon
 - Move content only when real frames arrive, not through optimistic local scrolling.
 - Clearly indicate that this gesture also changes the desktop conversation position.
 
+### Phase 4 status (2026-10-04)
+
+The terminal screen now has explicit control, and the gestures follow the
+contract above. The phone asks for control with a **Control** button
+behind the existing phone lock (`ReplyLock`, valid five minutes), and
+**Stop** closes the controller before the phone watches again.
+
+- The daemon changes the mode of a stream by replacing its bridge: one
+  CLI stream cannot change its mode, so a `terminal_open` in another
+  mode closes the old bridge first, waits until it let go of the
+  terminal, and opens a new one. The phone sees the end of the old
+  session and a fresh `terminal_opened`, and input only reaches the new
+  session. There is no takeover and no reacquisition after a reconnect.
+- One finger while Controlling sends one wheel step per `max(cell height,
+  14 px)` of movement, at the cell where the finger landed. The steps
+  leave at most 30 per second with a burst of 10, nothing is queued
+  behind a spent budget, and the steps stop when the finger lifts: there
+  is no remote inertia. A drag that begins outside the grid sends
+  nothing, and a change of the grid ends the gesture at once.
+- Two fingers zoom and pan locally and send nothing. The zoom changes
+  the font of the page, so the grid keeps its real cells and the text
+  stays sharp at every level, and it keeps the cell under the pinch
+  where it is. In observe mode a one-finger drag pans the same view.
+- The coordinates come from the drawn grid: the page reports the size
+  and the origin of its xterm screen, and the touches of the page map to
+  zero-based cells of it. The margins beside the grid take no input.
+- No input goes out before `terminal_opened` and a full frame: only a
+  full frame is a baseline to read the screen against.
+- When the unlock ends or the app goes to the back, the phone goes back
+  to watching and sends no more input. Leaving the screen releases the
+  stream, which also fixes a Phase 3 gap: the stream used to outlive the
+  screen.
+
+Checks: `go test -race ./...` with the new `TestHerdrTerminalModeSwitch`,
+and the JVM tests with the new `HerdrGesturesTest` for the cells, the
+threshold, the budget, the pinch, and the margins, plus `lintDebug` and
+the debug and release builds.
+
+Emulator evidence, with a real OpenCode screen captured through the
+bridge and the state row of the new control:
+
+- `/tmp/opencode/flux-terminal-control.png`: the terminal of the pane
+  with "Watching" and its **Control** button in the dark theme.
+- `/tmp/opencode/flux-terminal-control-light.png`: the same in the light
+  theme. The app chrome turns light and the terminal keeps the colors of
+  the program.
+
+Not part of Phase 4, as the plan says: remote taps and clicks, raw
+typing and the IME, and mobile resize. The phone keeps the size that the
+pane has on the computer; herdr gives the controller a size lock at that
+size, so a phone-driven resize would also resize the computer and needs
+its own design first. The lifecycle cases of the test plan (rotation,
+backgrounding, IME) use the same mechanisms as the touchpad screen and
+still take the manual tests of section 11.
+
 ### Existing input
 
 Initially retain existing prompts and the keybar with their current validation.
@@ -616,15 +671,15 @@ Endpoint generation 1 is a later alternative, not an MVP requirement.
 
 ## 14. Delivery checklist
 
-- [ ] Phase 0 demonstrates real scrolling and coexistence in an isolated session.
+- [x] Phase 0 demonstrates real scrolling and coexistence in an isolated session.
 - [ ] Initial geometry and size recovery are verified.
-- [ ] Terminal dependency selected after license and fixture review.
-- [ ] Observe works without input, resize, or scroll ownership.
-- [ ] Control is explicit, without automatic takeover or unrestricted raw input.
-- [ ] Wheel input targets only the selected pane with correct coordinates.
-- [ ] Historical reads are excluded for other devices too.
+- [x] Terminal dependency selected after license and fixture review.
+- [x] Observe works without input, resize, or scroll ownership.
+- [x] Control is explicit, without automatic takeover or unrestricted raw input.
+- [x] Wheel input targets only the selected pane with correct coordinates.
+- [x] Historical reads are excluded for other devices too.
 - [ ] Permission, lock, background, EOF, and connection-loss shutdowns are tested.
-- [ ] No replay, dropped incremental frames, or orphaned subprocesses.
+- [x] No replay, dropped incremental frames, or orphaned subprocesses.
 - [ ] Go/Kotlin tests and Swift compatibility verified where applicable.
-- [ ] Installed PC and Pixel software unchanged without additional agreement.
+- [x] Installed PC and Pixel software unchanged without additional agreement.
 - [ ] Actual limitations and measurements documented before proposing a merge.
