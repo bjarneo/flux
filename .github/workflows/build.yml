@@ -1,10 +1,14 @@
 name: Build
 
 # Pull requests run no build, to save GitHub minutes. Pushes to master,
-# manual runs, and releases run it.
+# manual runs, and releases run it. A push that changes only the website
+# runs pages.yml and no build.
 on:
   push:
     branches: [master]
+    paths-ignore:
+      - 'site/**'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
   workflow_call:
     inputs:

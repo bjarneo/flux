@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-02T08:50:12+00:00",
+  "generatedAt": "2026-10-04T00:00:00+00:00",
   "title": "Design System: Flux for Android, iOS, and macOS",
   "extensions": {
     "colorMeta": {
@@ -421,6 +421,21 @@
         "name": "apple-standard",
         "value": "200ms timingCurve(0.4, 0, 0.2, 1), nil with Reduce Motion",
         "purpose": "Motion.standard on iOS and macOS: promote to master, Later, and the iOS swipe."
+      },
+      {
+        "name": "site-reel",
+        "value": "700ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "The website clock reels."
+      },
+      {
+        "name": "site-mark-trace",
+        "value": "4 x 210ms cubic-bezier(0.65, 0, 0.35, 1), then 540ms cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "The Flux mark trace on the website."
+      },
+      {
+        "name": "site-state",
+        "value": "200ms ease, theme colors 300ms",
+        "purpose": "State changes and the active border fade on the website."
       }
     ],
     "breakpoints": [
@@ -467,6 +482,18 @@
       {
         "name": "macos-menu-panel",
         "value": "360pt width of the menu bar panel"
+      },
+      {
+        "name": "site-wide",
+        "value": "1099px: 3 bar links hide, the rail becomes a thin sticky line"
+      },
+      {
+        "name": "site-single",
+        "value": "899px: 1 column, the stage hides, each moment shows its own phone"
+      },
+      {
+        "name": "site-narrow",
+        "value": "599px: no page links, 56px bar, 8px side inset"
       }
     ],
     "states": {
@@ -533,6 +560,46 @@
         "pressed": "Tile at 80% alpha. The border does not change.",
         "menuBarExtra": "Flux mark and the count 1 to 9+. Window style panel, 360pt: count line, compact master of all computers, next 3 items, a menu for each online computer, Open Flux, Settings, Quit Flux.",
         "controlMasterTool": "Remote desktop"
+      },
+      "website": {
+        "source": "The shipped code in site/index.html, site/style.css, and site/main.js. A static page for GitHub Pages.",
+        "palette": "Fixed Tokyo Night reference values in :root, with the frontmatter role names. No live theme, except the sample themes of the theme section.",
+        "siteColors": {
+          "faint": "#8690BB",
+          "selection": "#33467C",
+          "phoneGlass": "#08080C"
+        },
+        "faces": {
+          "sans": "Mona Sans, self-hosted variable woff2, weight 200 to 900, width 75% to 125%",
+          "mono": "JetBrains Mono, self-hosted woff2, weight 100 to 800, tabular numbers",
+          "headings": "weight 720, width 112%, line height 1.06, letter spacing -0.022em, h1 -0.03em",
+          "body": "weight 420, 1.0625rem, line height 1.55",
+          "clock": "JetBrains Mono weight 200, letter spacing -0.04em. First clock clamp(4.75rem, 1.5rem + 7.4vw, 9rem). Rail clock clamp(3.4rem, 1rem + 4vw, 5.4rem)."
+        },
+        "metrics": {
+          "gap": "8px",
+          "sideInset": "16px, 8px below 600px",
+          "sectionGap": "48px",
+          "tileCorner": "12px",
+          "linkCorner": "10px",
+          "smallCorner": "8px",
+          "codeCorner": "6px",
+          "contentMax": "1600px",
+          "bar": "60px, 56px below 600px"
+        },
+        "targets": {
+          "button": "48px",
+          "smallButton": "44px",
+          "link": "44px",
+          "chip": "44px"
+        },
+        "activeBorder": "2px, 45deg gradient accent to cyan, on the data-focus tile at the middle of the window. Fades in 200ms.",
+        "clock": "Digit reels 0 to 9, 700ms roll with cubic-bezier(0.16, 1, 0.3, 1). Accent colon blinks to 35% every 2s.",
+        "markTrace": "16-unit grid. 4 ring sides of 210ms each with cubic-bezier(0.65, 0, 0.35, 1), then the accent bar in 540ms with cubic-bezier(0.22, 1, 0.36, 1) from 660ms.",
+        "commandBlock": "bg fill, line border, 12px corner, mono 1rem with a cyan prompt, tonal Copy button. Copied in green for 1.8s.",
+        "themeSection": "Sample themes Tokyo Night, Catppuccin Latte, Neon, Futurism, Cotton Candy. The tile takes the theme background, foreground, accent, and 2 border colors. 300ms color change.",
+        "phoneFrame": "7px inset, corner 11% of the width, screen corner 9%, line-hi border, captures cross-fade in 200ms",
+        "reducedMotion": "No animation and no transition. Clocks set at once, marks drawn."
       }
     }
   },
@@ -671,6 +738,11 @@
         "name": "The Hidden Secret Rule",
         "body": "In the Apple apps, a secret clip shows \"Hidden text\" in the body face. The event keeps no part of the secret.",
         "section": "typography"
+      },
+      {
+        "name": "The Focus Follows the Middle Rule",
+        "body": "1 tile at a time carries the active border: the tile at the middle of the window, or else the visible tile nearest to it. A scroll, an anchor jump, or a resize moves it.",
+        "section": "elevation"
       }
     ],
     "dos": [

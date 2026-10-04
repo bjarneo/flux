@@ -12,7 +12,7 @@ See [security](docs/security.md) for what a paired device can do and which setti
 https://github.com/user-attachments/assets/4b8445fe-6734-4100-b200-92f57e1b353a
 
 
-**[Install locally](docs/install.md)** · **[Set up Android](docs/android.md)** · **[Set up iOS](docs/ios.md)** · **[Set up macOS](docs/macos.md)** · **[Read the docs](docs/README.md)** · **[Use with agents](docs/agents.md)**
+**[Website](https://bjarneo.github.io/flux/)** · **[Install locally](docs/install.md)** · **[Set up Android](docs/android.md)** · **[Set up iOS](docs/ios.md)** · **[Set up macOS](docs/macos.md)** · **[Read the docs](docs/README.md)** · **[Use with agents](docs/agents.md)**
 
 ## What you can do
 

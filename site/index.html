@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flux: answer your Omarchy computer from your phone</title>
+<meta name="description" content="Flux connects an Omarchy computer to an Android phone, an iPhone, or a Mac. Answer herdr agents, approve sudo with a fingerprint, and send the clipboard and files.">
+<link rel="canonical" href="https://bjarneo.github.io/flux/">
+<meta name="theme-color" content="#16161e">
+<meta name="color-scheme" content="dark">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Flux">
+<meta property="og:title" content="Flux: answer your Omarchy computer from your phone">
+<meta property="og:description" content="Answer herdr agents, approve sudo with a fingerprint, and send the clipboard and files. For Android, iPhone, and Mac.">
+<meta property="og:url" content="https://bjarneo.github.io/flux/">
+<meta property="og:image" content="https://bjarneo.github.io/flux/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Flux logo, the time 14:07, and the Flux Inbox on a phone with an agent that waits for an answer.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preload" href="fonts/mona-sans.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/jetbrains-mono.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css">
+<script src="main.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to the content</a>
+
+<header class="bar">
+  <a class="lockup" href="#top" aria-label="Flux, to the top of the page">
+    <span class="mark" data-mark aria-hidden="true"><i class="s s1"></i><i class="s s2"></i><i class="s s3"></i><i class="s s4"></i><i class="b"></i></span>
+    <span class="word">flux</span>
+  </a>
+  <nav class="nav" aria-label="Main">
+    <a href="#afternoon">The afternoon</a>
+    <a href="#themes">Themes</a>
+    <a href="#trust">Security</a>
+    <a href="https://github.com/bjarneo/flux/blob/master/docs/README.md">Docs</a>
+    <a href="https://github.com/bjarneo/flux">GitHub</a>
+  </nav>
+  <a class="btn btn-fill btn-s" href="#install">Install</a>
+</header>
+
+<main id="main">
+
+<section class="hero" id="top" aria-labelledby="hero-title">
+  <div class="tile hero-text is-focus" data-focus>
+    <div class="clock clock-hero" data-clock="14:07" aria-hidden="true">14:07</div>
+    <h1 id="hero-title">Answer your Omarchy computer from your phone.</h1>
+    <p class="lede">An agent waits for input. <code>sudo</code> asks for a password. A file arrives. Flux shows it on your phone, and you act with 1 tap. It works on your network, and through Tailscale when you are away.</p>
+    <div class="cmd" data-cmd>
+      <code><span class="prompt" aria-hidden="true">~</span>yay -S omarchy-flux</code>
+      <button class="btn btn-tonal btn-s" type="button" data-copy="yay -S omarchy-flux">Copy</button>
+    </div>
+    <p class="hero-next">Then get the app for <a href="#install">Android, iPhone, or Mac</a>.</p>
+  </div>
+  <div class="tile hero-phone">
+    <figure class="phone">
+      <img src="img/phone/inbox-agent.webp" width="720" height="1600" alt="The Flux Inbox on an Android phone at 14:07. The master tile shows the question of a Codex agent: run bin/migrate --apply. It has 3 numbered choices and a Reply button.">
+    </figure>
+  </div>
+  <nav class="tile times" aria-label="The afternoon">
+    <ol>
+      <li><a href="#m-1407"><time>14:07</time> Agent</a></li>
+      <li><a href="#m-1409"><time>14:09</time> Output</a></li>
+      <li><a href="#m-1422"><time>14:22</time> sudo</a></li>
+      <li><a href="#m-1540"><time>15:40</time> Clipboard</a></li>
+      <li><a href="#m-1612"><time>16:12</time> Files</a></li>
+      <li><a href="#m-1730"><time>17:30</time> Media</a></li>
+      <li><a href="#m-1802"><time>18:02</time> Windows</a></li>
+      <li><a href="#m-1834"><time>18:34</time> Desk</a></li>
+      <li><a href="#m-1851"><time>18:51</time> Ring</a></li>
+    </ol>
+  </nav>
+</section>
+
+<section class="story" id="afternoon" aria-labelledby="afternoon-title">
+  <div class="tile story-head" data-focus>
+    <h2 id="afternoon-title">One afternoon away from the desk</h2>
+    <p>Your agents keep working on the computer while you are out. Each time below is a moment when Flux brings the computer to you.</p>
+  </div>
+
+  <div class="story-body">
+  <aside class="rail" aria-hidden="true">
+    <div class="tile rail-tile">
+      <div class="clock clock-rail" data-clock="14:07" data-rail-clock>14:07</div>
+      <p class="rail-now" data-rail-now>Agent</p>
+      <ol class="rail-list">
+        <li data-for="m-1407" class="need"><time>14:07</time> Agent</li>
+        <li data-for="m-1409"><time>14:09</time> Output</li>
+        <li data-for="m-1422" class="need"><time>14:22</time> sudo</li>
+        <li data-for="m-1540"><time>15:40</time> Clipboard</li>
+        <li data-for="m-1612"><time>16:12</time> Files</li>
+        <li data-for="m-1730"><time>17:30</time> Media</li>
+        <li data-for="m-1802"><time>18:02</time> Windows</li>
+        <li data-for="m-1834"><time>18:34</time> Desk</li>
+        <li data-for="m-1851"><time>18:51</time> Ring</li>
+      </ol>
+    </div>
+  </aside>
+
+  <div class="story-cols">
+  <div class="moments">
+    <article class="tile moment" data-focus id="m-1407" data-time="14:07" data-label="Agent" data-shot="inbox-agent">
+      <h3><time>14:07</time> Codex waits for an answer.</h3>
+      <p>The Inbox shows the agent that waits first. It shows the question, and the command that each choice approves. Tap 1, and Flux types the answer into the herdr pane on the computer.</p>
+      <p class="note">Agent replies need agent control on the computer, and the phone unlock.</p>
+      <figure class="phone phone-inline"><img src="img/phone/inbox-agent.webp" width="720" height="1600" loading="lazy" alt="The Inbox with the question of the Codex agent in the master tile."></figure>
+    </article>
+
+    <article class="tile moment" data-focus id="m-1409" data-time="14:09" data-label="Output" data-shot="agent-output">
+      <h3><time>14:09</time> Read the output before you answer.</h3>
+      <p>Open the agent to see its terminal output in color. Select <b>Changes</b> to review the diff of the working tree. Then answer from the same screen, or type a message to the agent.</p>
+      <figure class="phone phone-inline"><img src="img/phone/agent-output.webp" width="720" height="1600" loading="lazy" alt="The output of the Codex agent on the phone, with Output and Changes tabs, the 3 choices, and a text field."></figure>
+    </article>
+
+    <article class="tile moment" data-focus id="m-1422" data-time="14:22" data-label="sudo" data-shot="inbox-approval">
+      <h3><time>14:22</time> sudo asks for your fingerprint.</h3>
+      <p>A <code>sudo</code> prompt on the computer shows on the phone. Touch the fingerprint sensor to approve it. The iPhone uses Face ID or Touch ID, and the Mac uses Touch ID.</p>
+      <p>Only root on the computer can change the key that checks the approval. If the approval fails or times out, <code>sudo</code> asks for the password.</p>
+      <div class="cmd cmd-inline"><code><span class="prompt" aria-hidden="true">~</span>sudo flux-cli approve setup</code><button class="btn btn-tonal btn-s" type="button" data-copy="sudo flux-cli approve setup">Copy</button></div>
+      <figure class="phone phone-inline"><img src="img/phone/inbox-approval.webp" width="720" height="1600" loading="lazy" alt="The Inbox at 14:22 with the request Approve sudo on omarchy-xps in the master tile, and a Review button."></figure>
+    </article>
+
+    <article class="tile moment" data-focus id="m-1540" data-time="15:40" data-label="Clipboard" data-shot="send">
+      <h3><time>15:40</time> Copy on the phone, paste on the computer.</h3>
+      <p>Flux sends clipboard text and images in both directions. Send files, photos, and links from the Share menu of any app. Away from home, Flux connects through Tailscale.</p>
+      <figure class="phone phone-inline"><img src="img/phone/send.webp" width="720" height="1600" loading="lazy" alt="The Send screen on mobile data, with Send clipboard, Send files, Get files, and the camera tools."></figure>
+    </article>
+
+    <article class="tile moment" data-focus id="m-1612" data-time="16:12" data-label="Files" data-shot="browse">
+      <h3><time>16:12</time> Get a file from the computer at home.</h3>
+      <p><b>Get files</b> opens the shared folders of the computer, read-only. Search all of them by name, then save the file on the phone.</p>
+      <figure class="phone phone-inline"><img src="img/phone/browse.webp" width="720" height="1600" loading="lazy" alt="Get files shows the home folder of the computer, with a search field, folders, and files to download."></figure>
+    </article>
+
+    <article class="tile moment" data-focus id="m-1730" data-time="17:30" data-label="Media" data-shot="media">
+      <h3><time>17:30</time> Pause the music at home.</h3>
+      <p><b>Media</b> shows what plays on the computer. Play, pause, skip, seek, and set the volume. The Inbox also shows what plays now, with play and pause.</p>
+      <figure class="phone phone-inline"><img src="img/phone/media.webp" width="720" height="1600" loading="lazy" alt="The Media screen with the song Weightless, a seek bar, and the previous, pause, and next buttons."></figure>
+    </article>
+
+    <article class="tile moment" data-focus id="m-1802" data-time="18:02" data-label="Windows" data-shot="omarchy">
+      <h3><time>18:02</time> Move a window to another workspace.</h3>
+      <p>The Omarchy panel shows your workspaces and the focused window. Move, close, or float a window. Open the Omarchy menu, a terminal, or a browser with their key bindings.</p>
+      <figure class="phone phone-inline"><img src="img/phone/omarchy.webp" width="720" height="1600" loading="lazy" alt="The Omarchy panel with workspaces 1 to 10, the window controls, and the launch shortcuts with their key bindings."></figure>
+    </article>
+
+    <article class="tile moment" data-focus id="m-1834" data-time="18:34" data-label="Desk" data-shot="touchpad">
+      <h3><time>18:34</time> At the desk, the phone is a touchpad.</h3>
+      <p>Use the phone as a touchpad and keyboard, a webcam, or a microphone. Show the computer screen on the phone, with its audio. The Flux window on the computer shows what is live, with <b>Stop</b>.</p>
+      <figure class="phone phone-inline"><img src="img/phone/touchpad.webp" width="720" height="1600" loading="lazy" alt="The touchpad and keyboard screen, with a large touch area and keys for esc, tab, arrows, ctrl, alt, shift, and super."></figure>
+    </article>
+
+    <article class="tile moment" data-focus id="m-1851" data-time="18:51" data-label="Ring" data-shot="ring">
+      <h3><time>18:51</time> Find the phone.</h3>
+      <p>Ring it from the Flux window, or run the command below. Tap <b>I found it</b> to stop the ring.</p>
+      <div class="cmd cmd-inline"><code><span class="prompt" aria-hidden="true">~</span>flux-cli ring</code><button class="btn btn-tonal btn-s" type="button" data-copy="flux-cli ring">Copy</button></div>
+      <figure class="phone phone-inline"><img src="img/phone/ring.webp" width="720" height="1600" loading="lazy" alt="The phone shows the text &quot;omarchy-xps is ringing this phone&quot; and an I found it button."></figure>
+    </article>
+  </div>
+
+  <div class="stage" aria-hidden="true">
+    <figure class="phone" data-stage>
+      <img class="is-on" src="img/phone/inbox-agent.webp" data-shot="inbox-agent" width="720" height="1600" alt="">
+      <img src="img/phone/agent-output.webp" data-shot="agent-output" width="720" height="1600" loading="lazy" alt="">
+      <img src="img/phone/inbox-approval.webp" data-shot="inbox-approval" width="720" height="1600" loading="lazy" alt="">
+      <img src="img/phone/send.webp" data-shot="send" width="720" height="1600" loading="lazy" alt="">
+      <img src="img/phone/browse.webp" data-shot="browse" width="720" height="1600" loading="lazy" alt="">
+      <img src="img/phone/media.webp" data-shot="media" width="720" height="1600" loading="lazy" alt="">
+      <img src="img/phone/omarchy.webp" data-shot="omarchy" width="720" height="1600" loading="lazy" alt="">
+      <img src="img/phone/touchpad.webp" data-shot="touchpad" width="720" height="1600" loading="lazy" alt="">
+      <img src="img/phone/ring.webp" data-shot="ring" width="720" height="1600" loading="lazy" alt="">
+    </figure>
+  </div>
+  </div>
+  </div>
+
+  <p class="story-foot">The screens show Flux for Android 0.12.0 in demo mode, with sample computers and agents.</p>
+</section>
+
+<section class="tile computer" id="computer" data-focus aria-labelledby="computer-title">
+  <div class="computer-text">
+    <h2 id="computer-title">On the computer, Flux is a window.</h2>
+    <p>The Flux window shows each device with its battery, its notifications, and what is live. <code>flux-cli</code> does the same from a terminal or a script. In <code>omarchy-shell</code>, the Flux mark in the bar opens the window.</p>
+    <div class="cmd cmd-inline"><code><span class="prompt" aria-hidden="true">~</span>flux-cli open</code><button class="btn btn-tonal btn-s" type="button" data-copy="flux-cli open">Copy</button></div>
+  </div>
+  <figure class="desk">
+    <img src="img/desk/remote-live.webp" width="1600" height="1031" loading="lazy" alt="The Flux window on the computer. The Overview of Pixel 8 shows the battery, the latest notifications, the remote desktop and the phone camera as live with Stop buttons, and the device access switches.">
+    <figcaption>The Overview of a Pixel 8. The remote desktop and the phone camera are live.</figcaption>
+  </figure>
+</section>
+
+<section class="tile themes" data-focus id="themes" data-theme="tokyo-night" aria-labelledby="themes-title">
+  <div class="themes-text">
+    <h2 id="themes-title">Flux takes the theme of your Omarchy.</h2>
+    <p>The computer sends its active theme to the phone. Change the theme, and the phone changes with it. A contrast check keeps the text readable in every theme.</p>
+    <div class="chips" role="group" aria-label="Sample Omarchy themes">
+      <button type="button" class="chip" data-pick="tokyo-night" aria-pressed="true">Tokyo Night</button>
+      <button type="button" class="chip" data-pick="catppuccin-latte" aria-pressed="false">Catppuccin Latte</button>
+      <button type="button" class="chip" data-pick="neon" aria-pressed="false">Neon</button>
+      <button type="button" class="chip" data-pick="futurism" aria-pressed="false">Futurism</button>
+      <button type="button" class="chip" data-pick="cotton-candy" aria-pressed="false">Cotton Candy</button>
+    </div>
+    <p class="note">Tokyo Night is the default when the computer sends no theme.</p>
+  </div>
+  <figure class="phone" data-theme-phone>
+    <img class="is-on" src="img/phone/inbox-agent.webp" data-shot="tokyo-night" width="720" height="1600" loading="lazy" alt="The Flux Inbox in the Tokyo Night theme.">
+    <img src="img/phone/theme-catppuccin-latte.webp" data-shot="catppuccin-latte" width="720" height="1600" loading="lazy" alt="The Flux Inbox in the light Catppuccin Latte theme.">
+    <img src="img/phone/theme-neon.webp" data-shot="neon" width="720" height="1600" loading="lazy" alt="The Flux Inbox in the Neon theme.">
+    <img src="img/phone/theme-futurism.webp" data-shot="futurism" width="720" height="1600" loading="lazy" alt="The Flux Inbox in the Futurism theme.">
+    <img src="img/phone/theme-cotton-candy.webp" data-shot="cotton-candy" width="720" height="1600" loading="lazy" alt="The Flux Inbox in the Cotton Candy theme.">
+  </figure>
+</section>
+
+<section class="trust" id="trust" aria-labelledby="trust-title">
+  <div class="tile trust-text" data-focus>
+    <h2 id="trust-title">You pair with a key that you can see.</h2>
+    <dl class="facts">
+      <div>
+        <dt>Compare 16 characters.</dt>
+        <dd>Pairing shows the same key on both screens, for example <code>5EE6 825F 974E D59A</code>. Accept only when every character matches. A pairing that the computer starts also needs a confirmation on the computer.</dd>
+      </div>
+      <div>
+        <dt>Add no firewall rule.</dt>
+        <dd><code>fluxd</code> opens the connections to the phone itself. Flux works with the default Omarchy firewall, which blocks inbound traffic.</dd>
+      </div>
+      <div>
+        <dt>Choose what each device can do.</dt>
+        <dd>Turn clipboard, notifications, shared folders, remote input, remote desktop, and agent control on or off for each device.</dd>
+      </div>
+      <div>
+        <dt>Unlock the phone for control.</dt>
+        <dd>Agent replies and remote desktop ask for the phone lock first. The unlock stays valid for 5 minutes.</dd>
+      </div>
+    </dl>
+    <p><a class="more" href="https://github.com/bjarneo/flux/blob/master/docs/security.md">Read the security guide</a></p>
+  </div>
+  <div class="tile trust-pair">
+    <figure class="phone"><img src="img/phone/pair.webp" width="720" height="1600" loading="lazy" alt="The pairing sheet on the phone for framework-13, with the key 5EE6 825F 974E D59A in 4 blocks, and the buttons Cancel and Pair."></figure>
+  </div>
+  <figure class="tile trust-desk desk">
+    <img src="img/desk/device-access.webp" width="880" height="948" loading="lazy" alt="The Device access switches of a Pixel 8 in the Flux window: Clipboard sync, Notifications, Shared folders, Remote input, Remote desktop, Agent output, Agent control, and Agent terminals. All switches except Clipboard sync and Notifications show Off globally.">
+    <figcaption>The <b>Device access</b> switches in the Flux window.</figcaption>
+  </figure>
+</section>
+
+<section class="tile index" data-focus id="features" aria-labelledby="features-title">
+  <h2 id="features-title">Everything in Flux</h2>
+  <dl class="index-list">
+    <div>
+      <dt>Agents</dt>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/herdr.md">Answer herdr agents</a></dd>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/workflows.md#agent-diff-review">Review the changes of an agent</a></dd>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/herdr.md">Start agents and open terminals</a></dd>
+    </div>
+    <div>
+      <dt>Approval</dt>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/approvals.md">sudo with a fingerprint, Face ID, or Touch ID</a></dd>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/approvals.md#lock-screens">The hyprlock lock screen</a></dd>
+    </div>
+    <div>
+      <dt>Clipboard and files</dt>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/features.md#files-clipboard-and-links">Clipboard text, images, and links</a></dd>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/workflows.md#desktop-outbox">Queued files and folders that resume after a reconnect</a></dd>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/features.md#browse-pc">Get files from the computer</a></dd>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/workflows.md#saved-clipboard-snippets">Saved clipboard snippets</a></dd>
+    </div>
+    <div>
+      <dt>Phone</dt>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/features.md#notifications">Phone notifications on the computer, with reply</a></dd>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/features.md#text-messages">Text messages</a></dd>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/features.md#calls">Media pauses during calls</a></dd>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/features.md#do-not-disturb">Do Not Disturb on both sides</a></dd>
+    </div>
+    <div>
+      <dt>Camera and sound</dt>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/camera.md">The phone as a webcam or a microphone</a></dd>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/camera.md#screen-mirror">The phone screen on the computer</a></dd>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/camera.md">Scan text, documents, and QR codes</a></dd>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/features.md#automatic-screenshots-and-photos">New screenshots and photos to the computer</a></dd>
+    </div>
+    <div>
+      <dt>Control</dt>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/remote-input.md">Touchpad and keyboard</a></dd>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/remote-desktop.md">Remote desktop with audio</a></dd>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/features.md#dictation-in-text-fields">Dictation in text fields</a></dd>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/features.md#media-and-desktop-commands">Media and desktop commands</a></dd>
+    </div>
+    <div>
+      <dt>Away from home</dt>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/tailscale.md">Connect through Tailscale</a></dd>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/workflows.md#notification-rules">Notification rules and quiet hours</a></dd>
+      <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/workflows.md#local-automation">Commands that run on device events</a></dd>
+    </div>
+  </dl>
+</section>
+
+<section class="install" id="install" aria-labelledby="install-title">
+  <div class="tile install-omarchy" data-focus>
+    <h2 id="install-title">Install Flux on both sides.</h2>
+    <h3><span class="step">1</span> On Omarchy</h3>
+    <div class="term">
+      <pre><code><span class="prompt" aria-hidden="true">~</span>yay -S omarchy-flux
+<span class="prompt" aria-hidden="true">~</span>flux-cli setup
+<span class="prompt" aria-hidden="true">~</span>flux-cli open</code></pre>
+      <button class="btn btn-tonal btn-s" type="button" data-copy="yay -S omarchy-flux && flux-cli setup && flux-cli open">Copy</button>
+    </div>
+    <p class="note">To build from source, read the <a href="https://github.com/bjarneo/flux/blob/master/docs/install.md">install guide</a>. To update later, run <code>flux-cli update</code>.</p>
+  </div>
+
+  <div class="tile install-step"><h3><span class="step">2</span> On the phone or the Mac</h3></div>
+  <div class="apps">
+    <div class="tile app">
+      <h4>Android</h4>
+      <p class="req">Android 10 or later</p>
+      <a class="btn btn-fill" data-asset="android" href="https://github.com/bjarneo/flux/releases/download/v0.12.0/flux-android-0.12.0.apk">Download the APK</a>
+      <p class="note">The computer sends later versions to the phone.</p>
+    </div>
+    <div class="tile app">
+      <h4>iPhone</h4>
+      <p class="req">iOS 17 or later</p>
+      <a class="btn btn-fill" href="https://github.com/bjarneo/flux/blob/master/docs/ios.md#install-on-an-iphone">Build with Xcode</a>
+      <p class="note">A free Apple ID works. The app then runs for 7 days.</p>
+    </div>
+    <div class="tile app">
+      <h4>Mac</h4>
+      <p class="req">macOS 14 or later</p>
+      <a class="btn btn-fill" data-asset="mac" href="https://github.com/bjarneo/flux/releases/download/v0.12.0/flux-macos-0.12.0.zip">Download for Mac</a>
+      <p class="note">The app is not notarized. Before the first start, run <code>xattr -dr com.apple.quarantine Flux.app</code>.</p>
+    </div>
+  </div>
+
+  <div class="tile install-pair" data-focus>
+    <h3><span class="step">3</span> Pair them</h3>
+    <p>Open Flux on both sides. Select <b>+ Pair new device</b> in the Flux window, and compare the key on both screens.</p>
+    <p class="note">Version <a data-version href="https://github.com/bjarneo/flux/releases/tag/v0.12.0">0.12.0</a>. <a href="https://github.com/bjarneo/flux/releases">All releases</a>.</p>
+  </div>
+</section>
+
+<section class="tile end" data-focus aria-label="Flux">
+  <div class="end-lockup">
+    <span class="mark mark-l" data-mark data-mark-late aria-hidden="true"><i class="s s1"></i><i class="s s2"></i><i class="s s3"></i><i class="s s4"></i><i class="b"></i></span>
+    <span class="word">flux</span>
+  </div>
+  <p>Flux is made for Omarchy.</p>
+  <ul class="end-links">
+    <li><a href="https://github.com/bjarneo/flux">GitHub</a></li>
+    <li><a href="https://github.com/bjarneo/flux/blob/master/docs/README.md">Docs</a></li>
+    <li><a href="https://github.com/bjarneo/flux/releases">Releases</a></li>
+    <li><a href="https://aur.archlinux.org/packages/omarchy-flux">AUR</a></li>
+  </ul>
+</section>
+
+</main>
+
+<p class="copied" role="status" aria-live="polite" data-copied></p>
+</body>
+</html>

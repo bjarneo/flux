@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Flux social preview</title>
+<!-- The social preview of the website, 1200 x 630. render-og.sh takes a
+     screenshot of this page into site/img/og.png. -->
+<link rel="stylesheet" href="../style.css">
+<style>
+  html, body { width: 1200px; height: 630px; overflow: hidden; }
+  body { display: grid; grid-template-columns: 790px 1fr; gap: 8px; padding: 8px; }
+  .tile { height: 614px; }
+  .left { display: flex; flex-direction: column; justify-content: space-between; padding: 44px 52px; }
+  .left .lockup { gap: 14px; }
+  .left .mark { --size: 44px; }
+  .left .word { font-size: 2rem; }
+  .left .clock { font-size: 9rem; margin-left: -0.05em; }
+  .left h1 { font-size: 3.4rem; max-width: 12.5em; margin-top: 14px; }
+  .right { display: grid; place-items: center; }
+  .right .phone { --pw: 262px; }
+</style>
+</head>
+<body>
+  <div class="tile left is-focus">
+    <span class="lockup">
+      <span class="mark is-drawn" aria-hidden="true"><i class="s s1"></i><i class="s s2"></i><i class="s s3"></i><i class="s s4"></i><i class="b"></i></span>
+      <span class="word">flux</span>
+    </span>
+    <div>
+      <div class="clock">14:07</div>
+      <h1>Answer your Omarchy computer from your phone.</h1>
+    </div>
+  </div>
+  <div class="tile right">
+    <figure class="phone"><img src="../img/phone/inbox-agent.webp" width="720" height="1600" alt=""></figure>
+  </div>
+</body>
+</html>

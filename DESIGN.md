@@ -513,6 +513,84 @@ The Mac app follows the macOS 14 structure. The code is in `macos/App/`.
 - **Differences from Android:** A sidebar in the place of the navigation bar. No thumb push and no swipe. 28 pt pointer targets in the place of 48 dp touch targets. A hover state. Buttons on the 8 pt small corner. A pressed tile dims and keeps its border. A 12 pt gutter. The menu bar extra exists only on the Mac.
 - **Preserved surfaces:** The pairing view shows on the theme background of the window, and takes the accent and the light or dark mode. The pair request sheet, `PairRequestSheet`, and the Touch ID approval window, `ApprovePrompt`, keep their own background, and take only the accent and the light or dark mode.
 
+## Website
+
+The Flux website uses the system of this file. This section gives only what differs from the apps. All other sections apply where a page can use them.
+
+This section comes from the shipped code in `site/index.html`, `site/style.css`, and `site/main.js`. The site is a static page for GitHub Pages, with no build step. Every page part works without the script.
+
+### Website colors
+
+The site has no live theme. `:root` in `site/style.css` holds the Tokyo Night reference values of the frontmatter as custom properties, with the same role names.
+
+- **Page ground:** `bg` fills the page and the command block.
+- **Tiles:** Each part of the page is a `tile` with a 1 px `line` border. A hover on a time link or an end link takes `tile-hi`. The phone frame and the Copied notice take a `line-hi` border.
+- **Accent:** Links, the filled button, the colon of a clock, the time in a moment heading, the step numbers, and the bar of the Flux mark. A hover on a link or on the filled button changes it to `cyan`.
+- **Cyan:** The shell prompt in a command block, and the second stop of the active border gradient.
+- **Red:** Only the marker of a moment that needs the user, in the time list of the rail. The marker is a mix of 45% red into `line` until that moment has the focus. Then it is full red.
+- **Green:** Only a Copy button after a copy, with the label "Copied".
+- **Faint:** A site-only text color, `--faint` `#8690bb`. It sets the later moments in the rail, the notes in the moments, the captions of the desktop captures, and the foot line of the story. It gives 4.98:1 on `tile` and 5.76:1 on `bg`, so it can carry meaning. The site uses faint, not `dim`, for small text.
+- **Selection:** Selected text takes `#33467c` with `text`.
+- **Phone glass:** The phone frame fills with `#08080c` around the capture.
+
+### Website type
+
+- **Mona Sans:** It sets what Flux says. The site hosts the variable font itself, in `site/fonts/mona-sans.woff2`, with weights 200 to 900 and widths 75% to 125%.
+- **Headings:** Weight 720, width 112%, a line height of 1.06, and a letter spacing of -0.022em. The `h1` has -0.03em. The sizes are `clamp(2.25rem, 1.5rem + 2.4vw, 3.6rem)` for `h1`, `clamp(1.75rem, 1.2rem + 2vw, 2.85rem)` for `h2`, and `clamp(1.3rem, 1.1rem + 0.8vw, 1.7rem)` for `h3`.
+- **Body:** Weight 420 at 1.0625rem, with a line height of 1.55. Lines stay at 34em to 40em. The list terms are weight 680 at width 108%. The buttons are weight 640.
+- **JetBrains Mono:** It sets the clocks, the times, the prompts, the commands, the step numbers, and the word "flux" of the lockup at weight 700. The site hosts it in `site/fonts/jetbrains-mono.woff2`, with tabular numbers. The Mono Is the Computer Rule applies with Mona Sans in the place of Roboto.
+- **Clocks:** Weight 200, a line height of 1, and a letter spacing of -0.04em. The first clock is `clamp(4.75rem, 1.5rem + 7.4vw, 9rem)`. The rail clock is `clamp(3.4rem, 1rem + 4vw, 5.4rem)`, 2.2rem below 1100 px, and 1.8rem below 600 px.
+
+### Website layout
+
+- **Workspace:** The tiles sit in a column of at most 1600 px, with an 8 px gap and a 16 px side inset. Below 600 px, the side inset is 8 px. A new part of the page starts 48 px below the last part.
+- **Bar:** A sticky bar of 60 px, or 56 px below 600 px. It shows the lockup, the page links, and a small filled Install button. Its fill is `bg` at 92% with a 10 px blur.
+- **Grid:** The first viewport, the theme section, and the trust section split 7 to 5. The first viewport puts the clock, the headline, and the command block on the left, and the phone on the right. A tile of time links runs under the 2 tiles.
+- **Story:** A sticky rail with the clock and the time list on the left. The moments in the middle, with a sticky stage on the right that shows the phone. The moments have a gap of 34vh, so 1 moment at a time sits at the middle of the window.
+- **From 1099 px down:** The bar hides 3 page links. The rail becomes a thin sticky line with the clock and the label of the moment, and the time list hides.
+- **From 899 px down:** Each split becomes 1 column. The stage hides, and each moment shows its own phone. The moments close up to the 8 px gap. The 3 app tiles stack.
+- **From 599 px down:** The bar shows only the lockup and its button. The tiles take a 22 px by 18 px inset, and the commands take 0.9rem.
+
+### Website shapes and depth
+
+- **Corners:** 12 px for tiles, buttons, the command block, and the stage. 10 px for page links, chips, desktop captures, and the Copied notice. 8 px for time links and step numbers. 6 px for inline code and the focus ring.
+- **Phone frame:** A 7 px inset, a corner of 11% of the phone width, and a screen corner of 9%. Stacked captures in 1 frame cross-fade in 200 ms.
+- **Depth:** No shadows. The Flat Tile Rule applies. The bar is the only translucent surface.
+- **Focus ring:** 2 px in the accent, with a 3 px offset. In the theme section, it takes the accent of the sample theme.
+
+### Website active border
+
+**The Focus Follows the Middle Rule.** 1 tile at a time carries the active border: the tile at the middle of the window, or else the visible tile nearest to it. A scroll, an anchor jump, or a resize moves it.
+
+- The border is 2 px on the 12 px corner, a 45 degree gradient from `accent` to `cyan`. It fades in over 200 ms.
+- Only the tiles with `data-focus` take part. The first tile of the first viewport has the border in the markup, so the page shows 1 active border without the script.
+- When a moment takes the focus, the rail clock rolls to its time, the rail shows its label, and the stage phone shows its capture.
+
+### Website components
+
+- **Digit reel clock:** Each digit is a strip of 0 to 9 in a window of 1em. A change rolls the strip in 700 ms with `cubic-bezier(0.16, 1, 0.3, 1)`. The colon is in the accent and blinks to 35% every 2 s. On load, the first clock rolls from 00:00 to 14:07. Without the script, each clock shows its time as text.
+- **Flux mark trace:** The mark sits on a 16-unit grid. A square ring of 10 units at 3 units, with a 2-unit stroke in `text`, and a bar of 2 by 14 units at 7 units in the accent. The 4 sides of the ring trace in, 210 ms each, from the top side clockwise, with `cubic-bezier(0.65, 0, 0.35, 1)`. Then the bar drops through in 540 ms with `cubic-bezier(0.22, 1, 0.36, 1)`. The 30 px mark in the bar traces on load. The 120 px mark of the end card traces when 60% of it is in view.
+- **Command block:** A `bg` fill, a `line` border, and the 12 px corner. The command is mono at 1rem with a line height of 1.7, after the cyan shell prompt, a `~` and a chevron. The prompt chevron is drawn with a mask, because the font subset has no U+276F. A small tonal Copy button sits at the end. After a copy, the button shows "Copied" in green for 1.8 s, and a notice at the bottom of the window repeats the command. When the browser blocks the copy, the button shows "Copy failed" and the notice tells the user to select the text.
+- **Buttons:** The filled kind is `accent` with `on-accent`, and a hover changes it to `cyan`. The tonal kind is `line` with `text`, and a hover changes it to `line-hi`. A button is 48 px high, or 44 px for the small size. The color change takes 200 ms.
+- **Theme section:** The tile takes the colors of 5 sample Omarchy themes: Tokyo Night, Catppuccin Latte, Neon, Futurism, and Cotton Candy. A chip picks a theme and has `aria-pressed`. The tile fill is the theme background, and the text is the theme foreground. The borders and the chip fills are mixes of the foreground into the background. The selected chip fills with the theme accent. The active border takes the 2 border colors of the theme. The colors change in 300 ms, and the phone cross-fades to the Inbox in that theme. The sample values are fixed in `site/style.css`. This is the only part of the site with a light theme.
+- **Time rail:** A list of the moments with a time and a label. Each item has an 8 px square marker on a 2 px corner. A past moment is `sub`, the moment in focus is `text` with an accent marker, and a later moment is faint.
+
+### Website motion
+
+- The state changes of the site take 200 ms. The theme colors take 300 ms. The clock reels take 700 ms.
+- With reduced motion, the site has no animation and no transition. Each clock shows its time at once, and each mark shows drawn.
+
+### Differences from the apps
+
+- No live theme. The site uses the Tokyo Night values, except in the theme section.
+- Mona Sans and JetBrains Mono in the place of Roboto and the system mono.
+- The active border follows the tile at the middle of the window. The site has no master tile.
+- An 8 px gap and a 16 px side inset in the place of the 10 dp gutter.
+- The command block fills with `bg`, not `off-tile`.
+- A selected theme chip fills with the accent, not `accent-tile`.
+- A site-only `--faint` text color, and hover states for a pointer.
+- 44 px targets for links and small buttons, and 48 px for buttons.
+
 ## Do's and Don'ts
 
 ### Do:
