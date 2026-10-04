@@ -69,6 +69,19 @@ func (d *Daemon) herdrTerminalOpen(dev *Device, l *lan.Link, req json.Number, pa
 		_ = l.Send(withRequest(proto.New(proto.TypeFluxHerdr, map[string]any{
 			"kind": "terminal_opened", "pane": pane, "mode": mode, "error": err}), req))
 	}
+	// A mode change on the same pane replaces the bridge: one CLI stream
+	// cannot change its mode, so control opens a new subprocess. The old
+	// bridge closes first, so the phone never sees two streams of its
+	// pane and the terminal is free again before the new bridge opens.
+	d.mu.Lock()
+	old := d.herdrSwapLocked(dev, l, pane, mode)
+	d.mu.Unlock()
+	if old != nil {
+		d.stopHerdrTerminal(old, herdrTermReleased)
+		// The stop releases the bridge in the background. Wait here
+		// until it let go of the terminal, or the new one cannot attach.
+		_ = old.session.Close()
+	}
 	d.mu.Lock()
 	why := d.herdrTerminalErrorLocked(dev, pane, mode)
 	d.mu.Unlock()
@@ -174,6 +187,19 @@ func (d *Daemon) herdrTerminalAllowed(t *herdrTerminal) bool {
 	}
 	t.stop = herdrTermStopped
 	return false
+}
+
+// herdrSwapLocked returns the stream that a new open replaces: the
+// stream of this device and link on the same pane in another mode. A
+// mode change cannot reuse a CLI stream, so it opens a new bridge. d.mu
+// must be held.
+func (d *Daemon) herdrSwapLocked(dev *Device, l *lan.Link, pane, mode string) *herdrTerminal {
+	for _, t := range d.herdrStreams {
+		if t.dev == dev && t.link == l && t.pane == pane && t.mode != mode {
+			return t
+		}
+	}
+	return nil
 }
 
 // herdrStreamLocked returns the stream only for the device and the link

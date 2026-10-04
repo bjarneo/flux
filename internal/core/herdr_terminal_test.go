@@ -312,6 +312,56 @@ func TestHerdrTerminalInputPolicy(t *testing.T) {
 	}
 }
 
+func TestHerdrTerminalModeSwitch(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d, _ := terminalDaemon(ctx, t, bridgeEcho)
+	desk, phone, _, _ := linkPair(t, ctx)
+	dev := &Device{ID: "phone1", Paired: true}
+	answers := herdrAnswers(t, phone)
+	d.cfg.HerdrControl = true
+
+	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_open", "pane": "w1:p1", "mode": "observe", "request": 1}))
+	if a := nextOpened(t, answers); a["session"] != "ts1" || a["mode"] != "observe" {
+		t.Fatalf("terminal_opened = %v", a)
+	}
+
+	// A mode change on the same pane replaces the bridge: the phone sees
+	// the end of the old session and a new one, in any order.
+	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_open", "pane": "w1:p1", "mode": "control", "request": 2}))
+	var opened, closed map[string]any
+	for opened == nil || closed == nil {
+		switch a := nextAnswer(t, answers); a["kind"] {
+		case "terminal_frame":
+		case "terminal_opened":
+			opened = a
+		case "terminal_closed":
+			closed = a
+		default:
+			t.Fatalf("answer = %v", a)
+		}
+	}
+	if opened["session"] != "ts2" || opened["mode"] != "control" || opened["request"] != 2.0 {
+		t.Fatalf("terminal_opened = %v", opened)
+	}
+	if closed["session"] != "ts1" || closed["code"] != "released" {
+		t.Fatalf("terminal_closed = %v", closed)
+	}
+
+	// The replacement session is the one that input reaches.
+	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_scroll", "session": "ts1", "direction": "up",
+		"column": 1, "row": 1}))
+	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_release", "session": "ts2", "request": 3}))
+	final := nextClosed(t, answers)
+	if final["session"] != "ts2" || final["code"] != "released" || final["request"] != 3.0 {
+		t.Fatalf("terminal_closed = %v", final)
+	}
+}
+
 func TestHerdrTerminalRejectsStaleSessions(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
