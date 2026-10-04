@@ -157,6 +157,59 @@ Exit gate: reproducible evidence of pane-specific wheel input and correct ANSI r
 If size handling or coexistence fails the requirements, retain observe and document the limit.
 Do not describe the MVP as control without size authority if the contract does not support it.
 
+### Phase 0 results (2026-10-03)
+
+Harness: `scripts/herdr-bridge-proof.py`. It creates a disposable named Herdr
+session, runs a fixture TUI in its pane, and asserts the bridge contract.
+
+```sh
+python3 scripts/herdr-bridge-proof.py          # 14 checks, self-cleaning
+python3 scripts/herdr-bridge-proof.py --keep   # keep the session for manual use
+```
+
+Evidence lands in `/tmp/opencode/herdr-bridge-proof/results.json`.
+Run against Herdr 0.9.3: 14 passed, 0 failed. Existing sessions were not touched.
+
+Proven at contract level with the fixture TUI:
+
+1. `observe` streams `terminal.frame` JSONL at the observer viewport (80x24)
+   and does NOT resize the PTY: the pane stayed 120x40 with zero size events.
+2. `control` owns PTY size: connecting at 80x24 resized the application
+   (`pane layout` kept its own workspace rect, so the PTY size is the ground
+   truth, not the layout rect). The size-lock limitation is now confirmed.
+3. Wheel routing with `source: wheel`, `lines: 1`:
+   - mouse report: one SGR event per command, `ESC[<64;X;YM` up and
+     `ESC[<65;X;YM` down. Coordinates are 1-based: sent cell (col,row)
+     arrives as (col+1,row+1). `lines` does not repeat events; a separate
+     command is needed per step, which matches the planned 30 events/s budget.
+   - alternate scroll (1007, no mouse reporting): arrow encodings `ESC[A`
+     and `ESC[B` arrive, one per command.
+   - neither: host scrollback moves by exactly `lines` and the app receives
+     nothing. `pane get` exposes `scroll.offset_from_bottom` for verification.
+4. Controller exclusivity: a second `control` without `--takeover` is rejected
+   with `terminal attach failed: ... already has an attached client`; the
+   first controller keeps working.
+5. `terminal.resize` in the same stream resized the app to 100x30.
+6. `terminal.release` closes with `{"reason":"detached"}` and the process
+   exits cleanly; no orphans remain.
+7. An observer keeps receiving frames while a controller is active.
+8. `workspace create` and `pane get` expose `terminal_id`, so Phase 1 can
+   pin terminal identity through the JSON API.
+9. `herdr --session NAME server` gives an isolated headless server;
+   `session stop` plus `session delete` clean it up.
+
+Still unproven and still Phase 0 open items:
+
+- OpenCode V2 itself reacting to the wheel: its own mouse mode decides
+  between the three routings. The fixture proves the routing, not OpenCode.
+- Desktop TUI behavior while control holds the size lock (the probe was
+  headless).
+- Frame baseline and recovery after a dropped connection.
+- Rendering these frames on Android (Phase 3 work).
+
+So the exit gate passes for the bridge contract, and the MVP may proceed to
+Phase 1. The MVP must still state that control acquires PTY size ownership.
+
 ## 6. Phase 1: CLI wrapper in fluxd
 
 ### Safe session and executable selection
