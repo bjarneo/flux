@@ -374,6 +374,21 @@ adb -s emulator-5554 shell am start -n org.omarchy.flux/.ui.MainActivity \
 Use a small, non-private sample. This only changes the demo output; it sends no
 keys or prompts to a real agent. Omit the output extra to restore the default sample.
 
+The terminal choice of an agent screen takes a sample of its own in
+`flux.debug.terminal`, with the grid of that screen in `flux.debug.terminal_grid`:
+
+```bash
+sample=$(< /path/to/sample.ansi)
+sample=${sample//\'/\'\\\'\'}
+adb -s emulator-5554 shell am start -n org.omarchy.flux/.ui.MainActivity \
+  --ez flux.debug.demo true --es flux.debug.page agent:w2:p1 \
+  --es flux.debug.terminal "'$sample'" --es flux.debug.terminal_grid "120x40"
+```
+
+The sample is one ANSI screen, for example a frame of `herdr terminal session
+observe`. With a terminal sample, the agent screen opens on its Terminal choice
+instead of Read.
+
 ## Icons
 
 The app uses Material Symbols Rounded at the 24 dp optical size, under the Apache License 2.0. To add an icon, add its name to `ICONS` in `tools/fetch_icons.py`, run the script, and add the drawable to `Ic` in `ui/Icons.kt`:

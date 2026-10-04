@@ -84,6 +84,16 @@ This matters most for full-screen agents such as opencode, which draw panels acr
 - A centered drawing, for example the opencode logo, moves to the left when that makes it fit.
 - When the agent colors suit a dark background and the phone uses the light theme, the phone inverts the lightness of these colors, so the text stays readable. It does the same for colors that suit a light background in the dark theme.
 
+The **Terminal** choice on the screen of an agent shows the live terminal of its
+pane, exactly as the program draws it on the computer. The phone changes nothing
+in it: the sidebar, the tabs, and the panels are the ones of the program. The
+terminal keeps the size that the pane has on the computer, the phone fits that
+grid on its screen, and pinch zoom and drag pan over it. The colors are the
+colors of the program in both themes.
+
+This choice shows the terminal only: the phone sends no keys, no text, and no
+gestures to it yet. A computer with herdr 0.9.3 or newer offers it.
+
 ## Notifications
 
 The phone posts a notification when an agent changes to blocked.

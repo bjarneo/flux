@@ -325,6 +325,53 @@ Do not claim a frame acknowledges a specific input event.
 - Initial test policy: 1 MiB per record and a 4 MiB queue; adjust using fixtures.
 - Never truncate an ANSI frame: reject the entire frame and show a recoverable error.
 
+### Phase 2 status (2026-10-04)
+
+Implemented in `internal/core/herdr_terminal.go` and the dispatch of
+`handleHerdr`, with `pane.get` and `pane.layout` helpers in
+`internal/herdr/`. The messages are the contract of the plan:
+`terminal_open`, `terminal_opened`, `terminal_frame`, `terminal_scroll`,
+`terminal_mouse`, `terminal_release`, and `terminal_closed`.
+
+- One stream per device, and one controller per pane. Other devices may
+  observe the same pane while one of them controls it.
+- An open needs `herdr` and a paired device. Control additionally needs
+  `herdr_control`, and a pane without an agent also needs
+  `herdr_terminals`.
+- The stream is bound to the device, the link, and the pane. A message
+  with another session, another connection, or an unknown session is
+  ignored and logged. The terminal is pinned with `pane.get` before the
+  bridge opens.
+- The daemon fixes `source: wheel` and `lines: 1` for every gesture, so
+  a phone cannot turn a scroll into another key.
+- The frames of one stream go out from one goroutine in order, and
+  `terminal_opened` goes before the first frame and `terminal_closed`
+  after the last one. The phone always gets the frames before the end.
+- While a stream is open on a pane, the history reads of every device
+  return the cached history: herdr scrolls the terminal to collect the
+  history, which would move the live stream and the desktop.
+- The streams close when the agent leaves the pane, the pane closes, the
+  herdr server stops, the link drops, the device is unpaired, or
+  `herdr`/`herdr_control` turns off.
+- The state announces the `bridge` capabilities when the installed herdr
+  has the CLI bridge (0.9.3 and newer). An older herdr gives no caps and
+  no terminal button.
+
+Checks: `go test -race ./internal/herdr ./internal/core ./internal/proto
+./internal/lan`, `go vet ./...`, and `go test -race ./...` all pass. The
+9 tests in `internal/core/herdr_terminal_test.go` use a fake bridge
+script and cover frames, permissions, the input policy, stale sessions,
+history blocking, pruning, link loss, and the capabilities.
+
+Not part of Phase 2, as the plan says: `input_seq` is not in the
+messages. The Flux link is ordered and reliable, and a frame is not an
+acknowledgement of an input event, so per-event numbers would add state
+without a use.
+
+The macOS and iOS clients ignore the new kinds, which are additive. The
+Swift checks of the protocol run on a Mac or in CI and still need a run
+before merge.
+
 ## 8. Phase 3: ANSI observation on Android
 
 ### Select a component rather than building another partial parser
@@ -361,6 +408,48 @@ Do not feed frames through `TermText.kt`, `cleanANSI`, or reflow: they lose stat
 - Allow returning to Read without losing reply drafts.
 
 Exit gate: stable fixtures in light/dark themes, portrait/landscape, and with the IME open.
+
+### Phase 3 status (2026-10-04)
+
+The terminal view is `xterm.js 5.3.0` (MIT, with its license in the APK)
+inside a local WebView page. The page is `android/app/src/main/assets/terminal/`
+and loads nothing from the network. This follows the decision to use xterm.js
+and a WebView instead of an in-house renderer: the frames are Herdr's own
+rendering dialect, but Unicode, styles, and incremental updates are still a
+terminal's job, and a maintained emulator handles them once.
+
+- `ui/HerdrTerminal.kt` hosts the WebView and a JS bridge. The stream events
+  arrive in order: `Opened` resets the terminal to the grid of the pane,
+  `Frame` writes its ANSI bytes, and a frame with a new size resets first.
+  A view that leaves the screen releases the stream; a rotation opens it
+  again after the new page is ready, so no frames are replayed or lost.
+- The page disables stdin, never answers terminal queries, and opens no
+  links. The WebView cannot load the network and does not cache the page,
+  so the terminal content stays inside the app.
+- The grid keeps the size that the pane has on the computer. The page
+  shrinks the font until the whole grid fits the view (the WebView reports
+  its real CSS size: its layout viewport is wider than its window), and
+  pinch zoom and drag pan over it.
+- The agent screen now has a **Read / Terminal** choice. Terminal is
+  read-only in this phase; the reply controls and the reading view stay as
+  they were.
+- Debug builds accept `flux.debug.terminal` (an ANSI sample) and
+  `flux.debug.terminal_grid` ("120x40") next to `flux.debug.output`, so
+  screenshots need no pairing.
+
+Checks: the JVM tests (including `HerdrTerminalTest` for the wire shapes),
+`lintDebug`, the debug build, and the release build all pass.
+
+Emulator evidence, with a real OpenCode screen captured through the bridge:
+
+- `/tmp/opencode/flux-terminal-dark.png`: the whole screen of OpenCode at
+  120x40 in the dark theme, with its logo, prompt, model line, and status
+  line. The colors of the terminal are the colors of the program.
+- `/tmp/opencode/flux-terminal-light.png`: the same in the light theme. The
+  app chrome turns light and the terminal keeps its own colors.
+
+Not part of Phase 3, as the plan says: gestures, control mode, and resize.
+The IME never opens here because the view is read-only and not focusable.
 
 ## 9. Phase 4: explicit control and remote scrolling
 
