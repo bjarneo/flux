@@ -199,7 +199,8 @@ The phone turns on the camera or the microphone only after you tap Start on the 
 
 The stream starts from the visible page with the start code of its Start button.
 Android lets an app use the camera and the microphone only while the app is visible or after an action of the user.
-The stream stops when the page closes or Flux goes to the background, as after a start on the page.
+The stream keeps running after the page closes and while Flux is in the background, as after a start on the page.
+See [streams in the background](camera.md#streams-in-the-background).
 
 Another app on the phone can start Flux with the extras of the Start action.
 Only the one-time key of the notification opens the page and starts the stream.
@@ -389,6 +390,7 @@ python3 tools/fetch_icons.py
 | `app/src/main/java/org/omarchy/flux/net` | UDP discovery, TCP links, TLS, and payload transfers |
 | `app/src/main/java/org/omarchy/flux/core` | Devices, pairing, trust store, and the plugins |
 | `app/src/main/java/org/omarchy/flux/service` | The foreground service and the notification listener |
+| `app/src/main/java/org/omarchy/flux/stream` | The stream connection, and the foreground service that keeps the webcam and the mic running in the background |
 | `app/src/main/java/org/omarchy/flux/theme` | The computer theme, the contrast guard, and the palettes. Plain Kotlin with JVM tests. |
 | `app/src/main/java/org/omarchy/flux/ui` | The Compose screens |
 | `tools` | The test peer, the screenshot helper, and the icon script |

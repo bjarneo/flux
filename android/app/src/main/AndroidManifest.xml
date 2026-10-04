@@ -36,6 +36,9 @@
     <!-- The phone as microphone, and the screen mirror. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <!-- The webcam and the mic keep streaming while Flux is in the background. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <!-- Approve sudo and polkit with a fingerprint. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <!-- Android 12 and later: the pair sheet and the approval screen hide the windows of other apps. -->
@@ -142,6 +145,12 @@
             android:name=".screen.ScreenMirrorService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+
+        <!-- Keeps the webcam and the mic running while Flux is in the background. -->
+        <service
+            android:name=".stream.StreamService"
+            android:exported="false"
+            android:foregroundServiceType="camera|microphone|connectedDevice" />
 
         <!-- Quick Settings tile that sends the clipboard to the computers. -->
         <service

@@ -19,11 +19,19 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.InboxReach
+import org.omarchy.flux.core.StreamKind
+import org.omarchy.flux.stream.LiveStream
+import org.omarchy.flux.stream.LiveStreams
+import org.omarchy.flux.stream.streamSentence
+
+/** A webcam or mic stream in the Inbox. [name] is the name of its computer. */
+class StreamNotice(val stream: LiveStream, val name: String)
 
 /**
- * What the Inbox tells next to its items: a new pairing, the computers in
- * scope that are not reachable, the items on other computers that need the
- * user, and the notification question. [scopeName] is the name of the
+ * What the Inbox tells next to its items: the webcam and the mic streams
+ * of this phone, a new pairing, the computers in scope that are not
+ * reachable, the items on other computers that need the user, and the
+ * notification question. [streams] show in each scope. [scopeName] is the name of the
  * computer in scope, or null for all computers. [elsewhere] counts the
  * items out of scope that need the user. [paired] is the name of the
  * computer in scope while the Inbox shows its success state after a new
@@ -38,7 +46,12 @@ class InboxNotices(
     val notify: NotifyAsk,
     val paired: String? = null,
     val connecting: Boolean = false,
+    val streams: List<StreamNotice> = emptyList(),
 )
+
+/** The line of a stream in the Inbox, for example "The mic streams to omarchy. It keeps running when you leave Flux." */
+internal fun streamLine(s: StreamNotice): String =
+    streamSentence(listOf(s.stream.kind), s.name, s.stream.live) + ". It keeps running when you leave Flux."
 
 /** The title of an Inbox with nothing to do. In a scope, it names the computer. */
 internal fun nothingText(n: InboxNotices): String = n.scopeName?.let { "Nothing on $it needs you" } ?: "Nothing needs you"
@@ -89,6 +102,19 @@ internal fun elsewhereText(count: Int): String =
  */
 @Composable
 internal fun InboxNoticeList(n: InboxNotices, actions: InboxActions, offline: Boolean = true, paired: Boolean = true) {
+    // Green marks a live camera or microphone, as the privacy dot of Android does.
+    for (s in n.streams) {
+        val kind = s.stream.kind
+        Notice(
+            { Sym(if (kind == StreamKind.Webcam) Ic.videocam else Ic.micFill, tint = Tn.green, size = 18.dp) },
+            streamLine(s),
+            Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            color = Tn.text,
+        ) {
+            FluxButton("Open", { actions.open(Route(s.stream.deviceId, streamPage(kind))) }, kind = ButtonKind.Text)
+            FluxButton(if (kind == StreamKind.Webcam) "Stop webcam" else "Stop the mic", { LiveStreams.stop(kind) }, kind = ButtonKind.Text)
+        }
+    }
     if (paired && n.paired != null) {
         Notice(
             { Sym(Ic.checkCircle, tint = Tn.green, size = 18.dp) },

@@ -66,7 +66,6 @@ import org.omarchy.flux.camera.rememberCameraPermission
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.StreamKind
-import org.omarchy.flux.mic.MicSession
 import org.omarchy.flux.mic.MicSettings
 import org.omarchy.flux.ui.ButtonKind
 import org.omarchy.flux.ui.ChoiceChip
@@ -87,9 +86,10 @@ import org.omarchy.flux.ui.rememberStreamStart
 
 /**
  * The Webcam screen of 1 computer, in the Stream band of Control. A stream
- * that runs keeps its Stop button, also when the link drops. After a tap
- * on Start in a stream request of the computer, the stream starts when the
- * computer is reachable and the camera is ready.
+ * that runs keeps its Stop button, also when the link drops. The stream
+ * keeps running after the screen closes and while Flux is in the
+ * background. After a tap on Start in a stream request of the computer,
+ * the stream starts when the computer is reachable and the camera is ready.
  */
 @Composable
 fun WebcamScreen(d: DeviceUi, onBack: () -> Unit) {
@@ -123,21 +123,19 @@ fun WebcamPanel(deviceId: String, startNow: MutableState<Boolean>) {
     }
 
     val context = LocalContext.current
-    LaunchedEffect(context) { WebcamSettings.load(context.applicationContext) }
-    val controller = remember { WebcamController(context.applicationContext) }
+    // The controller of the app. A running stream keeps it, with its settings, after this screen closes.
+    val controller = remember { WebcamHost.controller(context) }
     val config by WebcamSettings.config.collectAsState()
     val caps by WebcamSettings.caps.collectAsState()
     val status by WebcamSession.status.collectAsState()
     val cameraError by controller.cameraError.collectAsState()
-    var rotation by rememberSaveable { mutableIntStateOf(0) }
+    var rotation by rememberSaveable { mutableIntStateOf(controller.extraRotation) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     val pcName = remember(deviceId) { FluxCore.device(deviceId)?.identity?.deviceName ?: "the computer" }
 
     // "Also send the microphone": the microphone streams while the webcam
-    // is live. The webcam stops it when the webcam stops.
-    LaunchedEffect(context) { MicSettings.load(context.applicationContext) }
+    // is live. WebcamHost starts it, and stops it when the webcam stops.
     val withMic by MicSettings.withWebcam.collectAsState()
-    var micByWebcam by remember { mutableStateOf(false) }
     fun hasMicPermission() = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
     // True after the user refused the microphone. The settings then offer the app settings.
     var micRefused by rememberSaveable { mutableStateOf(false) }
@@ -149,51 +147,24 @@ fun WebcamPanel(deviceId: String, startNow: MutableState<Boolean>) {
         if (on && !hasMicPermission()) askMic.launch(Manifest.permission.RECORD_AUDIO)
         else MicSettings.setWithWebcam(context.applicationContext, on)
     }
-    // The status can be of the stream of another Webcam page, for example
-    // while a stream request opens the page of another computer above this
-    // one. This page starts and stops only the microphone to its computer.
-    LaunchedEffect(status.phase, withMic) {
-        val own = WebcamSession.runsTo(deviceId)
-        val live = own && status.phase == WebcamSession.Phase.Live
-        if (live && withMic && hasMicPermission() && !MicSession.status.value.active) {
-            MicSession.start(FluxCore, deviceId)
-            micByWebcam = true
-        } else if ((!own || !withMic) && micByWebcam) {
-            if (MicSession.runsTo(deviceId)) MicSession.stop(FluxCore, notify = true)
-            micByWebcam = false
-        }
-    }
-
     DisposableEffect(controller) {
-        onDispose {
-            controller.release()
-            if (micByWebcam && MicSession.runsTo(deviceId)) MicSession.stop(FluxCore, notify = true)
-        }
+        WebcamHost.show(controller)
+        onDispose { WebcamHost.hide(controller) }
     }
-    LaunchedEffect(config) { controller.apply(config) }
     LaunchedEffect(rotation) { controller.extraRotation = rotation }
     // A tap on Start in a stream request starts the stream with the same path as Start webcam.
     StartAfterTap(startNow, ready = cameraError == null, StreamKind.Webcam, key = config) {
         if (!WebcamSession.runsTo(deviceId)) controller.goLive(deviceId)
     }
 
-    // The stream stops when the app goes to the background, and the camera
-    // closes, so that other apps can use it. The microphone that the webcam
-    // started stops too, because the composition does not run in the
-    // background.
+    // A stream keeps running when the app goes to the background. Without
+    // a stream, the camera closes, so that other apps can use it.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_STOP -> {
-                    controller.stopLive()
-                    controller.pause()
-                    if (micByWebcam) {
-                        MicSession.stop(FluxCore, notify = true)
-                        micByWebcam = false
-                    }
-                }
-                Lifecycle.Event.ON_START -> controller.resume()
+                Lifecycle.Event.ON_STOP -> WebcamHost.setVisible(false)
+                Lifecycle.Event.ON_START -> WebcamHost.setVisible(true)
                 else -> Unit
             }
         }
@@ -201,7 +172,7 @@ fun WebcamPanel(deviceId: String, startNow: MutableState<Boolean>) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // The screen stays on while the phone streams.
+    // The screen stays on while it shows the preview of a stream.
     val view = LocalView.current
     DisposableEffect(status.active) {
         view.keepScreenOn = status.active
@@ -229,7 +200,7 @@ fun WebcamPanel(deviceId: String, startNow: MutableState<Boolean>) {
                                     controller.attachPreview(texture, width, height)
 
                                 override fun onSurfaceTextureDestroyed(texture: SurfaceTexture): Boolean {
-                                    controller.detachPreview()
+                                    controller.detachPreview(texture)
                                     return true
                                 }
 
@@ -289,7 +260,7 @@ fun WebcamPanel(deviceId: String, startNow: MutableState<Boolean>) {
             }
             LiveButton(active, canStart, Modifier.fillMaxWidth().heightIn(min = 64.dp), onClick = toggleLive)
             T(
-                "Apps on $pcName see this phone as Flux Camera. Keep this screen open while you stream.",
+                "Apps on $pcName see this phone as Flux Camera. The webcam keeps streaming when you leave this screen.",
                 Modifier.fillMaxWidth(), size = 13, color = Tn.sub, align = TextAlign.Center, lineHeight = 1.35f,
             )
         }

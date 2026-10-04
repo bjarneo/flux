@@ -29,11 +29,16 @@ private const val CONNECT_TIMEOUT_MS = 10_000
 object WebcamSession {
     enum class Phase { Idle, Connecting, Starting, Live, Error }
 
+    /**
+     * [device] and [label] name the video device on the computer.
+     * [deviceId] is the computer of a stream that starts or runs.
+     */
     data class Status(
         val phase: Phase = Phase.Idle,
         val message: String = "",
         val device: String = "",
         val label: String = "",
+        val deviceId: String? = null,
     ) {
         val active: Boolean get() = phase == Phase.Connecting || phase == Phase.Starting || phase == Phase.Live
     }
@@ -72,7 +77,7 @@ object WebcamSession {
             ++attempt
         }
         val name = core.device(deviceId)?.identity?.deviceName ?: "the computer"
-        _status.value = Status(Phase.Connecting, "Waiting for $name…")
+        _status.value = Status(Phase.Connecting, "Waiting for $name…", deviceId = deviceId)
         core.io.execute {
             try {
                 val d = core.device(deviceId) ?: error("$name is not known")
@@ -103,7 +108,7 @@ object WebcamSession {
                 synchronized(listenerLock) {
                     // A stop can come before the lock. Then end() has closed the socket.
                     if (!current(id)) return@execute
-                    _status.value = Status(Phase.Starting, "Starting Flux Camera on $name…")
+                    _status.value = Status(Phase.Starting, "Starting Flux Camera on $name…", deviceId = deviceId)
                     l.onConnected(ssl.outputStream, width, height)
                 }
                 watch(core, d, id)
@@ -147,10 +152,7 @@ object WebcamSession {
 
     /**
      * Stops the stream when [listener] runs it, and tells the computer.
-     * Without a stream, the status goes back to idle, as after [stop]. A
-     * Webcam page that closes stops only its own stream. The page of
-     * another computer can run the stream already, for example after a
-     * stream request opened that page above it.
+     * Without a stream, the status goes back to idle, as after [stop].
      */
     fun stopOwnedBy(core: FluxCore, listener: Listener) {
         val id = synchronized(lock) { attempt.takeIf { this.listener == null || this.listener === listener } } ?: return
@@ -174,7 +176,7 @@ object WebcamSession {
         val name = d.identity.deviceName
         when (reply) {
             is WebcamReply.Live -> {
-                if (_status.value.active) _status.value = Status(Phase.Live, "Live on $name as ${reply.label}", reply.device, reply.label)
+                if (_status.value.active) _status.value = Status(Phase.Live, "Live on $name as ${reply.label}", reply.device, reply.label, d.id)
             }
             is WebcamReply.Failed -> core.io.execute { stop(core, notify = false, Status(Phase.Error, reply.message)) }
             WebcamReply.Stop -> core.io.execute { stop(core, notify = false, Status(Phase.Idle, "Stopped on $name")) }

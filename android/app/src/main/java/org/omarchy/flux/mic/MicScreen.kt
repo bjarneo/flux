@@ -31,7 +31,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -60,10 +59,11 @@ import org.omarchy.flux.ui.rememberStreamStart
 
 /**
  * The Mic screen. Apps on the computer see this phone as Flux Microphone
- * while the stream runs. The stream stops when the screen closes or the
- * app goes to the background. After a tap on Start in a stream request of
- * the computer, the stream starts when the computer is reachable and Flux
- * has the microphone permission.
+ * while the stream runs. The stream keeps running after the screen closes
+ * and while Flux is in the background, see [org.omarchy.flux.stream.StreamService].
+ * After a tap on Start in a stream request of the computer, the stream
+ * starts when the computer is reachable and Flux has the microphone
+ * permission.
  */
 @Composable
 fun MicScreen(d: DeviceUi, onBack: () -> Unit) {
@@ -93,25 +93,12 @@ fun MicScreen(d: DeviceUi, onBack: () -> Unit) {
     val mine = status.deviceId == null || status.deviceId == d.id
     val active = status.active && status.deviceId == d.id
 
-    // The stream stops when the app goes to the background and when the
-    // screen closes. Android gives the microphone only to a visible app.
+    // The user can change the permission in the system settings.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) granted = has()
-            if (event == Lifecycle.Event.ON_STOP && MicSession.status.value.active) MicSession.stop(FluxCore, notify = true)
-        }
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) granted = has() }
         lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            // The page of another computer can run the stream already, for example after a stream request opened that page above this one.
-            if (MicSession.runsTo(d.id)) MicSession.stop(FluxCore, notify = true)
-        }
-    }
-    val view = LocalView.current
-    DisposableEffect(active) {
-        view.keepScreenOn = active
-        onDispose { view.keepScreenOn = false }
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     Column(Modifier.fillMaxSize().padding(horizontal = TiledGutter)) {
@@ -138,7 +125,7 @@ fun MicScreen(d: DeviceUi, onBack: () -> Unit) {
             if (!granted) {
                 T("Allow the microphone", size = 20, weight = FontWeight.SemiBold, align = TextAlign.Center)
                 T(
-                    "Flux uses the microphone only while this screen is open and the mic runs.",
+                    "Flux uses the microphone only while the mic runs.",
                     size = 14, color = Tn.sub, align = TextAlign.Center, lineHeight = 1.35f,
                 )
                 FluxButton("Allow microphone", { ask.launch(Manifest.permission.RECORD_AUDIO) }, icon = Ic.mic)
@@ -174,7 +161,7 @@ fun MicScreen(d: DeviceUi, onBack: () -> Unit) {
                 icon = if (active) Ic.stop else Ic.micFill,
             )
             T(
-                "Apps on ${d.name} see this phone as Flux Microphone. Keep this screen open while you talk.",
+                "Apps on ${d.name} see this phone as Flux Microphone. The mic keeps streaming when you leave this screen or lock the phone.",
                 size = 13, color = Tn.sub, align = TextAlign.Center, lineHeight = 1.35f,
             )
         }

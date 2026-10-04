@@ -142,6 +142,11 @@ The service starts again after a restart of the phone and after an app update.
 **Turn off Flux** in **Computers** or **Turn off** in the notification stops the service.
 Flux then stays off after a restart, until you turn it on again.
 
+While the webcam or the mic streams, `StreamService` also runs.
+It is a foreground service of the `camera` and `microphone` types, so the streams keep running in the background.
+Its notification is in the **Live streams** channel.
+See [streams in the background](camera.md#streams-in-the-background).
+
 ### Network
 
 Flux uses Flux protocol version 8.

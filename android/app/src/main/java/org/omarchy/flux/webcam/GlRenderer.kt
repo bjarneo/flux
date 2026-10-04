@@ -119,6 +119,17 @@ class GlRenderer {
         attachPreview()
     }
 
+    /**
+     * Stops the preview when it still shows on [texture]. A Webcam screen
+     * that closes calls it. A newer screen can have given its own preview.
+     */
+    fun removePreview(texture: SurfaceTexture) = runSync {
+        if (previewTexture !== texture) return@runSync
+        preview?.let { destroySurface(it.surface) }
+        preview = null
+        previewTexture = null
+    }
+
     /** Draws into the preview that the screen gave, when GL is ready. */
     private fun attachPreview() {
         val texture = previewTexture ?: return

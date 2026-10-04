@@ -73,6 +73,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.launch
 import org.omarchy.flux.camera.CameraMode
@@ -86,6 +87,7 @@ import org.omarchy.flux.core.inScope
 import org.omarchy.flux.core.inboxReach
 import org.omarchy.flux.core.needsYou
 import org.omarchy.flux.mic.MicScreen
+import org.omarchy.flux.stream.LiveStreams
 import org.omarchy.flux.webcam.WebcamScreen
 
 /** Keeps the order that the user gave the Inbox across a recreation: the pinned key, then the deferred keys. */
@@ -134,6 +136,10 @@ fun FluxShell(
     val arranged = remember(items, arrangement) { arrangement.arrange(items) }
     val needs = all.needsYou()
     val reach = remember(scope, state.devices) { inboxReach(scope, state.devices) }
+    val live by LiveStreams.live.collectAsStateWithLifecycle()
+    val streams = remember(live, state.devices) {
+        live.map { s -> StreamNotice(s, state.devices.firstOrNull { it.id == s.deviceId }?.name ?: "the computer") }
+    }
     val notices = InboxNotices(
         reach = reach,
         onWifi = state.onWifi,
@@ -144,6 +150,7 @@ fun FluxShell(
         paired = state.devices.firstOrNull { it.paired && it.id == welcome && it.id == scope }?.name,
         // A sample computer of the demo never connects, so it does not wait. The debug page @connecting is the exception.
         connecting = state.connecting && reach.offline.any { !isDemo(it.id) || org.omarchy.flux.core.DebugInbox.connecting },
+        streams = streams,
     )
     val picker = rememberTargetPicker()
     val tools = rememberSendTools(state.devices, scope, picker)

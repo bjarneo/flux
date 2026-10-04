@@ -254,7 +254,7 @@ The palette is a set of roles that the contrast guard fills from the Omarchy the
 ### Semantic colors
 
 - **Needs-You Red**, `red`: An item that needs the user, the count badge, errors, and the Destructive button kind. See the One Red Rule.
-- **Done Green**, `green`: A connected link dot, an agent that is done, a finished transfer, a player that plays, and a battery that charges.
+- **Done Green**, `green`: A connected link dot, an agent that is done, a finished transfer, a player that plays, a battery that charges, and a live camera or microphone, as in the stream notice of the Inbox.
 - **Clipboard Cyan**, `cyan`: The clipboard item, a battery above 50%, and the second stop of the fallback border gradient.
 - **Warning Yellow**, `yellow`: A battery at 50% or less, the offline Inbox icon, and the top edge of the pairing sheet.
 - **Low Orange**, `orange`: A battery at 20% or less.

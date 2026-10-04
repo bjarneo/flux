@@ -41,11 +41,13 @@ object Android {
     const val CHANNEL_AGENT_INPUT = "flux.agents.input"
     const val CHANNEL_AGENT_DONE = "flux.agents.done"
     const val CHANNEL_STREAM = "flux.stream"
+    const val CHANNEL_LIVE = "flux.live"
     private const val TAG_AGENT = "agent"
     const val ID_SERVICE = 1
     const val ID_PAIR = 2
     const val ID_RING = 3
     const val ID_APPROVE = 4
+    const val ID_STREAMS = 5
 
     /**
      * The ID of the next event notification. Threads share it, and it starts
@@ -205,6 +207,10 @@ object Android {
         })
         nm.createNotificationChannel(NotificationChannel(CHANNEL_STREAM, "Stream requests", NotificationManager.IMPORTANCE_HIGH).apply {
             description = "A computer asks to start the webcam or the mic of this phone"
+        })
+        nm.createNotificationChannel(NotificationChannel(CHANNEL_LIVE, "Live streams", NotificationManager.IMPORTANCE_LOW).apply {
+            description = "Shows while the webcam or the mic of this phone streams to a computer"
+            setShowBadge(false)
         })
     }
 

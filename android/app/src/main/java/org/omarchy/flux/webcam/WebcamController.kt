@@ -20,8 +20,9 @@ private const val CONFIG_INTERVAL_MS = 120L
 
 /**
  * Connects the camera, the GL renderer, the encoder, and the network
- * session for 1 Webcam screen. The screen creates it, calls [apply] for
- * each settings change, and calls [release] when it closes.
+ * session. [WebcamHost] holds 1 controller for the app, calls [apply] for
+ * each settings change, and calls [release] when no stream and no Webcam
+ * screen need the camera.
  */
 class WebcamController(context: Context) : WebcamSession.Listener {
     private val renderer = GlRenderer()
@@ -41,6 +42,9 @@ class WebcamController(context: Context) : WebcamSession.Listener {
     // or a release takes a new number, so a late open does nothing.
     private val cameraLock = Any()
     private var cameraWanted = 0
+
+    // True after pause(), until resume() opens the camera again.
+    private var paused = false
 
     private val _cameraError = MutableStateFlow<String?>(null)
     /** A problem with the camera itself, or null. */
@@ -72,7 +76,8 @@ class WebcamController(context: Context) : WebcamSession.Listener {
         renderer.outputAspect = config.width.toFloat() / config.height
         renderer.color = GlRenderer.Color(config.brightness, config.contrast, config.saturation, config.warmth)
         if (old == null || old.camera != config.camera) {
-            openCamera(config)
+            // A paused camera opens with the new settings in resume().
+            if (!paused) openCamera(config)
             encoder?.requestKeyFrame()
         } else {
             camera.setControls(controlsFor(config))
@@ -87,8 +92,14 @@ class WebcamController(context: Context) : WebcamSession.Listener {
         }
     }
 
-    /** Opens the camera and turns on the orientation sensor again, for example when the app comes back to the front. */
+    /**
+     * Opens the camera and turns on the orientation sensor again after
+     * [pause], for example when the app comes back to the front. A camera
+     * that another app took opens again too.
+     */
     fun resume() {
+        if (!paused && _cameraError.value == null) return
+        paused = false
         if (orientation.canDetectOrientation()) orientation.enable()
         applied?.let { openCamera(it) }
     }
@@ -134,8 +145,10 @@ class WebcamController(context: Context) : WebcamSession.Listener {
         )
     }
 
-    /** Stops the camera and the orientation sensor, for example when the app goes to the background. */
+    /** Stops the camera and the orientation sensor, for example when the app goes to the background without a stream. */
     fun pause() {
+        if (paused) return
+        paused = true
         orientation.disable()
         synchronized(cameraLock) {
             cameraWanted++
@@ -145,7 +158,8 @@ class WebcamController(context: Context) : WebcamSession.Listener {
 
     fun attachPreview(texture: SurfaceTexture, width: Int, height: Int) = renderer.setPreview(texture, width, height)
 
-    fun detachPreview() = renderer.setPreview(null, 0, 0)
+    /** Stops the preview on [texture]. The preview of another Webcam screen stays. */
+    fun detachPreview(texture: SurfaceTexture) = renderer.removePreview(texture)
 
     /** Starts the stream to the computer with the current settings. */
     fun goLive(deviceId: String) {
@@ -177,10 +191,7 @@ class WebcamController(context: Context) : WebcamSession.Listener {
         encoder = null
     }
 
-    /**
-     * Stops everything. The controller cannot start again. A stream that
-     * another controller started keeps running.
-     */
+    /** Stops everything, also the stream that this controller runs. The controller cannot start again. */
     fun release() {
         main.removeCallbacks(sendConfig)
         WebcamSession.stopOwnedBy(FluxCore, this)
