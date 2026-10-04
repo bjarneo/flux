@@ -51,6 +51,13 @@ type browseSession struct {
 
 	// start is the time when the session began.
 	start time.Time
+
+	// ctx and fsys are the context and the folders of the session. They
+	// are nil until the session can serve a search.
+	ctx  context.Context
+	fsys *browseFS
+	// stopSearch stops the search that runs, or is nil.
+	stopSearch context.CancelFunc
 }
 
 // BrowseView is 1 Browse PC session for the window. Since is the start in
@@ -73,15 +80,24 @@ func (d *Daemon) browseViewLocked() []BrowseView {
 	return out
 }
 
-// handleBrowseRequest answers flux.sftp.request from a Flux phone.
+// handleBrowseRequest answers flux.sftp.request from a Flux phone. A
+// request with a search body runs a search in the session of the phone.
 // The SFTP server does not listen on the network. The phone opens a tunnel
 // listener, fluxd connects out to it, and the SSH session runs inside the
 // tunnel, so Browse PC works with a firewall that blocks incoming traffic.
 func (d *Daemon) handleBrowseRequest(dev *Device, l *lan.Link, p *proto.Packet) {
 	var b struct {
-		Start bool `json:"startBrowsing"`
+		Start  bool          `json:"startBrowsing"`
+		Search *browseSearch `json:"search"`
 	}
-	if p.Decode(&b) != nil || !b.Start {
+	if p.Decode(&b) != nil {
+		return
+	}
+	if b.Search != nil {
+		d.searchBrowse(dev, l, *b.Search)
+		return
+	}
+	if !b.Start {
 		return
 	}
 	d.mu.Lock()
@@ -115,6 +131,7 @@ func (d *Daemon) handleBrowseRequest(dev *Device, l *lan.Link, p *proto.Packet) 
 	if err := l.Send(proto.New(proto.TypeSftp, map[string]any{
 		"tunnel": id, "user": "flux", "password": password,
 		"path": fsys.start, "multiPaths": roots, "pathNames": names,
+		"search": true,
 	})); err != nil {
 		l.CancelTunnel(id)
 		fsys.Close()
@@ -141,6 +158,9 @@ func (d *Daemon) startBrowse(dev *Device, l interface{ Done() <-chan struct{} },
 		defer d.mu.Unlock()
 		return d.cfg.ShareHome && dev.Paired && d.permittedLocked(dev.ID, "shareHome") && d.sessions.browse[n] == s && ctx.Err() == nil
 	}
+	d.mu.Lock()
+	s.ctx, s.fsys = ctx, fsys
+	d.mu.Unlock()
 	d.watchSession(ctx, cancel, dev, l, func() bool { return d.cfg.ShareHome && d.permittedLocked(dev.ID, "shareHome") })
 
 	go func() {

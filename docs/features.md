@@ -155,6 +155,17 @@ A symlink to another drive does not show in the home folder.
 When `~/Documents` or another folder of the list is such a symlink, open it from the list of folders.
 `fluxd` does not offer a `download_dir` that holds the home folder, such as `/`, or a `download_dir` in a folder of home with a dot name.
 
+To find a file by its name, type in the search field at the top of **Get files**.
+
+- At the top of Home, the search reads each shared folder.
+- In another folder, the search reads that folder and its subfolders.
+- Each word must be in the name, in any case. For example, `invoice 2026` finds `Invoice-2026-09.pdf`.
+- The search uses the same rules as the folder list. It also skips each `node_modules` folder. It does not read the contents of a folder that is a symlink.
+- The search shows the first 100 matches, the best first.
+- The search stops after 10 seconds. To find more, open a folder and search there.
+
+A tap on a file downloads it. A tap on a folder opens it.
+
 While the phone browses, the desktop shows a notification with a **Stop** button until the session ends.
 The Overview page of the Flux window shows a **BROWSE PC** card with a **Stop** button too.
 To see and end the sessions from a terminal, run:

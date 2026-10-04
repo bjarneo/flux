@@ -12,10 +12,13 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.omarchy.flux.net.ConnectedSocketFactory
 import org.omarchy.flux.net.Tunnel
 import org.omarchy.flux.protocol.Packet
+import org.omarchy.flux.protocol.SftpFound
 import org.omarchy.flux.protocol.SftpOffer
 import org.omarchy.flux.protocol.Types
 import org.omarchy.flux.protocol.bodyOf
 import java.security.Security
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
 private const val TAG = "FluxBrowse"
 
@@ -37,6 +40,9 @@ object Browse {
     /** The folder that the next session opens in place of the first root, or null. */
     @Volatile private var resumePath: String? = null
 
+    /** The ID of the last search. An answer to an older search does not show. */
+    private val searchIds = AtomicLong()
+
     /**
      * Starts a session. It opens [path] when the computer shares it, else
      * the first root. `fluxd` ends a session when the link drops, so the
@@ -46,20 +52,26 @@ object Browse {
         val d = core.device(id) ?: return
         close()
         resumePath = path
-        core.setBrowse(BrowseState(deviceId = id, loading = true))
+        // The search field stays while a new session of the same computer opens.
+        val canSearch = core.browseState()?.takeIf { it.deviceId == id }?.canSearch ?: false
+        core.setBrowse(BrowseState(deviceId = id, loading = true, canSearch = canSearch))
         d.send(Packet(Types.SFTP_REQUEST, bodyOf("startBrowsing" to true)))
         core.scheduler.schedule({
             val s = core.browseState()
             if (s != null && s.deviceId == id && s.loading && s.entries.isEmpty() && s.error == null) {
                 core.setBrowse(s.copy(loading = false, error = "${d.identity.deviceName} did not answer. Get files needs fluxd."))
             }
-        }, 10, java.util.concurrent.TimeUnit.SECONDS)
+        }, 10, TimeUnit.SECONDS)
     }
 
     /** Handles flux.sftp. The core lock is held. */
     fun onCredentials(core: FluxCore, d: Device, p: Packet) {
         val state = core.browseState()
         if (state == null || state.deviceId != d.id) return
+        if (SftpFound.isAnswer(p)) {
+            SftpFound.parse(p)?.let { onFound(core, it) }
+            return
+        }
         p.string("errorMessage")?.let {
             core.setBrowse(state.copy(loading = false, error = it))
             return
@@ -101,7 +113,7 @@ object Browse {
                 val first = offer.roots.first().second
                 val open = resumePath?.takeIf { p -> offer.roots.any { (_, root) -> p == root || p.startsWith(root.trimEnd('/') + "/") } } ?: first
                 resumePath = null
-                core.setBrowse(state.copy(loading = false, roots = offer.roots))
+                core.setBrowse(state.copy(loading = false, roots = offer.roots, canSearch = offer.search))
                 list(core, open)
             } catch (e: Exception) {
                 if (generation == gen) {
@@ -139,6 +151,46 @@ object Browse {
                 core.setBrowse(core.browseState()?.copy(loading = false, error = "Cannot open $path: ${e.message}"))
             }
         }
+    }
+
+    /**
+     * Asks the computer for the files and folders whose names hold each
+     * word of [query], in [path] and its subfolders. An empty [path]
+     * searches each shared folder. An empty [query] ends the search.
+     */
+    fun search(core: FluxCore, query: String, path: String) {
+        val state = core.browseState() ?: return
+        val q = query.trim()
+        if (q.isEmpty()) {
+            if (state.search != null) core.setBrowse(state.copy(search = null))
+            return
+        }
+        val d = core.device(state.deviceId) ?: return
+        val id = searchIds.incrementAndGet()
+        core.setBrowse(state.copy(search = BrowseSearch(id, q, path)))
+        d.send(SftpFound.request(id, q, path))
+        core.scheduler.schedule({
+            val now = core.browseState()
+            val s = now?.search
+            if (s != null && s.id == id && s.loading) {
+                core.setBrowse(now.copy(search = s.copy(loading = false, error = "${d.identity.deviceName} did not answer the search.")))
+            }
+        }, 20, TimeUnit.SECONDS)
+    }
+
+    /** Shows the answer to the last search. The core lock is held. */
+    private fun onFound(core: FluxCore, found: SftpFound) {
+        val state = core.browseState() ?: return
+        val s = state.search?.takeIf { it.id == found.id } ?: return
+        val results = found.results.map { BrowseEntry(it.path.trimEnd('/').substringAfterLast('/'), it.path, it.dir, if (it.dir) 0 else it.size) }
+        core.setBrowse(state.copy(search = s.copy(loading = false, results = results, more = found.more, partial = found.partial, error = found.error)))
+    }
+
+    /** Reports whether [name] holds each word of [query], in any case. The demo searches with it. */
+    fun matches(name: String, query: String): Boolean {
+        val lower = name.lowercase()
+        val words = query.lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        return words.isNotEmpty() && words.all { it in lower }
     }
 
     /**

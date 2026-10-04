@@ -47,7 +47,10 @@ data class RemoteCommand(val key: String, val name: String, val command: String)
 /** One entry of a folder on the PC. */
 data class BrowseEntry(val name: String, val path: String, val dir: Boolean, val size: Long)
 
-/** The state of the Browse PC screen. */
+/**
+ * The state of the Browse PC screen. [canSearch] tells that the computer
+ * answers a search. [search] is the search that shows, or null.
+ */
 data class BrowseState(
     val deviceId: String,
     val loading: Boolean = true,
@@ -55,6 +58,25 @@ data class BrowseState(
     val roots: List<Pair<String, String>> = emptyList(),
     val path: String = "",
     val entries: List<BrowseEntry> = emptyList(),
+    val canSearch: Boolean = false,
+    val search: BrowseSearch? = null,
+)
+
+/**
+ * A search of the Browse PC screen. [path] is the folder that the search
+ * reads with its subfolders, or empty for each shared folder. [more] tells
+ * that more names match than [results] holds. [partial] tells that the
+ * search stopped at its time limit.
+ */
+data class BrowseSearch(
+    val id: Long,
+    val query: String,
+    val path: String,
+    val loading: Boolean = true,
+    val results: List<BrowseEntry> = emptyList(),
+    val more: Boolean = false,
+    val partial: Boolean = false,
+    val error: String? = null,
 )
 
 /** A snapshot of one device for the UI. */

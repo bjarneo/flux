@@ -12,6 +12,62 @@ final class BrowseTests: XCTestCase {
         XCTAssertEqual(o.roots, [BrowseRoot(name: "Home", path: "/home/u"), BrowseRoot(name: "Pictures", path: "/home/u/Pictures")])
     }
 
+    func testSearchFlagOfTheOffer() throws {
+        let line = #"{"id":1,"type":"flux.sftp","body":{"tunnel":"s1","user":"flux","password":"pw","multiPaths":["/home/u"],"pathNames":["Home"],"search":true}}"#
+        XCTAssertTrue(try XCTUnwrap(offer(line)).search)
+        XCTAssertFalse(try XCTUnwrap(offer(#"{"id":1,"type":"flux.sftp","body":{"tunnel":"s1","user":"flux","password":"pw","multiPaths":["/home/u"],"pathNames":["Home"]}}"#)).search, "an older fluxd has no search")
+    }
+
+    func testSearchAnswer() throws {
+        let p = try XCTUnwrap(Packet.parse(#"{"id":1,"type":"flux.sftp","body":{"search":{"id":7,"results":[{"path":"/home/u/Documents/plan.md","dir":false,"size":12,"modified":1790000000},{"path":"/home/u/notes","dir":true,"size":4096,"modified":0},{"path":"relative.txt","dir":false,"size":1,"modified":1},{"dir":false}],"more":true,"partial":false}}}"#))
+        XCTAssertNil(SftpOffer.parse(p), "an answer to a search is not an offer")
+        let found = try XCTUnwrap(BrowseFound.parse(p))
+        XCTAssertEqual(found.id, 7)
+        XCTAssertTrue(found.more)
+        XCTAssertFalse(found.partial)
+        XCTAssertNil(found.error)
+        XCTAssertEqual(found.results, [
+            BrowseEntry(name: "plan.md", path: "/home/u/Documents/plan.md", dir: false, size: 12, modified: Date(timeIntervalSince1970: 1_790_000_000)),
+            BrowseEntry(name: "notes", path: "/home/u/notes", dir: true, size: 4096),
+        ], "a result without an absolute path is skipped")
+    }
+
+    func testSearchErrorAndOtherPackets() throws {
+        let failed = try XCTUnwrap(BrowseFound.parse(try XCTUnwrap(Packet.parse(#"{"id":1,"type":"flux.sftp","body":{"search":{"id":3,"results":[],"more":false,"partial":false,"error":"Get files is not open. Open it again."}}}"#))))
+        XCTAssertEqual(failed, BrowseFound(id: 3, error: "Get files is not open. Open it again."))
+        XCTAssertNil(BrowseFound.parse(try XCTUnwrap(Packet.parse(#"{"id":1,"type":"flux.sftp","body":{"tunnel":"s1","user":"flux","password":"pw","multiPaths":["/h"],"pathNames":["Home"],"search":true}}"#))), "an offer is not an answer")
+        XCTAssertNil(BrowseFound.parse(try XCTUnwrap(Packet.parse(#"{"id":1,"type":"flux.sftp","body":{"search":{"results":[]}}}"#))), "no ID")
+        XCTAssertNil(BrowseFound.parse(try XCTUnwrap(Packet.parse(#"{"id":1,"type":"flux.sftp.request","body":{"search":{"id":3}}}"#))))
+    }
+
+    func testSearchRequest() {
+        let p = BrowseSearch.request(id: 9, query: "plan 2024", path: "")
+        XCTAssertEqual(p.type, PacketType.sftpRequest)
+        let body = p.object("search")
+        XCTAssertEqual(body?["id"]?.int64, 9)
+        XCTAssertEqual(body?["query"]?.string, "plan 2024")
+        XCTAssertEqual(body?["path"]?.string, "")
+        XCTAssertNil(p.bool("startBrowsing"), "a search starts no session")
+    }
+
+    func testSearchQueryScopeAndLocation() {
+        XCTAssertEqual(BrowseSearch.query("  plan  "), "plan")
+        XCTAssertEqual(BrowseSearch.query(String(repeating: "é", count: 150)).utf8.count, 200, "the query fits 200 bytes")
+        XCTAssertEqual(BrowseSearch.query(" \n "), "")
+
+        let roots = [BrowseRoot(name: "Home", path: "/home/u"), BrowseRoot(name: "Downloads", path: "/home/u/Downloads")]
+        XCTAssertEqual(BrowseSearch.scope(path: "/home/u", roots: roots), "", "the top of Home searches each shared folder")
+        XCTAssertEqual(BrowseSearch.scope(path: "/home/u/", roots: roots), "")
+        XCTAssertEqual(BrowseSearch.scope(path: "/home/u/Documents", roots: roots), "/home/u/Documents")
+        XCTAssertEqual(BrowseSearch.scope(path: "/home/u/Downloads", roots: roots), "/home/u/Downloads")
+        XCTAssertEqual(BrowseSearch.scope(path: "", roots: roots), "")
+
+        XCTAssertEqual(BrowseSearch.location(of: "/home/u/Documents/Work/plan.md", roots: roots), "Home/Documents/Work")
+        XCTAssertEqual(BrowseSearch.location(of: "/home/u/Downloads/a.zip", roots: roots), "Downloads")
+        XCTAssertEqual(BrowseSearch.location(of: "/home/u/notes", roots: roots), "Home")
+        XCTAssertEqual(BrowseSearch.location(of: "/srv/x/a", roots: roots), "/srv/x")
+    }
+
     func testBadRootListsAreRejected() {
         XCTAssertNil(offer(#"{"id":1,"type":"flux.sftp","body":{"tunnel":"t","user":"k","password":"p","path":"/home/u","multiPaths":["/home/u","/srv"],"pathNames":["Home"]}}"#), "the lists differ in length")
         XCTAssertNil(offer(#"{"id":1,"type":"flux.sftp","body":{"tunnel":"t","user":"k","password":"p","path":"/home/u"}}"#), "no lists")

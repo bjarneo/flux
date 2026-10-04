@@ -24,6 +24,8 @@ struct BrowseView: View {
         .frame(minWidth: 560, minHeight: 360)
         .quickLookPreview($preview)
         .onChange(of: browser.path) { selection = [] }
+        .onChange(of: browser.query) { selection = [] }
+        .onExitCommand { if browser.inSearch { browser.endSearch() } }
     }
 
     @ViewBuilder
@@ -36,6 +38,8 @@ struct BrowseView: View {
             } actions: {
                 Button("Try Again") { browser.retry() }
             }
+        } else if browser.inSearch {
+            search
         } else if browser.loading && browser.entries.isEmpty {
             ProgressView("Opening the files of \(browser.deviceName)…")
         } else if browser.entries.isEmpty {
@@ -45,8 +49,73 @@ struct BrowseView: View {
         }
     }
 
+    /// The search results, or the wait, the error, or no match.
+    @ViewBuilder
+    private var search: some View {
+        if let error = browser.searchError {
+            ContentUnavailableView {
+                Label("Cannot search", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(error)
+            } actions: {
+                Button("Try Again") { browser.retry() }
+            }
+        } else if let found = browser.found, !found.results.isEmpty {
+            VStack(spacing: 0) {
+                results(found.results)
+                if found.more || found.partial {
+                    Divider()
+                    Text(found.more ? "Showing the first 100 matches. Type more of the name."
+                                    : "The search stopped after 10 seconds. Search in a folder to find more.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                }
+            }
+        } else if browser.searching {
+            ProgressView("Searching…")
+        } else {
+            ContentUnavailableView {
+                Label("No file or folder has \"\(browser.query)\"", systemImage: "magnifyingglass")
+            } description: {
+                Text("Type another part of the name, or search in another folder.")
+            }
+        }
+    }
+
+    /// The files and the folders that the search found, with the folder
+    /// that holds each one. Opening a folder ends the search.
+    private func results(_ found: [BrowseEntry]) -> some View {
+        actions(Table(found, selection: $selection) {
+            TableColumn("Name") { entry in
+                Label {
+                    Text(entry.name).lineLimit(1).truncationMode(.middle)
+                } icon: {
+                    Image(nsImage: BrowseFormat.icon(entry))
+                        .resizable()
+                        .frame(width: 16, height: 16)
+                }
+            }
+            TableColumn("Place") { entry in
+                Text(browser.location(of: entry))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+            }
+            .width(min: 120, ideal: 240)
+            TableColumn("Size") { entry in
+                Text(entry.dir ? "--" : BrowseFormat.bytes(entry.size))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            .width(min: 60, ideal: 90, max: 120)
+        }, rows: found)
+    }
+
     private var table: some View {
-        Table(browser.entries, selection: $selection) {
+        actions(Table(browser.entries, selection: $selection) {
             TableColumn("Name") { entry in
                 Label {
                     Text(entry.name).lineLimit(1).truncationMode(.middle)
@@ -66,9 +135,13 @@ struct BrowseView: View {
                 Text(BrowseFormat.kind(entry)).foregroundStyle(.secondary)
             }
             .width(min: 80, ideal: 150, max: 240)
-        }
-        .contextMenu(forSelectionType: BrowseEntry.ID.self) { ids in
-            let chosen = entries(ids)
+        }, rows: browser.entries)
+    }
+
+    /// The context menu and the double click of a table of entries.
+    private func actions(_ table: some View, rows: [BrowseEntry]) -> some View {
+        table.contextMenu(forSelectionType: BrowseEntry.ID.self) { ids in
+            let chosen = entries(ids, in: rows)
             if chosen.count == 1, let entry = chosen.first, entry.dir {
                 Button("Open") { browser.open(entry.path) }
             }
@@ -79,7 +152,7 @@ struct BrowseView: View {
                 }
             }
         } primaryAction: { ids in
-            let chosen = entries(ids)
+            let chosen = entries(ids, in: rows)
             if chosen.count == 1, let entry = chosen.first {
                 browser.activate(entry)
             } else {
@@ -88,20 +161,20 @@ struct BrowseView: View {
         }
     }
 
-    private func entries(_ ids: Set<BrowseEntry.ID>) -> [BrowseEntry] {
-        browser.entries.filter { ids.contains($0.id) }
+    private func entries(_ ids: Set<BrowseEntry.ID>, in rows: [BrowseEntry]) -> [BrowseEntry] {
+        rows.filter { ids.contains($0.id) }
     }
 }
 
-/// Up, the folders from the root, the roots, and reload.
+/// Back, the folders from the root, the roots, the search, and reload.
 private struct BrowseBar: View {
     let browser: BrowseModel
 
     var body: some View {
         HStack(spacing: 8) {
             Button { browser.goUp() } label: { Image(systemName: "chevron.left") }
-                .disabled(!browser.canGoUp)
-                .help("Enclosing folder")
+                .disabled(!browser.canGoBack)
+                .help(browser.inSearch ? "End the search" : "Enclosing folder")
                 .keyboardShortcut(.upArrow, modifiers: .command)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 2) {
@@ -116,8 +189,11 @@ private struct BrowseBar: View {
                     }
                 }
             }
-            if browser.loading && !browser.entries.isEmpty {
+            if browser.inSearch ? (browser.searching && !(browser.found?.results.isEmpty ?? true)) : (browser.loading && !browser.entries.isEmpty) {
                 ProgressView().controlSize(.small)
+            }
+            if browser.canSearch {
+                BrowseSearchField(browser: browser)
             }
             if browser.roots.count > 1 {
                 Menu {
@@ -139,6 +215,30 @@ private struct BrowseBar: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(.bar)
+    }
+}
+
+/// The search field of the window. Return searches at once, and Escape
+/// ends the search.
+private struct BrowseSearchField: View {
+    let browser: BrowseModel
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField(browser.searchPrompt, text: Binding(get: { browser.searchText }, set: { browser.setSearchText($0) }))
+                .textFieldStyle(.plain)
+                .onSubmit { browser.search(browser.searchText) }
+                .onExitCommand { browser.endSearch() }
+            if !browser.searchText.isEmpty {
+                Button { browser.endSearch() } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }
+                    .buttonStyle(.plain)
+                    .help("Clear the search")
+            }
+        }
+        .padding(.horizontal, 6)
+        .frame(width: 220, height: 24)
+        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(.quaternary))
     }
 }
 

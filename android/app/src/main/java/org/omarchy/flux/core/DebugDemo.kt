@@ -94,6 +94,7 @@ object DebugDemo {
     fun browse(): BrowseState = BrowseState(
         deviceId = PC,
         loading = false,
+        canSearch = true,
         roots = listOf("Home" to "/home/user/", "Downloads" to "/home/user/Downloads/"),
         path = "/home/user/",
         entries = listOf(
@@ -106,6 +107,26 @@ object DebugDemo {
             BrowseEntry("talk.mp4", "/home/user/talk.mp4", dir = false, size = 182_000_000),
         ),
     )
+
+    /** The files of the demo computer below the home folder, for the demo search. */
+    private val demoFiles = browse().entries + listOf(
+        BrowseEntry("invoice-2026-09.pdf", "/home/user/Documents/invoice-2026-09.pdf", dir = false, size = 84_000),
+        BrowseEntry("invoices", "/home/user/Documents/invoices", dir = true, size = 0),
+        BrowseEntry("invoice-2026-08.pdf", "/home/user/Documents/invoices/invoice-2026-08.pdf", dir = false, size = 79_000),
+        BrowseEntry("lease.pdf", "/home/user/Documents/lease.pdf", dir = false, size = 1_300_000),
+        BrowseEntry("flux-android.apk", "/home/user/Downloads/flux-android.apk", dir = false, size = 118_000_000),
+        BrowseEntry("holiday-beach.jpg", "/home/user/Pictures/holiday-beach.jpg", dir = false, size = 3_900_000),
+    )
+
+    /** Searches the demo computer as fluxd does: each word in the name, in [path] and its subfolders. */
+    fun search(query: String, path: String): BrowseSearch {
+        val from = path.trimEnd('/')
+        val results = demoFiles
+            .filter { from.isEmpty() || it.path.startsWith("$from/") }
+            .filter { Browse.matches(it.name, query) }
+            .sortedBy { it.path.count { c -> c == '/' } }
+        return BrowseSearch(0, query.trim(), path, loading = false, results = results)
+    }
 
     private fun device(id: String, name: String, type: String, ip: String, paired: Boolean, online: Boolean) = DeviceUi(
         id = id, name = name, type = type, ip = ip, paired = paired, online = online,

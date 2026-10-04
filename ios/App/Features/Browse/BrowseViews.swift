@@ -64,6 +64,19 @@ private struct BrowseContent: View {
     let browser: BrowseModel
 
     var body: some View {
+        if browser.canSearch {
+            list
+                .searchable(text: Binding(get: { browser.searchText }, set: { browser.setSearchText($0) }),
+                            placement: .navigationBarDrawer(displayMode: .always), prompt: Text(browser.searchPrompt))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .onSubmit(of: .search) { browser.search(browser.searchText) }
+        } else {
+            list
+        }
+    }
+
+    private var list: some View {
         List {
             if browser.roots.count > 1 {
                 Section {
@@ -102,14 +115,33 @@ private struct BrowseContent: View {
                     }
                 }
             }
-            Section {
-                folder
-            } header: {
-                if !browser.crumbs.isEmpty {
-                    Text(browser.crumbs.map(\.name).joined(separator: " › "))
+            if browser.inSearch {
+                Section {
+                    results
+                } header: {
+                    Text(browser.searchScope.isEmpty ? "All shared folders" : browser.crumbs.map(\.name).joined(separator: " › "))
                         .lineLimit(1)
                         .truncationMode(.head)
                         .textCase(nil)
+                } footer: {
+                    if let found = browser.found, browser.searchError == nil {
+                        if found.more {
+                            Text("Showing the first 100 matches. Type more of the name.")
+                        } else if found.partial {
+                            Text("The search stopped after 10 seconds. Search in a folder to find more.")
+                        }
+                    }
+                }
+            } else {
+                Section {
+                    folder
+                } header: {
+                    if !browser.crumbs.isEmpty {
+                        Text(browser.crumbs.map(\.name).joined(separator: " › "))
+                            .lineLimit(1)
+                            .truncationMode(.head)
+                            .textCase(nil)
+                    }
                 }
             }
         }
@@ -117,10 +149,33 @@ private struct BrowseContent: View {
         .overlay { overlay }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                if browser.loading && !browser.entries.isEmpty { ProgressView() }
-                if browser.canGoUp {
-                    Button { browser.goUp() } label: { Label("Up", systemImage: "arrow.up") }
+                if browser.inSearch {
+                    if browser.searching && !(browser.found?.results.isEmpty ?? true) { ProgressView() }
+                } else {
+                    if browser.loading && !browser.entries.isEmpty { ProgressView() }
+                    if browser.canGoUp {
+                        Button { browser.goUp() } label: { Label("Up", systemImage: "arrow.up") }
+                    }
                 }
+            }
+        }
+    }
+
+    /// The files and the folders that the search found. A tap on a folder
+    /// ends the search and opens the folder.
+    @ViewBuilder
+    private var results: some View {
+        if browser.searchError == nil {
+            ForEach(browser.found?.results ?? []) { entry in
+                Button { browser.activate(entry) } label: { EntryRow(entry: entry, place: browser.location(of: entry)) }
+                    .tint(.primary)
+                    .contextMenu {
+                        if entry.dir {
+                            Button("Open", systemImage: "folder") { browser.open(entry.path) }
+                        } else {
+                            Button("Download", systemImage: "arrow.down.circle") { browser.download(entry) }
+                        }
+                    }
             }
         }
     }
@@ -152,17 +207,45 @@ private struct BrowseContent: View {
             } actions: {
                 Button("Try Again") { browser.retry() }
             }
+        } else if browser.inSearch {
+            searchOverlay
         } else if browser.loading && browser.entries.isEmpty {
             ProgressView("Opening the files of \(browser.deviceName)…")
         } else if browser.entries.isEmpty {
             ContentUnavailableView("This folder is empty", systemImage: "folder", description: Text("Go up to open another folder."))
         }
     }
+
+    /// The state of a search without results: the wait, the error, or no match.
+    @ViewBuilder
+    private var searchOverlay: some View {
+        if let error = browser.searchError {
+            ContentUnavailableView {
+                Label("Cannot search", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(error)
+            } actions: {
+                Button("Try Again") { browser.retry() }
+            }
+        } else if browser.found?.results.isEmpty ?? true {
+            if browser.searching {
+                ProgressView("Searching…")
+            } else {
+                ContentUnavailableView {
+                    Label("No file or folder has \"\(browser.query)\"", systemImage: "magnifyingglass")
+                } description: {
+                    Text("Type another part of the name, or search in another folder.")
+                }
+            }
+        }
+    }
 }
 
-/// One entry of a folder: its icon, name, size, and date.
+/// One entry of a folder: its icon, name, size, and date. A search result
+/// shows its place in place of the date.
 private struct EntryRow: View {
     let entry: BrowseEntry
+    var place: String?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -175,7 +258,7 @@ private struct EntryRow: View {
                 Text(entry.name)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Text(BrowseFormat.details(entry))
+                Text(place.map { BrowseFormat.found(entry, place: $0) } ?? BrowseFormat.details(entry))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -269,6 +352,11 @@ enum BrowseFormat {
         let date = entry.modified?.formatted(date: .abbreviated, time: .shortened)
         let parts = [entry.dir ? "Folder" : bytes(entry.size), date].compactMap { $0 }
         return parts.joined(separator: " · ")
+    }
+
+    /// The place and the size of a search result, or the place of a folder.
+    static func found(_ entry: BrowseEntry, place: String) -> String {
+        entry.dir ? place : "\(place) · \(bytes(entry.size))"
     }
 
     static func bytes(_ n: Int64) -> String { ByteCountFormatter.string(fromByteCount: n, countStyle: .file) }

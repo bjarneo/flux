@@ -19,6 +19,8 @@ public struct SftpOffer: Sendable, Equatable {
     public var user: String
     public var password: String
     public var roots: [BrowseRoot]
+    /// True when the computer can search the names in its shared folders.
+    public var search = false
 
     /// Parses flux.sftp. It returns nil for an error answer, a packet
     /// without a tunnel, or root lists that are empty or differ in length.
@@ -30,6 +32,6 @@ public struct SftpOffer: Sendable, Equatable {
         let names = p.strings("pathNames")
         guard !paths.isEmpty, paths.count == names.count else { return nil }
         let roots = zip(names, paths).map { BrowseRoot(name: $0, path: $1) }
-        return SftpOffer(tunnel: tunnel, user: user, password: password, roots: roots)
+        return SftpOffer(tunnel: tunnel, user: user, password: password, roots: roots, search: p.bool("search") ?? false)
     }
 }

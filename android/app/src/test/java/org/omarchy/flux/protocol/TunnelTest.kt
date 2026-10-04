@@ -92,6 +92,53 @@ class TunnelTest {
         assertNull(sftp("""{"tunnel":"s1","user":"flux","multiPaths":["/"],"pathNames":["Home"]}"""))
     }
 
+    @Test
+    fun sftpOfferTellsSearch() {
+        val base = """"tunnel":"s1","user":"flux","password":"pw","path":"/home/u","multiPaths":["/home/u"],"pathNames":["Home"]"""
+        assertFalse(sftp("{$base}")!!.search)
+        assertTrue(sftp("""{$base,"search":true}""")!!.search)
+    }
+
+    @Test
+    fun sftpSearchRequest() {
+        val p = Packet.parse(SftpFound.request(7, "invoice 2026", "").serialize())!!
+        assertEquals(Types.SFTP_REQUEST, p.type)
+        val search = p.obj("search")!!
+        assertEquals(7L, search.long("id"))
+        assertEquals("invoice 2026", search.str("query"))
+        assertEquals("", search.str("path"))
+        assertFalse(p.has("startBrowsing"))
+    }
+
+    private fun found(body: String) = SftpFound.parse(Packet.parse("""{"id":1,"type":"flux.sftp","body":$body}""")!!)
+
+    @Test
+    fun sftpSearchAnswers() {
+        val f = found(
+            """{"search":{"id":7,"results":[{"path":"/home/u/a.pdf","dir":false,"size":12,"modified":1700000000},""" +
+                """{"path":"/home/u/docs","dir":true,"size":4096,"modified":1},{"path":"relative","dir":false}],"more":true,"partial":false}}""",
+        )!!
+        assertEquals(7L, f.id)
+        assertEquals(listOf(SftpMatch("/home/u/a.pdf", false, 12, 1_700_000_000), SftpMatch("/home/u/docs", true, 4096, 1)), f.results)
+        assertTrue(f.more)
+        assertFalse(f.partial)
+        assertNull(f.error)
+
+        val failed = found("""{"search":{"id":8,"results":[],"more":false,"partial":false,"error":"Get files is not open. Open it again."}}""")!!
+        assertEquals("Get files is not open. Open it again.", failed.error)
+        assertTrue(failed.results.isEmpty())
+
+        // An offer and an error of the session are not search answers, and a search answer is not an offer.
+        val offer = Packet.parse("""{"id":1,"type":"flux.sftp","body":{"tunnel":"s1","user":"flux","password":"pw","multiPaths":["/"],"pathNames":["Home"],"search":true}}""")!!
+        assertFalse(SftpFound.isAnswer(offer))
+        assertTrue(SftpOffer.parse(offer)!!.search)
+        assertTrue(SftpFound.isAnswer(Packet.parse("""{"id":1,"type":"flux.sftp","body":{"search":{"results":[]}}}""")!!))
+        assertNull(found("""{"tunnel":"s1","user":"flux","password":"pw","multiPaths":["/"],"pathNames":["Home"],"search":true}"""))
+        assertNull(found("""{"errorMessage":"no"}"""))
+        assertNull(found("""{"search":{"results":[]}}"""))
+        assertNull(sftp("""{"search":{"id":7,"results":[]}}"""))
+    }
+
     private val phone = LocalCertificate.generate("0123456789abcdef0123456789abcdef")
     private val pc = LocalCertificate.generate("fedcba9876543210fedcba9876543210")
 
