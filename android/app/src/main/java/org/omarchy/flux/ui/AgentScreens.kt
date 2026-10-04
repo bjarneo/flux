@@ -87,6 +87,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.omarchy.flux.core.AgentChoice
 import org.omarchy.flux.core.AgentStatus
+import org.omarchy.flux.core.ComputerThemes
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.HERDR_BLOCKED
@@ -525,6 +526,10 @@ private fun TerminalOutput(d: DeviceUi, pane: String, sample: TerminalSample?, m
     val session = d.herdrTerminal?.takeIf { it.pane == pane }
     val controlling = session?.open == true && session.mode == "control" && !session.sending
     val requesting = session?.sending == true && session.mode == "control"
+    // The grid that fills the phone at a readable font, from the page.
+    // A control stream opens at that size, so the program on the
+    // computer redraws for the phone instead of being shrunk to fit.
+    var grid by remember { mutableStateOf(0 to 0) }
 
     // Control needs a person that holds the unlocked phone. When the
     // unlock ends, the phone goes back to watching and sends no input.
@@ -589,7 +594,12 @@ private fun TerminalOutput(d: DeviceUi, pane: String, sample: TerminalSample?, m
                             // computer, so a person must hold the phone.
                             ReplyLock.run(
                                 context,
-                                action = { HerdrSync.terminalOpen(FluxCore, d.id, pane, "control") },
+                                action = {
+                                    HerdrSync.terminalOpen(
+                                        FluxCore, d.id, pane, "control",
+                                        grid.first, grid.second,
+                                    )
+                                },
                                 title = "Control a terminal",
                                 purpose = "control terminals",
                                 onError = { FluxCore.toast(it) },
@@ -605,6 +615,8 @@ private fun TerminalOutput(d: DeviceUi, pane: String, sample: TerminalSample?, m
             modifier = Modifier.weight(1f),
             sample = sample,
             control = controlling,
+            theme = ComputerThemes.theme(d.id)?.theme,
+            onGrid = { cols, rows -> grid = cols to rows },
             onWheel = { column, row, direction ->
                 // The gesture already waits for control and a drawn
                 // screen. The session id comes from the current state.

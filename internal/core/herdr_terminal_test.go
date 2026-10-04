@@ -362,6 +362,72 @@ func TestHerdrTerminalModeSwitch(t *testing.T) {
 	}
 }
 
+// bridgeArgs prints the argv of the bridge in its first frame, so a
+// test can see the terminal size that fluxd asked for. It exits when
+// fluxd closes stdin, like the real bridge.
+const bridgeArgs = `
+b=$(printf %s "$*" | base64 | tr -d '\n')
+printf '{"type":"terminal.frame","seq":1,"encoding":"ansi","width":48,"height":80,"full":true,"bytes":"%s"}\n' "$b"
+while IFS= read -r line; do :; done
+echo '{"type":"terminal.closed","reason":"detached"}'
+`
+
+// A control stream may name the size of the phone: fluxd opens the
+// bridge at that size, so the program on the computer redraws for the
+// phone instead of being shrunk to fit. Watching keeps the pane size.
+func TestHerdrTerminalOpensAtThePhoneSize(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d, _ := terminalDaemon(ctx, t, bridgeArgs)
+	desk, phone, _, _ := linkPair(t, ctx)
+	dev := &Device{ID: "phone1", Paired: true}
+	answers := herdrAnswers(t, phone)
+	d.cfg.HerdrControl = true
+
+	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_open", "pane": "w1:p1", "mode": "control", "request": 1,
+		"cols": 48, "rows": 80}))
+	open := nextOpened(t, answers)
+	if open["session"] != "ts1" || open["width"] != 48.0 || open["height"] != 80.0 {
+		t.Fatalf("terminal_opened = %v", open)
+	}
+	frame := nextAnswer(t, answers)
+	args := frameText(t, frame)
+	if !strings.Contains(args, "--cols 48") || !strings.Contains(args, "--rows 80") {
+		t.Fatalf("bridge argv = %q", args)
+	}
+	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_release", "session": "ts1", "request": 2}))
+	nextClosed(t, answers)
+
+	// An invalid size fails the open instead of reaching the bridge.
+	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_open", "pane": "w1:p1", "mode": "control", "request": 3,
+		"cols": 0, "rows": 80}))
+	failed := nextAnswer(t, answers)
+	if failed["kind"] != "terminal_opened" || failed["error"] == nil ||
+		failed["error"] != "fluxd does not accept that terminal size" {
+		t.Fatalf("answer = %v", failed)
+	}
+
+	// Watching ignores a size of the phone and keeps the pane size.
+	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_open", "pane": "w1:p1", "mode": "observe", "request": 4,
+		"cols": 48, "rows": 80}))
+	open = nextOpened(t, answers)
+	if open["width"] != 120.0 || open["height"] != 40.0 {
+		t.Fatalf("terminal_opened = %v", open)
+	}
+	frame = nextAnswer(t, answers)
+	args = frameText(t, frame)
+	if strings.Contains(args, "--cols 48") || !strings.Contains(args, "--cols 120") {
+		t.Fatalf("bridge argv = %q", args)
+	}
+	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_release", "session": open["session"], "request": 5}))
+	nextClosed(t, answers)
+}
+
 func TestHerdrTerminalRejectsStaleSessions(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

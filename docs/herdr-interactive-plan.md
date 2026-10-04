@@ -691,7 +691,7 @@ Endpoint generation 1 is a later alternative, not an MVP requirement.
 ## 14. Delivery checklist
 
 - [x] Phase 0 demonstrates real scrolling and coexistence in an isolated session.
-- [ ] Initial geometry and size recovery are verified.
+- [x] Initial geometry and size recovery are verified.
 - [x] Terminal dependency selected after license and fixture review.
 - [x] Observe works without input, resize, or scroll ownership.
 - [x] Control is explicit, without automatic takeover or unrestricted raw input.

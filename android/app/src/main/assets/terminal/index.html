@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="xterm.css">
 <style>
-  html, body { margin: 0; padding: 0; background: #000; overflow: hidden; }
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
   #stage { position: absolute; left: 0; top: 0; }
   #screen { margin: 0; }
 </style>
@@ -26,8 +26,7 @@
     convertEol: false,
     cursorBlink: false,
     fontFamily: "monospace",
-    fontSize: 13,
-    theme: { background: "#000000" }
+    fontSize: 13
   });
   term.open(document.getElementById("screen"));
   // Herdr renders absolute cell runs and expects host autowrap off.
@@ -41,6 +40,12 @@
   var availW = 0;
   var availH = 0;
   var fitFont = 13;
+  // The phone terminal asks the computer for about this many columns:
+  // enough that a full-screen program such as opencode drops its
+  // sidebars, while the drawing still fills the phone at a readable
+  // font. The font is derived from it, so a wider phone shows the same
+  // content in a larger font.
+  var phoneCols = 80;
   var panX = 0;
   var panY = 0;
 
@@ -105,8 +110,19 @@
       availW / (cellW * term.cols),
       availH / (cellH * term.rows)
     );
-    fitFont = Math.max(3, Math.min(13, Math.floor(size)));
+    // The font grows to fill the view too: a phone-sized grid must not
+    // draw small in a corner of the screen.
+    fitFont = Math.max(3, Math.min(24, Math.floor(size)));
     term.options.fontSize = fitFont;
+    // The grid that the phone asks the computer for: about phoneCols
+    // columns at a readable font, filling the view. The font is clamped
+    // so it stays readable on any screen.
+    if (availW > 0 && availH > 0 && window.FluxBridge && window.FluxBridge.grid) {
+      var phoneFont = Math.max(8, Math.min(18, availW / (cellW * phoneCols)));
+      var cols = Math.max(20, Math.min(500, Math.floor(availW / (cellW * phoneFont))));
+      var rows = Math.max(6, Math.min(500, Math.floor(availH / (cellH * phoneFont))));
+      window.FluxBridge.grid(cols, rows);
+    }
     panX = 0;
     panY = 0;
     window.scrollTo(0, 0);
@@ -127,7 +143,12 @@
       term.write(bytes);
     },
     theme: function (json) {
-      term.options.theme = JSON.parse(json);
+      var t = JSON.parse(json);
+      term.options.theme = t;
+      // The page shows the theme behind the grid too, for example while
+      // the grid pans. An explicit frame color still wins inside cells.
+      document.body.style.background = t.background || "transparent";
+      document.getElementById("stage").style.background = t.background || "transparent";
     },
     // Zoom keeps the cell under the focal point where it is, so the
     // content follows the fingers of a pinch. The font never goes below

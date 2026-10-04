@@ -687,6 +687,8 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 		// and row are zero-based cells of its viewport.
 		Session   string `json:"session"`
 		Mode      string `json:"mode"`
+		Cols      int    `json:"cols"`
+		Rows      int    `json:"rows"`
 		Direction string `json:"direction"`
 		Action    string `json:"action"`
 		Button    string `json:"button"`
@@ -793,7 +795,7 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 			d.herdrSend(dev, l, state, withRequest(reply, req))
 		}()
 	case "terminal_open":
-		go d.herdrTerminalOpen(dev, l, req, body.Pane, body.Mode)
+		go d.herdrTerminalOpen(dev, l, req, body.Pane, body.Mode, body.Cols, body.Rows)
 	case "terminal_scroll":
 		d.herdrTerminalScroll(dev, l, body.Session, body.Direction, body.Column, body.Row)
 	case "terminal_mouse":

@@ -1,6 +1,8 @@
 # Plan: phone-first Herdr terminal after the Pixel trial
 
-Status: proposed follow-up; no changes to runtime behavior implemented by this document.
+Status: partly implemented. Priority 1 (PTY resize and desktop recovery) and Priority 3
+(terminal theme fidelity) are done and validated on the Pixel. Priorities 2 and 4 remain
+proposals. Each status section records what is verified and what is still open.
 
 This plan records the user's observations from the real Pixel trial of
 `feat/herdr-interactive-control`. It supersedes the desktop-size, separate-reader,
@@ -98,6 +100,25 @@ Acceptance: the phone gets an application redraw suited to portrait use, and the
 to its normal geometry after every tested release/failure path. Neither neighboring panes
 nor personal Herdr settings are changed to fake that result.
 
+### Priority 1 status (2026-10-04)
+
+Implemented and verified against Herdr 0.9.3.
+
+- The geometry contract was measured in a disposable session with the desktop TUI
+  attached: control at 40x80 resized the pane to 40x80; `terminal.release` and a
+  killed controller (EOF) both gave the desktop size back; a desktop window resize
+  during control was blocked, and the release restored the *new* desktop geometry,
+  not the stale one. Without a desktop client attached, Herdr keeps the last size,
+  and the desktop reclaims it when a client attaches again.
+- The phone measures its own cell and asks the computer for the grid that fills the
+  view at a readable font (~80 columns on the Pixel). A control stream opens at that
+  size, so the program redraws for the phone instead of a shrunk desktop grid. The
+  grid is bounded like the frames.
+- The phone was validated on the Pixel: taking control resizes the pane, the content
+  fills the screen, and the user confirmed it as the expected behavior. This is the
+  outcome the user requested first; the remaining test-plan and lifecycle items of
+  section 7 still apply to it.
+
 ## 4. Priority 2: one terminal surface, control by default
 
 - In Android, replace the existing **Output** tab with **Terminal**, beside **Changes**.
@@ -145,6 +166,31 @@ Investigate before choosing a fix:
 
 Acceptance: explicit and default backgrounds match the reference in dark and light terminal
 themes, including blank cells and erased regions. The app chrome may keep its own theme.
+
+### Priority 3 status (2026-10-04)
+
+Implemented and confirmed by the user on the Pixel: the terminal background matches the
+computer theme.
+
+- A full frame from the pane was captured through the bridge and rendered cell by cell:
+  nearly every cell carries an explicit RGB background (for example `48;2;12;12;19`), so
+  the program's own colors do arrive. Few cells use the default background (`49`).
+- The page created xterm with a hardcoded `background: "#000000"` and never applied the
+  computer's theme to it, so default and erased areas drew black instead of the terminal
+  theme. The theme packet already reaches the phone; only the terminal did not use it.
+- Fix: the phone builds an xterm theme from the Omarchy theme of the computer (background,
+  foreground, cursor, selection, and the 16 ANSI colors), applies it before the first frame
+  and on each theme change, and paints the page and stage with the same background. Explicit
+  RGB colors of a frame still win, and no color is inferred from frame text.
+- The first attempt crashed when the terminal opened: the theme JSON was quoted with
+  `android.util.JsonWriter`, which refuses a bare string root (`IllegalStateException`).
+  Quoting with `kotlinx.serialization.json.JsonPrimitive` fixed it; the user then confirmed
+  the result as perfect.
+- The black was not treated as a confirmed cause before; the hardcoded value in the page is
+  the concrete finding. If a program paints an explicit black, that is preserved.
+
+The light-theme check and a theme change while the terminal is open still deserve a pass.
+
 
 ## 6. Priority 4: gesture refinement
 

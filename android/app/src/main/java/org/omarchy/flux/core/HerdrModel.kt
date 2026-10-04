@@ -416,9 +416,16 @@ fun parseHerdrTerminalClosed(body: JsonObject): HerdrTerminalEvent.Closed? {
     )
 }
 
-/** The body of a terminal_open: a stream of [mode] on [pane]. */
-fun herdrTerminalOpenBody(pane: String, mode: String, request: Long): JsonObject =
-    bodyOf("kind" to "terminal_open", "pane" to pane, "mode" to mode, "request" to request)
+/**
+ * The body of a terminal_open: a stream of [mode] on [pane]. A control
+ * stream may name the terminal size it wants in cells; 0 keeps the size
+ * of the pane on the computer.
+ */
+fun herdrTerminalOpenBody(pane: String, mode: String, request: Long, cols: Int = 0, rows: Int = 0): JsonObject =
+    bodyOf(
+        "kind" to "terminal_open", "pane" to pane, "mode" to mode, "request" to request,
+        "cols" to cols, "rows" to rows,
+    )
 
 /** The body of a terminal_release of [session]. */
 fun herdrTerminalReleaseBody(session: String, request: Long): JsonObject =

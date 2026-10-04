@@ -100,6 +100,9 @@ object ComputerThemes {
         return DebugTheme.current()?.let { names + (it.deviceId to it.name) } ?: names
     }
 
+    /** The theme of the computer [id], or null when it sent none. */
+    fun theme(id: String): ComputerTheme? = book.theme(id)
+
     /**
      * Sets the night mode of the app on Android 12 and later, so that the
      * system splash screen and the window background match the palette.

@@ -190,12 +190,12 @@ object HerdrSync {
      * answer sets [Device.herdrTerminal], and [terminalSink] gets the
      * events of the stream in the order they arrive.
      */
-    fun terminalOpen(core: FluxCore, id: String, pane: String, mode: String) {
+    fun terminalOpen(core: FluxCore, id: String, pane: String, mode: String, cols: Int = 0, rows: Int = 0) {
         val token = core.locked {
             val d = core.device(id) ?: return@locked null
             val seq = ++terminalSeq
             d.herdrTerminal = HerdrTerminalSession(pane = pane, mode = mode, request = seq)
-            if (!d.send(Packet(Types.FLUX_HERDR, herdrTerminalOpenBody(pane, mode, seq)))) {
+            if (!d.send(Packet(Types.FLUX_HERDR, herdrTerminalOpenBody(pane, mode, seq, cols, rows)))) {
                 d.herdrTerminal = HerdrTerminalSession(
                     pane = pane, mode = mode, request = seq, sending = false,
                     error = "${d.identity.deviceName} is not reachable",

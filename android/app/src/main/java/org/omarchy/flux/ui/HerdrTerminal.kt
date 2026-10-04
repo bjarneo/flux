@@ -14,6 +14,7 @@ import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.HerdrSync
 import org.omarchy.flux.core.HerdrTerminalEvent
 import org.omarchy.flux.core.HerdrTerminalSession
+import org.omarchy.flux.theme.OmarchyTheme
 
 /**
  * The live terminal of a herdr pane. It draws the ANSI frames of the
@@ -36,13 +37,16 @@ fun HerdrTerminalView(
     modifier: Modifier = Modifier,
     sample: TerminalSample? = null,
     control: Boolean = false,
+    theme: OmarchyTheme? = null,
     onWheel: (column: Int, row: Int, direction: String) -> Unit = { _, _, _ -> },
+    onGrid: (cols: Int, rows: Int) -> Unit = { _, _ -> },
 ) {
     val feeder = remember { TerminalFeeder() }
     feeder.onReady = {
         if (sample != null) feeder.draw(sample) else onReady()
     }
     feeder.onWheel = onWheel
+    feeder.onGrid = onGrid
     feeder.control = control
     DisposableEffect(feeder) {
         HerdrSync.terminalSink = feeder
@@ -51,6 +55,12 @@ fun HerdrTerminalView(
             feeder.detach()
         }
     }
+    // The theme of the computer colors the default and indexed colors of
+    // the frames. It is applied before the first frame and on each change.
+    DisposableEffect(theme) {
+        feeder.setTheme(theme)
+        onDispose { }
+    }
     AndroidView(
         modifier = modifier.semantics {
             contentDescription = "The terminal of ${session?.pane ?: "the pane"}" +
@@ -58,6 +68,8 @@ fun HerdrTerminalView(
         },
         factory = { context ->
             WebView(context).apply {
+                // The page paints the theme background itself.
+                setBackgroundColor(android.graphics.Color.TRANSPARENT)
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = false
                 // The page is part of the APK and must always be the one
@@ -104,6 +116,14 @@ private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
     @Volatile
     var onWheel: ((column: Int, row: Int, direction: String) -> Unit)? = null
 
+    /** Called on the main thread with the phone-first grid of the view. */
+    @Volatile
+    var onGrid: ((cols: Int, rows: Int) -> Unit)? = null
+
+    /** The xterm theme JSON of the computer, or null while it sent none. */
+    @Volatile
+    private var themeJson: String? = null
+
     private var ready = false
     private var cols = 0
     private var rows = 0
@@ -134,9 +154,27 @@ private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
         handler.post {
             if (!ready) {
                 ready = true
+                applyTheme()
                 onReady?.invoke()
             }
         }
+    }
+
+    /** Sets the theme of the computer to draw default and indexed colors. Any thread. */
+    fun setTheme(theme: OmarchyTheme?) {
+        val json = theme?.let { terminalTheme(it).toString() }
+        handler.post {
+            themeJson = json
+            if (ready) applyTheme()
+        }
+    }
+
+    /** Sends the last theme to the page. Main thread. */
+    private fun applyTheme() {
+        val json = themeJson ?: return
+        // The page takes the theme as a JSON string literal.
+        val quoted = kotlinx.serialization.json.JsonPrimitive(json).toString()
+        eval("FluxTerminal.theme($quoted)")
     }
 
     /** Feeds one event of the stream. Any thread. */
@@ -176,6 +214,11 @@ private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
         }
     }
 
+    /** The phone-first grid that the page measured. Any thread. */
+    fun grid(cols: Int, rows: Int) {
+        handler.post { onGrid?.invoke(cols, rows) }
+    }
+
     private fun resize(view: WebView, width: Int, height: Int) {
         if (width < 1 || height < 1) return
         cols = width
@@ -212,6 +255,7 @@ private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
             webView = null
             onReady = null
             onWheel = null
+            onGrid = null
             ready = false
             baseline = false
             gestures.reset()
@@ -234,6 +278,11 @@ private class TerminalBridge(private val feeder: TerminalFeeder) {
     @JavascriptInterface
     fun geometry(cellW: Double, cellH: Double, originX: Double, originY: Double, cols: Int, rows: Int, font: Int) {
         feeder.geometry(cellW, cellH, originX, originY, cols, rows, font)
+    }
+
+    @JavascriptInterface
+    fun grid(cols: Int, rows: Int) {
+        feeder.grid(cols, rows)
     }
 }
 

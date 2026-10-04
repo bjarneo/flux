@@ -62,9 +62,19 @@ func (d *Daemon) herdrBinName() string {
 	return "herdr"
 }
 
+// validTermSize reports whether a phone may ask for this terminal size.
+// It is in cells, and bounded like the frames of the bridge.
+func validTermSize(cols, rows int) bool {
+	return cols >= 1 && rows >= 1 && cols <= 1000 && rows <= 1000
+}
+
 // herdrTerminalOpen opens one terminal-session bridge for the phone. The
-// answer is terminal_opened with the session ID, or with the error.
-func (d *Daemon) herdrTerminalOpen(dev *Device, l *lan.Link, req json.Number, pane, mode string) {
+// answer is terminal_opened with the session ID, or with the error. A
+// control stream may name the terminal size it wants: herdr then draws
+// the pane for the phone and gives the desktop its size back when the
+// stream ends. Watching keeps the size of the pane, because its viewport
+// would only show part of the desktop screen.
+func (d *Daemon) herdrTerminalOpen(dev *Device, l *lan.Link, req json.Number, pane, mode string, cols, rows int) {
 	fail := func(err string) {
 		_ = l.Send(withRequest(proto.New(proto.TypeFluxHerdr, map[string]any{
 			"kind": "terminal_opened", "pane": pane, "mode": mode, "error": err}), req))
@@ -94,6 +104,14 @@ func (d *Daemon) herdrTerminalOpen(dev *Device, l *lan.Link, req json.Number, pa
 	if mode == "control" {
 		d.waitHerdrReads(pane)
 	}
+	width, height := 0, 0
+	if mode == "control" && (cols > 0 || rows > 0) {
+		if !validTermSize(cols, rows) {
+			fail("fluxd does not accept that terminal size")
+			return
+		}
+		width, height = cols, rows
+	}
 	ctx, cancel := context.WithCancel(d.ctx)
 	info, perr := herdr.GetPane(ctx, d.herdrPath, pane)
 	layout, lerr := herdr.GetLayout(ctx, d.herdrPath, pane)
@@ -106,9 +124,12 @@ func (d *Daemon) herdrTerminalOpen(dev *Device, l *lan.Link, req json.Number, pa
 		}
 		return
 	}
+	if width == 0 {
+		width, height = layout.Width, layout.Height
+	}
 	session, err := herdr.OpenSession(ctx, herdr.SessionConfig{
 		Path: d.herdrBinName(), Socket: d.herdrPath, Target: pane,
-		Cols: layout.Width, Rows: layout.Height, Control: mode == "control",
+		Cols: width, Rows: height, Control: mode == "control",
 	})
 	if err != nil {
 		cancel()
@@ -117,7 +138,7 @@ func (d *Daemon) herdrTerminalOpen(dev *Device, l *lan.Link, req json.Number, pa
 		return
 	}
 	t := &herdrTerminal{dev: dev, link: l, pane: pane, mode: mode,
-		terminal: info.TerminalID, width: layout.Width, height: layout.Height,
+		terminal: info.TerminalID, width: width, height: height,
 		session: session, cancel: cancel}
 	d.mu.Lock()
 	// The state can change during the herdr calls above, so check again.
