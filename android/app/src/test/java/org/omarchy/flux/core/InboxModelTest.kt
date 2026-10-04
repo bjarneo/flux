@@ -1,6 +1,7 @@
 package org.omarchy.flux.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -280,6 +281,23 @@ class InboxModelTest {
         assertEquals("running transfers stay above the limit", listOf(9L, 8L, 7L, 6L), list.map { it.id })
         assertEquals(TransferState.Failed, endTransfer(list, 9, ok = false, at = 9).first().state)
         assertEquals("an ended transfer does not change again", TransferState.Done, endTransfer(endTransfer(list, 9, true, 9), 9, false, 10).first().state)
+    }
+
+    @Test
+    fun aFileThatTheComputerSendsAgainKeepsItsItem() {
+        var list = endTransfer(startTransfer(emptyList(), Transfer(1, "a", "a", "f1", incoming = true, at = 5)), 1, ok = false, at = 7)
+        list = resumeTransfer(list, 1)
+        assertEquals(listOf(1L), list.map { it.id })
+        assertEquals(TransferState.Running, list.single().state)
+        assertEquals(0L, list.single().ended)
+        assertEquals("the item keeps its start time", 5L, list.single().at)
+        assertEquals(list, resumeTransfer(list, 2))
+
+        val id = InboxFeed.transferStarted("a", "desk", "f.txt", incoming = true)
+        InboxFeed.transferEnded(id, false)
+        assertTrue(InboxFeed.transferResumed(id))
+        assertEquals(TransferState.Running, InboxFeed.transfers.value.first { it.id == id }.state)
+        assertFalse(InboxFeed.transferResumed(-1))
     }
 
     @Test

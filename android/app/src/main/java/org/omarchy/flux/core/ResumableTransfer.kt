@@ -14,6 +14,10 @@ import java.security.MessageDigest
 /** Receives acknowledged file chunks. Private partial files survive an app restart. */
 object ResumableTransfer {
     private val lock = Any()
+
+    /** The Inbox transfer of each file, by its folder key. A retry of the computer keeps the item. The lock guards it. */
+    private val inbox = HashMap<String, Long>()
+
     internal fun valid(id: String, name: String, size: Long, hash: String): Boolean =
         Regex("[a-f0-9]{12}").matches(id) && Regex("[a-f0-9]{64}").matches(hash) &&
             size in 0..(1L shl 40) && name.isNotBlank() && name != "." && name != ".." &&
@@ -31,6 +35,7 @@ object ResumableTransfer {
         val cert = d.certificate ?: return
         core.io.execute {
             synchronized(lock) {
+                var item: Long? = null
                 runCatching {
                     if (action == "offer") {
                         val before = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000
@@ -47,6 +52,9 @@ object ResumableTransfer {
                         reply(d, id, "done", size)
                         return@synchronized
                     }
+                    val transfer = inbox[key]?.takeIf(InboxFeed::transferResumed)
+                        ?: InboxFeed.transferStarted(d.id, d.identity.deviceName, name, incoming = true).also { inbox[key] = it }
+                    item = transfer
                     val part = File(dir, "data")
                     var offset = part.length()
                     check(offset <= size) { "Partial file exceeds the transfer size" }
@@ -79,12 +87,17 @@ object ResumableTransfer {
                         meta = meta.put("done", true)
                         save(state, meta)
                         part.delete()
+                        InboxFeed.transferEnded(transfer, true)
+                        inbox.remove(key)
                         val open = Intent(Intent.ACTION_VIEW).setDataAndType(download.uri, mime ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         Android.showEvent(core.app, "Received $name", "From ${d.identity.deviceName}, saved in Downloads", open)
                         core.toast("Saved $name in Downloads")
                         reply(d, id, "done", size)
                     } else reply(d, id, "offset", offset)
-                }.onFailure { d.send(Packet(Types.FLUX_TRANSFER, bodyOf("id" to id, "action" to "error", "error" to (it.message ?: "The transfer failed")))) }
+                }.onFailure {
+                    item?.let { t -> InboxFeed.transferEnded(t, false) }
+                    d.send(Packet(Types.FLUX_TRANSFER, bodyOf("id" to id, "action" to "error", "error" to (it.message ?: "The transfer failed"))))
+                }
             }
         }
     }

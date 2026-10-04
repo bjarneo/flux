@@ -349,6 +349,10 @@ fun startTransfer(list: List<Transfer>, t: Transfer, max: Int = MAX_TRANSFERS): 
 fun endTransfer(list: List<Transfer>, id: Long, ok: Boolean, at: Long): List<Transfer> =
     list.map { if (it.id == id && it.state == TransferState.Running) it.copy(state = if (ok) TransferState.Done else TransferState.Failed, ended = at) else it }
 
+/** Marks the ended transfer [id] as running again. A file that the computer sends again keeps its item. */
+fun resumeTransfer(list: List<Transfer>, id: Long): List<Transfer> =
+    list.map { if (it.id == id && it.state != TransferState.Running) it.copy(state = TransferState.Running, ended = 0) else it }
+
 /**
  * The recent transfers and the last clip, for the Inbox. The share and
  * clipboard code reports to it. It keeps no file content and only a short
@@ -396,5 +400,15 @@ object InboxFeed {
 
     fun transferEnded(id: Long, ok: Boolean) {
         _transfers.update { endTransfer(it, id, ok, System.currentTimeMillis()) }
+    }
+
+    /** Reports that the transfer [id] runs again. It returns false when the Inbox no longer has the transfer. */
+    fun transferResumed(id: Long): Boolean {
+        var found = false
+        _transfers.update { list ->
+            found = list.any { it.id == id }
+            resumeTransfer(list, id)
+        }
+        return found
     }
 }
