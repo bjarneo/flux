@@ -43,6 +43,7 @@ A paired device can also connect through [Tailscale](tailscale.md) away from tha
 | [Android design system](../DESIGN.md) | Theme roles, the contrast guard, type, the Inbox master and stack, components, and rules |
 | [Development](development.md) | Component checks, isolated daemons, and local iteration |
 | [Android terminal input plan](herdr-android-input-plan.md) | Direct typing and retained drafts |
+| [Terminal refinements](herdr-android-fine-tuning.md) | Key rows, selection, agent checks |
 | [Releases](releasing.md) | GitHub workflows, AUR publication, APK signatures, and secrets |
 | [Agent skill](agents.md) | Skill installation, scope, and example prompts |
 | [Approval security design](approve.md) | Trust anchors, signatures, enrollment, and failure behavior |
