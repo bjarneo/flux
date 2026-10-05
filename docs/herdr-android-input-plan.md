@@ -380,9 +380,25 @@ The phone keyboard's own paste key already produces such a block, so the direct 
 paste key of its own. fluxd keeps line breaks and tabs, drops every other control character,
 so a paste cannot close its own paste or type a key, and allows 64 KB, more than a typed
 event. It advertises a `paste` capability, so a phone detects an older computer and falls back
-to typing instead of failing silently. The computer clipboard does not change. Text only: an
-image or a file needs another path. Validate the paste on the phone against opencode before
-changing the limits.
+to typing instead of failing silently. The computer clipboard does not change. Validate the
+paste on the phone against opencode before changing the limits.
+
+## 8c. Image paste in direct mode
+
+The keyboard also pastes images from its clipboard, so the input connection of the terminal
+names the image types it accepts and takes a `commitContent` image. The image does not go to
+the editable or to the terminal as bytes; it travels as the payload of one
+`terminal_paste_image` packet in the controller session. The daemon detects the image type
+from the bytes, accepts a PNG, JPEG, GIF, or WebP image of up to 16 MiB, puts it on the
+clipboard of the computer, and then sends Ctrl+V to the controller. The program reads its own
+clipboard, so the image reaches the prompt as the attachment that the program draws, for
+example the image chip of opencode, and never as typed text. One image per device runs at a
+time, and the paste does not use clipboard sync or the clipboard of the phone. The capability
+`image` says that the computer accepts the packet, so an older daemon is not asked.
+
+Text and image pastes are separate: a block of text stays a bracketed paste, and only a
+`commitContent` image takes the image path. This keeps every control byte, the size limits,
+and the errors of the text path unchanged.
 
 ## 9. Implementation order and files
 
@@ -474,6 +490,8 @@ Use the existing isolated Flux Test pairing and isolated Herdr agent, not person
 - One row contains Esc, Tab, Up, Down, and the keyboard, with accessible touch targets.
 - The phone keyboard's own paste reaches opencode as one bracketed paste: it shows its paste
   handling and does not submit on the line breaks.
+- The phone keyboard's image paste reaches opencode as an attachment: the chip of the image
+  appears in the prompt, the text of the prompt is unchanged, and no submit happens.
 - Keyboard appears only on request; repeated keyboard taps do not hide it.
 - Android's dismiss arrow/Back hides only the IME; no remote Esc or prompt submission occurs.
 - Gboard suggestions/autocorrection/capitalization are off in direct mode; Changes retains them.

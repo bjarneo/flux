@@ -1,8 +1,10 @@
 package org.omarchy.flux.core
 
+import android.net.Uri
 import android.util.Log
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import org.omarchy.flux.net.Payload
 import org.omarchy.flux.protocol.Packet
 import org.omarchy.flux.protocol.Types
 import org.omarchy.flux.protocol.bodyOf
@@ -315,6 +317,38 @@ object HerdrSync {
         if (session.isEmpty() || text.isEmpty()) return
         val d = core.device(id) ?: return
         d.send(Packet(Types.FLUX_HERDR, herdrTerminalPasteBody(session, text)))
+    }
+
+    /**
+     * Pastes the image at [uri] into the active controller session. The
+     * image travels as the payload of the packet, so fluxd can put it on
+     * the clipboard of the computer before it sends the paste key. The
+     * program then reads the image as an attachment instead of typed text.
+     *
+     * Reading the image and sending the payload block, so they run on the
+     * IO pool and not on the caller.
+     */
+    fun terminalPasteImage(core: FluxCore, id: String, session: String, uri: Uri) {
+        if (session.isEmpty()) return
+        core.io.execute {
+            val d = core.device(id) ?: return@execute
+            val cert = d.certificate ?: return@execute
+            val tls = FluxCore.tls ?: return@execute
+            val data = runCatching {
+                core.app.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            }.getOrNull() ?: return@execute
+            if (data.isEmpty() || data.size > ClipImage.MAX_BYTES) return@execute
+            val server = Payload.openServer()
+            val p = Packet(
+                Types.FLUX_HERDR, herdrTerminalPasteImageBody(session),
+                payloadSize = data.size.toLong(), payloadPort = server.localPort,
+            )
+            if (!d.send(p)) {
+                server.close()
+                return@execute
+            }
+            runCatching { Payload.send(tls, server, data.inputStream(), data.size.toLong(), cert) }
+        }
     }
 
     /** Handles terminal_input_error: why a typed event did not reach the terminal. The core lock is held. */

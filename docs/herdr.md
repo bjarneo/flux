@@ -163,6 +163,7 @@ An older computer keeps those controls in Live too.
 The row has Esc, Tab, Up, Down, and the keyboard key; use the keyboard's mic for dictation.
 The keyboard's paste, dictation, and swipe words send one bracketed paste, not Enter.
 Line breaks stay in the paste, and the program applies its own paste handling.
+An image paste goes to the computer clipboard, then Ctrl+V lets the program attach it.
 Live starts with the keyboard hidden. Losing control hides it, and a reconnect does not open it.
 **Refresh** does not show while Live is on.
 The phone then reads the output only when Live opens and when the status changes, so the choice tiles stay current.
@@ -637,11 +638,13 @@ The `kind` field selects the message.
 | `terminal_closed` | Computer | `session`, `code`, and `reason`. After a release, also the `request` of the release. |
 | `terminal_input` | Phone | `session`, and exactly one of `text` or `key` |
 | `terminal_paste` | Phone | `session` and `text`; fluxd wraps it as one bracketed paste |
+| `terminal_paste_image` | Phone | `session`, with an image as the payload |
 | `terminal_input_error` | Computer | `session`, `code`, `error` |
 
 The optional `state.bridge` list advertises `observe`, `control`, `scroll`, `mouse`, `input`,
-and `paste`. A phone sends a typed event only with `input`, and a paste only with `paste`, so
-an older computer is detected instead of failing silently.
+`paste`, and `image`. A phone sends a typed event only with `input`, a text paste only with
+`paste`, and an image paste only with `image`, so an older computer is detected instead of
+failing silently.
 Old clients ignore these additive kinds and continue using read/output operations.
 Only control may request a phone-sized grid; dimensions are bounded to 1..1000 cells.
 Each device has at most one stream and each pane at most one controller, without takeover.
@@ -663,6 +666,16 @@ control character, so a paste cannot close its own paste or type a key. A paste 
 to 64 KB, larger than a typed event, because a paste is often a code block. It uses the same
 `terminal_input_error` codes. The phone takes the block that its keyboard committed, such as
 its own paste, and sends the text; the computer clipboard does not change.
+
+A `terminal_paste_image` pastes an image that the phone keyboard took from its clipboard. The
+image is the payload of the packet, so the paste does not need clipboard sync and does not
+depend on the clipboard of the phone. fluxd accepts a PNG, JPEG, GIF, or WebP image of up to
+16 MiB, detects its type from the bytes, and drops a payload that is not an image. It puts the
+image on the clipboard of the computer and then sends Ctrl+V to the controller, so the program
+reads the image as an attachment instead of typed text. The clipboard of the computer then
+holds the image, as a copy does. An unknown, foreign, or released session gets no answer, and
+a size limit or a failed transfer answers with `terminal_input_error`. One image per device
+runs at a time.
 
 Frames contain base64 ANSI bytes and must be applied in order: incremental frames cannot be
 dropped or truncated. A full frame establishes the baseline before input is enabled. Its sequence

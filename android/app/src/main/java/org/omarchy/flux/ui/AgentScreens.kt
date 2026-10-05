@@ -1083,6 +1083,7 @@ private fun LiveTerminalView(
     SideEffect {
         input.ready = inputReady
         input.pasteReady = inputReady && d.herdr?.terminalPaste == true
+        input.imageReady = inputReady && d.herdr?.terminalImage == true
         input.session = session?.session.orEmpty()
         input.onText = { text ->
             if (terminalControlReady(current, t.drawn, t.authorized, t.active)) {
@@ -1099,6 +1100,11 @@ private fun LiveTerminalView(
                 guardedInput { s -> HerdrSync.terminalPaste(FluxCore, d.id, s.session, text) }
             }
         }
+        input.onImage = { uri, _ ->
+            if (terminalControlReady(current, t.drawn, t.authorized, t.active)) {
+                guardedInput { s -> HerdrSync.terminalPasteImage(FluxCore, d.id, s.session, uri) }
+            }
+        }
     }
     DisposableEffect(Unit) {
         onDispose {
@@ -1106,6 +1112,7 @@ private fun LiveTerminalView(
             input.onText = null
             input.onKey = null
             input.onPaste = null
+            input.onImage = null
         }
     }
     LaunchedEffect(session?.inputError) {
@@ -1121,9 +1128,11 @@ private fun LiveTerminalView(
             control = controlling && visible && t.pendingGrid == null,
             inputEnabled = visible,
             inputReady = inputReady,
+            imageReady = inputReady && d.herdr?.terminalImage == true,
             onText = { input.type(it) },
             onKey = { input.key(it) },
             onPaste = { input.paste(it) },
+            onImage = { uri, mime -> input.pasteImage(uri, mime) },
             input = input,
             theme = ComputerThemes.theme(d.id)?.theme,
             onGrid = { cols, rows -> t.grid(cols to rows) },

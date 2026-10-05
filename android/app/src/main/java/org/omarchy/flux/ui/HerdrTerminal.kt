@@ -5,6 +5,8 @@ import android.content.Context
 import android.view.MotionEvent
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityManager
+import android.net.Uri
+import android.os.Bundle
 import android.text.Editable
 import android.text.InputType
 import android.text.Selection
@@ -13,6 +15,7 @@ import android.view.View
 import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
+import android.view.inputmethod.InputContentInfo
 import android.view.inputmethod.InputMethodManager
 import android.webkit.JavascriptInterface
 import android.webkit.RenderProcessGoneDetail
@@ -35,6 +38,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.viewinterop.AndroidView
+import org.omarchy.flux.core.ClipImage
+import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.HerdrSync
 import org.omarchy.flux.core.HerdrTerminalEvent
 import org.omarchy.flux.core.HerdrTerminalSession
@@ -63,6 +68,13 @@ internal fun rememberTerminalFeeder(deviceId: String): TerminalFeeder {
     }
     return feeder
 }
+/**
+ * The image types that the phone keyboard may paste into the terminal. The
+ * IME shows its image and clipboard options only while the editor names
+ * them, and it commits the image to the terminal then.
+ */
+private val IMAGE_MIME_TYPES = arrayOf("image/png", "image/jpeg", "image/gif", "image/webp")
+
 /**
  * True when the terminal view can take focus on the phone. The phone is in
  * touch mode, so a view that is not focusable in touch mode cannot take
@@ -125,9 +137,11 @@ internal fun HerdrTerminalView(
     onTap: (column: Int, row: Int) -> Unit = { _, _ -> },
     onGone: () -> Unit = {},
     inputReady: Boolean = false,
+    imageReady: Boolean = false,
     onText: (String) -> Unit = {},
     onKey: (String) -> Unit = {},
     onPaste: (String) -> Unit = {},
+    onImage: (Uri, String) -> Unit = { _, _ -> },
     input: TerminalInput? = null,
 ) {
     feeder.onReady = {
@@ -172,6 +186,8 @@ internal fun HerdrTerminalView(
             editor.onText = onText
             editor.onKey = onKey
             editor.onPaste = onPaste
+            editor.imageReady = imageReady
+            editor.onImage = onImage
             input?.onShowKeyboard = {
                 // Android ignores showSoftInput() for a view that is not
                 // served, so ask for the keyboard only after the view took
@@ -204,10 +220,13 @@ internal class TerminalInput {
     var ready by mutableStateOf(false)
     /** True while the computer also accepts a bracketed paste. */
     var pasteReady by mutableStateOf(false)
+    /** True while the computer also accepts an image to paste. */
+    var imageReady by mutableStateOf(false)
     var session by mutableStateOf("")
     var onText: ((String) -> Unit)? = null
     var onKey: ((String) -> Unit)? = null
     var onPaste: ((String) -> Unit)? = null
+    var onImage: ((Uri, String) -> Unit)? = null
     var onShowKeyboard: (() -> Unit)? = null
 
     /** Types [text] on the computer. [from] is the session of a delayed caller, or empty for now. */
@@ -238,6 +257,18 @@ internal class TerminalInput {
     fun showKeyboard() {
         if (ready) onShowKeyboard?.invoke()
     }
+
+    /**
+     * Pastes the image at [uri] in the active session. The computer puts
+     * it on its clipboard and pastes it, so the program reads it as an
+     * attachment. [from] is the session of a delayed caller, or empty for
+     * now.
+     */
+    fun pasteImage(uri: Uri, mime: String, from: String = "") {
+        if (!ready || !imageReady || mime !in ClipImage.TYPES) return
+        if (from.isNotEmpty() && from != session) return
+        onImage?.invoke(uri, mime)
+    }
 }
 
 /**
@@ -258,6 +289,9 @@ internal class TerminalWebView(context: Context) : WebView(context) {
     /** Sends one committed block of text as a bracketed paste. */
     var onPaste: ((String) -> Unit)? = null
 
+    /** Sends one image that the phone keyboard pasted. */
+    var onImage: ((Uri, String) -> Unit)? = null
+
     /** True while the terminal may take typed input. */
     var inputReady: Boolean = false
         set(value) {
@@ -270,6 +304,18 @@ internal class TerminalWebView(context: Context) : WebView(context) {
             // drop the focus when it stops, so leaving and returning starts
             // with no keyboard.
             if (value) refreshInput() else closeKeyboard()
+        }
+
+    /**
+     * True while the computer also accepts an image paste. The IME reads
+     * the accepted content types when the input connection is built, so a
+     * change restarts the input while the keyboard shows.
+     */
+    var imageReady: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            if (value) refreshInput()
         }
 
     private var connection: TerminalInputConnection? = null
@@ -299,6 +345,9 @@ internal class TerminalWebView(context: Context) : WebView(context) {
         // and a replacement would edit text that is already remote.
         outAttrs.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
         outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN
+        // The image types that the keyboard may paste. The IME offers its
+        // image and clipboard options only while the editor names them.
+        if (imageReady) outAttrs.contentMimeTypes = IMAGE_MIME_TYPES
         return TerminalInputConnection(this).also { connection = it }
     }
 
@@ -354,6 +403,25 @@ internal class TerminalWebView(context: Context) : WebView(context) {
             }
             super.commitText(text, newCursorPosition)
             flush()
+            return true
+        }
+
+        /**
+         * Takes an image that the phone keyboard pasted. The IME calls
+         * this only for a type in [IMAGE_MIME_TYPES]. The image does not
+         * go to the editable: it goes to the computer, which pastes it
+         * into the program, so the terminal draws the program's own
+         * attachment and not the image bytes.
+         */
+        override fun commitContent(inputContentInfo: InputContentInfo, flags: Int, opts: Bundle?): Boolean {
+            val mime = inputContentInfo.description.getMimeType(0) ?: return false
+            if (mime !in ClipImage.TYPES) return false
+            // The IME grants a read of the content for this paste only.
+            if (flags and InputConnection.INPUT_CONTENT_GRANT_READ_URI_PERMISSION != 0) {
+                runCatching { inputContentInfo.requestPermission() }
+                    .onFailure { return false }
+            }
+            onImage?.invoke(inputContentInfo.contentUri, mime)
             return true
         }
 

@@ -91,6 +91,9 @@ data class HerdrState(
     /** True when this computer also accepts a bracketed paste in a live terminal. */
     val terminalPaste: Boolean get() = "paste" in bridge
 
+    /** True when this computer also accepts an image to paste in a live terminal. */
+    val terminalImage: Boolean get() = "image" in bridge
+
     fun agent(pane: String): HerdrAgent? = agents.firstOrNull { it.pane == pane }
 
     fun terminal(pane: String): HerdrTerminal? = panes.firstOrNull { it.pane == pane }
@@ -576,6 +579,14 @@ fun herdrTerminalKeyBody(session: String, key: String): JsonObject =
 /** The body of one bracketed paste in the controller session [session]. */
 fun herdrTerminalPasteBody(session: String, text: String): JsonObject =
     bodyOf("kind" to "terminal_paste", "session" to session, "text" to text)
+
+/**
+ * The body of one image paste in the controller session [session]. The
+ * image travels as the payload of the packet; fluxd detects its type and
+ * puts it on the clipboard of the computer.
+ */
+fun herdrTerminalPasteImageBody(session: String): JsonObject =
+    bodyOf("kind" to "terminal_paste_image", "session" to session)
 
 /** The key names that fluxd accepts in a keys packet. */
 val HERDR_KEYS: Set<String> = setOf("enter", "esc", "tab", "shift+tab", "up", "down", "left", "right", "backspace", "space", "y", "n") +

@@ -597,6 +597,96 @@ func (d *Daemon) herdrTerminalPaste(dev *Device, l *lan.Link, id, text string) {
 	d.herdrTerminalSend(dev, l, id, "\x1b[200~"+body+"\x1b[201~")
 }
 
+// herdrTerminalImageMax is the largest image that a phone may paste into a
+// terminal in one terminal_paste_image. It matches the clipboard image
+// limit of Flux.
+const herdrTerminalImageMax = 16 << 20
+
+// herdrTerminalPasteKey is the paste key of the controlled program. A
+// terminal reads 0x16 as Ctrl+V. opencode reads the clipboard then, so an
+// image on the clipboard of the computer reaches the prompt as an
+// attachment instead of typed text.
+const herdrTerminalPasteKey = "\x16"
+
+// herdrTerminalPasteImage puts an image from the phone on the clipboard
+// of the computer and pastes it into the controller session of the phone.
+// The image travels as the payload of the packet, so the paste does not
+// depend on clipboard sync or on the clipboard of the phone. The program
+// reads its own clipboard, so the image reaches the prompt as an
+// attachment. fluxd detects the image type from the bytes and drops a
+// payload that is not an image, so a phone cannot put arbitrary data on
+// the clipboard.
+func (d *Daemon) herdrTerminalPasteImage(dev *Device, l *lan.Link, p *proto.Packet, id string) {
+	// The ownership check runs first, so a foreign, unknown, or released
+	// session gets no answer and learns nothing about somebody else's
+	// terminal.
+	d.mu.Lock()
+	t := d.herdrStreamLocked(dev, l, id)
+	d.mu.Unlock()
+	if t == nil || t.mode != "control" {
+		d.logf("%s: ignored an image paste for an unknown session", d.nameOf(dev))
+		return
+	}
+	switch {
+	case !p.HasPayload() || p.PayloadSize <= 0:
+		herdrTerminalInputError(l, id, "invalid_input", "The image is empty.")
+		return
+	case p.PayloadSize > herdrTerminalImageMax:
+		herdrTerminalInputError(l, id, "invalid_input", fmt.Sprintf("The image is larger than %d MiB", herdrTerminalImageMax>>20))
+		return
+	}
+	if !d.startHerdrImage(dev) {
+		herdrTerminalInputError(l, id, "input_failed", "An image of this device is still on its way.")
+		return
+	}
+	go func() {
+		defer d.endHerdrImage(dev)
+		ctx, cancel := context.WithTimeout(d.ctx, clipImageTimeout)
+		defer cancel()
+		data, err := fetchAll(ctx, l, p)
+		if err != nil {
+			d.logf("%s: terminal paste image: %v", d.nameOf(dev), err)
+			herdrTerminalInputError(l, id, "input_failed", "fluxd could not receive the image.")
+			return
+		}
+		mime := clipImageType(data)
+		if mime == "" {
+			herdrTerminalInputError(l, id, "invalid_input", "The paste is not a PNG, JPEG, GIF, or WebP image.")
+			return
+		}
+		if err := d.clip.SetImage(data, mime); err != nil {
+			d.logf("%s: terminal paste image: %v", d.nameOf(dev), err)
+			herdrTerminalInputError(l, id, "input_failed", "fluxd could not put the image on the clipboard.")
+			return
+		}
+		d.herdrTerminalSend(dev, l, id, herdrTerminalPasteKey)
+	}()
+}
+
+// startHerdrImage reserves the one image paste of the device. It returns
+// false while another image of the device is still on its way, because the
+// clipboard of the computer holds one image at a time. Call endHerdrImage
+// when the paste ends.
+func (d *Daemon) startHerdrImage(dev *Device) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.herdrJobs.pasting[dev.ID] {
+		return false
+	}
+	if d.herdrJobs.pasting == nil {
+		d.herdrJobs.pasting = map[string]bool{}
+	}
+	d.herdrJobs.pasting[dev.ID] = true
+	return true
+}
+
+// endHerdrImage ends an image paste that startHerdrImage reserved.
+func (d *Daemon) endHerdrImage(dev *Device) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	delete(d.herdrJobs.pasting, dev.ID)
+}
+
 // herdrTerminalInput types one event in the controller session of the
 // phone. Exactly one of text or key is set.
 func (d *Daemon) herdrTerminalInput(dev *Device, l *lan.Link, id, text, key string) {

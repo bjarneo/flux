@@ -300,6 +300,11 @@ class HerdrTerminalTest {
         assertEquals("ts1", paste.str("session"))
         assertEquals("one\ntwo", paste.str("text"))
         assertNull(paste["key"])
+
+        val image = herdrTerminalPasteImageBody("ts1")
+        assertEquals("terminal_paste_image", image.str("kind"))
+        assertEquals("ts1", image.str("session"))
+        assertNull("the image travels as the payload, not the body", image["text"])
     }
 
     @Test
@@ -323,6 +328,8 @@ class HerdrTerminalTest {
         assertFalse(s.terminalInput)
         assertTrue(s.copy(bridge = s.bridge + "input").terminalInput)
         assertEquals(listOf("observe", "control", "scroll", "mouse"), s.bridge)
+        assertFalse(s.terminalImage)
+        assertTrue(s.copy(bridge = s.bridge + "image").terminalImage)
         assertFalse(s.terminalPaste)
         assertTrue(s.copy(bridge = s.bridge + "paste").terminalPaste)
         val old = parseHerdrState(body("""{"kind":"state","enabled":true,"running":true,"control":true}"""))!!
