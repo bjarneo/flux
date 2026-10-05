@@ -635,6 +635,7 @@ private fun TerminalOutput(d: DeviceUi, pane: String, sample: TerminalSample?, m
     Box(modifier) {
         HerdrTerminalView(
             session,
+            deviceId = d.id,
             onReady = { ready = true },
             modifier = Modifier.fillMaxSize(),
             sample = sample,

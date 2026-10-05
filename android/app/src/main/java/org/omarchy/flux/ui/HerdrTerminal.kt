@@ -34,6 +34,7 @@ import org.omarchy.flux.theme.OmarchyTheme
 @Composable
 fun HerdrTerminalView(
     session: HerdrTerminalSession?,
+    deviceId: String,
     onReady: () -> Unit,
     modifier: Modifier = Modifier,
     sample: TerminalSample? = null,
@@ -46,6 +47,7 @@ fun HerdrTerminalView(
     onTap: (column: Int, row: Int) -> Unit = { _, _ -> },
 ) {
     val feeder = remember { TerminalFeeder() }
+    feeder.deviceId = deviceId
     feeder.onReady = {
         if (sample != null) feeder.draw(sample) else onReady()
     }
@@ -129,8 +131,16 @@ fun HerdrTerminalView(
  * always sees the grid of a frame before the frame itself. The touches
  * of the page arrive here too and become wheel steps, zoom, and pan.
  */
-private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
+private class TerminalFeeder : (String, HerdrTerminalEvent) -> Unit {
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    /**
+     * The computer whose terminal this feeder draws. Events of another
+     * computer are dropped, so a late frame or close of one never reaches
+     * the terminal of another, whose session can share the same name.
+     */
+    @Volatile
+    var deviceId: String = ""
 
     /** The view that draws the terminal, or null while it is gone. */
     @Volatile
@@ -226,7 +236,8 @@ private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
     }
 
     /** Feeds one event of the stream. Any thread. */
-    override fun invoke(event: HerdrTerminalEvent) {
+    override fun invoke(deviceId: String, event: HerdrTerminalEvent) {
+        if (deviceId != this.deviceId) return
         handler.post {
             val view = webView ?: return@post
             if (!ready) return@post

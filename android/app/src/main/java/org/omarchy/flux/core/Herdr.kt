@@ -56,12 +56,14 @@ object HerdrSync {
     private var terminalSeq = 0L
 
     /**
-     * The sink of the terminal events of an open stream. It runs on the
-     * network thread with the core lock held, so it must only hand the
-     * event over.
+     * The sink of the terminal events of an open stream. It takes the
+     * device ID and the event, so a late event of one computer never
+     * reaches the terminal of another, whose session can share the same
+     * name. It runs on the network thread with the core lock held, so it
+     * must only hand the event over.
      */
     @Volatile
-    var terminalSink: ((HerdrTerminalEvent) -> Unit)? = null
+    var terminalSink: ((deviceId: String, event: HerdrTerminalEvent) -> Unit)? = null
 
     /** Counts the creates and closes, so that a late timeout does not replace a newer one. The core lock guards it. */
     private var actions = 0L
@@ -111,7 +113,7 @@ object HerdrSync {
                 val frame = parseHerdrTerminalFrame(p.body) ?: return
                 // Only the stream of this phone gets its frames.
                 if (d.herdrTerminal?.session != frame.session) return
-                terminalSink?.invoke(frame)
+                terminalSink?.invoke(d.id, frame)
             }
             "terminal_closed" -> onTerminalClosed(d, p.body)
             else -> Log.d(TAG, "ignored flux.herdr kind ${p.string("kind")}")
@@ -273,7 +275,7 @@ object HerdrSync {
             return
         }
         d.herdrTerminal = opened
-        if (opened.open) terminalSink?.invoke(HerdrTerminalEvent.Opened(opened.session, opened.width, opened.height))
+        if (opened.open) terminalSink?.invoke(d.id, HerdrTerminalEvent.Opened(opened.session, opened.width, opened.height))
     }
 
     /** Handles terminal_closed, the end of a stream. The core lock is held. */
@@ -282,7 +284,7 @@ object HerdrSync {
         val t = d.herdrTerminal ?: return
         if (t.session != closed.session) return
         d.herdrTerminal = t.copy(sending = false, open = false, code = closed.code, reason = closed.reason)
-        terminalSink?.invoke(closed)
+        terminalSink?.invoke(d.id, closed)
     }
 
     /**
