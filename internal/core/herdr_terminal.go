@@ -84,17 +84,7 @@ func (d *Daemon) herdrTerminalOpen(dev *Device, l *lan.Link, req json.Number, pa
 	// then covers only the reads that began before the reservation, and
 	// no new read can make herdr scroll the terminal under the stream.
 	if mode == "control" {
-		d.mu.Lock()
-		if d.herdrStreamWait == nil {
-			d.herdrStreamWait = map[string]bool{}
-		}
-		d.herdrStreamWait[pane] = true
-		d.mu.Unlock()
-		defer func() {
-			d.mu.Lock()
-			delete(d.herdrStreamWait, pane)
-			d.mu.Unlock()
-		}()
+		defer d.reserveHerdrStream(pane)()
 	}
 	// A mode change on the same pane replaces the bridge: one CLI stream
 	// cannot change its mode, so control opens a new subprocess. The old
@@ -251,6 +241,28 @@ func (d *Daemon) herdrStreamLocked(dev *Device, l *lan.Link, id string) *herdrTe
 	return t
 }
 
+// reserveHerdrStream marks the pane as having a control stream in the
+// middle of its attach. It returns the release, which the caller must
+// call exactly once. The count keeps the reservation while more than one
+// stream attaches to the pane: a stream that fails releases only its own.
+func (d *Daemon) reserveHerdrStream(pane string) func() {
+	d.mu.Lock()
+	if d.herdrStreamWait == nil {
+		d.herdrStreamWait = map[string]int{}
+	}
+	d.herdrStreamWait[pane]++
+	d.mu.Unlock()
+	return func() {
+		d.mu.Lock()
+		if n := d.herdrStreamWait[pane]; n <= 1 {
+			delete(d.herdrStreamWait, pane)
+		} else {
+			d.herdrStreamWait[pane] = n - 1
+		}
+		d.mu.Unlock()
+	}
+}
+
 // herdrStreamed reports whether a terminal session shows the pane, or one
 // is about to attach.
 func (d *Daemon) herdrStreamed(pane string) bool {
@@ -262,7 +274,7 @@ func (d *Daemon) herdrStreamed(pane string) bool {
 // herdrStreamedLocked reports whether a terminal session shows the pane,
 // or a control stream is attaching to it. d.mu must be held.
 func (d *Daemon) herdrStreamedLocked(pane string) bool {
-	if d.herdrStreamWait[pane] {
+	if d.herdrStreamWait[pane] > 0 {
 		return true
 	}
 	for _, t := range d.herdrStreams {

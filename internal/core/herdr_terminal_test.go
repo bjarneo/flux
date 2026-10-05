@@ -658,7 +658,7 @@ func TestHerdrTerminalAttachReservesThePane(t *testing.T) {
 	defer cancel()
 	d, f := terminalDaemon(ctx, t, bridgeEcho)
 	d.mu.Lock()
-	d.herdrStreamWait = map[string]bool{"w1:p1": true}
+	d.herdrStreamWait = map[string]int{"w1:p1": 1}
 	d.herdrHistory = map[string]agentHistory{
 		"w1:p1": {lines: []string{"cached"}, at: time.Now()},
 	}
@@ -707,6 +707,25 @@ func TestHerdrTerminalWaitCoversViewReads(t *testing.T) {
 			return false
 		}
 	})
+}
+
+// Two control streams can attach to a pane at once, for example two
+// devices, or a retry while the first still opens. A stream that fails
+// must release only its own reservation, never the one of the other.
+func TestHerdrTerminalReserveSurvivesAnotherOpen(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d, _ := terminalDaemon(ctx, t, bridgeEcho)
+	first := d.reserveHerdrStream("w1:p1")
+	second := d.reserveHerdrStream("w1:p1")
+	second()
+	if !d.herdrStreamed("w1:p1") {
+		t.Fatal("a second release dropped the first reservation")
+	}
+	first()
+	if d.herdrStreamed("w1:p1") {
+		t.Fatal("the pane stays reserved after every release")
+	}
 }
 
 func TestHerdrTerminalCapabilities(t *testing.T) {
