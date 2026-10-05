@@ -20,7 +20,7 @@
   // bytes and fixes the grid size; no input goes back to the app here,
   // so this page never answers terminal queries by itself.
   var term = new Terminal({
-    cols: 80,
+    cols: 60,
     rows: 24,
     scrollback: 0,
     disableStdin: true,
@@ -46,7 +46,7 @@
   // sidebars, while the drawing still fills the phone at a readable
   // font. The font is derived from it, so a wider phone shows the same
   // content in a larger font.
-  var phoneCols = 80;
+  var phoneCols = 60;
   var panX = 0;
   var panY = 0;
 
@@ -86,12 +86,13 @@
     requestAnimationFrame(function () { fn(); report(); });
   }
 
-  function fit(w, h) {
+  function fit(w, h, requestGrid) {
     availW = w || availW;
     availH = h || availH;
+    if (availW <= 0 || availH <= 0) return;
+
     // Monospace fallback per font pixel, when the probe cannot measure.
     var cellW = 0.62;
-    var cellH = 1.25;
     var probe = document.createElement("span");
     probe.style.position = "absolute";
     probe.style.left = "-9999px";
@@ -104,41 +105,38 @@
     var rect = probe.getBoundingClientRect();
     probe.remove();
     var w2 = rect.width / 1000;
-    var h2 = rect.height / 100;
     if (w2 > 0.4 && w2 < 0.9) cellW = w2;
-    if (h2 > 0.9 && h2 < 1.8) cellH = h2;
-    var size = Math.min(
-      availW / (cellW * term.cols),
-      availH / (cellH * term.rows)
-    );
-    // The font grows to fill the view too: a phone-sized grid must not
-    // draw small in a corner of the screen.
-    fitFont = Math.max(3, Math.min(24, Math.floor(size)));
-    term.options.fontSize = fitFont;
-    // The grid that the phone asks the computer for: about phoneCols
-    // columns at a readable font, filling the view. The font is clamped
-    // so it stays readable on any screen.
-    if (availW > 0 && availH > 0 && window.FluxBridge && window.FluxBridge.grid) {
-      var phoneFont = Math.max(8, Math.min(18, availW / (cellW * phoneCols)));
-      var cols = Math.max(20, Math.min(500, Math.floor(availW / (cellW * phoneFont))));
-      var rows = Math.max(6, Math.min(500, Math.floor(availH / (cellH * phoneFont))));
-      window.FluxBridge.grid(cols, rows);
+    if (requestGrid) {
+      fitFont = Math.max(8, Math.min(18, availW / (cellW * phoneCols)));
+      term.options.fontSize = fitFont;
     }
     panX = 0;
     panY = 0;
     window.scrollTo(0, 0);
-    settled(place);
+    requestAnimationFrame(function () {
+      if (requestGrid && window.FluxBridge && window.FluxBridge.grid) {
+        // Use xterm's rendered cell size, not a font-metric estimate, so
+        // the PTY grid reaches the edges without leaving a large frame.
+        var cell = measure();
+        if (cell.w <= 0 || cell.h <= 0) return;
+        var cols = Math.max(20, Math.min(500, Math.floor(availW / cell.w)));
+        var rows = Math.max(6, Math.min(500, Math.floor(availH / cell.h)));
+        window.FluxBridge.grid(cols, rows);
+      }
+      place();
+      report();
+    });
   }
 
   window.FluxTerminal = {
     prepare: function (w, h) {
-      fit(w, h);
+      fit(w, h, true);
     },
     reset: function (cols, rows, w, h) {
       term.reset();
       term.resize(cols, rows);
       term.write("\u001b[?7l");
-      fit(w, h);
+      fit(w, h, false);
     },
     write: function (base64, full, session) {
       var raw = atob(base64);
