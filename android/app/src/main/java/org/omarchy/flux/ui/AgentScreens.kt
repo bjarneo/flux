@@ -659,6 +659,15 @@ private fun TerminalOutput(d: DeviceUi, pane: String, sample: TerminalSample?, m
                     HerdrSync.terminalScroll(FluxCore, d.id, t.session, direction, column, row)
                 }
             },
+            onTap = { column, row ->
+                val t = currentSession
+                if (active && authorized && !ReplyLock.valid()) {
+                    stop("Authentication expired. Reauthenticate to continue.")
+                } else if (active && authorized && t?.open == true && t.mode == "control") {
+                    HerdrSync.terminalMouse(FluxCore, d.id, t.session, "down", "left", column, row)
+                    HerdrSync.terminalMouse(FluxCore, d.id, t.session, "up", "left", column, row)
+                }
+            },
         )
         if (!visible) {
             Column(

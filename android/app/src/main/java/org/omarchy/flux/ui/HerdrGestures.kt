@@ -85,6 +85,7 @@ class TerminalGestures(
     private val onStats: (GestureStats) -> Unit = {},
     private val post: (delayMs: Long, action: () -> Unit) -> Unit = { _, _ -> },
     private val scrollScale: Double = SCROLL_SCALE,
+    private val onTap: (column: Int, row: Int) -> Unit = { _, _ -> },
 ) {
     companion object {
         /**
@@ -98,6 +99,10 @@ class TerminalGestures(
 
         /** The travel after which a gesture is vertical or horizontal. */
         const val LOCK_PX = 6.0
+
+        /** A click requires a brief touch that never leaves this radius. */
+        const val TAP_SLOP_PX = 6.0
+        const val TAP_MAX_MS = 350L
 
         /**
          * The largest movement of one touch event that counts as a finger
@@ -150,6 +155,7 @@ class TerminalGestures(
     /** The grid as the page draws it. A new grid ends a running gesture. */
     var geometry = TerminalGeometry()
         set(value) {
+            if (value != field) tapEligible = false
             if (value.cols != field.cols || value.rows != field.rows) {
                 endDrag()
                 endFling()
@@ -165,6 +171,9 @@ class TerminalGestures(
     private var totalX = 0.0
     private var totalY = 0.0
     private var vertical = false
+    private var tapEligible = false
+    private var startX = 0.0
+    private var startY = 0.0
 
     /** The finger travel that still owes wheel steps, in CSS pixels. */
     private var pending = 0.0
@@ -196,9 +205,12 @@ class TerminalGestures(
     fun touch(action: String, id: Int, x: Double, y: Double, at: Long = now()) {
         when (action) {
             "down" -> {
+                val stoppingFling = flingCell != null
                 endFling()
                 points[id] = x to y
                 if (points.size >= 2) startZoom() else startDrag(x, y, at)
+                // Touching a moving terminal stops inertia, not a remote button.
+                if (stoppingFling) tapEligible = false
             }
             "move" -> {
                 if (points[id] == null) return
@@ -229,6 +241,9 @@ class TerminalGestures(
         endZoom()
         drag = true
         dragCell = if (control) geometry.cellAt(x, y) else null
+        tapEligible = dragCell != null
+        startX = x
+        startY = y
         lastX = x
         lastY = y
         totalX = 0.0
@@ -249,6 +264,7 @@ class TerminalGestures(
         val rawY = y - lastY
         lastX = x
         lastY = y
+        if (hypot(x - startX, y - startY) >= TAP_SLOP_PX) tapEligible = false
         if (!control) {
             if (rawX != 0.0 || rawY != 0.0) onPan(rawX, rawY)
             return
@@ -320,6 +336,8 @@ class TerminalGestures(
         val speed = if (fling && active) dragSpeed() else 0.0
         val cell = dragCell
         val wasVertical = vertical
+        val tap = active && fling && tapEligible && at - statStart in 0..TAP_MAX_MS &&
+            geometry.cellAt(lastX, lastY) != null
         if (active) {
             onStats(GestureStats(
                 statDistance, statSteps, at - statStart, speed, statMoves,
@@ -327,6 +345,7 @@ class TerminalGestures(
             ))
         }
         endDrag()
+        if (tap && cell != null) onTap(cell.first, cell.second)
         if (fling && control && wasVertical && cell != null) startFling(speed, cell)
     }
 
@@ -395,6 +414,7 @@ class TerminalGestures(
 
     private fun endDrag() {
         drag = false
+        tapEligible = false
         dragCell = null
         pending = 0.0
         vel.clear()

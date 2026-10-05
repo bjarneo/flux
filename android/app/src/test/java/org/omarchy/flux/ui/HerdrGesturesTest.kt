@@ -19,6 +19,7 @@ class HerdrGesturesTest {
         val fonts = mutableListOf<Triple<Int, Double, Double>>()
         val pans = mutableListOf<Pair<Double, Double>>()
         val stats = mutableListOf<GestureStats>()
+        val taps = mutableListOf<Pair<Int, Int>>()
     }
 
     private fun gestures(
@@ -35,9 +36,85 @@ class HerdrGesturesTest {
             onStats = { sink.stats += it },
             post = post,
             scrollScale = scrollScale,
+            onTap = { column, row -> sink.taps += column to row },
         )
         g.geometry = grid
         return g
+    }
+
+    @Test
+    fun aBriefStationaryTouchClicksOnceAtTheTouchedCell() {
+        val sink = Sink()
+        val g = gestures(sink)
+        g.geometry = grid.copy(originX = 30.0, originY = 40.0, cellW = 20.0, cellH = 40.0)
+        g.control = true
+        g.touch("down", 1, 135.0, 125.0, at = 0)
+        assertTrue(sink.taps.isEmpty())
+        g.touch("up", 1, 136.0, 126.0, at = 100)
+        g.touch("up", 1, 136.0, 126.0, at = 110)
+        assertEquals(listOf(5 to 2), sink.taps)
+        assertTrue(sink.wheels.isEmpty())
+    }
+
+    @Test
+    fun draggingAwayAndBackNeverBecomesAClick() {
+        for ((dx, dy) in listOf(0.0 to 20.0, 20.0 to 0.0)) {
+            val sink = Sink()
+            val g = gestures(sink)
+            g.control = true
+            g.touch("down", 1, 55.0, 205.0, at = 0)
+            g.touch("move", 1, 55.0 + dx, 205.0 + dy, at = 20)
+            g.touch("up", 1, 55.0, 205.0, at = 40)
+            assertTrue(sink.taps.isEmpty())
+        }
+    }
+
+    @Test
+    fun longPressCancelObserveAndMarginsNeverClick() {
+        for (scenario in listOf("long", "cancel", "observe", "margin", "release", "resize")) {
+            val sink = Sink()
+            val g = gestures(sink)
+            g.control = scenario != "observe"
+            val x = if (scenario == "margin") -1.0 else 55.0
+            g.touch("down", 1, x, 205.0, at = 0)
+            if (scenario == "release") g.control = false
+            if (scenario == "resize") g.geometry = grid.copy(originX = 5.0)
+            g.touch(
+                if (scenario == "cancel") "cancel" else "up", 1, x, 205.0,
+                at = if (scenario == "long") 1000L else 100L,
+            )
+            assertTrue(scenario, sink.taps.isEmpty())
+        }
+    }
+
+    @Test
+    fun aSecondFingerDisqualifiesTheRemainingFingerFromClicking() {
+        val sink = Sink()
+        val g = gestures(sink)
+        g.control = true
+        g.touch("down", 1, 55.0, 205.0, at = 0)
+        g.touch("down", 2, 155.0, 205.0, at = 10)
+        g.touch("up", 2, 155.0, 205.0, at = 20)
+        g.touch("up", 1, 55.0, 205.0, at = 30)
+        assertTrue(sink.taps.isEmpty())
+    }
+
+    @Test
+    fun touchingToStopInertiaDoesNotAlsoClick() {
+        val sink = Sink()
+        val pending = ArrayDeque<() -> Unit>()
+        val g = gestures(sink, { 1000L }, { _, action -> pending.addLast(action) })
+        g.control = true
+        g.touch("down", 1, 55.0, 400.0, at = 0)
+        g.touch("move", 1, 55.0, 340.0, at = 20)
+        g.touch("up", 1, 55.0, 280.0, at = 40)
+        assertTrue(pending.isNotEmpty())
+        g.touch("down", 1, 55.0, 205.0, at = 60)
+        g.touch("up", 1, 55.0, 205.0, at = 100)
+        assertTrue(sink.taps.isEmpty())
+        g.touch("down", 1, 55.0, 205.0, at = 120)
+        g.touch("up", 1, 55.0, 205.0, at = 160)
+        assertEquals(listOf(5 to 10), sink.taps)
     }
 
     @Test

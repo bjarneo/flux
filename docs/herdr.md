@@ -102,7 +102,10 @@ The terminal stays covered while authentication, control acquisition, and its fi
 redraw finish. Herdr resizes the pane for the phone, and the program draws its own
 interface for that grid. The app preserves explicit program colors and uses the
 computer's synced theme for default colors. One finger scrolls the remote conversation;
-two fingers zoom and pan locally. Gestures do not send clicks, text, or arbitrary keys.
+two fingers zoom and pan locally. A brief stationary touch sends a left-button click at the
+touched cell, for example to use OpenCode's native Jump to latest. Drags, long presses, and
+two-finger gestures do not click. Touching during inertia stops it without clicking; a second
+tap can activate the button. Gestures do not send text or arbitrary keys.
 The existing validated reply controls remain available below the terminal.
 
 When authentication expires, Android hides the terminal, releases control, and offers

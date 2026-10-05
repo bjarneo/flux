@@ -290,6 +290,22 @@ distance after repeated lifts. Release-build and end-to-end phone latency checks
 
 ## 7. Verification and boundaries
 
+### Native tap follow-up (2026-10-04)
+
+Implemented for Android. JVM tests, lint, and the debug build passed; Flux Test is installed
+on the Pixel. User validation and the release build remain pending. No commits are requested
+until the user finishes the phone trial.
+
+- A single-finger touch lasting at most 350 ms and staying within a 6 CSS-pixel radius sends
+  an ordered left-button down/up pair through the existing terminal mouse protocol.
+- Clicks require authenticated active control, a drawn baseline, and enabled visible input.
+  The original touched cell is mapped using the current terminal origin and cell metrics.
+- Leaving the tap radius permanently disqualifies that gesture, even if the finger returns.
+  Long presses, cancellation, observation, margins, geometry/control changes, and multi-touch
+  never click. Touching to stop inertia does not also activate a remote button.
+- Scroll calibration is unchanged. The phone trial must confirm native OpenCode buttons,
+  particularly Jump to latest, without accidental clicks during scrolling or zooming.
+
 - Start with a disposable Herdr session and isolated daemon; keep the installed PC daemon intact.
 - Continue Pixel testing with the separate `org.omarchy.flux.dev` app, not the official app.
 - Validate real OpenCode conversation scrolling on phone and PC, not only static sample frames.

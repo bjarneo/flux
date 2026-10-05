@@ -45,12 +45,14 @@ fun HerdrTerminalView(
     onGrid: (cols: Int, rows: Int) -> Unit = { _, _ -> },
     onDrawn: (session: String) -> Unit = {},
     inputEnabled: Boolean = true,
+    onTap: (column: Int, row: Int) -> Unit = { _, _ -> },
 ) {
     val feeder = remember { TerminalFeeder() }
     feeder.onReady = {
         if (sample != null) feeder.draw(sample) else onReady()
     }
     feeder.onWheel = onWheel
+    feeder.onTap = onTap
     feeder.onGrid = onGrid
     feeder.onDrawn = onDrawn
     feeder.control = control
@@ -144,6 +146,8 @@ private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
     @Volatile
     var onWheel: ((column: Int, row: Int, direction: String) -> Unit)? = null
 
+    var onTap: ((column: Int, row: Int) -> Unit)? = null
+
     /** Called on the main thread with the phone-first grid of the view. */
     @Volatile
     var onGrid: ((cols: Int, rows: Int) -> Unit)? = null
@@ -172,6 +176,9 @@ private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
         },
         onFont = { size, x, y -> eval("FluxTerminal.zoom($size, $x, $y)") },
         onPan = { dx, dy -> eval("FluxTerminal.pan($dx, $dy)") },
+        onTap = { column, row ->
+            if (baseline && inputEnabled) onTap?.invoke(column, row)
+        },
         // The feel of the gesture is tuned on a real phone: these numbers
         // show what one gesture did, and never a line of the terminal.
         onStats = { stats ->
@@ -356,6 +363,7 @@ private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
             webView = null
             onReady = null
             onWheel = null
+            onTap = null
             onGrid = null
             onDrawn = null
             ready = false
