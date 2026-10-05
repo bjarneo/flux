@@ -5,7 +5,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The touches of the terminal become wheel steps, zoom, and pan. */
+/** The touches of the terminal become wheel steps, zoom, pan, and a fling. */
 class HerdrGesturesTest {
 
     /** A grid of 10x20 pixel cells at the origin, 120x40 cells. */
@@ -18,14 +18,21 @@ class HerdrGesturesTest {
         val wheels = mutableListOf<Triple<Int, Int, String>>()
         val fonts = mutableListOf<Triple<Int, Double, Double>>()
         val pans = mutableListOf<Pair<Double, Double>>()
+        val stats = mutableListOf<GestureStats>()
     }
 
-    private fun gestures(sink: Sink, clock: () -> Long = { 0L }): TerminalGestures {
+    private fun gestures(
+        sink: Sink,
+        clock: () -> Long = { 0L },
+        post: (Long, () -> Unit) -> Unit = { _, _ -> },
+    ): TerminalGestures {
         val g = TerminalGestures(
             now = clock,
             onWheel = { column, row, direction -> sink.wheels += Triple(column, row, direction) },
             onFont = { size, x, y -> sink.fonts += Triple(size, x, y) },
             onPan = { dx, dy -> sink.pans += dx to dy },
+            onStats = { sink.stats += it },
+            post = post,
         )
         g.geometry = grid
         return g
@@ -47,13 +54,39 @@ class HerdrGesturesTest {
         val g = gestures(sink)
         g.control = true
         g.touch("down", 1, 205.0, 105.0) // the cell (20, 5)
-        g.touch("move", 1, 205.0, 85.0) // one step up
+        g.touch("move", 1, 205.0, 99.0) // 6 px up: one step
         assertEquals(listOf(Triple(20, 5, "down")), sink.wheels)
-        g.touch("move", 1, 205.0, 125.0) // two steps down
+        g.touch("move", 1, 205.0, 111.0) // 12 px down: two steps
         assertEquals(
             listOf(Triple(20, 5, "down"), Triple(20, 5, "up"), Triple(20, 5, "up")),
             sink.wheels,
         )
+    }
+
+    @Test
+    fun theStepDoesNotChangeWithTheFont() {
+        // The same finger travel gives the same number of steps, whatever
+        // the height of a cell is: zooming does not change the effort.
+        for (cellH in listOf(20.0, 40.0)) {
+            val sink = Sink()
+            val g = gestures(sink)
+            g.geometry = grid.copy(cellH = cellH)
+            g.control = true
+            g.touch("down", 1, 55.0, 205.0)
+            g.touch("move", 1, 55.0, 187.0) // 18 px up
+            assertEquals(3, sink.wheels.size)
+        }
+    }
+
+    @Test
+    fun aSidewaysSwipeNeverScrolls() {
+        val sink = Sink()
+        val g = gestures(sink)
+        g.control = true
+        g.touch("down", 1, 100.0, 200.0)
+        g.touch("move", 1, 130.0, 203.0)
+        g.touch("move", 1, 160.0, 206.0)
+        assertTrue(sink.wheels.isEmpty())
     }
 
     @Test
@@ -62,31 +95,173 @@ class HerdrGesturesTest {
         val g = gestures(sink)
         g.control = true
         g.touch("down", 1, 55.0, 205.0) // the cell (5, 10)
-        g.touch("move", 1, 55.0, 195.0) // half a step
+        g.touch("move", 1, 55.0, 202.0) // 3 px: the axis is not chosen yet
         assertTrue(sink.wheels.isEmpty())
-        g.touch("move", 1, 55.0, 185.0) // the other half
+        g.touch("move", 1, 55.0, 199.0) // 6 px in all: one step
         assertEquals(listOf(Triple(5, 10, "down")), sink.wheels)
-        g.touch("move", 1, 55.0, 170.0) // three quarters: still nothing
+        g.touch("move", 1, 55.0, 196.0) // 3 px more: not a step yet
         assertEquals(1, sink.wheels.size)
-        g.touch("move", 1, 55.0, 160.0) // one more step
+        g.touch("move", 1, 55.0, 193.0) // 6 px more: the second step
         assertEquals(2, sink.wheels.size)
     }
 
     @Test
-    fun theBudgetAllowsABurstAndThenWaits() {
+    fun everyStepOfALongDragIsSent() {
+        // A long drag must not lose travel to a rate limit: 1400 px of finger
+        // movement become every whole 6 px step.
         val sink = Sink()
-        var now = 0L
-        val g = gestures(sink) { now }
+        val g = gestures(sink)
+        g.geometry = grid.copy(rows = 200)
+        g.control = true
+        g.touch("down", 1, 55.0, 1500.0)
+        for (i in 1..70) g.touch("move", 1, 55.0, 1500.0 - 20.0 * i)
+        assertEquals(1400 / 6, sink.wheels.size)
+    }
+
+    @Test
+    fun aHeldFingerScrollsOnEveryPositionBeforeTheLift() {
+        val sink = Sink()
+        val g = gestures(sink, clock = { 10_000L })
+        g.geometry = grid.copy(rows = 200)
+        g.control = true
+        g.touch("down", 1, 55.0, 1200.0, at = 0)
+        for (sample in 1..20) {
+            g.touch("move", 1, 55.0, 1200.0 - sample * 12, at = sample * 50L)
+            // No lift between these samples: each position advances the pane.
+            assertEquals(sample * 2, sink.wheels.size)
+        }
+        g.touch("up", 1, 55.0, 960.0, at = 1000)
+        assertEquals(1000L, sink.stats.single().durationMs)
+        assertEquals("up", sink.stats.single().endReason)
+        assertTrue(sink.stats.single().moves >= 20)
+    }
+
+    @Test
+    fun batchedPositionsUseTheirOriginalTimesForTheLiftSpeed() {
+        val sink = Sink()
+        val pending = ArrayDeque<() -> Unit>()
+        // All these samples are processed at once, not at their event times.
+        val g = gestures(sink, { 10_000L }, { _, action -> pending.addLast(action) })
+        g.control = true
+        g.touch("down", 1, 55.0, 400.0, at = 100)
+        g.touch("move", 1, 55.0, 370.0, at = 120)
+        g.touch("move", 1, 55.0, 340.0, at = 140)
+        g.touch("up", 1, 55.0, 310.0, at = 160)
+        assertEquals(15, sink.wheels.size)
+        assertEquals(-1.5, sink.stats.single().speed, 0.001)
+        assertEquals(60L, sink.stats.single().durationMs)
+        assertTrue(pending.isNotEmpty())
+    }
+
+    @Test
+    fun pausingBeforeTheLiftDoesNotStartAnotherFling() {
+        val sink = Sink()
+        val pending = ArrayDeque<() -> Unit>()
+        val g = gestures(sink, { 1000L }, { _, action -> pending.addLast(action) })
+        g.control = true
+        g.touch("down", 1, 55.0, 400.0, at = 0)
+        g.touch("move", 1, 55.0, 340.0, at = 20)
+        g.touch("move", 1, 55.0, 280.0, at = 40)
+        g.touch("up", 1, 55.0, 280.0, at = 500)
+        assertTrue(pending.isEmpty())
+        assertEquals(0.0, sink.stats.single().speed, 0.001)
+    }
+
+    @Test
+    fun aCancelledDragStopsInputAndNeverStartsAFling() {
+        val sink = Sink()
+        val pending = ArrayDeque<() -> Unit>()
+        val g = gestures(sink, { 1000L }, { _, action -> pending.addLast(action) })
+        g.control = true
+        g.touch("down", 1, 55.0, 400.0, at = 0)
+        g.touch("move", 1, 55.0, 340.0, at = 20)
+        g.touch("cancel", 1, 55.0, 340.0, at = 30)
+        val before = sink.wheels.size
+        g.touch("move", 1, 55.0, 280.0, at = 40)
+        assertEquals(before, sink.wheels.size)
+        assertTrue(pending.isEmpty())
+        assertEquals("cancel", sink.stats.single().endReason)
+    }
+
+    @Test
+    fun aJumpBeyondAFingerMoveIsBounded() {
+        val sink = Sink()
+        val g = gestures(sink)
         g.control = true
         g.touch("down", 1, 55.0, 205.0)
-        repeat(15) { g.touch("move", 1, 55.0, 205.0 - 20.0 * (it + 1)) }
-        assertEquals(TerminalGestures.BURST, sink.wheels.size)
-        // One second later the budget refills and a new drag scrolls again.
-        now = 1000
-        g.touch("up", 1, 55.0, 0.0)
+        g.touch("move", 1, 55.0, -5000.0) // a lost or reused touch
+        assertEquals((TerminalGestures.MAX_DELTA_PX / TerminalGestures.STEP_PX).toInt(),
+            sink.wheels.size)
+    }
+
+    @Test
+    fun aReversalRespondsAtOnce() {
+        val sink = Sink()
+        val g = gestures(sink)
+        g.control = true
+        g.touch("down", 1, 55.0, 211.0)
+        g.touch("move", 1, 55.0, 200.0) // 11 px up: one step, 5 px pending
+        assertEquals(listOf("down"), sink.wheels.map { it.third })
+        // Turning around drops the pending travel, so 9 px down sends a step
+        // up at once instead of first absorbing the 5 px that were waiting.
+        g.touch("move", 1, 55.0, 209.0)
+        assertEquals(listOf("down", "up"), sink.wheels.map { it.third })
+    }
+
+    @Test
+    fun aFastSwipeKeepsScrollingAfterTheLift() {
+        val sink = Sink()
+        var now = 0L
+        val pending = ArrayDeque<() -> Unit>()
+        val g = gestures(sink, { now }, { _, action -> pending.addLast(action) })
+        g.control = true
+        g.touch("down", 1, 55.0, 400.0)
+        now = 20
+        g.touch("move", 1, 55.0, 360.0)
+        now = 40
+        g.touch("move", 1, 55.0, 320.0)
+        now = 60
+        g.touch("up", 1, 55.0, 320.0)
+        // A quick lift schedules the fling.
+        assertTrue(pending.isNotEmpty())
+        val atLift = sink.wheels.size
+        now = 76
+        pending.removeFirst()()
+        assertTrue(sink.wheels.size > atLift)
+    }
+
+    @Test
+    fun aNewTouchStopsTheFling() {
+        val sink = Sink()
+        var now = 0L
+        val pending = ArrayDeque<() -> Unit>()
+        val g = gestures(sink, { now }, { _, action -> pending.addLast(action) })
+        g.control = true
+        g.touch("down", 1, 55.0, 400.0)
+        now = 20
+        g.touch("move", 1, 55.0, 360.0)
+        now = 40
+        g.touch("up", 1, 55.0, 360.0)
+        val stale = pending.removeFirst()
+        // A new touch cancels the fling: the tick that was queued does nothing.
+        g.touch("down", 1, 55.0, 400.0)
+        val before = sink.wheels.size
+        now = 5_000
+        stale()
+        assertEquals(before, sink.wheels.size)
+    }
+
+    @Test
+    fun aControlGestureReportsItsNumbers() {
+        val sink = Sink()
+        val g = gestures(sink)
+        g.control = true
         g.touch("down", 1, 55.0, 205.0)
-        repeat(5) { g.touch("move", 1, 55.0, 205.0 - 20.0 * (it + 1)) }
-        assertEquals(TerminalGestures.BURST + 5, sink.wheels.size)
+        g.touch("move", 1, 55.0, 193.0) // 12 px up: two steps
+        g.touch("up", 1, 55.0, 193.0)
+        assertEquals(1, sink.stats.size)
+        assertEquals(2, sink.stats[0].steps)
+        assertTrue(sink.stats[0].distance >= 6.0)
     }
 
     @Test
@@ -122,9 +297,9 @@ class HerdrGesturesTest {
         val g = gestures(sink)
         g.control = true
         g.touch("down", 1, 105.0, 105.0)
-        g.touch("move", 1, 105.0, 95.0) // half a step
+        g.touch("move", 1, 105.0, 102.0) // the axis is not chosen yet
         g.geometry = grid.copy(cols = 80) // the screen changed under the finger
-        g.touch("move", 1, 105.0, 85.0)
+        g.touch("move", 1, 105.0, 95.0)
         assertTrue(sink.wheels.isEmpty())
     }
 
@@ -145,12 +320,12 @@ class HerdrGesturesTest {
         val g = gestures(sink)
         g.control = true
         g.touch("down", 1, 55.0, 205.0)
-        g.touch("move", 1, 55.0, 195.0) // half a step
-        g.touch("up", 1, 55.0, 195.0)
-        g.touch("move", 1, 55.0, 155.0) // the lifted finger sends nothing
-        assertTrue(sink.wheels.isEmpty())
+        g.touch("move", 1, 55.0, 199.0) // one step
+        g.touch("up", 1, 55.0, 199.0)
+        g.touch("move", 1, 55.0, 145.0) // the lifted finger sends nothing
+        assertEquals(1, sink.wheels.size)
         g.touch("down", 1, 55.0, 205.0) // a new gesture starts clean
-        g.touch("move", 1, 55.0, 185.0)
-        assertEquals(listOf(Triple(5, 10, "down")), sink.wheels)
+        g.touch("move", 1, 55.0, 199.0)
+        assertEquals(listOf(Triple(5, 10, "down"), Triple(5, 10, "down")), sink.wheels)
     }
 }

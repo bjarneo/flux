@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="xterm.css">
 <style>
-  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden;
+    touch-action: none; }
   #stage { position: absolute; left: 0; top: 0; }
   #screen { margin: 0; }
 </style>
@@ -173,22 +174,8 @@
     }
   };
 
-  // The touches drive the app: one finger scrolls the terminal of the
-  // computer while it is controlled and pans the view otherwise, and two
-  // fingers zoom and pan locally. The page keeps the browser from
-  // scrolling or zooming any of them, and hands the touches over.
-  var actions = { touchstart: "down", touchmove: "move", touchend: "up", touchcancel: "cancel" };
-  Object.keys(actions).forEach(function (name) {
-    document.addEventListener(name, function (e) {
-      e.preventDefault();
-      if (!(window.FluxBridge && window.FluxBridge.touch)) return;
-      var changed = e.changedTouches;
-      for (var i = 0; i < changed.length; i++) {
-        var t = changed[i];
-        window.FluxBridge.touch(actions[name], t.identifier, t.clientX, t.clientY);
-      }
-    }, { passive: false });
-  });
+  // Android owns the complete native touch stream, including batched
+  // positions. Do not forward DOM touches as a second gesture stream.
 
   fit();
   if (window.FluxBridge && window.FluxBridge.ready) {

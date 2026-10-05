@@ -1,8 +1,8 @@
 # Plan: phone-first Herdr terminal after the Pixel trial
 
 Status: partly implemented. Priority 1 (PTY resize and desktop recovery) and Priority 3
-(terminal theme fidelity) are done and validated on the Pixel. Priorities 2 and 4 remain
-proposals. Each status section records what is verified and what is still open.
+(terminal theme fidelity) are done and validated on the Pixel. Priority 4 is in progress;
+Priority 2 remains a proposal. Each status section records what is verified and still open.
 
 This plan records the user's observations from the real Pixel trial of
 `feat/herdr-interactive-control`. It supersedes the desktop-size, separate-reader,
@@ -211,10 +211,10 @@ movements. Keep precision for small adjustments, rather than simply maximizing s
 
 - Measure finger travel, gesture duration, emitted wheel steps, rate-limited steps, and actual
   application scroll movement. Distinguish low sensitivity from slow frame delivery or latency.
-- Review the current threshold of `max(cell height, 14 CSS px)` and its interaction with font
+- Review the original threshold of `max(cell height, 14 CSS px)` and its interaction with font
   zoom, cell geometry, and phone density. A local font change should not unpredictably change
   the effort needed to scroll the remote conversation.
-- Review the 30 events/second budget and burst of 10 against normal short and fast swipes.
+- Review the original 30 events/second budget and burst of 10 against short and fast swipes.
   Keep bounded input, but do not assume the original limits deliver adequate responsiveness.
 - Tune the movement-to-wheel mapping against real OpenCode behavior. Herdr's mouse-report
   route sends one event per command: increasing `lines` alone does not multiply wheel events.
@@ -236,6 +236,33 @@ Acceptance: on the Pixel, ordinary short, long, and fast swipes navigate a real 
 conversation comfortably, without excessive finger travel or repeated swipes for tiny advances.
 Compare directly with Termius and obtain the user's validation of sensitivity; static frames
 and gesture unit tests alone cannot establish that the experience is good.
+
+### Priority 4 status (2026-10-04)
+
+In progress; not accepted by the user yet.
+
+- The user rejected both tuning iterations: the first felt somewhat better, but a long drag
+  still advanced little; removing the token budget did not produce a perceptible improvement.
+  Repeated short swipes remained more effective than following one finger continuously.
+- The disposable fixture received all 100 wheel events at 60/s, 100/s, and in a burst.
+  Direct bridge delivery p95 was about 1-2 ms, with regular frame gaps near 17 ms under steady
+  input. This measures the fixture and local bridge, not OpenCode or the phone round trip;
+  it does not rule out an application or network/rendering bottleneck.
+- Investigation found a competing gesture owner: the terminal WebView is nested inside
+  `FillColumn`'s Compose `verticalScroll`. DOM `preventDefault()` does not prevent an Android
+  ancestor from intercepting a drag and cancelling the WebView's touch stream.
+- The new correction captures native `MotionEvent` input from finger-down through lift,
+  asks the parent not to intercept, and consumes the terminal's gesture. Original historical
+  positions and event times are processed in order on the main thread; the DOM touch bridge
+  is removed to avoid duplicate input and its extra queue. Two-finger navigation stays local.
+- Debug summaries include position counts and whether the gesture ended with `up` or
+  `cancel`. Regression checks cover input before lift, original timestamps, final-position
+  delivery, pause-before-lift, and cancellation without inertia.
+
+The native correction passed all 20 gesture tests, the Android JVM suite, lint, and the debug
+build, and was installed in Flux Test on the Pixel. It still needs the user's validation.
+Continuous tracking during a single held drag is the acceptance criterion, not greater
+distance after repeated lifts. Release-build and end-to-end phone latency checks remain open.
 
 ## 7. Verification and boundaries
 

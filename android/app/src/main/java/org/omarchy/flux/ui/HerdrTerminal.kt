@@ -1,6 +1,7 @@
 package org.omarchy.flux.ui
 
 import android.annotation.SuppressLint
+import android.view.MotionEvent
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import androidx.compose.runtime.Composable
@@ -15,6 +16,8 @@ import org.omarchy.flux.core.HerdrSync
 import org.omarchy.flux.core.HerdrTerminalEvent
 import org.omarchy.flux.core.HerdrTerminalSession
 import org.omarchy.flux.theme.OmarchyTheme
+
+private const val TAG = "FluxTerminal"
 
 /**
  * The live terminal of a herdr pane. It draws the ANSI frames of the
@@ -86,6 +89,21 @@ fun HerdrTerminalView(
                 // open the keyboard.
                 isFocusable = false
                 isFocusableInTouchMode = false
+                setOnTouchListener { view, event ->
+                    // Claim the entire drag before the enclosing Compose
+                    // scroll column can intercept it and cancel the WebView.
+                    if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                        view.parent?.requestDisallowInterceptTouchEvent(true)
+                    }
+                    feeder.touch(event, resources.displayMetrics.density.toDouble())
+                    if (event.actionMasked == MotionEvent.ACTION_UP ||
+                        event.actionMasked == MotionEvent.ACTION_CANCEL
+                    ) {
+                        view.parent?.requestDisallowInterceptTouchEvent(false)
+                        if (event.actionMasked == MotionEvent.ACTION_UP) view.performClick()
+                    }
+                    true
+                }
                 addJavascriptInterface(TerminalBridge(feeder), "FluxBridge")
                 feeder.webView = this
                 loadUrl("file:///android_asset/terminal/index.html")
@@ -140,6 +158,20 @@ private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
         },
         onFont = { size, x, y -> eval("FluxTerminal.zoom($size, $x, $y)") },
         onPan = { dx, dy -> eval("FluxTerminal.pan($dx, $dy)") },
+        // The feel of the gesture is tuned on a real phone: these numbers
+        // show what one gesture did, and never a line of the terminal.
+        onStats = { stats ->
+            if (org.omarchy.flux.BuildConfig.DEBUG) {
+                android.util.Log.d(
+                    TAG,
+                    "gesture distance=${stats.distance} steps=${stats.steps} " +
+                        "moves=${stats.moves} end=${stats.endReason} " +
+                        "ms=${stats.durationMs} speed=${stats.speed}",
+                )
+            }
+        },
+        // The fling ticks run on the same main thread as the touches.
+        post = { delay, action -> handler.postDelayed(action, delay) },
     )
 
     /** True while the phone controls the terminal. Main thread. */
@@ -197,14 +229,39 @@ private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
                 }
                 // The screen shows the reason; the terminal keeps its
                 // last screen until a new stream opens.
-                is HerdrTerminalEvent.Closed -> Unit
+                is HerdrTerminalEvent.Closed -> {
+                    baseline = false
+                    gestures.reset()
+                }
             }
         }
     }
 
-    /** One touch of the page, in CSS pixels. Any thread. */
-    fun touch(action: String, id: Int, x: Double, y: Double) {
-        handler.post { gestures.touch(action, id, x, y) }
+    /** Native touches on the main thread, mapped to the page's CSS pixels. */
+    fun touch(event: MotionEvent, density: Double) {
+        fun send(action: String, index: Int, history: Int? = null) {
+            val x = history?.let { event.getHistoricalX(index, it) } ?: event.getX(index)
+            val y = history?.let { event.getHistoricalY(index, it) } ?: event.getY(index)
+            val time = history?.let { event.getHistoricalEventTime(it) } ?: event.eventTime
+            gestures.touch(action, event.getPointerId(index), x / density, y / density, time)
+        }
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN ->
+                send("down", event.actionIndex)
+            MotionEvent.ACTION_MOVE -> {
+                // Android may batch several positions into one delivery.
+                // Preserve their original order and times, not just the last.
+                for (history in 0 until event.historySize) {
+                    for (index in 0 until event.pointerCount) send("move", index, history)
+                }
+                for (index in 0 until event.pointerCount) send("move", index)
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> send("up", event.actionIndex)
+            MotionEvent.ACTION_CANCEL -> {
+                for (index in 0 until event.pointerCount) send("cancel", index)
+                gestures.reset()
+            }
+        }
     }
 
     /** The grid of the page as it draws it. Any thread. */
@@ -268,11 +325,6 @@ private class TerminalBridge(private val feeder: TerminalFeeder) {
     @JavascriptInterface
     fun ready(cols: Int, rows: Int) {
         feeder.pageReady()
-    }
-
-    @JavascriptInterface
-    fun touch(action: String, id: Int, x: Double, y: Double) {
-        feeder.touch(action, id, x, y)
     }
 
     @JavascriptInterface

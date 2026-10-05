@@ -236,13 +236,15 @@ object HerdrSync {
      * Sends one wheel step to the terminal of [session] at the
      * zero-based cell ([column], [row]). The computer routes it to the
      * program in the pane or to its history.
+     *
+     * A step changes no state of the phone, so it goes out without the
+     * core lock and its full publish: at 90 steps a second a publish per
+     * step would rebuild and recompose the whole screen.
      */
     fun terminalScroll(core: FluxCore, id: String, session: String, direction: String, column: Int, row: Int) {
-        if (session.isEmpty() || direction !in setOf("up", "down")) return
-        core.locked {
-            val d = core.device(id) ?: return@locked
-            d.send(Packet(Types.FLUX_HERDR, herdrTerminalScrollBody(session, direction, column, row)))
-        }
+        if (session.isEmpty() || (direction != "up" && direction != "down")) return
+        val d = core.device(id) ?: return
+        d.send(Packet(Types.FLUX_HERDR, herdrTerminalScrollBody(session, direction, column, row)))
     }
 
     /** Sends one pointer event to the terminal of [session]. */
