@@ -465,7 +465,7 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
                 controls = {
                     if (agent != null && d.herdr?.control == true) {
                         if (!review && direct) {
-                            DirectTerminalControls(d, agent, out, terminalInput)
+                            DirectTerminalControls(agent, out, terminalInput)
                         } else {
                             ReplyControls(d, agent, out.takeUnless { review }, d.herdrReply?.takeIf { it.pane == pane },
                                 if (review) appliedReviewPath else null, reviewReady = !review || (out?.loading == false && out.error == null))
@@ -1520,121 +1520,26 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
 
 /**
  * The direct controls of the live terminal: the choices of a blocked agent
- * and one row with Esc, Tab, Up, Down, the mic, and the keyboard. Typed
- * text and named keys go straight to the terminal through [input], so the
- * program draws its own prompt and its own menus. The phone-side draft of
- * [ReplyControls] stays for the Changes tab and for the later buffered
- * mode. Only the final words of a dictation go out, as one line, and the
- * phone keyboard's Return sends Enter.
+ * and one row with Esc, Tab, Up, Down, and the keyboard. Typed text and
+ * named keys go straight to the terminal through [input], so the program
+ * draws its own prompt and its own menus. The phone keyboard's own mic
+ * dictates into the terminal, so this mode has no mic key of its own. The
+ * phone-side draft of [ReplyControls] stays for the Changes tab and for
+ * the later buffered mode.
  */
 @Composable
-private fun DirectTerminalControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, input: TerminalInput) {
-    val context = LocalContext.current
-    val demo = isDemo(d.id)
-    val dictation = rememberDictation()
-    val canDictate = demo || remember { Dictation.available(context) }
-    val dictating = dictation.phase != Dictation.Phase.Idle
-    var voiceError by remember { mutableStateOf<String?>(null) }
-    var micRefused by remember { mutableStateOf(false) }
-    var startAfterGrant by remember { mutableStateOf(false) }
-    // The session of the dictation. A result that arrives after the session
-    // changed, for example after a reconnect, is dropped.
-    var dictationSession by remember { mutableStateOf("") }
-    val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        micRefused = !ok
-        if (ok) startAfterGrant = true else voiceError = MIC_REFUSED
-    }
-    fun dictate(): Boolean {
-        voiceError = null
-        if (MicSession.status.value.active) {
-            voiceError = "Stop Flux Microphone to dictate"
-            return false
-        }
-        if (!input.ready) return false
-        if (!demo && ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            askMic.launch(Manifest.permission.RECORD_AUDIO)
-            return false
-        }
-        dictationSession = input.session
-        val hints = listOf(agent.agent, agent.project, agent.workspace).filter { it.isNotBlank() }.distinct()
-        return dictation.start(hints, demo) { spoken ->
-            // The final words only, on one line, without an automatic Enter.
-            input.type(spoken.replace('\n', ' '), from = dictationSession)
-        }
-    }
-    LaunchedEffect(startAfterGrant) {
-        if (!startAfterGrant) return@LaunchedEffect
-        startAfterGrant = false
-        dictate()
-    }
-    // Android gives the microphone only to a visible app. The dictation
-    // ends with its words when the app goes to the background.
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner, dictation) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) dictation.stopNow() }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-    val models = rememberSpeechModels()
-    var picking by remember { mutableStateOf(false) }
-    var language by remember { mutableStateOf(DictationSettings.language(context)) }
-    fun choose(tag: String) {
-        DictationSettings.setLanguage(context, tag)
-        language = tag
-    }
-    val view = LocalView.current
-    DisposableEffect(dictating) {
-        view.keepScreenOn = dictating
-        onDispose { view.keepScreenOn = false }
-    }
-
+private fun DirectTerminalControls(agent: HerdrAgent, out: HerdrOutput?, input: TerminalInput) {
     Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
         val choices = if (agent.status == AgentStatus.Blocked) out?.choices.orEmpty() else emptyList()
         for (c in choices) ChoiceTile(c, input.ready) { input.type(c.key) }
-        DictationBar(
-            dictation,
-            canDictate = canDictate,
-            onStart = { dictate() },
-            onLanguage = {
-                dictation.stopNow()
-                picking = true
-            },
-            field = { m -> DirectKeys(m, input) },
-        )
-        val problem = voiceError ?: dictation.error
-        if (problem != null) {
-            Column(Modifier.padding(horizontal = 4.dp)) {
-                T(problem, size = 12, color = Tn.red, lineHeight = 1.3f)
-                FlowRow(Modifier.offset(x = (-12).dp)) {
-                    if (problem == dictation.error && dictation.languageError) {
-                        FluxButton("Choose a language", { picking = true }, kind = ButtonKind.Text)
-                    }
-                    if (needsMicSettings(problem, micRefused && problem == voiceError)) {
-                        FluxButton("Open app settings", { openAppSettings(context) }, kind = ButtonKind.Text, icon = Ic.settings)
-                    }
-                }
-            }
-        }
-        if (picking) {
-            LanguageSheet(
-                models,
-                selected = language,
-                onSelect = { tag ->
-                    choose(tag)
-                    picking = false
-                    dictate()
-                },
-                onDownloaded = ::choose,
-                onDismiss = { picking = false },
-            )
-        }
+        DirectKeys(Modifier.fillMaxWidth(), input)
     }
 }
 
 /**
  * The one row of direct keys: Esc, Tab, Up, Down, and the keyboard. The
- * mic of the enclosing [DictationBar] takes the end of the row. The
- * keyboard key only shows the phone keyboard; Android hides it again.
+ * keyboard key only shows the phone keyboard; Android hides it again. The
+ * phone keyboard's own mic dictates, so the row has no mic key.
  */
 @Composable
 private fun DirectKeys(m: Modifier, input: TerminalInput) {
