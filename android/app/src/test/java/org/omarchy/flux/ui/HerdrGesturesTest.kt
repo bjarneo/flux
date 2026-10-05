@@ -25,6 +25,7 @@ class HerdrGesturesTest {
         sink: Sink,
         clock: () -> Long = { 0L },
         post: (Long, () -> Unit) -> Unit = { _, _ -> },
+        scrollScale: Double = 1.0,
     ): TerminalGestures {
         val g = TerminalGestures(
             now = clock,
@@ -33,9 +34,60 @@ class HerdrGesturesTest {
             onPan = { dx, dy -> sink.pans += dx to dy },
             onStats = { sink.stats += it },
             post = post,
+            scrollScale = scrollScale,
         )
         g.geometry = grid
         return g
+    }
+
+    @Test
+    fun calibratedDragSendsOneStepPer18PixelsWhileTheFingerIsDown() {
+        val sink = Sink()
+        val g = gestures(sink, scrollScale = TerminalGestures.SCROLL_SCALE)
+        g.control = true
+        g.touch("down", 1, 55.0, 400.0)
+        for (sample in 1..10) {
+            g.touch("move", 1, 55.0, 400.0 - sample * 18.0)
+            assertEquals(sample, sink.wheels.size)
+        }
+    }
+
+    @Test
+    fun flingDistanceDoesNotDependOnAnimationCallbackFrequency() {
+        fun run(ticks: List<Long>): Int {
+            val sink = Sink()
+            var time = 0L
+            val callbacks = ArrayDeque<() -> Unit>()
+            val g = gestures(sink, { time }, { _, action -> callbacks.addLast(action) })
+            g.control = true
+            g.touch("down", 1, 55.0, 400.0, at = 0)
+            g.touch("move", 1, 55.0, 340.0, at = 20)
+            g.touch("up", 1, 55.0, 280.0, at = 40)
+            val before = sink.wheels.size
+            for (tick in ticks) {
+                time = tick
+                callbacks.removeFirst()()
+            }
+            return sink.wheels.size - before
+        }
+        assertEquals(run(listOf(48)), run(listOf(16, 32, 48)))
+    }
+
+    @Test
+    fun delayedFlingStopsInsteadOfCatchingUpWithABurst() {
+        val sink = Sink()
+        var time = 0L
+        val callbacks = ArrayDeque<() -> Unit>()
+        val g = gestures(sink, { time }, { _, action -> callbacks.addLast(action) })
+        g.control = true
+        g.touch("down", 1, 55.0, 400.0, at = 0)
+        g.touch("move", 1, 55.0, 340.0, at = 20)
+        g.touch("up", 1, 55.0, 280.0, at = 40)
+        val before = sink.wheels.size
+        time = 1000
+        callbacks.removeFirst()()
+        assertEquals(before, sink.wheels.size)
+        assertTrue(callbacks.isEmpty())
     }
 
     @Test

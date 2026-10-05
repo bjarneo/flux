@@ -55,8 +55,8 @@ data class GestureStats(
 
 /**
  * Turns the touches on the terminal into wheel steps and local zoom and
- * pan. While [control] is on, a one-finger drag sends one wheel step per
- * [STEP_PX] of movement, at the cell where the finger landed, so the
+ * pan. While [control] is on, a one-finger drag scales its travel by
+ * [SCROLL_SCALE] and sends one wheel step per [STEP_PX], at the touched cell, so the
  * gesture scrolls the conversation of the pane on the computer too. In
  * observe mode the same drag only pans the local view. Two fingers
  * always zoom and pan locally and send nothing.
@@ -84,13 +84,17 @@ class TerminalGestures(
     private val onPan: (dx: Double, dy: Double) -> Unit,
     private val onStats: (GestureStats) -> Unit = {},
     private val post: (delayMs: Long, action: () -> Unit) -> Unit = { _, _ -> },
+    private val scrollScale: Double = SCROLL_SCALE,
 ) {
     companion object {
         /**
-         * The finger travel of one wheel step, in CSS pixels. It does not
-         * depend on the cell or the font, so zooming leaves it unchanged.
+         * The scaled travel of one wheel step. Dividing by SCROLL_SCALE
+         * gives the CSS pixel distance of the finger, independent of font.
          */
         const val STEP_PX = 6.0
+
+        /** Initial phone calibration: one wheel step per 18 CSS px of finger travel. */
+        const val SCROLL_SCALE = 1.0 / 3.0
 
         /** The travel after which a gesture is vertical or horizontal. */
         const val LOCK_PX = 6.0
@@ -115,7 +119,10 @@ class TerminalGestures(
         const val FLING_MAX = 3.0
 
         /** The time constant of the fling slowdown, in milliseconds. */
-        const val FLING_TAU_MS = 180.0
+        const val FLING_TAU_MS = 250.0
+
+        /** A delayed animation must stop instead of catching up in one large jump. */
+        const val FLING_MAX_GAP_MS = 64.0
 
         /** The fling ends below this speed, in pixels per millisecond. */
         const val FLING_STOP = 0.3
@@ -260,12 +267,12 @@ class TerminalGestures(
             // mainly sideways swipe does not scroll the conversation.
             if (abs(totalY) < LOCK_PX || abs(totalY) <= abs(totalX)) return
             vertical = true
-            pending = totalY
+            pending = totalY * scrollScale
         } else {
             // A change of direction drops the pending travel, so turning
             // around responds at once instead of waiting for it.
             if (pending != 0.0 && pending * dy < 0.0) pending = 0.0
-            pending += dy
+            pending += dy * scrollScale
         }
         pending = pending.coerceIn(-MAX_PENDING_PX, MAX_PENDING_PX)
         statDistance += abs(dy)
@@ -357,12 +364,19 @@ class TerminalGestures(
             post(FLING_TICK_MS) { flingTick(gen) }
             return
         }
+        if (dt > FLING_MAX_GAP_MS || flingMs + dt > FLING_MAX_MS) {
+            endFling()
+            return
+        }
         flingAt = t
         flingMs += dt
-        pending += flingV * dt
+        // Integrate v(t) = v0 * exp(-t / tau) exactly. Distance then depends
+        // on elapsed time, not on how many animation callbacks were delivered.
+        val decay = exp(-dt / FLING_TAU_MS)
+        pending += flingV * FLING_TAU_MS * (1.0 - decay) * scrollScale
         pending = pending.coerceIn(-MAX_PENDING_PX, MAX_PENDING_PX)
         emit(cell)
-        flingV *= exp(-dt / FLING_TAU_MS)
+        flingV *= decay
         if (abs(flingV) >= FLING_STOP && flingMs < FLING_MAX_MS) {
             post(FLING_TICK_MS) { flingTick(gen) }
         } else {
