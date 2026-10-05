@@ -406,16 +406,6 @@ fun terminalSurvivesLinkChange(opened: Any?, current: Any?): Boolean =
     opened != null && opened === current
 
 /**
- * True when the terminal screen asked for a session and the computer now
- * shows none while the unlock is still valid. That happens when a new
- * link replaces the old one: the computer drops the session of the old
- * link, which the screen may never have observed. The first open has not
- * asked yet, so it must not count as a loss.
- */
-fun terminalSessionLost(session: HerdrTerminalSession?, wanted: Boolean, authorized: Boolean): Boolean =
-    authorized && wanted && session == null
-
-/**
  * True while [session] is a released session whose terminal_closed has not
  * arrived. The phone waits for that event before it opens a new stream on
  * the same pane, because the computer keeps one controller per pane. A

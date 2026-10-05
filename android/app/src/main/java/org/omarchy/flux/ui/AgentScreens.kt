@@ -85,6 +85,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.omarchy.flux.core.AgentChoice
 import org.omarchy.flux.core.AgentStatus
 import org.omarchy.flux.core.ComputerThemes
@@ -99,7 +100,6 @@ import org.omarchy.flux.core.HerdrTerminal
 import org.omarchy.flux.core.choicesOpen
 import org.omarchy.flux.core.terminalClosePending
 import org.omarchy.flux.core.terminalControlReady
-import org.omarchy.flux.core.terminalSessionLost
 import org.omarchy.flux.mic.MicSession
 import org.omarchy.flux.voice.Dictation
 import org.omarchy.flux.voice.DictationBar
@@ -327,7 +327,7 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
     // Android enters the controlled terminal directly; Changes keeps
     // its diff reader. Debug samples draw without acquiring control.
     val sample = if (isDemo(d.id)) terminalDebugSample() else null
-    val stream = sample != null || (d.herdr?.terminalStream == true && d.online && agent != null && !demo)
+    val stream = sample != null || (d.herdr?.terminalStream == true && agent != null && !demo)
     Column(Modifier.fillMaxSize().imePadding().padding(horizontal = TiledGutter)) {
         TiledTopBar(title, onBack, context = context) {
             if (out?.loading == true && out.lines.isNotEmpty()) {
@@ -337,7 +337,6 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
             }
         }
         when {
-            !d.online -> NotReachable(d, "The lines of the agent")
             agent == null && d.herdr != null -> EmptyState(
                 Ic.agent,
                 "The agent is gone",
@@ -522,7 +521,6 @@ private const val FOLLOW_SLACK_PX = 48
 @Composable
 private fun TerminalOutput(d: DeviceUi, pane: String, sample: TerminalSample?, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val session = d.herdrTerminal?.takeIf { it.pane == pane }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var active by remember { mutableStateOf(
@@ -542,17 +540,13 @@ private fun TerminalOutput(d: DeviceUi, pane: String, sample: TerminalSample?, m
     var message by remember { mutableStateOf<String?>(null) }
     var prompt by remember { mutableStateOf<android.os.CancellationSignal?>(null) }
     val currentSession by rememberUpdatedState(session)
-    // True from the moment the screen asks for a session until it stops
-    // that attempt. It must not depend on observing the session: the link
-    // can be replaced before Compose ever sees it.
-    var wantSession by remember { mutableStateOf(false) }
     fun stop(reason: String) {
         generation++
         prompt?.cancel()
         prompt = null
         authorized = false
-        wantSession = false
         drawn = ""
+        pendingGrid = null
         message = reason
         HerdrSync.terminalRelease(FluxCore, d.id)
     }
@@ -562,7 +556,19 @@ private fun TerminalOutput(d: DeviceUi, pane: String, sample: TerminalSample?, m
                 Lifecycle.Event.ON_START -> active = true
                 Lifecycle.Event.ON_STOP -> {
                     active = false
-                    stop("Reconnect to the terminal.")
+                    if (authorized && ReplyLock.valid()) {
+                        drawn = ""
+                        pendingGrid = null
+                        message = "Reconnecting…"
+                        HerdrSync.terminalRelease(FluxCore, d.id)
+                    } else {
+                        val wasPrompting = prompt != null
+                        generation++
+                        prompt?.cancel()
+                        prompt = null
+                        if (authorized) stop("Authentication expired. Reauthenticate to continue.")
+                        else if (wasPrompting) message = "Authentication cancelled."
+                    }
                 }
                 else -> Unit
             }
@@ -577,8 +583,8 @@ private fun TerminalOutput(d: DeviceUi, pane: String, sample: TerminalSample?, m
             HerdrSync.terminalRelease(FluxCore, d.id)
         }
     }
-    LaunchedEffect(ready, grid, retry, active) {
-        if (sample != null || !ready || grid.first < 1 || !active || attempted) {
+    LaunchedEffect(ready, grid, retry, active, d.online) {
+        if (sample != null || !ready || grid.first < 1 || !active || !d.online || attempted) {
             return@LaunchedEffect
         }
         attempted = true
@@ -587,29 +593,9 @@ private fun TerminalOutput(d: DeviceUi, pane: String, sample: TerminalSample?, m
         ReplyLock.run(
             context,
             action = {
-                scope.launch {
-                    // Release is asynchronous. Wait for the old bridge's EOF
-                    // acknowledgement before asking Herdr for control again.
-                    val deadline = android.os.SystemClock.elapsedRealtime() + 8_000
-                    while (terminalClosePending(currentSession)) {
-                        if (!active || token != generation) return@launch
-                        if (android.os.SystemClock.elapsedRealtime() >= deadline) {
-                            stop("The previous terminal is still closing. Reconnect to retry.")
-                            return@launch
-                        }
-                        delay(25)
-                    }
-                    if (active && token == generation) {
-                        if (ReplyLock.valid()) {
-                            authorized = true
-                            wantSession = true
-                            HerdrSync.terminalOpen(
-                                FluxCore, d.id, pane, "control", grid.first, grid.second,
-                            )
-                        } else {
-                            stop("Authentication expired. Reauthenticate to continue.")
-                        }
-                    }
+                if (active && token == generation && ReplyLock.valid()) {
+                    authorized = true
+                    message = "Opening terminal…"
                 }
             },
             title = "Open terminal",
@@ -622,6 +608,78 @@ private fun TerminalOutput(d: DeviceUi, pane: String, sample: TerminalSample?, m
                 if (active && token == generation) prompt = it else it.cancel()
             },
         )
+    }
+    LaunchedEffect(
+        authorized, active, ready, grid, d.online, d.herdr?.control,
+        d.herdr?.terminalStream, retry,
+    ) {
+        if (!authorized || !active || !ready || grid.first < 1 || sample != null) return@LaunchedEffect
+        var backoff = 500L
+        while (active && authorized) {
+            if (!ReplyLock.valid()) {
+                stop("Authentication expired. Reauthenticate to continue.")
+                return@LaunchedEffect
+            }
+            if (!d.online) {
+                message = "Waiting for the computer…"
+                delay(backoff)
+                backoff = (backoff * 2).coerceAtMost(10_000L)
+                continue
+            }
+            val herdr = d.herdr
+            if (herdr?.control != true || !herdr.terminalStream) {
+                message = "Terminal control is unavailable."
+                return@LaunchedEffect
+            }
+
+            val current = currentSession
+            if (current?.open == true) {
+                message = null
+                backoff = 500L
+                val id = current.session
+                snapshotFlow { currentSession }.first {
+                    !active || it?.session != id || !it.open
+                }
+                continue
+            }
+            if (terminalClosePending(current)) {
+                message = "Reconnecting…"
+                withTimeoutOrNull(8_000) {
+                    snapshotFlow { currentSession }.first {
+                        !active || !terminalClosePending(it)
+                    }
+                }
+                if (!active) return@LaunchedEffect
+                continue
+            }
+            if (current?.sending == true) {
+                withTimeoutOrNull(20_000) {
+                    snapshotFlow { currentSession }.first {
+                        !active || it?.request != current.request || !it.sending
+                    }
+                }
+                continue
+            }
+            if (current?.code == "agent_ended" || current?.code == "pane_closed") {
+                message = "The agent is no longer available."
+                return@LaunchedEffect
+            }
+
+            message = if (current == null) "Opening terminal…" else "Reconnecting…"
+            val previousRequest = current?.request ?: 0L
+            HerdrSync.terminalOpen(FluxCore, d.id, pane, "control", grid.first, grid.second)
+            val opened = withTimeoutOrNull(20_000) {
+                snapshotFlow { currentSession }.first {
+                    active && it != null && it.request != previousRequest && !it.sending
+                }
+            }
+            if (opened?.open == true) {
+                backoff = 500L
+                continue
+            }
+            delay(backoff)
+            backoff = (backoff * 2).coerceAtMost(10_000L)
+        }
     }
     LaunchedEffect(pendingGrid, authorized, active, session?.session, session?.open) {
         val target = pendingGrid ?: return@LaunchedEffect
@@ -641,25 +699,14 @@ private fun TerminalOutput(d: DeviceUi, pane: String, sample: TerminalSample?, m
             stop("Authentication expired. Reauthenticate to continue.")
         }
     }
-    LaunchedEffect(session?.open, session?.error, session?.sending) {
-        if (authorized && session != null && !session.sending && !session.open) {
-            stop(session.error ?: "The terminal disconnected. Reconnect to continue.")
-        }
-    }
-    // A new link can replace the old one while the computer stays online.
-    // The computer drops the session of the old link, and the screen may
-    // never have observed it, so the loss is measured against the request
-    // the screen made, not against the last state it saw.
-    LaunchedEffect(session, wantSession, authorized) {
-        if (terminalSessionLost(session, wantSession, authorized)) {
-            stop("The terminal connection changed. Reconnect to continue.")
-        }
-    }
     LaunchedEffect(session?.session, authorized) {
         val id = session?.session.orEmpty()
         if (authorized && id.isNotEmpty()) {
             delay(10_000)
-            if (drawn != id) stop("The terminal did not finish loading. Reconnect to retry.")
+            if (drawn != id && currentSession?.let { it.session == id && it.open } == true) {
+                message = "Reconnecting…"
+                HerdrSync.terminalRelease(FluxCore, d.id)
+            }
         }
     }
     val controlling = active && authorized && session?.open == true && session.mode == "control"
@@ -706,9 +753,13 @@ private fun TerminalOutput(d: DeviceUi, pane: String, sample: TerminalSample?, m
                 verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                T(message ?: "Opening terminal…", size = 13, color = Tn.sub)
-                if (message != null) FluxButton(
-                    if (ReplyLock.valid()) "Reconnect" else "Reauthenticate",
+                T(
+                    message ?: if (d.online) "Opening terminal…" else "Waiting for the computer…",
+                    size = 13,
+                    color = Tn.sub,
+                )
+                if (message != null && !ReplyLock.valid()) FluxButton(
+                    "Reauthenticate",
                     {
                         drawn = ""
                         attempted = false

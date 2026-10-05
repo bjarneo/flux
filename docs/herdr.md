@@ -109,11 +109,12 @@ tap can activate the button. Gestures do not send text or arbitrary keys.
 The existing validated reply controls remain available below the terminal.
 
 When authentication expires, Android hides the terminal, releases control, and offers
-**Reauthenticate**. Cancellation or connection failure offers an explicit retry rather
-than repeatedly opening the authentication prompt. Switching to Changes, leaving the
-screen, or backgrounding the app releases control. Returning from the background offers
-**Reconnect**; it does not silently reacquire control. Herdr restores desktop geometry
-when a desktop client is attached. Without one, the next desktop client reclaims the size.
+**Reauthenticate**. Cancellation also requires an explicit authentication retry. Connection
+loss retries automatically with a bounded delay while the unlock remains valid. Switching to
+Changes, leaving the screen, or backgrounding the app releases control. Returning to the
+foreground reacquires control automatically while that same five-minute unlock remains valid;
+reconnecting does not extend it. Herdr restores desktop geometry when a desktop client is
+attached. Without one, the next desktop client reclaims the size.
 When the available phone area changes, Flux debounces the new grid and resizes the active
 control session without releasing it or asking for authentication again.
 
