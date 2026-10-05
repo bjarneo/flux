@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"image"
 	"strings"
 	"testing"
 	"time"
@@ -75,7 +76,7 @@ func TestHerdrTerminalPasteImageOverLink(t *testing.T) {
 		t.Fatalf("terminal_opened = %v", a)
 	}
 	go desk.Receive(func(p *proto.Packet) { d.handleHerdr(dev, desk, p) })
-	img := testPNG(9)
+	img := testJPEG(t)
 	p := proto.New(proto.TypeFluxHerdr, map[string]any{
 		"kind": "terminal_paste_image", "session": "ts1"})
 	go func() {
@@ -83,8 +84,15 @@ func TestHerdrTerminalPasteImageOverLink(t *testing.T) {
 			t.Logf("send payload: %v", err)
 		}
 	}()
-	if got := waitImage(t, clip); !bytes.Equal(got, img) {
-		t.Fatalf("clipboard image = %d bytes, want %d", len(got), len(img))
+	got := waitImage(t, clip)
+	if _, format, err := image.Decode(bytes.NewReader(got)); err != nil || format != "png" {
+		t.Fatalf("clipboard format = %q, err %v, want png", format, err)
+	}
+	clip.mu.Lock()
+	mime := clip.mime
+	clip.mu.Unlock()
+	if mime != "image/png" {
+		t.Fatalf("clipboard mime = %q, want image/png", mime)
 	}
 	for {
 		a := nextAnswer(t, answers)

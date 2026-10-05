@@ -1,10 +1,14 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"log"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"net"
 	"os"
 	"path/filepath"
@@ -1300,6 +1304,44 @@ func nextInputError(t *testing.T, answers <-chan map[string]any) map[string]any 
 			t.Fatalf("answer = %v, want terminal_input_error", a)
 		}
 		return a
+	}
+}
+
+// testJPEG returns a small JPEG image, so a test can prove the conversion
+// to PNG that the clipboard needs.
+func testJPEG(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	for y := 0; y < 4; y++ {
+		for x := 0; x < 4; x++ {
+			img.Set(x, y, color.RGBA{R: uint8(x * 60), G: uint8(y * 60), B: 128, A: 255})
+		}
+	}
+	var b bytes.Buffer
+	if err := jpeg.Encode(&b, img, nil); err != nil {
+		t.Fatal(err)
+	}
+	return b.Bytes()
+}
+
+// The clipboard needs image/png, because the paste path of opencode reads
+// only that type. A PNG stays as it is; a JPEG becomes a PNG; a WebP is
+// refused with a reason.
+func TestHerdrTerminalPNG(t *testing.T) {
+	pngIn := testPNG(4)
+	out, why := herdrTerminalPNG(pngIn, "image/png")
+	if why != "" || !bytes.Equal(out, pngIn) {
+		t.Fatalf("a PNG must stay as it is: %q", why)
+	}
+	out, why = herdrTerminalPNG(testJPEG(t), "image/jpeg")
+	if why != "" || len(out) == 0 {
+		t.Fatalf("a JPEG must become a PNG: %q", why)
+	}
+	if _, format, err := image.Decode(bytes.NewReader(out)); err != nil || format != "png" {
+		t.Fatalf("the JPEG became %q, err %v, want png", format, err)
+	}
+	if _, why := herdrTerminalPNG(testJPEG(t), "image/webp"); why == "" {
+		t.Fatal("a WebP needs a decoder that Flux does not carry")
 	}
 }
 

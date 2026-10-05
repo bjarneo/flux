@@ -389,12 +389,15 @@ The keyboard also pastes images from its clipboard, so the input connection of t
 names the image types it accepts and takes a `commitContent` image. The image does not go to
 the editable or to the terminal as bytes; it travels as the payload of one
 `terminal_paste_image` packet in the controller session. The daemon detects the image type
-from the bytes, accepts a PNG, JPEG, GIF, or WebP image of up to 16 MiB, puts it on the
-clipboard of the computer, and then sends Ctrl+V to the controller. The program reads its own
-clipboard, so the image reaches the prompt as the attachment that the program draws, for
-example the image chip of opencode, and never as typed text. One image per device runs at a
-time, and the paste does not use clipboard sync or the clipboard of the phone. The capability
-`image` says that the computer accepts the packet, so an older daemon is not asked.
+from the bytes, accepts a PNG, JPEG, GIF, or WebP image of up to 16 MiB, turns a JPEG or a GIF
+into a PNG, and refuses a WebP, because the paste path of opencode reads `image/png` and Flux
+has no WebP decoder. It puts the PNG on the clipboard of the computer and then sends Ctrl+V to
+the controller. The program reads its own clipboard, so the image reaches the prompt as the
+attachment that the program draws, for example the image chip of opencode, and never as typed
+text. One image per device runs at a time, and the paste does not use clipboard sync or the
+clipboard of the phone. A failure of the phone side, such as a read that the content provider
+refuses, shows a toast on the phone. The capability `image` says that the computer accepts the
+packet, so an older daemon is not asked.
 
 Text and image pastes are separate: a block of text stays a bracketed paste, and only a
 `commitContent` image takes the image path. This keeps every control byte, the size limits,

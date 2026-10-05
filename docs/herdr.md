@@ -670,12 +670,14 @@ its own paste, and sends the text; the computer clipboard does not change.
 A `terminal_paste_image` pastes an image that the phone keyboard took from its clipboard. The
 image is the payload of the packet, so the paste does not need clipboard sync and does not
 depend on the clipboard of the phone. fluxd accepts a PNG, JPEG, GIF, or WebP image of up to
-16 MiB, detects its type from the bytes, and drops a payload that is not an image. It puts the
-image on the clipboard of the computer and then sends Ctrl+V to the controller, so the program
-reads the image as an attachment instead of typed text. The clipboard of the computer then
-holds the image, as a copy does. An unknown, foreign, or released session gets no answer, and
-a size limit or a failed transfer answers with `terminal_input_error`. One image per device
-runs at a time.
+16 MiB, detects its type from the bytes, and drops a payload that is not an image. The paste
+path of opencode reads `image/png`, so fluxd turns a JPEG or a GIF into a PNG and refuses a
+WebP with a reason, because it has no WebP decoder. It puts the PNG on the clipboard of the
+computer and then sends Ctrl+V to the controller, so the program reads the image as an
+attachment instead of typed text. The clipboard of the computer then holds the image, as a
+copy does. An unknown, foreign, or released session gets no answer, and a size limit, an
+unreadable image, or a failed transfer answers with `terminal_input_error`. One image per
+device runs at a time.
 
 Frames contain base64 ANSI bytes and must be applied in order: incremental frames cannot be
 dropped or truncated. A full frame establishes the baseline before input is enabled. Its sequence

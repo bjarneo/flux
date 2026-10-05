@@ -326,18 +326,39 @@ object HerdrSync {
      * program then reads the image as an attachment instead of typed text.
      *
      * Reading the image and sending the payload block, so they run on the
-     * IO pool and not on the caller.
+     * IO pool and not on the caller. A failure of this phone side shows
+     * on the phone, because the terminal cannot name an image that never
+     * left it.
      */
     fun terminalPasteImage(core: FluxCore, id: String, session: String, uri: Uri) {
         if (session.isEmpty()) return
         core.io.execute {
             val d = core.device(id) ?: return@execute
-            val cert = d.certificate ?: return@execute
-            val tls = FluxCore.tls ?: return@execute
+            val cert = d.certificate
+            val tls = FluxCore.tls
+            if (cert == null || tls == null) {
+                core.toast("${d.identity.deviceName} is not ready for an image")
+                return@execute
+            }
             val data = runCatching {
                 core.app.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            }.getOrNull() ?: return@execute
-            if (data.isEmpty() || data.size > ClipImage.MAX_BYTES) return@execute
+            }.getOrElse { error ->
+                Log.w(TAG, "read the pasted image failed", error)
+                core.toast("Flux could not read that image")
+                return@execute
+            }
+            if (data == null) {
+                core.toast("Flux could not read that image")
+                return@execute
+            }
+            if (data.isEmpty()) {
+                core.toast("That image is empty")
+                return@execute
+            }
+            if (data.size > ClipImage.MAX_BYTES) {
+                core.toast("That image is larger than ${ClipImage.MAX_BYTES shr 20} MiB")
+                return@execute
+            }
             val server = Payload.openServer()
             val p = Packet(
                 Types.FLUX_HERDR, herdrTerminalPasteImageBody(session),
@@ -345,9 +366,14 @@ object HerdrSync {
             )
             if (!d.send(p)) {
                 server.close()
+                core.toast("${d.identity.deviceName} is not reachable")
                 return@execute
             }
-            runCatching { Payload.send(tls, server, data.inputStream(), data.size.toLong(), cert) }
+            val sent = runCatching { Payload.send(tls, server, data.inputStream(), data.size.toLong(), cert) }
+            if (sent.isFailure) {
+                Log.w(TAG, "send the pasted image failed", sent.exceptionOrNull())
+                core.toast("Flux could not send the image to ${d.identity.deviceName}")
+            }
         }
     }
 

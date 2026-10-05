@@ -18,10 +18,15 @@ package core
 // Such reads use the last cached history.
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	"image/png"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -654,13 +659,41 @@ func (d *Daemon) herdrTerminalPasteImage(dev *Device, l *lan.Link, p *proto.Pack
 			herdrTerminalInputError(l, id, "invalid_input", "The paste is not a PNG, JPEG, GIF, or WebP image.")
 			return
 		}
-		if err := d.clip.SetImage(data, mime); err != nil {
+		pngData, why := herdrTerminalPNG(data, mime)
+		if pngData == nil {
+			herdrTerminalInputError(l, id, "invalid_input", why)
+			return
+		}
+		if err := d.clip.SetImage(pngData, "image/png"); err != nil {
 			d.logf("%s: terminal paste image: %v", d.nameOf(dev), err)
 			herdrTerminalInputError(l, id, "input_failed", "fluxd could not put the image on the clipboard.")
 			return
 		}
 		d.herdrTerminalSend(dev, l, id, herdrTerminalPasteKey)
 	}()
+}
+
+// herdrTerminalPNG returns the image as PNG, the type that the paste path
+// of opencode reads. A PNG stays as it is, so it is not encoded again; a
+// JPEG or a GIF is decoded and encoded as PNG. A WebP image needs a
+// decoder that Flux does not carry. It returns the reason when the image
+// cannot become a PNG.
+func herdrTerminalPNG(data []byte, mime string) ([]byte, string) {
+	switch mime {
+	case "image/png":
+		return data, ""
+	case "image/webp":
+		return nil, "opencode reads PNG, and Flux cannot turn WebP into PNG on the computer. Copy it as a PNG or a JPEG."
+	}
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, "fluxd could not read that image."
+	}
+	var b bytes.Buffer
+	if err := png.Encode(&b, img); err != nil {
+		return nil, "fluxd could not turn the image into a PNG."
+	}
+	return b.Bytes(), ""
 }
 
 // startHerdrImage reserves the one image paste of the device. It returns
