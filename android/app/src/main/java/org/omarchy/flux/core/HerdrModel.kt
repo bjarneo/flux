@@ -481,6 +481,10 @@ fun herdrTerminalMouseBody(session: String, action: String, button: String, colu
         "column" to column, "row" to row,
     )
 
+/** The requested phone viewport of an active terminal controller. */
+fun herdrTerminalResizeBody(session: String, cols: Int, rows: Int): JsonObject =
+    bodyOf("kind" to "terminal_resize", "session" to session, "cols" to cols, "rows" to rows)
+
 /** The key names that fluxd accepts in a keys packet. */
 val HERDR_KEYS: Set<String> = setOf("enter", "esc", "tab", "shift+tab", "up", "down", "left", "right", "backspace", "space", "y", "n") +
     (0..9).map { it.toString() }

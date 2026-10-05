@@ -169,6 +169,12 @@ class HerdrTerminalTest {
         assertEquals("left", mouse.str("button"))
         assertEquals(JsonPrimitive(5), mouse["column"])
         assertEquals(JsonPrimitive(6), mouse["row"])
+
+        val resize = herdrTerminalResizeBody("ts1", 48, 80)
+        assertEquals("terminal_resize", resize.str("kind"))
+        assertEquals("ts1", resize.str("session"))
+        assertEquals(JsonPrimitive(48), resize["cols"])
+        assertEquals(JsonPrimitive(80), resize["rows"])
     }
 
     @Test

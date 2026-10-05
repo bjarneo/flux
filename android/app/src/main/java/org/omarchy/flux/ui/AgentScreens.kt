@@ -530,6 +530,10 @@ private fun TerminalOutput(d: DeviceUi, pane: String, sample: TerminalSample?, m
     ) }
     var ready by remember { mutableStateOf(false) }
     var grid by remember { mutableStateOf(0 to 0) }
+    var pendingGrid by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var sentGrid by remember(session?.session) {
+        mutableStateOf((session?.width ?: 0) to (session?.height ?: 0))
+    }
     var authorized by remember { mutableStateOf(false) }
     var drawn by remember { mutableStateOf("") }
     var attempted by remember { mutableStateOf(false) }
@@ -619,6 +623,18 @@ private fun TerminalOutput(d: DeviceUi, pane: String, sample: TerminalSample?, m
             },
         )
     }
+    LaunchedEffect(pendingGrid, authorized, active, session?.session, session?.open) {
+        val target = pendingGrid ?: return@LaunchedEffect
+        if (!authorized || !active || session?.open != true || session.mode != "control") {
+            return@LaunchedEffect
+        }
+        delay(180)
+        if (pendingGrid == target && target != sentGrid) {
+            HerdrSync.terminalResize(FluxCore, d.id, session.session, target.first, target.second)
+            sentGrid = target
+        }
+        if (pendingGrid == target) pendingGrid = null
+    }
     LaunchedEffect(authorized) {
         if (authorized) {
             while (ReplyLock.valid()) delay(ReplyLock.remainingMs().coerceAtLeast(1L))
@@ -655,12 +671,12 @@ private fun TerminalOutput(d: DeviceUi, pane: String, sample: TerminalSample?, m
             onReady = { ready = true },
             modifier = Modifier.fillMaxSize(),
             sample = sample,
-            control = controlling && visible,
+            control = controlling && visible && pendingGrid == null,
             inputEnabled = visible,
             theme = ComputerThemes.theme(d.id)?.theme,
             onGrid = { cols, rows ->
                 val next = cols to rows
-                if (authorized && grid != next) stop("The view resized. Reconnect to continue.")
+                if (authorized && grid != next) pendingGrid = next
                 grid = next
             },
             onDrawn = { id ->

@@ -114,6 +114,8 @@ than repeatedly opening the authentication prompt. Switching to Changes, leaving
 screen, or backgrounding the app releases control. Returning from the background offers
 **Reconnect**; it does not silently reacquire control. Herdr restores desktop geometry
 when a desktop client is attached. Without one, the next desktop client reclaims the size.
+When the available phone area changes, Flux debounces the new grid and resizes the active
+control session without releasing it or asking for authentication again.
 
 **Changes** retains diff rendering, file filtering, and review actions. iOS keeps its
 existing read/output experience; its reader and shared read/diff operations are unchanged.
@@ -471,6 +473,7 @@ The `kind` field selects the message.
 | `terminal_open` | Phone | `request`, `pane`, `mode`, optional `cols` and `rows` |
 | `terminal_opened` | Computer | `request`, `pane`, `mode`, `session`, `width`, `height`; `error` |
 | `terminal_frame` | Computer | `session`, `seq`, `encoding`, `full`, `width`, `height`, `bytes` |
+| `terminal_resize` | Phone | `session`, `cols`, `rows` |
 | `terminal_scroll` | Phone | `session`, `direction`, zero-based `column` and `row` |
 | `terminal_mouse` | Phone | `session`, `action`, `button`, zero-based `column` and `row` |
 | `terminal_release` | Phone | `session`, `request` |

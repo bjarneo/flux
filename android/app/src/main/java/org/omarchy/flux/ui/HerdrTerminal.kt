@@ -251,7 +251,11 @@ private class TerminalFeeder : (String, HerdrTerminalEvent) -> Unit {
                 is HerdrTerminalEvent.Frame -> {
                     // A frame draws into its own grid, so a new size of
                     // the terminal resets it first.
-                    if (event.width != cols || event.height != rows) resize(view, event.width, event.height)
+                    if (event.width != cols || event.height != rows) {
+                        baseline = false
+                        gestures.reset()
+                        resize(view, event.width, event.height)
+                    }
                     val id = kotlinx.serialization.json.JsonPrimitive(sessionId).toString()
                     view.evaluateJavascript(
                         "FluxTerminal.write('${event.bytes}', ${event.full}, $id)", null,

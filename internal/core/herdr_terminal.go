@@ -8,8 +8,8 @@ package core
 // One device streams one pane at a time. One controller per terminal:
 // other devices may observe the same pane. A control stream needs
 // herdr_control, and a pane without an agent also needs herdr_terminals.
-// The phone sees the terminal at the size it has on the desktop, so
-// opening a stream does not resize the desktop.
+// Control resizes the terminal for the phone, and Herdr restores desktop
+// geometry when the controller releases it.
 //
 // While a stream is open on a pane, fluxd does not read the history of
 // that pane from any device: herdr scrolls the terminal to collect the
@@ -312,6 +312,30 @@ func (d *Daemon) herdrTerminalMouse(dev *Device, l *lan.Link, id, action, button
 	}
 	if err := t.session.SendMouse(action, button, column, row); err != nil {
 		d.logf("%s: terminal.mouse: %v", d.nameOf(dev), err)
+	}
+}
+
+// herdrTerminalResize changes the grid of an active controller without
+// replacing its stream. The phone owns only its paired control session.
+func (d *Daemon) herdrTerminalResize(dev *Device, l *lan.Link, id string, cols, rows int) {
+	if !validTermSize(cols, rows) {
+		d.logf("%s: ignored terminal.resize with invalid size %dx%d", d.nameOf(dev), cols, rows)
+		return
+	}
+	d.mu.Lock()
+	t := d.herdrStreamLocked(dev, l, id)
+	if t == nil || t.mode != "control" {
+		d.mu.Unlock()
+		return
+	}
+	if !d.herdrTerminalAllowed(t) {
+		d.mu.Unlock()
+		d.stopHerdrTerminal(t, herdrTermStopped)
+		return
+	}
+	d.mu.Unlock()
+	if err := t.session.Resize(cols, rows); err != nil {
+		d.logf("%s: terminal.resize: %v", d.nameOf(dev), err)
 	}
 }
 

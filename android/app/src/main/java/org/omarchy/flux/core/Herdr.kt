@@ -263,6 +263,13 @@ object HerdrSync {
         }
     }
 
+    /** Resizes the PTY of the active phone-controlled terminal session. */
+    fun terminalResize(core: FluxCore, id: String, session: String, cols: Int, rows: Int) {
+        if (session.isEmpty() || cols !in 1..1000 || rows !in 1..1000) return
+        val d = core.device(id) ?: return
+        d.send(Packet(Types.FLUX_HERDR, herdrTerminalResizeBody(session, cols, rows)))
+    }
+
     /** Handles terminal_opened, the answer to a terminal_open. The core lock is held. */
     private fun onTerminalOpened(d: Device, body: JsonObject) {
         val opened = parseHerdrTerminalOpened(body) ?: return

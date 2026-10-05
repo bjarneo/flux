@@ -263,6 +263,8 @@ func TestHerdrTerminalInputPolicy(t *testing.T) {
 		"kind": "terminal_mouse", "session": "ts1", "action": "down",
 		"button": "left", "column": 5, "row": 6}))
 	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_resize", "session": "ts1", "cols": 48, "rows": 80}))
+	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
 		"kind": "terminal_release", "session": "ts1", "request": 7}))
 
 	var echoed []string
@@ -280,10 +282,10 @@ func TestHerdrTerminalInputPolicy(t *testing.T) {
 			echoed = append(echoed, text)
 		}
 	}
-	if len(echoed) != 3 {
+	if len(echoed) != 4 {
 		t.Fatalf("the bridge got %d commands: %q", len(echoed), echoed)
 	}
-	var scroll, mouse, release map[string]any
+	var scroll, mouse, resize, release map[string]any
 	for _, line := range echoed {
 		var rec map[string]any
 		if json.Unmarshal([]byte(line), &rec) != nil {
@@ -294,6 +296,8 @@ func TestHerdrTerminalInputPolicy(t *testing.T) {
 			scroll = rec
 		case "terminal.mouse":
 			mouse = rec
+		case "terminal.resize":
+			resize = rec
 		case "terminal.release":
 			release = rec
 		}
@@ -306,6 +310,9 @@ func TestHerdrTerminalInputPolicy(t *testing.T) {
 	if mouse == nil || mouse["action"] != "down" || mouse["button"] != "left" ||
 		mouse["column"] != 5.0 || mouse["row"] != 6.0 {
 		t.Fatalf("mouse = %v", mouse)
+	}
+	if resize == nil || resize["cols"] != 48.0 || resize["rows"] != 80.0 {
+		t.Fatalf("resize = %v", resize)
 	}
 	if release == nil {
 		t.Fatal("the bridge got no terminal.release")

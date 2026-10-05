@@ -800,6 +800,8 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.herdrTerminalScroll(dev, l, body.Session, body.Direction, body.Column, body.Row)
 	case "terminal_mouse":
 		d.herdrTerminalMouse(dev, l, body.Session, body.Action, body.Button, body.Column, body.Row)
+	case "terminal_resize":
+		d.herdrTerminalResize(dev, l, body.Session, body.Cols, body.Rows)
 	case "terminal_release":
 		d.herdrTerminalRelease(dev, l, req, body.Session)
 	default:
