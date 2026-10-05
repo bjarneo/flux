@@ -396,6 +396,17 @@ fun parseHerdrTerminalOpened(body: JsonObject): HerdrTerminalSession? {
     )
 }
 
+/**
+ * True while [session] is a released session whose terminal_closed has not
+ * arrived. The phone waits for that event before it opens a new stream on
+ * the same pane, because the computer keeps one controller per pane. A
+ * session without an ID, one that already got its reason, or one that the
+ * lost link dropped does not wait.
+ */
+fun terminalClosePending(session: HerdrTerminalSession?): Boolean =
+    session != null && session.code == "released" &&
+        session.reason.isEmpty() && session.session.isNotEmpty()
+
 /** Show only an authorized control stream whose own baseline finished drawing. */
 fun terminalControlReady(
     session: HerdrTerminalSession?, drawn: String, authorized: Boolean, active: Boolean,

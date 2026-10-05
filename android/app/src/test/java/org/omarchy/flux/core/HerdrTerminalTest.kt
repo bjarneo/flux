@@ -11,6 +11,24 @@ import org.omarchy.flux.protocol.str
 
 class HerdrTerminalTest {
     @Test
+    fun aReleasedSessionWaitsForItsCloseOnlyWhileItsStreamRemains() {
+        val released = HerdrTerminalSession(
+            pane = "w1:p1", mode = "control", session = "ts1", open = false,
+            sending = false, code = "released",
+        )
+        assertTrue(terminalClosePending(released))
+        // The link dropped, so the stream is gone: a reconnect must not
+        // wait for a terminal_closed that can no longer arrive.
+        assertFalse(terminalClosePending(null))
+        // A close that already arrived does not wait either.
+        assertFalse(terminalClosePending(released.copy(reason = "detached")))
+        // A session that never opened has no stream to close.
+        assertFalse(terminalClosePending(released.copy(session = "")))
+        // A live or newly opened session is not a pending release.
+        assertFalse(terminalClosePending(released.copy(code = "")))
+    }
+
+    @Test
     fun controlIsHiddenUntilItsOwnBaselineAndAuthorizationAreReady() {
         val session = HerdrTerminalSession(
             pane = "w1:p1", mode = "control", session = "ts1", open = true, sending = false,

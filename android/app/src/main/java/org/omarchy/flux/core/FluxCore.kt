@@ -372,6 +372,10 @@ object FluxCore {
         locked {
             if (d.link !== link) return@locked
             d.link = null
+            // The stream of the pane ended with its link. A released
+            // session would otherwise wait for a terminal_closed that can
+            // no longer arrive, so a reconnect could never open a stream.
+            d.herdrTerminal = null
             d.dropPairing()
             if (!d.paired) devices.remove(d.id)
         }
@@ -390,6 +394,7 @@ object FluxCore {
         d.herdrOutput = null
         d.herdrReply = null
         d.herdrAction = null
+        d.herdrTerminal = null
         // The computer can no longer dismiss, answer, or press a button on a phone notification.
         NotificationSync.forgetDevice(id)
         ComputerThemes.forget(this, id)

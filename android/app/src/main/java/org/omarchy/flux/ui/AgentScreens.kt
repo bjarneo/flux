@@ -97,6 +97,7 @@ import org.omarchy.flux.core.HerdrReply
 import org.omarchy.flux.core.HerdrSync
 import org.omarchy.flux.core.HerdrTerminal
 import org.omarchy.flux.core.choicesOpen
+import org.omarchy.flux.core.terminalClosePending
 import org.omarchy.flux.core.terminalControlReady
 import org.omarchy.flux.mic.MicSession
 import org.omarchy.flux.voice.Dictation
@@ -580,10 +581,7 @@ private fun TerminalOutput(d: DeviceUi, pane: String, sample: TerminalSample?, m
                     // Release is asynchronous. Wait for the old bridge's EOF
                     // acknowledgement before asking Herdr for control again.
                     val deadline = android.os.SystemClock.elapsedRealtime() + 8_000
-                    while (currentSession?.code == "released" &&
-                        currentSession?.reason.isNullOrEmpty() &&
-                        !currentSession?.session.isNullOrEmpty()
-                    ) {
+                    while (terminalClosePending(currentSession)) {
                         if (!active || token != generation) return@launch
                         if (android.os.SystemClock.elapsedRealtime() >= deadline) {
                             stop("The previous terminal is still closing. Reconnect to retry.")

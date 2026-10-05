@@ -228,7 +228,12 @@ object HerdrSync {
                 return@locked
             }
             d.herdrTerminal = t.copy(open = false, code = "released")
-            d.send(Packet(Types.FLUX_HERDR, herdrTerminalReleaseBody(t.session, ++terminalSeq)))
+            if (!d.send(Packet(Types.FLUX_HERDR, herdrTerminalReleaseBody(t.session, ++terminalSeq)))) {
+                // The link is gone, so the end of the stream can never
+                // arrive. Keep no released session for a reconnect to wait
+                // for; the computer ended the stream with the link.
+                d.herdrTerminal = null
+            }
         }
     }
 
