@@ -239,7 +239,9 @@ and gesture unit tests alone cannot establish that the experience is good.
 
 ### Priority 4 status (2026-10-04)
 
-In progress; not accepted by the user yet.
+Continuous native touch tracking was accepted by the user on the Pixel: the result was
+reported as infinitely better. This closes the gesture-delivery stage; the remaining safety
+and end-to-end checks below are not implied by that usability confirmation.
 
 - The user rejected both tuning iterations: the first felt somewhat better, but a long drag
   still advanced little; removing the token budget did not produce a perceptible improvement.
@@ -260,7 +262,7 @@ In progress; not accepted by the user yet.
   delivery, pause-before-lift, and cancellation without inertia.
 
 The native correction passed all 20 gesture tests, the Android JVM suite, lint, and the debug
-build, and was installed in Flux Test on the Pixel. It still needs the user's validation.
+build, and was installed and validated by the user in Flux Test on the Pixel.
 Continuous tracking during a single held drag is the acceptance criterion, not greater
 distance after repeated lifts. Release-build and end-to-end phone latency checks remain open.
 
