@@ -63,6 +63,23 @@ internal fun rememberTerminalFeeder(deviceId: String): TerminalFeeder {
     }
     return feeder
 }
+/**
+ * True when the terminal view can take focus on the phone. The phone is in
+ * touch mode, so a view that is not focusable in touch mode cannot take
+ * focus: requestFocus() returns false, the input manager never serves the
+ * view, and Android ignores showSoftInput(). A tap still does not open the
+ * keyboard, because the touch listener consumes every touch before
+ * View.onTouchEvent can focus the view.
+ */
+internal const val TERMINAL_FOCUSABLE_IN_TOUCH_MODE = true
+
+/**
+ * True when the keyboard key may open the IME: the input gate is open and
+ * the view can take focus in touch mode. The gate keeps a reconnect or an
+ * unauthenticated terminal from opening the keyboard.
+ */
+internal fun keyboardMayOpen(ready: Boolean, focusableInTouchMode: Boolean): Boolean =
+    ready && focusableInTouchMode
 
 /**
  * The live terminal of a herdr pane. It draws the ANSI frames of the
@@ -144,13 +161,23 @@ internal fun HerdrTerminalView(
             editor.onText = onText
             editor.onKey = onKey
             input?.onShowKeyboard = {
-                view.requestFocus()
-                val imm = view.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-                imm?.showSoftInput(view, 0)
+                // Android ignores showSoftInput() for a view that is not
+                // served, so ask for the keyboard only after the view took
+                // focus. The post lets the focus change reach the input
+                // manager first, and restartInput builds the connection of
+                // a view that was served without one.
+                if (keyboardMayOpen(inputReady, view.isFocusableInTouchMode) && view.requestFocus()) {
+                    val imm = view.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                    view.post {
+                        imm?.restartInput(view)
+                        imm?.showSoftInput(view, 0)
+                    }
+                }
             }
         },
-        onRelease = {
+        onRelease = { view ->
             input?.onShowKeyboard = null
+            (view as TerminalWebView).closeKeyboard()
         },
     )
 }
@@ -204,11 +231,35 @@ internal class TerminalWebView(context: Context) : WebView(context) {
     /** True while the terminal may take typed input. */
     var inputReady: Boolean = false
         set(value) {
+            if (field == value) return
             field = value
-            if (!value) connection?.clearContent()
+            // Android refuses the input connection while the terminal is
+            // not ready, and it does not build one later on its own: the
+            // keyboard then shows with no way to type. Restart the input
+            // when the terminal becomes ready, and hide the keyboard and
+            // drop the focus when it stops, so leaving and returning starts
+            // with no keyboard.
+            if (value) refreshInput() else closeKeyboard()
         }
 
     private var connection: TerminalInputConnection? = null
+
+    /** The input manager of this view. */
+    private fun imm(): InputMethodManager? =
+        context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+
+    /** Rebuilds the input connection while the keyboard shows on this view. */
+    fun refreshInput() {
+        val manager = imm() ?: return
+        if (manager.isActive(this)) manager.restartInput(this)
+    }
+
+    /** Hides the keyboard and drops the IME focus. */
+    fun closeKeyboard() {
+        connection?.clearContent()
+        clearFocus()
+        windowToken?.let { imm()?.hideSoftInputFromWindow(it, 0) }
+    }
 
     override fun onCheckIsTextEditor(): Boolean = inputReady
 
@@ -464,7 +515,7 @@ internal class TerminalFeeder(
         // The terminal takes no keys here, so a tap must not
         // open the keyboard.
         isFocusable = true
-        isFocusableInTouchMode = false
+        isFocusableInTouchMode = TERMINAL_FOCUSABLE_IN_TOUCH_MODE
         setOnTouchListener { view, event ->
             // Claim the entire drag before the enclosing Compose
             // scroll column can intercept it and cancel the WebView.
