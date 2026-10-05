@@ -30,11 +30,11 @@ import (
 
 // The close codes that a phone gets in terminal_closed.
 const (
-	herdrTermReleased  = "released"   // the phone released the terminal
-	herdrTermBridge    = "bridge"     // the bridge stream ended
+	herdrTermReleased  = "released"    // the phone released the terminal
+	herdrTermBridge    = "bridge"      // the bridge stream ended
 	herdrTermAgentGone = "agent_ended" // the agent left the pane
 	herdrTermPaneGone  = "pane_closed" // the pane closed or moved
-	herdrTermStopped   = "stopped"    // permissions or the link changed
+	herdrTermStopped   = "stopped"     // permissions or the link changed
 )
 
 // herdrTerminal is one open terminal-session bridge for one phone.
@@ -317,7 +317,15 @@ func (d *Daemon) stopHerdrTerminal(t *herdrTerminal, code string) {
 // waits instead, and a link that cannot take them ends the stream. It is
 // the only sender of terminal_closed.
 func (d *Daemon) runHerdrTerminal(t *herdrTerminal) {
+	failed := false
+	// A failed send means the link is gone, but the bridge reader may be
+	// blocked on a full frame queue. Keep draining the frames so the
+	// reader can finish and close the stream, instead of waiting for a
+	// Close that only happens after Wait.
 	for frame := range t.session.Frames() {
+		if failed {
+			continue
+		}
 		body := map[string]any{
 			"kind": "terminal_frame", "session": t.id,
 			"seq": frame.Seq, "encoding": frame.Encoding, "full": frame.Full,
@@ -326,7 +334,7 @@ func (d *Daemon) runHerdrTerminal(t *herdrTerminal) {
 		}
 		if err := t.link.Send(proto.New(proto.TypeFluxHerdr, body)); err != nil {
 			t.cancel()
-			break
+			failed = true
 		}
 	}
 	reason, err := t.session.Wait()

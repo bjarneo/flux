@@ -571,6 +571,52 @@ exec sleep 300
 	})
 }
 
+// A bridge that floods frames fills the frame queue of the session while
+// the phone stops reading. When the link then drops, the forwarder must
+// drain the frames and end the stream: waiting for Close before Wait
+// would deadlock, and the stream would stay registered for the device.
+func TestHerdrTerminalLinkLossWithAFullFrameQueue(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	pidfile := filepath.Join(t.TempDir(), "pid")
+	d, _ := terminalDaemon(ctx, t, `
+echo $$ > `+pidfile+`
+echo '{"type":"terminal.frame","seq":1,"encoding":"ansi","width":80,"height":24,"full":true,"bytes":"cmVhZHk="}'
+i=0
+while :; do
+  i=$((i+1))
+  printf '{"type":"terminal.frame","seq":%d,"encoding":"ansi","width":80,"height":24,"full":false,"bytes":"eA=="}\n' "$i"
+done
+`)
+	desk, phone, _, _ := linkPair(t, ctx)
+	dev := &Device{ID: "phone1", Paired: true}
+	answers := herdrAnswers(t, phone)
+
+	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_open", "pane": "w1:p1", "mode": "observe", "request": 1}))
+	if a := nextOpened(t, answers); a["session"] != "ts1" {
+		t.Fatalf("terminal_opened = %v", a)
+	}
+	raw, err := os.ReadFile(pidfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(raw)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Let the phone stop reading and the frame queue fill, so the reader
+	// is blocked and the forwarder would stall without the drain.
+	time.Sleep(300 * time.Millisecond)
+	desk.Close()
+	waitFor(t, "the flooded stream to end with the link", func() bool {
+		d.mu.Lock()
+		gone := len(d.herdrStreams) == 0
+		d.mu.Unlock()
+		return gone && syscall.Kill(pid, 0) != nil
+	})
+}
+
 func TestHerdrTerminalCapabilities(t *testing.T) {
 	for version, want := range map[string]bool{
 		"0.9.3": true, "0.9.4": true, "0.10.0": true, "1.0.0": true,
