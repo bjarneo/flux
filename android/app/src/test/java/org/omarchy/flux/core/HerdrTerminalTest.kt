@@ -29,6 +29,32 @@ class HerdrTerminalTest {
     }
 
     @Test
+    fun aTerminalSessionNeverSurvivesALinkChange() {
+        val link = Any()
+        val other = Any()
+        assertTrue("the same link keeps its session", terminalSurvivesLinkChange(link, link))
+        assertFalse("a dropped link ends the session", terminalSurvivesLinkChange(link, null))
+        assertFalse("a replaced link ends the session", terminalSurvivesLinkChange(link, other))
+        assertFalse("a new device has no session on the link", terminalSurvivesLinkChange(null, link))
+    }
+
+    @Test
+    fun losingTheSessionWhileAuthorizedOffersAReconnect() {
+        val session = HerdrTerminalSession(
+            pane = "w1:p1", mode = "control", session = "ts1", open = true, sending = false,
+        )
+        // The first open has not asked for a session yet.
+        assertFalse(terminalSessionLost(null, wanted = false, authorized = true))
+        // A session that the screen asked for and the computer dropped is
+        // a loss, also when the screen never observed it.
+        assertTrue(terminalSessionLost(null, wanted = true, authorized = true))
+        // Before the unlock there is nothing to lose.
+        assertFalse(terminalSessionLost(null, wanted = true, authorized = false))
+        // A live session is not a loss.
+        assertFalse(terminalSessionLost(session, wanted = true, authorized = true))
+    }
+
+    @Test
     fun controlIsHiddenUntilItsOwnBaselineAndAuthorizationAreReady() {
         val session = HerdrTerminalSession(
             pane = "w1:p1", mode = "control", session = "ts1", open = true, sending = false,

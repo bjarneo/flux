@@ -99,6 +99,7 @@ import org.omarchy.flux.core.HerdrTerminal
 import org.omarchy.flux.core.choicesOpen
 import org.omarchy.flux.core.terminalClosePending
 import org.omarchy.flux.core.terminalControlReady
+import org.omarchy.flux.core.terminalSessionLost
 import org.omarchy.flux.mic.MicSession
 import org.omarchy.flux.voice.Dictation
 import org.omarchy.flux.voice.DictationBar
@@ -537,11 +538,16 @@ private fun TerminalOutput(d: DeviceUi, pane: String, sample: TerminalSample?, m
     var message by remember { mutableStateOf<String?>(null) }
     var prompt by remember { mutableStateOf<android.os.CancellationSignal?>(null) }
     val currentSession by rememberUpdatedState(session)
+    // True from the moment the screen asks for a session until it stops
+    // that attempt. It must not depend on observing the session: the link
+    // can be replaced before Compose ever sees it.
+    var wantSession by remember { mutableStateOf(false) }
     fun stop(reason: String) {
         generation++
         prompt?.cancel()
         prompt = null
         authorized = false
+        wantSession = false
         drawn = ""
         message = reason
         HerdrSync.terminalRelease(FluxCore, d.id)
@@ -592,6 +598,7 @@ private fun TerminalOutput(d: DeviceUi, pane: String, sample: TerminalSample?, m
                     if (active && token == generation) {
                         if (ReplyLock.valid()) {
                             authorized = true
+                            wantSession = true
                             HerdrSync.terminalOpen(
                                 FluxCore, d.id, pane, "control", grid.first, grid.second,
                             )
@@ -621,6 +628,15 @@ private fun TerminalOutput(d: DeviceUi, pane: String, sample: TerminalSample?, m
     LaunchedEffect(session?.open, session?.error, session?.sending) {
         if (authorized && session != null && !session.sending && !session.open) {
             stop(session.error ?: "The terminal disconnected. Reconnect to continue.")
+        }
+    }
+    // A new link can replace the old one while the computer stays online.
+    // The computer drops the session of the old link, and the screen may
+    // never have observed it, so the loss is measured against the request
+    // the screen made, not against the last state it saw.
+    LaunchedEffect(session, wantSession, authorized) {
+        if (terminalSessionLost(session, wantSession, authorized)) {
+            stop("The terminal connection changed. Reconnect to continue.")
         }
     }
     LaunchedEffect(session?.session, authorized) {
