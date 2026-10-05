@@ -160,6 +160,8 @@ The keyboard types directly in the program; Return sends Enter, and a tap does n
 Input waits for the first frame and the same five-minute unlock, and reconnects replay no input.
 Output and Changes keep the choices, composer, Send, and dictation as before.
 An older computer keeps those controls in Live too.
+The row has Esc, Tab, Up, Down, and the keyboard key; use the keyboard's mic for dictation.
+Live starts with the keyboard hidden. Losing control hides it, and a reconnect does not open it.
 **Refresh** does not show while Live is on.
 The phone then reads the output only when Live opens and when the status changes, so the choice tiles stay current.
 Until the first full screen draws, a cover shows **Opening the terminal…**.
@@ -180,8 +182,8 @@ The gestures on the live terminal are:
 - A short tap clicks the left mouse button at the cell under the finger, for example on a button of the agent. herdr sends the click only to an agent that uses the mouse. A drag, a long press, and a touch that stops a scroll do not click.
 - Two fingers zoom and pan the view on the phone. They send nothing to the computer.
 
-The live terminal takes no keys and no text.
-To type, use the text field and the key bar under the terminal.
+Typing in Live sends text and named keys to the current controller session.
+Suggestions and autocorrection are off, because the text already reached the computer.
 
 Live releases control when you select **Live** again, select **Changes**, leave the agent screen, or put the app in the background.
 When the app comes back while the unlock is valid, Live takes control again.

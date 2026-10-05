@@ -19,10 +19,11 @@ The user revised the earlier suggestion-enabled direct-input proposal. Follow th
 4. Replace the two normal control rows with one:
 
    ```text
-   Esc | Tab | ↑ | ↓ | microphone | keyboard
+   Esc | Tab | ↑ | ↓ | keyboard
    ```
 
-   These are six controls, not five. Do not remove a requested control to match an earlier count.
+   The microphone was dropped after the phone test: the native keyboard's own mic
+   dictates into the terminal, so this mode needs no mic key. See section 8.
 5. Remove the separate **Enter** and **Send** buttons from the direct-input UI.
    The phone keyboard's Return sends a real Enter to the remote program.
 6. The keyboard button **shows** the Android keyboard. Pressing it again must not hide it.
@@ -329,12 +330,18 @@ The screen already has `imePadding` and debounced in-place `terminal_resize`. Re
 
 The normal footer stays one row above the IME. Use existing button styles and accessible labels.
 Keep touch targets at least 48 dp. `KeyBar` currently wraps on narrow widths; for this new bar,
-use one horizontally scrollable row if six targets do not fit, rather than shrinking or wrapping.
+use one horizontally scrollable row if five targets do not fit, rather than shrinking or wrapping.
 The current agent header, Terminal/Changes tabs, and Close action remain unchanged.
 
-## 8. Microphone in direct mode
+## 8. Microphone in direct mode (deferred, not deleted)
 
-Reuse `Dictation`, mic availability/permissions, language selection, and the existing listening UI.
+Status: not in the row now. The phone keyboard's own mic already dictates into the terminal,
+so the direct row has no mic key. Keep this design and the shared dictation code
+(`voice/Dictation.kt`, `DictationUi.kt`, `LanguageSheet.kt`, and the `ReplyControls` caller)
+for a future option; do not delete it.
+
+When it returns as an option, reuse `Dictation`, mic availability/permissions, language
+selection, and the existing listening UI.
 Do not reimplement recognition or stream audio to the computer.
 
 1. Start only under the same ready/authenticated control gate as typing.
@@ -354,7 +361,8 @@ generation before stopping/cancelling it during lifecycle changes.
 The existing draft mode deliberately keeps words after backgrounding. Do not change the shared
 recognizer's policy globally to implement direct-mode cancellation; guard this caller instead.
 Use the existing temporary dictation panel for status/cancel/language controls, not a second
-permanent prompt/Send row. The six-control row is the normal idle layout.
+permanent prompt/Send row. The five-control row (Esc, Tab, Up, Down, keyboard) is the normal
+idle layout; a returned mic key would be an option, not a default.
 
 ## 9. Implementation order and files
 
@@ -377,7 +385,7 @@ permanent prompt/Send row. The six-control row is the normal idle layout.
   `ui/HerdrTerminalInput.kt` if keeping it separate makes the view readable.
 - Connect its gate to `TerminalOutput`; add the direct footer branch in `TiledAgentScreen`.
 - Preserve the local editor branch for Changes and its eventual second mode.
-- Add the six-control bar and idempotent keyboard-open action.
+- Add the five-control bar and idempotent keyboard-open action.
 - Check keyboard show/dismiss, in-place resizing, composition, deletion, and Return on the phone.
 
 ### D. Direct dictation and regressions
@@ -443,7 +451,7 @@ run locally rather than claiming cross-platform validation. No Apple feature imp
 Use the existing isolated Flux Test pairing and isolated Herdr agent, not personal sessions.
 
 - No local prompt box, standalone Enter, or Send appears on the live Terminal tab.
-- One row contains Esc, Tab, Up, Down, mic, and keyboard, with accessible touch targets.
+- One row contains Esc, Tab, Up, Down, and the keyboard, with accessible touch targets.
 - Keyboard appears only on request; repeated keyboard taps do not hide it.
 - Android's dismiss arrow/Back hides only the IME; no remote Esc or prompt submission occurs.
 - Gboard suggestions/autocorrection/capitalization are off in direct mode; Changes retains them.
@@ -456,7 +464,8 @@ Use the existing isolated Flux Test pairing and isolated Herdr agent, not person
 - A Return produces exactly one remote Enter and keeps the keyboard available for more input.
 - Keyboard show/dismiss retains the stream, 60-column density, readable sizing, and prompt state.
 - Terminal gestures work while the keyboard is open and after it is dismissed.
-- Dictation inserts only its final text once, adds no Enter, and cancels safely on state changes.
+- The phone keyboard's own mic dictates into the terminal; the row has no Flux mic key.
+- The Changes draft still dictates with the Flux mic and sends the whole text with Send.
 - App switching before expiry recovers control without replay; after expiry input stays blocked.
 - Link recovery cannot deliver old queued keys or speech callbacks into the new session.
 - Changes still supports local editing, suggestions, dictation, review feedback, and complete Send.
@@ -480,7 +489,7 @@ Discover the current isolated environment instead of copying old PIDs or creatin
 ## 12. Definition of done and future handoff
 
 Phase one is done only when direct Android typing, native OpenCode menus, one-row controls,
-final-only dictation, authentication, recovery, and the retained buffered code pass the checks.
+authentication, recovery, and the retained buffered code pass the checks.
 Passing a Kotlin build alone does not prove per-character IME input or native menu interaction.
 
 Phase two remains explicitly unimplemented: the user will specify how the local buffered composer
