@@ -2,7 +2,8 @@
 
 [Documentation index](README.md) · [Current Herdr behavior](herdr.md)
 
-Status: proposed, not implemented. This is an implementation handoff, not a feature announcement.
+Status: implemented. [The Herdr guide](herdr.md) describes the current behavior; this page keeps
+the design, the wire contract, and the checks behind it.
 Baseline: the live-terminal, in-place resize, and automatic reconnect work through `7a7e5ec`.
 Inspect the checkout before starting; symbols below matter more than historical line numbers.
 
@@ -210,8 +211,9 @@ Preserve FIFO through the existing link writer and `Session` input queue; add no
 ### Compatibility behavior
 
 - Old apps keep using the unchanged `prompt`, `keys`, `input`, and read/diff operations.
-- New Android with an old daemon may still render the terminal, but direct controls stay disabled
-  with an update-required explanation. Do not restore the hidden draft editor as an implicit mode.
+- New Android with an old daemon may still render the terminal. The implemented fallback keeps the
+  existing complete-prompt controls on the live tab until the computer advertises `input`, so the
+  screen stays usable; direct mode never silently shows the hidden draft editor.
 - Additional capability strings and kinds are additive. Verify Apple parsing tolerates them;
   do not implement this UI or new input sending in Swift.
 

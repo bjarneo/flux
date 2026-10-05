@@ -155,7 +155,11 @@ A valid unlock from the last 5 minutes opens Live with no prompt.
 The replies to agents use the same unlock.
 
 The live terminal then takes the place of the output.
-The choice tiles, the key bar, the text field with **Send**, and the mic key stay under it, and they work as before.
+With a computer that supports live input, a key bar and a keyboard key replace the composer.
+The keyboard types directly in the program; Return sends Enter, and a tap does not open it.
+Input waits for the first frame and the same five-minute unlock, and reconnects replay no input.
+Output and Changes keep the choices, composer, Send, and dictation as before.
+An older computer keeps those controls in Live too.
 **Refresh** does not show while Live is on.
 The phone then reads the output only when Live opens and when the status changes, so the choice tiles stay current.
 Until the first full screen draws, a cover shows **Opening the terminal…**.
@@ -627,6 +631,30 @@ The `kind` field selects the message.
 | `terminal_resize` | Phone | `session`, `cols`, and `rows`, from 1 to 1000 |
 | `terminal_release` | Phone | `session` and `request`. The computer answers with `terminal_closed`. |
 | `terminal_closed` | Computer | `session`, `code`, and `reason`. After a release, also the `request` of the release. |
+| `terminal_input` | Phone | `session`, and exactly one of `text` or `key` |
+| `terminal_input_error` | Computer | `session`, `code`, `error` |
+
+The optional `state.bridge` list advertises `observe`, `control`, `scroll`, `mouse`, and `input`.
+Old clients ignore these additive kinds and continue using read/output operations.
+Only control may request a phone-sized grid; dimensions are bounded to 1..1000 cells.
+Each device has at most one stream and each pane at most one controller, without takeover.
+The generated session ID is bound to its device, link, and terminal; stale input is not replayed.
+
+A `terminal_input` types one event in the controller session. `text` goes as it is, on one
+line, without a trailing Enter, and can have up to 16 KB. `key` is one of `enter`, `tab`,
+`esc`, `backspace`, `up`, `down`, `left`, and `right`; fluxd encodes it, so a client cannot
+send an arbitrary escape sequence. fluxd refuses an empty text, both fields, a control
+character, or an unknown key with `terminal_input_error` and the code `invalid_input`.
+A bridge failure answers with `input_failed` and ends the stream, so a phone cannot keep
+typing into a dead controller. An unknown, foreign, or released session gets no input and
+no answer. The events keep their order through the controller, so a character, a Tab, and
+an Enter arrive in the order they were typed.
+
+Frames contain base64 ANSI bytes and must be applied in order: incremental frames cannot be
+dropped or truncated. A full frame establishes the baseline before input is enabled. Its sequence
+number is not an acknowledgement of a specific input event. Wheel input uses `source: wheel`
+and `lines: 1`; increasing `lines` does not multiply mouse-report events. Mouse clicks use
+ordered left-button `down`/`up` events through the existing bridge.
 
 When `fluxd` cannot finish an answer because of an internal error, it sends the answer with an `error`, for example `fluxd could not read the pane`.
 

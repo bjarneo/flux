@@ -5,6 +5,15 @@ import android.content.Context
 import android.view.MotionEvent
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityManager
+import android.text.Editable
+import android.text.InputType
+import android.text.Selection
+import android.view.KeyEvent
+import android.view.View
+import android.view.inputmethod.BaseInputConnection
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
+import android.view.inputmethod.InputMethodManager
 import android.webkit.JavascriptInterface
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceRequest
@@ -17,7 +26,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -86,6 +97,10 @@ internal fun HerdrTerminalView(
     inputEnabled: Boolean = true,
     onTap: (column: Int, row: Int) -> Unit = { _, _ -> },
     onGone: () -> Unit = {},
+    inputReady: Boolean = false,
+    onText: (String) -> Unit = {},
+    onKey: (String) -> Unit = {},
+    input: TerminalInput? = null,
 ) {
     feeder.onReady = {
         if (sample != null) feeder.draw(sample) else onReady()
@@ -120,7 +135,201 @@ internal fun HerdrTerminalView(
             }
         },
         factory = { context -> feeder.view(context) },
+        update = { view ->
+            // The gate and the callbacks come from the current composition,
+            // not from the factory, so a stale capture cannot type into a
+            // terminal that lost control or changed session.
+            val editor = view as TerminalWebView
+            editor.inputReady = inputReady
+            editor.onText = onText
+            editor.onKey = onKey
+            input?.onShowKeyboard = {
+                view.requestFocus()
+                val imm = view.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                imm?.showSoftInput(view, 0)
+            }
+        },
+        onRelease = {
+            input?.onShowKeyboard = null
+        },
     )
+}
+
+/**
+ * The live typed input of the terminal on screen. [TerminalOutput] fills it;
+ * the direct footer reads it. [ready] gates every action, and [session] is
+ * the stream that may take the input, so a stale speech result or a late
+ * callback cannot type into another session.
+ */
+internal class TerminalInput {
+    var ready by mutableStateOf(false)
+    var session by mutableStateOf("")
+    var onText: ((String) -> Unit)? = null
+    var onKey: ((String) -> Unit)? = null
+    var onShowKeyboard: (() -> Unit)? = null
+
+    /** Types [text] on the computer. [from] is the session of a delayed caller, or empty for now. */
+    fun type(text: String, from: String = "") {
+        if (!ready || text.isEmpty() || (from.isNotEmpty() && from != session)) return
+        onText?.invoke(text)
+    }
+
+    /** Sends the named key [name]. [from] is the session of a delayed caller, or empty for now. */
+    fun key(name: String, from: String = "") {
+        if (!ready || (from.isNotEmpty() && from != session)) return
+        onKey?.invoke(name)
+    }
+
+    /** Shows the phone keyboard. Android hides it again. */
+    fun showKeyboard() {
+        if (ready) onShowKeyboard?.invoke()
+    }
+}
+
+/**
+ * The terminal WebView that also takes the phone keyboard. The page draws
+ * only: the IME text comes here and goes to the computer through [onText]
+ * and [onKey]. Committed text leaves the editable at once, so the editable
+ * holds only the composition that the keyboard has not finished. That is
+ * why suggestions stay off: a suggestion replaces text that already went
+ * to the computer, which this page cannot undo.
+ */
+internal class TerminalWebView(context: Context) : WebView(context) {
+    /** Types text on the computer. */
+    var onText: ((String) -> Unit)? = null
+
+    /** Sends one named key to the computer. */
+    var onKey: ((String) -> Unit)? = null
+
+    /** True while the terminal may take typed input. */
+    var inputReady: Boolean = false
+        set(value) {
+            field = value
+            if (!value) connection?.clearContent()
+        }
+
+    private var connection: TerminalInputConnection? = null
+
+    override fun onCheckIsTextEditor(): Boolean = inputReady
+
+    override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? {
+        if (!inputReady) return null
+        // No suggestions and no autocorrection: the terminal owns its text,
+        // and a replacement would edit text that is already remote.
+        outAttrs.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+        outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN
+        return TerminalInputConnection(this).also { connection = it }
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (inputReady && !event.isCtrlPressed && !event.isAltPressed && sendNamedKey(keyCode)) return true
+        return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        if (inputReady && namedKey(keyCode) != null) return true
+        return super.onKeyUp(keyCode, event)
+    }
+
+    private fun namedKey(keyCode: Int): String? = when (keyCode) {
+        KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> "enter"
+        KeyEvent.KEYCODE_TAB -> "tab"
+        KeyEvent.KEYCODE_DEL -> "backspace"
+        KeyEvent.KEYCODE_ESCAPE -> "esc"
+        KeyEvent.KEYCODE_DPAD_UP -> "up"
+        KeyEvent.KEYCODE_DPAD_DOWN -> "down"
+        KeyEvent.KEYCODE_DPAD_LEFT -> "left"
+        KeyEvent.KEYCODE_DPAD_RIGHT -> "right"
+        else -> null
+    }
+
+    private fun sendNamedKey(keyCode: Int): Boolean {
+        val key = namedKey(keyCode) ?: return false
+        onKey?.invoke(key)
+        return true
+    }
+
+    /**
+     * The bridge of the phone keyboard. A committed character goes out at
+     * once. A composition stays local until the keyboard finishes it, so a
+     * dead accent or a non-Latin word goes out whole. The deletion that the
+     * editable cannot cover is a remote backspace.
+     */
+    private inner class TerminalInputConnection(target: View) : BaseInputConnection(target, true) {
+        // BaseInputConnection makes its own editable for a view that is not
+        // a text editor. The property is nullable in the platform types.
+        private val content: Editable = editable ?: Editable.Factory.getInstance().newEditable("")
+
+        fun clearContent() {
+            content.clear()
+        }
+
+        override fun commitText(text: CharSequence, newCursorPosition: Int): Boolean {
+            // A lone line break is the Return key, not a prompt.
+            if (text.length == 1 && (text[0] == '\n' || text[0] == '\r')) {
+                content.clear()
+                onKey?.invoke("enter")
+                return true
+            }
+            super.commitText(text, newCursorPosition)
+            flush()
+            return true
+        }
+
+        override fun setComposingText(text: CharSequence, newCursorPosition: Int): Boolean {
+            super.setComposingText(text, newCursorPosition)
+            return true
+        }
+
+        override fun finishComposingText(): Boolean {
+            super.finishComposingText()
+            flush()
+            return true
+        }
+
+        override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean =
+            deleteText(beforeLength, afterLength, codePoints = false)
+
+        override fun deleteSurroundingTextInCodePoints(beforeLength: Int, afterLength: Int): Boolean =
+            deleteText(beforeLength, afterLength, codePoints = true)
+
+        override fun sendKeyEvent(event: KeyEvent): Boolean {
+            if (event.action == KeyEvent.ACTION_DOWN && sendNamedKey(event.keyCode)) return true
+            if (event.action == KeyEvent.ACTION_UP && namedKey(event.keyCode) != null) return true
+            return super.sendKeyEvent(event)
+        }
+
+        private fun flush() {
+            val pending = content.toString()
+            if (pending.isEmpty()) return
+            content.clear()
+            onText?.invoke(pending)
+        }
+
+        private fun deleteText(beforeLength: Int, afterLength: Int, codePoints: Boolean): Boolean {
+            val e = content
+            val sel = Selection.getSelectionStart(e)
+            val end = Selection.getSelectionEnd(e)
+            if (sel < 0 || end < 0) return true
+            var start = minOf(sel, end)
+            var stop = maxOf(sel, end)
+            var left = beforeLength
+            while (left > 0 && start > 0) {
+                start = if (codePoints) Character.offsetByCodePoints(e, start, -1) else start - 1
+                left--
+            }
+            var right = afterLength
+            while (right > 0 && stop < e.length) {
+                stop = if (codePoints) Character.offsetByCodePoints(e, stop, 1) else stop + 1
+                right--
+            }
+            e.delete(start, stop)
+            Selection.setSelection(e, start)
+            // The part that the editable did not cover is a remote deletion.
+            repeat(left) { onKey?.invoke("backspace") }
+            return true
+        }
+    }
 }
 
 /**
@@ -223,7 +432,7 @@ internal class TerminalFeeder(
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun makeView(context: Context): WebView = WebView(context).apply {
+    private fun makeView(context: Context): WebView = TerminalWebView(context).apply {
         // The page paints the theme background itself.
         setBackgroundColor(android.graphics.Color.TRANSPARENT)
         settings.javaScriptEnabled = true
@@ -254,7 +463,7 @@ internal class TerminalFeeder(
         settings.builtInZoomControls = false
         // The terminal takes no keys here, so a tap must not
         // open the keyboard.
-        isFocusable = false
+        isFocusable = true
         isFocusableInTouchMode = false
         setOnTouchListener { view, event ->
             // Claim the entire drag before the enclosing Compose

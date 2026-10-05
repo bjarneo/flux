@@ -85,6 +85,9 @@ data class HerdrState(
      */
     val liveTerminal: Boolean get() = control && "control" in bridge
 
+    /** True when this computer also accepts typed text and keys in a live terminal. */
+    val terminalInput: Boolean get() = "input" in bridge
+
     fun agent(pane: String): HerdrAgent? = agents.firstOrNull { it.pane == pane }
 
     fun terminal(pane: String): HerdrTerminal? = panes.firstOrNull { it.pane == pane }
@@ -352,6 +355,8 @@ data class HerdrTerminalSession(
     val reason: String = "",
     val closed: Boolean = false,
     val retry: Boolean = false,
+    /** Why the last typed event did not reach the terminal, or null. */
+    val inputError: String? = null,
 )
 
 /**
@@ -514,6 +519,16 @@ fun parseHerdrTerminalClosed(body: JsonObject): HerdrTerminalEvent.Closed? {
     )
 }
 
+/** A refused terminal_input. [code] is "invalid_input" or "input_failed". */
+data class HerdrTerminalInputError(val session: String, val code: String, val error: String)
+
+/** Parses the body of a terminal_input_error packet. It returns null for another body. */
+fun parseHerdrTerminalInputError(body: JsonObject): HerdrTerminalInputError? {
+    if (body.str("kind") != "terminal_input_error") return null
+    val session = body.str("session")?.takeIf { it.isNotEmpty() } ?: return null
+    return HerdrTerminalInputError(session, body.str("code").orEmpty(), body.str("error").orEmpty())
+}
+
 /**
  * The body of a terminal_open: a stream of [mode] on [pane]. A control
  * stream can name the terminal size that it wants in cells. A size of 0
@@ -547,6 +562,14 @@ fun herdrTerminalMouseBody(session: String, action: String, button: String, colu
 fun herdrTerminalResizeBody(session: String, cols: Int, rows: Int): JsonObject =
     bodyOf("kind" to "terminal_resize", "session" to session, "cols" to cols, "rows" to rows)
 
+/** The body of one typed text event in the controller session [session]. */
+fun herdrTerminalInputBody(session: String, text: String): JsonObject =
+    bodyOf("kind" to "terminal_input", "session" to session, "text" to text)
+
+/** The body of one named key in the controller session [session]. */
+fun herdrTerminalKeyBody(session: String, key: String): JsonObject =
+    bodyOf("kind" to "terminal_input", "session" to session, "key" to key)
+
 /** The key names that fluxd accepts in a keys packet. */
 val HERDR_KEYS: Set<String> = setOf("enter", "esc", "tab", "shift+tab", "up", "down", "left", "right", "backspace", "space", "y", "n") +
     (0..9).map { it.toString() }
@@ -554,6 +577,10 @@ val HERDR_KEYS: Set<String> = setOf("enter", "esc", "tab", "shift+tab", "up", "d
 /** The key names that fluxd accepts in an input packet for a terminal. */
 val HERDR_TERMINAL_KEYS: Set<String> = setOf("enter", "esc", "tab", "shift+tab", "up", "down", "left", "right", "backspace", "space") +
     ('a'..'z').map { "ctrl+$it" }
+
+/** The named keys that fluxd accepts in a live terminal_input packet. */
+val HERDR_TERMINAL_INPUT_KEYS: Set<String> =
+    setOf("enter", "tab", "esc", "backspace", "up", "down", "left", "right")
 
 /** The most keys in 1 keys packet. */
 const val HERDR_MAX_KEYS = 8

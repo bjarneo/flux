@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"flux/internal/herdr"
 	"flux/internal/lan"
@@ -482,6 +483,110 @@ func (d *Daemon) herdrTerminalResize(dev *Device, l *lan.Link, id string, cols, 
 	d.mu.Unlock()
 	if err := t.session.Resize(cols, rows); err != nil {
 		d.warnHerdrInput(t, "terminal.resize", err)
+	}
+}
+
+// herdrTerminalInputMax is the largest text event that a phone may type in
+// one terminal_input. It matches the prompt limit.
+const herdrTerminalInputMax = 16 << 10
+
+// herdrTerminalInputKeys maps a named key from a phone to the bytes that
+// the controller types. Only fluxd encodes a special key, so a client
+// cannot smuggle an arbitrary escape sequence into a text event.
+var herdrTerminalInputKeys = map[string]string{
+	"enter": "\r", "tab": "\t", "esc": "\x1b", "backspace": "\x7f",
+	"up": "\x1b[A", "down": "\x1b[B", "left": "\x1b[D", "right": "\x1b[C",
+}
+
+// herdrTerminalInputText reports whether text is a valid text event: not
+// empty, within the limit, one line, and without control or directional
+// characters. A terminal reads a control character as a key, and the
+// Unicode bidirectional controls can reorder text on a screen.
+func herdrTerminalInputText(text string) bool {
+	if text == "" || len(text) > herdrTerminalInputMax || !utf8.ValidString(text) {
+		return false
+	}
+	for _, r := range text {
+		switch {
+		case r == '\n' || r == '\t':
+			return false
+		case r < 0x20 || r == 0x7f || r >= 0x80 && r <= 0x9f:
+			return false
+		case r == 0x061c || r == 0x200e || r == 0x200f || r >= 0x202a && r <= 0x202e || r >= 0x2066 && r <= 0x2069,
+			r == 0x2028 || r == 0x2029:
+			return false
+		}
+	}
+	return true
+}
+
+// herdrTerminalInput types one event in the controller session of the
+// phone. Exactly one of text or key is set. The event goes to the bridge
+// of the stream in order, so a character, a Tab, and an Enter stay in
+// order and no legacy reply job can reorder them. The daemon lock guards
+// the stream while the event is enqueued, so no input can follow a
+// recorded release.
+//
+// A foreign, unknown, or released session gets no input and no answer, so
+// it learns nothing about somebody else's terminal. A valid owned stream
+// gets a failure-only terminal_input_error, and a bridge failure also ends
+// the stream: the phone must not keep typing into a dead controller.
+func (d *Daemon) herdrTerminalInput(dev *Device, l *lan.Link, id, text, key string) {
+	fail := func(code, msg string) {
+		_ = l.Send(proto.New(proto.TypeFluxHerdr, map[string]any{
+			"kind": "terminal_input_error", "session": id, "code": code, "error": msg,
+		}))
+	}
+	var payload string
+	switch {
+	case text != "" && key != "":
+		fail("invalid_input", "Send text or a key, not both.")
+		return
+	case key != "":
+		encoded, ok := herdrTerminalInputKeys[key]
+		if !ok {
+			fail("invalid_input", "fluxd does not know that key.")
+			return
+		}
+		payload = encoded
+	case herdrTerminalInputText(text):
+		payload = text
+	default:
+		fail("invalid_input", "The terminal did not accept this input.")
+		return
+	}
+	d.mu.Lock()
+	t := d.herdrStreamLocked(dev, l, id)
+	if t == nil || t.mode != "control" || t.stop != "" {
+		d.mu.Unlock()
+		d.logf("%s: ignored terminal.input for an unknown session", d.nameOf(dev))
+		return
+	}
+	// The stream opened for the agent or the shell that it found, so the
+	// input may not follow that identity into another pane. This mirrors
+	// pruneHerdrStreamsLocked, which ends the stream on the same state.
+	allowed := d.herdrTerminalAllowed(t)
+	agent := d.herdrAgentLocked(t.pane)
+	known := agent || d.herdrTerminalLocked(t.pane)
+	gone := !known || t.agent && !agent
+	var err error
+	if allowed && !gone {
+		// The enqueue is bounded and nonblocking, so it is safe under the
+		// lock and it cannot follow a release that this lock serializes.
+		err = t.session.SendInput(payload)
+	}
+	d.mu.Unlock()
+	switch {
+	case !allowed:
+		d.stopHerdrTerminal(t, herdrTermStopped)
+	case !known:
+		d.stopHerdrTerminal(t, herdrTermPaneGone)
+	case t.agent && !agent:
+		d.stopHerdrTerminal(t, herdrTermAgentGone)
+	case err != nil:
+		d.logf("%s: terminal.input: %v", d.nameOf(dev), err)
+		fail("input_failed", "The terminal did not accept this input.")
+		d.stopHerdrTerminal(t, herdrTermBridge)
 	}
 }
 

@@ -1089,6 +1089,169 @@ func TestHerdrTerminalHeldReadWithoutCache(t *testing.T) {
 	assertOnlyANSIReads(t, f.takeCalls())
 }
 
+// A control stream takes typed text and named keys in order. The text is
+// not trimmed or submitted, and a key uses the bytes of the terminal.
+func TestHerdrTerminalTypedInput(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d, _ := terminalDaemon(ctx, t, bridgeEcho)
+	desk, phone, _, _ := linkPair(t, ctx)
+	dev := &Device{ID: "phone1", Paired: true}
+	answers := herdrAnswers(t, phone)
+	d.cfg.HerdrControl = true
+
+	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_open", "pane": "w1:p1", "mode": "control", "request": 1}))
+	if a := nextOpened(t, answers); a["session"] != "ts1" {
+		t.Fatalf("terminal_opened = %v", a)
+	}
+	for _, ev := range []map[string]any{
+		{"kind": "terminal_input", "session": "ts1", "text": "@"},
+		{"kind": "terminal_input", "session": "ts1", "text": "src/main"},
+		{"kind": "terminal_input", "session": "ts1", "key": "down"},
+		{"kind": "terminal_input", "session": "ts1", "key": "enter"},
+	} {
+		d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, ev))
+	}
+	want := []string{"@", "src/main", "\x1b[B", "\r"}
+	var got []string
+	for len(got) < len(want) {
+		a := nextAnswer(t, answers)
+		if a["kind"] != "terminal_frame" {
+			t.Fatalf("answer = %v", a)
+		}
+		if text := frameText(t, a); text != "ready" {
+			got = append(got, text)
+		}
+	}
+	for i, line := range got {
+		var rec map[string]any
+		if json.Unmarshal([]byte(line), &rec) != nil {
+			t.Fatalf("echoed %q", line)
+		}
+		if rec["type"] != "terminal.input" || rec["text"] != want[i] {
+			t.Fatalf("event %d = %v, want text %q", i, rec, want[i])
+		}
+	}
+}
+
+// A bad event is refused with terminal_input_error and never reaches the
+// bridge. An unknown session, and the session of another device, get no
+// input and no answer.
+func TestHerdrTerminalInputRefusals(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d, _ := terminalDaemon(ctx, t, bridgeEcho)
+	desk, phone, _, _ := linkPair(t, ctx)
+	dev := &Device{ID: "phone1", Paired: true}
+	other := &Device{ID: "tablet", Paired: true}
+	answers := herdrAnswers(t, phone)
+	d.cfg.HerdrControl = true
+
+	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_open", "pane": "w1:p1", "mode": "control", "request": 1}))
+	if a := nextOpened(t, answers); a["session"] != "ts1" {
+		t.Fatalf("terminal_opened = %v", a)
+	}
+	bad := []map[string]any{
+		{"kind": "terminal_input", "session": "ts1", "text": ""},
+		{"kind": "terminal_input", "session": "ts1", "text": "a", "key": "enter"},
+		{"kind": "terminal_input", "session": "ts1", "key": "ctrl+c"},
+		{"kind": "terminal_input", "session": "ts1", "text": "a\nb"},
+		{"kind": "terminal_input", "session": "ts1", "text": "a\x1b[A"},
+	}
+	for _, ev := range bad {
+		d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, ev))
+	}
+	for range bad {
+		if a := nextInputError(t, answers); a["session"] != "ts1" || a["code"] != "invalid_input" {
+			t.Fatalf("answer = %v, want terminal_input_error", a)
+		}
+	}
+	// A stale session and a foreign device reach nothing and answer nothing.
+	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_input", "session": "ts9", "text": "x"}))
+	d.handleHerdr(other, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_input", "session": "ts1", "text": "x"}))
+
+	// A good event still reaches the bridge: exactly one echo.
+	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_input", "session": "ts1", "text": "ok"}))
+	var echoed []string
+	deadline := time.After(300 * time.Millisecond)
+	for done := false; !done; {
+		select {
+		case a := <-answers:
+			switch a["kind"] {
+			case "terminal_frame":
+				if text := frameText(t, a); text != "ready" {
+					echoed = append(echoed, text)
+				}
+			case "terminal_closed":
+			default:
+				t.Fatalf("an unexpected answer reached the phone: %v", a)
+			}
+		case <-deadline:
+			done = true
+		}
+	}
+	if len(echoed) != 1 || !strings.Contains(echoed[0], `"text":"ok"`) {
+		t.Fatalf("the bridge got %q", echoed)
+	}
+}
+
+// A bridge failure on input ends the stream, so the phone cannot keep
+// typing into a dead controller. The bridge here never reads its stdin,
+// so its pipe and the input queue fill and SendInput fails.
+func TestHerdrTerminalInputFailureEndsTheStream(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d, _ := terminalDaemon(ctx, t, `
+echo '{"type":"terminal.frame","seq":1,"encoding":"ansi","width":80,"height":24,"full":true,"bytes":"cmVhZHk="}'
+exec sleep 300
+`)
+	desk, phone, _, _ := linkPair(t, ctx)
+	dev := &Device{ID: "phone1", Paired: true}
+	answers := herdrAnswers(t, phone)
+	d.cfg.HerdrControl = true
+
+	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_open", "pane": "w1:p1", "mode": "control", "request": 1}))
+	if a := nextOpened(t, answers); a["session"] != "ts1" {
+		t.Fatalf("terminal_opened = %v", a)
+	}
+	big := strings.Repeat("x", herdrTerminalInputMax)
+	for i := 0; i < 400; i++ {
+		d.mu.Lock()
+		_, live := d.herdrStreams["ts1"]
+		d.mu.Unlock()
+		if !live {
+			break
+		}
+		d.herdrTerminalInput(dev, desk, "ts1", big, "")
+	}
+	waitFor(t, "the input failure to end the stream", func() bool {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		return len(d.herdrStreams) == 0
+	})
+}
+
+// nextInputError returns a terminal_input_error, skipping the frames.
+func nextInputError(t *testing.T, answers <-chan map[string]any) map[string]any {
+	t.Helper()
+	for {
+		a := nextAnswer(t, answers)
+		if a["kind"] == "terminal_frame" {
+			continue
+		}
+		if a["kind"] != "terminal_input_error" {
+			t.Fatalf("answer = %v, want terminal_input_error", a)
+		}
+		return a
+	}
+}
+
 func str(v any) string {
 	s, _ := v.(string)
 	return s

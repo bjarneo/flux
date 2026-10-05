@@ -203,7 +203,8 @@ type herdrCLI struct {
 // herdrBridgeCaps are the terminal-session actions of a herdr that has
 // the CLI bridge of terminal sessions. Only observe reads. The others
 // write to the terminal, so a device gets them only with herdr_control.
-var herdrBridgeCaps = []string{"observe", "control", "scroll", "mouse"}
+// "input" also lets the phone type in a control stream.
+var herdrBridgeCaps = []string{"observe", "control", "scroll", "mouse", "input"}
 
 // herdrObserveCaps are the bridge actions of a device without
 // herdr_control.
@@ -781,6 +782,9 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 		Button    string `json:"button"`
 		Column    int    `json:"column"`
 		Row       int    `json:"row"`
+		// Key names one named key of a terminal_input, such as "enter".
+		// fluxd encodes it; a client cannot send an escape sequence.
+		Key string `json:"key"`
 		// Request is the number of a keys, prompt, input, create, close,
 		// terminal_open, or terminal_release packet. The answer carries
 		// the same number, so the phone matches a late answer.
@@ -893,6 +897,8 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.herdrTerminalMouse(dev, l, body.Session, body.Action, body.Button, body.Column, body.Row)
 	case "terminal_resize":
 		d.herdrTerminalResize(dev, l, body.Session, body.Cols, body.Rows)
+	case "terminal_input":
+		d.herdrTerminalInput(dev, l, body.Session, body.Text, body.Key)
 	case "terminal_release":
 		d.herdrTerminalRelease(dev, l, req, body.Session)
 	default:

@@ -119,6 +119,7 @@ object HerdrSync {
                 terminalSink?.invoke(d.id, frame)
             }
             "terminal_closed" -> onTerminalClosed(d, p.body)
+            "terminal_input_error" -> onTerminalInputError(d, p.body)
             else -> Log.d(TAG, "ignored flux.herdr kind ${p.string("kind")}")
         }
     }
@@ -281,6 +282,34 @@ object HerdrSync {
         if (session.isEmpty() || cols !in 1..1000 || rows !in 1..1000) return
         val d = core.device(id) ?: return
         d.send(Packet(Types.FLUX_HERDR, herdrTerminalResizeBody(session, cols, rows)))
+    }
+
+    /**
+     * Types one text event in the active controller session. The text goes
+     * as it is: fluxd does not trim it or press Enter. An empty text, or a
+     * text with control characters, is refused by fluxd. A step changes no
+     * phone state, so it goes out without the core lock and its publish: at
+     * a character per key a publish would rebuild the whole screen.
+     */
+    fun terminalInput(core: FluxCore, id: String, session: String, text: String) {
+        if (session.isEmpty() || text.isEmpty()) return
+        val d = core.device(id) ?: return
+        d.send(Packet(Types.FLUX_HERDR, herdrTerminalInputBody(session, text)))
+    }
+
+    /** Sends one named key to the active controller session. */
+    fun terminalInputKey(core: FluxCore, id: String, session: String, key: String) {
+        if (session.isEmpty() || key !in HERDR_TERMINAL_INPUT_KEYS) return
+        val d = core.device(id) ?: return
+        d.send(Packet(Types.FLUX_HERDR, herdrTerminalKeyBody(session, key)))
+    }
+
+    /** Handles terminal_input_error: why a typed event did not reach the terminal. The core lock is held. */
+    private fun onTerminalInputError(d: Device, body: JsonObject) {
+        val e = parseHerdrTerminalInputError(body) ?: return
+        val t = d.herdrTerminal ?: return
+        if (t.session != e.session) return
+        d.herdrTerminal = t.copy(inputError = e.error)
     }
 
     /** Handles terminal_opened, the answer to a terminal_open. The core lock is held. */
