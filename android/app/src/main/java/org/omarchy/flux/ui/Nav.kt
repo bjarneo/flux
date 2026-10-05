@@ -71,6 +71,9 @@ const val NOTIFY_PAGE = "notify:"
 /** The sync switches. They apply to every computer, so the page has no computer. */
 const val SYNC_PAGE = "sync"
 
+/** The version and the project links. They belong to the app, so the page has no computer. */
+const val ABOUT_PAGE = "about"
+
 /**
  * The navigation state: the destination [tab] and the screens above it.
  * System Back pops a screen, then goes to the Inbox, then leaves the app.
@@ -131,7 +134,7 @@ data class Nav(val tab: Tab = Tab.Inbox, val stack: List<Route> = emptyList()) {
             "send" -> Nav(Tab.Send) to null
             "control" -> Nav(Tab.Control) to null
             "computers", "devices", "pair", "unpair" -> Nav(Tab.Computers) to null
-            SYNC_PAGE -> Nav(Tab.Computers, listOf(Route(null, SYNC_PAGE))) to null
+            SYNC_PAGE, ABOUT_PAGE -> Nav(Tab.Computers, listOf(Route(null, page))) to null
             // The old computer page is now the Control destination of 1 computer.
             "home" -> Nav(Tab.Control) to deviceId
             // The prompt of a stream request shows over the Inbox. The notification shows in the shade.

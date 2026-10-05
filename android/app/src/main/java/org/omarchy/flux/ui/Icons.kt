@@ -126,6 +126,11 @@ object Ic {
     val openFull = R.drawable.ic_open_in_full
     val star = R.drawable.ic_star
     val starFill = R.drawable.ic_star_fill
+    val web = R.drawable.ic_public
+    val docs = R.drawable.ic_menu_book
+    val bug = R.drawable.ic_bug_report
+    val handle = R.drawable.ic_alternate_email
+    val license = R.drawable.ic_license
 }
 
 /** An icon from [Ic]. It takes the content color unless [tint] is set. */

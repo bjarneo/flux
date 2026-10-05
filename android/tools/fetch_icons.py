@@ -43,6 +43,7 @@ fingerprint power_settings_new signature smart_toy
 light_mode dark_mode contrast
 touchpad_mouse keyboard slideshow
 inbox devices expand_more star+fill
+public menu_book bug_report alternate_email license
 """.split()
 
 BASE = "https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android"

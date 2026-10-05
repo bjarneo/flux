@@ -181,6 +181,7 @@ fun FluxShell(
     fun open(r: Route) = go(current.push(r))
     val toComputers = { go(Nav(Tab.Computers)) }
     val toSync = { open(Route(null, SYNC_PAGE)) }
+    val toAbout = { open(Route(null, ABOUT_PAGE)) }
     // The same intent as Approvals.show: the screen opens in its own task, and Android reuses a screen that waits there.
     val approve: (ApproveRequest) -> Unit = { r ->
         if (isDemo(r.computerId)) {
@@ -222,7 +223,7 @@ fun FluxShell(
                                 )
                                 Tab.Send -> SendScreen(state, scope, picker, tools, onOpen = ::open, onPair = toComputers)
                                 Tab.Control -> ControlScreen(state, scope, picker, onOpen = ::open, onPair = toComputers)
-                                Tab.Computers -> ComputersScreen(state, scope, onScope, onPair, onUnpair, onSync = toSync)
+                                Tab.Computers -> ComputersScreen(state, scope, onScope, onPair, onUnpair, onSync = toSync, onAbout = toAbout)
                             }
                         }
                     }
@@ -409,7 +410,10 @@ private fun DetailScreen(route: Route, state: UiState, current: () -> Nav, go: (
     fun push(r: Route) = go(current().push(r))
     val id = route.deviceId
     if (id == null) {
-        if (route.page == SYNC_PAGE) SyncScreen(state, pop)
+        when (route.page) {
+            SYNC_PAGE -> SyncScreen(state, pop)
+            ABOUT_PAGE -> AboutScreen(pop)
+        }
         return
     }
     val device = state.devices.firstOrNull { it.id == id } ?: return

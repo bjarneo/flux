@@ -66,6 +66,7 @@ class NavTest {
         assertEquals(Nav(Tab.Control) to null, Nav.debug("control", "pc"))
         assertEquals(Nav(Tab.Computers) to null, Nav.debug("devices", "pc"))
         assertEquals(Nav(Tab.Computers, listOf(Route(null, SYNC_PAGE))) to null, Nav.debug("sync", "pc"))
+        assertEquals(Nav(Tab.Computers, listOf(Route(null, ABOUT_PAGE))) to null, Nav.debug("about", "pc"))
         assertEquals("the old computer page is Control with the computer in scope", Nav(Tab.Control) to "pc", Nav.debug("home", "pc"))
         assertEquals(Nav(Tab.Send, listOf(Route("pc", "camera:photo"))) to null, Nav.debug("camera:photo", "pc"))
         assertEquals(Nav(Tab.Control, listOf(Route("pc", "camera:webcam"))) to null, Nav.debug("camera:webcam", "pc"))

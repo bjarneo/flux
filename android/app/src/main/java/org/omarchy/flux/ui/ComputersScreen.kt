@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import org.omarchy.flux.BuildConfig
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.ThemeMode
@@ -43,8 +44,9 @@ import org.omarchy.flux.core.UiState
 
 /**
  * The Computers destination: this phone, the paired computers, the
- * computers that are available to pair, and the settings of the app. A tap
- * on a paired computer makes it the scope. A pull down scans again.
+ * computers that are available to pair, the settings of the app, and the
+ * About row. A tap on a paired computer makes it the scope. A pull down
+ * scans again.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,6 +57,7 @@ fun ComputersScreen(
     onPair: (DeviceUi) -> Unit,
     onUnpair: (DeviceUi) -> Unit,
     onSync: () -> Unit,
+    onAbout: () -> Unit,
 ) {
     val paired = state.devices.filter { it.paired }
     val available = state.devices.filter { !it.paired && it.online }
@@ -91,6 +94,7 @@ fun ComputersScreen(
                 ThemeRow(state)
                 // The row runs an action and opens no screen, so it has no chevron. A dialog asks first.
                 SettingRow(Ic.power, "Turn off Flux", "This phone stops all connections until you turn Flux on again.", chevron = false) { turningOff = true }
+                SettingRow(Ic.info, "About Flux", aboutVersion(BuildConfig.VERSION_NAME, BuildConfig.DEBUG), onClick = onAbout)
             }
         }
     }

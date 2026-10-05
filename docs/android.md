@@ -74,6 +74,8 @@ An earlier Flux for Android uses other ports and cannot connect to a `fluxd` wit
 Install the new APK from the GitHub releases once, as in [Install a release APK](#install-a-release-apk).
 The new app also cannot connect to an earlier `fluxd`, so update Flux on the computer too.
 
+To open the latest release on the phone, select **About Flux** in **Computers**, then **Latest release**.
+
 When a newer Flux for Android exists, the Flux window on the computer shows **Flux for Android 0.7.0 is available**.
 The device card also shows the app version of the phone.
 To update the phone:
@@ -101,6 +103,13 @@ After the update, Android starts the Flux service again.
 The offer needs the [release check](configuration.md#release-check) and a phone app that reports its version.
 Earlier versions of the app do not report it, so update them once with an APK from the release.
 A debug build gets no offer, because a release APK has another signing key and cannot replace it.
+
+## About Flux
+
+**Computers** has an **About Flux** row under **Settings**.
+The row shows the version of the app, and it says when the app is a debug build.
+The row opens a page with links to the latest release, the website, the source code, the documentation, the issues, the X account, and the license.
+Each link opens the browser. The page makes no network request.
 
 ## First run
 
@@ -328,6 +337,7 @@ The pages are:
 
 - `inbox`, `send`, `control`, and `computers` for the 4 destinations of the navigation bar. `devices` is the same as `computers`.
 - `sync` for the sync switches.
+- `about` for **About Flux**.
 - `home` for **Control** with the first paired computer in scope.
 - `media`, `commands`, `browse`, `mic`, `webcam`, `touchpad`, `desktop`, `omarchy`, `agents`, and `camera`.
 - `agent:<pane>` for the output of one herdr agent. The sample blocked agent is `agent:w2:p1`.

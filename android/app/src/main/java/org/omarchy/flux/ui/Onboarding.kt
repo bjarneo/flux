@@ -1,6 +1,5 @@
 package org.omarchy.flux.ui
 
-import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -26,7 +25,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.net.toUri
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.UiState
@@ -124,10 +122,7 @@ private fun InstallGuideButton() {
     // The padding of a text button holds the offset.
     FluxButton(
         "Read the install guide",
-        {
-            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, INSTALL_GUIDE.toUri())) }
-                .onFailure { FluxCore.toast("No app on this phone opens web links") }
-        },
+        { openLink(context, INSTALL_GUIDE) },
         Modifier.offset(x = (-12).dp),
         kind = ButtonKind.Text,
         icon = Ic.openInNew,
