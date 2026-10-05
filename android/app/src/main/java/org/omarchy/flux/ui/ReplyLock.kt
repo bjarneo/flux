@@ -37,6 +37,9 @@ object ReplyLock {
     /** True while an unlock is valid. */
     fun valid(): Boolean = unlocked(SystemClock.elapsedRealtime(), until)
 
+    /** Time left in the existing five-minute authorization; does not extend it. */
+    fun remainingMs(): Long = (until - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
+
     /** True when an unlock that ends at [until] is valid at [now]. Both are in elapsed realtime. */
     internal fun unlocked(now: Long, until: Long): Boolean = now < until
 
@@ -53,6 +56,7 @@ object ReplyLock {
         title: String = "Answer an agent",
         purpose: String = "answer agents",
         onCancel: () -> Unit = {},
+        onPrompt: (CancellationSignal) -> Unit = {},
         onError: (String) -> Unit,
     ) {
         if (valid()) {
@@ -75,8 +79,10 @@ object ReplyLock {
             @Suppress("DEPRECATION")
             builder.setDeviceCredentialAllowed(true)
         }
+        val cancellation = CancellationSignal()
+        onPrompt(cancellation)
         builder.build().authenticate(
-            CancellationSignal(),
+            cancellation,
             context.mainExecutor,
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {

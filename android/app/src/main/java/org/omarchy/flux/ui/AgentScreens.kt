@@ -97,6 +97,7 @@ import org.omarchy.flux.core.HerdrReply
 import org.omarchy.flux.core.HerdrSync
 import org.omarchy.flux.core.HerdrTerminal
 import org.omarchy.flux.core.choicesOpen
+import org.omarchy.flux.core.terminalControlReady
 import org.omarchy.flux.mic.MicSession
 import org.omarchy.flux.voice.Dictation
 import org.omarchy.flux.voice.DictationBar
@@ -290,10 +291,11 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
     var review by rememberSaveable(d.id, pane) { mutableStateOf(false) }
     var reviewPath by rememberSaveable(d.id, pane) { mutableStateOf("") }
     var appliedReviewPath by rememberSaveable(d.id, pane) { mutableStateOf("") }
+    var reviewRevision by remember { mutableLongStateOf(0L) }
     val reviewText = Tn.text
     fun readReview() {
         appliedReviewPath = reviewPath
-        HerdrSync.read(FluxCore, d.id, pane, review = true, path = appliedReviewPath)
+        reviewRevision++
     }
     val agent = d.herdr?.agent(pane)
     val status = agent?.status
@@ -303,8 +305,8 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
     val loading by rememberUpdatedState(d.herdrOutput?.takeIf { it.pane == pane }?.loading == true)
     // The polls stop when the agent is gone.
     val alive = agent != null || d.herdr == null
-    LaunchedEffect(d.id, pane, d.online, status, alive, review, appliedReviewPath) {
-        if (!d.online || demo || !alive) return@LaunchedEffect
+    LaunchedEffect(d.id, pane, d.online, status, alive, review, appliedReviewPath, reviewRevision) {
+        if (!d.online || demo || !alive || !review) return@LaunchedEffect
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             // A new status reads at once. Only the polls wait for the last read.
             HerdrSync.read(FluxCore, d.id, pane, review = review, path = appliedReviewPath)
@@ -320,24 +322,16 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
     val closer = rememberPaneCloser(d, pane, onBack)
     val title = agent?.project?.ifEmpty { null } ?: agent?.agent ?: pane
     val context = listOfNotNull(agent?.agent?.takeIf { it != title }, d.name).joinToString(" · ")
-    // The live terminal needs the herdr bridge of the computer. It is
-    // read-only here; a later phase adds control. A debug sample opens
-    // the terminal at once, for screenshots.
+    // Android enters the controlled terminal directly; Changes keeps
+    // its diff reader. Debug samples draw without acquiring control.
     val sample = if (isDemo(d.id)) terminalDebugSample() else null
     val stream = sample != null || (d.herdr?.terminalStream == true && d.online && agent != null && !demo)
-    var mode by rememberSaveable { mutableStateOf(if (sample != null) "terminal" else "read") }
     Column(Modifier.fillMaxSize().imePadding().padding(horizontal = TiledGutter)) {
         TiledTopBar(title, onBack, context = context) {
             if (out?.loading == true && out.lines.isNotEmpty()) {
                 SquareSpinner("Reading the output")
-            } else if (d.online && agent != null && !demo) {
-                SquareButton(Ic.refresh, "Refresh", { HerdrSync.read(FluxCore, d.id, pane) })
-            }
-        }
-        if (stream) {
-            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ChoiceChip("Read", mode == "read", { mode = "read" }, role = Role.Tab)
-                ChoiceChip("Terminal", mode == "terminal", { mode = "terminal" }, role = Role.Tab)
+            } else if (review && d.online && agent != null && !demo) {
+                SquareButton(Ic.refresh, "Refresh", { readReview() })
             }
         }
         when {
@@ -352,14 +346,13 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
                 Modifier.weight(1f),
                 header = {
                     Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
-                        if (agent != null) AgentHeader(agent, closer.takeIf { d.herdr?.control == true })
-                        // Output and Changes read the reflowed text; the live
-                        // terminal draws the pane itself, so no review choice.
-                        if (d.herdr?.review == true && !(stream && mode == "terminal")) {
+                        if (agent != null) {
+                            AgentHeader(agent, closer.takeIf { d.herdr?.control == true })
+                        }
+                        if (d.herdr?.review == true) {
                             Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(TileGap)) {
-                                ChoiceChip("Output", !review, {
+                                ChoiceChip("Terminal", !review, {
                                     review = false
-                                    HerdrSync.read(FluxCore, d.id, pane, review = false)
                                 }, Modifier.weight(1f), role = Role.Tab)
                                 ChoiceChip("Changes", review, { review = true; readReview() }, Modifier.weight(1f), role = Role.Tab)
                             }
@@ -374,7 +367,13 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
                     }
                 },
                 output = { m ->
-                    if (stream && mode == "terminal") TerminalOutput(d, pane, sample, m) else AgentOutput(out, m)
+                    when {
+                        review -> AgentOutput(out, m)
+                        stream -> androidx.compose.runtime.key(d.id, pane) {
+                            TerminalOutput(d, pane, sample, m)
+                        }
+                        else -> T("This computer does not support terminal control.", m)
+                    }
                 },
                 controls = {
                     if (agent != null && d.herdr?.control == true) {
@@ -513,119 +512,172 @@ private fun FillColumn(
 private const val FOLLOW_SLACK_PX = 48
 
 /**
- * The live terminal of the pane and the state of its stream. The
- * terminal draws at the size that the pane has on the computer, so it
- * may be wider than the phone: pinch to zoom and drag to pan. With
- * **Control** the drags scroll the conversation of the pane on the
- * computer too, after the phone lock confirms it. A [sample] draws that
- * screen instead, for screenshots.
+ * Acquire authenticated control at phone geometry and reveal only a
+ * drawn baseline. Preserve the existing five-minute unlock policy;
+ * expiry or leaving the foreground hides and releases the terminal.
+ * A [sample] draws without authentication or remote input.
  */
 @Composable
 private fun TerminalOutput(d: DeviceUi, pane: String, sample: TerminalSample?, modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val session = d.herdrTerminal?.takeIf { it.pane == pane }
-    val controlling = session?.open == true && session.mode == "control" && !session.sending
-    val requesting = session?.sending == true && session.mode == "control"
-    // The grid that fills the phone at a readable font, from the page.
-    // A control stream opens at that size, so the program on the
-    // computer redraws for the phone instead of being shrunk to fit.
-    var grid by remember { mutableStateOf(0 to 0) }
-
-    // Control needs a person that holds the unlocked phone. When the
-    // unlock ends, the phone goes back to watching and sends no input.
-    LaunchedEffect(controlling) {
-        while (controlling) {
-            if (!ReplyLock.valid()) {
-                HerdrSync.terminalOpen(FluxCore, d.id, pane, "observe")
-                break
-            }
-            kotlinx.coroutines.delay(15_000)
-        }
-    }
-    // The same when the app goes to the back. The stream itself ends
-    // with the screen: the phone must not keep a terminal open that
-    // nobody looks at.
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val live by rememberUpdatedState(controlling)
+    var active by remember { mutableStateOf(
+        lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED),
+    ) }
+    var ready by remember { mutableStateOf(false) }
+    var grid by remember { mutableStateOf(0 to 0) }
+    var authorized by remember { mutableStateOf(false) }
+    var drawn by remember { mutableStateOf("") }
+    var attempted by remember { mutableStateOf(false) }
+    var retry by remember { mutableLongStateOf(0L) }
+    var generation by remember { mutableLongStateOf(0L) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var prompt by remember { mutableStateOf<android.os.CancellationSignal?>(null) }
+    val currentSession by rememberUpdatedState(session)
+    fun stop(reason: String) {
+        generation++
+        prompt?.cancel()
+        prompt = null
+        authorized = false
+        drawn = ""
+        message = reason
+        HerdrSync.terminalRelease(FluxCore, d.id)
+    }
     DisposableEffect(lifecycle, d.id, pane) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP && live) {
-                HerdrSync.terminalOpen(FluxCore, d.id, pane, "observe")
+            when (event) {
+                Lifecycle.Event.ON_START -> active = true
+                Lifecycle.Event.ON_STOP -> {
+                    active = false
+                    stop("Reconnect to the terminal.")
+                }
+                else -> Unit
             }
         }
         lifecycle.addObserver(observer)
         onDispose {
+            active = false
+            generation++
+            prompt?.cancel()
+            prompt = null
             lifecycle.removeObserver(observer)
             HerdrSync.terminalRelease(FluxCore, d.id)
         }
     }
-    Column(modifier) {
-        val state = when {
-            requesting -> "Asking for control of $pane…"
-            session == null || session.sending ->
-                if (sample != null) "Watching $pane: the phone sends nothing to it."
-                else "Connecting to the terminal of $pane…"
-            session.error != null -> session.error
-            controlling -> "Controlling $pane: swipes scroll the conversation on the computer too."
-            session.open -> "Watching $pane: the phone sends nothing to it."
-            else -> "The terminal stream ended (${session.reason.ifEmpty { session.code }})."
+    LaunchedEffect(ready, grid, retry, active) {
+        if (sample != null || !ready || grid.first < 1 || !active || attempted) {
+            return@LaunchedEffect
         }
-        if (state != null) {
-            Row(
-                Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                T(state, Modifier.weight(1f), size = 12, color = Tn.sub)
-                when {
-                    sample != null -> FluxButton(
-                        "Control",
-                        { FluxCore.toast("A sample terminal takes no control") },
-                    )
-                    session == null || session.sending -> Unit
-                    controlling -> FluxButton(
-                        "Stop",
-                        { HerdrSync.terminalOpen(FluxCore, d.id, pane, "observe") },
-                        kind = ButtonKind.Tonal,
-                    )
-                    else -> FluxButton(
-                        "Control",
-                        {
-                            // A control stream sends input to the
-                            // computer, so a person must hold the phone.
-                            ReplyLock.run(
-                                context,
-                                action = {
-                                    HerdrSync.terminalOpen(
-                                        FluxCore, d.id, pane, "control",
-                                        grid.first, grid.second,
-                                    )
-                                },
-                                title = "Control a terminal",
-                                purpose = "control terminals",
-                                onError = { FluxCore.toast(it) },
+        attempted = true
+        message = null
+        val token = ++generation
+        ReplyLock.run(
+            context,
+            action = {
+                scope.launch {
+                    // Release is asynchronous. Wait for the old bridge's EOF
+                    // acknowledgement before asking Herdr for control again.
+                    val deadline = android.os.SystemClock.elapsedRealtime() + 8_000
+                    while (currentSession?.code == "released" &&
+                        currentSession?.reason.isNullOrEmpty() &&
+                        !currentSession?.session.isNullOrEmpty()
+                    ) {
+                        if (!active || token != generation) return@launch
+                        if (android.os.SystemClock.elapsedRealtime() >= deadline) {
+                            stop("The previous terminal is still closing. Reconnect to retry.")
+                            return@launch
+                        }
+                        delay(25)
+                    }
+                    if (active && token == generation) {
+                        if (ReplyLock.valid()) {
+                            authorized = true
+                            HerdrSync.terminalOpen(
+                                FluxCore, d.id, pane, "control", grid.first, grid.second,
                             )
-                        },
-                    )
+                        } else {
+                            stop("Authentication expired. Reauthenticate to continue.")
+                        }
+                    }
                 }
-            }
+            },
+            title = "Open terminal",
+            purpose = "control terminals",
+            onCancel = {
+                if (token == generation) stop("Authentication cancelled.")
+            },
+            onError = { if (token == generation) stop(it) },
+            onPrompt = {
+                if (active && token == generation) prompt = it else it.cancel()
+            },
+        )
+    }
+    LaunchedEffect(authorized) {
+        if (authorized) {
+            while (ReplyLock.valid()) delay(ReplyLock.remainingMs().coerceAtLeast(1L))
+            stop("Authentication expired. Reauthenticate to continue.")
         }
+    }
+    LaunchedEffect(session?.open, session?.error, session?.sending) {
+        if (authorized && session != null && !session.sending && !session.open) {
+            stop(session.error ?: "The terminal disconnected. Reconnect to continue.")
+        }
+    }
+    LaunchedEffect(session?.session, authorized) {
+        val id = session?.session.orEmpty()
+        if (authorized && id.isNotEmpty()) {
+            delay(10_000)
+            if (drawn != id) stop("The terminal did not finish loading. Reconnect to retry.")
+        }
+    }
+    val controlling = active && authorized && session?.open == true && session.mode == "control"
+    val visible = sample != null || terminalControlReady(session, drawn, authorized, active)
+    Box(modifier) {
         HerdrTerminalView(
             session,
-            onReady = { HerdrSync.terminalOpen(FluxCore, d.id, pane, "observe") },
-            modifier = Modifier.weight(1f),
+            onReady = { ready = true },
+            modifier = Modifier.fillMaxSize(),
             sample = sample,
-            control = controlling,
+            control = controlling && visible,
+            inputEnabled = visible,
             theme = ComputerThemes.theme(d.id)?.theme,
-            onGrid = { cols, rows -> grid = cols to rows },
+            onGrid = { cols, rows ->
+                val next = cols to rows
+                if (authorized && grid != next) stop("The view resized. Reconnect to continue.")
+                grid = next
+            },
+            onDrawn = { id ->
+                if (currentSession?.session == id) drawn = id
+            },
             onWheel = { column, row, direction ->
-                // The gesture already waits for control and a drawn
-                // screen. The session id comes from the current state.
-                val t = d.herdrTerminal?.takeIf { it.pane == pane && it.open }
-                if (t != null) {
+                val t = currentSession
+                if (active && authorized && !ReplyLock.valid()) {
+                    stop("Authentication expired. Reauthenticate to continue.")
+                } else if (active && authorized && t?.open == true && t.mode == "control") {
                     HerdrSync.terminalScroll(FluxCore, d.id, t.session, direction, column, row)
                 }
             },
         )
+        if (!visible) {
+            Column(
+                Modifier.fillMaxSize().background(Tn.tile),
+                verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                T(message ?: "Opening terminal…", size = 13, color = Tn.sub)
+                if (message != null) FluxButton(
+                    if (ReplyLock.valid()) "Reconnect" else "Reauthenticate",
+                    {
+                        drawn = ""
+                        attempted = false
+                        message = null
+                        retry++
+                    },
+                )
+            }
+        }
     }
 }
 

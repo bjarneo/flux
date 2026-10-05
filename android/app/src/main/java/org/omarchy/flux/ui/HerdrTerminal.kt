@@ -43,6 +43,8 @@ fun HerdrTerminalView(
     theme: OmarchyTheme? = null,
     onWheel: (column: Int, row: Int, direction: String) -> Unit = { _, _, _ -> },
     onGrid: (cols: Int, rows: Int) -> Unit = { _, _ -> },
+    onDrawn: (session: String) -> Unit = {},
+    inputEnabled: Boolean = true,
 ) {
     val feeder = remember { TerminalFeeder() }
     feeder.onReady = {
@@ -50,7 +52,9 @@ fun HerdrTerminalView(
     }
     feeder.onWheel = onWheel
     feeder.onGrid = onGrid
+    feeder.onDrawn = onDrawn
     feeder.control = control
+    feeder.inputEnabled = inputEnabled
     DisposableEffect(feeder) {
         HerdrSync.terminalSink = feeder
         onDispose {
@@ -106,6 +110,12 @@ fun HerdrTerminalView(
                 }
                 addJavascriptInterface(TerminalBridge(feeder), "FluxBridge")
                 feeder.webView = this
+                addOnLayoutChangeListener { _, left, top, right, bottom,
+                    oldLeft, oldTop, oldRight, oldBottom ->
+                    if (right - left != oldRight - oldLeft ||
+                        bottom - top != oldBottom - oldTop
+                    ) feeder.prepare()
+                }
                 loadUrl("file:///android_asset/terminal/index.html")
             }
         },
@@ -137,6 +147,10 @@ private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
     /** Called on the main thread with the phone-first grid of the view. */
     @Volatile
     var onGrid: ((cols: Int, rows: Int) -> Unit)? = null
+
+    var onDrawn: ((String) -> Unit)? = null
+    private var sessionId = ""
+    var inputEnabled = true
 
     /** The xterm theme JSON of the computer, or null while it sent none. */
     @Volatile
@@ -187,9 +201,18 @@ private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
             if (!ready) {
                 ready = true
                 applyTheme()
+                prepare()
                 onReady?.invoke()
             }
         }
+    }
+
+    /** Measure the phone grid without opening an observation stream. */
+    fun prepare() {
+        val view = webView ?: return
+        if (!ready || view.width == 0 || view.height == 0) return
+        val density = view.resources.displayMetrics.density
+        eval("FluxTerminal.prepare(${view.width / density}, ${view.height / density})")
     }
 
     /** Sets the theme of the computer to draw default and indexed colors. Any thread. */
@@ -216,6 +239,7 @@ private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
             if (!ready) return@post
             when (event) {
                 is HerdrTerminalEvent.Opened -> {
+                    sessionId = event.session
                     baseline = false
                     gestures.reset()
                     resize(view, event.width, event.height)
@@ -224,12 +248,15 @@ private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
                     // A frame draws into its own grid, so a new size of
                     // the terminal resets it first.
                     if (event.width != cols || event.height != rows) resize(view, event.width, event.height)
-                    if (event.full) baseline = true
-                    view.evaluateJavascript("FluxTerminal.write('${event.bytes}')", null)
+                    val id = kotlinx.serialization.json.JsonPrimitive(sessionId).toString()
+                    view.evaluateJavascript(
+                        "FluxTerminal.write('${event.bytes}', ${event.full}, $id)", null,
+                    )
                 }
                 // The screen shows the reason; the terminal keeps its
                 // last screen until a new stream opens.
                 is HerdrTerminalEvent.Closed -> {
+                    sessionId = ""
                     baseline = false
                     gestures.reset()
                 }
@@ -239,6 +266,10 @@ private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
 
     /** Native touches on the main thread, mapped to the page's CSS pixels. */
     fun touch(event: MotionEvent, density: Double) {
+        if (!inputEnabled) {
+            gestures.reset()
+            return
+        }
         fun send(action: String, index: Int, history: Int? = null) {
             val x = history?.let { event.getHistoricalX(index, it) } ?: event.getX(index)
             val y = history?.let { event.getHistoricalY(index, it) } ?: event.getY(index)
@@ -274,6 +305,19 @@ private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
     /** The phone-first grid that the page measured. Any thread. */
     fun grid(cols: Int, rows: Int) {
         handler.post { onGrid?.invoke(cols, rows) }
+    }
+
+    fun drawn(id: String) {
+        handler.post {
+            webView?.postVisualStateCallback(0, object : WebView.VisualStateCallback() {
+                override fun onComplete(requestId: Long) {
+                    if (id == sessionId && ready) {
+                        baseline = true
+                        onDrawn?.invoke(id)
+                    }
+                }
+            })
+        }
     }
 
     private fun resize(view: WebView, width: Int, height: Int) {
@@ -313,6 +357,7 @@ private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
             onReady = null
             onWheel = null
             onGrid = null
+            onDrawn = null
             ready = false
             baseline = false
             gestures.reset()
@@ -335,6 +380,11 @@ private class TerminalBridge(private val feeder: TerminalFeeder) {
     @JavascriptInterface
     fun grid(cols: Int, rows: Int) {
         feeder.grid(cols, rows)
+    }
+
+    @JavascriptInterface
+    fun drawn(session: String) {
+        feeder.drawn(session)
     }
 }
 

@@ -131,17 +131,24 @@
   }
 
   window.FluxTerminal = {
+    prepare: function (w, h) {
+      fit(w, h);
+    },
     reset: function (cols, rows, w, h) {
       term.reset();
       term.resize(cols, rows);
       term.write("\u001b[?7l");
       fit(w, h);
     },
-    write: function (base64) {
+    write: function (base64, full, session) {
       var raw = atob(base64);
       var bytes = new Uint8Array(raw.length);
       for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-      term.write(bytes);
+      term.write(bytes, function () {
+        if (full && window.FluxBridge) {
+          requestAnimationFrame(function () { window.FluxBridge.drawn(session); });
+        }
+      });
     },
     theme: function (json) {
       var t = JSON.parse(json);

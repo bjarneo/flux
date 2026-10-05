@@ -1,8 +1,8 @@
 # Plan: phone-first Herdr terminal after the Pixel trial
 
 Status: partly implemented. Priority 1 (PTY resize and desktop recovery) and Priority 3
-(terminal theme fidelity) are done and validated on the Pixel. Priority 4 is in progress;
-Priority 2 remains a proposal. Each status section records what is verified and still open.
+(terminal theme fidelity) are done and validated on the Pixel. Priority 4's native gesture
+tracking is also validated. Priority 2 is in progress. Status sections record remaining checks.
 
 This plan records the user's observations from the real Pixel trial of
 `feat/herdr-interactive-control`. It supersedes the desktop-size, separate-reader,
@@ -149,6 +149,28 @@ Implemented and verified against Herdr 0.9.3.
 Acceptance: opening a supported Android agent leads to the authenticated, phone-sized terminal
 without selecting a second view or pressing a separate Control button. The visible tabs are
 **Terminal / Changes**, Changes still works, and iOS retains its existing read/output flow.
+
+### Priority 2 status (2026-10-04)
+
+Implemented for Android. JVM tests, lint, and debug/release builds passed. The user confirmed
+the initial screen looked good, then clarified that the agent card and Close button must stay.
+The card is restored; validation of that restoration and the lifecycle/expiry paths remains open.
+
+- Removed Read/Terminal and the pane-control status/Control/Stop row. Output is now Terminal,
+  next to Changes. Unsupported computers show an explicit message, not a hidden reader fallback.
+- Retain the agent information card, status, pane identifier, and Close action on both tabs.
+  The removed pane text is only the old status row beside Control, not the agent card.
+- Entry measures the phone grid without opening an observe stream, then invokes the existing
+  authentication gate and opens control directly. A valid five-minute unlock is still reused.
+- The terminal remains covered until its own full baseline is parsed and the WebView confirms
+  that its visual state is ready. Hidden content accepts no touches. Old-session render callbacks
+  cannot reveal a replacement session.
+- The five-minute policy is unchanged. Expiry hides and releases the terminal and offers
+  Reauthenticate. Input also checks authorization rather than relying only on the expiry timer.
+- Exit, Changes, backgrounding, and disconnection release control. A retry is explicit; cancelled
+  authentication does not loop. A generation check prevents late authentication from opening
+  a terminal after the screen leaves. Existing stale-open handling releases late bridge responses.
+- iOS and shared read/diff operations are unchanged; Android Changes still uses the reader.
 
 ## 5. Priority 3: background and terminal theme fidelity
 

@@ -396,6 +396,12 @@ fun parseHerdrTerminalOpened(body: JsonObject): HerdrTerminalSession? {
     )
 }
 
+/** Show only an authorized control stream whose own baseline finished drawing. */
+fun terminalControlReady(
+    session: HerdrTerminalSession?, drawn: String, authorized: Boolean, active: Boolean,
+): Boolean = active && authorized && session != null && session.open && !session.sending &&
+    session.mode == "control" && session.session.isNotEmpty() && drawn == session.session
+
 /** Parses the body of a terminal_frame packet. It returns null for another body. */
 fun parseHerdrTerminalFrame(body: JsonObject): HerdrTerminalEvent.Frame? {
     if (body.str("kind") != "terminal_frame") return null

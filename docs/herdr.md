@@ -52,6 +52,11 @@ A blocked agent waits for an approval or for the answer to a question.
 Idle and done agents are ready for new input.
 The **Agents and terminals** tile shows the number of blocked agents.
 
+### Existing reader
+
+This section describes the read/output view retained on iOS and other reader screens.
+The Android agent screen uses the live terminal described below instead.
+
 The output screen of the phone shows up to 1000 lines of recent output.
 The screen part of the output has the colors and styles of the terminal.
 The older lines above it are plain text.
@@ -84,24 +89,31 @@ This matters most for full-screen agents such as opencode, which draw panels acr
 - A centered drawing, for example the opencode logo, moves to the left when that makes it fit.
 - When the agent colors suit a dark background and the phone uses the light theme, the phone inverts the lightness of these colors, so the text stays readable. It does the same for colors that suit a light background in the dark theme.
 
-The **Terminal** choice on the screen of an agent shows the live terminal of its
-pane, exactly as the program draws it on the computer. The phone changes nothing
-in it: the sidebar, the tabs, and the panels are the ones of the program. The
-terminal keeps the size that the pane has on the computer, the phone fits that
-grid on its screen, and pinch zoom and drag pan over it. The colors are the
-colors of the program in both themes. A computer with herdr 0.9.3 or newer
-offers this choice.
+### Android live terminal
 
-**Control** under the terminal sends the drags over it to the pane: one finger
-scrolls the conversation, and the computer shows the same position right away.
-A drag is wheel input and nothing else: the phone sends no text and no keys from
-this screen. Control asks for the phone lock first, it lasts while the phone
-stays unlocked and in front, and it changes what the computer shows, so the
-screen says so while it is on. **Stop** goes back to watching. A computer also
-needs `herdr_control` for this.
+On Android, opening an agent selects **Terminal**, beside **Changes** when review
+is supported. There is no separate Read/Terminal selector or Control/Stop row.
+The app invokes the phone's fingerprint or screen-lock check and requests control
+automatically. An existing unlock is reused for the remainder of its five-minute window.
+The computer needs herdr 0.9.3 or newer, terminal streaming, and `herdr_control`.
+The agent information card, status, pane identifier, and **Close** action remain on both tabs.
 
-While a phone controls a terminal, herdr holds its size: the computer cannot
-resize that pane until the phone stops. The phone never resizes it on its own.
+The terminal stays covered while authentication, control acquisition, and its first
+redraw finish. Herdr resizes the pane for the phone, and the program draws its own
+interface for that grid. The app preserves explicit program colors and uses the
+computer's synced theme for default colors. One finger scrolls the remote conversation;
+two fingers zoom and pan locally. Gestures do not send clicks, text, or arbitrary keys.
+The existing validated reply controls remain available below the terminal.
+
+When authentication expires, Android hides the terminal, releases control, and offers
+**Reauthenticate**. Cancellation or connection failure offers an explicit retry rather
+than repeatedly opening the authentication prompt. Switching to Changes, leaving the
+screen, or backgrounding the app releases control. Returning from the background offers
+**Reconnect**; it does not silently reacquire control. Herdr restores desktop geometry
+when a desktop client is attached. Without one, the next desktop client reclaims the size.
+
+**Changes** retains diff rendering, file filtering, and review actions. iOS keeps its
+existing read/output experience; its reader and shared read/diff operations are unchanged.
 
 ## Notifications
 

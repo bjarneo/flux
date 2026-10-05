@@ -10,6 +10,22 @@ import org.omarchy.flux.protocol.Packet
 import org.omarchy.flux.protocol.str
 
 class HerdrTerminalTest {
+    @Test
+    fun controlIsHiddenUntilItsOwnBaselineAndAuthorizationAreReady() {
+        val session = HerdrTerminalSession(
+            pane = "w1:p1", mode = "control", session = "ts1", open = true, sending = false,
+        )
+        assertTrue(terminalControlReady(session, "ts1", true, true))
+        assertFalse(terminalControlReady(session, "", true, true))
+        assertFalse(terminalControlReady(session, "old-session", true, true))
+        assertFalse(terminalControlReady(session, "ts1", false, true))
+        assertFalse(terminalControlReady(session, "ts1", true, false))
+        assertFalse(terminalControlReady(session.copy(open = false), "ts1", true, true))
+        assertFalse(terminalControlReady(session.copy(sending = true), "ts1", true, true))
+        assertFalse(terminalControlReady(session.copy(mode = "observe"), "ts1", true, true))
+        assertFalse(terminalControlReady(null, "ts1", true, true))
+    }
+
     private fun body(line: String) = Packet.parse("""{"id":1,"type":"flux.herdr","body":$line}""")!!.body
 
     @Test
