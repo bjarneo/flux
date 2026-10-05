@@ -18,7 +18,6 @@ class HerdrGesturesTest {
         val wheels = mutableListOf<Triple<Int, Int, String>>()
         val fonts = mutableListOf<Triple<Int, Double, Double>>()
         val pans = mutableListOf<Pair<Double, Double>>()
-        val stats = mutableListOf<GestureStats>()
         val taps = mutableListOf<Pair<Int, Int>>()
     }
 
@@ -33,7 +32,6 @@ class HerdrGesturesTest {
             onWheel = { column, row, direction -> sink.wheels += Triple(column, row, direction) },
             onFont = { size, x, y -> sink.fonts += Triple(size, x, y) },
             onPan = { dx, dy -> sink.pans += dx to dy },
-            onStats = { sink.stats += it },
             post = post,
             scrollScale = scrollScale,
             onTap = { column, row -> sink.taps += column to row },
@@ -260,9 +258,8 @@ class HerdrGesturesTest {
             assertEquals(sample * 2, sink.wheels.size)
         }
         g.touch("up", 1, 55.0, 960.0, at = 1000)
-        assertEquals(1000L, sink.stats.single().durationMs)
-        assertEquals("up", sink.stats.single().endReason)
-        assertTrue(sink.stats.single().moves >= 20)
+        assertEquals(40, sink.wheels.size)
+        assertTrue(sink.taps.isEmpty())
     }
 
     @Test
@@ -270,16 +267,20 @@ class HerdrGesturesTest {
         val sink = Sink()
         val pending = ArrayDeque<() -> Unit>()
         // All these samples are processed at once, not at their event times.
-        val g = gestures(sink, { 10_000L }, { _, action -> pending.addLast(action) })
+        var processingTime = 10_000L
+        val g = gestures(sink, { processingTime }, { _, action -> pending.addLast(action) })
         g.control = true
         g.touch("down", 1, 55.0, 400.0, at = 100)
         g.touch("move", 1, 55.0, 370.0, at = 120)
         g.touch("move", 1, 55.0, 340.0, at = 140)
         g.touch("up", 1, 55.0, 310.0, at = 160)
         assertEquals(15, sink.wheels.size)
-        assertEquals(-1.5, sink.stats.single().speed, 0.001)
-        assertEquals(60L, sink.stats.single().durationMs)
         assertTrue(pending.isNotEmpty())
+        processingTime += 16
+        pending.removeFirst()()
+        // 1.5 px/ms at the lift adds three wheel steps in the first tick.
+        assertEquals(18, sink.wheels.size)
+        assertEquals("down", sink.wheels.last().third)
     }
 
     @Test
@@ -293,7 +294,7 @@ class HerdrGesturesTest {
         g.touch("move", 1, 55.0, 280.0, at = 40)
         g.touch("up", 1, 55.0, 280.0, at = 500)
         assertTrue(pending.isEmpty())
-        assertEquals(0.0, sink.stats.single().speed, 0.001)
+        assertTrue(sink.taps.isEmpty())
     }
 
     @Test
@@ -309,7 +310,7 @@ class HerdrGesturesTest {
         g.touch("move", 1, 55.0, 280.0, at = 40)
         assertEquals(before, sink.wheels.size)
         assertTrue(pending.isEmpty())
-        assertEquals("cancel", sink.stats.single().endReason)
+        assertTrue(sink.taps.isEmpty())
     }
 
     @Test
@@ -381,16 +382,15 @@ class HerdrGesturesTest {
     }
 
     @Test
-    fun aControlGestureReportsItsNumbers() {
+    fun aControlGestureSendsTwoStepsWithoutATap() {
         val sink = Sink()
         val g = gestures(sink)
         g.control = true
         g.touch("down", 1, 55.0, 205.0)
         g.touch("move", 1, 55.0, 193.0) // 12 px up: two steps
         g.touch("up", 1, 55.0, 193.0)
-        assertEquals(1, sink.stats.size)
-        assertEquals(2, sink.stats[0].steps)
-        assertTrue(sink.stats[0].distance >= 6.0)
+        assertEquals(2, sink.wheels.size)
+        assertTrue(sink.taps.isEmpty())
     }
 
     @Test

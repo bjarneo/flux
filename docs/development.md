@@ -86,6 +86,19 @@ The Qt host renders fixture screens into `snapshots/`.
 The [QML guide](qml.md#snapshot-harness) covers theme and screen filters.
 The [shell guide](omarchy.md#offscreen-test) covers an isolated plugin host.
 
+## Herdr bridge integration checks
+
+With Herdr 0.9.3 or newer installed, run from the repository root:
+
+```sh
+python3 scripts/herdr-bridge-proof.py
+```
+
+The harness creates and removes a disposable named session and runs a fixture TUI.
+It checks wheel/mouse routing, passive observation, control exclusivity, PTY resize,
+release, and process cleanup without using personal sessions or the installed Flux daemon.
+Use `--keep` only when inspecting the fixture manually; stop and delete that session afterward.
+
 ## Android checks
 
 ```sh

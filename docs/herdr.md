@@ -118,6 +118,14 @@ when a desktop client is attached. Without one, the next desktop client reclaims
 **Changes** retains diff rendering, file filtering, and review actions. iOS keeps its
 existing read/output experience; its reader and shared read/diff operations are unchanged.
 
+The bridge streams rendered ANSI cells, not inline terminal graphics. Raw keyboard/IME
+passthrough is not part of this view. While a pane is streamed, historical reads return
+cached output instead of scrolling the live application to collect history.
+
+The five-minute authentication gate is checked locally by Android, not cryptographically
+verified by `fluxd`. Agent disappearance ends control, but detection uses asynchronous state:
+there is a race before a replacement shell is detected, not an atomic agent-identity guarantee.
+
 ## Notifications
 
 The phone posts a notification when an agent changes to blocked.
@@ -460,6 +468,25 @@ The `kind` field selects the message.
 | `input` | Phone | `pane` of a terminal, `text`, and 0 to 8 `keys`. The computer answers with `sent`. |
 | `create` | Phone | `what` is `agent` or `terminal`, then `agent`, `cwd`, and `workspace`. The computer answers with `created`. |
 | `close` | Phone | `pane`. The computer answers with `closed`. |
+| `terminal_open` | Phone | `request`, `pane`, `mode`, optional `cols` and `rows` |
+| `terminal_opened` | Computer | `request`, `pane`, `mode`, `session`, `width`, `height`; `error` |
+| `terminal_frame` | Computer | `session`, `seq`, `encoding`, `full`, `width`, `height`, `bytes` |
+| `terminal_scroll` | Phone | `session`, `direction`, zero-based `column` and `row` |
+| `terminal_mouse` | Phone | `session`, `action`, `button`, zero-based `column` and `row` |
+| `terminal_release` | Phone | `session`, `request` |
+| `terminal_closed` | Computer | `session`, `code`, `reason`, optional release `request` |
+
+The optional `state.bridge` list advertises `observe`, `control`, `scroll`, and `mouse`.
+Old clients ignore these additive kinds and continue using read/output operations.
+Only control may request a phone-sized grid; dimensions are bounded to 1..1000 cells.
+Each device has at most one stream and each pane at most one controller, without takeover.
+The generated session ID is bound to its device, link, and terminal; stale input is not replayed.
+
+Frames contain base64 ANSI bytes and must be applied in order: incremental frames cannot be
+dropped or truncated. A full frame establishes the baseline before input is enabled. Its sequence
+number is not an acknowledgement of a specific input event. Wheel input uses `source: wheel`
+and `lines: 1`; increasing `lines` does not multiply mouse-report events. Mouse clicks use
+ordered left-button `down`/`up` events through the existing bridge.
 
 When `fluxd` cannot finish an answer because of an internal error, it sends the answer with an `error`, for example `fluxd could not read the pane`.
 

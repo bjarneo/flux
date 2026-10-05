@@ -35,25 +35,6 @@ data class TerminalGeometry(
 }
 
 /**
- * What one finished control gesture did, for tuning the feel on a real
- * phone. It carries numbers only: never the text of a conversation.
- */
-data class GestureStats(
-    /** The finger travel along the scroll axis, in CSS pixels. */
-    val distance: Double,
-    /** The wheel steps the gesture sent while the finger was down. */
-    val steps: Int,
-    /** From the first touch to the lift, in milliseconds. */
-    val durationMs: Long,
-    /** The finger speed at the lift, in pixels per millisecond. */
-    val speed: Double,
-    /** Positions processed while the finger was down, including batched ones. */
-    val moves: Int,
-    /** Whether the gesture ended with a lift or an Android cancellation. */
-    val endReason: String,
-)
-
-/**
  * Turns the touches on the terminal into wheel steps and local zoom and
  * pan. While [control] is on, a one-finger drag scales its travel by
  * [SCROLL_SCALE] and sends one wheel step per [STEP_PX], at the touched cell, so the
@@ -82,7 +63,6 @@ class TerminalGestures(
     private val onWheel: (column: Int, row: Int, direction: String) -> Unit,
     private val onFont: (size: Int, focalX: Double, focalY: Double) -> Unit,
     private val onPan: (dx: Double, dy: Double) -> Unit,
-    private val onStats: (GestureStats) -> Unit = {},
     private val post: (delayMs: Long, action: () -> Unit) -> Unit = { _, _ -> },
     private val scrollScale: Double = SCROLL_SCALE,
     private val onTap: (column: Int, row: Int) -> Unit = { _, _ -> },
@@ -195,11 +175,7 @@ class TerminalGestures(
     private var flingAt = 0L
     private var flingMs = 0.0
 
-    // The numbers of one control gesture, reported at the lift.
-    private var statStart = 0L
-    private var statDistance = 0.0
-    private var statSteps = 0
-    private var statMoves = 0
+    private var dragAt = 0L
 
     /** One touch of the page at ([x], [y]) in CSS pixels. Any thread. */
     fun touch(action: String, id: Int, x: Double, y: Double, at: Long = now()) {
@@ -250,12 +226,9 @@ class TerminalGestures(
         totalY = 0.0
         vertical = false
         pending = 0.0
-        statStart = at
-        statDistance = 0.0
-        statSteps = 0
-        statMoves = 0
+        dragAt = at
         vel.clear()
-        vel.addLast(statStart to y)
+        vel.addLast(at to y)
     }
 
     private fun moveDrag(x: Double, y: Double, at: Long) {
@@ -271,7 +244,6 @@ class TerminalGestures(
         }
         // A drag that began outside the grid sends nothing at all.
         val cell = dragCell ?: return
-        statMoves++
         // A jump beyond a finger move is a lost or reused touch, not a
         // swipe, so it must not become a burst of steps.
         val dx = rawX.coerceIn(-MAX_DELTA_PX, MAX_DELTA_PX)
@@ -291,7 +263,6 @@ class TerminalGestures(
             pending += dy * scrollScale
         }
         pending = pending.coerceIn(-MAX_PENDING_PX, MAX_PENDING_PX)
-        statDistance += abs(dy)
         vel.addLast(at to y)
         while (vel.size > 2 && at - vel.first().first > FLING_WINDOW_MS) vel.removeFirst()
         emit(cell)
@@ -330,20 +301,14 @@ class TerminalGestures(
         }
     }
 
-    /** Ends the gesture of the last finger, and reports what it did. */
+    /** Ends the last finger's gesture and dispatches a deliberate tap or fling. */
     private fun lift(fling: Boolean, at: Long) {
         val active = drag && control
         val speed = if (fling && active) dragSpeed() else 0.0
         val cell = dragCell
         val wasVertical = vertical
-        val tap = active && fling && tapEligible && at - statStart in 0..TAP_MAX_MS &&
+        val tap = active && fling && tapEligible && at - dragAt in 0..TAP_MAX_MS &&
             geometry.cellAt(lastX, lastY) != null
-        if (active) {
-            onStats(GestureStats(
-                statDistance, statSteps, at - statStart, speed, statMoves,
-                if (fling) "up" else "cancel",
-            ))
-        }
         endDrag()
         if (tap && cell != null) onTap(cell.first, cell.second)
         if (fling && control && wasVertical && cell != null) startFling(speed, cell)
@@ -407,7 +372,6 @@ class TerminalGestures(
         while (abs(pending) >= STEP_PX) {
             val direction = if (pending < 0) "down" else "up"
             pending += if (pending < 0) STEP_PX else -STEP_PX
-            statSteps++
             onWheel(cell.first, cell.second, direction)
         }
     }

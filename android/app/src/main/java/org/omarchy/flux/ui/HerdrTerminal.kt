@@ -17,8 +17,6 @@ import org.omarchy.flux.core.HerdrTerminalEvent
 import org.omarchy.flux.core.HerdrTerminalSession
 import org.omarchy.flux.theme.OmarchyTheme
 
-private const val TAG = "FluxTerminal"
-
 /**
  * The live terminal of a herdr pane. It draws the ANSI frames of the
  * pane in xterm.js inside a WebView, at the terminal size that the pane
@@ -178,18 +176,6 @@ private class TerminalFeeder : (HerdrTerminalEvent) -> Unit {
         onPan = { dx, dy -> eval("FluxTerminal.pan($dx, $dy)") },
         onTap = { column, row ->
             if (baseline && inputEnabled) onTap?.invoke(column, row)
-        },
-        // The feel of the gesture is tuned on a real phone: these numbers
-        // show what one gesture did, and never a line of the terminal.
-        onStats = { stats ->
-            if (org.omarchy.flux.BuildConfig.DEBUG) {
-                android.util.Log.d(
-                    TAG,
-                    "gesture distance=${stats.distance} steps=${stats.steps} " +
-                        "moves=${stats.moves} end=${stats.endReason} " +
-                        "ms=${stats.durationMs} speed=${stats.speed}",
-                )
-            }
         },
         // The fling ticks run on the same main thread as the touches.
         post = { delay, action -> handler.postDelayed(action, delay) },
