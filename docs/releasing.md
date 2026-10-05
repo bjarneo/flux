@@ -27,11 +27,10 @@ The APK flow follows the persistent-key release pattern from kleeamp in `cliamp-
 4. Configure the Android secrets below.
 5. Make the [release signing key](#release-signing-key).
 6. Configure AUR access if you want automatic publication.
-7. Select the source license before public distribution.
 
-The repository currently has no selected license.
-The package retains `LicenseRef-unknown` until the owner makes that choice.
-Add the selected license file and update the package metadata together.
+Flux uses the [MIT license](../LICENSE).
+The package sets `license=('MIT')` and installs `LICENSE` in `/usr/share/licenses/omarchy-flux/`.
+Change the license file and the package metadata together.
 
 The release workflow accepts only stable `vMAJOR.MINOR.PATCH` tags, such as `v0.1.0`.
 Prerelease tags fail validation.

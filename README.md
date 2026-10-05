@@ -160,3 +160,7 @@ See [development](docs/development.md) for local checks and [releases](docs/rele
 - [Agent skill](docs/agents.md)
 
 The [documentation index](docs/README.md) lists all topics.
+
+## License
+
+Flux uses the [MIT license](LICENSE).

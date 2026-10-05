@@ -7,8 +7,7 @@ pkgrel=1
 pkgdesc='Connect an Omarchy computer to your phone with Flux for Android'
 arch=('x86_64' 'aarch64')
 url='https://omarchy.org'
-# The repository has no license yet.
-license=('LicenseRef-unknown')
+license=('MIT')
 depends=('qt6-base>=6.6' 'qt6-declarative>=6.6' 'qt6-svg' 'qt6-wayland' 'ttf-font-nerd' 'wl-clipboard' 'pipewire' 'avahi' 'xdg-utils')
 optdepends=(
 	'quickshell: the flux plugin for omarchy-shell'
@@ -65,4 +64,5 @@ check() {
 package() {
 	_src
 	make install DESTDIR="$pkgdir" PREFIX=/usr
+	install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

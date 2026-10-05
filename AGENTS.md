@@ -11,4 +11,4 @@ Start with [the documentation index](docs/README.md) for detailed topics.
 - Use [the release guide](docs/releasing.md) for package and workflow changes.
 - Use [the marketing guide](marketing/README.md) for the feature videos.
 - Keep secrets and local SDK paths out of the repository.
-- Preserve the source owner's license choice. The repository currently has no selected license.
+- Keep the MIT license in [LICENSE](LICENSE). Only the source owner changes the license.

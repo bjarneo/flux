@@ -165,4 +165,3 @@ The [privacy manifests](ios.md#privacy-manifests) declare no tracking and no col
 | App Review access | Add a screen recording or a demo switch. See [Test without an Omarchy computer](#test-without-an-omarchy-computer). |
 | Export compliance | Answer the encryption questions for TLS, SSH, RSA, and ECDSA. The `Info.plist` does not set `ITSAppUsesNonExemptEncryption`, so App Store Connect asks for each build. |
 | Time-sensitive notifications | Decide if the paid team signs the time-sensitive entitlement for approval notifications. See [Flux for iOS](ios.md#install-on-an-iphone). |
-| License | Select the source license before public distribution. The repository currently has no selected license. |

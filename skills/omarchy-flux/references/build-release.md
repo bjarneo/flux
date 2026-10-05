@@ -183,9 +183,9 @@ Set the `AUR_PUBLISH` repository variable to `true` to enable the AUR job.
 The AUR account needs access to the `omarchy-flux` package repository.
 Verify the AUR host key fingerprints before you store the known-hosts value.
 
-The source has no selected license yet.
-Keep the existing `LicenseRef-unknown` metadata until the owner selects a license.
-Do not invent license terms or maintainer personal details.
+The source uses the MIT license in `LICENSE`.
+The PKGBUILD sets `license=('MIT')` and installs `LICENSE` in `/usr/share/licenses/omarchy-flux/`.
+Do not change the license terms. Do not add maintainer personal details.
 
 ## Prepare an AUR recipe
 

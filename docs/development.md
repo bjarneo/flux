@@ -165,5 +165,5 @@ The [release guide](releasing.md) covers the archive-based AUR recipe.
 | Approval | Read `docs/approve.md`, then run the Go and Android approval tests. For a change in FluxKit or the Apple apps, also run the Swift approval tests `ApproveMessageTests`, `ApprovePluginLogicTests`, `ApproveKeysBackupTests`, and the iOS `ApproveLogicTests` with `make test-macos test-ios`. They run only on a Mac or in the `macos` and `ios` jobs of CI. |
 | Package or workflow | Shell syntax, `actionlint`, package build, and release-generator tests |
 
-The repository currently has no selected license.
-Preserve that state until the source owner chooses one.
+Flux uses the [MIT license](../LICENSE).
+Only the source owner changes the license.
