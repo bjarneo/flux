@@ -1082,6 +1082,7 @@ private fun LiveTerminalView(
     // control or changed.
     SideEffect {
         input.ready = inputReady
+        input.pasteReady = inputReady && d.herdr?.terminalPaste == true
         input.session = session?.session.orEmpty()
         input.onText = { text ->
             if (terminalControlReady(current, t.drawn, t.authorized, t.active)) {
@@ -1093,12 +1094,18 @@ private fun LiveTerminalView(
                 guardedInput { s -> HerdrSync.terminalInputKey(FluxCore, d.id, s.session, key) }
             }
         }
+        input.onPaste = { text ->
+            if (terminalControlReady(current, t.drawn, t.authorized, t.active)) {
+                guardedInput { s -> HerdrSync.terminalPaste(FluxCore, d.id, s.session, text) }
+            }
+        }
     }
     DisposableEffect(Unit) {
         onDispose {
             input.ready = false
             input.onText = null
             input.onKey = null
+            input.onPaste = null
         }
     }
     LaunchedEffect(session?.inputError) {
@@ -1116,6 +1123,7 @@ private fun LiveTerminalView(
             inputReady = inputReady,
             onText = { input.type(it) },
             onKey = { input.key(it) },
+            onPaste = { input.paste(it) },
             input = input,
             theme = ComputerThemes.theme(d.id)?.theme,
             onGrid = { cols, rows -> t.grid(cols to rows) },
@@ -1538,8 +1546,9 @@ private fun DirectTerminalControls(agent: HerdrAgent, out: HerdrOutput?, input: 
 
 /**
  * The one row of direct keys: Esc, Tab, Up, Down, and the keyboard. The
- * keyboard key only shows the phone keyboard; Android hides it again. The
- * phone keyboard's own mic dictates, so the row has no mic key.
+ * keyboard key only shows the phone keyboard, and Android hides it again.
+ * The phone keyboard's own paste, mic, and dictation handle those, so the
+ * row has no paste or mic key.
  */
 @Composable
 private fun DirectKeys(m: Modifier, input: TerminalInput) {
@@ -1548,15 +1557,21 @@ private fun DirectKeys(m: Modifier, input: TerminalInput) {
         KeyTile("tab", "Tab", Modifier.weight(1f)) { input.key("tab") }
         KeyTile("↑", "Up", Modifier.weight(1f)) { input.key("up") }
         KeyTile("↓", "Down", Modifier.weight(1f)) { input.key("down") }
-        Box(
-            Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(Tn.tile)
-                .border(1.dp, Tn.line, RoundedCornerShape(8.dp))
-                .clickable(onClickLabel = "Show the keyboard", role = Role.Button) { input.showKeyboard() }
-                .clearAndSetSemantics { contentDescription = "Show the keyboard" },
-            contentAlignment = Alignment.Center,
-        ) {
-            Sym(Ic.keyboard, tint = Tn.sub, size = 20.dp)
-        }
+        IconKey(Modifier.weight(1f), Ic.keyboard, "Show the keyboard") { input.showKeyboard() }
+    }
+}
+
+/** A key of [DirectKeys] that shows an icon. [description] is what TalkBack reads. */
+@Composable
+private fun IconKey(m: Modifier, icon: Int, description: String, onClick: () -> Unit) {
+    Box(
+        m.fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(Tn.tile)
+            .border(1.dp, Tn.line, RoundedCornerShape(8.dp))
+            .clickable(onClickLabel = description, role = Role.Button, onClick = onClick)
+            .clearAndSetSemantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        Sym(icon, tint = Tn.sub, size = 20.dp)
     }
 }
 

@@ -304,6 +304,19 @@ object HerdrSync {
         d.send(Packet(Types.FLUX_HERDR, herdrTerminalKeyBody(session, key)))
     }
 
+    /**
+     * Pastes [text] as one bracketed paste in the active controller
+     * session. The program reads it as pasted content and applies its own
+     * paste handling, so its line breaks do not submit. fluxd wraps the
+     * text, bounds its size, and drops control characters; it does not
+     * press Enter.
+     */
+    fun terminalPaste(core: FluxCore, id: String, session: String, text: String) {
+        if (session.isEmpty() || text.isEmpty()) return
+        val d = core.device(id) ?: return
+        d.send(Packet(Types.FLUX_HERDR, herdrTerminalPasteBody(session, text)))
+    }
+
     /** Handles terminal_input_error: why a typed event did not reach the terminal. The core lock is held. */
     private fun onTerminalInputError(d: Device, body: JsonObject) {
         val e = parseHerdrTerminalInputError(body) ?: return

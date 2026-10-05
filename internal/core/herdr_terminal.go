@@ -520,46 +520,118 @@ func herdrTerminalInputText(text string) bool {
 	return true
 }
 
+// herdrTerminalInputPayload validates one typed event and returns the bytes
+// that the controller types. Exactly one of text or key is set. An invalid
+// event returns an empty payload and the reason for the phone.
+func herdrTerminalInputPayload(text, key string) (string, string) {
+	switch {
+	case text != "" && key != "":
+		return "", "Send text or a key, not both."
+	case key != "":
+		encoded, ok := herdrTerminalInputKeys[key]
+		if !ok {
+			return "", "fluxd does not know that key."
+		}
+		return encoded, ""
+	case herdrTerminalInputText(text):
+		return text, ""
+	}
+	return "", "The terminal did not accept this input."
+}
+
+// herdrTerminalPasteMax is the largest paste that a phone may send in one
+// terminal_paste. A paste is often a code block, so it is larger than one
+// typed event; the controller writes the whole line to the program.
+const herdrTerminalPasteMax = 64 << 10
+
+// herdrTerminalPasteText prepares the text of a paste. A paste keeps its
+// line breaks and tabs, because the program reads them as pasted content
+// and not as keys. Every other control character goes, so a paste cannot
+// close its own bracketed paste with an escape sequence or type a key. It
+// returns an empty text and the reason when the paste is refused.
+func herdrTerminalPasteText(text string) (string, string) {
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
+	switch {
+	case text == "":
+		return "", "The clipboard has no text."
+	case len(text) > herdrTerminalPasteMax:
+		return "", fmt.Sprintf("The paste is longer than %d KB", herdrTerminalPasteMax>>10)
+	case !utf8.ValidString(text):
+		return "", "The paste is not valid text."
+	}
+	var b strings.Builder
+	b.Grow(len(text))
+	for _, r := range text {
+		switch {
+		case r == '\n' || r == '\t':
+			b.WriteRune(r)
+		case r < 0x20 || r == 0x7f || r >= 0x80 && r <= 0x9f:
+			// Drop, so the paste cannot type a key.
+		case r == 0x061c || r == 0x200e || r == 0x200f || r >= 0x202a && r <= 0x202e || r >= 0x2066 && r <= 0x2069,
+			r == 0x2028 || r == 0x2029:
+			// Drop the directional controls that can reorder the paste.
+		default:
+			b.WriteRune(r)
+		}
+	}
+	out := b.String()
+	if out == "" {
+		return "", "The paste has no text that the terminal can read."
+	}
+	return out, ""
+}
+
+// herdrTerminalPaste types text as one bracketed paste in the controller
+// session of the phone. A program that enabled bracketed paste reads the
+// text as pasted content and does not submit on its line breaks, so a
+// phone paste reaches the program's own paste handling, for example the
+// compact placeholder of opencode. The markers are Flux's, because the
+// controller writes the bytes as they are.
+func (d *Daemon) herdrTerminalPaste(dev *Device, l *lan.Link, id, text string) {
+	body, why := herdrTerminalPasteText(text)
+	if body == "" {
+		herdrTerminalInputError(l, id, "invalid_input", why)
+		return
+	}
+	d.herdrTerminalSend(dev, l, id, "\x1b[200~"+body+"\x1b[201~")
+}
+
 // herdrTerminalInput types one event in the controller session of the
-// phone. Exactly one of text or key is set. The event goes to the bridge
-// of the stream in order, so a character, a Tab, and an Enter stay in
-// order and no legacy reply job can reorder them. The daemon lock guards
-// the stream while the event is enqueued, so no input can follow a
-// recorded release.
+// phone. Exactly one of text or key is set.
+func (d *Daemon) herdrTerminalInput(dev *Device, l *lan.Link, id, text, key string) {
+	payload, why := herdrTerminalInputPayload(text, key)
+	if payload == "" {
+		herdrTerminalInputError(l, id, "invalid_input", why)
+		return
+	}
+	d.herdrTerminalSend(dev, l, id, payload)
+}
+
+// herdrTerminalInputError answers a refused event. It carries no typed or
+// pasted text, so a failure never leaks what the phone sent.
+func herdrTerminalInputError(l *lan.Link, id, code, msg string) {
+	_ = l.Send(proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_input_error", "session": id, "code": code, "error": msg,
+	}))
+}
+
+// herdrTerminalSend enqueues one already validated event in the controller
+// stream of the phone. The event goes to the bridge of the stream in
+// order, so a character, a Tab, and an Enter stay in order and no legacy
+// reply job can reorder them. The daemon lock guards the stream while the
+// event is enqueued, so no input can follow a recorded release.
 //
 // A foreign, unknown, or released session gets no input and no answer, so
 // it learns nothing about somebody else's terminal. A valid owned stream
 // gets a failure-only terminal_input_error, and a bridge failure also ends
 // the stream: the phone must not keep typing into a dead controller.
-func (d *Daemon) herdrTerminalInput(dev *Device, l *lan.Link, id, text, key string) {
-	fail := func(code, msg string) {
-		_ = l.Send(proto.New(proto.TypeFluxHerdr, map[string]any{
-			"kind": "terminal_input_error", "session": id, "code": code, "error": msg,
-		}))
-	}
-	var payload string
-	switch {
-	case text != "" && key != "":
-		fail("invalid_input", "Send text or a key, not both.")
-		return
-	case key != "":
-		encoded, ok := herdrTerminalInputKeys[key]
-		if !ok {
-			fail("invalid_input", "fluxd does not know that key.")
-			return
-		}
-		payload = encoded
-	case herdrTerminalInputText(text):
-		payload = text
-	default:
-		fail("invalid_input", "The terminal did not accept this input.")
-		return
-	}
+func (d *Daemon) herdrTerminalSend(dev *Device, l *lan.Link, id, payload string) {
 	d.mu.Lock()
 	t := d.herdrStreamLocked(dev, l, id)
 	if t == nil || t.mode != "control" || t.stop != "" {
 		d.mu.Unlock()
-		d.logf("%s: ignored terminal.input for an unknown session", d.nameOf(dev))
+		d.logf("%s: ignored terminal input for an unknown session", d.nameOf(dev))
 		return
 	}
 	// The stream opened for the agent or the shell that it found, so the
@@ -584,8 +656,8 @@ func (d *Daemon) herdrTerminalInput(dev *Device, l *lan.Link, id, text, key stri
 	case t.agent && !agent:
 		d.stopHerdrTerminal(t, herdrTermAgentGone)
 	case err != nil:
-		d.logf("%s: terminal.input: %v", d.nameOf(dev), err)
-		fail("input_failed", "The terminal did not accept this input.")
+		d.logf("%s: terminal input: %v", d.nameOf(dev), err)
+		herdrTerminalInputError(l, id, "input_failed", "The terminal did not accept this input.")
 		d.stopHerdrTerminal(t, herdrTermBridge)
 	}
 }

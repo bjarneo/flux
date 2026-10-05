@@ -36,4 +36,17 @@ class HerdrTerminalFocusTest {
         assertFalse(keyboardMayOpen(ready = false, focusableInTouchMode = true))
         assertFalse(keyboardMayOpen(ready = false, focusableInTouchMode = false))
     }
+
+    @Test
+    fun aCommittedBlockIsAPasteAndATypedCharacterIsNot() {
+        // Ordinary typing arrives one character at a time, so `@` still
+        // opens the program's own menu.
+        assertFalse(committedAsPaste("a"))
+        assertFalse(committedAsPaste("@"))
+        assertFalse(committedAsPaste("/"))
+        // A paste, a dictation, or a composed word arrives as one block.
+        assertTrue(committedAsPaste("hello"))
+        assertTrue(committedAsPaste("one\ntwo"))
+        assertTrue(committedAsPaste("a\r\nb"))
+    }
 }

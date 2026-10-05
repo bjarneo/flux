@@ -203,8 +203,8 @@ type herdrCLI struct {
 // herdrBridgeCaps are the terminal-session actions of a herdr that has
 // the CLI bridge of terminal sessions. Only observe reads. The others
 // write to the terminal, so a device gets them only with herdr_control.
-// "input" also lets the phone type in a control stream.
-var herdrBridgeCaps = []string{"observe", "control", "scroll", "mouse", "input"}
+// "input" and "paste" let the phone type and paste in a control stream.
+var herdrBridgeCaps = []string{"observe", "control", "scroll", "mouse", "input", "paste"}
 
 // herdrObserveCaps are the bridge actions of a device without
 // herdr_control.
@@ -899,6 +899,8 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.herdrTerminalResize(dev, l, body.Session, body.Cols, body.Rows)
 	case "terminal_input":
 		d.herdrTerminalInput(dev, l, body.Session, body.Text, body.Key)
+	case "terminal_paste":
+		d.herdrTerminalPaste(dev, l, body.Session, body.Text)
 	case "terminal_release":
 		d.herdrTerminalRelease(dev, l, req, body.Session)
 	default:

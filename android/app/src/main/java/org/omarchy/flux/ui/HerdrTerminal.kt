@@ -82,6 +82,16 @@ internal fun keyboardMayOpen(ready: Boolean, focusableInTouchMode: Boolean): Boo
     ready && focusableInTouchMode
 
 /**
+ * True when a text that the phone keyboard committed is a paste rather
+ * than typing. Ordinary typing arrives one character at a time, while a
+ * paste, a dictation, or a composed word arrives as one block. A line
+ * break is always a paste: the direct view has no typed line break, so a
+ * committed newline must not submit the prompt.
+ */
+internal fun committedAsPaste(text: String): Boolean =
+    text.length > 1 || text.indexOf('\n') >= 0 || text.indexOf('\r') >= 0
+
+/**
  * The live terminal of a herdr pane. It draws the ANSI frames of the
  * pane in xterm.js inside a WebView. The view measures the grid that fits
  * the phone and gives it to [onGrid]. In control mode, the computer
@@ -117,6 +127,7 @@ internal fun HerdrTerminalView(
     inputReady: Boolean = false,
     onText: (String) -> Unit = {},
     onKey: (String) -> Unit = {},
+    onPaste: (String) -> Unit = {},
     input: TerminalInput? = null,
 ) {
     feeder.onReady = {
@@ -160,6 +171,7 @@ internal fun HerdrTerminalView(
             editor.inputReady = inputReady
             editor.onText = onText
             editor.onKey = onKey
+            editor.onPaste = onPaste
             input?.onShowKeyboard = {
                 // Android ignores showSoftInput() for a view that is not
                 // served, so ask for the keyboard only after the view took
@@ -190,9 +202,12 @@ internal fun HerdrTerminalView(
  */
 internal class TerminalInput {
     var ready by mutableStateOf(false)
+    /** True while the computer also accepts a bracketed paste. */
+    var pasteReady by mutableStateOf(false)
     var session by mutableStateOf("")
     var onText: ((String) -> Unit)? = null
     var onKey: ((String) -> Unit)? = null
+    var onPaste: ((String) -> Unit)? = null
     var onShowKeyboard: (() -> Unit)? = null
 
     /** Types [text] on the computer. [from] is the session of a delayed caller, or empty for now. */
@@ -205,6 +220,18 @@ internal class TerminalInput {
     fun key(name: String, from: String = "") {
         if (!ready || (from.isNotEmpty() && from != session)) return
         onKey?.invoke(name)
+    }
+
+    /** Pastes [text] as one bracketed paste. [from] is the session of a delayed caller, or empty for now. */
+    fun paste(text: String, from: String = "") {
+        if (!ready || text.isEmpty() || (from.isNotEmpty() && from != session)) return
+        // A computer without the paste capability keeps the old typing path,
+        // which refuses a block that spans lines. It must update.
+        if (!pasteReady) {
+            type(text, from)
+            return
+        }
+        onPaste?.invoke(text)
     }
 
     /** Shows the phone keyboard. Android hides it again. */
@@ -227,6 +254,9 @@ internal class TerminalWebView(context: Context) : WebView(context) {
 
     /** Sends one named key to the computer. */
     var onKey: ((String) -> Unit)? = null
+
+    /** Sends one committed block of text as a bracketed paste. */
+    var onPaste: ((String) -> Unit)? = null
 
     /** True while the terminal may take typed input. */
     var inputReady: Boolean = false
@@ -354,7 +384,11 @@ internal class TerminalWebView(context: Context) : WebView(context) {
             val pending = content.toString()
             if (pending.isEmpty()) return
             content.clear()
-            onText?.invoke(pending)
+            // A block of text is a paste, so the program reads it as pasted
+            // content: its line breaks do not submit and a large block shows
+            // the program's own paste handling. Ordinary typing stays one
+            // character at a time.
+            if (committedAsPaste(pending)) onPaste?.invoke(pending) else onText?.invoke(pending)
         }
 
         private fun deleteText(beforeLength: Int, afterLength: Int, codePoints: Boolean): Boolean {

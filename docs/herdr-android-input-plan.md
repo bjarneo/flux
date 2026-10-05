@@ -22,8 +22,9 @@ The user revised the earlier suggestion-enabled direct-input proposal. Follow th
    Esc | Tab | ↑ | ↓ | keyboard
    ```
 
-   The microphone was dropped after the phone test: the native keyboard's own mic
-   dictates into the terminal, so this mode needs no mic key. See section 8.
+   The microphone and the paste key were dropped after the phone test: the native
+   keyboard's own mic and paste already work, so this mode needs neither. See sections 8
+   and 8b.
 5. Remove the separate **Enter** and **Send** buttons from the direct-input UI.
    The phone keyboard's Return sends a real Enter to the remote program.
 6. The keyboard button **shows** the Android keyboard. Pressing it again must not hide it.
@@ -43,7 +44,8 @@ Do not recreate those menus, query a file index, or integrate the OpenCode SDK f
 
 - Phone-keyboard word suggestions/autocorrection and a phone/remote prompt synchronization engine.
 - The future mode selector, configurable key layouts, three-dot settings, or modifier buttons.
-- Ctrl/Alt shortcut support, arbitrary raw control-byte input, and a new clipboard-paste UI.
+- Ctrl/Alt shortcut support and arbitrary raw control-byte input. Paste is text only for
+  now; images and files need another path.
 - A live-terminal conversion of the separate shell screen or the iOS reader.
 - Changing approval security, extending the five-minute unlock, or automatic controller takeover.
 
@@ -364,6 +366,24 @@ Use the existing temporary dictation panel for status/cancel/language controls, 
 permanent prompt/Send row. The five-control row (Esc, Tab, Up, Down, keyboard) is the normal
 idle layout; a returned mic key would be an option, not a default.
 
+## 8b. Paste in direct mode (text only)
+
+A block that the phone keyboard commits, such as its own paste, a dictation, or a swipe, is
+sent as one bracketed paste, `ESC [ 200 ~` + text + `ESC [ 201 ~`. Ordinary typing stays one
+character at a time, so `@` and `/` still open the program's own menus. opencode and other
+programs read a bracketed paste as pasted content, so they apply their own paste handling, for
+example the compact placeholder of a large paste, and the line breaks do not submit. The
+markers are Flux's: the controller writes bytes as they are, and opencode's paste uses
+bracketed paste.
+
+The phone keyboard's own paste key already produces such a block, so the direct row has no
+paste key of its own. fluxd keeps line breaks and tabs, drops every other control character,
+so a paste cannot close its own paste or type a key, and allows 64 KB, more than a typed
+event. It advertises a `paste` capability, so a phone detects an older computer and falls back
+to typing instead of failing silently. The computer clipboard does not change. Text only: an
+image or a file needs another path. Validate the paste on the phone against opencode before
+changing the limits.
+
 ## 9. Implementation order and files
 
 ### A. Contract proof
@@ -452,6 +472,8 @@ Use the existing isolated Flux Test pairing and isolated Herdr agent, not person
 
 - No local prompt box, standalone Enter, or Send appears on the live Terminal tab.
 - One row contains Esc, Tab, Up, Down, and the keyboard, with accessible touch targets.
+- The phone keyboard's own paste reaches opencode as one bracketed paste: it shows its paste
+  handling and does not submit on the line breaks.
 - Keyboard appears only on request; repeated keyboard taps do not hide it.
 - Android's dismiss arrow/Back hides only the IME; no remote Esc or prompt submission occurs.
 - Gboard suggestions/autocorrection/capitalization are off in direct mode; Changes retains them.

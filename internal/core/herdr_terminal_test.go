@@ -1237,6 +1237,57 @@ exec sleep 300
 	})
 }
 
+// A paste goes to the controller as one bracketed paste: the markers are
+// Flux's, the line breaks and tabs stay, and every other control character
+// goes, so a paste cannot close its own paste or type a key.
+func TestHerdrTerminalPaste(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d, _ := terminalDaemon(ctx, t, bridgeEcho)
+	desk, phone, _, _ := linkPair(t, ctx)
+	dev := &Device{ID: "phone1", Paired: true}
+	answers := herdrAnswers(t, phone)
+	d.cfg.HerdrControl = true
+
+	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_open", "pane": "w1:p1", "mode": "control", "request": 1}))
+	if a := nextOpened(t, answers); a["session"] != "ts1" {
+		t.Fatalf("terminal_opened = %v", a)
+	}
+	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_paste", "session": "ts1", "text": "a\r\nb\tc\x07\x1bd"}))
+	want := "\x1b[200~a\nb\tcd\x1b[201~"
+	for {
+		a := nextAnswer(t, answers)
+		if a["kind"] != "terminal_frame" {
+			t.Fatalf("answer = %v", a)
+		}
+		text := frameText(t, a)
+		if text == "ready" {
+			continue
+		}
+		var rec map[string]any
+		if json.Unmarshal([]byte(text), &rec) != nil {
+			t.Fatalf("echoed %q", text)
+		}
+		if rec["type"] != "terminal.input" || rec["text"] != want {
+			t.Fatalf("paste = %v, want %q", rec, want)
+		}
+		break
+	}
+	// An empty paste and an oversized paste are refused, and reach no bridge.
+	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_paste", "session": "ts1", "text": ""}))
+	if a := nextInputError(t, answers); a["code"] != "invalid_input" {
+		t.Fatalf("empty paste = %v", a)
+	}
+	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_paste", "session": "ts1", "text": strings.Repeat("x", herdrTerminalPasteMax+1)}))
+	if a := nextInputError(t, answers); a["code"] != "invalid_input" || !strings.Contains(str(a["error"]), "longer than") {
+		t.Fatalf("long paste = %v", a)
+	}
+}
+
 // nextInputError returns a terminal_input_error, skipping the frames.
 func nextInputError(t *testing.T, answers <-chan map[string]any) map[string]any {
 	t.Helper()

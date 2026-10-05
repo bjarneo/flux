@@ -294,6 +294,12 @@ class HerdrTerminalTest {
         assertEquals("ts1", key.str("session"))
         assertEquals("down", key.str("key"))
         assertNull(key["text"])
+
+        val paste = herdrTerminalPasteBody("ts1", "one\ntwo")
+        assertEquals("terminal_paste", paste.str("kind"))
+        assertEquals("ts1", paste.str("session"))
+        assertEquals("one\ntwo", paste.str("text"))
+        assertNull(paste["key"])
     }
 
     @Test
@@ -317,6 +323,8 @@ class HerdrTerminalTest {
         assertFalse(s.terminalInput)
         assertTrue(s.copy(bridge = s.bridge + "input").terminalInput)
         assertEquals(listOf("observe", "control", "scroll", "mouse"), s.bridge)
+        assertFalse(s.terminalPaste)
+        assertTrue(s.copy(bridge = s.bridge + "paste").terminalPaste)
         val old = parseHerdrState(body("""{"kind":"state","enabled":true,"running":true,"control":true}"""))!!
         assertFalse("a computer without the bridge has no live terminal", old.liveTerminal)
     }
