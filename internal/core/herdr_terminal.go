@@ -79,6 +79,23 @@ func (d *Daemon) herdrTerminalOpen(dev *Device, l *lan.Link, req json.Number, pa
 		_ = l.Send(withRequest(proto.New(proto.TypeFluxHerdr, map[string]any{
 			"kind": "terminal_opened", "pane": pane, "mode": mode, "error": err}), req))
 	}
+	// Reserve the pane while the control stream attaches, so a read that
+	// starts during the attach already serves the cache. The wait below
+	// then covers only the reads that began before the reservation, and
+	// no new read can make herdr scroll the terminal under the stream.
+	if mode == "control" {
+		d.mu.Lock()
+		if d.herdrStreamWait == nil {
+			d.herdrStreamWait = map[string]bool{}
+		}
+		d.herdrStreamWait[pane] = true
+		d.mu.Unlock()
+		defer func() {
+			d.mu.Lock()
+			delete(d.herdrStreamWait, pane)
+			d.mu.Unlock()
+		}()
+	}
 	// A mode change on the same pane replaces the bridge: one CLI stream
 	// cannot change its mode, so control opens a new subprocess. The old
 	// bridge closes first, so the phone never sees two streams of its
@@ -234,9 +251,20 @@ func (d *Daemon) herdrStreamLocked(dev *Device, l *lan.Link, id string) *herdrTe
 	return t
 }
 
-// herdrStreamedLocked reports whether a terminal session shows the pane.
-// d.mu must be held.
+// herdrStreamed reports whether a terminal session shows the pane, or one
+// is about to attach.
+func (d *Daemon) herdrStreamed(pane string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.herdrStreamedLocked(pane)
+}
+
+// herdrStreamedLocked reports whether a terminal session shows the pane,
+// or a control stream is attaching to it. d.mu must be held.
 func (d *Daemon) herdrStreamedLocked(pane string) bool {
+	if d.herdrStreamWait[pane] {
+		return true
+	}
 	for _, t := range d.herdrStreams {
 		if t.pane == pane {
 			return true
@@ -382,13 +410,17 @@ func (d *Daemon) pruneHerdrStreamsLocked(running bool) []*herdrTerminal {
 }
 
 // waitHerdrReads waits until no read of the pane runs, or until the read
-// timeout passes.
+// timeout passes. Reads with a request number run in reviewJobs, so both
+// queues must be empty before a control stream takes the pane.
 func (d *Daemon) waitHerdrReads(pane string) {
 	deadline := time.Now().Add(herdrReadTimeout + 2*time.Second)
 	for time.Now().Before(deadline) {
 		d.mu.Lock()
 		busy := false
 		for key := range d.herdrJobs.reads {
+			busy = busy || key.pane == pane
+		}
+		for key := range d.reviewJobs {
 			busy = busy || key.pane == pane
 		}
 		d.mu.Unlock()

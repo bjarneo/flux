@@ -1083,6 +1083,13 @@ func (d *Daemon) readTerminal(ctx context.Context, pane string, lines int, ansi 
 // under the plain history. While the agent works, it uses the history of
 // the last idle read.
 func (d *Daemon) readAgentOutput(ctx context.Context, pane string, lines int, ansi bool) (string, bool, error) {
+	if !ansi && d.herdrStreamed(pane) {
+		// A plain read makes herdr scroll the terminal to collect the
+		// history, which would move a live stream and the desktop screen.
+		// While a stream is open or attaching, serve the last history.
+		history, truncated := d.readAgentHistory(ctx, pane, lines)
+		return strings.Join(history, "\n"), truncated, nil
+	}
 	r, err := herdr.ReadAgent(ctx, d.herdrPath, pane, lines, ansi)
 	if err != nil {
 		return "", false, err

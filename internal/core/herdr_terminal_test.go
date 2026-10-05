@@ -617,6 +617,98 @@ done
 	})
 }
 
+// A plain read would make herdr scroll the terminal to collect the
+// history, which moves a live stream and the desktop screen. While a
+// stream shows the pane, a plain read serves the cache and reaches no
+// herdr call.
+func TestHerdrTerminalPlainReadUsesCacheWhileStream(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d, f := terminalDaemon(ctx, t, bridgeEcho)
+	desk, phone, _, _ := linkPair(t, ctx)
+	dev := &Device{ID: "phone1", Paired: true}
+	answers := herdrAnswers(t, phone)
+	d.cfg.HerdrControl = true
+	d.mu.Lock()
+	d.herdrHistory = map[string]agentHistory{
+		"w1:p1": {lines: []string{"cached"}, at: time.Now()},
+	}
+	d.mu.Unlock()
+
+	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_open", "pane": "w1:p1", "mode": "control", "request": 1}))
+	if a := nextOpened(t, answers); a["session"] != "ts1" {
+		t.Fatalf("terminal_opened = %v", a)
+	}
+	f.takeCalls()
+	body := outputBody(t, d.readHerdr("w1:p1", 100, false))
+	if body["text"] != "cached" {
+		t.Fatalf("plain read during a stream = %v", body["text"])
+	}
+	if calls := f.takeCalls(); len(calls) != 0 {
+		t.Fatalf("plain read during a stream called herdr: %v", calls)
+	}
+}
+
+// A control stream reserves its pane before the slow attach, so a read
+// that starts during the attach serves the cache instead of scrolling
+// the terminal under the new stream.
+func TestHerdrTerminalAttachReservesThePane(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d, f := terminalDaemon(ctx, t, bridgeEcho)
+	d.mu.Lock()
+	d.herdrStreamWait = map[string]bool{"w1:p1": true}
+	d.herdrHistory = map[string]agentHistory{
+		"w1:p1": {lines: []string{"cached"}, at: time.Now()},
+	}
+	d.mu.Unlock()
+	body := outputBody(t, d.readHerdr("w1:p1", 100, false))
+	if body["text"] != "cached" {
+		t.Fatalf("plain read during an attach = %v", body["text"])
+	}
+	if calls := f.takeCalls(); len(calls) != 0 {
+		t.Fatalf("plain read during an attach called herdr: %v", calls)
+	}
+}
+
+// A read with a request number runs in reviewJobs, so a control stream
+// must wait for it too before it takes the pane.
+func TestHerdrTerminalWaitCoversViewReads(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d, _ := terminalDaemon(ctx, t, bridgeEcho)
+	pane := "w1:p1"
+	key := herdrReadKey{pane: pane}
+	d.mu.Lock()
+	if d.reviewJobs == nil {
+		d.reviewJobs = map[herdrReadKey]*reviewReadJob{}
+	}
+	d.reviewJobs[key] = &reviewReadJob{}
+	d.mu.Unlock()
+	done := make(chan struct{})
+	go func() {
+		d.waitHerdrReads(pane)
+		close(done)
+	}()
+	select {
+	case <-done:
+		t.Fatal("waitHerdrReads returned while a view read runs")
+	case <-time.After(200 * time.Millisecond):
+	}
+	d.mu.Lock()
+	delete(d.reviewJobs, key)
+	d.mu.Unlock()
+	waitFor(t, "waitHerdrReads to return", func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	})
+}
+
 func TestHerdrTerminalCapabilities(t *testing.T) {
 	for version, want := range map[string]bool{
 		"0.9.3": true, "0.9.4": true, "0.10.0": true, "1.0.0": true,

@@ -132,13 +132,16 @@ type Daemon struct {
 	herdrWake    chan struct{}
 
 	// herdrStreams is the terminal session of each phone by session ID.
+	// herdrStreamWait marks the panes whose control stream is attaching,
+	// so a read during the attach serves the cache already.
 	// herdrBridge reports whether the installed herdr has the CLI
 	// bridge of terminal sessions, and herdrBin is that CLI.
 	// herdrStreamSeq numbers the sessions of this daemon.
-	herdrStreams   map[string]*herdrTerminal
-	herdrStreamSeq int
-	herdrBridge    bool
-	herdrBin       string
+	herdrStreams    map[string]*herdrTerminal
+	herdrStreamWait map[string]bool
+	herdrStreamSeq  int
+	herdrBridge     bool
+	herdrBin        string
 
 	subs   map[int]func(event string, data any)
 	nextID int
