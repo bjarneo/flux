@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime/debug"
@@ -59,6 +60,11 @@ const (
 // cannot find where they meet. The rows between them come with the first
 // read after the agent stops.
 const herdrGap = "\x1b[2m··· More lines show here when the agent stops ···\x1b[0m"
+
+// herdrHeldGap takes the place of herdrGap while a phone controls the
+// pane. fluxd then does not read the history, because herdr scrolls the
+// terminal for it, so the history stays as it was.
+const herdrHeldGap = "\x1b[2m··· Older lines update when the phone releases this agent ···\x1b[0m"
 
 // errHerdrOff ends a herdr session when the user turns the feature off.
 var errHerdrOff = errors.New("herdr sync is off")
@@ -116,6 +122,9 @@ type herdrJobs struct {
 	// sending counts the keys, prompt, input, and close jobs that run for
 	// each device ID.
 	sending map[string]int
+
+	// opening has the ID of each device whose terminal_open runs.
+	opening map[string]bool
 }
 
 // herdrMaxSends is the number of keys, prompt, input, and close jobs that
@@ -171,10 +180,109 @@ type herdrView struct {
 	Running    bool             `json:"running"`
 	Control    bool             `json:"control"`
 	Terminals  bool             `json:"terminals"`
+	Bridge     []string         `json:"bridge"`
 	Agents     []HerdrAgent     `json:"agents"`
 	Panes      []HerdrTerminal  `json:"panes"`
 	Workspaces []HerdrWorkspace `json:"workspaces"`
 	Kinds      []string         `json:"kinds"`
+
+	// CLI is the herdr CLI that fluxd runs for the live terminal. Only the
+	// local API shows it, so flux-cli doctor can name a problem.
+	CLI herdrCLI `json:"cli"`
+}
+
+// herdrCLI is the result of the version check of the herdr CLI. Path is
+// the binary that fluxd runs, Version is the version that it printed,
+// and Error tells why the check failed.
+type herdrCLI struct {
+	Path    string `json:"path"`
+	Version string `json:"version"`
+	Error   string `json:"error"`
+}
+
+// herdrBridgeCaps are the terminal-session actions of a herdr that has
+// the CLI bridge of terminal sessions. Only observe reads. The others
+// write to the terminal, so a device gets them only with herdr_control.
+var herdrBridgeCaps = []string{"observe", "control", "scroll", "mouse"}
+
+// herdrObserveCaps are the bridge actions of a device without
+// herdr_control.
+var herdrObserveCaps = []string{"observe"}
+
+// herdrVersionTimeout limits the version check of the herdr CLI.
+const herdrVersionTimeout = 3 * time.Second
+
+// herdrBridgeRetry is how long fluxd waits before it checks the bridge
+// again after a failed check. An update of the herdr server or of the
+// herdr CLI then turns the live terminal on without a restart of fluxd.
+const herdrBridgeRetry = time.Minute
+
+// checkHerdrBridge checks whether the live terminal works with the herdr
+// server of version server. The server and the herdr CLI that fluxd runs
+// both need herdr.MinBridgeVersion. fluxd runs the CLI from PATH, which
+// can find another herdr than the server, so it asks the CLI for its
+// version at each new connection to a server. retryHerdrBridge runs the
+// check again while it fails. checkHerdrBridge keeps the result and
+// returns true when the result changed. It logs why the live terminal is
+// off when always is true or when the result changed.
+func (d *Daemon) checkHerdrBridge(ctx context.Context, server string, always bool) bool {
+	cli := herdrCLI{Path: d.herdrBinName()}
+	ok := herdr.BridgeVersionOK(server)
+	// An old server needs no check of the CLI.
+	if ok {
+		if path, err := exec.LookPath(cli.Path); err == nil {
+			cli.Path = path
+		}
+		vctx, cancel := context.WithTimeout(ctx, herdrVersionTimeout)
+		version, err := herdr.CLIVersion(vctx, cli.Path)
+		cancel()
+		cli.Version = version
+		if err != nil {
+			cli.Error = err.Error()
+		}
+		ok = err == nil && herdr.BridgeVersionOK(version)
+	}
+	d.mu.Lock()
+	changed := ok != d.herdrBridge || cli != d.herdrCLI
+	d.herdrBridge, d.herdrCLI = ok, cli
+	d.mu.Unlock()
+	if !always && !changed {
+		return false
+	}
+	switch {
+	case !herdr.BridgeVersionOK(server):
+		d.logf("herdr %s: the live terminal on the phone needs herdr %s or newer", server, herdr.MinBridgeVersion)
+	case cli.Error != "":
+		d.logf("herdr: the live terminal on the phone is off: %s", cli.Error)
+	case !ok:
+		d.logf("herdr: the live terminal on the phone is off, because fluxd runs %s %s, and it needs %s or newer",
+			cli.Path, cli.Version, herdr.MinBridgeVersion)
+	case !always:
+		d.logf("herdr: the live terminal on the phone is on, because fluxd runs %s %s", cli.Path, cli.Version)
+	}
+	return changed
+}
+
+// retryHerdrBridge checks the bridge again when the last check failed.
+// It asks the server for its version again, so an update of the server
+// or of the CLI turns the live terminal on without a restart of fluxd.
+// The phones get the new state when the result changed.
+func (d *Daemon) retryHerdrBridge(ctx context.Context) {
+	d.mu.Lock()
+	ok := d.herdrBridge
+	d.mu.Unlock()
+	if ok {
+		return
+	}
+	// When the ping fails, the next read of the session fails too, and
+	// the loop connects again with a new check.
+	pong, err := herdr.Ping(ctx, d.herdrPath)
+	if err != nil {
+		return
+	}
+	if d.checkHerdrBridge(ctx, pong.Version, false) {
+		d.sendHerdr()
+	}
 }
 
 func (d *Daemon) herdrViewLocked() herdrView {
@@ -183,6 +291,10 @@ func (d *Daemon) herdrViewLocked() herdrView {
 		Enabled: d.cfg.Herdr, Running: d.cfg.Herdr && d.herdrRunning,
 		Control: d.herdrControlLocked(), Terminals: d.herdrTerminalsLocked(),
 		Agents: d.herdrAgents, Panes: d.herdrTerms, Workspaces: d.herdrPlaces, Kinds: d.herdrKinds,
+		CLI: d.herdrCLI,
+	}
+	if v.Running && d.herdrBridge {
+		v.Bridge = herdrBridgeCaps
 	}
 	if !v.Enabled || v.Agents == nil {
 		v.Agents = []HerdrAgent{}
@@ -195,6 +307,9 @@ func (d *Daemon) herdrViewLocked() herdrView {
 	}
 	if !v.Control || v.Kinds == nil {
 		v.Kinds = []string{}
+	}
+	if v.Bridge == nil {
+		v.Bridge = []string{}
 	}
 	return v
 }
@@ -210,7 +325,8 @@ func (d *Daemon) herdrTerminalsLocked() bool { return d.herdrControlLocked() && 
 func herdrStatePacket(v herdrView) *proto.Packet {
 	return proto.New(proto.TypeFluxHerdr, map[string]any{
 		"kind": "state", "enabled": v.Enabled, "running": v.Running, "control": v.Control,
-		"terminals": v.Terminals, "agents": v.Agents, "panes": v.Panes, "workspaces": v.Workspaces, "kinds": v.Kinds,
+		"terminals": v.Terminals, "bridge": v.Bridge, "agents": v.Agents,
+		"panes": v.Panes, "workspaces": v.Workspaces, "kinds": v.Kinds,
 		"review": v.Review,
 	})
 }
@@ -257,6 +373,8 @@ func (d *Daemon) herdrSession(ctx context.Context, logged *string) error {
 		return fmt.Errorf("herdr %s uses API protocol %d, and Flux needs %d or newer", pong.Version, pong.Protocol, herdr.MinProtocol)
 	}
 	d.logf("herdr %s: following its agents", pong.Version)
+	d.checkHerdrBridge(ctx, pong.Version, true)
+	checked := time.Now()
 	*logged = ""
 	// This herdr can have other agent kinds than the last one.
 	d.herdrKindsDue()
@@ -291,6 +409,10 @@ func (d *Daemon) herdrSession(ctx context.Context, logged *string) error {
 			continue
 		}
 		d.setHerdr(true, live)
+		if time.Since(checked) >= herdrBridgeRetry {
+			checked = time.Now()
+			d.retryHerdrBridge(ctx)
+		}
 
 		select {
 		case <-ctx.Done():
@@ -569,6 +691,12 @@ func (d *Daemon) setHerdr(running bool, live herdrLive) {
 		}
 	}
 	d.herdrRunning, d.herdrAgents, d.herdrTerms, d.herdrPlaces, d.herdrKinds = running, live.Agents, live.Terminals, live.Workspaces, live.Kinds
+	if !running {
+		d.herdrBridge = false
+	}
+	for _, t := range d.pruneHerdrStreamsLocked(running) {
+		go d.stopHerdrTerminal(t, t.stop)
+	}
 	d.mu.Unlock()
 	d.sendHerdr()
 }
@@ -642,9 +770,20 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 		Cwd       string   `json:"cwd"`
 		Workspace string   `json:"workspace"`
 		Answer    bool     `json:"answer"`
-		// Request is the number of a keys, prompt, input, create, or close
-		// packet. The answer carries the same number, so the phone matches
-		// a late answer to its packet.
+		// Terminal-session fields. Session names the stream, and column
+		// and row are zero-based cells of its viewport.
+		Session   string `json:"session"`
+		Mode      string `json:"mode"`
+		Cols      int    `json:"cols"`
+		Rows      int    `json:"rows"`
+		Direction string `json:"direction"`
+		Action    string `json:"action"`
+		Button    string `json:"button"`
+		Column    int    `json:"column"`
+		Row       int    `json:"row"`
+		// Request is the number of a keys, prompt, input, create, close,
+		// terminal_open, or terminal_release packet. The answer carries
+		// the same number, so the phone matches a late answer.
 		Request json.RawMessage `json:"request"`
 		Path    string          `json:"path"`
 	}
@@ -658,7 +797,11 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 		terminal := d.herdrTerminalLocked(body.Pane) || (body.Kind == "create" && body.What == "terminal")
 		d.mu.Unlock()
 		read := body.Kind == "read" || body.Kind == "diff"
-		if !v.Enabled || (!read && !v.Control) || ((body.Kind == "input" || terminal) && !v.Terminals) {
+		// A terminal stream checks its pane and mode in herdrTerminalOpen
+		// and answers with terminal_opened or terminal_closed, so the
+		// generic refusal below cannot cover its kinds.
+		stream := strings.HasPrefix(body.Kind, "terminal_")
+		if !stream && (!v.Enabled || (!read && !v.Control) || ((body.Kind == "input" || terminal) && !v.Terminals)) {
 			kind := "sent"
 			if read {
 				kind = "output"
@@ -738,6 +881,20 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 			d.mu.Unlock()
 			d.herdrSend(dev, l, state, withRequest(reply, req))
 		}()
+	case "terminal_open":
+		if !d.startHerdrOpen(dev) {
+			d.herdrSend(dev, l, withRequest(herdrOpenFailed(body.Pane, body.Mode, errHerdrOpenBusy), req))
+			return
+		}
+		go d.herdrTerminalOpen(dev, l, req, body.Pane, body.Mode, body.Cols, body.Rows)
+	case "terminal_scroll":
+		d.herdrTerminalScroll(dev, l, body.Session, body.Direction, body.Column, body.Row)
+	case "terminal_mouse":
+		d.herdrTerminalMouse(dev, l, body.Session, body.Action, body.Button, body.Column, body.Row)
+	case "terminal_resize":
+		d.herdrTerminalResize(dev, l, body.Session, body.Cols, body.Rows)
+	case "terminal_release":
+		d.herdrTerminalRelease(dev, l, req, body.Session)
 	default:
 		d.logf("%s: unknown flux.herdr kind %q", d.nameOf(dev), body.Kind)
 	}
@@ -1018,21 +1175,46 @@ func (d *Daemon) readTerminal(ctx context.Context, pane string, lines int, ansi 
 // the screen. So for ANSI, fluxd reads both and puts the colored screen
 // under the plain history. While the agent works, it uses the history of
 // the last idle read.
+//
+// While a phone controls the pane, a plain read would make herdr scroll
+// the terminal of the phone. A plain read then gets the screen of an ANSI
+// read without its styles, under the cached history, as an ANSI read
+// does. herdrHeldGap tells the reader that the history waits for the
+// release.
 func (d *Daemon) readAgentOutput(ctx context.Context, pane string, lines int, ansi bool) (string, bool, error) {
-	r, err := herdr.ReadAgent(ctx, d.herdrPath, pane, lines, ansi)
+	held := d.herdrControlled(pane)
+	if !ansi && !held {
+		r, err := herdr.ReadAgent(ctx, d.herdrPath, pane, lines, false)
+		if err != nil {
+			return "", false, err
+		}
+		return cleanPlain(r.Text), r.Truncated, nil
+	}
+	r, err := herdr.ReadAgent(ctx, d.herdrPath, pane, lines, true)
 	if err != nil {
 		return "", false, err
 	}
-	if !ansi {
-		return cleanPlain(r.Text), r.Truncated, nil
+	text, gap := cleanANSI(r.Text), herdrGap
+	if held {
+		gap = herdrHeldGap
 	}
-	screen := strings.Split(cleanANSI(r.Text), "\n")
+	if !ansi {
+		text, gap = trimLineEnds(sgr.ReplaceAllString(text, "")), sgr.ReplaceAllString(gap, "")
+	}
+	screen := strings.Split(text, "\n")
 	if len(screen) >= lines {
 		return strings.Join(screen, "\n"), r.Truncated, nil
 	}
 	history, truncated := d.readAgentHistory(ctx, pane, lines)
 	truncated = truncated || r.Truncated
-	out := spliceScreen(history, screen)
+	var out []string
+	if held && len(history) == 0 {
+		// No history is in the cache. The gap shows that the older lines
+		// come after the release.
+		out = append([]string{gap}, screen...)
+	} else {
+		out = spliceScreenGap(history, screen, gap)
+	}
 	if len(out) > lines {
 		out, truncated = out[len(out)-lines:], true
 	}
@@ -1042,11 +1224,18 @@ func (d *Daemon) readAgentOutput(ctx context.Context, pane string, lines int, an
 // readAgentHistory returns the plain history of an agent and reports
 // whether herdr cut it. A fresh history from the last read needs no new
 // read. While the agent works, herdr refuses the read, and the history of
-// the last idle read stays.
+// the last idle read stays. While a phone controls the pane, the history
+// of the last read stays too.
 func (d *Daemon) readAgentHistory(ctx context.Context, pane string, lines int) ([]string, bool) {
 	d.mu.Lock()
 	last, ok := d.herdrHistory[pane]
+	held := d.herdrControlledLocked(pane)
 	d.mu.Unlock()
+	if held {
+		// herdr scrolls the terminal to collect the history, which would
+		// move the terminal of the phone and the screen of the desktop.
+		return last.lines, last.truncated
+	}
 	if ok && !last.at.IsZero() && time.Since(last.at) < herdrHistoryTTL && last.asked >= lines {
 		return last.lines, last.truncated
 	}
@@ -1081,6 +1270,11 @@ func (d *Daemon) readAgentHistory(ctx context.Context, pane string, lines int) (
 // history. When no place is good, spliceScreen keeps the whole history
 // and puts herdrGap between.
 func spliceScreen(history, screen []string) []string {
+	return spliceScreenGap(history, screen, herdrGap)
+}
+
+// spliceScreenGap is spliceScreen with another text in place of herdrGap.
+func spliceScreenGap(history, screen []string, gap string) []string {
 	if len(history) == 0 {
 		return screen
 	}
@@ -1114,7 +1308,7 @@ func spliceScreen(history, screen []string) []string {
 		}
 	}
 	if best < 0 {
-		out := append(slices.Clip(history), herdrGap)
+		out := append(slices.Clip(history), gap)
 		return append(out, screen...)
 	}
 	return append(slices.Clip(history[:max(best-anchor, 0)]), screen...)

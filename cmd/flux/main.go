@@ -342,6 +342,23 @@ type State struct {
 		Fingerprint string `json:"fingerprint"`
 	} `json:"devices"`
 	Commands []config.Command `json:"commands"`
+
+	// Herdr is what fluxd knows about herdr. Bridge lists the actions of
+	// the live terminal, and CLI is the herdr CLI that fluxd runs for it.
+	Herdr struct {
+		Running bool     `json:"running"`
+		Bridge  []string `json:"bridge"`
+		CLI     struct {
+			Path    string `json:"path"`
+			Version string `json:"version"`
+			Error   string `json:"error"`
+		} `json:"cli"`
+
+		// Enabled is the herdr setting. Control is true when herdr and
+		// herdr_control are both true. The live terminal needs Control.
+		Enabled bool `json:"enabled"`
+		Control bool `json:"control"`
+	} `json:"herdr"`
 }
 
 func status(asJSON bool) error {

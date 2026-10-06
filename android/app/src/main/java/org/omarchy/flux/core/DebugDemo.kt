@@ -32,6 +32,12 @@ object DebugDemo {
     /** Debug-only ANSI sample for reproducible agent-output screenshots. */
     @Volatile var agentOutput: String? = null
 
+    /** Debug-only ANSI sample for reproducible terminal screenshots. */
+    @Volatile var terminalSample: String? = null
+
+    /** Debug-only terminal grid of [terminalSample], such as "120x40". */
+    @Volatile var terminalGrid: String? = null
+
     fun isDemo(id: String?) = id != null && id.startsWith("demo-")
 
     fun devices(): List<DeviceUi> {
@@ -79,6 +85,7 @@ object DebugDemo {
                         HerdrWorkspace("w3", "web", "~/Code/web"),
                     ),
                     kinds = listOf("claude", "codex", "opencode"),
+                    bridge = listOf("observe", "control", "scroll", "mouse"),
                 ),
                 herdrOutput = HerdrOutput(
                     pane = "w2:p1",

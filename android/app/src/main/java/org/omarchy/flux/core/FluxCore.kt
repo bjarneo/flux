@@ -311,8 +311,13 @@ object FluxCore {
             val d = existing ?: Device(this, link.identity).also { devices[id] = it }
             d.identity = link.identity
             d.link = link
-            // Set the new link first, so that closing the old link does not
-            // mark the device offline.
+            // The terminal stream belongs to the link that opened it, and
+            // the computer ends it with that link. Drop the session of a
+            // dropped or replaced link, so a reconnect opens a new stream
+            // instead of waiting for a close that cannot arrive. Set the
+            // new link first, so closing the old one keeps the device
+            // online.
+            if (!terminalSurvivesLinkChange(old, link)) d.herdrTerminal = null
             if (old != null && old !== link) old.close()
             d.certificate = link.peerCertificate
             d.lastIp = link.address.hostAddress ?: ""
@@ -371,6 +376,10 @@ object FluxCore {
     private fun detach(d: Device, link: Link) {
         locked {
             if (d.link !== link) return@locked
+            // A dropped link ends the stream that it opened. A released
+            // session would otherwise wait for a terminal_closed that can
+            // no longer arrive, so a reconnect could never open a stream.
+            if (!terminalSurvivesLinkChange(link, null)) d.herdrTerminal = null
             d.link = null
             d.dropPairing()
             if (!d.paired) devices.remove(d.id)
@@ -390,6 +399,7 @@ object FluxCore {
         d.herdrOutput = null
         d.herdrReply = null
         d.herdrAction = null
+        d.herdrTerminal = null
         // The computer can no longer dismiss, answer, or press a button on a phone notification.
         NotificationSync.forgetDevice(id)
         ComputerThemes.forget(this, id)

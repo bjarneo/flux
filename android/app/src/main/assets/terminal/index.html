@@ -1,0 +1,269 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- xterm.js and xterm.css come from the npm package @xterm/xterm 5.5.0. -->
+<link rel="stylesheet" href="xterm.css">
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden;
+    touch-action: none; }
+  #stage { position: absolute; left: 0; top: 0; }
+  #screen { margin: 0; }
+</style>
+</head>
+<body>
+<div id="stage"><div id="screen"></div></div>
+<script src="xterm.js"></script>
+<script>
+(function () {
+  // The terminal shows the frames of one herdr pane. Flux feeds ANSI
+  // bytes and sets the grid size. The page tells Flux its grid, the
+  // geometry of its cells, and the end of each full frame through
+  // FluxBridge. The terminal takes no keys, so this page never answers a
+  // terminal query by itself.
+  var bridge = window.FluxBridge;
+  // With TalkBack on, xterm keeps the rows of the screen as text that
+  // TalkBack can read.
+  var reader = !!(bridge && bridge.screenReader && bridge.screenReader());
+  var term = new Terminal({
+    cols: 60,
+    rows: 24,
+    scrollback: 0,
+    disableStdin: true,
+    convertEol: false,
+    cursorBlink: false,
+    fontFamily: "monospace",
+    fontSize: 13,
+    screenReaderMode: reader
+  });
+  term.open(document.getElementById("screen"));
+  // In screen reader mode, xterm adds each printed character to an
+  // assertive live region. Only a key or a blur empties that region, and
+  // this page gets neither. TalkBack would then read each frame, and the
+  // region would grow with each frame. The rows stay for TalkBack to read,
+  // and the region stays silent and empty.
+  if (reader) {
+    var region = term.element && term.element.querySelector(".xterm-accessibility .live-region");
+    if (region) {
+      region.setAttribute("aria-live", "off");
+      region.textContent = "";
+      new MutationObserver(function () {
+        if (region.textContent) region.textContent = "";
+      }).observe(region, { childList: true, characterData: true, subtree: true });
+    }
+  }
+  // Herdr renders absolute cell runs and expects host autowrap off.
+  term.write("\u001b[?7l");
+
+  // In control mode, the computer resizes the pane to the grid that this
+  // page measures. Until then, and in observe mode, the grid keeps the
+  // size of the pane on the computer, so it can be wider and taller than
+  // the view. The app then zooms and pans over it. Flux passes the real
+  // view size in CSS pixels, because the layout viewport of a WebView is
+  // not its visible area.
+  var availW = 0;
+  var availH = 0;
+  var fitFont = 13;
+  // The phone terminal asks the computer for about this many columns.
+  // That is enough for a full-screen program such as opencode to drop
+  // its sidebars, and the font still fills the phone at a readable size.
+  // The font comes from it, so a wider phone shows the same content in a
+  // larger font.
+  var phoneCols = 60;
+  var panX = 0;
+  var panY = 0;
+  // The grid that the page last gave to Flux, the view width of that
+  // fit, and the cell height at the fit font.
+  var gridCols = 0;
+  var gridRows = 0;
+  var fitW = 0;
+  var fitCellH = 0;
+  // True while Flux keeps the grid on the computer, for example while
+  // the keyboard shows.
+  var keepRows = false;
+
+  // The real cell of the drawn grid, and where it starts. The app maps
+  // its touches to cells with these numbers, so they come from the
+  // rendering itself and not from an estimate of the font.
+  function measure() {
+    var r = document.querySelector(".xterm-screen").getBoundingClientRect();
+    return { w: r.width / term.cols, h: r.height / term.rows, left: r.left, top: r.top };
+  }
+
+  function report() {
+    if (!(bridge && bridge.geometry)) return;
+    var m = measure();
+    if (m.w <= 0 || m.h <= 0) return;
+    bridge.geometry(m.w, m.h, m.left, m.top, term.cols, term.rows, term.options.fontSize);
+  }
+
+  function sendGrid() {
+    if (bridge && bridge.grid) bridge.grid(gridCols, gridRows);
+  }
+
+  function clampCols(n) {
+    return Math.max(20, Math.min(500, n));
+  }
+
+  function clampRows(n) {
+    return Math.max(6, Math.min(500, n));
+  }
+
+  // The grid is centered while it fits the view and pans within the
+  // view when it does not, so it can never leave the screen.
+  function clampPan(p, avail, grid) {
+    if (grid <= avail) return (avail - grid) / 2;
+    return Math.min(0, Math.max(avail - grid, p));
+  }
+
+  // With bottom, a grid that is taller than the view shows its bottom
+  // rows, where an agent asks its questions.
+  function place(bottom) {
+    var m = measure();
+    var gridH = m.h * term.rows;
+    if (bottom) panY = availH - gridH;
+    panX = clampPan(panX, availW, m.w * term.cols);
+    panY = clampPan(panY, availH, gridH);
+    var stage = document.getElementById("stage");
+    stage.style.left = panX + "px";
+    stage.style.top = panY + "px";
+  }
+
+  function settled(fn) {
+    // The grid dimensions land with the next render after a font change.
+    requestAnimationFrame(function () { fn(); report(); });
+  }
+
+  // A new height with the same width, for example for the keyboard or
+  // for new choices. The zoom and the pan stay, and the row at the bottom
+  // edge stays there. Without the keyboard, the grid gets the rows of
+  // the new height.
+  function refit(oldH) {
+    panY += availH - oldH;
+    requestAnimationFrame(function () {
+      if (!keepRows && fitCellH > 0) {
+        var rows = clampRows(Math.floor(availH / fitCellH));
+        if (rows !== gridRows) {
+          gridRows = rows;
+          sendGrid();
+        }
+      }
+      place(false);
+      report();
+    });
+  }
+
+  function fit(w, h, requestGrid) {
+    var oldH = availH;
+    availW = w || availW;
+    availH = h || availH;
+    if (availW <= 0 || availH <= 0) return;
+    if (requestGrid && gridCols > 0 && Math.abs(availW - fitW) < 1) {
+      refit(oldH);
+      return;
+    }
+
+    // Monospace fallback per font pixel, when the probe cannot measure.
+    var cellW = 0.62;
+    var probe = document.createElement("span");
+    probe.style.position = "absolute";
+    probe.style.left = "-9999px";
+    probe.style.top = "0";
+    probe.style.whiteSpace = "pre";
+    probe.style.fontFamily = term.options.fontFamily;
+    probe.style.fontSize = "100px";
+    probe.textContent = "MMMMMMMMMM";
+    document.body.appendChild(probe);
+    var rect = probe.getBoundingClientRect();
+    probe.remove();
+    var w2 = rect.width / 1000;
+    if (w2 > 0.4 && w2 < 0.9) cellW = w2;
+    if (requestGrid) {
+      fitFont = Math.max(8, Math.min(18, availW / (cellW * phoneCols)));
+      term.options.fontSize = fitFont;
+    }
+    panX = 0;
+    window.scrollTo(0, 0);
+    requestAnimationFrame(function () {
+      if (requestGrid) {
+        // Use the rendered cell size of xterm, not a font-metric
+        // estimate, so the PTY grid reaches the edges without leaving a
+        // large frame.
+        var cell = measure();
+        if (cell.w <= 0 || cell.h <= 0) return;
+        fitW = availW;
+        fitCellH = cell.h;
+        gridCols = clampCols(Math.floor(availW / cell.w));
+        // While the keyboard shows, a new width keeps the rows.
+        if (!keepRows || gridRows < 1) gridRows = clampRows(Math.floor(availH / cell.h));
+        sendGrid();
+      }
+      place(true);
+      report();
+    });
+  }
+
+  window.FluxTerminal = {
+    prepare: function (w, h, keep) {
+      keepRows = !!keep;
+      fit(w, h, true);
+    },
+    reset: function (cols, rows, w, h) {
+      term.reset();
+      term.resize(cols, rows);
+      term.write("\u001b[?7l");
+      fit(w, h, false);
+    },
+    write: function (base64, full, session) {
+      var raw = atob(base64);
+      var bytes = new Uint8Array(raw.length);
+      for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+      term.write(bytes, function () {
+        if (full && bridge) {
+          requestAnimationFrame(function () { bridge.drawn(session); });
+        }
+      });
+    },
+    theme: function (json) {
+      var t = JSON.parse(json);
+      term.options.theme = t;
+      // The page shows the theme behind the grid too, for example while
+      // the grid pans. An explicit frame color still wins inside cells.
+      document.body.style.background = t.background || "transparent";
+      document.getElementById("stage").style.background = t.background || "transparent";
+    },
+    // Zoom keeps the cell under the focal point where it is, so the
+    // content follows the fingers of a pinch. The font never goes below
+    // the fit, so the whole grid stays reachable.
+    zoom: function (font, fx, fy) {
+      var before = measure();
+      var cx = (fx - before.left) / before.w;
+      var cy = (fy - before.top) / before.h;
+      term.options.fontSize = Math.max(fitFont, Math.min(24, Math.round(font)));
+      settled(function () {
+        var after = measure();
+        panX = fx - cx * after.w;
+        panY = fy - cy * after.h;
+        place(false);
+      });
+    },
+    pan: function (dx, dy) {
+      panX += dx;
+      panY += dy;
+      place(false);
+      report();
+    }
+  };
+
+  // Android owns the complete native touch stream, including batched
+  // positions. Do not forward DOM touches as a second gesture stream.
+
+  fit();
+  if (bridge && bridge.ready) {
+    bridge.ready(term.cols, term.rows);
+  }
+})();
+</script>
+</body>
+</html>

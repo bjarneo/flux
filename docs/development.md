@@ -98,6 +98,67 @@ The release build runs R8 and checks release-only build errors.
 Without release credentials, it produces an unsigned APK.
 See [Android tools](android.md#test) for a test peer and phone screenshots.
 
+## Update xterm.js
+
+The live terminal of Flux for Android draws with xterm.js from the npm package `@xterm/xterm`.
+The app keeps 3 files of the package in `android/app/src/main/assets/terminal/`:
+
+| File in the app | File in the package |
+| --- | --- |
+| `xterm.js` | `lib/xterm.js` |
+| `xterm.css` | `css/xterm.css` |
+| `xterm-LICENSE.txt` | `LICENSE` |
+
+The comment at the top of `index.html` names the version that the app uses.
+
+To update xterm.js:
+
+1. Set `VERSION` to the new version. This command gets the newest version from the registry:
+
+   ```sh
+   VERSION=$(npm view @xterm/xterm version)
+   ```
+
+2. From the repository root, download the package into a temporary folder:
+
+   ```sh
+   REPO=$PWD
+   cd "$(mktemp -d)"
+   npm pack "@xterm/xterm@$VERSION"
+   ```
+
+3. Compare the checksum of the archive with the checksum of the registry. The 2 lines must be the same:
+
+   ```sh
+   npm view "@xterm/xterm@$VERSION" dist.integrity
+   echo "sha512-$(openssl dgst -sha512 -binary "xterm-xterm-$VERSION.tgz" | base64 -w0)"
+   ```
+
+4. Copy the 3 files into the app:
+
+   ```sh
+   tar -xzf "xterm-xterm-$VERSION.tgz"
+   cp package/lib/xterm.js package/css/xterm.css "$REPO/android/app/src/main/assets/terminal/"
+   cp package/LICENSE "$REPO/android/app/src/main/assets/terminal/xterm-LICENSE.txt"
+   ```
+
+5. Change the version in the comment at the top of `index.html`.
+6. Make sure that `xterm.js` still has the class names `xterm-accessibility` and `live-region`. The output must show the 2 names:
+
+   ```sh
+   grep -oE 'xterm-accessibility|live-region' "$REPO/android/app/src/main/assets/terminal/xterm.js" | sort -u
+   ```
+
+   `index.html` uses these names so that TalkBack does not read each frame. If a name changed, change `index.html` too.
+7. Run the [Android checks](#android-checks).
+8. Open **Live** on a phone and check the terminal.
+9. Turn on TalkBack on the phone.
+10. Open **Live** again. TalkBack must not read each new frame aloud.
+
+Do not change the copied files, so that each file stays the same as the file in the package.
+A reviewer can then compare each file with the package.
+`xterm.js` ends with a `sourceMappingURL` comment, and the app does not include the map file.
+
 ## macOS checks
 
 ```sh

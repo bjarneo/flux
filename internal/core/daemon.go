@@ -131,6 +131,18 @@ type Daemon struct {
 	herdrHistory map[string]agentHistory
 	herdrWake    chan struct{}
 
+	// herdrStreams is the terminal session of each phone by session ID.
+	// herdrStreamWait counts the control streams that attach to a pane,
+	// so a read during the attach serves the cache already. herdrBridge
+	// reports whether the herdr server and the herdr CLI both have the
+	// bridge of terminal sessions. herdrBin is that CLI, or "" for the
+	// herdr in PATH. herdrStreamSeq numbers the sessions of this daemon.
+	herdrStreams    map[string]*herdrTerminal
+	herdrStreamWait map[string]int
+	herdrStreamSeq  int
+	herdrBridge     bool
+	herdrBin        string
+
 	subs   map[int]func(event string, data any)
 	nextID int
 	dirty  chan struct{}
@@ -173,6 +185,10 @@ type Daemon struct {
 	// time of the copy on the device. A flux.clipboard.connect packet that
 	// is not newer is stale.
 	lastClipAt time.Time
+
+	// herdrCLI is the herdr CLI that fluxd runs for the live terminal,
+	// with the result of its last version check.
+	herdrCLI herdrCLI
 }
 
 // Options change how the daemon runs. The zero value is the normal mode.
@@ -360,6 +376,11 @@ func (d *Daemon) Busy() string {
 		what = "Browse PC"
 	case d.appSending != "":
 		what = "the app update for " + d.appSending
+	case len(d.herdrStreams) > 0 || len(d.herdrJobs.opening) > 0:
+		// A restart ends the stream, and herdr then gives the desktop its
+		// size back. Android ends Live when its unlock ends, so the wait
+		// for Live has a limit.
+		what = "the live terminal"
 	}
 	d.mu.Unlock()
 	if what == "" && d.approvals.pending() > 0 {

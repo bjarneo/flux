@@ -199,7 +199,7 @@ herdr agent list
 journalctl --user -u fluxd --no-pager | grep herdr
 ```
 
-The `herdr` field of the state has `enabled`, `running`, `control`, `terminals`, `agents`, `panes`, `workspaces`, and `kinds`.
+The `herdr` field of the state has `enabled`, `running`, `control`, `terminals`, `bridge`, `review`, `agents`, `panes`, `workspaces`, `kinds`, and `cli`.
 `fluxd` and herdr must run as the same user.
 `HERDR_SOCKET_PATH` selects a herdr session other than the default.
 
@@ -207,6 +207,12 @@ Replies, new agents, and closes from the phone need `herdr_control = true`.
 A reply can make an agent run any command as the desktop user, also with `herdr_terminals = false`.
 The setting applies to every paired device.
 Do not turn on `herdr_control` unless the user asks for replies from the phone.
+
+The **Live** key of Flux for Android also needs `herdr_control = true`.
+It also needs herdr 0.9.3 or newer for the herdr server and for the `herdr` CLI in the `PATH` of `fluxd.service`.
+`flux-cli doctor` checks `herdr_control` and both versions, and `cli` in the state shows the CLI that `fluxd` runs.
+While the version check fails, `fluxd` runs it again about once a minute, so an update of herdr needs no restart.
+`fluxd` reads the `PATH` of `fluxd.service` only when it starts, so a change of that `PATH` needs `systemctl --user restart fluxd`.
 
 `fluxd` refuses a prompt to an agent that waits for a choice, with the code `blocked`.
 The app then offers **Send as answer**, which sends the same text with `"answer": true`.

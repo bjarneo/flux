@@ -2,6 +2,8 @@ package org.omarchy.flux.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.CancellationSignal
+import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -35,11 +37,13 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,10 +61,12 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.SpanStyle
@@ -86,17 +92,23 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.omarchy.flux.core.AgentChoice
 import org.omarchy.flux.core.AgentStatus
+import org.omarchy.flux.core.ComputerThemes
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.HERDR_BLOCKED
 import org.omarchy.flux.core.HerdrAgent
 import org.omarchy.flux.core.HerdrOutput
 import org.omarchy.flux.core.HerdrReply
+import org.omarchy.flux.core.HerdrState
 import org.omarchy.flux.core.HerdrSync
 import org.omarchy.flux.core.HerdrTerminal
+import org.omarchy.flux.core.HerdrTerminalSession
 import org.omarchy.flux.core.choicesOpen
+import org.omarchy.flux.core.terminalClosePending
+import org.omarchy.flux.core.terminalControlReady
 import org.omarchy.flux.mic.MicSession
 import org.omarchy.flux.voice.Dictation
 import org.omarchy.flux.voice.DictationBar
@@ -283,13 +295,24 @@ private fun TerminalTile(t: HerdrTerminal, onClick: () -> Unit) {
  * lines at the bottom. The screen reads the output again when the status
  * changes, and every few seconds while the agent works and the screen is
  * visible. When the computer allows it, the screen also sends keys and text
- * to the agent.
+ * to the agent. When the computer also allows terminal control, the Live key
+ * shows the live terminal of the pane in the place of the output.
  */
 @Composable
 fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
     var review by rememberSaveable(d.id, pane) { mutableStateOf(false) }
     var reviewPath by rememberSaveable(d.id, pane) { mutableStateOf("") }
     var appliedReviewPath by rememberSaveable(d.id, pane) { mutableStateOf("") }
+    // True while the live terminal shows in the place of the output.
+    var live by rememberSaveable(d.id, pane) { mutableStateOf(false) }
+    // Why the live terminal ended by itself, or null.
+    var liveNote by rememberSaveable(d.id, pane) { mutableStateOf<String?>(null) }
+    // True from a tap on Live until the unlock succeeds or Live ends. A
+    // terminal that opens again without a tap, for example after the
+    // computer connects again, opens only while the unlock is valid. A
+    // link that drops during the unlock prompt keeps it true, so the
+    // prompt shows again after the reconnect.
+    var liveAsk by remember(d.id, pane) { mutableStateOf(false) }
     val reviewText = Tn.text
     fun readReview() {
         appliedReviewPath = reviewPath
@@ -303,12 +326,26 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
     val loading by rememberUpdatedState(d.herdrOutput?.takeIf { it.pane == pane }?.loading == true)
     // The polls stop when the agent is gone.
     val alive = agent != null || d.herdr == null
-    LaunchedEffect(d.id, pane, d.online, status, alive, review, appliedReviewPath) {
+    val liveShown = live && !review
+    // True while the last read effect ran with the live terminal on.
+    var liveBefore by remember(d.id, pane) { mutableStateOf(false) }
+    LaunchedEffect(d.id, pane, d.online, status, alive, review, appliedReviewPath, liveShown) {
+        // After Live ends, the computer gives the pane its desktop size
+        // back, and the agent draws the pane again. A read at once gets a
+        // half-drawn screen, so the first read waits for the redraw.
+        var redraw = liveBefore && !liveShown
+        liveBefore = liveShown
         if (!d.online || demo || !alive) return@LaunchedEffect
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            if (redraw) {
+                redraw = false
+                delay(LIVE_REDRAW_MS)
+            }
             // A new status reads at once. Only the polls wait for the last read.
             HerdrSync.read(FluxCore, d.id, pane, review = review, path = appliedReviewPath)
-            while (status == AgentStatus.Working) {
+            // The live terminal shows the newest lines itself. Its reads
+            // only keep the choices current, so they do not poll.
+            while (status == AgentStatus.Working && !liveShown) {
                 delay(WORKING_REFRESH_MS)
                 if (!loading) HerdrSync.read(FluxCore, d.id, pane, review = review, path = appliedReviewPath)
             }
@@ -320,22 +357,68 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
     val closer = rememberPaneCloser(d, pane, onBack)
     val title = agent?.project?.ifEmpty { null } ?: agent?.agent ?: pane
     val context = listOfNotNull(agent?.agent?.takeIf { it != title }, d.name).joinToString(" · ")
+    // A demo computer shows the debug sample screen in Live, with no unlock and no input.
+    val sample = if (demo) terminalDebugSample() else null
+    val offered = liveOffered(d.online, agent != null, d.herdr, demo, sample != null)
+    // The live terminal runs above the layout, so a rotation that moves
+    // the output keeps its stream and its page.
+    val terminal = if (liveShown && d.online && (agent != null || d.herdr == null)) {
+        key(d.id, pane) {
+            rememberLiveTerminal(d, pane, sample, ask = liveAsk, onAsked = { liveAsk = false }) { reason ->
+                live = false
+                liveAsk = false
+                liveNote = reason
+            }
+        }
+    } else {
+        null
+    }
+    // fluxd sends the state without the agent before it closes the stream,
+    // and the terminal leaves the screen with the agent. So the state ends
+    // Live, and a new agent in the same pane needs a new tap on Live.
+    val gone = liveGoneReason(d.herdr, pane, d.name)
+    LaunchedEffect(live, gone) {
+        if (live && gone != null) {
+            live = false
+            liveAsk = false
+            liveNote = gone
+        }
+    }
     Column(Modifier.fillMaxSize().imePadding().padding(horizontal = TiledGutter)) {
         TiledTopBar(title, onBack, context = context) {
-            if (out?.loading == true && out.lines.isNotEmpty()) {
-                SquareSpinner("Reading the output")
-            } else if (d.online && agent != null && !demo) {
-                SquareButton(Ic.refresh, "Refresh", { HerdrSync.read(FluxCore, d.id, pane) })
+            // The key stays while Live is on, so that Live can always stop.
+            if (!review && (live || offered)) {
+                LiveKey(live) {
+                    if (live) {
+                        live = false
+                    } else {
+                        liveNote = null
+                        liveAsk = !demo
+                        live = true
+                    }
+                }
+            }
+            if (!liveShown) {
+                if (out?.loading == true && out.lines.isNotEmpty()) {
+                    SquareSpinner("Reading the output")
+                } else if (d.online && agent != null && !demo) {
+                    SquareButton(Ic.refresh, "Refresh", { HerdrSync.read(FluxCore, d.id, pane) })
+                }
             }
         }
         when {
             !d.online -> NotReachable(d, "The lines of the agent")
-            agent == null && d.herdr != null -> EmptyState(
-                Ic.agent,
-                "The agent is gone",
-                "The agent in $pane on ${d.name} stopped or moved to another pane.",
-                Modifier.padding(top = 48.dp),
-            )
+            agent == null && d.herdr != null -> {
+                // The line tells why Live ended with the agent. An older
+                // reason does not show here.
+                liveNote?.takeIf { it == gone }?.let { LiveNote(it) }
+                EmptyState(
+                    Ic.agent,
+                    "The agent is gone",
+                    "The agent in $pane on ${d.name} stopped or moved to another pane.",
+                    Modifier.padding(top = 48.dp),
+                )
+            }
             else -> PaneLayout(
                 Modifier.weight(1f),
                 header = {
@@ -347,7 +430,11 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
                                     review = false
                                     HerdrSync.read(FluxCore, d.id, pane, review = false)
                                 }, Modifier.weight(1f), role = Role.Tab)
-                                ChoiceChip("Changes", review, { review = true; readReview() }, Modifier.weight(1f), role = Role.Tab)
+                                ChoiceChip("Changes", review, {
+                                    review = true
+                                    live = false
+                                    readReview()
+                                }, Modifier.weight(1f), role = Role.Tab)
                             }
                             if (review) OutlinedTextField(
                                 value = reviewPath, onValueChange = { reviewPath = it }, modifier = Modifier.fillMaxWidth(), singleLine = true,
@@ -359,7 +446,16 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
                         }
                     }
                 },
-                output = { m -> AgentOutput(out, m) },
+                output = { m ->
+                    Column(m, verticalArrangement = Arrangement.spacedBy(TileGap)) {
+                        if (!review) liveNote?.let { LiveNote(it) }
+                        if (terminal != null) {
+                            LiveTerminalView(terminal, d, pane, sample, Modifier.weight(1f).fillMaxWidth())
+                        } else {
+                            AgentOutput(out, Modifier.weight(1f))
+                        }
+                    }
+                },
                 controls = {
                     if (agent != null && d.herdr?.control == true) {
                         ReplyControls(d, agent, out.takeUnless { review }, d.herdrReply?.takeIf { it.pane == pane },
@@ -375,6 +471,64 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
         }
     }
     closer.Dialog("Close ${agent?.agent ?: "the agent"}?", "herdr closes $pane on ${d.name}, and the agent in it stops.")
+}
+
+/**
+ * True when the agent screen offers Live: on a demo computer with a
+ * sample screen, or when the computer is [online], the [agent] runs, and
+ * [herdr] allows terminal control.
+ */
+internal fun liveOffered(online: Boolean, agent: Boolean, herdr: HerdrState?, demo: Boolean, sample: Boolean): Boolean =
+    if (demo) sample else online && agent && herdr?.liveTerminal == true
+
+/**
+ * The reason that ends Live when the agent of [pane] is not in [herdr],
+ * or null while the agent runs or no state arrived. The reason is the
+ * same as the reason of the terminal_closed that fluxd sends later.
+ * [computer] is the name of the computer.
+ */
+internal fun liveGoneReason(herdr: HerdrState?, pane: String, computer: String): String? {
+    if (herdr == null || herdr.agent(pane) != null) return null
+    val code = when {
+        !herdr.enabled || !herdr.running -> "stopped"
+        // Without terminals, the state does not list the panes, so a closed pane looks like an ended agent.
+        herdr.terminals && herdr.terminal(pane) == null -> "pane_closed"
+        else -> "agent_ended"
+    }
+    return liveEndReason(code, computer)
+}
+
+/**
+ * The Live key of the top bar. It shows the live terminal in the place of
+ * the output, and a second tap stops it. It has the accent color while
+ * [on], and TalkBack reads what a tap does.
+ */
+@Composable
+private fun LiveKey(on: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(8.dp)
+    val ink = if (on) Tn.blue else Tn.sub
+    val description = if (on) "Stop the live terminal" else "Show the live terminal"
+    Row(
+        Modifier.minimumInteractiveComponentSize().heightIn(min = 40.dp).clip(shape)
+            .background(if (on) Tn.accentTile else Tn.tile).border(1.dp, if (on) Tn.blue else Tn.line, shape)
+            .clickable(onClickLabel = description, role = Role.Button, onClick = onClick)
+            .clearAndSetSemantics { contentDescription = description }
+            .padding(start = 10.dp, end = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Sym(Ic.terminal, tint = ink, size = 18.dp)
+        T("Live", size = 13, color = if (on) Tn.blue else Tn.text, weight = FontWeight.SemiBold)
+    }
+}
+
+/** The line above the output that tells why Live ended by itself. TalkBack reads it when it shows. */
+@Composable
+private fun LiveNote(text: String) {
+    T(
+        text, Modifier.padding(horizontal = 4.dp).semantics { liveRegion = LiveRegionMode.Polite },
+        size = 12, color = Tn.sub, lineHeight = 1.3f,
+    )
 }
 
 /**
@@ -493,6 +647,451 @@ private fun FillColumn(
                 head.placeRelative(0, 0)
                 body.placeRelative(0, head.height + headGap)
                 foot.placeRelative(0, head.height + headGap + height + footGap)
+            }
+        }
+    }
+}
+
+// ───────────────────────── Live terminal ─────────────────────────
+
+/** Why Live ends when the unlock ended or is not valid. */
+internal const val LIVE_UNLOCK_ENDED = "The unlock ended. Tap Live to open the terminal again."
+
+/** Why Live ends when the user cancels the unlock. */
+internal const val LIVE_UNLOCK_CANCELED = "You canceled the unlock."
+
+/** Why Live ends when the stream failed too many times, or the page of the terminal stopped. */
+internal const val LIVE_FAILED = "The live terminal stopped. Tap Live to try again."
+
+/** The texts over the live terminal while it does not show. */
+private const val LIVE_OPENING = "Opening the terminal…"
+private const val LIVE_RECONNECTING = "Reconnecting…"
+
+/** How many times Live opens again after a failure, before it ends. */
+internal const val LIVE_RETRIES = 4
+
+/** The first wait before Live opens again. Each next wait is 2 times longer. */
+internal const val LIVE_RETRY_MS = 1_000L
+
+/** How long a stream must show before its end starts a new count of failures. */
+internal const val LIVE_STABLE_MS = 30_000L
+
+/** How long Live waits for an answer to its open. The open itself fails after 20 seconds. */
+private const val LIVE_OPEN_WAIT_MS = 25_000L
+
+/** How long Live waits for the close of a released stream on the same pane. */
+private const val LIVE_CLOSE_WAIT_MS = 8_000L
+
+/** How long a new stream can take to draw its first full screen. */
+private const val LIVE_DRAW_WAIT_MS = 10_000L
+
+/** How long a new grid of the view waits before the computer resizes the pane. */
+private const val LIVE_RESIZE_DELAY_MS = 180L
+
+/** How long the output waits after Live, so that the agent can draw the pane at the desktop size again. */
+private const val LIVE_REDRAW_MS = 1_500L
+
+/**
+ * True when the wait for the answer to open [request] can end: the
+ * answer arrived, or the slot lost the open. [seen] is true after the
+ * slot showed this open. Before that, a published slot can still be the
+ * slot from before the open, so only a newer request counts as lost.
+ */
+internal fun openSettled(slot: HerdrTerminalSession?, request: Long, seen: Boolean): Boolean = when {
+    slot != null && slot.request > request -> true
+    !seen -> false
+    else -> slot == null || slot.request != request || !slot.sending
+}
+
+/**
+ * The reason that ends Live when the computer closed the stream with
+ * [code], or null when Live can open a new stream. [computer] is the name
+ * of the computer.
+ */
+internal fun liveEndReason(code: String, computer: String): String? = when (code) {
+    "agent_ended" -> "The agent in this pane ended."
+    "pane_closed" -> "herdr closed this pane."
+    "stopped" -> "$computer stopped the live terminal."
+    else -> null
+}
+
+/** The reason that ends Live when the computer refused the open with [error]. */
+internal fun liveOpenError(error: String): String = "The live terminal did not open: ${error.trimEnd('.')}."
+
+/**
+ * Counts the failures of the Live stream and gives the wait before the
+ * next open. Each wait is 2 times longer than the last. After
+ * [LIVE_RETRIES] failures, Live ends. Only a stream that showed for
+ * [LIVE_STABLE_MS] starts a new count. Thus a stream that draws and then
+ * fails each time does not open again without end.
+ */
+internal class LiveRetries {
+    private var failures = 0
+    private var wait = LIVE_RETRY_MS
+
+    /** Counts a failure. It returns the wait before the next open, or null when Live must end. */
+    fun fail(): Long? {
+        failures++
+        if (failures > LIVE_RETRIES) return null
+        return wait.also { wait *= 2 }
+    }
+
+    /**
+     * Counts an open that the link lost, for example when a new link
+     * replaced the old one. The next open goes out at once. It returns
+     * false when Live must end.
+     */
+    fun lost(): Boolean = ++failures <= LIVE_RETRIES
+
+    /** A stream showed for [ms] milliseconds. A stream that showed for [LIVE_STABLE_MS] starts a new count. */
+    fun ran(ms: Long) {
+        if (ms < LIVE_STABLE_MS) return
+        failures = 0
+        wait = LIVE_RETRY_MS
+    }
+}
+
+/**
+ * The live terminal of one agent pane: the unlock, the control stream at
+ * the grid of the phone, and the page that draws it. [rememberLiveTerminal]
+ * keeps it above the layout, and [LiveTerminalView] shows it.
+ */
+private class LiveTerminal(val feeder: TerminalFeeder, active: Boolean) {
+    /** True after the page loaded. */
+    var ready by mutableStateOf(false)
+
+    /** The grid that the view measured, in cells. */
+    var grid by mutableStateOf(0 to 0)
+
+    /** A new grid that waits for the resize of the pane, or null. */
+    var pendingGrid by mutableStateOf<Pair<Int, Int>?>(null)
+
+    /** The last grid that went to the computer, and its session. */
+    var sentGrid = 0 to 0
+    var sentSession = ""
+
+    /** True after the unlock of this Live. */
+    var authorized by mutableStateOf(false)
+
+    /** True while the app is in the front. */
+    var active by mutableStateOf(active)
+
+    /** The session whose first full screen shows. */
+    var drawn by mutableStateOf("")
+
+    /** The text over the terminal while it does not show. */
+    var message by mutableStateOf<String?>(null)
+
+    /** True after the first open. A later open is a reconnect. */
+    var opened = false
+
+    /** The unlock prompt that shows, or null. */
+    var prompt: CancellationSignal? = null
+
+    /** True after Live ended. Later events do nothing. */
+    var ended = false
+
+    /** Turns Live off with a reason. The screen sets it. */
+    var onExit: (String) -> Unit = {}
+
+    /** Ends Live once with [reason]. The screen then shows the output and the reason. */
+    fun exit(reason: String) {
+        if (ended) return
+        ended = true
+        onExit(reason)
+    }
+
+    /** The view measured [next]. While control runs, a new grid resizes the pane. */
+    fun grid(next: Pair<Int, Int>) {
+        if (authorized && grid != next) pendingGrid = next
+        grid = next
+    }
+}
+
+/**
+ * Starts the live terminal of [pane] after a tap on Live. It asks for the
+ * phone lock when [ask] is true, and calls [onAsked] after the unlock
+ * succeeds. Without a tap, for example after the computer connects again,
+ * it opens only while the unlock is valid. A valid unlock of the last 5
+ * minutes needs no new prompt. Then it takes control of the pane at the
+ * grid of the phone, and opens the stream again after a short failure.
+ * Live ends with a reason for [onExit] when the user cancels the unlock,
+ * the unlock ends, the computer refuses the stream, the computer closes
+ * the stream for the agent or the pane, the page of the terminal stops,
+ * or the stream fails too often. The screen ends Live itself when the
+ * agent leaves the pane. In the background, the terminal releases
+ * control. On the return, it takes control again while the unlock is
+ * valid. A [sample] draws with no unlock and no stream.
+ */
+@Composable
+private fun rememberLiveTerminal(
+    d: DeviceUi,
+    pane: String,
+    sample: TerminalSample?,
+    ask: Boolean,
+    onAsked: () -> Unit,
+    onExit: (String) -> Unit,
+): LiveTerminal {
+    val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val feeder = rememberTerminalFeeder(d.id)
+    val t = remember { LiveTerminal(feeder, lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) }
+    t.onExit = onExit
+    val device by rememberUpdatedState(d)
+    val asking by rememberUpdatedState(ask)
+    val asked by rememberUpdatedState(onAsked)
+    val stream = sample == null
+    fun slot(): HerdrTerminalSession? = device.herdrTerminal?.takeIf { it.pane == pane }
+
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> {
+                    t.active = true
+                    // The phone can change hands while the app is in the background.
+                    if (stream && t.authorized && !ReplyLock.valid()) t.exit(LIVE_UNLOCK_ENDED)
+                }
+                Lifecycle.Event.ON_STOP -> {
+                    t.active = false
+                    t.drawn = ""
+                    t.pendingGrid = null
+                    if (stream) HerdrSync.terminalRelease(FluxCore, device.id, pane)
+                }
+                else -> Unit
+            }
+        }
+        lifecycle.addObserver(observer)
+        onDispose {
+            lifecycle.removeObserver(observer)
+            t.ended = true
+            t.prompt?.cancel()
+            t.prompt = null
+            if (stream) HerdrSync.terminalRelease(FluxCore, device.id, pane)
+        }
+    }
+    // The unlock. A tap on Live asks for it, and a valid unlock opens at once.
+    LaunchedEffect(t.active) {
+        if (!stream || !t.active || t.authorized || t.prompt != null || t.ended) return@LaunchedEffect
+        if (!asking && !ReplyLock.valid()) {
+            t.exit(LIVE_UNLOCK_ENDED)
+            return@LaunchedEffect
+        }
+        ReplyLock.run(
+            context,
+            action = {
+                t.prompt = null
+                if (!t.ended) {
+                    t.authorized = true
+                    // Only a finished unlock uses up the tap. A prompt that
+                    // a lost link closed shows again after the reconnect.
+                    asked()
+                }
+            },
+            title = "Open the terminal",
+            purpose = "control terminals",
+            onCancel = {
+                t.prompt = null
+                t.exit(LIVE_UNLOCK_CANCELED)
+            },
+            onPrompt = { t.prompt = it },
+            onError = {
+                t.prompt = null
+                t.exit(it)
+            },
+        )
+    }
+    // The unlock ends after its 5 minutes, also while the terminal shows.
+    LaunchedEffect(t.authorized) {
+        if (!t.authorized) return@LaunchedEffect
+        while (ReplyLock.valid()) delay(ReplyLock.remainingMs().coerceAtLeast(1L))
+        t.exit(LIVE_UNLOCK_ENDED)
+    }
+    // The stream: open it, wait while it runs, and open it again after a failure.
+    LaunchedEffect(t.authorized, t.active, t.ready, t.grid.first > 0) {
+        if (!stream || !t.authorized || !t.active || !t.ready || t.grid.first < 1) return@LaunchedEffect
+        val retries = LiveRetries()
+        var request = 0L
+        // Counts a failure and waits before the next open. It returns false when Live ended.
+        suspend fun retry(reason: String): Boolean {
+            val wait = retries.fail()
+            if (wait == null) {
+                t.exit(reason)
+                return false
+            }
+            t.message = LIVE_RECONNECTING
+            delay(wait)
+            return true
+        }
+        // The terminal exists only while the computer is online, so this
+        // loop never waits for the computer. While the computer is
+        // offline, the screen shows that it is not reachable. In the
+        // background, the loop stops and opens nothing.
+        while (!t.ended && t.active) {
+            val herdr = device.herdr
+            if (herdr != null && !herdr.liveTerminal) {
+                t.exit("${device.name} does not allow terminal control now.")
+                return@LaunchedEffect
+            }
+            val current = slot()
+            val error = current?.error
+            when {
+                current?.open == true -> {
+                    val id = current.session
+                    if (t.drawn != id) {
+                        val shown = withTimeoutOrNull(LIVE_DRAW_WAIT_MS) {
+                            snapshotFlow { t.drawn == id || slot()?.let { it.session == id && it.open } != true }.first { it }
+                        }
+                        if (shown == null) {
+                            HerdrSync.terminalRelease(FluxCore, device.id, pane)
+                            if (!retry(LIVE_FAILED)) return@LaunchedEffect
+                            continue
+                        }
+                    }
+                    // The time at which the first full screen of the stream showed, or 0.
+                    val shownAt = if (t.drawn == id) SystemClock.elapsedRealtime() else 0L
+                    if (shownAt > 0L) t.message = null
+                    val end = snapshotFlow { slot() }.first { it?.session != id || !it.open }
+                    if (shownAt > 0L) retries.ran(SystemClock.elapsedRealtime() - shownAt)
+                    t.message = LIVE_RECONNECTING
+                    if (end != null && end.session == id && end.closed && end.code != "released") {
+                        liveEndReason(end.code, device.name)?.let {
+                            t.exit(it)
+                            return@LaunchedEffect
+                        }
+                        if (!retry(LIVE_FAILED)) return@LaunchedEffect
+                    }
+                }
+                terminalClosePending(current) -> {
+                    // The computer keeps one controller for each pane, so the
+                    // last stream of the pane must close first.
+                    t.message = LIVE_RECONNECTING
+                    val session = current?.session.orEmpty()
+                    val closed = withTimeoutOrNull(LIVE_CLOSE_WAIT_MS) {
+                        snapshotFlow { terminalClosePending(slot()) }.first { !it }
+                    }
+                    if (closed == null) HerdrSync.terminalDrop(FluxCore, device.id, pane, session)
+                }
+                current?.sending == true -> {
+                    // Another open of the pane waits for its answer, which comes or times out.
+                    snapshotFlow { slot() }.first { it?.request != current.request || !it.sending }
+                }
+                current != null && current.request == request && error != null -> {
+                    if (!current.retry) {
+                        t.exit(liveOpenError(error))
+                        return@LaunchedEffect
+                    }
+                    if (!retry(liveOpenError(error))) return@LaunchedEffect
+                    request = 0L
+                }
+                else -> {
+                    t.message = if (t.opened) LIVE_RECONNECTING else LIVE_OPENING
+                    t.opened = true
+                    request = HerdrSync.terminalOpen(FluxCore, device.id, pane, "control", t.grid.first, t.grid.second)
+                    val number = request
+                    // The wait also ends when the slot loses this open, for
+                    // example after a new link replaced the old one. Right
+                    // after the open, the published slot can still be the
+                    // old one, so openSettled waits until the slot shows it.
+                    val settled = withTimeoutOrNull(LIVE_OPEN_WAIT_MS) {
+                        var seen = false
+                        snapshotFlow { slot() }.first {
+                            if (it?.request == number) seen = true
+                            openSettled(it, number, seen)
+                        }
+                        true
+                    }
+                    val answer = slot()
+                    if (settled == null) {
+                        request = 0L
+                        if (!retry(LIVE_FAILED)) return@LaunchedEffect
+                    } else if (answer == null || answer.request != number) {
+                        // The link lost the open, so a new open goes out at once.
+                        request = 0L
+                        if (!retries.lost()) {
+                            t.exit(LIVE_FAILED)
+                            return@LaunchedEffect
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // A new grid of the view resizes the pane after a short pause, so that
+    // a layout change that runs sends only its last grid.
+    val session = slot()
+    LaunchedEffect(t.pendingGrid, t.authorized, t.active, session?.session, session?.open) {
+        val target = t.pendingGrid ?: return@LaunchedEffect
+        if (!t.authorized || !t.active || session?.open != true || session.mode != "control") return@LaunchedEffect
+        delay(LIVE_RESIZE_DELAY_MS)
+        val sent = if (t.sentSession == session.session) t.sentGrid else session.width to session.height
+        if (t.pendingGrid == target && target != sent) {
+            HerdrSync.terminalResize(FluxCore, device.id, session.session, target.first, target.second)
+            t.sentSession = session.session
+            t.sentGrid = target
+        }
+        if (t.pendingGrid == target) t.pendingGrid = null
+    }
+    return t
+}
+
+/**
+ * The live terminal in the place of the output. It stays covered until
+ * the first full screen of its own stream drew, and the cover tells what
+ * the terminal waits for. A drag scrolls the program on the computer, a
+ * short tap clicks a cell, and two fingers zoom and pan the view.
+ */
+@Composable
+private fun LiveTerminalView(t: LiveTerminal, d: DeviceUi, pane: String, sample: TerminalSample?, modifier: Modifier) {
+    val session = d.herdrTerminal?.takeIf { it.pane == pane }
+    val current by rememberUpdatedState(session)
+    val controlling = t.active && t.authorized && session?.open == true && session.mode == "control"
+    val visible = sample != null || terminalControlReady(session, t.drawn, t.authorized, t.active)
+    // Input needs a valid unlock. An unlock that ended ends Live.
+    fun input(send: (HerdrTerminalSession) -> Unit) {
+        val s = current
+        if (!t.active || !t.authorized) return
+        if (!ReplyLock.valid()) {
+            t.exit(LIVE_UNLOCK_ENDED)
+        } else if (s?.open == true && s.mode == "control") {
+            send(s)
+        }
+    }
+    Box(modifier) {
+        HerdrTerminalView(
+            t.feeder,
+            session,
+            onReady = { t.ready = true },
+            modifier = Modifier.fillMaxSize(),
+            sample = sample,
+            control = controlling && visible && t.pendingGrid == null,
+            inputEnabled = visible,
+            theme = ComputerThemes.theme(d.id)?.theme,
+            onGrid = { cols, rows -> t.grid(cols to rows) },
+            onDrawn = { id -> if (current?.session == id) t.drawn = id },
+            onWheel = { column, row, direction ->
+                input { s -> HerdrSync.terminalScroll(FluxCore, d.id, s.session, direction, column, row) }
+            },
+            onTap = { column, row ->
+                input { s ->
+                    HerdrSync.terminalMouse(FluxCore, d.id, s.session, "down", "left", column, row)
+                    HerdrSync.terminalMouse(FluxCore, d.id, s.session, "up", "left", column, row)
+                }
+            },
+            // The page of the terminal stopped, so Live ends and releases control.
+            onGone = { t.exit(LIVE_FAILED) },
+        )
+        if (!visible) {
+            Column(
+                Modifier.fillMaxSize().background(Tn.tile),
+                verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                T(
+                    t.message ?: LIVE_OPENING,
+                    Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    size = 13,
+                    color = Tn.sub,
+                )
             }
         }
     }

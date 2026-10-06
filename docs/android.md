@@ -370,6 +370,13 @@ ANDROID_SERIAL=emulator-5554 FLUX_DEMO=1 FLUX_THEME=catppuccin-latte tools/shot.
 
 Release builds ignore these extras.
 
+The agent screen of `agent:<pane>` opens on **Output**.
+When the computer offers diff review, the screen has the **Output** and **Changes** choices.
+When the computer allows replies, the screen has the choice tiles, the key bar, and the text field with **Send** and the mic key.
+When the computer offers terminal control, the top bar also has **Live**.
+**Live** shows the live terminal of the pane in the place of the output, and the rest of the screen stays.
+See [Live terminal on Android](herdr.md#live-terminal-on-android).
+
 To reproduce terminal layout bugs without pairing the emulator, a debug build also
 accepts an ANSI sample in `flux.debug.output` while demo mode is on:
 
@@ -398,6 +405,23 @@ To capture the screen of an agent, send `agent.read` on the herdr socket with
 Use a small, non-private sample. This only changes the demo output; it sends no
 keys or prompts to a real agent. Omit the output extra to restore the default sample.
 
+**Live** on an agent screen takes a sample of its own in `flux.debug.terminal`.
+`flux.debug.terminal_grid` sets the grid of the sample. The default grid is `100x30`:
+
+```bash
+sample=$(< /path/to/sample.ansi)
+sample=${sample//\'/\'\\\'\'}
+adb -s emulator-5554 shell am start -n org.omarchy.flux/.ui.MainActivity \
+  --ez flux.debug.demo true --es flux.debug.page agent:w2:p1 \
+  --es flux.debug.terminal "'$sample'" --es flux.debug.terminal_grid "120x40"
+```
+
+The sample is one ANSI screen, for example a frame of `herdr terminal session observe`.
+With a terminal sample, the agent screen shows **Live** in its top bar.
+Select **Live** to draw the sample in the place of the output.
+The sample needs no unlock, and it sends no scroll and no click.
+Without a terminal sample, a demo agent screen has no **Live**, so the screenshots of the site and the videos do not change.
+
 ## Icons
 
 The app uses Material Symbols Rounded at the 24 dp optical size, under the Apache License 2.0. To add an icon, add its name to `ICONS` in `tools/fetch_icons.py`, run the script, and add the drawable to `Ic` in `ui/Icons.kt`:
@@ -417,6 +441,7 @@ python3 tools/fetch_icons.py
 | `app/src/main/java/org/omarchy/flux/stream` | The stream connection, and the foreground service that keeps the webcam and the mic running in the background |
 | `app/src/main/java/org/omarchy/flux/theme` | The computer theme, the contrast guard, and the palettes. Plain Kotlin with JVM tests. |
 | `app/src/main/java/org/omarchy/flux/ui` | The Compose screens |
+| `app/src/main/assets/terminal` | The page of the live terminal, with xterm.js and its license. See [Update xterm.js](development.md#update-xtermjs). |
 | `tools` | The test peer, the screenshot helper, and the icon script |
 
 Continue with [phone pairing](features.md#pair-a-phone).

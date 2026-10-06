@@ -300,7 +300,7 @@ The socket has no herdr method.
 The apps talk to `fluxd` with `flux.herdr` packets on their link:
 
 - A `prompt` has an `answer` flag. Without `"answer": true`, fluxd refuses a prompt to an agent that waits for a choice, with the code `blocked` and the message `The agent waits for a choice. Pick a choice first.`
-- An app can add a `request` number to `keys`, `prompt`, `input`, `create`, and `close`. fluxd copies it into the answer: `sent`, `created`, or `closed`.
+- An app can add a `request` number to `keys`, `prompt`, `input`, `create`, `close`, `terminal_open`, and `terminal_release`. fluxd copies it into the answer: `sent`, `created`, `closed`, `terminal_opened`, or `terminal_closed`.
 
 See the [wire format](herdr.md#wire-format).
 

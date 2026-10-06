@@ -23,6 +23,9 @@ private const val CREATE_TIMEOUT_MS = 60_000L
 /** How long a reply waits for the answer of the computer. */
 private const val REPLY_TIMEOUT_MS = 10_000L
 
+/** How long a terminal open waits for terminal_opened. fluxd answers each open within 15 seconds. */
+private const val TERMINAL_OPEN_TIMEOUT_MS = 20_000L
+
 /** How long the phone waits after a reply before it reads the output again. The agent needs a moment to draw. */
 private const val REREAD_DELAY_MS = 700L
 
@@ -51,6 +54,19 @@ object HerdrSync {
 
     /** Counts the replies, so that a late timeout does not replace a newer reply. The core lock guards it. */
     private var replies = 0L
+
+    /** Counts the terminal opens and releases, so that a late answer matches its request. */
+    private var terminalSeq = 0L
+
+    /**
+     * The sink of the terminal events of an open stream. It takes the
+     * device ID and the event, so a late event of one computer never
+     * reaches the terminal of another, whose session can share the same
+     * name. It runs on the network thread with the core lock held, so it
+     * must only hand the event over.
+     */
+    @Volatile
+    var terminalSink: ((deviceId: String, event: HerdrTerminalEvent) -> Unit)? = null
 
     /** Counts the creates and closes, so that a late timeout does not replace a newer one. The core lock guards it. */
     private var actions = 0L
@@ -95,6 +111,14 @@ object HerdrSync {
                 if (action == null || !done.answers(action)) return
                 d.herdrAction = action.copy(sending = false, pane = done.pane ?: action.pane, error = done.error)
             }
+            "terminal_opened" -> onTerminalOpened(d, p.body)
+            "terminal_frame" -> {
+                val frame = parseHerdrTerminalFrame(p.body) ?: return
+                // Only the stream of this phone gets its frames.
+                if (d.herdrTerminal?.session != frame.session) return
+                terminalSink?.invoke(d.id, frame)
+            }
+            "terminal_closed" -> onTerminalClosed(d, p.body)
             else -> Log.d(TAG, "ignored flux.herdr kind ${p.string("kind")}")
         }
     }
@@ -162,6 +186,125 @@ object HerdrSync {
             if (d.herdrOutput?.pane == pane) d.herdrOutput = null
             if (d.herdrReply?.pane == pane) d.herdrReply = null
         }
+    }
+
+    /**
+     * Opens a terminal session on [pane]. With [mode] "observe" the
+     * phone only shows the terminal of the pane. "control" also sends
+     * gestures and keys, and needs `herdr_control` on the computer. The
+     * answer sets [Device.herdrTerminal], and [terminalSink] gets the
+     * events of the stream in the order they arrive. An open stream of
+     * this phone is released first. It returns the number of the open,
+     * which the answer carries, or 0 for an unknown device.
+     */
+    fun terminalOpen(core: FluxCore, id: String, pane: String, mode: String, cols: Int = 0, rows: Int = 0): Long {
+        val token = core.locked {
+            val d = core.device(id) ?: return@locked null
+            val seq = ++terminalSeq
+            val change = terminalOpenChange(d.herdrTerminal, pane, mode, seq)
+            change.release?.let { d.send(Packet(Types.FLUX_HERDR, herdrTerminalReleaseBody(it, ++terminalSeq))) }
+            d.herdrTerminal = change.slot
+            if (!d.send(Packet(Types.FLUX_HERDR, herdrTerminalOpenBody(pane, mode, seq, cols, rows)))) {
+                d.herdrTerminal = change.slot?.copy(
+                    sending = false, error = "${d.identity.deviceName} is not reachable", retry = true,
+                )
+            }
+            seq
+        } ?: return 0
+        core.scheduler.schedule({
+            core.locked {
+                val d = core.device(id) ?: return@locked
+                terminalOpenTimeout(d.herdrTerminal, token, "${d.identity.deviceName} did not answer")?.let { d.herdrTerminal = it }
+            }
+        }, TERMINAL_OPEN_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        return token
+    }
+
+    /**
+     * Releases the terminal session of [pane]. A session of another pane
+     * stays, because it belongs to another screen. The computer answers
+     * with terminal_closed after the last frame of the stream.
+     */
+    fun terminalRelease(core: FluxCore, id: String, pane: String) {
+        core.locked {
+            val d = core.device(id) ?: return@locked
+            val change = terminalReleaseChange(d.herdrTerminal, pane) ?: return@locked
+            d.herdrTerminal = change.slot
+            val session = change.release ?: return@locked
+            if (!d.send(Packet(Types.FLUX_HERDR, herdrTerminalReleaseBody(session, ++terminalSeq)))) {
+                // The link is gone, so the end of the stream can never
+                // arrive. The computer ended the stream with the link, so
+                // no released session stays for a reconnect to wait for.
+                d.herdrTerminal = null
+            }
+        }
+    }
+
+    /**
+     * Forgets the released [session] of [pane] when its terminal_closed did
+     * not arrive in time. A new open on the pane then does not wait for it.
+     */
+    fun terminalDrop(core: FluxCore, id: String, pane: String, session: String) {
+        core.locked {
+            val d = core.device(id) ?: return@locked
+            val t = d.herdrTerminal
+            if (t != null && t.pane == pane && t.session == session && terminalClosePending(t)) d.herdrTerminal = null
+        }
+    }
+
+    /**
+     * Sends one wheel step to the terminal of [session] at the
+     * zero-based cell ([column], [row]). The computer routes it to the
+     * program in the pane or to its history.
+     *
+     * A step changes no state of the phone, so it goes out without the
+     * core lock and its full publish: at 90 steps a second a publish per
+     * step would rebuild and recompose the whole screen.
+     */
+    fun terminalScroll(core: FluxCore, id: String, session: String, direction: String, column: Int, row: Int) {
+        if (session.isEmpty() || (direction != "up" && direction != "down")) return
+        val d = core.device(id) ?: return
+        d.send(Packet(Types.FLUX_HERDR, herdrTerminalScrollBody(session, direction, column, row)))
+    }
+
+    /** Sends one pointer event to the terminal of [session]. */
+    fun terminalMouse(core: FluxCore, id: String, session: String, action: String, button: String, column: Int, row: Int) {
+        if (session.isEmpty() || action !in setOf("down", "up", "drag", "move")) return
+        core.locked {
+            val d = core.device(id) ?: return@locked
+            d.send(Packet(Types.FLUX_HERDR, herdrTerminalMouseBody(session, action, button, column, row)))
+        }
+    }
+
+    /** Resizes the PTY of the active phone-controlled terminal session. */
+    fun terminalResize(core: FluxCore, id: String, session: String, cols: Int, rows: Int) {
+        if (session.isEmpty() || cols !in 1..1000 || rows !in 1..1000) return
+        val d = core.device(id) ?: return
+        d.send(Packet(Types.FLUX_HERDR, herdrTerminalResizeBody(session, cols, rows)))
+    }
+
+    /** Handles terminal_opened, the answer to a terminal_open. The core lock is held. */
+    private fun onTerminalOpened(d: Device, body: JsonObject) {
+        val opened = parseHerdrTerminalOpened(body) ?: return
+        // The screen that asked can be gone by now. The phone releases its
+        // session at once, because it would otherwise run for nobody.
+        if (staleTerminalAnswer(d.herdrTerminal, opened)) {
+            if (opened.open) {
+                d.send(Packet(Types.FLUX_HERDR, herdrTerminalReleaseBody(opened.session, ++terminalSeq)))
+            }
+            return
+        }
+        d.herdrTerminal = opened
+        if (opened.open) terminalSink?.invoke(d.id, HerdrTerminalEvent.Opened(opened.session, opened.width, opened.height))
+    }
+
+    /** Handles terminal_closed, the end of a stream. The core lock is held. */
+    private fun onTerminalClosed(d: Device, body: JsonObject) {
+        val closed = parseHerdrTerminalClosed(body) ?: return
+        val t = d.herdrTerminal ?: return
+        if (t.session != closed.session) return
+        d.herdrTerminal = t.copy(sending = false, open = false, code = closed.code, reason = closed.reason, closed = true)
+        terminalSink?.invoke(d.id, closed)
     }
 
     /**

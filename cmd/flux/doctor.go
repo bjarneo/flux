@@ -132,7 +132,9 @@ func doctor() {
 	}
 
 	// herdr is optional. When it runs, the phone shows its agents.
-	if _, err := exec.LookPath("herdr"); err == nil {
+	// The state error err of fluxd decides below whether checkLiveTerminal
+	// gets the state, so the error of LookPath has its own name.
+	if _, herr := exec.LookPath("herdr"); herr == nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		path := herdr.SocketPath()
 		pong, perr := herdr.Ping(ctx, path)
@@ -146,6 +148,13 @@ func doctor() {
 		default:
 			check(pong.Protocol >= herdr.MinProtocol, fmt.Sprintf("herdr %s runs, so the phone can show its agents", pong.Version),
 				fmt.Sprintf("herdr %s uses API protocol %d, and Flux needs %d or newer. Run: herdr update", pong.Version, pong.Protocol, herdr.MinProtocol))
+			if pong.Protocol >= herdr.MinProtocol {
+				var fluxd *State
+				if err == nil {
+					fluxd = &s
+				}
+				checkLiveTerminal(pong.Version, fluxd, os.Stdout, check)
+			}
 		}
 	}
 
@@ -308,6 +317,42 @@ func udpHolders(port int) ([]string, error) {
 
 func active(unit string) bool {
 	return exec.Command("systemctl", "is-active", "--quiet", unit).Run() == nil
+}
+
+// checkLiveTerminal checks that the phone can show the live terminal of
+// a herdr pane. The live terminal needs herdr = true and herdr_control =
+// true. The herdr server and the herdr CLI that fluxd runs both need
+// herdr.MinBridgeVersion or newer. fluxd finds the CLI in the PATH of
+// fluxd.service, which can find another herdr than the shell, so fluxd
+// checks the CLI. fluxd is nil when it does not answer. The live terminal
+// is optional, so a setting that turns it off gives a note and not a
+// problem.
+func checkLiveTerminal(server string, fluxd *State, out io.Writer, check func(ok bool, pass, fix string)) {
+	need := "herdr " + herdr.MinBridgeVersion + " or newer"
+	// fluxd checks a failed CLI again each minute. A restart checks it at
+	// once, and only a restart reads a new PATH of fluxd.service.
+	restart := "systemctl --user restart fluxd"
+	switch {
+	case fluxd != nil && !fluxd.Herdr.Enabled:
+		fmt.Fprintln(out, "- The live terminal on the phone needs herdr = true and herdr_control = true in config.toml")
+	case fluxd != nil && !fluxd.Herdr.Control:
+		fmt.Fprintln(out, "- The live terminal on the phone needs herdr_control = true in config.toml")
+	case !herdr.BridgeVersionOK(server):
+		check(false, "", fmt.Sprintf("The live terminal on the phone needs %s, and herdr %s runs. Run: herdr update", need, server))
+	case fluxd == nil:
+		fmt.Fprintf(out, "- The live terminal on the phone needs %s for the herdr server and for the herdr CLI that fluxd runs. fluxd does not answer, so doctor cannot check that CLI\n", need)
+	case !fluxd.Herdr.Running || fluxd.Herdr.CLI.Version == "" && fluxd.Herdr.CLI.Error == "":
+		fmt.Fprintf(out, "- The live terminal on the phone needs %s for the herdr server and for the herdr CLI that fluxd runs. fluxd did not check its herdr CLI yet\n", need)
+	case len(fluxd.Herdr.Bridge) > 0:
+		check(true, fmt.Sprintf("herdr %s runs, and fluxd runs %s %s, so the phone can show the live terminal",
+			server, fluxd.Herdr.CLI.Path, fluxd.Herdr.CLI.Version), "")
+	case fluxd.Herdr.CLI.Error != "":
+		check(false, "", safe(fmt.Sprintf("The live terminal on the phone needs the herdr CLI in the PATH of fluxd.service, and fluxd cannot run it: %s. After the fix, run: %s",
+			fluxd.Herdr.CLI.Error, restart)))
+	default:
+		check(false, "", safe(fmt.Sprintf("The live terminal on the phone needs %s, and fluxd runs %s %s. Update that herdr, or put a newer herdr first in the PATH of fluxd.service. Then run: %s",
+			need, fluxd.Herdr.CLI.Path, fluxd.Herdr.CLI.Version, restart)))
+	}
 }
 
 // herdrDown reports whether err is a plain connection failure to the

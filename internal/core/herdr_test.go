@@ -112,6 +112,10 @@ type fakeHerdr struct {
 	// counts the reads that wait for it.
 	hold chan struct{}
 	held int
+
+	// version is the herdr version in the ping reply. The default is
+	// 0.9.1, which has no bridge, so no test runs a herdr CLI.
+	version string
 }
 
 func newFakeHerdr(t *testing.T) *fakeHerdr {
@@ -169,7 +173,11 @@ func (f *fakeHerdr) serve(conn net.Conn) {
 	var result string
 	switch req.Method {
 	case "ping":
-		result = `"result":{"type":"pong","version":"0.9.1","protocol":22}`
+		version := f.version
+		if version == "" {
+			version = "0.9.1"
+		}
+		result = `"result":{"type":"pong","version":"` + version + `","protocol":22}`
 	case "session.snapshot":
 		result = `"result":{"type":"session_snapshot","snapshot":` + f.snapshot + `}`
 	case "agent.read":

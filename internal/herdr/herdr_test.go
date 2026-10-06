@@ -278,10 +278,15 @@ func TestSubscribe(t *testing.T) {
 
 func TestReadLineLimit(t *testing.T) {
 	long := strings.Repeat("x", maxLine+1) + "\n"
-	if _, err := readLine(bufio.NewReader(strings.NewReader(long))); !errors.Is(err, errLineTooLong) {
+	r := bufio.NewReader(strings.NewReader(long))
+	if _, err := readLine(r, maxLine); !errors.Is(err, errLineTooLong) {
 		t.Fatalf("error %v, want errLineTooLong", err)
 	}
-	line, err := readLine(bufio.NewReader(strings.NewReader("abc\nrest")))
+	small := bufio.NewReader(strings.NewReader("abcd\n"))
+	if _, err := readLine(small, 4); !errors.Is(err, errLineTooLong) {
+		t.Fatalf("error %v, want errLineTooLong for a small limit", err)
+	}
+	line, err := readLine(bufio.NewReader(strings.NewReader("abc\nrest")), maxLine)
 	if err != nil || string(line) != "abc\n" {
 		t.Fatalf("line %q, error %v", line, err)
 	}

@@ -63,9 +63,9 @@ It also tells which setting turns a feature off, when one exists.
 | Calls | `pause_media_on_call = true` | Pause the media players of the computer during a call. | `pause_media_on_call = false` |
 | Media | On | Play, pause, skip, seek, and set the volume of the media players of the computer. | No setting. Unpair the device. |
 | Desktop commands | No commands | Run each command in `commands`. | `flux-cli commands remove ID` |
-| herdr agents | `herdr = true` | Read the list of the [herdr agents](herdr.md) and the recent output of each agent. | `herdr = false` |
-| Agent control | `herdr_control = false` | Send keys and prompts to the agents, start agents, and close them. An agent runs commands, so the device can run any command as your user. | `herdr_control = false` |
-| Terminals | `herdr_terminals = false` | Read and type in each herdr pane that has no agent, also a `sudo -i` shell or an SSH session that you opened. Needs `herdr_control`. | `herdr_terminals = false` |
+| herdr agents | `herdr = true` | Read the list of the [herdr agents](herdr.md) and the recent output of each agent. Watch the live terminal of an agent pane, with no input. | `herdr = false` |
+| Agent control | `herdr_control = false` | Send keys and prompts to the agents, start agents, and close them. Control the [live terminal](herdr.md#live-terminal-on-android) of an agent pane: click at any cell, scroll, and resize the pane. A click can press each button of the agent, for example an approval. An agent runs commands, so the device can run any command as your user. | `herdr_control = false` |
+| Terminals | `herdr_terminals = false` | Read and type in each herdr pane that has no agent, also a `sudo -i` shell or an SSH session that you opened. Watch and control the live terminal of such a pane. Needs `herdr_control`. | `herdr_terminals = false` |
 | Remote input | `remote_input = false` | Move the pointer and type in each window, also on the lock screen. See [touchpad and keyboard](remote-input.md). | `flux-cli input off` |
 | Remote desktop | `remote_desktop = false` | See the screen, each window, and the lock screen. See [remote desktop](remote-desktop.md). | `flux-cli desktop off`. It stops each stream at once. |
 | Webcam, microphone, and screen mirror | On | Stream its camera to the **Flux Camera** device, its microphone to a PipeWire source, and its screen to a window. The device starts each stream. The computer can ask the device to start its camera or its microphone, but the device asks its user first. See [camera and streams](camera.md). | No setting. `flux-cli webcam stop`, `flux-cli mic stop`, and `flux-cli screen stop` stop a stream. |
@@ -81,7 +81,7 @@ The **Remote access** card of the Flux window turns remote input and the remote 
 A script can call the IPC method `settings.set`. See [IPC](ipc.md).
 See [configuration](configuration.md#settings) for each setting.
 
-The apps ask for the screen lock, Face ID, or Touch ID before the touchpad, the remote desktop, and the replies to agents.
+The apps ask for the screen lock, Face ID, or Touch ID before the touchpad, the remote desktop, agent replies, and the live terminal.
 This check protects the app only, and `fluxd` cannot see it.
 The settings in `config.toml` are the checks that `fluxd` makes.
 So turn on `remote_input`, `remote_desktop`, `herdr_control`, and `herdr_terminals` only when you trust each paired device.

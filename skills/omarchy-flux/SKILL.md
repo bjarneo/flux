@@ -193,6 +193,7 @@ make build
 | iOS app | `ios/App/`, `ios/ShareExtension/`, and the shared `macos/Sources/FluxKit/` |
 | Fingerprint approval | `internal/approve/`, `cmd/flux-approve/`, `internal/core/approve.go`, Android `core/Approve*` and `ui/ApproveActivity.kt`, `macos/Sources/FluxKit/Plugins/Approve/`, `macos/App/Features/Approve/`, `ios/App/Features/Approve/` |
 | herdr agents | `internal/herdr/`, `internal/core/herdr.go`, Android `core/Herdr.kt` |
+| Live terminal | `internal/herdr/terminal_session.go`, `internal/core/herdr_terminal.go`, Android `ui/HerdrTerminal.kt` and `assets/terminal/` |
 | Package and system install | `dist/`, `Makefile` |
 
 Keep network state in `fluxd`.

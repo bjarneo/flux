@@ -55,6 +55,7 @@ It waits while 1 of these runs:
 
 - A file transfer
 - A webcam, microphone, or screen mirror stream
+- The live terminal of a herdr agent on the phone
 - The remote desktop
 - A Browse PC session
 - The send of the Android app

@@ -163,5 +163,13 @@ func (d *Daemon) herdrViewForLocked(device string) herdrView {
 	if !v.Terminals {
 		v.Panes = []HerdrTerminal{}
 	}
+	// A device sees only the bridge actions that it can use. Each one but
+	// observe writes to the terminal and needs herdr_control.
+	switch {
+	case !v.Running:
+		v.Bridge = []string{}
+	case !v.Control && len(v.Bridge) > 0:
+		v.Bridge = herdrObserveCaps
+	}
 	return v
 }
