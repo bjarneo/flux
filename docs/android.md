@@ -381,6 +381,20 @@ adb -s emulator-5554 shell am start -n org.omarchy.flux/.ui.MainActivity \
   --es flux.debug.output "'$sample'"
 ```
 
+A full screen of an agent is too long for an extra. To show a capture of any size,
+copy it into the app folder and give its name in `flux.debug.outputFile`:
+
+```bash
+adb -s emulator-5554 shell "run-as org.omarchy.flux mkdir -p files"
+adb -s emulator-5554 shell "run-as org.omarchy.flux sh -c 'cat > files/demo.ansi'" < /path/to/sample.ansi
+adb -s emulator-5554 shell am start -n org.omarchy.flux/.ui.MainActivity \
+  --ez flux.debug.demo true --es flux.debug.page agent:w2:p1 \
+  --es flux.debug.outputFile demo.ansi
+```
+
+To capture the screen of an agent, send `agent.read` on the herdr socket with
+`"source": "recent_unwrapped"`, `"format": "ansi"`, and `"strip_ansi": false`, as `fluxd` does.
+
 Use a small, non-private sample. This only changes the demo output; it sends no
 keys or prompts to a real agent. Omit the output extra to restore the default sample.
 

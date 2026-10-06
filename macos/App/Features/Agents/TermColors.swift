@@ -27,49 +27,14 @@ enum TermColors {
     }()
 
     /// The alpha of dim text.
-    private static let dimAlpha = 0.6
+    static let dimAlpha = 0.6
 
-    static func color(_ c: TermColor) -> Color {
-        switch c {
-        case .indexed(let i):
-            if palette.indices.contains(i) { return palette[i] }
-            return rgb(TermText.paletteRgb(i) ?? 0xC0CAF5)
-        case .rgb(let v):
-            return rgb(v)
-        }
-    }
-
-    /// The lines as styled text in the terminal colors.
-    static func attributed(_ lines: [TermLine]) -> AttributedString {
-        var out = AttributedString()
-        for (i, line) in lines.enumerated() {
-            if i > 0 { out += AttributedString("\n") }
-            for span in line.spans { out += styled(span) }
-        }
-        return out
-    }
-
-    private static func styled(_ span: TermSpan) -> AttributedString {
-        var a = AttributedString(span.text)
-        let s = span.style
-        guard s != TermStyle() else { return a }
-        var fg = s.fg.map(color) ?? text
-        var bg = s.bg.map(color)
-        if s.inverse {
-            let f = fg
-            fg = bg ?? background
-            bg = f
-        }
-        a.foregroundColor = s.dim ? fg.opacity(dimAlpha) : fg
-        if let bg { a.backgroundColor = bg }
-        if s.bold || s.italic {
-            var font = Font.system(size: fontSize, weight: s.bold ? .bold : .regular, design: .monospaced)
-            if s.italic { font = font.italic() }
-            a.font = font
-        }
-        if s.underline { a.underlineStyle = Text.LineStyle(pattern: .solid) }
-        if s.strike { a.strikethroughStyle = Text.LineStyle(pattern: .solid) }
-        return a
+    /// The color of a terminal color. With `invert`, the colors that do not
+    /// come from the theme get the opposite lightness, see `TermText.invertLightness`.
+    static func color(_ c: TermColor, invert: Bool = false) -> Color {
+        if case .indexed(let i) = c, palette.indices.contains(i) { return palette[i] }
+        let v = TermText.fixedRgb(c) ?? 0xC0CAF5
+        return rgb(invert ? TermText.invertLightness(v) : v)
     }
 
     static let fontSize: CGFloat = 12

@@ -81,8 +81,9 @@ final class HerdrTests: XCTestCase {
         let rule = "\(esc)[38;5;4m" + String(repeating: "─", count: 80) + "\(esc)[0m"
         let lines = TermText.lines("\(rule)\n\(esc)[1mbold\(esc)[0m   \(esc)[41m   \(esc)[0m\n\n  \n")
         XCTAssertEqual(lines.count, 2)
-        XCTAssertEqual(lines[0].text, String(repeating: "─", count: 32))
-        XCTAssertEqual(lines[0].spans.map(\.style.fg), [.indexed(4)], "a shortened rule keeps its color")
+        let fitted = TermText.fit(lines, cols: 32)
+        XCTAssertEqual(fitted[0].text, String(repeating: "─", count: 32))
+        XCTAssertEqual(fitted[0].spans.map(\.style.fg), [.indexed(4)], "a shortened rule keeps its color")
         XCTAssertEqual(lines[1].spans, [TermSpan("bold", TermStyle(bold: true))], "trailing blanks go, also with a background")
     }
 

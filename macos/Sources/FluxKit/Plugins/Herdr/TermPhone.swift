@@ -1,9 +1,9 @@
 import Foundation
 
-// The phone layout of terminal text: full-screen agents such as opencode
-// draw panels across a wide terminal, and a phone screen is narrow. This is
-// a port of the phone functions of TermText.kt of the Android app, so both
-// phones show the same output. The Mac shows the output as the terminal has it.
+// The screen layout of terminal text: full-screen agents such as opencode
+// draw panels across a wide terminal, and a phone screen or a window pane is
+// narrower. This is a port of the layout functions of TermText.kt of the
+// Android app, so the phones and the Mac show the same output.
 
 /// The tone of the background that the colors of an output suit.
 public enum TermTone: Sendable, Equatable {
@@ -42,6 +42,24 @@ extension TermText {
     /// The bars at the left side of a panel, for example of a message in opencode.
     static let bars: Set<Character> = ["┃", "│", "║", "▌", "▎", "▏"]
 
+    /// The right sides of boxes. A line that ends in one is a row of a box.
+    private static let boxSides: Set<Character> = ["│", "┃", "║"]
+    private static let boxTops: Set<Character> = ["╭", "┌", "╔", "┏"]
+    private static let boxTopEnds: Set<Character> = ["╮", "┐", "╗", "┓"]
+    private static let boxBottoms: Set<Character> = ["╰", "└", "╚", "┗"]
+    private static let boxBottomEnds: Set<Character> = ["╯", "┘", "╝", "┛"]
+    /// The joins of a table. A box with one of them in its top edge is a
+    /// table, and `openBoxes` keeps it.
+    private static let tableJoins = Set("┬┴┼├┤╤╧╪╦╩╬┳┻╋")
+
+    /// A run of rule characters must be this long to count as a rule.
+    static let ruleMin = 8
+    /// The shortest run that a rule keeps when `fit` shortens it.
+    private static let ruleKeep = 3
+    /// The columns at the right edge that an agent can keep free when it
+    /// wraps a line, for example for the margin of a panel.
+    private static let wrapSlack = 2
+
     /// A lone block after this many blanks at the end of a line is the thumb of a scroll bar.
     private static let scrollBarGap = 4
 
@@ -64,25 +82,159 @@ extension TermText {
     /// Text with a luminance of at most this value is dark.
     private static let darkText = 0.1
 
-    /// Makes terminal lines fit a phone screen. It removes the blanks at the
-    /// end of each line, scroll bars, and the edges of boxes. It shortens
-    /// lines of box rules, because they fill the width of the terminal. It
+    /// Makes terminal lines fit a screen. It removes the blanks at the end
+    /// of each line, scroll bars, and the edges of boxes. It joins the rows
+    /// that the agent wrapped at the width of the terminal, see `reflow`. It
     /// also removes the blank columns that all lines share at the start, and
     /// the extra empty rows, because full-screen agents such as opencode fill
-    /// the terminal with them.
-    static func tidyForPhone(_ lines: [TermLine]) -> [TermLine] {
+    /// the terminal with them. `fit` then fits the rules, boxes, and drawings
+    /// to the width of the screen.
+    public static func tidy(_ lines: [TermLine]) -> [TermLine] {
+        let rows = dropSidebar(dropSessionTabs(lines))
+        let width = termWidth(rows)
         var out: [TermLine] = []
-        for line in dropSidebar(lines) {
+        for line in rows {
             let trimmed = trimEndKeepingFill(dropScrollBar(line))
-            let text = trimmed.text
-            if isBoxEdge(text.trimmingCharacters(in: .whitespaces)) { continue }
-            if text.count > ruleWidth && text.allSatisfy({ ruleChars.contains($0) }) {
-                out.append(take(trimmed, ruleWidth))
-            } else {
-                out.append(trimmed)
-            }
+            if !isBoxEdge(trimmed.text.trimmingCharacters(in: .whitespaces)) { out.append(trimmed) }
         }
-        return dropEmptyRows(dedent(out))
+        let joined = reflow(out, width: width)
+        let margin = joined.filter { !$0.spans.isEmpty }.map(leadingBlanks).min() ?? 0
+        var result = dropEmptyRows(margin == 0 ? joined : joined.map { dropColumns($0, margin) })
+        if width > 0 {
+            for i in result.indices { result[i].cols = width - margin }
+        }
+        return result
+    }
+
+    /// The start and the length of the longest run of 1 rule character.
+    static func longestRule(_ chars: [Character]) -> (start: Int, count: Int) {
+        var best = (start: 0, count: 0)
+        var i = 0
+        while i < chars.count {
+            var j = i + 1
+            if ruleChars.contains(chars[i]) {
+                while j < chars.count && chars[j] == chars[i] { j += 1 }
+                if j - i > best.count { best = (i, j - i) }
+            }
+            i = j
+        }
+        return best
+    }
+
+    /// Returns the width of the terminal in columns, or 0 when the lines do
+    /// not show it. The widest line shows the width when it ends in blanks,
+    /// which a screen row with a background has, or when it holds a rule. A
+    /// plain read has no blanks at the end, so its widest line can be
+    /// narrower than the terminal.
+    private static func termWidth(_ lines: [TermLine]) -> Int {
+        let texts = lines.map { Array($0.text) }
+        guard let width = texts.map(\.count).max(), width > 0 else { return 0 }
+        let shown = texts.contains { t in t.count == width && (t.last == " " || longestRule(t).count >= ruleMin) }
+        return shown ? width : 0
+    }
+
+    /// Joins the rows that an agent wrapped at the terminal `width` into 1
+    /// line. Claude Code, Codex, and opencode wrap their text at the width of
+    /// the terminal, so on a narrow screen each row breaks again and leaves a
+    /// short piece. The screen then wraps the joined line at its own width. A
+    /// row continues the line above it when the first word of the row did not
+    /// fit at the end of the line above, and when the row starts at the
+    /// hanging indent of that line, under the same panel bar and with the
+    /// same fill. A row with a list marker starts a new line. Rules and the
+    /// rows of a box stay as they are. Without a known width, the lines stay
+    /// as they are.
+    private static func reflow(_ lines: [TermLine], width: Int) -> [TermLine] {
+        guard width > 0 else { return lines }
+        var out: [TermLine] = []
+        out.reserveCapacity(lines.count)
+        // The length of the last row of the last line, or 0 when no row can join it.
+        var end = 0
+        var hang = 0
+        // The first row of the last line. Its panel bars must be in the next row too.
+        var first: [Character] = []
+        for line in lines {
+            let text = Array(line.text)
+            if let prev = out.last, let last = prev.spans.last, end > 0, 2 * end >= width, line.fill == prev.fill,
+               continues(first, text, hang: hang) {
+                let word = (text[hang...].firstIndex(of: " ") ?? text.count) - hang
+                if end + 1 + word > width - wrapSlack {
+                    var gap = last.style
+                    gap.underline = false
+                    gap.strike = false
+                    out[out.count - 1] = TermLine(prev.spans + [TermSpan(" ", gap)] + dropColumns(line, hang).spans, fill: prev.fill)
+                    end = canContinue(text) ? text.count : 0
+                    continue
+                }
+            }
+            out.append(line)
+            first = text
+            end = canContinue(text) ? text.count : 0
+            hang = hangingIndent(line.text)
+        }
+        return out
+    }
+
+    /// True when the next row can continue a line that ends with `row`: the
+    /// row has text, and it is not a rule or a row of a box.
+    private static func canContinue(_ row: [Character]) -> Bool {
+        guard let last = row.last, row.contains(where: { $0 != " " }) else { return false }
+        return !boxSides.contains(last) && longestRule(row).count < ruleMin
+    }
+
+    /// True when `row` can continue the line with the first row `prev`,
+    /// which wraps at column `hang`. Before that column, the row has only
+    /// blanks and the panel bars of the line. At that column, its text
+    /// starts, without a list marker.
+    private static func continues(_ prev: [Character], _ row: [Character], hang: Int) -> Bool {
+        guard hang < row.count, row[hang] != " ", canContinue(row) else { return false }
+        for i in 0..<hang where row[i] != " " {
+            guard bars.contains(row[i]), i < prev.count, prev[i] == row[i] else { return false }
+        }
+        let rest = String(row[hang...])
+        return listMarker.firstMatch(in: rest, range: NSRange(rest.startIndex..., in: rest)) == nil
+    }
+
+    private static let sessionMarker = try! NSRegularExpression(pattern: #"^\s*\+ New session\s*$"#)
+    private static let sessionTitle = try! NSRegularExpression(pattern: #"^\s*(?:\d+|[!?●•·⠁-⣿])?\s+\S"#)
+
+    private static func matches(_ re: NSRegularExpression, _ s: String) -> Bool {
+        re.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)) != nil
+    }
+
+    /// Drops the expanded session tabs of OpenCode V2 at the left, without
+    /// moving the plain history above them. The tabs are a column of cells
+    /// with a background, from 8 to 60 columns wide, with the New session row
+    /// and at least 1 session title.
+    private static func dropSessionTabs(_ lines: [TermLine]) -> [TermLine] {
+        for (index, line) in lines.enumerated() {
+            var col = 0
+            for span in line.spans {
+                if span.style.bg == nil || span.style.inverse { break }
+                col += span.text.count
+            }
+            guard (8...60).contains(col), matches(sessionMarker, String(line.text.prefix(col))) else { continue }
+            func inRail(_ row: TermLine) -> Bool {
+                var at = 0
+                for span in row.spans {
+                    if at >= col { return true }
+                    if span.style.bg == nil || span.style.inverse { return false }
+                    at += span.text.count
+                }
+                return at >= col
+            }
+            var start = index
+            var end = index + 1
+            while start > 0 && inRail(lines[start - 1]) { start -= 1 }
+            while end < lines.count && inRail(lines[end]) { end += 1 }
+            guard end - start >= sidebarMinRows else { continue }
+            let hasTitle = lines[start..<end].contains { row in
+                let prefix = String(row.text.prefix(col))
+                return !matches(sessionMarker, prefix) && matches(sessionTitle, prefix)
+            }
+            guard hasTitle else { continue }
+            return lines.enumerated().map { i, row in (start..<end).contains(i) ? dropColumns(row, col) : row }
+        }
+        return lines
     }
 
     /// True for the top or bottom edge of a box that half blocks draw, for
@@ -203,12 +355,6 @@ extension TermText {
         return n
     }
 
-    /// Removes the blank columns that all lines with text share at the start.
-    private static func dedent(_ lines: [TermLine]) -> [TermLine] {
-        let n = lines.filter { !$0.spans.isEmpty }.map(leadingBlanks).min() ?? 0
-        return n == 0 ? lines : lines.map { dropColumns($0, n) }
-    }
-
     /// Removes the first `n` cells of a line.
     private static func dropColumns(_ line: TermLine, _ n: Int) -> TermLine {
         var out: [TermSpan] = []
@@ -244,42 +390,106 @@ extension TermText {
         return out
     }
 
-    /// Moves the centered blocks of lines that are wider than `cols` columns
-    /// to the left when they fit without some of the blanks before them. An
-    /// example is the logo of opencode. A block is a run of lines between
-    /// blank rows. It is centered when it starts at column `fitMinLead` or
-    /// later, and when it has at least half as many blank columns at the left
-    /// as at the right. The block keeps its place relative to the width of
-    /// the output, so it stays centered.
+    /// Fits the lines that are wider than `cols` columns to the screen:
+    ///
+    /// - A box that is too wide loses its right side, see `openBoxes`.
+    /// - A rule gets shorter, so that its line fills the width of the screen.
+    ///   A line can hold a title next to the rule, for example the session
+    ///   name that Claude Code shows above its prompt.
+    /// - A centered block of lines moves to the left when it fits without
+    ///   some of the blanks before it. An example is the logo of opencode. A
+    ///   block is a run of lines between blank rows. It is centered when it
+    ///   starts at column `fitMinLead` or later, and when it has at least
+    ///   half as many blank columns at the left as at the right. The block
+    ///   keeps its place relative to the width of the output, so it stays
+    ///   centered.
+    /// - A single line at the right edge of the terminal moves in the same
+    ///   way, for example a hint of Claude Code. It then ends at the right
+    ///   edge of the screen.
     public static func fit(_ lines: [TermLine], cols: Int) -> [TermLine] {
-        let width = lines.map(\.text.count).max() ?? 0
-        guard width > cols else { return lines }
-        var out = lines
+        guard (lines.map(\.text.count).max() ?? 0) > cols else { return lines }
+        // A joined line is wider than the terminal, so the width comes from tidy when it can.
+        let known = lines.map(\.cols).max() ?? 0
+        let width = known > 0 ? known : (lines.map(\.text.count).max() ?? 0)
+        var out = openBoxes(lines, cols: cols).map { fitRule($0, cols: cols) }
+        func move(_ start: Int, _ end: Int, single: Bool) {
+            let block = out[start..<end]
+            let lead = block.map(leadingBlanks).min() ?? 0
+            let right = block.map(\.text.count).max() ?? 0
+            let size = right - lead
+            // A single line moves only when it ends at the right edge, so that the rows of a drawing keep their places.
+            guard right > cols, right <= width, size <= cols, lead >= fitMinLead, 2 * lead >= width - right,
+                  !single || right >= width - wrapSlack else { return }
+            // The share of the free columns at the left stays the same.
+            let shift = lead - lead * (cols - size) / (width - size)
+            for i in start..<end { out[i] = dropColumns(out[i], shift) }
+        }
         var start = 0
-        while start < lines.count {
+        while start < out.count {
             var end = start
-            while end < lines.count && !lines[end].spans.isEmpty { end += 1 }
-            if end > start {
-                let block = lines[start..<end]
-                let lead = block.map(leadingBlanks).min() ?? 0
-                let right = block.map(\.text.count).max() ?? 0
-                let size = right - lead
-                if right > cols && size <= cols && lead >= fitMinLead && 2 * lead >= width - right {
-                    // The share of the free columns at the left stays the same.
-                    let shift = lead - lead * (cols - size) / (width - size)
-                    for i in start..<end { out[i] = dropColumns(lines[i], shift) }
-                }
-            }
+            while end < out.count && !out[end].spans.isEmpty { end += 1 }
+            if end > start { move(start, end, single: false) }
             start = end + 1
+        }
+        for i in out.indices where out[i].text.count > cols { move(i, i + 1, single: true) }
+        return out
+    }
+
+    /// Shortens the longest rule of a line that is wider than `cols`, so that the line fits.
+    private static func fitRule(_ line: TermLine, cols: Int) -> TermLine {
+        let text = Array(line.text)
+        guard text.count > cols else { return line }
+        let rule = longestRule(text)
+        guard rule.count >= ruleMin else { return line }
+        let cut = min(text.count - cols, rule.count - ruleKeep)
+        return TermLine(take(line, rule.start).spans + dropColumns(line, rule.start + cut).spans, fill: line.fill)
+    }
+
+    /// Removes the right side of each box that is wider than `cols` columns,
+    /// for example a dialog that fills the width of the terminal. The rows of
+    /// the box then wrap on the screen, and the left side stays as a panel
+    /// bar. A box starts with a top edge, for example ╭──╮, has rows with a
+    /// side at both ends, and ends with a bottom edge. `fitRule` then
+    /// shortens the edges.
+    private static func openBoxes(_ lines: [TermLine], cols: Int) -> [TermLine] {
+        let texts = lines.map { Array($0.text) }
+        var out = lines
+        var i = 0
+        while i < lines.count {
+            let top = texts[i]
+            let right = top.count - 1
+            guard right >= cols, let left = top.firstIndex(where: { $0 != " " }), boxTops.contains(top[left]),
+                  boxTopEnds.contains(top[right]), !top.contains(where: { tableJoins.contains($0) }),
+                  longestRule(top).count >= ruleMin else {
+                i += 1
+                continue
+            }
+            var end = i + 1
+            while end < lines.count {
+                let row = texts[end]
+                if row.count != right + 1 { break }
+                if boxBottoms.contains(row[left]) && boxBottomEnds.contains(row[right]) { break }
+                if !boxSides.contains(row[left]) || !boxSides.contains(row[right]) { break }
+                end += 1
+            }
+            guard end < lines.count, texts[end].count == right + 1, boxBottoms.contains(texts[end][left]) else {
+                i += 1
+                continue
+            }
+            for k in i...end { out[k] = trimEndKeepingFill(take(lines[k], right)) }
+            i = end + 1
         }
         return out
     }
 
-    private static let listMarker = try! NSRegularExpression(pattern: #"^(?:[-*+•·◦▪‣⏺●⎿→←✓✔✗✘△▣■□]|\[[ x✓•]\]|\d{1,3}[.)])\s+"#)
+    /// A list marker: a symbol before a blank, for example the bullet of
+    /// Claude Code or the prompt mark of Codex, a check box, or a number.
+    private static let listMarker = try! NSRegularExpression(pattern: #"^(?:[^\p{L}\p{N}\s]|\[[ x✓•]\]|\d{1,3}[.)])\s+"#)
 
     /// Returns the column where the wrapped rows of a line start, so that
     /// they line up with its text. The column is after the blanks at the
-    /// start, the bar of a panel, and a list marker.
+    /// start, the bar of a panel, and up to 2 list markers, for example the
+    /// cursor and the number of a choice.
     public static func hangingIndent(_ text: String) -> Int {
         let chars = Array(text)
         guard var i = chars.firstIndex(where: { $0 != " " }) else { return 0 }
@@ -287,9 +497,10 @@ extension TermText {
             i += 1
             while i < chars.count && chars[i] == " " { i += 1 }
         }
-        let rest = String(chars[i...])
-        if let m = listMarker.firstMatch(in: rest, range: NSRange(rest.startIndex..., in: rest)),
-           let range = Range(m.range, in: rest) {
+        for _ in 0..<2 {
+            let rest = String(chars[i...])
+            guard let m = listMarker.firstMatch(in: rest, range: NSRange(rest.startIndex..., in: rest)),
+                  let range = Range(m.range, in: rest) else { break }
             i += rest[range].count
         }
         return i

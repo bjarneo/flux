@@ -17,6 +17,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -35,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import org.omarchy.flux.core.BlockShape
+import org.omarchy.flux.core.CellRect
 import org.omarchy.flux.core.TermColor
 import org.omarchy.flux.core.TermLine
 import org.omarchy.flux.core.TermStyle
@@ -77,11 +79,26 @@ fun termColor(c: TermColor, colors: TiledColors, invert: Boolean = false): Color
 
 private fun rgbColor(rgb: Int) = Color(0xFF000000.toInt() or rgb)
 
+/** The brightest channel of a background that counts as black. */
+private const val BLACK_MAX = 0x10
+
+/**
+ * The Compose color of a background, or null for the background of the
+ * view. With [invert], a black background is the background of the view and
+ * not white, because the agent drew it for a dark terminal. An example is
+ * the logo of Claude Code.
+ */
+private fun termBg(c: TermColor, colors: TiledColors, invert: Boolean): Color? {
+    val rgb = fixedRgb(c)
+    if (invert && rgb != null && (rgb shr 16 and 0xFF) <= BLACK_MAX && (rgb shr 8 and 0xFF) <= BLACK_MAX && (rgb and 0xFF) <= BLACK_MAX) return null
+    return termColor(c, colors, invert)
+}
+
 /** Returns the Compose style of a terminal style, or null for the default style. */
 private fun spanStyle(s: TermStyle, colors: TiledColors, background: Color, invert: Boolean): SpanStyle? {
     if (s == TermStyle()) return null
     var fg = s.fg?.let { termColor(it, colors, invert) } ?: colors.text
-    var bg = s.bg?.let { termColor(it, colors, invert) }
+    var bg = s.bg?.let { termBg(it, colors, invert) }
     if (s.inverse) {
         val f = fg
         fg = bg ?: background
@@ -130,16 +147,31 @@ private class TermRow(
 
 /** The background of a cell with this style, or null for the default background. */
 private fun cellBg(s: TermStyle, colors: TiledColors, invert: Boolean): Color? =
-    if (s.inverse) null else s.bg?.let { termColor(it, colors, invert) }
+    if (s.inverse) null else s.bg?.let { termBg(it, colors, invert) }
+
+/**
+ * Returns the shape of a rule character: 1 light, 1 heavy, or 2 light
+ * lines across the middle of the cell. The mono font of Android has no
+ * glyphs for these characters, and the glyphs of a fallback font are wider
+ * than a cell, so a rule that fills the screen would wrap. The view draws
+ * the lines instead.
+ */
+private fun ruleShape(c: Char): BlockShape? = when (c) {
+    '─' -> BlockShape(listOf(CellRect(0f, 15f / 32, 1f, 17f / 32)))
+    '━' -> BlockShape(listOf(CellRect(0f, 14f / 32, 1f, 18f / 32)))
+    '═' -> BlockShape(listOf(CellRect(0f, 12f / 32, 1f, 14f / 32), CellRect(0f, 18f / 32, 1f, 20f / 32)))
+    else -> null
+}
 
 /**
  * Turns 1 terminal line into a row in [colors]. [invert] is for [termColor].
  * The glyphs of a bar at the start of the row and of block elements get no
- * color, because the font draws them shorter than the row. The view draws
- * them instead, as a terminal does.
+ * color, because the font draws them shorter than the row. The bar and the
+ * rule characters become blanks, because a fallback font draws them wider
+ * than a cell. The view draws all of them instead, as a terminal does.
  */
 private fun termRow(line: TermLine, colors: TiledColors, invert: Boolean): TermRow {
-    val fill = line.fill?.let { termColor(it, colors, invert) }
+    val fill = line.fill?.let { termBg(it, colors, invert) }
     val background = fill ?: colors.offTile
     val plain = line.text
     // The fill starts at the first cell with a background, as in the terminal.
@@ -168,8 +200,21 @@ private fun termRow(line: TermLine, colors: TiledColors, invert: Boolean): TermR
             val style = spanStyle(span.style, colors, background, invert)
             val color = style?.color ?: colors.text
             if (barWidth > 0f && col in at until at + span.text.length) bar = RowBar(col, color, barWidth)
-            span.text.forEachIndexed { i, c -> blockShape(c)?.let { blocks += RowBlock(at + i, it, color) } }
-            if (style == null) append(span.text) else withStyle(style) { append(span.text) }
+            var drawn = false
+            span.text.forEachIndexed { i, c ->
+                blockShape(c)?.let { blocks += RowBlock(at + i, it, color) }
+                ruleShape(c)?.let {
+                    blocks += RowBlock(at + i, it, color)
+                    drawn = true
+                }
+            }
+            val barCol = if (barWidth > 0f) col else -1
+            val shown = if (drawn || barCol in at until at + span.text.length) {
+                String(CharArray(span.text.length) { i -> if (at + i == barCol || ruleShape(span.text[i]) != null) ' ' else span.text[i] })
+            } else {
+                span.text
+            }
+            if (style == null) append(shown) else withStyle(style) { append(shown) }
             at += span.text.length
         }
         if (bar != null) addStyle(SpanStyle(color = Color.Transparent), col, col + 1)
@@ -237,7 +282,8 @@ fun TermLines(lines: List<TermLine>, width: Dp) {
                             val w = maxOf(1f, cell * bar.width)
                             drawRect(bar.color, Offset(pad + bar.col * cell + (cell - w) / 2, 0f), Size(w, size.height))
                         }
-                        layout.value?.let { l -> for (b in row.blocks) drawBlock(b, l.getBoundingBox(b.offset), pad) }
+                        // A rule in the blanks after the last word can reach past the edge.
+                        layout.value?.let { l -> clipRect { for (b in row.blocks) drawBlock(b, l.getBoundingBox(b.offset), pad) } }
                     }
                     .heightIn(min = rowHeight)
                     .padding(horizontal = TermPad),

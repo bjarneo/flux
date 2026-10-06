@@ -1,6 +1,6 @@
 import FluxKit
 import SwiftUI
-import UIKit
+import AppKit
 
 /// The side padding of each output line. The fill of a line goes under it.
 let termPad: CGFloat = 12
@@ -13,7 +13,7 @@ private let minCols = 20
 
 /// The width of 1 cell of the output font.
 let termCell: CGFloat = {
-    let font = UIFont.monospacedSystemFont(ofSize: TermColors.fontSize, weight: .regular)
+    let font = NSFont.monospacedSystemFont(ofSize: TermColors.fontSize, weight: .regular)
     let sample = "0000000000"
     return (sample as NSString).size(withAttributes: [.font: font]).width / CGFloat(sample.count)
 }()
@@ -22,7 +22,8 @@ let termCell: CGFloat = {
 /// points wide. A long line wraps, and its wrapped rows line up with its
 /// text. A line with a fill shows the fill up to the right edge, so the
 /// panels of an agent look like panels. When the text colors suit the other
-/// tone than the app, the view inverts their lightness.
+/// tone than the app, the view inverts their lightness. This is the view of
+/// the iPhone app with the font of macOS.
 struct TermLinesView: View {
     let lines: [TermLine]
     let width: CGFloat

@@ -250,6 +250,11 @@ class MainActivity : ComponentActivity() {
                 intent.getStringExtra("flux.debug.output")
             FluxCore.publish()
         }
+        // A capture is too long for an extra, so it can also come from a file in the app folder.
+        intent?.getStringExtra("flux.debug.outputFile")?.let {
+            org.omarchy.flux.core.DebugDemo.agentOutput = java.io.File(filesDir, it).readText()
+            FluxCore.publish()
+        }
         intent?.getStringExtra("flux.debug.theme")?.let { org.omarchy.flux.core.DebugTheme.select(it) }
         intent?.getStringExtra("flux.debug.page")?.let { debugPage.value = it }
         if (intent?.getBooleanExtra("flux.debug.showWhenLocked", false) != true) return

@@ -188,7 +188,9 @@ class HerdrTest {
     @Test
     fun tidiesRules() {
         val rule = "─".repeat(120)
-        assertEquals("─".repeat(32) + "\n❯ 1. Yes", termLines("$rule\n❯ 1. Yes  \n  \n").joinToString("\n") { it.text })
+        val lines = termLines("$rule\n❯ 1. Yes  \n  \n")
+        assertEquals("$rule\n❯ 1. Yes", lines.joinToString("\n") { it.text })
+        assertEquals("the screen fits the rule to its width", "─".repeat(40) + "\n❯ 1. Yes", fitLines(lines, 40).joinToString("\n") { it.text })
         assertEquals("a short rule stays", "-----", termLines("-----").single().text)
     }
 

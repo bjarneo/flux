@@ -60,6 +60,7 @@ A timed read waits while the last read still loads, so the reads do not pile up 
 A new status reads at once.
 Select refresh to read it at once.
 
+The screen opens at the newest lines.
 When you scroll up to read older lines, the screen stays there when new output comes.
 To go back to the newest lines, select the arrow at the bottom of the output.
 
@@ -71,9 +72,13 @@ The phone reads all lines again when the agent stops.
 herdr keeps only the recent part of the terminal for some agents, so the screen can show fewer lines.
 
 The phone fits the output to its narrow screen.
-This matters most for full-screen agents such as opencode, which draw panels across the full terminal:
+Claude Code, Codex, opencode, and other agents draw for the full width of the terminal, so a line from the computer is often wider than the screen:
 
-- A long line wraps, and its wrapped rows start under its text, after the panel bar or the list marker.
+- The phone joins the rows that the agent wrapped at the width of the terminal, and it wraps the text again at the width of the screen. Without this step, each wrapped row leaves a short piece on the screen. A list item, a rule, and a row of a box stay on their own lines. The phone finds the width of the terminal from a rule or from a row with a background, so it joins no rows in output that has neither.
+- A long line wraps, and its wrapped rows start under its text, after the panel bar or the list marker. A list marker is a symbol and a blank at the start of the line, for example `●`, `❯`, `›`, `⎿`, or `-`.
+- A rule fills the width of the screen. A rule with a title, for example the session name above the prompt of Claude Code, keeps the title and gets shorter.
+- A hint at the right edge of the terminal, for example `new task? /clear to save 120k tokens` of Claude Code, moves to the right edge of the screen.
+- A box that is wider than the screen loses its right side, so its rows wrap under the left side. A table keeps all its sides.
 - The phone removes the margin that all lines share, extra empty rows, scroll bars, and the half-block edges of boxes.
 - A panel, for example a message, a tool call, or a diff line in opencode, fills the width of the screen.
 - The phone removes the sidebar that opencode shows in a wide terminal, because its rows share the lines of the conversation. The status line at the bottom still shows the tokens and the cost.
@@ -83,6 +88,18 @@ This matters most for full-screen agents such as opencode, which draw panels acr
   stay in the output. A compact or partially visible vertical rail is not detected yet.
 - A centered drawing, for example the opencode logo, moves to the left when that makes it fit.
 - When the agent colors suit a dark background and the phone uses the light theme, the phone inverts the lightness of these colors, so the text stays readable. It does the same for colors that suit a light background in the dark theme.
+- Many phone fonts do not have the symbols `⏵`, `⏴`, `⏶`, `⏷`, and `⏺`. The phone shows `▸`, `◂`, `▴`, `▾`, and `●` in their place. Flux for Android also draws the rule characters `─`, `━`, and `═` itself, because its mono font has no glyphs for them.
+
+A wide terminal makes opencode show a diff in 2 columns, for example in a permission dialog.
+The 2 columns do not fit the screen of a phone.
+To show each diff in 1 column, set `diff_style` in `~/.config/opencode/tui.json` on the computer:
+
+```json
+{
+  "$schema": "https://opencode.ai/tui.json",
+  "diff_style": "stacked"
+}
+```
 
 ## Notifications
 
@@ -275,7 +292,9 @@ It does not start agents, close them, or open terminals.
 - **Agents and terminals** opens a window with the agent list on the left and the output of the selected agent on the right. When more than 1 computer has agents, Flux asks which one.
 - **Reply** and **Open** on the master tile of the Inbox open the agent in that window. The menu of each computer in the menu bar panel has **Agents…** too.
 - The output uses the colors of Tokyo Night in dark mode and Tokyo Night Day in light mode.
-- The Mac does not yet fit the output of full-screen agents such as opencode, as the phone does.
+- The Mac fits the output to the width of the window, as the phone does. See [See your agents](#see-your-agents).
+- When you scroll up to read older lines, the output stays there when new output comes. To go back to the newest lines, select the arrow at the bottom of the output.
+- Each output line selects its own text. To copy all the output, select the copy button above the output.
 - Press Command-R to read the output again.
 - Return sends the text. Shift-Return adds a line break.
 - Before the first reply, the Mac asks for Touch ID or the Mac password. The unlock stays valid for 5 minutes, until the Mac sleeps or locks.

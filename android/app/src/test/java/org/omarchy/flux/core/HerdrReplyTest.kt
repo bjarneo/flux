@@ -87,8 +87,9 @@ class HerdrReplyTest {
         val rule = "$esc[38;5;4m" + "─".repeat(80) + "$esc[0m"
         val lines = termLines("$rule\n$esc[1mbold$esc[0m   $esc[41m   $esc[0m\n\n  \n")
         assertEquals(2, lines.size)
-        assertEquals("─".repeat(32), lines[0].text)
-        assertEquals("a shortened rule keeps its color", TermColor.Indexed(4), lines[0].spans.single().style.fg)
+        val fitted = fitLines(lines, 32)
+        assertEquals("─".repeat(32), fitted[0].text)
+        assertEquals("a shortened rule keeps its color", TermColor.Indexed(4), fitted[0].spans.single().style.fg)
         assertEquals("trailing blanks go, also with a background", listOf(TermSpan("bold", TermStyle(bold = true))), lines[1].spans)
     }
 

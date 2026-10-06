@@ -14,7 +14,7 @@ final class TermPhoneTests: XCTestCase {
     private let added = 0x3E4231
     private let sidebar = 0x202033
 
-    private func lines(_ s: String) -> [TermLine] { TermText.lines(s, platform: .phone) }
+    private func lines(_ s: String) -> [TermLine] { TermText.lines(s) }
 
     private func blanks(_ n: Int) -> String { String(repeating: " ", count: n) }
 
@@ -89,13 +89,6 @@ final class TermPhoneTests: XCTestCase {
         XCTAssertEqual(out[0].fill, .rgb(panel), "an empty panel row too")
         XCTAssertNil(out[4].fill, "a row of the conversation has no fill")
         XCTAssertNil(out[3].fill)
-    }
-
-    func testTheMacKeepsTheTerminalLayout() {
-        let text = opencode.joined(separator: "\n")
-        XCTAssertEqual(TermText.lines(text, platform: .mac), TermText.tidyForWindow(TermText.parse(text)))
-        XCTAssertTrue(TermText.lines(text, platform: .mac).allSatisfy { $0.fill == nil }, "the Mac layout sets no fill")
-        XCTAssertEqual(TermText.lines(text, platform: .mac).first?.text, "", "the Mac keeps the empty rows before the text")
     }
 
     /// A row of a wide opencode screen: `main` in 60 columns, a gap of 2, and `side` in a sidebar of 30 columns.
@@ -187,9 +180,133 @@ final class TermPhoneTests: XCTestCase {
         XCTAssertEqual(TermText.fit(screen, cols: 40), screen)
     }
 
+    /// Wraps `text` at `width` columns as an agent does: `first` before the first row and `rest` before the others.
+    private func agentWrap(_ text: String, _ width: Int, _ first: String, _ rest: String? = nil) -> [String] {
+        let rest = rest ?? blanks(first.count)
+        var rows: [String] = []
+        var row = first
+        var empty = true
+        for word in text.split(separator: " ") {
+            if !empty && row.count + 1 + word.count > width {
+                rows.append(row)
+                row = rest
+                empty = true
+            }
+            if !empty { row += " " }
+            row += word
+            empty = false
+        }
+        rows.append(row)
+        return rows
+    }
+
+    private let answer = "The release is out. It contains the fix for the login page and the new export, and the deploy runs now."
+    private let item = "Server: production runs the new build with the fix for the login page and the new export."
+
+    func testJoinsTheRowsThatTheAgentWrapped() {
+        let rule = String(repeating: "─", count: 60)
+        let wrapped = agentWrap(answer, 60, "● ")
+        XCTAssertGreaterThan(wrapped.count, 1)
+        let screen = wrapped + [""] + agentWrap(item, 60, "  - ") + ["  - CLI: the new version is out.", "",
+            "  A short line.", "  The next line stays.", rule, "❯ fix it", rule]
+        let out = lines(screen.joined(separator: "\n"))
+        XCTAssertEqual(out.map(\.text), [
+            "● \(answer)", "", "  - \(item)", "  - CLI: the new version is out.", "",
+            "  A short line.", "  The next line stays.", rule, "❯ fix it", rule,
+        ])
+        XCTAssertEqual(out.first?.cols, 60, "the lines keep the width of the terminal")
+        XCTAssertEqual(lines(wrapped.joined(separator: "\n")).map(\.text), wrapped, "without a rule or a padded row, the width is not known")
+    }
+
+    func testJoinsTheRowsOfAPanel() {
+        let text = "The agent read the two files and found the bug in the parser. It added a test, and it fixed the wrap of long rows."
+        let rows = agentWrap(text, 80, "")
+        XCTAssertGreaterThan(rows.count, 1)
+        let out = lines((rows.map { panelRow($0, bar: accent) } + [plainRow("Done.")]).joined(separator: "\n"))
+        XCTAssertEqual(out.map(\.text), ["┃  \(text)", "   Done."])
+        XCTAssertEqual(out[0].fill, .rgb(panel), "the joined line keeps the panel background")
+        XCTAssertNil(out[1].fill, "a row outside the panel does not join it")
+    }
+
+    func testFitsRulesAndHintsToTheScreen() {
+        let screen = lines([
+            "● Done.", blanks(32) + "new task? /clear to save 12k", String(repeating: "─", count: 50) + " session ─", "❯ fix it",
+            String(repeating: "─", count: 60),
+        ].joined(separator: "\n"))
+        XCTAssertEqual(TermText.fit(screen, cols: 40).map(\.text), [
+            "● Done.", blanks(12) + "new task? /clear to save 12k", String(repeating: "─", count: 30) + " session ─", "❯ fix it",
+            String(repeating: "─", count: 40),
+        ])
+        XCTAssertEqual(TermText.fit(screen, cols: 60), screen, "lines that fit stay")
+    }
+
+    /// A row of a box that is `inner` columns wide inside.
+    private func boxRow(_ text: String, inner: Int = 58) -> String { "│ " + text + blanks(inner - 1 - text.count) + "│" }
+
+    func testOpensABoxThatIsTooWide() {
+        let rule58 = String(repeating: "─", count: 58)
+        let box = ["╭\(rule58)╮"] + ["Bash command", "", "  rm -rf build", "Do you want to proceed?", "❯ 1. Yes", "  2. No"].map { boxRow($0) } + ["╰\(rule58)╯"]
+        let out = lines(box.joined(separator: "\n"))
+        XCTAssertEqual(out.map(\.text), box, "a box keeps its rows")
+        let rule39 = String(repeating: "─", count: 39)
+        XCTAssertEqual(TermText.fit(out, cols: 40).map(\.text), [
+            "╭\(rule39)", "│ Bash command", "│", "│   rm -rf build", "│ Do you want to proceed?", "│ ❯ 1. Yes", "│   2. No", "╰\(rule39)",
+        ])
+        XCTAssertEqual(TermText.fit(out, cols: 60), out, "a box that fits stays")
+        let row = "│ a" + blanks(26) + "│ b" + blanks(27) + "│"
+        let table = ["┌" + String(repeating: "─", count: 28) + "┬" + String(repeating: "─", count: 29) + "┐", row,
+                     "└" + String(repeating: "─", count: 28) + "┴" + String(repeating: "─", count: 29) + "┘"]
+        XCTAssertEqual(TermText.fit(lines(table.joined(separator: "\n")), cols: 40)[1].text, row, "a table keeps its sides")
+    }
+
+    func testShowsSymbolsThatPhoneFontsLack() {
+        XCTAssertEqual(TermText.parse("⏵⏵ auto mode on").map(\.text), ["▸▸ auto mode on"])
+        XCTAssertEqual(TermText.parse("⏺ Done").map(\.text), ["● Done"])
+    }
+
+    /// Expanded V2 tabs at the left, with the background of the selected tab on its first 3 cells.
+    private func tabsRow(_ tab: String, _ main: String, width: Int = 42) -> String {
+        func pad(_ s: String, _ n: Int) -> String { s + blanks(max(0, n - s.count)) }
+        return cell(pad(String(tab.prefix(3)), 3), text, sidebar + 1) + cell(pad(String(tab.dropFirst(3)), width - 3), text, sidebar) + main
+    }
+
+    func testDropsVerticalSessionTabsBeforeFittingPanels() {
+        let rows = [
+            tabsRow("", blankRow()),
+            tabsRow(" 1 Fix alignment", plainRow("Questions")),
+            tabsRow("   flux", panelRow("Accept the license?", bar: accent)),
+            tabsRow("", panelRow("1. Continue", bar: accent)),
+            tabsRow(" + New session", panelRow("Build · Model", bar: accent)),
+            tabsRow("", plainRow("esc interrupt")),
+        ]
+        let expected = lines([
+            blankRow(), plainRow("Questions"), panelRow("Accept the license?", bar: accent),
+            panelRow("1. Continue", bar: accent), panelRow("Build · Model", bar: accent), plainRow("esc interrupt"),
+        ].joined(separator: "\n"))
+        XCTAssertEqual(lines(rows.joined(separator: "\n")), expected)
+        XCTAssertEqual(lines("Older plain history\n" + rows.joined(separator: "\n")).first?.text, "Older plain history")
+        for indicator in ["?", "!", "⠋", " "] {
+            var status = rows
+            status[1] = tabsRow(" \(indicator) Fix alignment", plainRow("Questions"))
+            XCTAssertEqual(lines(status.joined(separator: "\n")), expected)
+        }
+    }
+
+    func testKeepsPanelsThatMentionNewSession() {
+        let rows = [panelRow("1 Example"), panelRow("+ New session"), panelRow("Other text"), panelRow("Build")].joined(separator: "\n")
+        XCTAssertEqual(lines(rows).map(\.text), ["┃  1 Example", "┃  + New session", "┃  Other text", "┃  Build"])
+        let few = [tabsRow(" 1 Title", plainRow("Hello")), tabsRow(" + New session", plainRow("Build"))]
+        XCTAssertTrue(lines(few.joined(separator: "\n")).first?.text.contains("1 Title") == true)
+    }
+
     func testFindsTheHangingIndent() {
         XCTAssertEqual(TermText.hangingIndent("   Plain text of the answer"), 3)
-        XCTAssertEqual(TermText.hangingIndent("┃  $ make test"), 3)
+        XCTAssertEqual(TermText.hangingIndent("┃  make test"), 3)
+        XCTAssertEqual(TermText.hangingIndent("┃  $ make test"), 5, "a shell prompt is a mark")
+        XCTAssertEqual(TermText.hangingIndent("❯ Fix the test"), 2, "the prompt mark of Claude Code")
+        XCTAssertEqual(TermText.hangingIndent("※ recap: the tests pass"), 2, "the recap mark of Claude Code")
+        XCTAssertEqual(TermText.hangingIndent("› Fix the test"), 2, "the prompt mark of Codex")
+        XCTAssertEqual(TermText.hangingIndent(" ❯ 1. Yes, and keep going"), 6, "the cursor and the number of a choice")
         XCTAssertEqual(TermText.hangingIndent("   - A bullet"), 5)
         XCTAssertEqual(TermText.hangingIndent("┃  [✓] Build the APK"), 7)
         XCTAssertEqual(TermText.hangingIndent("⏺ Claude Code text"), 2)

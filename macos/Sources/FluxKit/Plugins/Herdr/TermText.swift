@@ -49,14 +49,17 @@ public struct TermSpan: Sendable, Hashable {
 
 /// One line of terminal text. `fill` is the background of the blank cells
 /// after the text, for example the background of a panel. A nil fill is the
-/// default background. Only the phone layout sets it.
+/// default background. `cols` is the width of the terminal that drew the
+/// line, when `TermText.tidy` finds it, else 0.
 public struct TermLine: Sendable, Hashable {
     public var spans: [TermSpan]
     public var fill: TermColor?
+    public var cols: Int
 
-    public init(_ spans: [TermSpan], fill: TermColor? = nil) {
+    public init(_ spans: [TermSpan], fill: TermColor? = nil, cols: Int = 0) {
         self.spans = spans
         self.fill = fill
+        self.cols = cols
     }
 
     public var text: String { spans.map(\.text).joined() }
@@ -144,6 +147,8 @@ public enum TermText {
                     out = " "
                 } else if isBidiMark(c) {
                     out = "\u{FFFD}"
+                } else if let g = glyphs[c] {
+                    out = g
                 }
                 run.append(out)
                 column += 1
@@ -154,6 +159,12 @@ public enum TermText {
         if !spans.isEmpty { lines.append(TermLine(spans)) }
         return lines
     }
+
+    /// Symbols that agents use and that phone fonts often do not have, with
+    /// a shape of the same meaning. A missing glyph shows as an empty box,
+    /// and the record symbol can show as a color emoji. Claude Code marks
+    /// its modes with ⏵⏵. The Android app uses the same map.
+    private static let glyphs: [Unicode.Scalar: Unicode.Scalar] = ["⏵": "▸", "⏴": "◂", "⏶": "▴", "⏷": "▾", "⏺": "●"]
 
     /// Reports whether `c` sets the direction of text, or is a line or
     /// paragraph separator. The app shows text with the Unicode
@@ -281,45 +292,7 @@ public enum TermText {
         return levels[n / 36] << 16 | levels[n / 6 % 6] << 8 | levels[n % 6]
     }
 
-    /// The longest rule line that the output view shows. The Android app
-    /// uses the same width, so both show the same output.
-    static let ruleWidth = 32
-
     static let ruleChars: Set<Character> = ["─", "━", "═", "-", "_", "="]
-
-    /// Makes terminal lines fit the output view of the platform. The iPhone
-    /// uses the phone layout of the Android app, see `tidyForPhone`.
-    public static func tidy(_ lines: [TermLine], platform: FluxPlatform = .current) -> [TermLine] {
-        platform == .phone ? tidyForPhone(lines) : tidyForWindow(lines)
-    }
-
-    /// Makes terminal lines fit the output view of the Mac. It removes the
-    /// blanks at the end of each line and the empty lines at the end. It also
-    /// shortens lines of box rules, because they fill the width of the terminal.
-    static func tidyForWindow(_ lines: [TermLine]) -> [TermLine] {
-        var out = lines.map { line -> TermLine in
-            let trimmed = trimEnd(line)
-            let text = trimmed.text
-            if text.count > ruleWidth && text.allSatisfy({ ruleChars.contains($0) }) { return take(trimmed, ruleWidth) }
-            return trimmed
-        }
-        while let last = out.last, last.spans.isEmpty { out.removeLast() }
-        return out
-    }
-
-    private static func trimEnd(_ line: TermLine) -> TermLine {
-        var spans = line.spans
-        while let last = spans.last {
-            var t = Substring(last.text)
-            while let c = t.last, c.isWhitespace { t.removeLast() }
-            if !t.isEmpty {
-                spans[spans.count - 1].text = String(t)
-                break
-            }
-            spans.removeLast()
-        }
-        return TermLine(spans)
-    }
 
     static func take(_ line: TermLine, _ n: Int) -> TermLine {
         var out: [TermSpan] = []
@@ -333,9 +306,9 @@ public enum TermText {
         return TermLine(out, fill: line.fill)
     }
 
-    /// Parses and tidies the output text of an agent for the platform.
-    public static func lines(_ text: String, platform: FluxPlatform = .current) -> [TermLine] {
-        tidy(parse(text), platform: platform)
+    /// Parses and tidies the output text of an agent, see `tidy`.
+    public static func lines(_ text: String) -> [TermLine] {
+        tidy(parse(text))
     }
 }
 

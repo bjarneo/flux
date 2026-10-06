@@ -48,7 +48,7 @@ final class TermRowsRenderTests: XCTestCase {
     }
 
     private func render(_ scheme: ColorScheme, name: String) throws -> Double {
-        let output = HerdrOutput(pane: "w1:p2", loading: false, lines: TermText.lines(screen, platform: .phone))
+        let output = HerdrOutput(pane: "w1:p2", loading: false, lines: TermText.lines(screen))
         let view = PaneOutput(output: output).padding(16).background(Color(.systemGroupedBackground))
         return try ScreenRender.render(view, name: name, scheme: scheme, wait: 0.8)
     }

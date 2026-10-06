@@ -242,10 +242,106 @@ class TermTextTest {
         assertEquals(screen, fitLines(screen, 40))
     }
 
+    /** Wraps [text] at [width] columns as an agent does: [first] before the first row and [rest] before the others. */
+    private fun agentWrap(text: String, width: Int, first: String, rest: String = " ".repeat(first.length)): List<String> {
+        val rows = ArrayList<String>()
+        var row = StringBuilder(first)
+        var empty = true
+        for (word in text.split(' ')) {
+            if (!empty && row.length + 1 + word.length > width) {
+                rows += row.toString()
+                row = StringBuilder(rest)
+                empty = true
+            }
+            if (!empty) row.append(' ')
+            row.append(word)
+            empty = false
+        }
+        rows += row.toString()
+        return rows
+    }
+
+    private val answer = "The release is out. It contains the fix for the login page and the new export, and the deploy runs now."
+    private val item = "Server: production runs the new build with the fix for the login page and the new export."
+
+    @Test
+    fun joinsTheRowsThatTheAgentWrapped() {
+        val rule = "─".repeat(60)
+        val wrapped = agentWrap(answer, 60, "● ")
+        assertTrue(wrapped.size > 1)
+        val screen = wrapped + "" + agentWrap(item, 60, "  - ") + "  - CLI: the new version is out." + "" +
+            "  A short line." + "  The next line stays." + rule + "❯ fix it" + rule
+        val lines = termLines(screen.joinToString("\n"))
+        assertEquals(
+            listOf(
+                "● $answer", "", "  - $item", "  - CLI: the new version is out.", "",
+                "  A short line.", "  The next line stays.", rule, "❯ fix it", rule,
+            ),
+            lines.map { it.text },
+        )
+        assertEquals("the lines keep the width of the terminal", 60, lines.first().cols)
+        assertEquals("without a rule or a padded row, the width is not known", wrapped, termLines(wrapped.joinToString("\n")).map { it.text })
+    }
+
+    @Test
+    fun joinsTheRowsOfAPanel() {
+        val text = "The agent read the two files and found the bug in the parser. It added a test, and it fixed the wrap of long rows."
+        val rows = agentWrap(text, 80, "")
+        assertTrue(rows.size > 1)
+        val lines = termLines((rows.map { panelRow(it, accent) } + plainRow("Done.")).joinToString("\n"))
+        assertEquals(listOf("┃  $text", "   Done."), lines.map { it.text })
+        assertEquals("the joined line keeps the panel background", TermColor.Rgb(panel), lines[0].fill)
+        assertEquals("a row outside the panel does not join it", null, lines[1].fill)
+    }
+
+    @Test
+    fun fitsRulesAndHintsToTheScreen() {
+        val screen = termLines(
+            listOf(
+                "● Done.", " ".repeat(32) + "new task? /clear to save 12k", "─".repeat(50) + " session ─", "❯ fix it", "─".repeat(60),
+            ).joinToString("\n"),
+        )
+        assertEquals(
+            listOf("● Done.", " ".repeat(12) + "new task? /clear to save 12k", "─".repeat(30) + " session ─", "❯ fix it", "─".repeat(40)),
+            fitLines(screen, 40).map { it.text },
+        )
+        assertEquals("lines that fit stay", screen, fitLines(screen, 60))
+    }
+
+    /** A row of a box that is [inner] columns wide inside. */
+    private fun boxRow(text: String, inner: Int = 58) = "│ " + text.padEnd(inner - 1) + "│"
+
+    @Test
+    fun opensABoxThatIsTooWide() {
+        val box = listOf("╭" + "─".repeat(58) + "╮") +
+            listOf("Bash command", "", "  rm -rf build", "Do you want to proceed?", "❯ 1. Yes", "  2. No").map { boxRow(it) } +
+            ("╰" + "─".repeat(58) + "╯")
+        val lines = termLines(box.joinToString("\n"))
+        assertEquals("a box keeps its rows", box, lines.map { it.text })
+        assertEquals(
+            listOf("╭" + "─".repeat(39), "│ Bash command", "│", "│   rm -rf build", "│ Do you want to proceed?", "│ ❯ 1. Yes", "│   2. No", "╰" + "─".repeat(39)),
+            fitLines(lines, 40).map { it.text },
+        )
+        assertEquals("a box that fits stays", lines, fitLines(lines, 60))
+        val table = listOf("┌" + "─".repeat(28) + "┬" + "─".repeat(29) + "┐", "│ a" + " ".repeat(26) + "│ b" + " ".repeat(27) + "│", "└" + "─".repeat(28) + "┴" + "─".repeat(29) + "┘")
+        assertEquals("a table keeps its sides", "│ a" + " ".repeat(26) + "│ b" + " ".repeat(27) + "│", fitLines(termLines(table.joinToString("\n")), 40)[1].text)
+    }
+
+    @Test
+    fun showsSymbolsThatPhoneFontsLack() {
+        assertEquals("▸▸ auto mode on", parseAnsi("⏵⏵ auto mode on").single().text)
+        assertEquals("● Done", parseAnsi("⏺ Done").single().text)
+    }
+
     @Test
     fun findsTheHangingIndent() {
         assertEquals(3, hangingIndent("   Plain text of the answer"))
-        assertEquals(3, hangingIndent("┃  $ make test"))
+        assertEquals(3, hangingIndent("┃  make test"))
+        assertEquals("a shell prompt is a mark", 5, hangingIndent("┃  $ make test"))
+        assertEquals("the prompt mark of Claude Code", 2, hangingIndent("❯ Fix the test"))
+        assertEquals("the recap mark of Claude Code", 2, hangingIndent("※ recap: the tests pass"))
+        assertEquals("the prompt mark of Codex", 2, hangingIndent("› Fix the test"))
+        assertEquals("the cursor and the number of a choice", 6, hangingIndent(" ❯ 1. Yes, and keep going"))
         assertEquals(5, hangingIndent("   - A bullet"))
         assertEquals(7, hangingIndent("┃  [✓] Build the APK"))
         assertEquals(2, hangingIndent("⏺ Claude Code text"))

@@ -1,9 +1,8 @@
-import FluxKit
 import XCTest
-@testable import Flux
+@testable import FluxKit
 
 /// The screen layout of output lines: wrapping, fills, panel bars, and block elements.
-final class TermRowsTests: XCTestCase {
+final class TermRowLayoutTests: XCTestCase {
     private func wrap(_ s: String, cols: Int, hang: Int = 0) -> [String] {
         let chars = Array(s)
         return TermRowLayout.wrap(chars, cols: cols, hang: hang).map { String(chars[$0]) }

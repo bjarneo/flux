@@ -1,3 +1,4 @@
+import AppKit
 import FluxKit
 import SwiftUI
 
@@ -154,7 +155,8 @@ private struct AgentDetail: View {
         let out = model.plugin.model.output(model.deviceId, pane: pane)
         VStack(alignment: .leading, spacing: 12) {
             if let agent {
-                AgentHeader(agent: agent, loading: out?.loading == true && !(out?.lines.isEmpty ?? true)) {
+                AgentHeader(agent: agent, loading: out?.loading == true && !(out?.lines.isEmpty ?? true),
+                            text: out?.text ?? "") {
                     model.plugin.read(model.deviceId, pane: pane)
                 }
                 if model.herdr?.review == true {
@@ -205,6 +207,9 @@ private struct AgentDetail: View {
 private struct AgentHeader: View {
     let agent: HerdrAgent
     let loading: Bool
+    /// The output as plain text, for the copy button. A row of the output
+    /// selects only its own text.
+    let text: String
     let refresh: () -> Void
 
     var body: some View {
@@ -226,6 +231,13 @@ private struct AgentHeader: View {
             Text(agent.pane)
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(text, forType: .string)
+            } label: { Image(systemName: "doc.on.doc") }
+                .buttonStyle(.borderless)
+                .disabled(text.isEmpty)
+                .help("Copy the output")
             if loading {
                 ProgressView().controlSize(.small)
             } else {
@@ -260,42 +272,120 @@ private struct AgentOutput: View {
     }
 }
 
+/// How close to the end the output must be, in points, to follow new lines.
+private let followSlack: CGFloat = 48
+
+/// The output in the layout of the phones: the rows that the agent wrapped
+/// at the width of the terminal join, and they wrap again at the width of
+/// the pane. Rules, boxes, and panels fit the pane. The view follows new
+/// lines at the end. When the user scrolls up to read older lines, the view
+/// stays there, and a button goes back to the newest lines.
 private struct TerminalText: View {
     let output: HerdrOutput
+    @State private var follow = true
+    @State private var viewport: CGFloat = 0
+    @State private var width: CGFloat = 0
 
     var body: some View {
-        let text = TermColors.attributed(output.lines)
+        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 6) {
                     if output.truncated {
                         Text("Older lines are cut.").font(.caption.monospaced()).foregroundStyle(TermColors.dim)
+                            .padding(.horizontal, termPad)
                     }
                     if let error = output.error {
                         Text(error).font(.caption).foregroundStyle(TermColors.red)
+                            .padding(.horizontal, termPad)
                     }
                     if output.lines.isEmpty {
                         Text("No output yet.").font(TermColors.font).foregroundStyle(TermColors.dim)
-                    } else {
-                        Text(text)
-                            .font(TermColors.font)
-                            .foregroundStyle(TermColors.text)
-                            .lineSpacing(2)
+                            .padding(.horizontal, termPad)
+                    } else if width > 0 {
+                        // The rows draw their own side padding, so the fill of a panel reaches both edges.
+                        TermLinesView(lines: output.lines, width: width - scrollerWidth)
                             .textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    Color.clear.frame(height: 1).id("end")
+                    // The end of the output. Its place in the viewport tells
+                    // whether the newest lines show.
+                    Color.clear
+                        .frame(height: 1)
+                        .id("end")
+                        .background(GeometryReader { g in
+                            Color.clear.preference(key: EndOffset.self, value: g.frame(in: .named("output")).minY)
+                        })
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 12)
                 .padding(.vertical, 10)
             }
+            .coordinateSpace(name: "output")
             .defaultScrollAnchor(.bottom)
-            // New output scrolls to the newest lines.
-            .onChange(of: output.text) { proxy.scrollTo("end", anchor: .bottom) }
+            .background(GeometryReader { g in
+                Color.clear
+                    .onAppear {
+                        viewport = g.size.height
+                        width = g.size.width
+                        stayAtEnd(proxy)
+                    }
+                    .onChange(of: g.size) { _, size in
+                        viewport = size.height
+                        width = size.width
+                        stayAtEnd(proxy)
+                    }
+            })
+            .onPreferenceChange(EndOffset.self) { end in
+                guard viewport > 0 else { return }
+                follow = end <= viewport + followSlack
+            }
+            // New output scrolls to the newest lines, unless the user reads older ones.
+            .onChange(of: output.text) {
+                if follow { proxy.scrollTo("end", anchor: .bottom) }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if !follow && !output.lines.isEmpty {
+                    Button {
+                        follow = true
+                        withAnimation { proxy.scrollTo("end", anchor: .bottom) }
+                    } label: {
+                        Image(systemName: "arrow.down")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(TermColors.blue)
+                            .frame(width: 32, height: 32)
+                            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(TermColors.background))
+                            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(TermColors.blue))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(10)
+                    .help("Show the newest lines")
+                    .accessibilityLabel("Show the newest lines")
+                }
+            }
         }
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(TermColors.background))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(TermColors.border))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(shape.fill(TermColors.background))
+        .overlay(shape.strokeBorder(TermColors.border))
+        .clipShape(shape)
     }
+}
+
+extension TerminalText {
+    /// The width of a scroll bar that takes room from the rows. The scroll
+    /// bars of macOS take no room unless the Mac always shows them, for
+    /// example with a mouse.
+    private var scrollerWidth: CGFloat {
+        NSScroller.preferredScrollerStyle == .legacy ? NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy) : 0
+    }
+
+    /// Keeps the newest lines on the screen after the width changes. The
+    /// rows wrap again at the new width, and the first rows come 1 layout
+    /// after the width is known, so the end moves.
+    private func stayAtEnd(_ proxy: ScrollViewProxy) {
+        guard follow else { return }
+        DispatchQueue.main.async { proxy.scrollTo("end", anchor: .bottom) }
+    }
+}
+
+private struct EndOffset: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }

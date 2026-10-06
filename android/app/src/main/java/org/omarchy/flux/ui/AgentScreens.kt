@@ -83,6 +83,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.omarchy.flux.core.AgentChoice
@@ -377,18 +378,25 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
 }
 
 /**
- * The header of an agent: the window-title line with the pane and the
- * status, the Close key, and the task of the agent. The top bar already
- * names the agent and the project.
+ * The header of an agent in 1 row, so that the output gets the height: the
+ * window-title line with the pane and the status, the task of the agent
+ * under it in 1 line, and the Close key. The top bar already names the
+ * agent and the project.
  */
 @Composable
 private fun AgentHeader(a: HerdrAgent, closer: PaneCloser?) {
-    Tile(Modifier.fillMaxWidth(), padding = PaddingValues(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            WindowTitle(listOf(a.pane), a.status, Modifier.weight(1f).semantics(mergeDescendants = true) {})
+    Tile(Modifier.fillMaxWidth(), padding = PaddingValues(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                WindowTitle(listOf(a.pane), a.status)
+                if (a.title.isNotEmpty()) T(a.title, size = 13, weight = FontWeight.SemiBold, maxLines = 1)
+            }
             closer?.Button()
         }
-        if (a.title.isNotEmpty()) T(a.title, size = 13, weight = FontWeight.SemiBold, maxLines = 2)
         closer?.error?.let { T(it, size = 12, color = Tn.red) }
     }
 }
@@ -507,8 +515,9 @@ internal fun AgentOutput(out: HerdrOutput?, modifier: Modifier) {
     var follow by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
     // Only the end of a scroll changes follow. A scroll by the user to the end follows again.
+    // The first value is not the end of a scroll. With output from before, the view is still at the top then.
     LaunchedEffect(scroll) {
-        snapshotFlow { scroll.isScrollInProgress }.collect { moving ->
+        snapshotFlow { scroll.isScrollInProgress }.drop(1).collect { moving ->
             if (!moving) follow = scroll.value >= scroll.maxValue - FOLLOW_SLACK_PX
         }
     }

@@ -33,9 +33,10 @@ data class TermSpan(val text: String, val style: TermStyle = TermStyle())
 /**
  * One line of terminal text. [fill] is the background of the blank cells
  * after the text, for example the background of a panel. A null fill is the
- * default background.
+ * default background. [cols] is the width of the terminal that drew the
+ * line, when [tidyLines] finds it, else 0.
  */
-data class TermLine(val spans: List<TermSpan>, val fill: TermColor? = null) {
+data class TermLine(val spans: List<TermSpan>, val fill: TermColor? = null, val cols: Int = 0) {
     val text: String get() = spans.joinToString("") { it.text }
 }
 
@@ -118,7 +119,7 @@ fun parseAnsi(text: String, maxLines: Int = Int.MAX_VALUE): List<TermLine> {
             }
             c == '\r' || c.code < 0x20 || c.code in 0x7F..0x9F -> i++
             else -> {
-                put(if (c == ' ') ' ' else if (isBidiMark(c)) '\uFFFD' else c)
+                put(if (c == ' ') ' ' else if (isBidiMark(c)) '\uFFFD' else glyphs[c] ?: c)
                 i++
             }
         }
@@ -130,6 +131,13 @@ fun parseAnsi(text: String, maxLines: Int = Int.MAX_VALUE): List<TermLine> {
     }
     return lines.toList()
 }
+
+/**
+ * Symbols that agents use and that phone fonts often do not have, with a
+ * shape of the same meaning. A missing glyph shows as an empty box, and the
+ * record symbol can show as a color emoji. Claude Code marks its modes with ⏵⏵.
+ */
+private val glyphs = mapOf('⏵' to '▸', '⏴' to '◂', '⏶' to '▴', '⏷' to '▾', '⏺' to '●')
 
 /**
  * Reports whether [c] sets the direction of text, or is a line or paragraph
@@ -238,19 +246,37 @@ fun paletteRgb(index: Int): Int? {
     return (levels[n / 36] shl 16) or (levels[n / 6 % 6] shl 8) or levels[n % 6]
 }
 
-/** The longest rule line that the output view shows. A phone screen is narrower than a terminal. */
-private const val RULE_WIDTH = 32
-
 private val ruleChars = setOf('─', '━', '═', '-', '_', '=')
 
+/** A run of rule characters must be this long to count as a rule. */
+private const val RULE_MIN = 8
+
 /** True when the line has only rule characters, so it is a horizontal rule. */
-fun isRule(line: String, min: Int = 8): Boolean {
+fun isRule(line: String, min: Int = RULE_MIN): Boolean {
     val t = line.trim()
     return t.length >= min && t.all { it in ruleChars }
 }
 
+/** The start and the length of the longest run of 1 rule character in [text]. */
+private fun longestRule(text: String): Pair<Int, Int> {
+    var best = 0 to 0
+    var i = 0
+    while (i < text.length) {
+        var j = i + 1
+        if (text[i] in ruleChars) {
+            while (j < text.length && text[j] == text[i]) j++
+            if (j - i > best.second) best = i to j - i
+        }
+        i = j
+    }
+    return best
+}
+
 /** The bars at the left side of a panel, for example of a message in opencode. */
 private const val BARS = "┃│║▌▎▏"
+
+/** The right sides of boxes. A line that ends in one is a row of a box. */
+private const val BOX_SIDES = "│┃║"
 
 /** A lone block after this many blanks at the end of a line is the thumb of a scroll bar. */
 private const val SCROLL_BAR_GAP = 4
@@ -260,23 +286,98 @@ private val edgeLine = Regex("^[╵╷╹╻]?(▀{8,}|▄{8,})[╵╷╹╻]?$"
 
 /**
  * Makes terminal lines fit a phone screen. It removes the blanks at the end
- * of each line, scroll bars, and the edges of boxes. It shortens lines of
- * box rules, because they fill the width of the terminal. It also removes
- * the blank columns that all lines share at the start, and the extra empty
- * rows, because full-screen agents such as opencode fill the terminal with them.
+ * of each line, scroll bars, and the edges of boxes. It joins the rows that
+ * the agent wrapped at the width of the terminal, see [reflow]. It also
+ * removes the blank columns that all lines share at the start, and the extra
+ * empty rows, because full-screen agents such as opencode fill the terminal
+ * with them. [fitLines] then fits the rules, boxes, and drawings to the
+ * width of the screen.
  */
 fun tidyLines(lines: List<TermLine>): List<TermLine> {
+    val rows = dropSidebar(dropSessionTabs(lines))
+    val width = termWidth(rows)
     val out = ArrayList<TermLine>()
-    for (line in dropSidebar(dropSessionTabs(lines))) {
+    for (line in rows) {
         val trimmed = trimEnd(dropScrollBar(line))
-        val text = trimmed.text
-        when {
-            edgeLine.matches(text.trim()) -> {}
-            text.length > RULE_WIDTH && text.all { it in ruleChars } -> out += take(trimmed, RULE_WIDTH)
-            else -> out += trimmed
-        }
+        if (!edgeLine.matches(trimmed.text.trim())) out += trimmed
     }
-    return dropEmptyRows(dedent(out))
+    val joined = reflow(out, width)
+    val margin = sharedMargin(joined)
+    val lines = dropEmptyRows(if (margin == 0) joined else joined.map { dropColumns(it, margin) })
+    return if (width == 0) lines else lines.map { it.copy(cols = width - margin) }
+}
+
+/**
+ * Returns the width of the terminal in columns, or 0 when the lines do not
+ * show it. The widest line shows the width when it ends in blanks, which
+ * a screen row with a background has, or when it holds a rule. A plain read
+ * has no blanks at the end, so its widest line can be narrower than the terminal.
+ */
+private fun termWidth(lines: List<TermLine>): Int {
+    val width = lines.maxOfOrNull { it.text.length } ?: return 0
+    val shown = lines.any { line ->
+        val t = line.text
+        t.length == width && (t.last() == ' ' || longestRule(t).second >= RULE_MIN)
+    }
+    return if (shown) width else 0
+}
+
+/** The columns at the right edge that an agent can keep free when it wraps a line, for example for the margin of a panel. */
+private const val WRAP_SLACK = 2
+
+/**
+ * Joins the rows that an agent wrapped at the terminal [width] into 1 line.
+ * Claude Code, Codex, and opencode wrap their text at the width of the
+ * terminal, so on a narrow screen each row breaks again and leaves a short
+ * piece. The screen then wraps the joined line at its own width. A row
+ * continues the line above it when the first word of the row did not fit
+ * at the end of the line above, and when the row starts at the hanging
+ * indent of that line, under the same panel bar and with the same fill.
+ * A row with a list marker starts a new line. Rules and the rows of a box
+ * stay as they are. Without a known width, the lines stay as they are.
+ */
+private fun reflow(lines: List<TermLine>, width: Int): List<TermLine> {
+    if (width == 0) return lines
+    val out = ArrayList<TermLine>(lines.size)
+    // The length of the last row of the last line, or 0 when no row can join it.
+    var end = 0
+    var hang = 0
+    for (line in lines) {
+        val text = line.text
+        val prev = out.lastOrNull()
+        if (prev != null && end > 0 && 2 * end >= width && line.fill == prev.fill && continues(prev.text, text, hang)) {
+            val space = text.indexOf(' ', hang)
+            val word = (if (space < 0) text.length else space) - hang
+            if (end + 1 + word > width - WRAP_SLACK) {
+                val gap = TermSpan(" ", prev.spans.last().style.copy(underline = false, strike = false))
+                out[out.size - 1] = TermLine(prev.spans + gap + dropColumns(line, hang).spans, prev.fill)
+                end = if (canContinue(text)) text.length else 0
+                continue
+            }
+        }
+        out += line
+        end = if (canContinue(text)) text.length else 0
+        hang = hangingIndent(text)
+    }
+    return out
+}
+
+/** True when the next row can continue a line that ends with [row]: the row has text, and it is not a rule or a row of a box. */
+private fun canContinue(row: String): Boolean =
+    row.isNotBlank() && row.last() !in BOX_SIDES && longestRule(row).second < RULE_MIN
+
+/**
+ * True when [row] can continue the line [prev], which wraps at column
+ * [hang]. Before that column, the row has only blanks and the panel bars of
+ * the line. At that column, its text starts, without a list marker.
+ */
+private fun continues(prev: String, row: String, hang: Int): Boolean {
+    if (hang >= row.length || row[hang] == ' ' || !canContinue(row)) return false
+    for (i in 0 until hang) {
+        val c = row[i]
+        if (c != ' ' && (c !in BARS || prev.getOrNull(i) != c)) return false
+    }
+    return listMarker.find(row.substring(hang)) == null
 }
 
 /** Drops the expanded OpenCode V2 session rail, without moving plain scrollback above it. */
@@ -428,11 +529,9 @@ private fun leadingBlanks(line: TermLine): Int {
     return n
 }
 
-/** Removes the blank columns that all lines with text share at the start. */
-private fun dedent(lines: List<TermLine>): List<TermLine> {
-    val n = lines.filter { it.spans.isNotEmpty() }.minOfOrNull(::leadingBlanks) ?: 0
-    return if (n == 0) lines else lines.map { dropColumns(it, n) }
-}
+/** The number of blank columns that all lines with text share at the start. */
+private fun sharedMargin(lines: List<TermLine>): Int =
+    lines.filter { it.spans.isNotEmpty() }.minOfOrNull(::leadingBlanks) ?: 0
 
 /** Removes the first [n] cells of a line. */
 private fun dropColumns(line: TermLine, n: Int): TermLine {
@@ -484,45 +583,124 @@ private fun take(line: TermLine, n: Int): TermLine {
 /** A block must start at this column or later to move, see [fitLines]. Text in a column near the left keeps its place. */
 private const val FIT_MIN_LEAD = 8
 
+/** The shortest run that a rule keeps when [fitLines] shortens it. */
+private const val RULE_KEEP = 3
+
 /**
- * Moves the centered blocks of lines that are wider than [cols] columns to
- * the left when they fit without some of the blanks before them. An example
- * is the logo of opencode. A block is a run of lines between blank rows. It
- * is centered when it starts at column [FIT_MIN_LEAD] or later, and when it
- * has at least half as many blank columns at the left as at the right. The
- * block keeps its place relative to the width of the output, so it stays
- * centered.
+ * Fits the lines that are wider than [cols] columns to the screen:
+ *
+ * - A box that is too wide loses its right side, see [openBoxes].
+ * - A rule gets shorter, so that its line fills the width of the screen.
+ *   A line can hold a title next to the rule, for example the session name
+ *   that Claude Code shows above its prompt.
+ * - A centered block of lines moves to the left when it fits without some
+ *   of the blanks before it. An example is the logo of opencode. A block is
+ *   a run of lines between blank rows. It is centered when it starts at
+ *   column [FIT_MIN_LEAD] or later, and when it has at least half as many
+ *   blank columns at the left as at the right. The block keeps its place
+ *   relative to the width of the output, so it stays centered.
+ * - A single line at the right edge of the terminal moves in the same way,
+ *   for example a hint of Claude Code. It then ends at the right edge of the screen.
  */
 fun fitLines(lines: List<TermLine>, cols: Int): List<TermLine> {
-    val width = lines.maxOfOrNull { it.text.length } ?: 0
-    if (width <= cols) return lines
-    val out = lines.toMutableList()
-    var start = 0
-    while (start < lines.size) {
-        var end = start
-        while (end < lines.size && lines[end].spans.isNotEmpty()) end++
-        if (end > start) {
-            val block = lines.subList(start, end)
-            val lead = block.minOf(::leadingBlanks)
-            val right = block.maxOf { it.text.length }
-            val size = right - lead
-            if (right > cols && size <= cols && lead >= FIT_MIN_LEAD && 2 * lead >= width - right) {
-                // The share of the free columns at the left stays the same.
-                val shift = lead - lead * (cols - size) / (width - size)
-                for (i in start until end) out[i] = dropColumns(lines[i], shift)
-            }
+    if ((lines.maxOfOrNull { it.text.length } ?: 0) <= cols) return lines
+    // A joined line is wider than the terminal, so the width comes from tidyLines when it can.
+    val width = lines.maxOf { it.cols }.takeIf { it > 0 } ?: lines.maxOf { it.text.length }
+    val out = openBoxes(lines, cols).map { fitRule(it, cols) }.toMutableList()
+    fun move(start: Int, end: Int, single: Boolean = false) {
+        val block = out.subList(start, end)
+        val lead = block.minOf(::leadingBlanks)
+        val right = block.maxOf { it.text.length }
+        val size = right - lead
+        // A single line moves only when it ends at the right edge, so that the rows of a drawing keep their places.
+        if (right in cols + 1..width && size <= cols && lead >= FIT_MIN_LEAD && 2 * lead >= width - right &&
+            (!single || right >= width - WRAP_SLACK)
+        ) {
+            // The share of the free columns at the left stays the same.
+            val shift = lead - lead * (cols - size) / (width - size)
+            for (i in start until end) out[i] = dropColumns(out[i], shift)
         }
+    }
+    var start = 0
+    while (start < out.size) {
+        var end = start
+        while (end < out.size && out[end].spans.isNotEmpty()) end++
+        if (end > start) move(start, end)
         start = end + 1
     }
+    for (i in out.indices) if (out[i].text.length > cols) move(i, i + 1, single = true)
     return out
 }
 
-private val listMarker = Regex("""^(?:[-*+•·◦▪‣⏺●⎿→←✓✔✗✘△▣■□]|\[[ x✓•]]|\d{1,3}[.)])\s+""")
+/** Shortens the longest rule of a line that is wider than [cols], so that the line fits. */
+private fun fitRule(line: TermLine, cols: Int): TermLine {
+    val text = line.text
+    if (text.length <= cols) return line
+    val (start, run) = longestRule(text)
+    if (run < RULE_MIN) return line
+    val cut = minOf(text.length - cols, run - RULE_KEEP)
+    return TermLine(take(line, start).spans + dropColumns(line, start + cut).spans, line.fill)
+}
+
+private const val BOX_TOPS = "╭┌╔┏"
+private const val BOX_TOP_ENDS = "╮┐╗┓"
+private const val BOX_BOTTOMS = "╰└╚┗"
+private const val BOX_BOTTOM_ENDS = "╯┘╝┛"
+
+/** The joins of a table. A box with one of them in its top edge is a table, and [openBoxes] keeps it. */
+private const val TABLE_JOINS = "┬┴┼├┤╤╧╪╦╩╬┳┻╋"
+
+/**
+ * Removes the right side of each box that is wider than [cols] columns, for
+ * example a dialog that fills the width of the terminal. The rows of the box
+ * then wrap on the screen, and the left side stays as a panel bar. A box
+ * starts with a top edge, for example ╭──╮, has rows with a side at both
+ * ends, and ends with a bottom edge. [fitRule] then shortens the edges.
+ */
+private fun openBoxes(lines: List<TermLine>, cols: Int): List<TermLine> {
+    var out: MutableList<TermLine>? = null
+    var i = 0
+    while (i < lines.size) {
+        val top = lines[i].text
+        val left = top.indexOfFirst { it != ' ' }
+        val right = top.length - 1
+        if (right < cols || left < 0 || top[left] !in BOX_TOPS || top[right] !in BOX_TOP_ENDS ||
+            top.any { it in TABLE_JOINS } || longestRule(top).second < RULE_MIN
+        ) {
+            i++
+            continue
+        }
+        var end = i + 1
+        while (end < lines.size) {
+            val row = lines[end].text
+            if (row.length != right + 1 || row.getOrNull(left) == null) break
+            if (row[left] in BOX_BOTTOMS && row[right] in BOX_BOTTOM_ENDS) break
+            if (row[left] !in BOX_SIDES || row[right] !in BOX_SIDES) break
+            end++
+        }
+        val bottom = lines.getOrNull(end)?.text
+        if (bottom == null || bottom.length != right + 1 || bottom[left] !in BOX_BOTTOMS) {
+            i++
+            continue
+        }
+        val o = out ?: lines.toMutableList().also { out = it }
+        for (k in i..end) o[k] = trimEnd(take(lines[k], right))
+        i = end + 1
+    }
+    return out ?: lines
+}
+
+/**
+ * A list marker: a symbol before a blank, for example the bullet of Claude
+ * Code or the prompt mark of Codex, a check box, or a number.
+ */
+private val listMarker = Regex("""^(?:[^\p{L}\p{N}\s]|\[[ x✓•]]|\d{1,3}[.)])\s+""")
 
 /**
  * Returns the column where the wrapped rows of a line start, so that they
  * line up with its text. The column is after the blanks at the start, the
- * bar of a panel, and a list marker.
+ * bar of a panel, and up to 2 list markers, for example the cursor and the
+ * number of a choice.
  */
 fun hangingIndent(text: String): Int {
     var i = text.indexOfFirst { it != ' ' }
@@ -531,7 +709,7 @@ fun hangingIndent(text: String): Int {
         i++
         while (i < text.length && text[i] == ' ') i++
     }
-    listMarker.find(text.substring(i))?.let { i += it.value.length }
+    repeat(2) { listMarker.find(text.substring(i))?.let { i += it.value.length } }
     return i
 }
 
