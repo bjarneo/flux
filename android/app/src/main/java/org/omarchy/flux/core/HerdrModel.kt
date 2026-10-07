@@ -361,8 +361,10 @@ data class HerdrTerminalSession(
     val reason: String = "",
     val closed: Boolean = false,
     val retry: Boolean = false,
-    /** Why the last typed event did not reach the terminal, or null. */
+    /** Why the last event did not reach the terminal, or null after the screen showed it. */
     val inputError: String? = null,
+    /** Counts the input errors of the session, so the screen shows a repeated error too. */
+    val inputErrorSeq: Int = 0,
 )
 
 /**
@@ -525,14 +527,18 @@ fun parseHerdrTerminalClosed(body: JsonObject): HerdrTerminalEvent.Closed? {
     )
 }
 
-/** A refused terminal_input. [code] is "invalid_input" or "input_failed". */
-data class HerdrTerminalInputError(val session: String, val code: String, val error: String)
+/**
+ * A refused input event. [code] is "invalid_input", "input_failed", or
+ * "paste_failed". [image] is true when the error is about an image paste.
+ */
+data class HerdrTerminalInputError(val session: String, val code: String, val error: String, val image: Boolean = false)
 
 /** Parses the body of a terminal_input_error packet. It returns null for another body. */
 fun parseHerdrTerminalInputError(body: JsonObject): HerdrTerminalInputError? {
     if (body.str("kind") != "terminal_input_error") return null
     val session = body.str("session")?.takeIf { it.isNotEmpty() } ?: return null
-    return HerdrTerminalInputError(session, body.str("code").orEmpty(), body.str("error").orEmpty())
+    val image = body.bool("image") == true
+    return HerdrTerminalInputError(session, body.str("code").orEmpty(), body.str("error").orEmpty(), image)
 }
 
 /**
@@ -598,7 +604,7 @@ val HERDR_TERMINAL_KEYS: Set<String> = setOf("enter", "esc", "tab", "shift+tab",
 
 /** The named keys that fluxd accepts in a live terminal_input packet. */
 val HERDR_TERMINAL_INPUT_KEYS: Set<String> =
-    setOf("enter", "tab", "esc", "backspace", "up", "down", "left", "right")
+    setOf("enter", "tab", "shift+tab", "esc", "backspace", "up", "down", "left", "right")
 
 /** The most keys in 1 keys packet. */
 const val HERDR_MAX_KEYS = 8

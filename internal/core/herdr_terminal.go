@@ -23,14 +23,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"image"
-	_ "image/gif"
-	_ "image/jpeg"
 	"image/png"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"flux/internal/desktop"
 	"flux/internal/herdr"
 	"flux/internal/lan"
 	"flux/internal/proto"
@@ -96,6 +94,27 @@ type herdrTerminal struct {
 	// stream. A gesture sends many events, so the next failures of the
 	// stream do not go to the log. d.mu guards it.
 	warned bool
+
+	// typed counts the characters that the phone typed or pasted since its
+	// last Enter, for the log line of that Enter. d.mu guards it.
+	typed int
+
+	// imaging is true while an image paste of the stream runs. d.mu guards
+	// it.
+	imaging bool
+
+	// imageCancel stops the transfer of that image when the stream ends.
+	// d.mu guards it.
+	imageCancel context.CancelFunc
+
+	// held keeps the events that came during an image paste, in order,
+	// until the agent had time to attach the image. d.mu guards it.
+	held []herdrTermEvent
+
+	// overflowed is true after fluxd refused an event because held was
+	// full. The phone gets one error for each image, not one for each
+	// key. d.mu guards it.
+	overflowed bool
 }
 
 // target names the pane of the stream for the log, in the words of the
@@ -496,33 +515,45 @@ func (d *Daemon) herdrTerminalResize(dev *Device, l *lan.Link, id string, cols, 
 const herdrTerminalInputMax = 16 << 10
 
 // herdrTerminalInputKeys maps a named key from a phone to the bytes that
-// the controller types. Only fluxd encodes a special key, so a client
-// cannot smuggle an arbitrary escape sequence into a text event.
+// the controller types. fluxd encodes each special key, and a text event
+// cannot hold a control character. So one event cannot hold an escape
+// sequence.
 var herdrTerminalInputKeys = map[string]string{
-	"enter": "\r", "tab": "\t", "esc": "\x1b", "backspace": "\x7f",
+	"enter": "\r", "tab": "\t", "shift+tab": "\x1b[Z", "esc": "\x1b", "backspace": "\x7f",
 	"up": "\x1b[A", "down": "\x1b[B", "left": "\x1b[D", "right": "\x1b[C",
 }
 
+// The codes of terminal_input_error.
+const (
+	herdrInputInvalid = "invalid_input" // fluxd refused the event
+	herdrInputFailed  = "input_failed"  // the bridge failed, and the stream ended
+	herdrPasteFailed  = "paste_failed"  // an image paste did not finish, and the stream stays
+)
+
+// herdrTerminalHidden reports whether r is a control character or a
+// directional control. A terminal reads a control character as a key. A
+// directional control can reorder text on a screen.
+func herdrTerminalHidden(r rune) bool {
+	switch {
+	case r < 0x20 || r == 0x7f || r >= 0x80 && r <= 0x9f:
+		return true
+	case r == 0x061c || r == 0x200e || r == 0x200f || r >= 0x202a && r <= 0x202e || r >= 0x2066 && r <= 0x2069:
+		return true
+	case r == 0x2028 || r == 0x2029:
+		return true
+	}
+	return false
+}
+
 // herdrTerminalInputText reports whether text is a valid text event: not
-// empty, within the limit, one line, and without control or directional
-// characters. A terminal reads a control character as a key, and the
-// Unicode bidirectional controls can reorder text on a screen.
+// empty, within the limit, valid UTF-8, and without a control or a
+// directional character. A line break and a tab are control characters,
+// so a text event stays on one line.
 func herdrTerminalInputText(text string) bool {
 	if text == "" || len(text) > herdrTerminalInputMax || !utf8.ValidString(text) {
 		return false
 	}
-	for _, r := range text {
-		switch {
-		case r == '\n' || r == '\t':
-			return false
-		case r < 0x20 || r == 0x7f || r >= 0x80 && r <= 0x9f:
-			return false
-		case r == 0x061c || r == 0x200e || r == 0x200f || r >= 0x202a && r <= 0x202e || r >= 0x2066 && r <= 0x2069,
-			r == 0x2028 || r == 0x2029:
-			return false
-		}
-	}
-	return true
+	return !strings.ContainsFunc(text, herdrTerminalHidden)
 }
 
 // herdrTerminalInputPayload validates one typed event and returns the bytes
@@ -531,258 +562,455 @@ func herdrTerminalInputText(text string) bool {
 func herdrTerminalInputPayload(text, key string) (string, string) {
 	switch {
 	case text != "" && key != "":
-		return "", "Send text or a key, not both."
+		return "", "Send text or a key, not both"
 	case key != "":
 		encoded, ok := herdrTerminalInputKeys[key]
 		if !ok {
-			return "", "fluxd does not know that key."
+			return "", "fluxd does not know that key"
 		}
 		return encoded, ""
 	case herdrTerminalInputText(text):
 		return text, ""
 	}
-	return "", "The terminal did not accept this input."
+	return "", "The terminal did not accept this input"
 }
 
 // herdrTerminalPasteMax is the largest paste that a phone may send in one
 // terminal_paste. A paste is often a code block, so it is larger than one
-// typed event; the controller writes the whole line to the program.
+// typed event.
 const herdrTerminalPasteMax = 64 << 10
 
 // herdrTerminalPasteText prepares the text of a paste. A paste keeps its
 // line breaks and tabs, because the program reads them as pasted content
-// and not as keys. Every other control character goes, so a paste cannot
-// close its own bracketed paste with an escape sequence or type a key. It
-// returns an empty text and the reason when the paste is refused.
+// and not as keys. fluxd drops each other control character and each
+// directional control, so a paste cannot end its own bracketed paste or
+// type a key. It returns an empty text and the reason when it refuses the
+// paste.
 func herdrTerminalPasteText(text string) (string, string) {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
 	switch {
 	case text == "":
-		return "", "The clipboard has no text."
+		return "", "The paste is empty"
 	case len(text) > herdrTerminalPasteMax:
 		return "", fmt.Sprintf("The paste is longer than %d KB", herdrTerminalPasteMax>>10)
 	case !utf8.ValidString(text):
-		return "", "The paste is not valid text."
+		return "", "The paste is not valid text"
 	}
-	var b strings.Builder
-	b.Grow(len(text))
-	for _, r := range text {
-		switch {
-		case r == '\n' || r == '\t':
-			b.WriteRune(r)
-		case r < 0x20 || r == 0x7f || r >= 0x80 && r <= 0x9f:
-			// Drop, so the paste cannot type a key.
-		case r == 0x061c || r == 0x200e || r == 0x200f || r >= 0x202a && r <= 0x202e || r >= 0x2066 && r <= 0x2069,
-			r == 0x2028 || r == 0x2029:
-			// Drop the directional controls that can reorder the paste.
-		default:
-			b.WriteRune(r)
+	out := strings.Map(func(r rune) rune {
+		if r != '\n' && r != '\t' && herdrTerminalHidden(r) {
+			return -1
 		}
-	}
-	out := b.String()
+		return r
+	}, text)
 	if out == "" {
-		return "", "The paste has no text that the terminal can read."
+		return "", "The paste has no text that the terminal can show"
 	}
 	return out, ""
 }
 
-// herdrTerminalPaste types text as one bracketed paste in the controller
-// session of the phone. A program that enabled bracketed paste reads the
-// text as pasted content and does not submit on its line breaks, so a
-// phone paste reaches the program's own paste handling, for example the
-// compact placeholder of opencode. The markers are Flux's, because the
-// controller writes the bytes as they are.
-func (d *Daemon) herdrTerminalPaste(dev *Device, l *lan.Link, id, text string) {
-	body, why := herdrTerminalPasteText(text)
-	if body == "" {
-		herdrTerminalInputError(l, id, "invalid_input", why)
-		return
-	}
-	d.herdrTerminalSend(dev, l, id, "\x1b[200~"+body+"\x1b[201~")
+// herdrTermEvent is one validated event for the controller session.
+type herdrTermEvent struct {
+	bytes string // the bytes that the controller types
+	key   string // the named key, or empty
+	chars int    // the count of typed or pasted characters
+	paste bool   // true for a bracketed paste of text
+	image int    // the size of a pasted image in bytes, for its paste key
 }
 
-// herdrTerminalImageMax is the largest image that a phone may paste into a
-// terminal in one terminal_paste_image. It matches the clipboard image
-// limit of Flux.
-const herdrTerminalImageMax = 16 << 20
+// herdrTermMaxHeld is the number of events that a stream keeps while an
+// image paste runs. It stays below the input queue of the session, so the
+// events fit in the queue after the paste key.
+const herdrTermMaxHeld = 96
 
-// herdrTerminalPasteKey is the paste key of the controlled program. A
-// terminal reads 0x16 as Ctrl+V. opencode reads the clipboard then, so an
-// image on the clipboard of the computer reaches the prompt as an
-// attachment instead of typed text.
-const herdrTerminalPasteKey = "\x16"
-
-// herdrTerminalPasteImage puts an image from the phone on the clipboard
-// of the computer and pastes it into the controller session of the phone.
-// The image travels as the payload of the packet, so the paste does not
-// depend on clipboard sync or on the clipboard of the phone. The program
-// reads its own clipboard, so the image reaches the prompt as an
-// attachment. fluxd detects the image type from the bytes and drops a
-// payload that is not an image, so a phone cannot put arbitrary data on
-// the clipboard.
-func (d *Daemon) herdrTerminalPasteImage(dev *Device, l *lan.Link, p *proto.Packet, id string) {
-	// The ownership check runs first, so a foreign, unknown, or released
-	// session gets no answer and learns nothing about somebody else's
-	// terminal.
+// herdrControlStream reports whether the session is a current control
+// stream of the device and the link. Each input event checks this first,
+// so a foreign, unknown, or released session gets no answer and learns
+// nothing about the terminal of another device.
+func (d *Daemon) herdrControlStream(dev *Device, l *lan.Link, id string) bool {
 	d.mu.Lock()
+	defer d.mu.Unlock()
 	t := d.herdrStreamLocked(dev, l, id)
-	d.mu.Unlock()
-	if t == nil || t.mode != "control" {
-		d.logf("%s: ignored an image paste for an unknown session", d.nameOf(dev))
-		return
-	}
-	switch {
-	case !p.HasPayload() || p.PayloadSize <= 0:
-		herdrTerminalInputError(l, id, "invalid_input", "The image is empty.")
-		return
-	case p.PayloadSize > herdrTerminalImageMax:
-		herdrTerminalInputError(l, id, "invalid_input", fmt.Sprintf("The image is larger than %d MiB", herdrTerminalImageMax>>20))
-		return
-	}
-	if !d.startHerdrImage(dev) {
-		herdrTerminalInputError(l, id, "input_failed", "An image of this device is still on its way.")
-		return
-	}
-	go func() {
-		defer d.endHerdrImage(dev)
-		ctx, cancel := context.WithTimeout(d.ctx, clipImageTimeout)
-		defer cancel()
-		data, err := fetchAll(ctx, l, p)
-		if err != nil {
-			d.logf("%s: terminal paste image: %v", d.nameOf(dev), err)
-			herdrTerminalInputError(l, id, "input_failed", "fluxd could not receive the image.")
-			return
-		}
-		mime := clipImageType(data)
-		if mime == "" {
-			herdrTerminalInputError(l, id, "invalid_input", "The paste is not a PNG, JPEG, GIF, or WebP image.")
-			return
-		}
-		pngData, why := herdrTerminalPNG(data, mime)
-		if pngData == nil {
-			herdrTerminalInputError(l, id, "invalid_input", why)
-			return
-		}
-		if err := d.clip.SetImage(pngData, "image/png"); err != nil {
-			d.logf("%s: terminal paste image: %v", d.nameOf(dev), err)
-			herdrTerminalInputError(l, id, "input_failed", "fluxd could not put the image on the clipboard.")
-			return
-		}
-		d.herdrTerminalSend(dev, l, id, herdrTerminalPasteKey)
-	}()
-}
-
-// herdrTerminalPNG returns the image as PNG, the type that the paste path
-// of opencode reads. A PNG stays as it is, so it is not encoded again; a
-// JPEG or a GIF is decoded and encoded as PNG. A WebP image needs a
-// decoder that Flux does not carry. It returns the reason when the image
-// cannot become a PNG.
-func herdrTerminalPNG(data []byte, mime string) ([]byte, string) {
-	switch mime {
-	case "image/png":
-		return data, ""
-	case "image/webp":
-		return nil, "opencode reads PNG, and Flux cannot turn WebP into PNG on the computer. Copy it as a PNG or a JPEG."
-	}
-	img, _, err := image.Decode(bytes.NewReader(data))
-	if err != nil {
-		return nil, "fluxd could not read that image."
-	}
-	var b bytes.Buffer
-	if err := png.Encode(&b, img); err != nil {
-		return nil, "fluxd could not turn the image into a PNG."
-	}
-	return b.Bytes(), ""
-}
-
-// startHerdrImage reserves the one image paste of the device. It returns
-// false while another image of the device is still on its way, because the
-// clipboard of the computer holds one image at a time. Call endHerdrImage
-// when the paste ends.
-func (d *Daemon) startHerdrImage(dev *Device) bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if d.herdrJobs.pasting[dev.ID] {
-		return false
-	}
-	if d.herdrJobs.pasting == nil {
-		d.herdrJobs.pasting = map[string]bool{}
-	}
-	d.herdrJobs.pasting[dev.ID] = true
-	return true
-}
-
-// endHerdrImage ends an image paste that startHerdrImage reserved.
-func (d *Daemon) endHerdrImage(dev *Device) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	delete(d.herdrJobs.pasting, dev.ID)
+	return t != nil && t.mode == "control" && t.stop == "" && t.release == ""
 }
 
 // herdrTerminalInput types one event in the controller session of the
 // phone. Exactly one of text or key is set.
 func (d *Daemon) herdrTerminalInput(dev *Device, l *lan.Link, id, text, key string) {
-	payload, why := herdrTerminalInputPayload(text, key)
-	if payload == "" {
-		herdrTerminalInputError(l, id, "invalid_input", why)
+	if !d.herdrControlStream(dev, l, id) {
 		return
 	}
-	d.herdrTerminalSend(dev, l, id, payload)
+	payload, why := herdrTerminalInputPayload(text, key)
+	if payload == "" {
+		herdrTerminalInputError(l, id, herdrInputInvalid, why)
+		return
+	}
+	ev := herdrTermEvent{bytes: payload, key: key}
+	if key == "" {
+		ev.chars = utf8.RuneCountInString(text)
+	}
+	d.herdrTerminalSend(dev, l, id, ev)
+}
+
+// herdrTerminalPaste types text as one bracketed paste in the controller
+// session of the phone. A program that turned on bracketed paste reads the
+// text as pasted content and does not submit on its line breaks. herdr
+// sends the text without the markers to a program that did not turn it on.
+func (d *Daemon) herdrTerminalPaste(dev *Device, l *lan.Link, id, text string) {
+	if !d.herdrControlStream(dev, l, id) {
+		return
+	}
+	body, why := herdrTerminalPasteText(text)
+	if body == "" {
+		herdrTerminalInputError(l, id, herdrInputInvalid, why)
+		return
+	}
+	d.herdrTerminalSend(dev, l, id, herdrTermEvent{
+		bytes: "\x1b[200~" + body + "\x1b[201~", chars: utf8.RuneCountInString(body), paste: true})
 }
 
 // herdrTerminalInputError answers a refused event. It carries no typed or
-// pasted text, so a failure never leaks what the phone sent.
+// pasted text, so a failure never shows what the phone sent.
 func herdrTerminalInputError(l *lan.Link, id, code, msg string) {
 	_ = l.Send(proto.New(proto.TypeFluxHerdr, map[string]any{
 		"kind": "terminal_input_error", "session": id, "code": code, "error": msg,
 	}))
 }
 
-// herdrTerminalSend enqueues one already validated event in the controller
-// stream of the phone. The event goes to the bridge of the stream in
-// order, so a character, a Tab, and an Enter stay in order and no legacy
-// reply job can reorder them. The daemon lock guards the stream while the
-// event is enqueued, so no input can follow a recorded release.
+// herdrTerminalImageError answers a refused image paste. The image field
+// tells the phone to stop the upload that waits for fluxd.
+func herdrTerminalImageError(l *lan.Link, id, code, msg string) {
+	_ = l.Send(proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_input_error", "session": id, "code": code, "error": msg, "image": true,
+	}))
+}
+
+// herdrTerminalSend puts one validated event in the controller stream of
+// the phone. The events go to the bridge of the stream in order, so a
+// character, a Tab, and an Enter stay in order. While an image paste of the
+// stream runs, the stream holds the event until the paste key of the
+// image is in the queue. A paste that the user typed before Enter then
+// reaches the prompt before Enter.
 //
-// A foreign, unknown, or released session gets no input and no answer, so
-// it learns nothing about somebody else's terminal. A valid owned stream
-// gets a failure-only terminal_input_error, and a bridge failure also ends
-// the stream: the phone must not keep typing into a dead controller.
-func (d *Daemon) herdrTerminalSend(dev *Device, l *lan.Link, id, payload string) {
+// A foreign, unknown, or released session gets no input and no answer. A
+// bridge failure ends the stream, so the phone does not keep typing into a
+// dead controller.
+func (d *Daemon) herdrTerminalSend(dev *Device, l *lan.Link, id string, ev herdrTermEvent) {
 	d.mu.Lock()
 	t := d.herdrStreamLocked(dev, l, id)
-	if t == nil || t.mode != "control" || t.stop != "" {
+	if t == nil || t.mode != "control" || t.stop != "" || t.release != "" {
 		d.mu.Unlock()
-		d.logf("%s: ignored terminal input for an unknown session", d.nameOf(dev))
 		return
 	}
-	// The stream opened for the agent or the shell that it found, so the
-	// input may not follow that identity into another pane. This mirrors
-	// pruneHerdrStreamsLocked, which ends the stream on the same state.
-	allowed := d.herdrTerminalAllowed(t)
-	agent := d.herdrAgentLocked(t.pane)
-	known := agent || d.herdrTerminalLocked(t.pane)
-	gone := !known || t.agent && !agent
-	var err error
-	if allowed && !gone {
-		// The enqueue is bounded and nonblocking, so it is safe under the
-		// lock and it cannot follow a release that this lock serializes.
-		err = t.session.SendInput(payload)
+	if t.imaging {
+		full := len(t.held) >= herdrTermMaxHeld
+		first := full && !t.overflowed
+		if full {
+			t.overflowed = true
+		} else {
+			t.held = append(t.held, ev)
+		}
+		d.mu.Unlock()
+		if first {
+			herdrTerminalInputError(l, id, herdrPasteFailed, "fluxd still pastes an image. Type again when it ends")
+		}
+		return
 	}
+	code, logs, err := d.herdrTermEnqueueLocked(t, []herdrTermEvent{ev})
 	d.mu.Unlock()
+	d.herdrTermSent(t, code, logs, err)
+}
+
+// herdrTermEnqueueLocked checks the stream and puts the events in the
+// input queue of its session. The enqueue is bounded and does not block,
+// so it is safe under the lock. A release that this lock serializes
+// cannot come between the check and the enqueue. It returns the close code
+// when the stream must end, and the log lines of the events. d.mu must be
+// held.
+//
+// The stream opened for the agent or the shell that it found, so the
+// input may not follow that identity into another pane. This mirrors
+// pruneHerdrStreamsLocked, which ends the stream on the same state.
+func (d *Daemon) herdrTermEnqueueLocked(t *herdrTerminal, evs []herdrTermEvent) (string, []string, error) {
+	if !d.herdrTerminalAllowed(t) {
+		return herdrTermStopped, nil, nil
+	}
+	agent := d.herdrAgentLocked(t.pane)
 	switch {
-	case !allowed:
-		d.stopHerdrTerminal(t, herdrTermStopped)
-	case !known:
-		d.stopHerdrTerminal(t, herdrTermPaneGone)
+	case !agent && !d.herdrTerminalLocked(t.pane):
+		return herdrTermPaneGone, nil, nil
 	case t.agent && !agent:
-		d.stopHerdrTerminal(t, herdrTermAgentGone)
+		return herdrTermAgentGone, nil, nil
+	}
+	blocked := d.herdrStatusLocked(t.pane) == herdr.StatusBlocked
+	var logs []string
+	for _, ev := range evs {
+		if err := t.session.SendInput(ev.bytes); err != nil {
+			return "", logs, err
+		}
+		if line := t.noteLocked(ev, blocked); line != "" {
+			logs = append(logs, line)
+		}
+	}
+	return "", logs, nil
+}
+
+// noteLocked returns the log line of one event, or an empty string. The
+// log gets each Enter and Esc, each paste, each image, and each text that
+// the phone types while the agent waits for a choice, because a digit can
+// select a choice. It gets counts and never the text. d.mu must be held.
+func (t *herdrTerminal) noteLocked(ev herdrTermEvent, blocked bool) string {
+	who := t.dev.Name
+	switch {
+	case ev.image > 0:
+		return fmt.Sprintf("%s pasted an image of %d bytes in the live terminal of %s", who, ev.image, t.target())
+	case ev.paste:
+		t.typed += ev.chars
+		return fmt.Sprintf("%s pasted %d characters in the live terminal of %s", who, ev.chars, t.target())
+	case ev.key == "enter":
+		n := t.typed
+		t.typed = 0
+		return fmt.Sprintf("%s pressed Enter after %d typed characters in the live terminal of %s", who, n, t.target())
+	case ev.key == "esc":
+		return fmt.Sprintf("%s pressed Esc in the live terminal of %s", who, t.target())
+	case ev.key == "backspace":
+		t.typed = max(0, t.typed-1)
+	case ev.chars > 0:
+		t.typed += ev.chars
+		if blocked {
+			return fmt.Sprintf("%s typed %d characters in the live terminal of %s while it waits for a choice", who, ev.chars, t.target())
+		}
+	}
+	return ""
+}
+
+// herdrTermSent writes the log lines of the sent events and ends the
+// stream when herdrTermEnqueueLocked asked for it. A bridge failure also
+// gets terminal_input_error.
+func (d *Daemon) herdrTermSent(t *herdrTerminal, code string, logs []string, err error) {
+	for _, line := range logs {
+		d.logf("%s", line)
+	}
+	switch {
+	case code != "":
+		d.stopHerdrTerminal(t, code)
 	case err != nil:
-		d.logf("%s: terminal input: %v", d.nameOf(dev), err)
-		herdrTerminalInputError(l, id, "input_failed", "The terminal did not accept this input.")
+		d.logf("%s: terminal input: %v", d.nameOf(t.dev), err)
+		herdrTerminalInputError(t.link, t.id, herdrInputFailed, "The terminal did not accept this input")
 		d.stopHerdrTerminal(t, herdrTermBridge)
 	}
+}
+
+// herdrTerminalPasteKey is the paste key of the controlled program. A
+// terminal reads 0x16 as Ctrl+V. opencode, Claude Code, and Codex then read
+// an image/png from the clipboard, so the image on the clipboard of the
+// computer reaches the prompt as an attachment instead of typed text.
+const herdrTerminalPasteKey = "\x16"
+
+// herdrImageMaxSide and herdrImageMaxPixels limit the size of a pasted
+// image. Flux for Android sends at most 2048 pixels on the long side. The
+// limits stop a small file with a very large size from reaching the
+// program, which decodes it.
+const (
+	herdrImageMaxSide   = 8192
+	herdrImageMaxPixels = 40_000_000
+)
+
+// herdrImageAttach is the time after the paste key of an image during
+// which the stream still holds the typed events. The agent reads the
+// clipboard after the paste key, and an Enter in that time would submit
+// the prompt without the image.
+var herdrImageAttach = 500 * time.Millisecond
+
+// herdrImageSettle is the time that the clipboard keeps a pasted image
+// after its paste key. The program reads the clipboard in that time. No
+// other image paste can replace the image before that.
+var herdrImageSettle = time.Second
+
+// herdrTerminalPasteImage puts a PNG image from the phone on the clipboard
+// of the computer and pastes it into the agent of the controller session.
+// The image travels as the payload of the packet, so the paste does not
+// depend on clipboard sync or on the clipboard of the phone. The phone
+// converts each image to PNG. fluxd reads only the PNG header and never
+// decodes the pixels, so a payload that is not a PNG cannot reach the
+// clipboard.
+func (d *Daemon) herdrTerminalPasteImage(dev *Device, l *lan.Link, p *proto.Packet, id string) {
+	// The ownership check runs first, so a foreign, unknown, or released
+	// session gets no answer.
+	d.mu.Lock()
+	t := d.herdrStreamLocked(dev, l, id)
+	owned := t != nil && t.mode == "control" && t.stop == "" && t.release == ""
+	d.mu.Unlock()
+	if !owned {
+		return
+	}
+	switch {
+	case !t.agent:
+		herdrTerminalImageError(l, id, herdrInputInvalid, "Only an agent takes a pasted image")
+		return
+	case !p.HasPayload() || p.PayloadSize <= 0:
+		herdrTerminalImageError(l, id, herdrInputInvalid, "The image is empty")
+		return
+	case p.PayloadSize > desktop.MaxClipboardImage:
+		herdrTerminalImageError(l, id, herdrInputInvalid, fmt.Sprintf("The image is larger than %d MiB", desktop.MaxClipboardImage>>20))
+		return
+	}
+	ctx, cancel := context.WithTimeout(d.ctx, clipImageTimeout)
+	switch d.startHerdrImage(t, cancel) {
+	case herdrImageBusy:
+		cancel()
+		herdrTerminalImageError(l, id, herdrPasteFailed, "fluxd still pastes an image. Paste again when it ends")
+		return
+	case herdrImageGone:
+		cancel()
+		return
+	}
+	cancelOnLinkDown(ctx, l, cancel)
+	go func() {
+		size := 0
+		defer func() { d.endHerdrImage(t, size) }()
+		defer cancel()
+		defer d.herdrRecover("terminal image paste", func() {
+			size = 0
+			herdrTerminalImageError(l, id, herdrPasteFailed, "fluxd could not paste the image")
+		})
+		data, err := fetchAll(ctx, l, p)
+		if err != nil {
+			d.logf("%s: terminal paste image: %v", d.nameOf(dev), err)
+			// The end of the stream also stops the transfer. The phone then
+			// gets terminal_closed and no error for the image.
+			d.mu.Lock()
+			open := d.herdrStreams[t.id] == t && t.stop == ""
+			d.mu.Unlock()
+			if open {
+				herdrTerminalImageError(l, id, herdrPasteFailed, "fluxd could not receive the image")
+			}
+			return
+		}
+		if why := herdrTerminalPNG(data); why != "" {
+			herdrTerminalImageError(l, id, herdrInputInvalid, why)
+			return
+		}
+		// The transfer can take a minute. The stream must still be current
+		// and allowed before the clipboard of the computer changes.
+		if !d.herdrImageCurrent(t) {
+			return
+		}
+		if err := d.clip.SetImage(data, "image/png"); err != nil {
+			d.logf("%s: terminal paste image: %v", d.nameOf(dev), err)
+			herdrTerminalImageError(l, id, herdrPasteFailed, "fluxd could not put the image on the clipboard")
+			return
+		}
+		size = len(data)
+	}()
+}
+
+// herdrTerminalPNG returns why fluxd refuses the image, or an empty string
+// for a PNG within the size limits. It reads only the header.
+func herdrTerminalPNG(data []byte) string {
+	if clipImageType(data) != "image/png" {
+		return "The image is not a PNG. Update Flux on the phone"
+	}
+	cfg, err := png.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return "fluxd could not read that image"
+	}
+	switch {
+	case cfg.Width > herdrImageMaxSide || cfg.Height > herdrImageMaxSide:
+		return fmt.Sprintf("The image is larger than %d pixels on a side", herdrImageMaxSide)
+	case cfg.Width*cfg.Height > herdrImageMaxPixels:
+		return fmt.Sprintf("The image has more than %d million pixels", herdrImageMaxPixels/1_000_000)
+	}
+	return ""
+}
+
+// The results of startHerdrImage.
+const (
+	herdrImageStarted = iota
+	herdrImageBusy    // another image paste runs
+	herdrImageGone    // the stream ended
+)
+
+// startHerdrImage reserves the one image paste of the computer for the
+// stream. It refuses while another image paste runs, because the
+// clipboard of the computer holds one image at a time. The stream keeps
+// cancel, so its end stops the transfer. Call endHerdrImage when the
+// paste ends.
+func (d *Daemon) startHerdrImage(t *herdrTerminal, cancel context.CancelFunc) int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	switch {
+	case d.herdrStreams[t.id] != t || t.stop != "" || t.release != "":
+		return herdrImageGone
+	case d.herdrJobs.imaging || t.imaging:
+		return herdrImageBusy
+	}
+	d.herdrJobs.imaging = true
+	t.imaging, t.imageCancel, t.overflowed = true, cancel, false
+	return herdrImageStarted
+}
+
+// herdrImageCurrent reports whether the stream of an image paste is still
+// current and allowed. A stream that its permissions do not allow now
+// ends at once.
+func (d *Daemon) herdrImageCurrent(t *herdrTerminal) bool {
+	d.mu.Lock()
+	current := d.herdrStreams[t.id] == t && t.stop == "" && t.release == "" && t.dev.Paired
+	allowed := !current || d.herdrTerminalAllowed(t)
+	ok := current && allowed && d.herdrAgentLocked(t.pane)
+	d.mu.Unlock()
+	if !allowed {
+		d.stopHerdrTerminal(t, herdrTermStopped)
+	}
+	return ok
+}
+
+// endHerdrImage ends the image paste that startHerdrImage reserved. With a
+// size above 0, the image is on the clipboard, so the paste key goes out.
+// The stream holds the typed events for herdrImageAttach more, so the
+// agent can attach the image before an Enter arrives. The reservation of
+// the computer stays for herdrImageSettle after the paste key, so another
+// paste cannot replace the image before the agent reads it.
+func (d *Daemon) endHerdrImage(t *herdrTerminal, size int) {
+	if size == 0 {
+		d.flushHerdrHeld(t)
+		d.mu.Lock()
+		d.herdrJobs.imaging = false
+		d.mu.Unlock()
+		return
+	}
+	d.mu.Lock()
+	t.imageCancel = nil
+	var code string
+	var logs []string
+	var err error
+	if d.herdrStreams[t.id] == t && t.stop == "" && t.release == "" {
+		code, logs, err = d.herdrTermEnqueueLocked(t, []herdrTermEvent{{bytes: herdrTerminalPasteKey, image: size}})
+	}
+	d.mu.Unlock()
+	d.herdrTermSent(t, code, logs, err)
+	time.AfterFunc(herdrImageAttach, func() { d.flushHerdrHeld(t) })
+	time.AfterFunc(herdrImageSettle, func() {
+		d.mu.Lock()
+		d.herdrJobs.imaging = false
+		d.mu.Unlock()
+	})
+}
+
+// flushHerdrHeld ends the hold of an image paste and sends the events that
+// the stream held, in order. A stream that ended drops them.
+func (d *Daemon) flushHerdrHeld(t *herdrTerminal) {
+	d.mu.Lock()
+	evs := t.held
+	t.held, t.imaging, t.imageCancel = nil, false, nil
+	var code string
+	var logs []string
+	var err error
+	if len(evs) > 0 && d.herdrStreams[t.id] == t && t.stop == "" && t.release == "" {
+		code, logs, err = d.herdrTermEnqueueLocked(t, evs)
+	}
+	d.mu.Unlock()
+	d.herdrTermSent(t, code, logs, err)
 }
 
 // herdrTerminalRelease ends the stream of the phone and lets its
@@ -820,7 +1048,13 @@ func (d *Daemon) stopHerdrTerminal(t *herdrTerminal, code string) {
 	// A new stream can open at once. The forwarder of this one still
 	// sends its last frames and the end.
 	delete(d.herdrStreams, t.id)
+	stopImage := t.imageCancel
 	d.mu.Unlock()
+	// The image of an ended stream cannot reach its agent, so its
+	// transfer stops.
+	if stopImage != nil {
+		stopImage()
+	}
 	go func() {
 		_ = t.session.Close()
 		t.cancel()
@@ -861,7 +1095,11 @@ func (d *Daemon) runHerdrTerminal(t *herdrTerminal) {
 		code = t.stop
 	}
 	delete(d.herdrStreams, t.id)
+	stopImage := t.imageCancel
 	d.mu.Unlock()
+	if stopImage != nil {
+		stopImage()
+	}
 	// Close reports a bridge that ended with SIGKILL, with the last
 	// stderr line of the bridge. herdr can then keep the terminal at the
 	// size of the phone, so the log must not show a clean release.

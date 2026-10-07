@@ -29,11 +29,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedTextField
@@ -41,6 +41,7 @@ import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -51,10 +52,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
@@ -66,6 +69,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -76,8 +80,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Constraints
@@ -387,6 +391,18 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
     }
     val terminalInput = remember(d.id, pane) { TerminalInput() }
     val direct = liveInputOffered(terminal != null, d.herdr, sample != null)
+    // The draft of the composer and its dictation live here, so Live keeps
+    // them while its key row takes the place of the composer.
+    val draft = rememberSaveable(d.id, pane, stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue()) }
+    val dictation = rememberDictation()
+    val replyState = rememberSaveableStateHolder()
+    // A dictation stops with its words when Live takes the place of the composer.
+    LaunchedEffect(direct) { if (direct) dictation.stopNow() }
+    // A prompt that the computer took from the composer also took the text that waited from Live.
+    val reply = d.herdrReply?.takeIf { it.pane == pane }
+    LaunchedEffect(reply) {
+        if (reply != null && reply.action == "prompt" && !reply.sending && reply.error == null) terminalInput.unsent = false
+    }
     Column(Modifier.fillMaxSize().imePadding().padding(horizontal = TiledGutter)) {
         TiledTopBar(title, onBack, context = context) {
             // The key stays while Live is on, so that Live can always stop.
@@ -465,10 +481,19 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
                 controls = {
                     if (agent != null && d.herdr?.control == true) {
                         if (!review && direct) {
-                            DirectTerminalControls(agent, out, terminalInput)
+                            DirectTerminalControls(d, agent, out, terminalInput)
                         } else {
-                            ReplyControls(d, agent, out.takeUnless { review }, d.herdrReply?.takeIf { it.pane == pane },
-                                if (review) appliedReviewPath else null, reviewReady = !review || (out?.loading == false && out.error == null))
+                            Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
+                                if (!review && terminalInput.unsent) LiveNote(LIVE_UNSENT)
+                                // The state of the composer stays while Live shows its key row.
+                                replyState.SaveableStateProvider("reply") {
+                                    ReplyControls(
+                                        d, agent, out.takeUnless { review }, reply,
+                                        draft, dictation,
+                                        if (review) appliedReviewPath else null, reviewReady = !review || (out?.loading == false && out.error == null),
+                                    )
+                                }
+                            }
                         }
                     } else if (agent != null) {
                         T(
@@ -667,6 +692,9 @@ private fun FillColumn(
 }
 
 // ───────────────────────── Live terminal ─────────────────────────
+
+/** The note above the composer after Live sent text with no Enter after it. */
+internal const val LIVE_UNSENT = "Text that you typed in Live can still be in the input of the agent. Send adds your text after it."
 
 /** Why Live ends when the unlock ended or is not valid. */
 internal const val LIVE_UNLOCK_ENDED = "The unlock ended. Tap Live to open the terminal again."
@@ -1067,48 +1095,34 @@ private fun LiveTerminalView(
     val current by rememberUpdatedState(session)
     val controlling = t.active && t.authorized && session?.open == true && session.mode == "control"
     val visible = sample != null || terminalControlReady(session, t.drawn, t.authorized, t.active)
-    // Input needs a valid unlock. An unlock that ended ends Live.
-    fun guardedInput(send: (HerdrTerminalSession) -> Unit) {
+    // Input needs a valid unlock. An unlock that ended ends Live. Returns
+    // true when send ran and its packet went out.
+    fun guardedInput(send: (HerdrTerminalSession) -> Boolean): Boolean {
         val s = current
-        if (!t.active || !t.authorized) return
+        if (!t.active || !t.authorized) return false
         if (!ReplyLock.valid()) {
             t.exit(LIVE_UNLOCK_ENDED)
-        } else if (s?.open == true && s.mode == "control") {
-            send(s)
+            return false
         }
+        return s?.open == true && s.mode == "control" && send(s)
     }
     // Typed input needs the drawn baseline of the current control session
     // and a valid unlock. A debug sample takes no input.
     val inputReady = controlling && visible && sample == null &&
         t.pendingGrid == null && d.herdr?.terminalInput == true
-    // The gate and the send are read again at each event, so a stale
-    // footer or a late speech result cannot type into a session that lost
+    // The gate and the send are read again at each event, so a stale key
+    // row or a late keyboard event cannot type into a session that lost
     // control or changed.
     SideEffect {
         input.ready = inputReady
         input.pasteReady = inputReady && d.herdr?.terminalPaste == true
         input.imageReady = inputReady && d.herdr?.terminalImage == true
-        input.session = session?.session.orEmpty()
-        input.onText = { text ->
-            if (terminalControlReady(current, t.drawn, t.authorized, t.active)) {
-                guardedInput { s -> HerdrSync.terminalInput(FluxCore, d.id, s.session, text) }
-            }
-        }
-        input.onKey = { key ->
-            if (terminalControlReady(current, t.drawn, t.authorized, t.active)) {
-                guardedInput { s -> HerdrSync.terminalInputKey(FluxCore, d.id, s.session, key) }
-            }
-        }
-        input.onPaste = { text ->
-            if (terminalControlReady(current, t.drawn, t.authorized, t.active)) {
-                guardedInput { s -> HerdrSync.terminalPaste(FluxCore, d.id, s.session, text) }
-            }
-        }
-        input.onImage = { uri, _ ->
-            if (terminalControlReady(current, t.drawn, t.authorized, t.active)) {
-                guardedInput { s -> HerdrSync.terminalPasteImage(FluxCore, d.id, s.session, uri) }
-            }
-        }
+        fun send(action: (HerdrTerminalSession) -> Boolean): Boolean =
+            terminalControlReady(current, t.drawn, t.authorized, t.active) && guardedInput(action)
+        input.onText = { text -> send { s -> HerdrSync.terminalInput(FluxCore, d.id, s.session, text) } }
+        input.onKey = { key -> send { s -> HerdrSync.terminalInputKey(FluxCore, d.id, s.session, key) } }
+        input.onPaste = { text -> send { s -> HerdrSync.terminalPaste(FluxCore, d.id, s.session, text) } }
+        input.onImage = { uri, release -> send { s -> HerdrSync.terminalPasteImage(FluxCore, d.id, s.session, uri, release) } }
     }
     DisposableEffect(Unit) {
         onDispose {
@@ -1119,8 +1133,14 @@ private fun LiveTerminalView(
             input.onImage = null
         }
     }
-    LaunchedEffect(session?.inputError) {
-        session?.inputError?.let { FluxCore.toast(it) }
+    // Each refused event shows once, also when the same error comes again.
+    // The program did not get the event, so the typed line starts again.
+    val errorSeq = session?.inputErrorSeq ?: 0
+    LaunchedEffect(session?.session, errorSeq) {
+        val error = session?.inputError ?: return@LaunchedEffect
+        FluxCore.toast(error)
+        input.forget()
+        HerdrSync.clearTerminalInputError(FluxCore, d.id, errorSeq)
     }
     Box(modifier) {
         HerdrTerminalView(
@@ -1133,10 +1153,6 @@ private fun LiveTerminalView(
             inputEnabled = visible,
             inputReady = inputReady,
             imageReady = inputReady && d.herdr?.terminalImage == true,
-            onText = { input.type(it) },
-            onKey = { input.key(it) },
-            onPaste = { input.paste(it) },
-            onImage = { uri, mime -> input.pasteImage(uri, mime) },
             input = input,
             theme = ComputerThemes.theme(d.id)?.theme,
             onGrid = { cols, rows -> t.grid(cols to rows) },
@@ -1144,12 +1160,17 @@ private fun LiveTerminalView(
             onWheel = { column, row, direction ->
                 guardedInput { s ->
                     HerdrSync.terminalScroll(FluxCore, d.id, s.session, direction, column, row)
+                    true
                 }
             },
+            // A click can move the cursor of the program, so the typed line starts again.
             onTap = { column, row ->
-                guardedInput { s ->
-                    HerdrSync.terminalMouse(FluxCore, d.id, s.session, "down", "left", column, row)
-                    HerdrSync.terminalMouse(FluxCore, d.id, s.session, "up", "left", column, row)
+                input.lineAction {
+                    guardedInput { s ->
+                        HerdrSync.terminalMouse(FluxCore, d.id, s.session, "down", "left", column, row)
+                        HerdrSync.terminalMouse(FluxCore, d.id, s.session, "up", "left", column, row)
+                        true
+                    }
                 }
             },
             // The page of the terminal stopped, so Live ends and releases control.
@@ -1338,9 +1359,18 @@ internal fun rememberPaneCloser(d: DeviceUi, pane: String, onClosed: () -> Unit)
  * lock first, see [ReplyLock].
  */
 @Composable
-private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, reply: HerdrReply?, reviewPath: String? = null, reviewReady: Boolean = true) {
+private fun ReplyControls(
+    d: DeviceUi,
+    agent: HerdrAgent,
+    out: HerdrOutput?,
+    reply: HerdrReply?,
+    draft: MutableState<TextFieldValue>,
+    dictation: Dictation,
+    reviewPath: String? = null,
+    reviewReady: Boolean = true,
+) {
     val context = LocalContext.current
-    var field by rememberSaveable(d.id, agent.pane, stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue()) }
+    var field by draft
     var lockError by remember { mutableStateOf<String?>(null) }
     // True while the large editor of the field shows.
     var editing by remember { mutableStateOf(false) }
@@ -1371,7 +1401,6 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
 
     // Dictation: the phone turns speech into text at the cursor of the field.
     // The text waits there for Send, so a prompt still needs the phone lock.
-    val dictation = rememberDictation()
     val demo = isDemo(d.id)
     val canDictate = demo || remember { Dictation.available(context) }
     val dictating = dictation.phase != Dictation.Phase.Idle
@@ -1541,47 +1570,65 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
 
 /**
  * The direct controls of the live terminal: the choices of a blocked agent
- * and one row with Esc, Tab, Up, Down, and the keyboard. Typed text and
- * named keys go straight to the terminal through [input], so the program
- * draws its own prompt and its own menus. The phone keyboard's own mic
- * dictates into the terminal, so this mode has no mic key of its own. The
- * phone-side draft of [ReplyControls] stays for the Changes tab and for
- * the later buffered mode.
+ * and one row with Esc, Tab, Up, Down, Enter, and the keyboard. Typed text
+ * and named keys go straight to the terminal through [input], so the
+ * program draws its own prompt and its own menus. The mic of the phone
+ * keyboard dictates into the terminal, so this row has no mic key. The
+ * draft of [ReplyControls] stays for Output without Live and for Changes.
  */
 @Composable
-private fun DirectTerminalControls(agent: HerdrAgent, out: HerdrOutput?, input: TerminalInput) {
+private fun DirectTerminalControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, input: TerminalInput) {
+    // After an answer, the choices wait for the next output, so that a second tap does not answer the next question.
+    var answered by remember(d.id, agent.pane) { mutableStateOf<HerdrOutput?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
         val choices = if (agent.status == AgentStatus.Blocked) out?.choices.orEmpty() else emptyList()
-        for (c in choices) ChoiceTile(c, input.ready) { input.type(c.key) }
-        DirectKeys(Modifier.fillMaxWidth(), input)
+        val open = input.ready && choicesOpen(out, answered, sending = false)
+        for (c in choices) {
+            // A choice of 2 digits would go as 2 keys, and the first key can select another choice.
+            ChoiceTile(c, open && c.key.length == 1) {
+                if (input.choose(c.key)) {
+                    answered = out
+                    // A typed digit gets no sent answer, so the screen reads the next dialog itself.
+                    if (!isDemo(d.id)) HerdrSync.rereadSoon(FluxCore, d.id, agent.pane)
+                }
+            }
+        }
+        DirectKeys(input, enterAccent = agent.status == AgentStatus.Blocked && choices.isEmpty(), Modifier.fillMaxWidth())
     }
 }
 
 /**
- * The one row of direct keys: Esc, Tab, Up, Down, and the keyboard. The
- * keyboard key only shows the phone keyboard, and Android hides it again.
- * The phone keyboard's own paste, mic, and dictation handle those, so the
- * row has no paste or mic key.
+ * The one row of direct keys: Esc, Tab, Up, Down, Enter, and the keyboard.
+ * The keyboard key only shows the phone keyboard, and Android hides it
+ * again. The paste and the mic of the phone keyboard work in the terminal,
+ * so the row has no paste or mic key. [enterAccent] marks Enter when a
+ * blocked agent shows no numbered choices. The keys show as off while the
+ * terminal takes no input.
  */
 @Composable
-private fun DirectKeys(m: Modifier, input: TerminalInput) {
-    KeyRow(m) {
-        KeyTile("esc", "Escape", Modifier.weight(1f)) { input.key("esc") }
-        KeyTile("tab", "Tab", Modifier.weight(1f)) { input.key("tab") }
-        KeyTile("↑", "Up", Modifier.weight(1f)) { input.key("up") }
-        KeyTile("↓", "Down", Modifier.weight(1f)) { input.key("down") }
-        IconKey(Modifier.weight(1f), Ic.keyboard, "Show the keyboard") { input.showKeyboard() }
+private fun DirectKeys(input: TerminalInput, enterAccent: Boolean, modifier: Modifier = Modifier) {
+    val on = input.ready
+    KeyRow(modifier) {
+        KeyTile("esc", "Escape", Modifier.weight(1f), enabled = on) { input.key("esc") }
+        KeyTile("tab", "Tab", Modifier.weight(1f), enabled = on) { input.key("tab") }
+        KeyTile("↑", "Up", Modifier.weight(1f), enabled = on) { input.key("up") }
+        KeyTile("↓", "Down", Modifier.weight(1f), enabled = on) { input.key("down") }
+        KeyTile("enter", "Enter", Modifier.weight(1.4f), accent = enterAccent, enabled = on) { input.key("enter") }
+        IconKey(Ic.keyboard, "Show the keyboard", Modifier.weight(1f), enabled = on) { input.showKeyboard() }
     }
 }
 
-/** A key of [DirectKeys] that shows an icon. [description] is what TalkBack reads. */
+/** A key of [DirectKeys] that shows an icon. [description] is what TalkBack reads. A key that is not [enabled] takes no tap. */
 @Composable
-private fun IconKey(m: Modifier, icon: Int, description: String, onClick: () -> Unit) {
+private fun IconKey(icon: Int, description: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
     Box(
-        m.fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(Tn.tile)
+        modifier.fillMaxHeight().alpha(if (enabled) 1f else DimAlpha).clip(RoundedCornerShape(8.dp)).background(Tn.tile)
             .border(1.dp, Tn.line, RoundedCornerShape(8.dp))
-            .clickable(onClickLabel = description, role = Role.Button, onClick = onClick)
-            .clearAndSetSemantics { contentDescription = description },
+            .clickable(enabled = enabled, onClickLabel = description, role = Role.Button, onClick = onClick)
+            .clearAndSetSemantics {
+                contentDescription = description
+                if (!enabled) disabled()
+            },
         contentAlignment = Alignment.Center,
     ) {
         Sym(icon, tint = Tn.sub, size = 20.dp)
@@ -1642,12 +1689,12 @@ internal fun KeyBar(keys: List<BarKey>) {
                 KeyRow {
                     for (k in keys) {
                         val m = Modifier.weight(k.share, fill = false).widthIn(max = KeyMaxWidth * k.share).fillMaxWidth()
-                        KeyTile(k.label, k.description, m, k.accent, k.onClick)
+                        KeyTile(k.label, k.description, m, k.accent, onClick = k.onClick)
                     }
                 }
             } else {
                 for (row in keys.chunked((keys.size + 1) / 2)) {
-                    KeyRow { for (k in row) KeyTile(k.label, k.description, Modifier.weight(k.share), k.accent, k.onClick) }
+                    KeyRow { for (k in row) KeyTile(k.label, k.description, Modifier.weight(k.share), k.accent, onClick = k.onClick) }
                 }
             }
         }
@@ -1656,15 +1703,27 @@ internal fun KeyBar(keys: List<BarKey>) {
 
 /**
  * A key of the key bar, with a mono label. [accent] marks the key that the
- * dialog needs. TalkBack reads [description].
+ * dialog needs. TalkBack reads [description]. A key that is not [enabled]
+ * shows as off and takes no tap.
  */
 @Composable
-internal fun KeyTile(label: String, description: String, modifier: Modifier, accent: Boolean = false, onClick: () -> Unit) {
+internal fun KeyTile(
+    label: String,
+    description: String,
+    modifier: Modifier,
+    accent: Boolean = false,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
     Box(
-        modifier.fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(if (accent) Tn.accentTile else Tn.tile)
+        modifier.fillMaxHeight().alpha(if (enabled) 1f else DimAlpha).clip(RoundedCornerShape(8.dp))
+            .background(if (accent) Tn.accentTile else Tn.tile)
             .border(1.dp, if (accent) Tn.blue else Tn.line, RoundedCornerShape(8.dp))
-            .clickable(onClickLabel = description, role = Role.Button, onClick = onClick)
-            .clearAndSetSemantics { contentDescription = description }
+            .clickable(enabled = enabled, onClickLabel = description, role = Role.Button, onClick = onClick)
+            .clearAndSetSemantics {
+                contentDescription = description
+                if (!enabled) disabled()
+            }
             .padding(horizontal = 4.dp),
         contentAlignment = Alignment.Center,
     ) {

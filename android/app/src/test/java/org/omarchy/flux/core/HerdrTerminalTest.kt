@@ -317,6 +317,11 @@ class HerdrTerminalTest {
         assertEquals("no", e.error)
         assertNull("another kind is not an input error", parseHerdrTerminalInputError(body("""{"kind":"sent","session":"ts1"}""")))
         assertNull("an error without a session is dropped", parseHerdrTerminalInputError(body("""{"kind":"terminal_input_error","code":"x"}""")))
+        assertFalse("an error is about typed input by default", e.image)
+        val image = parseHerdrTerminalInputError(
+            body("""{"kind":"terminal_input_error","session":"ts1","code":"paste_failed","error":"busy","image":true}"""),
+        )!!
+        assertTrue("an image error stops the upload of the phone", image.image)
     }
 
     @Test

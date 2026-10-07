@@ -120,14 +120,17 @@ type herdrJobs struct {
 	kindsBusy bool
 
 	// sending counts the keys, prompt, input, and close jobs that run for
-	// each device ID. pasting is true while an image of the device is on
-	// its way to the clipboard and the terminal, so one image at a time
-	// reaches the program.
+	// each device ID.
 	sending map[string]int
 
 	// opening has the ID of each device whose terminal_open runs.
 	opening map[string]bool
-	pasting map[string]bool
+
+	// imaging is true while an image paste into a live terminal runs, and
+	// for herdrImageSettle after its paste key. The clipboard of the
+	// computer holds one image, so one paste runs at a time for all
+	// devices.
+	imaging bool
 }
 
 // herdrMaxSends is the number of keys, prompt, input, and close jobs that
@@ -206,7 +209,8 @@ type herdrCLI struct {
 // herdrBridgeCaps are the terminal-session actions of a herdr that has
 // the CLI bridge of terminal sessions. Only observe reads. The others
 // write to the terminal, so a device gets them only with herdr_control.
-// "input", "paste", and "image" let the phone type and paste in a control stream.
+// input, paste, and image let the phone type and paste in a control
+// stream.
 var herdrBridgeCaps = []string{"observe", "control", "scroll", "mouse", "input", "paste", "image"}
 
 // herdrObserveCaps are the bridge actions of a device without
@@ -786,7 +790,7 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 		Column    int    `json:"column"`
 		Row       int    `json:"row"`
 		// Key names one named key of a terminal_input, such as "enter".
-		// fluxd encodes it; a client cannot send an escape sequence.
+		// fluxd encodes the key, so a phone sends no escape sequence.
 		Key string `json:"key"`
 		// Request is the number of a keys, prompt, input, create, close,
 		// terminal_open, or terminal_release packet. The answer carries

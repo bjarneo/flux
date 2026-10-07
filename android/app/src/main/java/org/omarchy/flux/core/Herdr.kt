@@ -288,101 +288,210 @@ object HerdrSync {
 
     /**
      * Types one text event in the active controller session. The text goes
-     * as it is: fluxd does not trim it or press Enter. An empty text, or a
-     * text with control characters, is refused by fluxd. A step changes no
-     * phone state, so it goes out without the core lock and its publish: at
-     * a character per key a publish would rebuild the whole screen.
+     * as it is. fluxd does not trim it or press Enter, and it refuses an
+     * empty text or a text with a control character. A step changes no
+     * phone state, so it goes out without the core lock and its publish. A
+     * publish for each character would build the whole screen again.
+     * Returns false when the packet did not go out.
      */
-    fun terminalInput(core: FluxCore, id: String, session: String, text: String) {
-        if (session.isEmpty() || text.isEmpty()) return
-        val d = core.device(id) ?: return
-        d.send(Packet(Types.FLUX_HERDR, herdrTerminalInputBody(session, text)))
+    fun terminalInput(core: FluxCore, id: String, session: String, text: String): Boolean {
+        if (session.isEmpty() || text.isEmpty()) return false
+        val d = core.device(id) ?: return false
+        return sendInput(d, Packet(Types.FLUX_HERDR, herdrTerminalInputBody(session, text)))
     }
 
-    /** Sends one named key to the active controller session. */
-    fun terminalInputKey(core: FluxCore, id: String, session: String, key: String) {
-        if (session.isEmpty() || key !in HERDR_TERMINAL_INPUT_KEYS) return
-        val d = core.device(id) ?: return
-        d.send(Packet(Types.FLUX_HERDR, herdrTerminalKeyBody(session, key)))
+    /** Sends one named key to the active controller session. Returns false when the packet did not go out. */
+    fun terminalInputKey(core: FluxCore, id: String, session: String, key: String): Boolean {
+        if (session.isEmpty() || key !in HERDR_TERMINAL_INPUT_KEYS) return false
+        val d = core.device(id) ?: return false
+        return sendInput(d, Packet(Types.FLUX_HERDR, herdrTerminalKeyBody(session, key)))
     }
 
     /**
      * Pastes [text] as one bracketed paste in the active controller
      * session. The program reads it as pasted content and applies its own
      * paste handling, so its line breaks do not submit. fluxd wraps the
-     * text, bounds its size, and drops control characters; it does not
-     * press Enter.
+     * text, bounds its size, and drops control characters. It does not
+     * press Enter. Returns false when the packet did not go out.
      */
-    fun terminalPaste(core: FluxCore, id: String, session: String, text: String) {
-        if (session.isEmpty() || text.isEmpty()) return
-        val d = core.device(id) ?: return
-        d.send(Packet(Types.FLUX_HERDR, herdrTerminalPasteBody(session, text)))
+    fun terminalPaste(core: FluxCore, id: String, session: String, text: String): Boolean {
+        if (session.isEmpty() || text.isEmpty()) return false
+        val d = core.device(id) ?: return false
+        return sendInput(d, Packet(Types.FLUX_HERDR, herdrTerminalPasteBody(session, text)))
     }
 
     /**
-     * Pastes the image at [uri] into the active controller session. The
-     * image travels as the payload of the packet, so fluxd can put it on
-     * the clipboard of the computer before it sends the paste key. The
-     * program then reads the image as an attachment instead of typed text.
-     *
-     * Reading the image and sending the payload block, so they run on the
-     * IO pool and not on the caller. A failure of this phone side shows
-     * on the phone, because the terminal cannot name an image that never
-     * left it.
+     * The typed packets of each device that wait while an image of the
+     * device turns into a PNG, by device ID. The image packet goes first,
+     * and fluxd keeps the order after it. Without this wait, an Enter
+     * typed after the paste would submit the prompt before the image.
      */
-    fun terminalPasteImage(core: FluxCore, id: String, session: String, uri: Uri) {
-        if (session.isEmpty()) return
-        core.io.execute {
-            val d = core.device(id) ?: return@execute
-            val cert = d.certificate
-            val tls = FluxCore.tls
-            if (cert == null || tls == null) {
-                core.toast("${d.identity.deviceName} is not ready for an image")
-                return@execute
-            }
-            val data = runCatching {
-                core.app.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            }.getOrElse { error ->
-                Log.w(TAG, "read the pasted image failed", error)
-                core.toast("Flux could not read that image")
-                return@execute
-            }
-            if (data == null) {
-                core.toast("Flux could not read that image")
-                return@execute
-            }
-            if (data.isEmpty()) {
-                core.toast("That image is empty")
-                return@execute
-            }
-            if (data.size > ClipImage.MAX_BYTES) {
-                core.toast("That image is larger than ${ClipImage.MAX_BYTES shr 20} MiB")
-                return@execute
-            }
-            val server = Payload.openServer()
-            val p = Packet(
-                Types.FLUX_HERDR, herdrTerminalPasteImageBody(session),
-                payloadSize = data.size.toLong(), payloadPort = server.localPort,
-            )
-            if (!d.send(p)) {
-                server.close()
-                core.toast("${d.identity.deviceName} is not reachable")
-                return@execute
-            }
-            val sent = runCatching { Payload.send(tls, server, data.inputStream(), data.size.toLong(), cert) }
-            if (sent.isFailure) {
-                Log.w(TAG, "send the pasted image failed", sent.exceptionOrNull())
-                core.toast("Flux could not send the image to ${d.identity.deviceName}")
-            }
+    private val waitingInput = HashMap<String, MutableList<Packet>>()
+
+    /** Sends one typed packet, or keeps it while an image of the device turns into a PNG. */
+    private fun sendInput(d: Device, p: Packet): Boolean = synchronized(waitingInput) {
+        val waiting = waitingInput[d.id]
+        if (waiting != null) {
+            waiting += p
+            true
+        } else {
+            d.send(p)
         }
     }
 
-    /** Handles terminal_input_error: why a typed event did not reach the terminal. The core lock is held. */
+    /**
+     * Ends the wait [wait] of the typed packets of the device. [first] goes
+     * out before them, for example the image packet. The sends only queue
+     * the packets, so they run under the lock, and no new packet can pass
+     * them. A wait that already ended changes nothing, so the wait of a
+     * newer image stays. Returns false when [first] did not go out.
+     */
+    private fun endInputWait(d: Device?, id: String, wait: MutableList<Packet>, first: Packet?): Boolean = synchronized(waitingInput) {
+        if (waitingInput[id] !== wait) return@synchronized false
+        waitingInput.remove(id)
+        if (d == null) return@synchronized false
+        val sent = first == null || d.send(first)
+        for (p in wait) d.send(p)
+        sent
+    }
+
+    /** An image paste that waits for fluxd to fetch it. A refusal or the end of the session closes its [server]. */
+    private class ImageUpload(val session: String, val server: java.net.ServerSocket) {
+        @Volatile var cancelled = false
+    }
+
+    /** The image paste of each device that waits for fluxd, by device ID. */
+    private val imageUploads = java.util.concurrent.ConcurrentHashMap<String, ImageUpload>()
+
+    /**
+     * Pastes the image at [uri] into the active controller session. The
+     * phone turns the image into a PNG of at most [TERMINAL_IMAGE_SIDE]
+     * pixels on its long side, in its upright orientation. The PNG travels
+     * as the payload of the packet, so fluxd can put it on the clipboard of
+     * the computer before it sends the paste key. The program then reads
+     * the image as an attachment instead of typed text. [release] ends the
+     * read grant of the keyboard after the read.
+     *
+     * The decode and the send block, so they run on the IO pool and not on
+     * the caller. A failure on the phone shows a toast, because the
+     * terminal cannot name an image that never left the phone.
+     */
+    fun terminalPasteImage(core: FluxCore, id: String, session: String, uri: Uri, release: () -> Unit): Boolean {
+        if (session.isEmpty()) {
+            release()
+            return false
+        }
+        // The typed packets wait from now until the image packet went out.
+        // One image of a device turns into a PNG at a time.
+        val wait = mutableListOf<Packet>()
+        val started = synchronized(waitingInput) { waitingInput.putIfAbsent(id, wait) == null }
+        if (!started) {
+            release()
+            core.toast("Flux still pastes an image. Paste again when it ends")
+            return false
+        }
+        core.io.execute {
+            try {
+                val png = try {
+                    terminalPng(core.app.contentResolver, uri)
+                } catch (e: Exception) {
+                    Log.w(TAG, "read the pasted image failed", e)
+                    null
+                } finally {
+                    release()
+                }
+                val d = core.device(id) ?: return@execute
+                when {
+                    png == null -> core.toast("Flux could not read that image")
+                    png.size > ClipImage.MAX_BYTES -> core.toast("That image is larger than ${ClipImage.MAX_BYTES shr 20} MiB as a PNG")
+                    else -> sendTerminalImage(core, d, session, png, wait)
+                }
+            } finally {
+                // A failure lets the typed packets go without the image.
+                endInputWait(core.device(id), id, wait, null)
+            }
+        }
+        return true
+    }
+
+    /**
+     * Sends [png] as the payload of a terminal_paste_image. The typed
+     * packets that waited go out after the image packet. Runs on the IO pool.
+     */
+    private fun sendTerminalImage(core: FluxCore, d: Device, session: String, png: ByteArray, wait: MutableList<Packet>) {
+        val name = d.identity.deviceName
+        val cert = d.certificate
+        val tls = FluxCore.tls
+        if (cert == null || tls == null) {
+            core.toast("$name is not ready for an image")
+            return
+        }
+        val server = try {
+            Payload.openServer()
+        } catch (e: Exception) {
+            Log.w(TAG, "open a payload port for the image failed", e)
+            core.toast("Flux could not send the image to $name")
+            return
+        }
+        val upload = ImageUpload(session, server)
+        imageUploads.put(d.id, upload)?.let { old ->
+            old.cancelled = true
+            runCatching { old.server.close() }
+        }
+        try {
+            val p = Packet(
+                Types.FLUX_HERDR, herdrTerminalPasteImageBody(session),
+                payloadSize = png.size.toLong(), payloadPort = server.localPort,
+            )
+            if (!endInputWait(d, d.id, wait, p)) {
+                core.toast("$name is not reachable")
+                return
+            }
+            val sent = runCatching { Payload.send(tls, server, png.inputStream(), png.size.toLong(), cert) }
+            // A refusal of fluxd closes the server and shows its own reason.
+            if (sent.isFailure && !upload.cancelled) {
+                Log.w(TAG, "send the pasted image failed", sent.exceptionOrNull())
+                core.toast("Flux could not send the image to $name")
+            }
+        } finally {
+            imageUploads.remove(d.id, upload)
+            runCatching { server.close() }
+        }
+    }
+
+    /** Stops the image paste of the device that waits for [session], because fluxd will not fetch it. */
+    private fun cancelImageUpload(d: Device, session: String) {
+        val upload = imageUploads[d.id] ?: return
+        if (upload.session != session) return
+        upload.cancelled = true
+        runCatching { upload.server.close() }
+    }
+
+    /**
+     * Reads the output of [pane] again after a short wait. A choice that
+     * went through the live terminal gets no sent answer, so the tiles get
+     * the next dialog this way.
+     */
+    fun rereadSoon(core: FluxCore, id: String, pane: String) {
+        core.scheduler.schedule({ read(core, id, pane) }, REREAD_DELAY_MS, TimeUnit.MILLISECONDS)
+    }
+
+    /** Clears the input error [seq] of the terminal of the device after the screen showed it. */
+    fun clearTerminalInputError(core: FluxCore, id: String, seq: Int) {
+        core.locked {
+            val d = core.device(id) ?: return@locked
+            val t = d.herdrTerminal ?: return@locked
+            if (t.inputErrorSeq == seq) d.herdrTerminal = t.copy(inputError = null)
+        }
+    }
+
+    /** Handles terminal_input_error: why an event did not reach the terminal. The core lock is held. */
     private fun onTerminalInputError(d: Device, body: JsonObject) {
         val e = parseHerdrTerminalInputError(body) ?: return
         val t = d.herdrTerminal ?: return
         if (t.session != e.session) return
-        d.herdrTerminal = t.copy(inputError = e.error)
+        if (e.image) cancelImageUpload(d, e.session)
+        d.herdrTerminal = t.copy(inputError = e.error, inputErrorSeq = t.inputErrorSeq + 1)
     }
 
     /** Handles terminal_opened, the answer to a terminal_open. The core lock is held. */
@@ -405,6 +514,7 @@ object HerdrSync {
         val closed = parseHerdrTerminalClosed(body) ?: return
         val t = d.herdrTerminal ?: return
         if (t.session != closed.session) return
+        cancelImageUpload(d, closed.session)
         d.herdrTerminal = t.copy(sending = false, open = false, code = closed.code, reason = closed.reason, closed = true)
         terminalSink?.invoke(d.id, closed)
     }

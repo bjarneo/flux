@@ -10,18 +10,19 @@
     touch-action: none; }
   #stage { position: absolute; left: 0; top: 0; }
   #screen { margin: 0; }
-  /* xterm's block-blink keyframe ends its off phase with
-     background-color: inherit, which resolves to the row container and
-     shows the theme background as a dark square. The off phase must show
-     the cell's own painted background, like a terminal that simply does
-     not draw the cursor: revert-layer rolls the animation back to the
-     span's own values. The vars come from the synced computer theme. */
+  /* The off phase of the block blink of xterm sets background-color:
+     inherit. That value comes from the row, so the off phase shows a
+     dark square in the theme background. The off phase must show the
+     background of the cell, as a terminal that does not draw the cursor
+     does. revert-layer sets the values of the cell again. The variables
+     come from the theme of the computer. Without a theme, the colors are
+     the default cursor colors of xterm. */
   #screen .xterm-cursor.xterm-cursor-blink.xterm-cursor-block {
     animation: flux-blink 1s step-end infinite !important;
   }
   @keyframes flux-blink {
-    0% { background-color: var(--flux-cursor, transparent);
-         color: var(--flux-cursor-accent, transparent); }
+    0% { background-color: var(--flux-cursor, #ffffff);
+         color: var(--flux-cursor-accent, #000000); }
     50% { background-color: revert-layer; color: revert-layer; }
   }
 </style>
@@ -52,13 +53,11 @@
     screenReaderMode: reader
   });
   term.open(document.getElementById("screen"));
-  // Initialize the xterm cursor without touching real DOM focus. Newer
-  // xterm draws the cursor only after it is initialized, which normally
-  // happens on its textarea focus or keys — this page never gets either,
-  // because the Android keyboard is served by the native view. A real
-  // focus() would offer the hidden IME textarea to the WebView and fight
-  // the native keyboard button, so fire a synthetic focus event instead:
-  // xterm's own handler runs, initializes the cursor, and no IME opens.
+  // xterm draws the cursor only after a focus or a key on its textarea.
+  // This page gets neither, because the native view serves the Android
+  // keyboard. A real focus() would offer the hidden textarea to the
+  // keyboard and fight the keyboard key. A synthetic focus event runs the
+  // handler of xterm, which starts the cursor, and no keyboard opens.
   term.textarea.dispatchEvent(new FocusEvent("focus"));
   // In screen reader mode, xterm adds each printed character to an
   // assertive live region. Only a key or a blur empties that region, and
@@ -250,11 +249,10 @@
     theme: function (json) {
       var t = JSON.parse(json);
       term.options.theme = t;
-      // The blink keyframes take the cursor colors from these vars, which
-      // the computer theme sets; nothing is hardcoded here.
-      document.documentElement.style.setProperty("--flux-cursor", t.cursor || "transparent");
+      // The blink keyframes take the cursor colors from these variables.
+      document.documentElement.style.setProperty("--flux-cursor", t.cursor || "#ffffff");
       document.documentElement.style.setProperty(
-        "--flux-cursor-accent", t.cursorAccent || t.background || "transparent");
+        "--flux-cursor-accent", t.cursorAccent || t.background || "#000000");
       // The page shows the theme behind the grid too, for example while
       // the grid pans. An explicit frame color still wins inside cells.
       document.body.style.background = t.background || "transparent";
