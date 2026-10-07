@@ -186,7 +186,8 @@ The gestures on the live terminal are:
 - Two fingers zoom and pan the view on the phone. They send nothing to the computer.
 
 Typing in Live sends text and named keys to the current controller session.
-Suggestions and autocorrection are off, because the text already reached the computer.
+When the keyboard offers a completion or correction, Live forwards the replacement immediately.
+The app keeps the keyboard's editing context so a correction replaces text instead of appending it.
 
 Live releases control when you select **Live** again, select **Changes**, leave the agent screen, or put the app in the background.
 When the app comes back while the unlock is valid, Live takes control again.
