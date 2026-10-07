@@ -13,6 +13,15 @@ import org.junit.Test
  */
 class HerdrTerminalFocusTest {
     @Test
+    fun correctionOffsetsStayValidBeyondTheOldMirrorLimit() {
+        assertTrue(imeReplacementInBounds(664, 670, 712))
+        assertTrue(imeReplacementInBounds(707, 712, 712))
+        assertFalse("a truncated buffer loses the range", imeReplacementInBounds(664, 670, 256))
+        assertFalse("an old connection has stale offsets", imeReplacementInBounds(707, 712, 0))
+        assertFalse(imeReplacementInBounds(-1, 4, 712))
+    }
+
+    @Test
     fun theTerminalTakesFocusInTheTouchModeOfThePhone() {
         // The regression: with focusable-in-touch-mode false, the button
         // did nothing, because Android refused requestFocus() and then

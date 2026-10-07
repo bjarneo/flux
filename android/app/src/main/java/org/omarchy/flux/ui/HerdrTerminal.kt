@@ -13,11 +13,12 @@ import android.text.Selection
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.BaseInputConnection
+import android.view.inputmethod.CorrectionInfo
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.TextAttribute
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputContentInfo
 import android.view.inputmethod.InputMethodManager
-import android.view.inputmethod.TextAttribute
 import android.webkit.JavascriptInterface
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceRequest
@@ -103,6 +104,10 @@ internal fun keyboardMayOpen(ready: Boolean, focusableInTouchMode: Boolean): Boo
  */
 internal fun committedAsPaste(text: String): Boolean =
     text.length > 1 || text.indexOf('\n') >= 0 || text.indexOf('\r') >= 0
+
+/** Stale IME offsets must not turn a replacement into an append. */
+internal fun imeReplacementInBounds(start: Int, end: Int, length: Int): Boolean =
+    start in 0..length && end in 0..length
 
 /**
  * The live terminal of a herdr pane. It draws the ANSI frames of the
@@ -209,6 +214,7 @@ internal fun HerdrTerminalView(
         onRelease = { view ->
             input?.onShowKeyboard = null
             (view as TerminalWebView).closeKeyboard()
+            view.resetIme()
         },
     )
 }
@@ -277,10 +283,8 @@ internal class TerminalInput {
 /**
  * The terminal WebView that also takes the phone keyboard. The page draws
  * only: the IME text comes here and goes to the computer through [onText]
- * and [onKey]. Committed text leaves the editable at once, so the editable
- * holds only the composition that the keyboard has not finished. That is
- * why suggestions stay off: a suggestion replaces text that already went
- * to the computer, which this page cannot undo.
+ * and [onKey]. The editable keeps the keyboard's context, including text
+ * already sent, so a correction can replace that text on the computer.
  */
 internal class TerminalWebView(context: Context) : WebView(context) {
     /** Types text on the computer. */
@@ -303,10 +307,10 @@ internal class TerminalWebView(context: Context) : WebView(context) {
             // Android refuses the input connection while the terminal is
             // not ready, and it does not build one later on its own: the
             // keyboard then shows with no way to type. Restart the input
-            // when the terminal becomes ready, and hide the keyboard and
-            // drop the focus when it stops, so leaving and returning starts
-            // with no keyboard.
-            if (value) refreshInput() else closeKeyboard()
+            // when the terminal becomes ready, and hide the keyboard when it
+            // stops, keeping the buffer: a transient flap must not wipe what
+            // was typed, leaving means a real end and the release wipes.
+            if (value) refreshInput() else hideKeyboard()
         }
 
     /**
@@ -333,19 +337,31 @@ internal class TerminalWebView(context: Context) : WebView(context) {
         if (manager.isActive(this)) manager.restartInput(this)
     }
 
-    /** Hides the keyboard and drops the IME focus. */
-    fun closeKeyboard() {
-        connection?.clearContent()
+    /** Hides the keyboard and drops the IME focus, keeping the buffer. A
+     * readiness flap (resize, reconnect) must not wipe what was typed:
+     * wiping desyncs Gboard and every later correction over-deletes. */
+    fun hideKeyboard() {
         clearFocus()
         windowToken?.let { imm()?.hideSoftInputFromWindow(it, 0) }
+    }
+
+    /** Hides the keyboard and drops the buffer. Only for a view going away. */
+    fun closeKeyboard() {
+        connection?.clearContent()
+        hideKeyboard()
+    }
+
+    /** Resets the view-level IME mirror. Only for a view going away. */
+    fun resetIme() {
+        imeMirror.clear()
     }
 
     override fun onCheckIsTextEditor(): Boolean = inputReady
 
     override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? {
         if (!inputReady) return null
-        // No suggestions and no autocorrection: the terminal owns its text,
-        // and a replacement would edit text that is already remote.
+        // Request raw terminal input. Some keyboards still offer suggestions;
+        // the input connection translates their replacements to remote edits.
         outAttrs.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
         outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN
         // The image types that the keyboard may paste. The IME offers its
@@ -355,6 +371,10 @@ internal class TerminalWebView(context: Context) : WebView(context) {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_DEL) {
+            // Route through the connection so the mirror stays in step.
+            if (connection?.sendKeyEvent(event) == true) return true
+        }
         if (inputReady && !event.isCtrlPressed && !event.isAltPressed && sendNamedKey(keyCode)) return true
         return super.onKeyDown(keyCode, event)
     }
@@ -382,11 +402,17 @@ internal class TerminalWebView(context: Context) : WebView(context) {
         return true
     }
 
+    // Mirror of the terminal line at the view level. The framework recreates
+    // the input connection (keyboard restart, readiness flaps), and a fresh
+    // empty buffer makes Gboard commit corrections blindly or over-delete.
+    // New connections seed from this mirror so context queries stay truthful.
+    private val imeMirror = StringBuilder()
+
     /**
      * The bridge of the phone keyboard. A committed character goes out at
-     * once. A composition stays local until the keyboard finishes it, so a
-     * dead accent or a non-Latin word goes out whole. The deletion that the
-     * editable cannot cover is a remote backspace.
+     * once. Composing edits are coalesced; a committed replacement goes out
+     * immediately. The editable and the sent mirror keep corrections and
+     * deletions in step with the computer.
      */
     private inner class TerminalInputConnection(target: View) : BaseInputConnection(target, true) {
         // BaseInputConnection makes its own editable for a view that is not
@@ -394,22 +420,106 @@ internal class TerminalWebView(context: Context) : WebView(context) {
         private val content: Editable = editable ?: Editable.Factory.getInstance().newEditable("")
 
         fun clearContent() {
+            cancelPending()
             content.clear()
+            sent.clear()
+        }
+
+        // What this connection already forwarded. Gboard computes corrections
+        // against what getTextBeforeCursor returns, so the buffer must keep
+        // what was sent instead of clearing it: with an empty buffer Gboard
+        // just commits the correction behind the typo.
+        private val sent = StringBuilder()
+
+        init {
+            // Seed from the view mirror so a recreated connection keeps the
+            // context that Gboard queries for corrections.
+            val tail = this@TerminalWebView.imeMirror.toString()
+            if (tail.isNotEmpty()) {
+                content.append(tail)
+                Selection.setSelection(content, content.length)
+            }
+            sent.append(content)
+        }
+
+        // The pending diff as backs plus the new tail, without sending.
+        private fun diff(): Pair<Int, String> {
+            val cur = content.toString()
+            val old = sent.toString()
+            var common = 0
+            val maxCommon = minOf(old.length, cur.length)
+            while (common < maxCommon && old[common] == cur[common]) common++
+            return (old.length - common) to cur.substring(common)
+        }
+
+        // Forwards the diff between the buffer and the sent text, so a
+        // correction becomes backspaces plus the corrected word.
+        private fun sync() {
+            // Keep the IME's coordinate space until this editor is reset.
+            // Trimming the prefix invalidates Gboard's replaceText offsets.
+            val (backs, extra) = diff()
+            val oldLen = sent.length
+            repeat(backs) { onKey?.invoke("backspace") }
+            if (extra.isNotEmpty()) {
+                if (committedAsPaste(extra)) onPaste?.invoke(extra) else onText?.invoke(extra)
+            }
+            val cur = content.toString()
+            sent.clear()
+            sent.append(cur)
+            // Persist at the view level: the framework recreates connections
+            // on keyboard restarts, and the next one seeds from here.
+            val outer = this@TerminalWebView.imeMirror
+            if (outer.length >= oldLen) {
+                outer.delete(outer.length - oldLen, outer.length)
+            } else {
+                outer.clear()
+            }
+            outer.append(cur)
+        }
+
+        private fun resetMirror() {
+            cancelPending()
+            content.clear()
+            sent.clear()
+            this@TerminalWebView.imeMirror.clear()
         }
 
         override fun commitText(text: CharSequence, newCursorPosition: Int): Boolean {
+            cancelPending()
             // A lone line break is the Return key, not a prompt.
             if (text.length == 1 && (text[0] == '\n' || text[0] == '\r')) {
-                content.clear()
+                resetMirror()
                 onKey?.invoke("enter")
                 return true
             }
+            pinToEnd()
             super.commitText(text, newCursorPosition)
-            flush()
+            sync()
             return true
         }
 
-        /** Forward a tapped IME replacement without waiting for another keystroke. */
+        /**
+         * A tapped autocorrection. Gboard edits the buffer directly through
+         * this call, bypassing commitText: without this override the fix
+         * sits silently until the next keystroke flushes it. Forward it at
+         * once. No pinning here: the offset math needs the real cursor, and
+         * the full-string diff replays the result exactly.
+         */
+        override fun commitCorrection(info: CorrectionInfo): Boolean {
+            cancelPending()
+            val ok = super.commitCorrection(info)
+            sync()
+            return ok
+        }
+
+        /**
+         * A tapped correction on newer Android: Gboard replaces the word
+         * directly through this call, bypassing commitText and the composing
+         * callbacks, so without this override the fix sits silently until
+         * the next keystroke flushes it. Forward it at once. No pinning:
+         * the range math needs the real selection, and the full-string
+         * diff replays the result exactly.
+         */
         override fun replaceText(
             start: Int,
             end: Int,
@@ -417,19 +527,20 @@ internal class TerminalWebView(context: Context) : WebView(context) {
             newCursorPosition: Int,
             attrs: TextAttribute?,
         ): Boolean {
+            cancelPending()
+            if (!imeReplacementInBounds(start, end, content.length)) {
+                return false
+            }
             val ok = super.replaceText(start, end, text, newCursorPosition, attrs)
-            flush()
+            sync()
             return ok
         }
 
-        /**
-         * Takes an image that the phone keyboard pasted. The IME calls
-         * this only for a type in [IMAGE_MIME_TYPES]. The image does not
-         * go to the editable: it goes to the computer, which pastes it
-         * into the program, so the terminal draws the program's own
-         * attachment and not the image bytes.
-         */
-        override fun commitContent(inputContentInfo: InputContentInfo, flags: Int, opts: Bundle?): Boolean {
+        override fun commitContent(
+            inputContentInfo: InputContentInfo,
+            flags: Int,
+            opts: Bundle?,
+        ): Boolean {
             val mime = inputContentInfo.description.getMimeType(0) ?: return false
             if (mime !in ClipImage.TYPES) return false
             // The IME grants a read of the content for this paste only.
@@ -442,44 +553,83 @@ internal class TerminalWebView(context: Context) : WebView(context) {
         }
 
         override fun setComposingText(text: CharSequence, newCursorPosition: Int): Boolean {
+            cancelPending()
+            pinToEnd()
             super.setComposingText(text, newCursorPosition)
+            // A rewrite of sent text after idle is a tapped correction: show
+            // it at once like a completion. Inside a burst it is still
+            // typing ahead: delay it so the settled word goes out once
+            // instead of storming rewrites that garble a smart prompt.
+            if (diff().first > 0) {
+                val now = android.os.SystemClock.uptimeMillis()
+                if (now - lastComposingSend < composeBurstMs) {
+                    scheduleSync()
+                } else {
+                    lastComposingSend = now
+                    sync()
+                }
+            } else {
+                scheduleSync()
+            }
             return true
         }
 
         override fun finishComposingText(): Boolean {
+            cancelPending()
             super.finishComposingText()
-            flush()
+            sync()
             return true
         }
 
-        override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean =
-            deleteText(beforeLength, afterLength, codePoints = false)
+        override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
+            cancelPending()
+            val left = deleteLocal(beforeLength, afterLength, codePoints = false)
+            // Deletions past the mirror still refer to remote text the
+            // mirror forgot (an older word being corrected): forward them.
+            repeat(left) { onKey?.invoke("backspace") }
+            sync()
+            return true
+        }
 
-        override fun deleteSurroundingTextInCodePoints(beforeLength: Int, afterLength: Int): Boolean =
-            deleteText(beforeLength, afterLength, codePoints = true)
+        override fun deleteSurroundingTextInCodePoints(beforeLength: Int, afterLength: Int): Boolean {
+            cancelPending()
+            val left = deleteLocal(beforeLength, afterLength, codePoints = true)
+            repeat(left) { onKey?.invoke("backspace") }
+            sync()
+            return true
+        }
 
         override fun sendKeyEvent(event: KeyEvent): Boolean {
+            if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DEL && inputReady) {
+                // A hardware delete must move the mirror too, or every later
+                // diff is off by one and corrections over-delete.
+                cancelPending()
+                if (content.isNotEmpty()) {
+                    val end = Selection.getSelectionEnd(content).coerceIn(0, content.length)
+                    if (end > 0) {
+                        content.delete(end - 1, end)
+                        Selection.setSelection(content, end - 1)
+                    }
+                    sync()
+                } else {
+                    onKey?.invoke("backspace")
+                }
+                return true
+            }
             if (event.action == KeyEvent.ACTION_DOWN && sendNamedKey(event.keyCode)) return true
             if (event.action == KeyEvent.ACTION_UP && namedKey(event.keyCode) != null) return true
             return super.sendKeyEvent(event)
         }
 
-        private fun flush() {
-            val pending = content.toString()
-            if (pending.isEmpty()) return
-            content.clear()
-            // A block of text is a paste, so the program reads it as pasted
-            // content: its line breaks do not submit and a large block shows
-            // the program's own paste handling. Ordinary typing stays one
-            // character at a time.
-            if (committedAsPaste(pending)) onPaste?.invoke(pending) else onText?.invoke(pending)
-        }
-
-        private fun deleteText(beforeLength: Int, afterLength: Int, codePoints: Boolean): Boolean {
+        // Deletes from the local mirror only. Returns how many requested
+        // deletions fell outside the buffer; sync() forwards nothing for
+        // those, so the caller sends them as raw backspaces (there is no
+        // forward-delete key on this bridge).
+        private fun deleteLocal(beforeLength: Int, afterLength: Int, codePoints: Boolean): Int {
             val e = content
             val sel = Selection.getSelectionStart(e)
             val end = Selection.getSelectionEnd(e)
-            if (sel < 0 || end < 0) return true
+            if (sel < 0 || end < 0) return beforeLength
             var start = minOf(sel, end)
             var stop = maxOf(sel, end)
             var left = beforeLength
@@ -494,10 +644,49 @@ internal class TerminalWebView(context: Context) : WebView(context) {
             }
             e.delete(start, stop)
             Selection.setSelection(e, start)
-            // The part that the editable did not cover is a remote deletion.
-            repeat(left) { onKey?.invoke("backspace") }
-            return true
+            return left
         }
+
+        private val imeHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        private var pendingSync: Runnable? = null
+        private val composeDebounceMs = 180L
+
+        private fun cancelPending() {
+            pendingSync?.let { imeHandler.removeCallbacks(it) }
+            pendingSync = null
+        }
+
+        // The terminal prompt is end-edited: replaying a mid-buffer insert
+        // at the remote end corrupts the line and amplifies on every stroke.
+        // Pin a collapsed mid-buffer cursor to the end before the edit, so
+        // the intent visibly appends instead of silently garbling. Ranges
+        // are left alone: replacing a range replays exactly.
+        private fun pinToEnd(): Boolean {
+            val start = Selection.getSelectionStart(content)
+            val end = Selection.getSelectionEnd(content)
+            if (start == end && start >= 0 && start != content.length) {
+                Selection.setSelection(content, content.length)
+                return true
+            }
+            return false
+        }
+
+        private fun scheduleSync() {
+            cancelPending()
+            val task = Runnable {
+                pendingSync = null
+                lastComposingSend = android.os.SystemClock.uptimeMillis()
+                sync()
+            }
+            pendingSync = task
+            imeHandler.postDelayed(task, composeDebounceMs)
+        }
+
+        // When the last composing word went out recently, rewrites are a
+        // typing burst: keep debouncing. An isolated rewrite is a tapped
+        // correction and goes out at once.
+        private var lastComposingSend = 0L
+        private val composeBurstMs = 500L
     }
 }
 
