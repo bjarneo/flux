@@ -386,7 +386,7 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
         }
     }
     val terminalInput = remember(d.id, pane) { TerminalInput() }
-    val direct = terminal != null && sample == null && d.herdr?.terminalInput == true
+    val direct = liveInputOffered(terminal != null, d.herdr, sample != null)
     Column(Modifier.fillMaxSize().imePadding().padding(horizontal = TiledGutter)) {
         TiledTopBar(title, onBack, context = context) {
             // The key stays while Live is on, so that Live can always stop.
@@ -490,6 +490,10 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
  */
 internal fun liveOffered(online: Boolean, agent: Boolean, herdr: HerdrState?, demo: Boolean, sample: Boolean): Boolean =
     if (demo) sample else online && agent && herdr?.liveTerminal == true
+
+/** Direct controls replace the composer only in an opted-in, non-demo Live view. */
+internal fun liveInputOffered(live: Boolean, herdr: HerdrState?, sample: Boolean): Boolean =
+    live && !sample && herdr?.liveTerminal == true && herdr.terminalInput
 
 /**
  * The reason that ends Live when the agent of [pane] is not in [herdr],

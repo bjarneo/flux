@@ -197,8 +197,10 @@ internal fun HerdrTerminalView(
                 if (keyboardMayOpen(inputReady, view.isFocusableInTouchMode) && view.requestFocus()) {
                     val imm = view.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
                     view.post {
-                        imm?.restartInput(view)
-                        imm?.showSoftInput(view, 0)
+                        if (editor.inputReady && view.hasFocus()) {
+                            imm?.restartInput(view)
+                            imm?.showSoftInput(view, 0)
+                        }
                     }
                 }
             }
@@ -211,7 +213,7 @@ internal fun HerdrTerminalView(
 }
 
 /**
- * The live typed input of the terminal on screen. [TerminalOutput] fills it;
+ * The live typed input of the terminal on screen. The Live view fills it;
  * the direct footer reads it. [ready] gates every action, and [session] is
  * the stream that may take the input, so a stale speech result or a late
  * callback cannot type into another session.
