@@ -10,6 +10,20 @@
     touch-action: none; }
   #stage { position: absolute; left: 0; top: 0; }
   #screen { margin: 0; }
+  /* xterm's block-blink keyframe ends its off phase with
+     background-color: inherit, which resolves to the row container and
+     shows the theme background as a dark square. The off phase must show
+     the cell's own painted background, like a terminal that simply does
+     not draw the cursor: revert-layer rolls the animation back to the
+     span's own values. The vars come from the synced computer theme. */
+  #screen .xterm-cursor.xterm-cursor-blink.xterm-cursor-block {
+    animation: flux-blink 1s step-end infinite !important;
+  }
+  @keyframes flux-blink {
+    0% { background-color: var(--flux-cursor, transparent);
+         color: var(--flux-cursor-accent, transparent); }
+    50% { background-color: revert-layer; color: revert-layer; }
+  }
 </style>
 </head>
 <body>
@@ -38,6 +52,14 @@
     screenReaderMode: reader
   });
   term.open(document.getElementById("screen"));
+  // Initialize the xterm cursor without touching real DOM focus. Newer
+  // xterm draws the cursor only after it is initialized, which normally
+  // happens on its textarea focus or keys — this page never gets either,
+  // because the Android keyboard is served by the native view. A real
+  // focus() would offer the hidden IME textarea to the WebView and fight
+  // the native keyboard button, so fire a synthetic focus event instead:
+  // xterm's own handler runs, initializes the cursor, and no IME opens.
+  term.textarea.dispatchEvent(new FocusEvent("focus"));
   // In screen reader mode, xterm adds each printed character to an
   // assertive live region. Only a key or a blur empties that region, and
   // this page gets neither. TalkBack would then read each frame, and the
@@ -228,6 +250,11 @@
     theme: function (json) {
       var t = JSON.parse(json);
       term.options.theme = t;
+      // The blink keyframes take the cursor colors from these vars, which
+      // the computer theme sets; nothing is hardcoded here.
+      document.documentElement.style.setProperty("--flux-cursor", t.cursor || "transparent");
+      document.documentElement.style.setProperty(
+        "--flux-cursor-accent", t.cursorAccent || t.background || "transparent");
       // The page shows the theme behind the grid too, for example while
       // the grid pans. An explicit frame color still wins inside cells.
       document.body.style.background = t.background || "transparent";
