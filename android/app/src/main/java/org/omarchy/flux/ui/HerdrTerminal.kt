@@ -17,6 +17,7 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputContentInfo
 import android.view.inputmethod.InputMethodManager
+import android.view.inputmethod.TextAttribute
 import android.webkit.JavascriptInterface
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceRequest
@@ -406,6 +407,19 @@ internal class TerminalWebView(context: Context) : WebView(context) {
             super.commitText(text, newCursorPosition)
             flush()
             return true
+        }
+
+        /** Forward a tapped IME replacement without waiting for another keystroke. */
+        override fun replaceText(
+            start: Int,
+            end: Int,
+            text: CharSequence,
+            newCursorPosition: Int,
+            attrs: TextAttribute?,
+        ): Boolean {
+            val ok = super.replaceText(start, end, text, newCursorPosition, attrs)
+            flush()
+            return ok
         }
 
         /**
