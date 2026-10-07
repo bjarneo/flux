@@ -155,18 +155,31 @@ A valid unlock from the last 5 minutes opens Live with no prompt.
 The replies to agents use the same unlock.
 
 The live terminal then takes the place of the output.
-With a computer that supports live input, a key bar and a keyboard key replace the composer.
-The keyboard types directly in the program; Return sends Enter, and a tap does not open it.
-Input waits for the first frame and the same five-minute unlock, and reconnects replay no input.
-Output and Changes keep the choices, composer, Send, and dictation as before.
-An older computer keeps those controls in Live too.
-The row has Esc, Tab, Up, Down, and the keyboard key; use the keyboard's mic for dictation.
-The keyboard's paste, dictation, and swipe words send one bracketed paste, not Enter.
-Line breaks stay in the paste, and the program applies its own paste handling.
-An image paste goes to the computer clipboard, then Ctrl+V lets the program attach it.
-Live starts with the keyboard hidden. Losing control hides it, and a reconnect does not open it.
+The choice tiles stay under the terminal.
+With a computer that supports live input, a key row takes the place of the key bar, the text field, **Send**, and the mic key.
+The key row has Esc, Tab, Up, Down, Enter, and a keyboard key.
+The keyboard key shows the phone keyboard.
+A tap on the terminal does not open the keyboard.
+The keyboard types directly into the agent, and Return sends Enter.
+To dictate, use the mic of the phone keyboard.
+Text from the keyboard with a line break or a tab, or of 256 characters or more, goes to the agent as one bracketed paste.
+The line breaks of a paste stay in the paste and do not submit the prompt.
+The agent applies its own paste handling.
+A shorter block, for example a swiped word, goes as typed text.
+An image that you paste with the keyboard goes to the clipboard of the computer, and then Ctrl+V lets the agent attach it.
+The phone turns the image upright and sends it as a PNG of at most 2048 pixels on its long side.
+Input waits for the first frame and the unlock.
+A reconnect does not send old input again.
+Live starts with the keyboard hidden.
+When the phone loses control, the keyboard hides, and a reconnect does not show it again.
+**Output** without Live and **Changes** keep the text field, **Send**, and the mic key.
+An older computer keeps these controls in Live too.
+The text field keeps its draft while Live shows.
+When Live ends after you typed text with no Enter after it, a note above the text field tells you that the input of the agent can still hold that text.
+**Send** then adds the new text after it.
 **Refresh** does not show while Live is on.
-The phone then reads the output only when Live opens and when the status changes, so the choice tiles stay current.
+The phone then reads the output when Live opens, when the status changes, and after a tap on a choice, so the choice tiles stay current.
+After a tap on a choice, the choices take no tap until the next output arrives.
 Until the first full screen draws, a cover shows **Opening the terminal…**.
 The cover shows **Reconnecting…** while Live opens the stream again.
 The terminal uses the colors of the computer theme for the default colors, and it keeps the colors that the agent sets.
@@ -185,9 +198,16 @@ The gestures on the live terminal are:
 - A short tap clicks the left mouse button at the cell under the finger, for example on a button of the agent. herdr sends the click only to an agent that uses the mouse. A drag, a long press, and a touch that stops a scroll do not click.
 - Two fingers zoom and pan the view on the phone. They send nothing to the computer.
 
-Typing in Live sends text and named keys to the current controller session.
-When the keyboard offers a completion or correction, Live forwards the replacement immediately.
-The app keeps the keyboard's editing context so a correction replaces text instead of appending it.
+Typing in Live goes to the agent at once.
+A digit or Return can answer a dialog of the agent, for example an approval.
+The text field refuses a prompt while the agent waits for a choice, but Live has no such guard.
+When the keyboard replaces a word, for example with a correction or a completion, Live sends backspaces and the new word at once.
+A correction reaches only the text that you typed after the last key of the key row, Return, a tap, a choice, or an image.
+After such a key, the agent can change its line, so the keyboard starts again with an empty line.
+A hardware keyboard types too.
+It sends Enter, Tab, Shift+Tab, Esc, Backspace, and the arrows as keys.
+AltGr types its characters, for example `@` and `{`.
+A key with Ctrl does nothing.
 
 Live releases control when you select **Live** again, select **Changes**, leave the agent screen, or put the app in the background.
 When the app comes back while the unlock is valid, Live takes control again.
@@ -499,7 +519,8 @@ systemctl --user restart fluxd
 The phone can read the agent list and the recent output of an agent pane.
 `fluxd` also lets a paired device watch the live terminal of an agent pane, with no input. Flux for Android does not use this.
 With `herdr_control = true`, it can also send the keys in the list above and prompts to an agent, start agents, and close agent panes.
-It can also control the live terminal of an agent pane: click at any cell, scroll, and resize the pane to its grid.
+It can also control the live terminal of an agent pane: type, paste text and images, click at any cell, scroll, and resize the pane to its grid.
+An image paste replaces the clipboard of the computer, also with `auto_clipboard = false`.
 A click can press each button of the agent, for example an approval.
 An agent runs commands, so a reply has the same power as a prompt that you type on the computer.
 `herdr_control` alone lets the phone run any command as your user, also when `herdr_terminals` is `false`.
@@ -525,7 +546,9 @@ Unpair the devices that you do not use.
 For a prompt and a terminal command, it logs the number of characters, not the text.
 It also logs each new agent, new terminal, and closed pane.
 For a live terminal, it logs the start, each press of a mouse button with its cell, and the end.
-It does not log the release of a button, a drag, a move, a scroll, or a resize.
+It also logs each Enter with the number of characters typed before it, each Esc, each paste with its number of characters, and each image with its size.
+While the agent waits for a choice, it logs each typed text with its number of characters, because a digit can select a choice.
+It does not log the typed text, the release of a button, a drag, a move, a scroll, or a resize.
 When the input to a live terminal fails, it logs only the first error of the stream.
 
 Terminal output can contain secrets.
@@ -637,54 +660,49 @@ The `kind` field selects the message.
 | `terminal_resize` | Phone | `session`, `cols`, and `rows`, from 1 to 1000 |
 | `terminal_release` | Phone | `session` and `request`. The computer answers with `terminal_closed`. |
 | `terminal_closed` | Computer | `session`, `code`, and `reason`. After a release, also the `request` of the release. |
-| `terminal_input` | Phone | `session`, and exactly one of `text` or `key` |
-| `terminal_paste` | Phone | `session` and `text`; fluxd wraps it as one bracketed paste |
-| `terminal_paste_image` | Phone | `session`, with an image as the payload |
-| `terminal_input_error` | Computer | `session`, `code`, `error` |
+| `terminal_input` | Phone | `session`, and `text` or `key`, but not both |
+| `terminal_paste` | Phone | `session` and `text`. `fluxd` sends the text as one bracketed paste. |
+| `terminal_paste_image` | Phone | `session`, and a PNG image as the payload |
+| `terminal_input_error` | Computer | `session`, `code`, and `error`. The error of an image paste also has `image`. |
 
-The optional `state.bridge` list advertises `observe`, `control`, `scroll`, `mouse`, `input`,
-`paste`, and `image`. A phone sends a typed event only with `input`, a text paste only with
-`paste`, and an image paste only with `image`, so an older computer is detected instead of
-failing silently.
-Old clients ignore these additive kinds and continue using read/output operations.
-Only control may request a phone-sized grid; dimensions are bounded to 1..1000 cells.
-Each device has at most one stream and each pane at most one controller, without takeover.
-The generated session ID is bound to its device, link, and terminal; stale input is not replayed.
+The optional `bridge` list of `state` names the actions of the live terminal: `observe`, `control`, `scroll`, `mouse`, `input`, `paste`, and `image`.
+A phone sends `terminal_input` only with `input`, `terminal_paste` only with `paste`, and `terminal_paste_image` only with `image`.
+Thus a phone finds an older computer and keeps the text field.
+An older app ignores the new kinds.
 
-A `terminal_input` types one event in the controller session. `text` goes as it is, on one
-line, without a trailing Enter, and can have up to 16 KB. `key` is one of `enter`, `tab`,
-`esc`, `backspace`, `up`, `down`, `left`, and `right`; fluxd encodes it, so a client cannot
-send an arbitrary escape sequence. fluxd refuses an empty text, both fields, a control
-character, or an unknown key with `terminal_input_error` and the code `invalid_input`.
-A bridge failure answers with `input_failed` and ends the stream, so a phone cannot keep
-typing into a dead controller. An unknown, foreign, or released session gets no input and
-no answer. The events keep their order through the controller, so a character, a Tab, and
-an Enter arrive in the order they were typed.
+A `terminal_input` types one event in the control stream of the phone.
+`text` goes as it is, on one line, with no Enter after it, and it can have up to 16 KB.
+`key` is `enter`, `tab`, `shift+tab`, `esc`, `backspace`, `up`, `down`, `left`, or `right`.
+`fluxd` encodes each key, and a text cannot hold a control character, so one event cannot hold an escape sequence.
+`fluxd` refuses an empty text, a text with a key, a control or directional character, and an unknown key with the code `invalid_input`.
+A bridge failure gets the code `input_failed` and ends the stream, so the phone does not type into a stream that stopped.
+A session that is unknown, released, or of another device gets no input and no answer, also for an invalid event.
+The events keep their order, so a character, a Tab, and an Enter arrive in the order that the phone sent them.
 
-A `terminal_paste` sends text as one bracketed paste. fluxd wraps the text in
-`ESC [ 200 ~` and `ESC [ 201 ~`, keeps its line breaks and tabs, and drops every other
-control character, so a paste cannot close its own paste or type a key. A paste can have up
-to 64 KB, larger than a typed event, because a paste is often a code block. It uses the same
-`terminal_input_error` codes. The phone takes the block that its keyboard committed, such as
-its own paste, and sends the text; the computer clipboard does not change.
+A `terminal_paste` sends text as one bracketed paste.
+`fluxd` puts the text between `ESC [ 200 ~` and `ESC [ 201 ~`.
+It keeps the line breaks and the tabs, and it drops each other control character and each directional character.
+Thus a paste cannot end its own paste or type a key.
+herdr removes the markers for a program that did not turn on bracketed paste.
+A paste can have up to 64 KB, because a paste is often a code block.
+The clipboard of the computer does not change.
 
-A `terminal_paste_image` pastes an image that the phone keyboard took from its clipboard. The
-image is the payload of the packet, so the paste does not need clipboard sync and does not
-depend on the clipboard of the phone. fluxd accepts a PNG, JPEG, GIF, or WebP image of up to
-16 MiB, detects its type from the bytes, and drops a payload that is not an image. The paste
-path of opencode reads `image/png`, so fluxd turns a JPEG or a GIF into a PNG and refuses a
-WebP with a reason, because it has no WebP decoder. It puts the PNG on the clipboard of the
-computer and then sends Ctrl+V to the controller, so the program reads the image as an
-attachment instead of typed text. The clipboard of the computer then holds the image, as a
-copy does. An unknown, foreign, or released session gets no answer, and a size limit, an
-unreadable image, or a failed transfer answers with `terminal_input_error`. One image per
-device runs at a time.
-
-Frames contain base64 ANSI bytes and must be applied in order: incremental frames cannot be
-dropped or truncated. A full frame establishes the baseline before input is enabled. Its sequence
-number is not an acknowledgement of a specific input event. Wheel input uses `source: wheel`
-and `lines: 1`; increasing `lines` does not multiply mouse-report events. Mouse clicks use
-ordered left-button `down`/`up` events through the existing bridge.
+A `terminal_paste_image` pastes an image that the phone keyboard took from its clipboard.
+The image is the payload of the packet, so the paste does not need clipboard sync.
+The phone sends a PNG of at most 2048 pixels on its long side.
+`fluxd` accepts only a PNG of up to 16 MiB, 8192 pixels on each side, and 40 million pixels, and it reads only the header.
+It refuses a JPEG or another image type with the code `invalid_input`, so an older phone gets a reason.
+`fluxd` pastes an image only into an agent, not into a terminal without an agent.
+It puts the PNG on the clipboard of the computer and then sends Ctrl+V to the agent.
+opencode, Claude Code, and Codex then read the image as an attachment.
+The clipboard of the computer then holds the image, as after a copy.
+The phone holds the typed events while it makes the PNG, and it sends them after the image packet.
+`fluxd` holds the typed events during the transfer and for 500 ms after Ctrl+V, so that the agent can attach the image.
+Thus Enter does not submit the prompt before the image.
+When more than 96 events wait, `fluxd` refuses the next ones, and the phone gets one `paste_failed`.
+One image paste runs at a time on the computer, for all devices.
+A second paste during that time gets the code `paste_failed`.
+A failed transfer or clipboard write also gets `paste_failed`, and the stream stays open.
 
 When `fluxd` cannot finish an answer because of an internal error, it sends the answer with an `error`, for example `fluxd could not read the pane`.
 

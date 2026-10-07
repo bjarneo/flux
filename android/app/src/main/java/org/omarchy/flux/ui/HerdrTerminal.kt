@@ -2,23 +2,25 @@ package org.omarchy.flux.ui
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.view.MotionEvent
-import android.view.ViewGroup
-import android.view.accessibility.AccessibilityManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.text.Editable
 import android.text.InputType
 import android.text.Selection
+import android.view.KeyCharacterMap
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
+import android.view.accessibility.AccessibilityManager
 import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.CorrectionInfo
 import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.TextAttribute
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputContentInfo
 import android.view.inputmethod.InputMethodManager
+import android.view.inputmethod.TextAttribute
 import android.webkit.JavascriptInterface
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceRequest
@@ -40,8 +42,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.viewinterop.AndroidView
-import org.omarchy.flux.core.ClipImage
-import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.HerdrSync
 import org.omarchy.flux.core.HerdrTerminalEvent
 import org.omarchy.flux.core.HerdrTerminalSession
@@ -72,42 +72,104 @@ internal fun rememberTerminalFeeder(deviceId: String): TerminalFeeder {
 }
 /**
  * The image types that the phone keyboard may paste into the terminal. The
- * IME shows its image and clipboard options only while the editor names
- * them, and it commits the image to the terminal then.
+ * keyboard offers its image and clipboard options only while the editor
+ * names them. The phone turns each image into a PNG before it sends it.
  */
-private val IMAGE_MIME_TYPES = arrayOf("image/png", "image/jpeg", "image/gif", "image/webp")
+internal val TERMINAL_IMAGE_TYPES = arrayOf("image/png", "image/jpeg", "image/gif", "image/webp", "image/heic", "image/heif")
 
 /**
  * True when the terminal view can take focus on the phone. The phone is in
  * touch mode, so a view that is not focusable in touch mode cannot take
- * focus: requestFocus() returns false, the input manager never serves the
- * view, and Android ignores showSoftInput(). A tap still does not open the
- * keyboard, because the touch listener consumes every touch before
+ * focus. requestFocus() then returns false, the input manager never serves
+ * the view, and Android ignores showSoftInput(). A tap still does not open
+ * the keyboard, because the touch listener takes each touch before
  * View.onTouchEvent can focus the view.
  */
 internal const val TERMINAL_FOCUSABLE_IN_TOUCH_MODE = true
 
 /**
- * True when the keyboard key may open the IME: the input gate is open and
- * the view can take focus in touch mode. The gate keeps a reconnect or an
- * unauthenticated terminal from opening the keyboard.
+ * True when the keyboard key may open the keyboard: the input gate is open
+ * and the view can take focus in touch mode. The gate keeps a reconnect or
+ * a terminal without an unlock from opening the keyboard.
  */
 internal fun keyboardMayOpen(ready: Boolean, focusableInTouchMode: Boolean): Boolean =
     ready && focusableInTouchMode
 
+/** The length from which a block of keyboard text goes as a paste, in characters. */
+internal const val TERMINAL_PASTE_FROM = 256
+
 /**
- * True when a text that the phone keyboard committed is a paste rather
- * than typing. Ordinary typing arrives one character at a time, while a
- * paste, a dictation, or a composed word arrives as one block. A line
- * break is always a paste: the direct view has no typed line break, so a
- * committed newline must not submit the prompt.
+ * True when text from the phone keyboard goes as a paste and not as typed
+ * text. A block with a line break or a tab goes as a paste, so it does not
+ * submit the prompt or complete a word. A long block goes as a paste, so
+ * the agent applies its own paste handling, for example a placeholder for
+ * a large paste. A word that the keyboard composed or swiped goes as typed
+ * text, so the menus of the agent for @ and / still follow it.
  */
 internal fun committedAsPaste(text: String): Boolean =
-    text.length > 1 || text.indexOf('\n') >= 0 || text.indexOf('\r') >= 0
+    text.any { it == '\n' || it == '\r' || it == '\t' } || text.codePointCount(0, text.length) >= TERMINAL_PASTE_FROM
 
-/** Stale IME offsets must not turn a replacement into an append. */
+/** True when a replacement of the keyboard is inside the buffer. A stale offset must not turn a replacement into an append. */
 internal fun imeReplacementInBounds(start: Int, end: Int, length: Int): Boolean =
     start in 0..length && end in 0..length
+
+/** One edit of the typed line: delete [backspaces] code points at the end, then type [text]. */
+internal data class LineEdit(val backspaces: Int, val text: String)
+
+/**
+ * The edit that changes the typed line [old] into [new]. A program deletes
+ * one code point for each backspace, so the count is in code points. The
+ * common part never ends inside a surrogate pair, so the new text never
+ * starts with half of an emoji.
+ */
+internal fun lineEdit(old: String, new: String): LineEdit {
+    var common = 0
+    val max = minOf(old.length, new.length)
+    while (common < max && old[common] == new[common]) common++
+    if (common > 0 && Character.isHighSurrogate(old[common - 1])) common--
+    return LineEdit(old.codePointCount(common, old.length), new.substring(common))
+}
+
+/**
+ * The text that the phone typed on the current line of the program, as the
+ * program got it. A correction of the keyboard becomes backspaces and the
+ * new text. Each send returns false when the event did not go out. The
+ * line is then empty, because the state of the program is not known.
+ */
+internal class SentLine {
+    var text = ""
+        private set
+
+    /** Sends the edit from [text] to [cur]. Returns false when an event did not go out. */
+    fun sync(cur: String, key: (String) -> Boolean, type: (String) -> Boolean, paste: (String) -> Boolean): Boolean {
+        val edit = lineEdit(text, cur)
+        var ok = true
+        repeat(edit.backspaces) { if (ok) ok = key("backspace") }
+        if (ok && edit.text.isNotEmpty()) ok = if (committedAsPaste(edit.text)) paste(edit.text) else type(edit.text)
+        text = if (ok) cur else ""
+        return ok
+    }
+
+    fun reset() {
+        text = ""
+    }
+}
+
+/**
+ * The named key of a key code, or null. Shift with Tab is Shift+Tab. Only
+ * these keys go to the program as keys. Other keys type their character.
+ */
+internal fun terminalKeyName(keyCode: Int, shift: Boolean): String? = when (keyCode) {
+    KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> "enter"
+    KeyEvent.KEYCODE_TAB -> if (shift) "shift+tab" else "tab"
+    KeyEvent.KEYCODE_DEL -> "backspace"
+    KeyEvent.KEYCODE_ESCAPE -> "esc"
+    KeyEvent.KEYCODE_DPAD_UP -> "up"
+    KeyEvent.KEYCODE_DPAD_DOWN -> "down"
+    KeyEvent.KEYCODE_DPAD_LEFT -> "left"
+    KeyEvent.KEYCODE_DPAD_RIGHT -> "right"
+    else -> null
+}
 
 /**
  * The live terminal of a herdr pane. It draws the ANSI frames of the
@@ -126,6 +188,7 @@ internal fun imeReplacementInBounds(start: Int, end: Int, length: Int): Boolean 
  * rows of the grid. With [sample], the view draws that screen and opens
  * no stream, for screenshots. When the renderer of the page stops, the
  * view goes away and [onGone] runs, so that the app keeps its process.
+ * While [inputReady] is true, the phone keyboard types into [input].
  */
 @Composable
 internal fun HerdrTerminalView(
@@ -144,10 +207,6 @@ internal fun HerdrTerminalView(
     onGone: () -> Unit = {},
     inputReady: Boolean = false,
     imageReady: Boolean = false,
-    onText: (String) -> Unit = {},
-    onKey: (String) -> Unit = {},
-    onPaste: (String) -> Unit = {},
-    onImage: (Uri, String) -> Unit = { _, _ -> },
     input: TerminalInput? = null,
 ) {
     feeder.onReady = {
@@ -184,120 +243,143 @@ internal fun HerdrTerminalView(
         },
         factory = { context -> feeder.view(context) },
         update = { view ->
-            // The gate and the callbacks come from the current composition,
-            // not from the factory, so a stale capture cannot type into a
+            // The gate and the input come from the current composition, not
+            // from the factory. A stale capture then cannot type into a
             // terminal that lost control or changed session.
             val editor = view as TerminalWebView
+            editor.input = input
             editor.inputReady = inputReady
-            editor.onText = onText
-            editor.onKey = onKey
-            editor.onPaste = onPaste
             editor.imageReady = imageReady
-            editor.onImage = onImage
-            input?.onShowKeyboard = {
-                // Android ignores showSoftInput() for a view that is not
-                // served, so ask for the keyboard only after the view took
-                // focus. The post lets the focus change reach the input
-                // manager first, and restartInput builds the connection of
-                // a view that was served without one.
-                if (keyboardMayOpen(inputReady, view.isFocusableInTouchMode) && view.requestFocus()) {
-                    val imm = view.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-                    view.post {
-                        if (editor.inputReady && view.hasFocus()) {
-                            imm?.restartInput(view)
-                            imm?.showSoftInput(view, 0)
-                        }
-                    }
-                }
-            }
+            input?.editor = editor
         },
         onRelease = { view ->
-            input?.onShowKeyboard = null
-            (view as TerminalWebView).closeKeyboard()
-            view.resetIme()
+            val editor = view as TerminalWebView
+            // A moved view can already serve a new node. Only this view lets go of its own input.
+            if (input?.editor === editor) input.editor = null
+            editor.input = null
+            editor.closeKeyboard()
         },
     )
 }
 
 /**
- * The live typed input of the terminal on screen. The Live view fills it;
- * the direct footer reads it. [ready] gates every action, and [session] is
- * the stream that may take the input, so a stale speech result or a late
- * callback cannot type into another session.
+ * The typed input of the terminal on screen. The Live view fills its
+ * senders, and the key row and the terminal view call it. [ready] gates
+ * each action, and each sender checks the session again when it sends, so
+ * a late callback cannot type into a session that lost control or changed.
  */
 internal class TerminalInput {
     var ready by mutableStateOf(false)
+
     /** True while the computer also accepts a bracketed paste. */
     var pasteReady by mutableStateOf(false)
+
     /** True while the computer also accepts an image to paste. */
     var imageReady by mutableStateOf(false)
-    var session by mutableStateOf("")
-    var onText: ((String) -> Unit)? = null
-    var onKey: ((String) -> Unit)? = null
-    var onPaste: ((String) -> Unit)? = null
-    var onImage: ((Uri, String) -> Unit)? = null
-    var onShowKeyboard: (() -> Unit)? = null
 
-    /** Types [text] on the computer. [from] is the session of a delayed caller, or empty for now. */
-    fun type(text: String, from: String = "") {
-        if (!ready || text.isEmpty() || (from.isNotEmpty() && from != session)) return
-        onText?.invoke(text)
+    /**
+     * True after text went to the input of the agent with no Enter after
+     * it. Live can end while that text still waits there.
+     */
+    var unsent by mutableStateOf(false)
+
+    var onText: ((String) -> Boolean)? = null
+    var onKey: ((String) -> Boolean)? = null
+    var onPaste: ((String) -> Boolean)? = null
+    var onImage: ((Uri, () -> Unit) -> Boolean)? = null
+
+    /** The terminal view on screen, or null. */
+    var editor: TerminalWebView? = null
+
+    /** Types [text] on the computer. Returns false when it did not go out. */
+    fun type(text: String): Boolean {
+        if (!ready || text.isEmpty()) return false
+        val sent = onText?.invoke(text) == true
+        if (sent) unsent = true
+        return sent
     }
 
-    /** Sends the named key [name]. [from] is the session of a delayed caller, or empty for now. */
-    fun key(name: String, from: String = "") {
-        if (!ready || (from.isNotEmpty() && from != session)) return
-        onKey?.invoke(name)
+    /** Sends the named key [name]. Returns false when it did not go out. */
+    fun send(name: String): Boolean {
+        if (!ready) return false
+        val sent = onKey?.invoke(name) == true
+        if (sent && name == "enter") unsent = false
+        return sent
     }
 
-    /** Pastes [text] as one bracketed paste. [from] is the session of a delayed caller, or empty for now. */
-    fun paste(text: String, from: String = "") {
-        if (!ready || text.isEmpty() || (from.isNotEmpty() && from != session)) return
-        // A computer without the paste capability keeps the old typing path,
-        // which refuses a block that spans lines. It must update.
-        if (!pasteReady) {
-            type(text, from)
-            return
-        }
-        onPaste?.invoke(text)
+    /** Pastes [text] as one bracketed paste. Returns false when it did not go out. */
+    fun paste(text: String): Boolean {
+        if (!ready || text.isEmpty()) return false
+        // A computer without the paste capability keeps the typing path.
+        // That path refuses a block with a line break.
+        if (!pasteReady) return type(text)
+        val sent = onPaste?.invoke(text) == true
+        if (sent) unsent = true
+        return sent
+    }
+
+    /**
+     * Pastes the image at [uri] in the active session. The phone turns it
+     * into a PNG, and the computer puts it on its clipboard and pastes it.
+     * [release] ends the read grant of the keyboard. It runs once, also
+     * when the image does not go out. Returns false when the image did not
+     * go out.
+     */
+    fun pasteImage(uri: Uri, release: () -> Unit): Boolean {
+        val sent = ready && imageReady && onImage?.invoke(uri, release) == true
+        if (!sent) release()
+        return sent
+    }
+
+    /** Presses a key of the key row. Text that waits in the keyboard goes first. */
+    fun key(name: String): Boolean = press { send(name) }
+
+    /**
+     * Types the digit of a choice tile. Text that waits in the keyboard goes
+     * first. The dialog takes the digit, so no text waits in the input.
+     */
+    fun choose(digit: String): Boolean = press { onText?.invoke(digit) == true }
+
+    /**
+     * Runs [action], which can change the line of the program, for example
+     * a tap on the terminal. While typing is on, the text that waits in the
+     * keyboard goes first, and the typed line starts again after it.
+     */
+    fun lineAction(action: () -> Boolean): Boolean {
+        val e = editor
+        return if (ready && e != null) e.press(action) else action()
+    }
+
+    /** Forgets the typed line, for example after the computer refused an event. */
+    fun forget() {
+        editor?.resetLine()
     }
 
     /** Shows the phone keyboard. Android hides it again. */
     fun showKeyboard() {
-        if (ready) onShowKeyboard?.invoke()
+        if (ready) editor?.showKeyboard()
     }
 
-    /**
-     * Pastes the image at [uri] in the active session. The computer puts
-     * it on its clipboard and pastes it, so the program reads it as an
-     * attachment. [from] is the session of a delayed caller, or empty for
-     * now.
-     */
-    fun pasteImage(uri: Uri, mime: String, from: String = "") {
-        if (!ready || !imageReady || mime !in ClipImage.TYPES) return
-        if (from.isNotEmpty() && from != session) return
-        onImage?.invoke(uri, mime)
+    private fun press(action: () -> Boolean): Boolean {
+        if (!ready) return false
+        return lineAction(action)
     }
 }
 
 /**
- * The terminal WebView that also takes the phone keyboard. The page draws
- * only: the IME text comes here and goes to the computer through [onText]
- * and [onKey]. The editable keeps the keyboard's context, including text
- * already sent, so a correction can replace that text on the computer.
+ * The terminal WebView that also takes the phone keyboard. The page only
+ * draws. The keyboard text comes here and goes to the computer through
+ * [input]. The view keeps the typed line of the program, so a correction
+ * of the keyboard can replace text that the phone already sent.
+ *
+ * The typed line starts again after each key or tap that changes the line
+ * on the computer: Enter, Esc, Tab, an arrow, a tap, a choice, an image,
+ * and a paste with a line break. A correction then reaches only the text
+ * typed since then, and it cannot delete text that the program changed.
  */
 internal class TerminalWebView(context: Context) : WebView(context) {
-    /** Types text on the computer. */
-    var onText: ((String) -> Unit)? = null
-
-    /** Sends one named key to the computer. */
-    var onKey: ((String) -> Unit)? = null
-
-    /** Sends one committed block of text as a bracketed paste. */
-    var onPaste: ((String) -> Unit)? = null
-
-    /** Sends one image that the phone keyboard pasted. */
-    var onImage: ((Uri, String) -> Unit)? = null
+    /** The typed input that the keyboard text goes to, or null. */
+    var input: TerminalInput? = null
 
     /** True while the terminal may take typed input. */
     var inputReady: Boolean = false
@@ -305,18 +387,23 @@ internal class TerminalWebView(context: Context) : WebView(context) {
             if (field == value) return
             field = value
             // Android refuses the input connection while the terminal is
-            // not ready, and it does not build one later on its own: the
-            // keyboard then shows with no way to type. Restart the input
-            // when the terminal becomes ready, and hide the keyboard when it
-            // stops, keeping the buffer: a transient flap must not wipe what
-            // was typed, leaving means a real end and the release wipes.
-            if (value) refreshInput() else hideKeyboard()
+            // not ready, and it does not build one later on its own. The
+            // keyboard then shows with no way to type. So the input starts
+            // again when the terminal becomes ready. When the terminal stops
+            // taking input, the keyboard hides and the typed line starts
+            // again, because the program can change while the phone waits.
+            if (value) {
+                refreshInput()
+            } else {
+                resetLine()
+                hideKeyboard()
+            }
         }
 
     /**
-     * True while the computer also accepts an image paste. The IME reads
-     * the accepted content types when the input connection is built, so a
-     * change restarts the input while the keyboard shows.
+     * True while the computer also accepts an image paste. The keyboard
+     * reads the accepted content types when the input connection is built,
+     * so a change starts the input again while the keyboard shows.
      */
     var imageReady: Boolean = false
         set(value) {
@@ -327,169 +414,293 @@ internal class TerminalWebView(context: Context) : WebView(context) {
 
     private var connection: TerminalInputConnection? = null
 
+    /** The typed line that the connections of this view share. A new connection starts from it. */
+    private val line = SentLine()
+
     /** The input manager of this view. */
     private fun imm(): InputMethodManager? =
         context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
 
-    /** Rebuilds the input connection while the keyboard shows on this view. */
+    /** Builds the input connection again while the keyboard shows on this view. */
     fun refreshInput() {
         val manager = imm() ?: return
         if (manager.isActive(this)) manager.restartInput(this)
     }
 
-    /** Hides the keyboard and drops the IME focus, keeping the buffer. A
-     * readiness flap (resize, reconnect) must not wipe what was typed:
-     * wiping desyncs Gboard and every later correction over-deletes. */
+    /** Shows the phone keyboard. The view takes focus first, because Android ignores showSoftInput() for a view that it does not serve. */
+    fun showKeyboard() {
+        if (!keyboardMayOpen(inputReady, isFocusableInTouchMode) || !requestFocus()) return
+        // The post lets the focus change reach the input manager first.
+        // restartInput builds the connection of a view that was served
+        // without one.
+        post {
+            if (inputReady && hasFocus()) {
+                val manager = imm() ?: return@post
+                manager.restartInput(this)
+                manager.showSoftInput(this, 0)
+            }
+        }
+    }
+
+    /** Hides the keyboard and drops the focus. */
     fun hideKeyboard() {
         clearFocus()
         windowToken?.let { imm()?.hideSoftInputFromWindow(it, 0) }
     }
 
-    /** Hides the keyboard and drops the buffer. Only for a view going away. */
+    /** Hides the keyboard and forgets the typed line. Only for a view that goes away. */
     fun closeKeyboard() {
         connection?.clearContent()
+        line.reset()
         hideKeyboard()
     }
 
-    /** Resets the view-level IME mirror. Only for a view going away. */
-    fun resetIme() {
-        imeMirror.clear()
+    /**
+     * Forgets the typed line. The keyboard learns that the line is empty,
+     * so it drops its own copy of the text too. The input connection stays,
+     * so a key that the user types next is not lost.
+     */
+    fun resetLine() {
+        connection?.clearContent()
+        line.reset()
+    }
+
+    /**
+     * Runs [action] as one press of the user. The text that waits in the
+     * keyboard composition goes first, so a key cannot pass a word that the
+     * user typed before it. The typed line then starts again.
+     */
+    fun press(action: () -> Boolean): Boolean {
+        connection?.flush()
+        val sent = action()
+        resetLine()
+        return sent
+    }
+
+    /** Presses the named key [name]. Backspace edits the typed line instead. */
+    private fun pressKey(name: String): Boolean {
+        val i = input ?: return false
+        if (name == "backspace") {
+            return connection?.deleteBack() ?: i.send(name)
+        }
+        return press { i.send(name) }
+    }
+
+    /**
+     * Handles one key event of a keyboard. A named key goes to the program,
+     * Backspace edits the typed line, and a key with a character types it.
+     * A key with Ctrl or Meta goes on to the WebView. With Alt, only a
+     * character goes out, because AltGr is the right Alt key and types the
+     * characters such as @ and { on many layouts. Returns true when the key
+     * was used.
+     */
+    @Suppress("DEPRECATION")
+    fun handleKey(event: KeyEvent): Boolean {
+        if (event.isCtrlPressed || event.isMetaPressed) return false
+        val name = terminalKeyName(event.keyCode, event.isShiftPressed).takeUnless { event.isAltPressed }
+        return when (event.action) {
+            KeyEvent.ACTION_DOWN -> if (name != null) {
+                pressKey(name)
+                true
+            } else {
+                typeKey(event)
+            }
+            KeyEvent.ACTION_UP -> name != null || keyChar(event) != null
+            KeyEvent.ACTION_MULTIPLE -> {
+                val chars = event.characters
+                if (event.keyCode == KeyEvent.KEYCODE_UNKNOWN && !chars.isNullOrEmpty()) {
+                    typeKeyText(chars)
+                    true
+                } else {
+                    false
+                }
+            }
+            else -> false
+        }
+    }
+
+    /** The character of a key event, or null. A dead key for an accent has none here. */
+    private fun keyChar(event: KeyEvent): String? {
+        val c = event.unicodeChar
+        if (c == 0 || c and KeyCharacterMap.COMBINING_ACCENT != 0) return null
+        return String(Character.toChars(c))
+    }
+
+    /**
+     * Types the character of a key event. Some keyboards send digits as
+     * key events, for example AOSP LatinIME when it does not compose. A
+     * hardware keyboard sends each key so.
+     */
+    private fun typeKey(event: KeyEvent): Boolean {
+        val text = keyChar(event) ?: return false
+        typeKeyText(text)
+        return true
+    }
+
+    private fun typeKeyText(text: String) {
+        val c = connection
+        if (c != null) c.typeKey(text) else input?.type(text)
+    }
+
+    /**
+     * A hardware keyboard sends its keys to the focused view. WebView would
+     * give them to the page, which takes no input, so the terminal takes
+     * them first.
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (inputReady && hasFocus() && handleKey(event)) return true
+        return super.dispatchKeyEvent(event)
     }
 
     override fun onCheckIsTextEditor(): Boolean = inputReady
 
     override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? {
-        if (!inputReady) return null
-        // Request raw terminal input. Some keyboards still offer suggestions;
-        // the input connection translates their replacements to remote edits.
-        outAttrs.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-        outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN
-        // The image types that the keyboard may paste. The IME offers its
-        // image and clipboard options only while the editor names them.
-        if (imageReady) outAttrs.contentMimeTypes = IMAGE_MIME_TYPES
-        return TerminalInputConnection(this).also { connection = it }
-    }
-
-    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_DEL) {
-            // Route through the connection so the mirror stays in step.
-            if (connection?.sendKeyEvent(event) == true) return true
+        // The text that waits in the old connection goes out first, so the
+        // new connection starts from the full typed line.
+        connection?.flush()
+        if (!inputReady) {
+            connection = null
+            return null
         }
-        if (inputReady && !event.isCtrlPressed && !event.isAltPressed && sendNamedKey(keyCode)) return true
-        return super.onKeyDown(keyCode, event)
+        // The terminal asks for plain input. Some keyboards still offer
+        // suggestions, and the connection turns their replacements into
+        // edits of the typed line. The keyboard does not learn what the
+        // user types into an agent, which can be a secret.
+        outAttrs.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+        outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN or EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
+        // The keyboard offers its image options only for these types.
+        if (imageReady) outAttrs.contentMimeTypes = TERMINAL_IMAGE_TYPES
+        val c = TerminalInputConnection(this)
+        connection = c
+        // The keyboard starts with the typed line and its cursor at the end.
+        val seed = line.text
+        outAttrs.initialSelStart = seed.length
+        outAttrs.initialSelEnd = seed.length
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) outAttrs.setInitialSurroundingText(seed)
+        return c
     }
-
-    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
-        if (inputReady && namedKey(keyCode) != null) return true
-        return super.onKeyUp(keyCode, event)
-    }
-
-    private fun namedKey(keyCode: Int): String? = when (keyCode) {
-        KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> "enter"
-        KeyEvent.KEYCODE_TAB -> "tab"
-        KeyEvent.KEYCODE_DEL -> "backspace"
-        KeyEvent.KEYCODE_ESCAPE -> "esc"
-        KeyEvent.KEYCODE_DPAD_UP -> "up"
-        KeyEvent.KEYCODE_DPAD_DOWN -> "down"
-        KeyEvent.KEYCODE_DPAD_LEFT -> "left"
-        KeyEvent.KEYCODE_DPAD_RIGHT -> "right"
-        else -> null
-    }
-
-    private fun sendNamedKey(keyCode: Int): Boolean {
-        val key = namedKey(keyCode) ?: return false
-        onKey?.invoke(key)
-        return true
-    }
-
-    // Mirror of the terminal line at the view level. The framework recreates
-    // the input connection (keyboard restart, readiness flaps), and a fresh
-    // empty buffer makes Gboard commit corrections blindly or over-delete.
-    // New connections seed from this mirror so context queries stay truthful.
-    private val imeMirror = StringBuilder()
 
     /**
      * The bridge of the phone keyboard. A committed character goes out at
-     * once. Composing edits are coalesced; a committed replacement goes out
-     * immediately. The editable and the sent mirror keep corrections and
-     * deletions in step with the computer.
+     * once. Composing edits wait for a short time, so a word goes out once.
+     * A committed replacement goes out at once. The editable keeps the typed
+     * line, so a correction becomes backspaces and the new text.
      */
     private inner class TerminalInputConnection(target: View) : BaseInputConnection(target, true) {
         // BaseInputConnection makes its own editable for a view that is not
         // a text editor. The property is nullable in the platform types.
         private val content: Editable = editable ?: Editable.Factory.getInstance().newEditable("")
 
+        private val imeHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        private var pendingSync: Runnable? = null
+        private val composeDebounceMs = 180L
+
+        // When the last composing word went out recently, rewrites are a
+        // typing burst, so they keep waiting. A single rewrite is a tapped
+        // correction, and it goes out at once.
+        private var lastComposingSend = 0L
+        private val composeBurstMs = 500L
+
+        init {
+            // The keyboard asks for the text before the cursor to correct a
+            // word. So the editable starts with the typed line.
+            val seed = line.text
+            if (seed.isNotEmpty()) {
+                content.append(seed)
+                Selection.setSelection(content, content.length)
+            }
+        }
+
+        /** True while the keyboard talks to this connection. An old connection sends nothing. */
+        private val current: Boolean get() = this === connection
+
+        /** Empties the editable and tells the keyboard. The caller resets the typed line. */
         fun clearContent() {
             cancelPending()
             content.clear()
-            sent.clear()
+            reportSelection()
         }
 
-        // What this connection already forwarded. Gboard computes corrections
-        // against what getTextBeforeCursor returns, so the buffer must keep
-        // what was sent instead of clearing it: with an empty buffer Gboard
-        // just commits the correction behind the typo.
-        private val sent = StringBuilder()
-
-        init {
-            // Seed from the view mirror so a recreated connection keeps the
-            // context that Gboard queries for corrections.
-            val tail = this@TerminalWebView.imeMirror.toString()
-            if (tail.isNotEmpty()) {
-                content.append(tail)
-                Selection.setSelection(content, content.length)
-            }
-            sent.append(content)
-        }
-
-        // The pending diff as backs plus the new tail, without sending.
-        private fun diff(): Pair<Int, String> {
-            val cur = content.toString()
-            val old = sent.toString()
-            var common = 0
-            val maxCommon = minOf(old.length, cur.length)
-            while (common < maxCommon && old[common] == cur[common]) common++
-            return (old.length - common) to cur.substring(common)
-        }
-
-        // Forwards the diff between the buffer and the sent text, so a
-        // correction becomes backspaces plus the corrected word.
-        private fun sync() {
-            // Keep the IME's coordinate space until this editor is reset.
-            // Trimming the prefix invalidates Gboard's replaceText offsets.
-            val (backs, extra) = diff()
-            val oldLen = sent.length
-            repeat(backs) { onKey?.invoke("backspace") }
-            if (extra.isNotEmpty()) {
-                if (committedAsPaste(extra)) onPaste?.invoke(extra) else onText?.invoke(extra)
-            }
-            val cur = content.toString()
-            sent.clear()
-            sent.append(cur)
-            // Persist at the view level: the framework recreates connections
-            // on keyboard restarts, and the next one seeds from here.
-            val outer = this@TerminalWebView.imeMirror
-            if (outer.length >= oldLen) {
-                outer.delete(outer.length - oldLen, outer.length)
-            } else {
-                outer.clear()
-            }
-            outer.append(cur)
-        }
-
-        private fun resetMirror() {
+        /** Sends the composing text that waits now. */
+        fun flush() {
             cancelPending()
-            content.clear()
-            sent.clear()
-            this@TerminalWebView.imeMirror.clear()
+            sync()
+        }
+
+        // Sends the edit between the typed line and the editable. A
+        // correction becomes backspaces and the corrected word.
+        private fun sync() {
+            if (!current) return
+            val cur = content.toString()
+            val i = input
+            val ok = i != null && line.sync(cur, key = { i.send(it) }, type = { i.type(it) }, paste = { i.paste(it) })
+            if (!ok) {
+                // An event did not go out, so the state of the program is
+                // not known. The keyboard starts again with an empty line.
+                clearContent()
+            } else if (cur.any { it == '\n' || it == '\r' }) {
+                // The program can show a paste with a line break as one
+                // placeholder, so a later correction cannot count on it.
+                resetLine()
+            }
+        }
+
+        /** Types [text] from a key event, and tells the keyboard where the cursor moved. */
+        fun typeKey(text: String) {
+            cancelPending()
+            // commitText would replace a composing word, so the word stays first.
+            super.finishComposingText()
+            pinToEnd()
+            super.commitText(text, 1)
+            sync()
+            reportSelection()
+        }
+
+        /**
+         * Deletes the code point before the cursor, or the selection, for a
+         * Backspace key. On an empty line, Backspace goes to the program,
+         * which can hold text that the line forgot. Returns false when the
+         * key did not go out.
+         */
+        fun deleteBack(): Boolean {
+            cancelPending()
+            val i = input ?: return false
+            if (content.isEmpty()) return i.send("backspace")
+            val start = Selection.getSelectionStart(content).coerceIn(0, content.length)
+            val end = Selection.getSelectionEnd(content).coerceIn(0, content.length)
+            when {
+                start != end -> content.delete(minOf(start, end), maxOf(start, end))
+                end > 0 -> content.delete(Character.offsetByCodePoints(content, end, -1), end)
+            }
+            sync()
+            reportSelection()
+            return true
+        }
+
+        // Tells the keyboard about a change that it did not ask for, so its
+        // own copy of the cursor stays right.
+        private fun reportSelection() {
+            if (!current) return
+            imm()?.updateSelection(
+                this@TerminalWebView,
+                Selection.getSelectionStart(content),
+                Selection.getSelectionEnd(content),
+                getComposingSpanStart(content),
+                getComposingSpanEnd(content),
+            )
         }
 
         override fun commitText(text: CharSequence, newCursorPosition: Int): Boolean {
+            if (!current) return false
             cancelPending()
-            // A lone line break is the Return key, not a prompt.
-            if (text.length == 1 && (text[0] == '\n' || text[0] == '\r')) {
-                resetMirror()
-                onKey?.invoke("enter")
+            // A lone line break is the Return key, and a lone tab is the Tab key.
+            val key = when (text.toString()) {
+                "\n", "\r" -> "enter"
+                "\t" -> "tab"
+                else -> null
+            }
+            if (key != null) {
+                pressKey(key)
                 return true
             }
             pinToEnd()
@@ -499,11 +710,20 @@ internal class TerminalWebView(context: Context) : WebView(context) {
         }
 
         /**
-         * A tapped autocorrection. Gboard edits the buffer directly through
-         * this call, bypassing commitText: without this override the fix
-         * sits silently until the next keystroke flushes it. Forward it at
-         * once. No pinning here: the offset math needs the real cursor, and
-         * the full-string diff replays the result exactly.
+         * The Return key of the keyboard. The editor names no action, so
+         * the keyboard calls this for Return. The pending text goes first,
+         * then Enter, and then the line starts again.
+         */
+        override fun performEditorAction(actionCode: Int): Boolean {
+            if (!current) return false
+            pressKey("enter")
+            return true
+        }
+
+        /**
+         * Some keyboards report a correction here before they replace the
+         * word. The call changes no text, so it only sends a pending
+         * composing edit at once.
          */
         override fun commitCorrection(info: CorrectionInfo): Boolean {
             cancelPending()
@@ -513,12 +733,11 @@ internal class TerminalWebView(context: Context) : WebView(context) {
         }
 
         /**
-         * A tapped correction on newer Android: Gboard replaces the word
-         * directly through this call, bypassing commitText and the composing
-         * callbacks, so without this override the fix sits silently until
-         * the next keystroke flushes it. Forward it at once. No pinning:
-         * the range math needs the real selection, and the full-string
-         * diff replays the result exactly.
+         * A tapped correction on newer Android. The keyboard replaces the
+         * word here, not through commitText or the composing calls, so the
+         * fix goes out at once. The range uses the real selection, so it is
+         * not moved to the end, and the diff of the whole line sends the
+         * result exactly.
          */
         override fun replaceText(
             start: Int,
@@ -541,26 +760,37 @@ internal class TerminalWebView(context: Context) : WebView(context) {
             flags: Int,
             opts: Bundle?,
         ): Boolean {
+            if (!current) return false
             val mime = inputContentInfo.description.getMimeType(0) ?: return false
-            if (mime !in ClipImage.TYPES) return false
-            // The IME grants a read of the content for this paste only.
+            if (mime !in TERMINAL_IMAGE_TYPES) return false
+            // The keyboard grants a read of the content for this paste only.
+            // HerdrSync ends the grant after the read.
             if (flags and InputConnection.INPUT_CONTENT_GRANT_READ_URI_PERMISSION != 0) {
-                runCatching { inputContentInfo.requestPermission() }
-                    .onFailure { return false }
+                try {
+                    inputContentInfo.requestPermission()
+                } catch (_: Exception) {
+                    return false
+                }
             }
-            onImage?.invoke(inputContentInfo.contentUri, mime)
-            return true
+            val i = input
+            if (i == null) {
+                inputContentInfo.releasePermission()
+                return false
+            }
+            // The text typed before the image goes first. The image then
+            // puts an attachment in the line, so the line starts again.
+            return press { i.pasteImage(inputContentInfo.contentUri) { inputContentInfo.releasePermission() } }
         }
 
         override fun setComposingText(text: CharSequence, newCursorPosition: Int): Boolean {
             cancelPending()
             pinToEnd()
             super.setComposingText(text, newCursorPosition)
-            // A rewrite of sent text after idle is a tapped correction: show
-            // it at once like a completion. Inside a burst it is still
-            // typing ahead: delay it so the settled word goes out once
-            // instead of storming rewrites that garble a smart prompt.
-            if (diff().first > 0) {
+            // A rewrite of sent text after a pause is a tapped correction,
+            // so it shows at once like a completion. Inside a burst it is
+            // still typing, so it waits. The settled word then goes out once,
+            // and a smart prompt does not get a storm of rewrites.
+            if (lineEdit(line.text, content.toString()).backspaces > 0) {
                 val now = android.os.SystemClock.uptimeMillis()
                 if (now - lastComposingSend < composeBurstMs) {
                     scheduleSync()
@@ -582,49 +812,35 @@ internal class TerminalWebView(context: Context) : WebView(context) {
         }
 
         override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
+            if (!current) return false
             cancelPending()
             val left = deleteLocal(beforeLength, afterLength, codePoints = false)
-            // Deletions past the mirror still refer to remote text the
-            // mirror forgot (an older word being corrected): forward them.
-            repeat(left) { onKey?.invoke("backspace") }
+            // Deletions past the start of the line refer to text on the
+            // computer that the line forgot, so they go out as backspaces.
+            repeat(left) { input?.send("backspace") }
             sync()
             return true
         }
 
         override fun deleteSurroundingTextInCodePoints(beforeLength: Int, afterLength: Int): Boolean {
+            if (!current) return false
             cancelPending()
             val left = deleteLocal(beforeLength, afterLength, codePoints = true)
-            repeat(left) { onKey?.invoke("backspace") }
+            repeat(left) { input?.send("backspace") }
             sync()
             return true
         }
 
         override fun sendKeyEvent(event: KeyEvent): Boolean {
-            if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DEL && inputReady) {
-                // A hardware delete must move the mirror too, or every later
-                // diff is off by one and corrections over-delete.
-                cancelPending()
-                if (content.isNotEmpty()) {
-                    val end = Selection.getSelectionEnd(content).coerceIn(0, content.length)
-                    if (end > 0) {
-                        content.delete(end - 1, end)
-                        Selection.setSelection(content, end - 1)
-                    }
-                    sync()
-                } else {
-                    onKey?.invoke("backspace")
-                }
-                return true
-            }
-            if (event.action == KeyEvent.ACTION_DOWN && sendNamedKey(event.keyCode)) return true
-            if (event.action == KeyEvent.ACTION_UP && namedKey(event.keyCode) != null) return true
+            if (!current) return false
+            if (inputReady && handleKey(event)) return true
             return super.sendKeyEvent(event)
         }
 
-        // Deletes from the local mirror only. Returns how many requested
-        // deletions fell outside the buffer; sync() forwards nothing for
-        // those, so the caller sends them as raw backspaces (there is no
-        // forward-delete key on this bridge).
+        // Deletes from the editable only. Returns how many requested
+        // deletions before the cursor fell outside the editable. The bridge
+        // has no forward-delete key, so deletions after the cursor that fall
+        // outside go nowhere.
         private fun deleteLocal(beforeLength: Int, afterLength: Int, codePoints: Boolean): Int {
             val e = content
             val sel = Selection.getSelectionStart(e)
@@ -647,28 +863,22 @@ internal class TerminalWebView(context: Context) : WebView(context) {
             return left
         }
 
-        private val imeHandler = android.os.Handler(android.os.Looper.getMainLooper())
-        private var pendingSync: Runnable? = null
-        private val composeDebounceMs = 180L
-
         private fun cancelPending() {
             pendingSync?.let { imeHandler.removeCallbacks(it) }
             pendingSync = null
         }
 
-        // The terminal prompt is end-edited: replaying a mid-buffer insert
-        // at the remote end corrupts the line and amplifies on every stroke.
-        // Pin a collapsed mid-buffer cursor to the end before the edit, so
-        // the intent visibly appends instead of silently garbling. Ranges
-        // are left alone: replacing a range replays exactly.
-        private fun pinToEnd(): Boolean {
+        // The prompt of a terminal is edited at its end. An insert in the
+        // middle of the buffer would arrive at the end of the remote line,
+        // so a collapsed cursor in the middle moves to the end first. A
+        // range stays where it is, because a range replacement replays
+        // exactly.
+        private fun pinToEnd() {
             val start = Selection.getSelectionStart(content)
             val end = Selection.getSelectionEnd(content)
             if (start == end && start >= 0 && start != content.length) {
                 Selection.setSelection(content, content.length)
-                return true
             }
-            return false
         }
 
         private fun scheduleSync() {
@@ -681,12 +891,6 @@ internal class TerminalWebView(context: Context) : WebView(context) {
             pendingSync = task
             imeHandler.postDelayed(task, composeDebounceMs)
         }
-
-        // When the last composing word went out recently, rewrites are a
-        // typing burst: keep debouncing. An isolated rewrite is a tapped
-        // correction and goes out at once.
-        private var lastComposingSend = 0L
-        private val composeBurstMs = 500L
     }
 }
 
@@ -819,8 +1023,8 @@ internal class TerminalFeeder(
         // browser scrolls and zooms nothing here.
         settings.setSupportZoom(false)
         settings.builtInZoomControls = false
-        // The terminal takes no keys here, so a tap must not
-        // open the keyboard.
+        // Only the keyboard key focuses the view. The touch listener takes
+        // each touch, so a tap does not open the keyboard.
         isFocusable = true
         isFocusableInTouchMode = TERMINAL_FOCUSABLE_IN_TOUCH_MODE
         setOnTouchListener { view, event ->

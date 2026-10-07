@@ -1102,46 +1102,28 @@ func TestHerdrTerminalTypedInput(t *testing.T) {
 	desk, phone, _, _ := linkPair(t, ctx)
 	dev := &Device{ID: "phone1", Paired: true}
 	answers := herdrAnswers(t, phone)
-	d.cfg.HerdrControl = true
-
-	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
-		"kind": "terminal_open", "pane": "w1:p1", "mode": "control", "request": 1}))
-	if a := nextOpened(t, answers); a["session"] != "ts1" {
-		t.Fatalf("terminal_opened = %v", a)
-	}
+	openControl(t, d, dev, desk, answers)
 	for _, ev := range []map[string]any{
 		{"kind": "terminal_input", "session": "ts1", "text": "@"},
 		{"kind": "terminal_input", "session": "ts1", "text": "src/main"},
 		{"kind": "terminal_input", "session": "ts1", "key": "down"},
+		{"kind": "terminal_input", "session": "ts1", "key": "shift+tab"},
 		{"kind": "terminal_input", "session": "ts1", "key": "enter"},
 	} {
 		d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, ev))
 	}
-	want := []string{"@", "src/main", "\x1b[B", "\r"}
-	var got []string
-	for len(got) < len(want) {
-		a := nextAnswer(t, answers)
-		if a["kind"] != "terminal_frame" {
-			t.Fatalf("answer = %v", a)
-		}
-		if text := frameText(t, a); text != "ready" {
-			got = append(got, text)
-		}
-	}
-	for i, line := range got {
-		var rec map[string]any
-		if json.Unmarshal([]byte(line), &rec) != nil {
-			t.Fatalf("echoed %q", line)
-		}
-		if rec["type"] != "terminal.input" || rec["text"] != want[i] {
-			t.Fatalf("event %d = %v, want text %q", i, rec, want[i])
+	want := []string{"@", "src/main", "\x1b[B", "\x1b[Z", "\r"}
+	got := echoedInputs(t, answers, len(want))
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("event %d = %q, want %q", i, got[i], want[i])
 		}
 	}
 }
 
 // A bad event is refused with terminal_input_error and never reaches the
 // bridge. An unknown session, and the session of another device, get no
-// input and no answer.
+// input and no answer, also for an invalid event.
 func TestHerdrTerminalInputRefusals(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1150,33 +1132,39 @@ func TestHerdrTerminalInputRefusals(t *testing.T) {
 	dev := &Device{ID: "phone1", Paired: true}
 	other := &Device{ID: "tablet", Paired: true}
 	answers := herdrAnswers(t, phone)
-	d.cfg.HerdrControl = true
-
-	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
-		"kind": "terminal_open", "pane": "w1:p1", "mode": "control", "request": 1}))
-	if a := nextOpened(t, answers); a["session"] != "ts1" {
-		t.Fatalf("terminal_opened = %v", a)
-	}
+	openControl(t, d, dev, desk, answers)
 	bad := []map[string]any{
 		{"kind": "terminal_input", "session": "ts1", "text": ""},
 		{"kind": "terminal_input", "session": "ts1", "text": "a", "key": "enter"},
 		{"kind": "terminal_input", "session": "ts1", "key": "ctrl+c"},
 		{"kind": "terminal_input", "session": "ts1", "text": "a\nb"},
 		{"kind": "terminal_input", "session": "ts1", "text": "a\x1b[A"},
+		{"kind": "terminal_input", "session": "ts1", "text": "a\u009b"},
+		{"kind": "terminal_input", "session": "ts1", "text": "a‮b"},
+		{"kind": "terminal_input", "session": "ts1", "text": "a b"},
+		{"kind": "terminal_paste", "session": "ts1", "text": "\x1b\u009b"},
 	}
 	for _, ev := range bad {
 		d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, ev))
 	}
 	for range bad {
-		if a := nextInputError(t, answers); a["session"] != "ts1" || a["code"] != "invalid_input" {
+		if a := nextInputError(t, answers); a["session"] != "ts1" || a["code"] != herdrInputInvalid {
 			t.Fatalf("answer = %v, want terminal_input_error", a)
 		}
 	}
 	// A stale session and a foreign device reach nothing and answer nothing.
-	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
-		"kind": "terminal_input", "session": "ts9", "text": "x"}))
-	d.handleHerdr(other, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
-		"kind": "terminal_input", "session": "ts1", "text": "x"}))
+	for _, ev := range []struct {
+		dev  *Device
+		body map[string]any
+	}{
+		{dev, map[string]any{"kind": "terminal_input", "session": "ts9", "text": "x"}},
+		{dev, map[string]any{"kind": "terminal_input", "session": "ts9", "text": ""}},
+		{other, map[string]any{"kind": "terminal_input", "session": "ts1", "text": "x"}},
+		{other, map[string]any{"kind": "terminal_input", "session": "ts1", "key": "ctrl+c"}},
+		{other, map[string]any{"kind": "terminal_paste", "session": "ts1", "text": ""}},
+	} {
+		d.handleHerdr(ev.dev, desk, proto.New(proto.TypeFluxHerdr, ev.body))
+	}
 
 	// A good event still reaches the bridge: exactly one echo.
 	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
@@ -1204,6 +1192,129 @@ func TestHerdrTerminalInputRefusals(t *testing.T) {
 	}
 }
 
+// The text check refuses each control and directional character, and the
+// paste sanitizer drops them. A paste keeps its line breaks and tabs.
+func TestHerdrTerminalSanitizers(t *testing.T) {
+	for _, c := range []struct {
+		in        string
+		typed     bool
+		pasted    string
+		pasteRefs bool
+	}{
+		{in: "plain text", typed: true, pasted: "plain text"},
+		{in: "naïve 😀", typed: true, pasted: "naïve 😀"},
+		{in: "a\tb", pasted: "a\tb"},
+		{in: "a\r\nb\rc", pasted: "a\nb\nc"},
+		{in: "x\x1b[201~y", pasted: "x[201~y"},
+		{in: "x\u009b201~y", pasted: "x201~y"},
+		{in: "a‮b⁦c؜d", pasted: "abcd"},
+		{in: "a‎b‏c", pasted: "abc"},
+		{in: "a b c", pasted: "abc"},
+		{in: "\x07\x1b", pasteRefs: true},
+		{in: "\xff\xfe", pasteRefs: true},
+	} {
+		if got := herdrTerminalInputText(c.in); got != c.typed {
+			t.Errorf("herdrTerminalInputText(%q) = %v, want %v", c.in, got, c.typed)
+		}
+		got, why := herdrTerminalPasteText(c.in)
+		if c.pasteRefs {
+			if got != "" || why == "" {
+				t.Errorf("herdrTerminalPasteText(%q) = %q, want a refusal", c.in, got)
+			}
+			continue
+		}
+		if got != c.pasted {
+			t.Errorf("herdrTerminalPasteText(%q) = %q, want %q", c.in, got, c.pasted)
+		}
+	}
+}
+
+// Input after the agent left the pane ends the stream with agent_ended.
+// Input after control went off ends it with stopped. Neither reaches the
+// bridge.
+func TestHerdrTerminalInputStopBranches(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		change func(d *Daemon)
+		code   string
+	}{
+		{"agent", func(d *Daemon) {
+			d.herdrAgents = nil
+			d.herdrTerms = []HerdrTerminal{{Pane: "w1:p1"}}
+		}, herdrTermAgentGone},
+		{"pane", func(d *Daemon) { d.herdrAgents = nil }, herdrTermPaneGone},
+		{"control", func(d *Daemon) { d.cfg.HerdrControl = false }, herdrTermStopped},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			d, _ := terminalDaemon(ctx, t, bridgeEcho)
+			desk, phone, _, _ := linkPair(t, ctx)
+			dev := &Device{ID: "phone1", Paired: true}
+			answers := herdrAnswers(t, phone)
+			openControl(t, d, dev, desk, answers)
+			d.mu.Lock()
+			c.change(d)
+			d.mu.Unlock()
+			d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+				"kind": "terminal_input", "session": "ts1", "text": "x"}))
+			for {
+				a := nextAnswer(t, answers)
+				if a["kind"] == "terminal_frame" {
+					if text := frameText(t, a); strings.Contains(text, "terminal.input") {
+						t.Fatalf("the input reached the bridge: %q", text)
+					}
+					continue
+				}
+				if a["kind"] != "terminal_closed" || a["code"] != c.code {
+					t.Fatalf("answer = %v, want terminal_closed with %s", a, c.code)
+				}
+				return
+			}
+		})
+	}
+}
+
+// The log gets each Enter with the count of typed characters, each paste
+// with its length, and each text typed while the agent waits for a choice.
+// It never gets the text.
+func TestHerdrTerminalInputLog(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d, _ := terminalDaemon(ctx, t, bridgeEcho)
+	logs := &logLines{}
+	d.logger = log.New(logs, "", 0)
+	desk, phone, _, _ := linkPair(t, ctx)
+	dev := &Device{ID: "phone1", Name: "Pixel 8", Paired: true}
+	answers := herdrAnswers(t, phone)
+	openControl(t, d, dev, desk, answers)
+	for _, ev := range []map[string]any{
+		{"kind": "terminal_input", "session": "ts1", "text": "secret"},
+		{"kind": "terminal_paste", "session": "ts1", "text": "one\ntwo"},
+		{"kind": "terminal_input", "session": "ts1", "key": "enter"},
+	} {
+		d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, ev))
+	}
+	d.mu.Lock()
+	d.herdrAgents[0].Status = "blocked"
+	d.mu.Unlock()
+	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
+		"kind": "terminal_input", "session": "ts1", "text": "2"}))
+	echoedInputs(t, answers, 4)
+	for _, want := range []string{
+		"Pixel 8 pasted 7 characters in the live terminal of the herdr agent in w1:p1",
+		"Pixel 8 pressed Enter after 13 typed characters in the live terminal of the herdr agent in w1:p1",
+		"Pixel 8 typed 1 characters in the live terminal of the herdr agent in w1:p1 while it waits for a choice",
+	} {
+		if !logs.has(want) {
+			t.Errorf("the log has no line %q", want)
+		}
+	}
+	if logs.has("secret") || logs.has("one") {
+		t.Error("the log shows typed text")
+	}
+}
+
 // A bridge failure on input ends the stream, so the phone cannot keep
 // typing into a dead controller. The bridge here never reads its stdin,
 // so its pipe and the input queue fill and SendInput fails.
@@ -1212,18 +1323,12 @@ func TestHerdrTerminalInputFailureEndsTheStream(t *testing.T) {
 	defer cancel()
 	d, _ := terminalDaemon(ctx, t, `
 echo '{"type":"terminal.frame","seq":1,"encoding":"ansi","width":80,"height":24,"full":true,"bytes":"cmVhZHk="}'
-exec sleep 300
+exec sleep 30
 `)
 	desk, phone, _, _ := linkPair(t, ctx)
 	dev := &Device{ID: "phone1", Paired: true}
 	answers := herdrAnswers(t, phone)
-	d.cfg.HerdrControl = true
-
-	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
-		"kind": "terminal_open", "pane": "w1:p1", "mode": "control", "request": 1}))
-	if a := nextOpened(t, answers); a["session"] != "ts1" {
-		t.Fatalf("terminal_opened = %v", a)
-	}
+	openControl(t, d, dev, desk, answers)
 	big := strings.Repeat("x", herdrTerminalInputMax)
 	for i := 0; i < 400; i++ {
 		d.mu.Lock()
@@ -1234,16 +1339,32 @@ exec sleep 300
 		}
 		d.herdrTerminalInput(dev, desk, "ts1", big, "")
 	}
-	waitFor(t, "the input failure to end the stream", func() bool {
-		d.mu.Lock()
-		defer d.mu.Unlock()
-		return len(d.herdrStreams) == 0
-	})
+	if a := nextInputError(t, answers); a["code"] != herdrInputFailed {
+		t.Fatalf("answer = %v, want input_failed", a)
+	}
+	// terminal_closed comes after the bridge exits, so the test leaves no
+	// bridge behind. A bridge that does not read gets a kill after 5
+	// seconds.
+	deadline := time.After(10 * time.Second)
+	for {
+		select {
+		case a := <-answers:
+			if a["kind"] == "terminal_frame" {
+				continue
+			}
+			if a["kind"] != "terminal_closed" || a["code"] != herdrTermBridge {
+				t.Fatalf("answer = %v, want terminal_closed with bridge", a)
+			}
+			return
+		case <-deadline:
+			t.Fatal("no terminal_closed within 10 seconds")
+		}
+	}
 }
 
-// A paste goes to the controller as one bracketed paste: the markers are
-// Flux's, the line breaks and tabs stay, and every other control character
-// goes, so a paste cannot close its own paste or type a key.
+// A paste goes to the controller as one bracketed paste. The markers come
+// from fluxd. The line breaks and tabs stay, and each other control
+// character goes, so a paste cannot end its own paste or type a key.
 func TestHerdrTerminalPaste(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1251,43 +1372,22 @@ func TestHerdrTerminalPaste(t *testing.T) {
 	desk, phone, _, _ := linkPair(t, ctx)
 	dev := &Device{ID: "phone1", Paired: true}
 	answers := herdrAnswers(t, phone)
-	d.cfg.HerdrControl = true
-
-	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
-		"kind": "terminal_open", "pane": "w1:p1", "mode": "control", "request": 1}))
-	if a := nextOpened(t, answers); a["session"] != "ts1" {
-		t.Fatalf("terminal_opened = %v", a)
-	}
+	openControl(t, d, dev, desk, answers)
 	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
 		"kind": "terminal_paste", "session": "ts1", "text": "a\r\nb\tc\x07\x1bd"}))
 	want := "\x1b[200~a\nb\tcd\x1b[201~"
-	for {
-		a := nextAnswer(t, answers)
-		if a["kind"] != "terminal_frame" {
-			t.Fatalf("answer = %v", a)
-		}
-		text := frameText(t, a)
-		if text == "ready" {
-			continue
-		}
-		var rec map[string]any
-		if json.Unmarshal([]byte(text), &rec) != nil {
-			t.Fatalf("echoed %q", text)
-		}
-		if rec["type"] != "terminal.input" || rec["text"] != want {
-			t.Fatalf("paste = %v, want %q", rec, want)
-		}
-		break
+	if got := echoedInputs(t, answers, 1); got[0] != want {
+		t.Fatalf("paste = %q, want %q", got[0], want)
 	}
 	// An empty paste and an oversized paste are refused, and reach no bridge.
 	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
 		"kind": "terminal_paste", "session": "ts1", "text": ""}))
-	if a := nextInputError(t, answers); a["code"] != "invalid_input" {
+	if a := nextInputError(t, answers); a["code"] != herdrInputInvalid {
 		t.Fatalf("empty paste = %v", a)
 	}
 	d.handleHerdr(dev, desk, proto.New(proto.TypeFluxHerdr, map[string]any{
 		"kind": "terminal_paste", "session": "ts1", "text": strings.Repeat("x", herdrTerminalPasteMax+1)}))
-	if a := nextInputError(t, answers); a["code"] != "invalid_input" || !strings.Contains(str(a["error"]), "longer than") {
+	if a := nextInputError(t, answers); a["code"] != herdrInputInvalid || !strings.Contains(str(a["error"]), "longer than") {
 		t.Fatalf("long paste = %v", a)
 	}
 }
@@ -1307,8 +1407,8 @@ func nextInputError(t *testing.T, answers <-chan map[string]any) map[string]any 
 	}
 }
 
-// testJPEG returns a small JPEG image, so a test can prove the conversion
-// to PNG that the clipboard needs.
+// testJPEG returns a small JPEG image. fluxd must refuse it, because the
+// phone converts each image to PNG.
 func testJPEG(t *testing.T) []byte {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
@@ -1322,27 +1422,6 @@ func testJPEG(t *testing.T) []byte {
 		t.Fatal(err)
 	}
 	return b.Bytes()
-}
-
-// The clipboard needs image/png, because the paste path of opencode reads
-// only that type. A PNG stays as it is; a JPEG becomes a PNG; a WebP is
-// refused with a reason.
-func TestHerdrTerminalPNG(t *testing.T) {
-	pngIn := testPNG(4)
-	out, why := herdrTerminalPNG(pngIn, "image/png")
-	if why != "" || !bytes.Equal(out, pngIn) {
-		t.Fatalf("a PNG must stay as it is: %q", why)
-	}
-	out, why = herdrTerminalPNG(testJPEG(t), "image/jpeg")
-	if why != "" || len(out) == 0 {
-		t.Fatalf("a JPEG must become a PNG: %q", why)
-	}
-	if _, format, err := image.Decode(bytes.NewReader(out)); err != nil || format != "png" {
-		t.Fatalf("the JPEG became %q, err %v, want png", format, err)
-	}
-	if _, why := herdrTerminalPNG(testJPEG(t), "image/webp"); why == "" {
-		t.Fatal("a WebP needs a decoder that Flux does not carry")
-	}
 }
 
 func str(v any) string {

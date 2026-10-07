@@ -22,9 +22,10 @@ fun terminalTheme(theme: OmarchyTheme): JsonObject {
     return buildJsonObject {
         hex("background")?.let { put("background", it) }
         hex("foreground")?.let { put("foreground", it) }
-        // The cursor takes the text color, like the desktop terminal does,
-        // not the accent: a celeste cursor reads as a selection highlight.
-        hex("foreground")?.let { put("cursor", it) }
+        // The cursor takes the cursor color of the theme, or else the text
+        // color, as the desktop terminal does. An accent cursor looks like
+        // a selection.
+        hex("cursor", "foreground")?.let { put("cursor", it) }
         hex("background")?.let { put("cursorAccent", it) }
         hex("selection", "accent")?.let { put("selectionBackground", it) }
         hex("color0", "dark_background", "background")?.let { put("black", it) }

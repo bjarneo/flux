@@ -224,7 +224,7 @@ val TileGap = 8.dp
 val TiledGutter = 10.dp
 
 /** The alpha of a tile or a choice that takes no taps, for example while its computer is not reachable. */
-private const val DimAlpha = 0.55f
+internal const val DimAlpha = 0.55f
 
 /**
  * The active border of the master tile, 2 dp wide. Without colors, it is

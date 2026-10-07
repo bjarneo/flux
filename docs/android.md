@@ -374,7 +374,8 @@ The agent screen of `agent:<pane>` opens on **Output**.
 When the computer offers diff review, the screen has the **Output** and **Changes** choices.
 When the computer allows replies, the screen has the choice tiles, the key bar, and the text field with **Send** and the mic key.
 When the computer offers terminal control, the top bar also has **Live**.
-**Live** shows the live terminal of the pane in the place of the output, and the rest of the screen stays.
+**Live** shows the live terminal of the pane in the place of the output.
+With a computer that supports live input, a key row and the phone keyboard take the place of the key bar and the text field.
 See [Live terminal on Android](herdr.md#live-terminal-on-android).
 
 To reproduce terminal layout bugs without pairing the emulator, a debug build also
