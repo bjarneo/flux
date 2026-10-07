@@ -128,7 +128,7 @@ class LiveTerminalTest {
         )
         assertEquals("The live terminal did not open: omarchy did not answer.", liveOpenError("omarchy did not answer."))
     }
-}
+
     @Test
     fun directInputRequiresAnOptedInLiveView() {
         val input = herdr.copy(bridge = herdr.bridge + "input")
@@ -139,3 +139,4 @@ class LiveTerminalTest {
         assertFalse("no state", liveInputOffered(true, null, false))
         assertFalse("control is off", liveInputOffered(true, input.copy(control = false), false))
     }
+}
