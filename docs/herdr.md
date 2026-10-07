@@ -155,7 +155,16 @@ A valid unlock from the last 5 minutes opens Live with no prompt.
 The replies to agents use the same unlock.
 
 The live terminal then takes the place of the output.
-The choice tiles, the key bar, the text field with **Send**, and the mic key stay under it, and they work as before.
+With a computer that supports live input, a key bar and a keyboard key replace the composer.
+The keyboard types directly in the program; Return sends Enter, and a tap does not open it.
+Input waits for the first frame and the same five-minute unlock, and reconnects replay no input.
+Output and Changes keep the choices, composer, Send, and dictation as before.
+An older computer keeps those controls in Live too.
+The row has Esc, Tab, Up, Down, and the keyboard key; use the keyboard's mic for dictation.
+The keyboard's paste, dictation, and swipe words send one bracketed paste, not Enter.
+Line breaks stay in the paste, and the program applies its own paste handling.
+An image paste goes to the computer clipboard, then Ctrl+V lets the program attach it.
+Live starts with the keyboard hidden. Losing control hides it, and a reconnect does not open it.
 **Refresh** does not show while Live is on.
 The phone then reads the output only when Live opens and when the status changes, so the choice tiles stay current.
 Until the first full screen draws, a cover shows **Opening the terminal…**.
@@ -176,8 +185,9 @@ The gestures on the live terminal are:
 - A short tap clicks the left mouse button at the cell under the finger, for example on a button of the agent. herdr sends the click only to an agent that uses the mouse. A drag, a long press, and a touch that stops a scroll do not click.
 - Two fingers zoom and pan the view on the phone. They send nothing to the computer.
 
-The live terminal takes no keys and no text.
-To type, use the text field and the key bar under the terminal.
+Typing in Live sends text and named keys to the current controller session.
+When the keyboard offers a completion or correction, Live forwards the replacement immediately.
+The app keeps the keyboard's editing context so a correction replaces text instead of appending it.
 
 Live releases control when you select **Live** again, select **Changes**, leave the agent screen, or put the app in the background.
 When the app comes back while the unlock is valid, Live takes control again.
@@ -627,6 +637,54 @@ The `kind` field selects the message.
 | `terminal_resize` | Phone | `session`, `cols`, and `rows`, from 1 to 1000 |
 | `terminal_release` | Phone | `session` and `request`. The computer answers with `terminal_closed`. |
 | `terminal_closed` | Computer | `session`, `code`, and `reason`. After a release, also the `request` of the release. |
+| `terminal_input` | Phone | `session`, and exactly one of `text` or `key` |
+| `terminal_paste` | Phone | `session` and `text`; fluxd wraps it as one bracketed paste |
+| `terminal_paste_image` | Phone | `session`, with an image as the payload |
+| `terminal_input_error` | Computer | `session`, `code`, `error` |
+
+The optional `state.bridge` list advertises `observe`, `control`, `scroll`, `mouse`, `input`,
+`paste`, and `image`. A phone sends a typed event only with `input`, a text paste only with
+`paste`, and an image paste only with `image`, so an older computer is detected instead of
+failing silently.
+Old clients ignore these additive kinds and continue using read/output operations.
+Only control may request a phone-sized grid; dimensions are bounded to 1..1000 cells.
+Each device has at most one stream and each pane at most one controller, without takeover.
+The generated session ID is bound to its device, link, and terminal; stale input is not replayed.
+
+A `terminal_input` types one event in the controller session. `text` goes as it is, on one
+line, without a trailing Enter, and can have up to 16 KB. `key` is one of `enter`, `tab`,
+`esc`, `backspace`, `up`, `down`, `left`, and `right`; fluxd encodes it, so a client cannot
+send an arbitrary escape sequence. fluxd refuses an empty text, both fields, a control
+character, or an unknown key with `terminal_input_error` and the code `invalid_input`.
+A bridge failure answers with `input_failed` and ends the stream, so a phone cannot keep
+typing into a dead controller. An unknown, foreign, or released session gets no input and
+no answer. The events keep their order through the controller, so a character, a Tab, and
+an Enter arrive in the order they were typed.
+
+A `terminal_paste` sends text as one bracketed paste. fluxd wraps the text in
+`ESC [ 200 ~` and `ESC [ 201 ~`, keeps its line breaks and tabs, and drops every other
+control character, so a paste cannot close its own paste or type a key. A paste can have up
+to 64 KB, larger than a typed event, because a paste is often a code block. It uses the same
+`terminal_input_error` codes. The phone takes the block that its keyboard committed, such as
+its own paste, and sends the text; the computer clipboard does not change.
+
+A `terminal_paste_image` pastes an image that the phone keyboard took from its clipboard. The
+image is the payload of the packet, so the paste does not need clipboard sync and does not
+depend on the clipboard of the phone. fluxd accepts a PNG, JPEG, GIF, or WebP image of up to
+16 MiB, detects its type from the bytes, and drops a payload that is not an image. The paste
+path of opencode reads `image/png`, so fluxd turns a JPEG or a GIF into a PNG and refuses a
+WebP with a reason, because it has no WebP decoder. It puts the PNG on the clipboard of the
+computer and then sends Ctrl+V to the controller, so the program reads the image as an
+attachment instead of typed text. The clipboard of the computer then holds the image, as a
+copy does. An unknown, foreign, or released session gets no answer, and a size limit, an
+unreadable image, or a failed transfer answers with `terminal_input_error`. One image per
+device runs at a time.
+
+Frames contain base64 ANSI bytes and must be applied in order: incremental frames cannot be
+dropped or truncated. A full frame establishes the baseline before input is enabled. Its sequence
+number is not an acknowledgement of a specific input event. Wheel input uses `source: wheel`
+and `lines: 1`; increasing `lines` does not multiply mouse-report events. Mouse clicks use
+ordered left-button `down`/`up` events through the existing bridge.
 
 When `fluxd` cannot finish an answer because of an internal error, it sends the answer with an `error`, for example `fluxd could not read the pane`.
 

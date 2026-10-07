@@ -282,6 +282,41 @@ class HerdrTerminalTest {
         assertEquals("ts1", resize.str("session"))
         assertEquals(JsonPrimitive(48), resize["cols"])
         assertEquals(JsonPrimitive(80), resize["rows"])
+
+        val text = herdrTerminalInputBody("ts1", "@")
+        assertEquals("terminal_input", text.str("kind"))
+        assertEquals("ts1", text.str("session"))
+        assertEquals("@", text.str("text"))
+        assertNull(text["key"])
+
+        val key = herdrTerminalKeyBody("ts1", "down")
+        assertEquals("terminal_input", key.str("kind"))
+        assertEquals("ts1", key.str("session"))
+        assertEquals("down", key.str("key"))
+        assertNull(key["text"])
+
+        val paste = herdrTerminalPasteBody("ts1", "one\ntwo")
+        assertEquals("terminal_paste", paste.str("kind"))
+        assertEquals("ts1", paste.str("session"))
+        assertEquals("one\ntwo", paste.str("text"))
+        assertNull(paste["key"])
+
+        val image = herdrTerminalPasteImageBody("ts1")
+        assertEquals("terminal_paste_image", image.str("kind"))
+        assertEquals("ts1", image.str("session"))
+        assertNull("the image travels as the payload, not the body", image["text"])
+    }
+
+    @Test
+    fun parsesTerminalInputError() {
+        val e = parseHerdrTerminalInputError(
+            body("""{"kind":"terminal_input_error","session":"ts1","code":"invalid_input","error":"no"}"""),
+        )!!
+        assertEquals("ts1", e.session)
+        assertEquals("invalid_input", e.code)
+        assertEquals("no", e.error)
+        assertNull("another kind is not an input error", parseHerdrTerminalInputError(body("""{"kind":"sent","session":"ts1"}""")))
+        assertNull("an error without a session is dropped", parseHerdrTerminalInputError(body("""{"kind":"terminal_input_error","code":"x"}""")))
     }
 
     @Test
@@ -290,7 +325,13 @@ class HerdrTerminalTest {
             body("""{"kind":"state","enabled":true,"running":true,"control":true,"bridge":["observe","control","scroll","mouse"],"agents":[]}"""),
         )!!
         assertTrue(s.liveTerminal)
+        assertFalse(s.terminalInput)
+        assertTrue(s.copy(bridge = s.bridge + "input").terminalInput)
         assertEquals(listOf("observe", "control", "scroll", "mouse"), s.bridge)
+        assertFalse(s.terminalImage)
+        assertTrue(s.copy(bridge = s.bridge + "image").terminalImage)
+        assertFalse(s.terminalPaste)
+        assertTrue(s.copy(bridge = s.bridge + "paste").terminalPaste)
         val old = parseHerdrState(body("""{"kind":"state","enabled":true,"running":true,"control":true}"""))!!
         assertFalse("a computer without the bridge has no live terminal", old.liveTerminal)
     }

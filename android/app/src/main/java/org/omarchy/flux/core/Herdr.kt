@@ -1,8 +1,10 @@
 package org.omarchy.flux.core
 
+import android.net.Uri
 import android.util.Log
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import org.omarchy.flux.net.Payload
 import org.omarchy.flux.protocol.Packet
 import org.omarchy.flux.protocol.Types
 import org.omarchy.flux.protocol.bodyOf
@@ -119,6 +121,7 @@ object HerdrSync {
                 terminalSink?.invoke(d.id, frame)
             }
             "terminal_closed" -> onTerminalClosed(d, p.body)
+            "terminal_input_error" -> onTerminalInputError(d, p.body)
             else -> Log.d(TAG, "ignored flux.herdr kind ${p.string("kind")}")
         }
     }
@@ -281,6 +284,105 @@ object HerdrSync {
         if (session.isEmpty() || cols !in 1..1000 || rows !in 1..1000) return
         val d = core.device(id) ?: return
         d.send(Packet(Types.FLUX_HERDR, herdrTerminalResizeBody(session, cols, rows)))
+    }
+
+    /**
+     * Types one text event in the active controller session. The text goes
+     * as it is: fluxd does not trim it or press Enter. An empty text, or a
+     * text with control characters, is refused by fluxd. A step changes no
+     * phone state, so it goes out without the core lock and its publish: at
+     * a character per key a publish would rebuild the whole screen.
+     */
+    fun terminalInput(core: FluxCore, id: String, session: String, text: String) {
+        if (session.isEmpty() || text.isEmpty()) return
+        val d = core.device(id) ?: return
+        d.send(Packet(Types.FLUX_HERDR, herdrTerminalInputBody(session, text)))
+    }
+
+    /** Sends one named key to the active controller session. */
+    fun terminalInputKey(core: FluxCore, id: String, session: String, key: String) {
+        if (session.isEmpty() || key !in HERDR_TERMINAL_INPUT_KEYS) return
+        val d = core.device(id) ?: return
+        d.send(Packet(Types.FLUX_HERDR, herdrTerminalKeyBody(session, key)))
+    }
+
+    /**
+     * Pastes [text] as one bracketed paste in the active controller
+     * session. The program reads it as pasted content and applies its own
+     * paste handling, so its line breaks do not submit. fluxd wraps the
+     * text, bounds its size, and drops control characters; it does not
+     * press Enter.
+     */
+    fun terminalPaste(core: FluxCore, id: String, session: String, text: String) {
+        if (session.isEmpty() || text.isEmpty()) return
+        val d = core.device(id) ?: return
+        d.send(Packet(Types.FLUX_HERDR, herdrTerminalPasteBody(session, text)))
+    }
+
+    /**
+     * Pastes the image at [uri] into the active controller session. The
+     * image travels as the payload of the packet, so fluxd can put it on
+     * the clipboard of the computer before it sends the paste key. The
+     * program then reads the image as an attachment instead of typed text.
+     *
+     * Reading the image and sending the payload block, so they run on the
+     * IO pool and not on the caller. A failure of this phone side shows
+     * on the phone, because the terminal cannot name an image that never
+     * left it.
+     */
+    fun terminalPasteImage(core: FluxCore, id: String, session: String, uri: Uri) {
+        if (session.isEmpty()) return
+        core.io.execute {
+            val d = core.device(id) ?: return@execute
+            val cert = d.certificate
+            val tls = FluxCore.tls
+            if (cert == null || tls == null) {
+                core.toast("${d.identity.deviceName} is not ready for an image")
+                return@execute
+            }
+            val data = runCatching {
+                core.app.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            }.getOrElse { error ->
+                Log.w(TAG, "read the pasted image failed", error)
+                core.toast("Flux could not read that image")
+                return@execute
+            }
+            if (data == null) {
+                core.toast("Flux could not read that image")
+                return@execute
+            }
+            if (data.isEmpty()) {
+                core.toast("That image is empty")
+                return@execute
+            }
+            if (data.size > ClipImage.MAX_BYTES) {
+                core.toast("That image is larger than ${ClipImage.MAX_BYTES shr 20} MiB")
+                return@execute
+            }
+            val server = Payload.openServer()
+            val p = Packet(
+                Types.FLUX_HERDR, herdrTerminalPasteImageBody(session),
+                payloadSize = data.size.toLong(), payloadPort = server.localPort,
+            )
+            if (!d.send(p)) {
+                server.close()
+                core.toast("${d.identity.deviceName} is not reachable")
+                return@execute
+            }
+            val sent = runCatching { Payload.send(tls, server, data.inputStream(), data.size.toLong(), cert) }
+            if (sent.isFailure) {
+                Log.w(TAG, "send the pasted image failed", sent.exceptionOrNull())
+                core.toast("Flux could not send the image to ${d.identity.deviceName}")
+            }
+        }
+    }
+
+    /** Handles terminal_input_error: why a typed event did not reach the terminal. The core lock is held. */
+    private fun onTerminalInputError(d: Device, body: JsonObject) {
+        val e = parseHerdrTerminalInputError(body) ?: return
+        val t = d.herdrTerminal ?: return
+        if (t.session != e.session) return
+        d.herdrTerminal = t.copy(inputError = e.error)
     }
 
     /** Handles terminal_opened, the answer to a terminal_open. The core lock is held. */

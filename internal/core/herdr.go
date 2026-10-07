@@ -120,11 +120,14 @@ type herdrJobs struct {
 	kindsBusy bool
 
 	// sending counts the keys, prompt, input, and close jobs that run for
-	// each device ID.
+	// each device ID. pasting is true while an image of the device is on
+	// its way to the clipboard and the terminal, so one image at a time
+	// reaches the program.
 	sending map[string]int
 
 	// opening has the ID of each device whose terminal_open runs.
 	opening map[string]bool
+	pasting map[string]bool
 }
 
 // herdrMaxSends is the number of keys, prompt, input, and close jobs that
@@ -203,7 +206,8 @@ type herdrCLI struct {
 // herdrBridgeCaps are the terminal-session actions of a herdr that has
 // the CLI bridge of terminal sessions. Only observe reads. The others
 // write to the terminal, so a device gets them only with herdr_control.
-var herdrBridgeCaps = []string{"observe", "control", "scroll", "mouse"}
+// "input", "paste", and "image" let the phone type and paste in a control stream.
+var herdrBridgeCaps = []string{"observe", "control", "scroll", "mouse", "input", "paste", "image"}
 
 // herdrObserveCaps are the bridge actions of a device without
 // herdr_control.
@@ -781,6 +785,9 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 		Button    string `json:"button"`
 		Column    int    `json:"column"`
 		Row       int    `json:"row"`
+		// Key names one named key of a terminal_input, such as "enter".
+		// fluxd encodes it; a client cannot send an escape sequence.
+		Key string `json:"key"`
 		// Request is the number of a keys, prompt, input, create, close,
 		// terminal_open, or terminal_release packet. The answer carries
 		// the same number, so the phone matches a late answer.
@@ -893,6 +900,12 @@ func (d *Daemon) handleHerdr(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.herdrTerminalMouse(dev, l, body.Session, body.Action, body.Button, body.Column, body.Row)
 	case "terminal_resize":
 		d.herdrTerminalResize(dev, l, body.Session, body.Cols, body.Rows)
+	case "terminal_input":
+		d.herdrTerminalInput(dev, l, body.Session, body.Text, body.Key)
+	case "terminal_paste":
+		d.herdrTerminalPaste(dev, l, body.Session, body.Text)
+	case "terminal_paste_image":
+		d.herdrTerminalPasteImage(dev, l, p, body.Session)
 	case "terminal_release":
 		d.herdrTerminalRelease(dev, l, req, body.Session)
 	default:

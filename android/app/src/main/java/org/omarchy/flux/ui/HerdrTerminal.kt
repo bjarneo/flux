@@ -5,6 +5,20 @@ import android.content.Context
 import android.view.MotionEvent
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityManager
+import android.net.Uri
+import android.os.Bundle
+import android.text.Editable
+import android.text.InputType
+import android.text.Selection
+import android.view.KeyEvent
+import android.view.View
+import android.view.inputmethod.BaseInputConnection
+import android.view.inputmethod.CorrectionInfo
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.TextAttribute
+import android.view.inputmethod.InputConnection
+import android.view.inputmethod.InputContentInfo
+import android.view.inputmethod.InputMethodManager
 import android.webkit.JavascriptInterface
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceRequest
@@ -17,13 +31,17 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.viewinterop.AndroidView
+import org.omarchy.flux.core.ClipImage
+import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.HerdrSync
 import org.omarchy.flux.core.HerdrTerminalEvent
 import org.omarchy.flux.core.HerdrTerminalSession
@@ -52,6 +70,44 @@ internal fun rememberTerminalFeeder(deviceId: String): TerminalFeeder {
     }
     return feeder
 }
+/**
+ * The image types that the phone keyboard may paste into the terminal. The
+ * IME shows its image and clipboard options only while the editor names
+ * them, and it commits the image to the terminal then.
+ */
+private val IMAGE_MIME_TYPES = arrayOf("image/png", "image/jpeg", "image/gif", "image/webp")
+
+/**
+ * True when the terminal view can take focus on the phone. The phone is in
+ * touch mode, so a view that is not focusable in touch mode cannot take
+ * focus: requestFocus() returns false, the input manager never serves the
+ * view, and Android ignores showSoftInput(). A tap still does not open the
+ * keyboard, because the touch listener consumes every touch before
+ * View.onTouchEvent can focus the view.
+ */
+internal const val TERMINAL_FOCUSABLE_IN_TOUCH_MODE = true
+
+/**
+ * True when the keyboard key may open the IME: the input gate is open and
+ * the view can take focus in touch mode. The gate keeps a reconnect or an
+ * unauthenticated terminal from opening the keyboard.
+ */
+internal fun keyboardMayOpen(ready: Boolean, focusableInTouchMode: Boolean): Boolean =
+    ready && focusableInTouchMode
+
+/**
+ * True when a text that the phone keyboard committed is a paste rather
+ * than typing. Ordinary typing arrives one character at a time, while a
+ * paste, a dictation, or a composed word arrives as one block. A line
+ * break is always a paste: the direct view has no typed line break, so a
+ * committed newline must not submit the prompt.
+ */
+internal fun committedAsPaste(text: String): Boolean =
+    text.length > 1 || text.indexOf('\n') >= 0 || text.indexOf('\r') >= 0
+
+/** Stale IME offsets must not turn a replacement into an append. */
+internal fun imeReplacementInBounds(start: Int, end: Int, length: Int): Boolean =
+    start in 0..length && end in 0..length
 
 /**
  * The live terminal of a herdr pane. It draws the ANSI frames of the
@@ -86,6 +142,13 @@ internal fun HerdrTerminalView(
     inputEnabled: Boolean = true,
     onTap: (column: Int, row: Int) -> Unit = { _, _ -> },
     onGone: () -> Unit = {},
+    inputReady: Boolean = false,
+    imageReady: Boolean = false,
+    onText: (String) -> Unit = {},
+    onKey: (String) -> Unit = {},
+    onPaste: (String) -> Unit = {},
+    onImage: (Uri, String) -> Unit = { _, _ -> },
+    input: TerminalInput? = null,
 ) {
     feeder.onReady = {
         if (sample != null) feeder.draw(sample) else onReady()
@@ -120,7 +183,511 @@ internal fun HerdrTerminalView(
             }
         },
         factory = { context -> feeder.view(context) },
+        update = { view ->
+            // The gate and the callbacks come from the current composition,
+            // not from the factory, so a stale capture cannot type into a
+            // terminal that lost control or changed session.
+            val editor = view as TerminalWebView
+            editor.inputReady = inputReady
+            editor.onText = onText
+            editor.onKey = onKey
+            editor.onPaste = onPaste
+            editor.imageReady = imageReady
+            editor.onImage = onImage
+            input?.onShowKeyboard = {
+                // Android ignores showSoftInput() for a view that is not
+                // served, so ask for the keyboard only after the view took
+                // focus. The post lets the focus change reach the input
+                // manager first, and restartInput builds the connection of
+                // a view that was served without one.
+                if (keyboardMayOpen(inputReady, view.isFocusableInTouchMode) && view.requestFocus()) {
+                    val imm = view.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                    view.post {
+                        if (editor.inputReady && view.hasFocus()) {
+                            imm?.restartInput(view)
+                            imm?.showSoftInput(view, 0)
+                        }
+                    }
+                }
+            }
+        },
+        onRelease = { view ->
+            input?.onShowKeyboard = null
+            (view as TerminalWebView).closeKeyboard()
+            view.resetIme()
+        },
     )
+}
+
+/**
+ * The live typed input of the terminal on screen. The Live view fills it;
+ * the direct footer reads it. [ready] gates every action, and [session] is
+ * the stream that may take the input, so a stale speech result or a late
+ * callback cannot type into another session.
+ */
+internal class TerminalInput {
+    var ready by mutableStateOf(false)
+    /** True while the computer also accepts a bracketed paste. */
+    var pasteReady by mutableStateOf(false)
+    /** True while the computer also accepts an image to paste. */
+    var imageReady by mutableStateOf(false)
+    var session by mutableStateOf("")
+    var onText: ((String) -> Unit)? = null
+    var onKey: ((String) -> Unit)? = null
+    var onPaste: ((String) -> Unit)? = null
+    var onImage: ((Uri, String) -> Unit)? = null
+    var onShowKeyboard: (() -> Unit)? = null
+
+    /** Types [text] on the computer. [from] is the session of a delayed caller, or empty for now. */
+    fun type(text: String, from: String = "") {
+        if (!ready || text.isEmpty() || (from.isNotEmpty() && from != session)) return
+        onText?.invoke(text)
+    }
+
+    /** Sends the named key [name]. [from] is the session of a delayed caller, or empty for now. */
+    fun key(name: String, from: String = "") {
+        if (!ready || (from.isNotEmpty() && from != session)) return
+        onKey?.invoke(name)
+    }
+
+    /** Pastes [text] as one bracketed paste. [from] is the session of a delayed caller, or empty for now. */
+    fun paste(text: String, from: String = "") {
+        if (!ready || text.isEmpty() || (from.isNotEmpty() && from != session)) return
+        // A computer without the paste capability keeps the old typing path,
+        // which refuses a block that spans lines. It must update.
+        if (!pasteReady) {
+            type(text, from)
+            return
+        }
+        onPaste?.invoke(text)
+    }
+
+    /** Shows the phone keyboard. Android hides it again. */
+    fun showKeyboard() {
+        if (ready) onShowKeyboard?.invoke()
+    }
+
+    /**
+     * Pastes the image at [uri] in the active session. The computer puts
+     * it on its clipboard and pastes it, so the program reads it as an
+     * attachment. [from] is the session of a delayed caller, or empty for
+     * now.
+     */
+    fun pasteImage(uri: Uri, mime: String, from: String = "") {
+        if (!ready || !imageReady || mime !in ClipImage.TYPES) return
+        if (from.isNotEmpty() && from != session) return
+        onImage?.invoke(uri, mime)
+    }
+}
+
+/**
+ * The terminal WebView that also takes the phone keyboard. The page draws
+ * only: the IME text comes here and goes to the computer through [onText]
+ * and [onKey]. The editable keeps the keyboard's context, including text
+ * already sent, so a correction can replace that text on the computer.
+ */
+internal class TerminalWebView(context: Context) : WebView(context) {
+    /** Types text on the computer. */
+    var onText: ((String) -> Unit)? = null
+
+    /** Sends one named key to the computer. */
+    var onKey: ((String) -> Unit)? = null
+
+    /** Sends one committed block of text as a bracketed paste. */
+    var onPaste: ((String) -> Unit)? = null
+
+    /** Sends one image that the phone keyboard pasted. */
+    var onImage: ((Uri, String) -> Unit)? = null
+
+    /** True while the terminal may take typed input. */
+    var inputReady: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            // Android refuses the input connection while the terminal is
+            // not ready, and it does not build one later on its own: the
+            // keyboard then shows with no way to type. Restart the input
+            // when the terminal becomes ready, and hide the keyboard when it
+            // stops, keeping the buffer: a transient flap must not wipe what
+            // was typed, leaving means a real end and the release wipes.
+            if (value) refreshInput() else hideKeyboard()
+        }
+
+    /**
+     * True while the computer also accepts an image paste. The IME reads
+     * the accepted content types when the input connection is built, so a
+     * change restarts the input while the keyboard shows.
+     */
+    var imageReady: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            if (value) refreshInput()
+        }
+
+    private var connection: TerminalInputConnection? = null
+
+    /** The input manager of this view. */
+    private fun imm(): InputMethodManager? =
+        context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+
+    /** Rebuilds the input connection while the keyboard shows on this view. */
+    fun refreshInput() {
+        val manager = imm() ?: return
+        if (manager.isActive(this)) manager.restartInput(this)
+    }
+
+    /** Hides the keyboard and drops the IME focus, keeping the buffer. A
+     * readiness flap (resize, reconnect) must not wipe what was typed:
+     * wiping desyncs Gboard and every later correction over-deletes. */
+    fun hideKeyboard() {
+        clearFocus()
+        windowToken?.let { imm()?.hideSoftInputFromWindow(it, 0) }
+    }
+
+    /** Hides the keyboard and drops the buffer. Only for a view going away. */
+    fun closeKeyboard() {
+        connection?.clearContent()
+        hideKeyboard()
+    }
+
+    /** Resets the view-level IME mirror. Only for a view going away. */
+    fun resetIme() {
+        imeMirror.clear()
+    }
+
+    override fun onCheckIsTextEditor(): Boolean = inputReady
+
+    override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? {
+        if (!inputReady) return null
+        // Request raw terminal input. Some keyboards still offer suggestions;
+        // the input connection translates their replacements to remote edits.
+        outAttrs.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+        outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN
+        // The image types that the keyboard may paste. The IME offers its
+        // image and clipboard options only while the editor names them.
+        if (imageReady) outAttrs.contentMimeTypes = IMAGE_MIME_TYPES
+        return TerminalInputConnection(this).also { connection = it }
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_DEL) {
+            // Route through the connection so the mirror stays in step.
+            if (connection?.sendKeyEvent(event) == true) return true
+        }
+        if (inputReady && !event.isCtrlPressed && !event.isAltPressed && sendNamedKey(keyCode)) return true
+        return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        if (inputReady && namedKey(keyCode) != null) return true
+        return super.onKeyUp(keyCode, event)
+    }
+
+    private fun namedKey(keyCode: Int): String? = when (keyCode) {
+        KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> "enter"
+        KeyEvent.KEYCODE_TAB -> "tab"
+        KeyEvent.KEYCODE_DEL -> "backspace"
+        KeyEvent.KEYCODE_ESCAPE -> "esc"
+        KeyEvent.KEYCODE_DPAD_UP -> "up"
+        KeyEvent.KEYCODE_DPAD_DOWN -> "down"
+        KeyEvent.KEYCODE_DPAD_LEFT -> "left"
+        KeyEvent.KEYCODE_DPAD_RIGHT -> "right"
+        else -> null
+    }
+
+    private fun sendNamedKey(keyCode: Int): Boolean {
+        val key = namedKey(keyCode) ?: return false
+        onKey?.invoke(key)
+        return true
+    }
+
+    // Mirror of the terminal line at the view level. The framework recreates
+    // the input connection (keyboard restart, readiness flaps), and a fresh
+    // empty buffer makes Gboard commit corrections blindly or over-delete.
+    // New connections seed from this mirror so context queries stay truthful.
+    private val imeMirror = StringBuilder()
+
+    /**
+     * The bridge of the phone keyboard. A committed character goes out at
+     * once. Composing edits are coalesced; a committed replacement goes out
+     * immediately. The editable and the sent mirror keep corrections and
+     * deletions in step with the computer.
+     */
+    private inner class TerminalInputConnection(target: View) : BaseInputConnection(target, true) {
+        // BaseInputConnection makes its own editable for a view that is not
+        // a text editor. The property is nullable in the platform types.
+        private val content: Editable = editable ?: Editable.Factory.getInstance().newEditable("")
+
+        fun clearContent() {
+            cancelPending()
+            content.clear()
+            sent.clear()
+        }
+
+        // What this connection already forwarded. Gboard computes corrections
+        // against what getTextBeforeCursor returns, so the buffer must keep
+        // what was sent instead of clearing it: with an empty buffer Gboard
+        // just commits the correction behind the typo.
+        private val sent = StringBuilder()
+
+        init {
+            // Seed from the view mirror so a recreated connection keeps the
+            // context that Gboard queries for corrections.
+            val tail = this@TerminalWebView.imeMirror.toString()
+            if (tail.isNotEmpty()) {
+                content.append(tail)
+                Selection.setSelection(content, content.length)
+            }
+            sent.append(content)
+        }
+
+        // The pending diff as backs plus the new tail, without sending.
+        private fun diff(): Pair<Int, String> {
+            val cur = content.toString()
+            val old = sent.toString()
+            var common = 0
+            val maxCommon = minOf(old.length, cur.length)
+            while (common < maxCommon && old[common] == cur[common]) common++
+            return (old.length - common) to cur.substring(common)
+        }
+
+        // Forwards the diff between the buffer and the sent text, so a
+        // correction becomes backspaces plus the corrected word.
+        private fun sync() {
+            // Keep the IME's coordinate space until this editor is reset.
+            // Trimming the prefix invalidates Gboard's replaceText offsets.
+            val (backs, extra) = diff()
+            val oldLen = sent.length
+            repeat(backs) { onKey?.invoke("backspace") }
+            if (extra.isNotEmpty()) {
+                if (committedAsPaste(extra)) onPaste?.invoke(extra) else onText?.invoke(extra)
+            }
+            val cur = content.toString()
+            sent.clear()
+            sent.append(cur)
+            // Persist at the view level: the framework recreates connections
+            // on keyboard restarts, and the next one seeds from here.
+            val outer = this@TerminalWebView.imeMirror
+            if (outer.length >= oldLen) {
+                outer.delete(outer.length - oldLen, outer.length)
+            } else {
+                outer.clear()
+            }
+            outer.append(cur)
+        }
+
+        private fun resetMirror() {
+            cancelPending()
+            content.clear()
+            sent.clear()
+            this@TerminalWebView.imeMirror.clear()
+        }
+
+        override fun commitText(text: CharSequence, newCursorPosition: Int): Boolean {
+            cancelPending()
+            // A lone line break is the Return key, not a prompt.
+            if (text.length == 1 && (text[0] == '\n' || text[0] == '\r')) {
+                resetMirror()
+                onKey?.invoke("enter")
+                return true
+            }
+            pinToEnd()
+            super.commitText(text, newCursorPosition)
+            sync()
+            return true
+        }
+
+        /**
+         * A tapped autocorrection. Gboard edits the buffer directly through
+         * this call, bypassing commitText: without this override the fix
+         * sits silently until the next keystroke flushes it. Forward it at
+         * once. No pinning here: the offset math needs the real cursor, and
+         * the full-string diff replays the result exactly.
+         */
+        override fun commitCorrection(info: CorrectionInfo): Boolean {
+            cancelPending()
+            val ok = super.commitCorrection(info)
+            sync()
+            return ok
+        }
+
+        /**
+         * A tapped correction on newer Android: Gboard replaces the word
+         * directly through this call, bypassing commitText and the composing
+         * callbacks, so without this override the fix sits silently until
+         * the next keystroke flushes it. Forward it at once. No pinning:
+         * the range math needs the real selection, and the full-string
+         * diff replays the result exactly.
+         */
+        override fun replaceText(
+            start: Int,
+            end: Int,
+            text: CharSequence,
+            newCursorPosition: Int,
+            attrs: TextAttribute?,
+        ): Boolean {
+            cancelPending()
+            if (!imeReplacementInBounds(start, end, content.length)) {
+                return false
+            }
+            val ok = super.replaceText(start, end, text, newCursorPosition, attrs)
+            sync()
+            return ok
+        }
+
+        override fun commitContent(
+            inputContentInfo: InputContentInfo,
+            flags: Int,
+            opts: Bundle?,
+        ): Boolean {
+            val mime = inputContentInfo.description.getMimeType(0) ?: return false
+            if (mime !in ClipImage.TYPES) return false
+            // The IME grants a read of the content for this paste only.
+            if (flags and InputConnection.INPUT_CONTENT_GRANT_READ_URI_PERMISSION != 0) {
+                runCatching { inputContentInfo.requestPermission() }
+                    .onFailure { return false }
+            }
+            onImage?.invoke(inputContentInfo.contentUri, mime)
+            return true
+        }
+
+        override fun setComposingText(text: CharSequence, newCursorPosition: Int): Boolean {
+            cancelPending()
+            pinToEnd()
+            super.setComposingText(text, newCursorPosition)
+            // A rewrite of sent text after idle is a tapped correction: show
+            // it at once like a completion. Inside a burst it is still
+            // typing ahead: delay it so the settled word goes out once
+            // instead of storming rewrites that garble a smart prompt.
+            if (diff().first > 0) {
+                val now = android.os.SystemClock.uptimeMillis()
+                if (now - lastComposingSend < composeBurstMs) {
+                    scheduleSync()
+                } else {
+                    lastComposingSend = now
+                    sync()
+                }
+            } else {
+                scheduleSync()
+            }
+            return true
+        }
+
+        override fun finishComposingText(): Boolean {
+            cancelPending()
+            super.finishComposingText()
+            sync()
+            return true
+        }
+
+        override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
+            cancelPending()
+            val left = deleteLocal(beforeLength, afterLength, codePoints = false)
+            // Deletions past the mirror still refer to remote text the
+            // mirror forgot (an older word being corrected): forward them.
+            repeat(left) { onKey?.invoke("backspace") }
+            sync()
+            return true
+        }
+
+        override fun deleteSurroundingTextInCodePoints(beforeLength: Int, afterLength: Int): Boolean {
+            cancelPending()
+            val left = deleteLocal(beforeLength, afterLength, codePoints = true)
+            repeat(left) { onKey?.invoke("backspace") }
+            sync()
+            return true
+        }
+
+        override fun sendKeyEvent(event: KeyEvent): Boolean {
+            if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DEL && inputReady) {
+                // A hardware delete must move the mirror too, or every later
+                // diff is off by one and corrections over-delete.
+                cancelPending()
+                if (content.isNotEmpty()) {
+                    val end = Selection.getSelectionEnd(content).coerceIn(0, content.length)
+                    if (end > 0) {
+                        content.delete(end - 1, end)
+                        Selection.setSelection(content, end - 1)
+                    }
+                    sync()
+                } else {
+                    onKey?.invoke("backspace")
+                }
+                return true
+            }
+            if (event.action == KeyEvent.ACTION_DOWN && sendNamedKey(event.keyCode)) return true
+            if (event.action == KeyEvent.ACTION_UP && namedKey(event.keyCode) != null) return true
+            return super.sendKeyEvent(event)
+        }
+
+        // Deletes from the local mirror only. Returns how many requested
+        // deletions fell outside the buffer; sync() forwards nothing for
+        // those, so the caller sends them as raw backspaces (there is no
+        // forward-delete key on this bridge).
+        private fun deleteLocal(beforeLength: Int, afterLength: Int, codePoints: Boolean): Int {
+            val e = content
+            val sel = Selection.getSelectionStart(e)
+            val end = Selection.getSelectionEnd(e)
+            if (sel < 0 || end < 0) return beforeLength
+            var start = minOf(sel, end)
+            var stop = maxOf(sel, end)
+            var left = beforeLength
+            while (left > 0 && start > 0) {
+                start = if (codePoints) Character.offsetByCodePoints(e, start, -1) else start - 1
+                left--
+            }
+            var right = afterLength
+            while (right > 0 && stop < e.length) {
+                stop = if (codePoints) Character.offsetByCodePoints(e, stop, 1) else stop + 1
+                right--
+            }
+            e.delete(start, stop)
+            Selection.setSelection(e, start)
+            return left
+        }
+
+        private val imeHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        private var pendingSync: Runnable? = null
+        private val composeDebounceMs = 180L
+
+        private fun cancelPending() {
+            pendingSync?.let { imeHandler.removeCallbacks(it) }
+            pendingSync = null
+        }
+
+        // The terminal prompt is end-edited: replaying a mid-buffer insert
+        // at the remote end corrupts the line and amplifies on every stroke.
+        // Pin a collapsed mid-buffer cursor to the end before the edit, so
+        // the intent visibly appends instead of silently garbling. Ranges
+        // are left alone: replacing a range replays exactly.
+        private fun pinToEnd(): Boolean {
+            val start = Selection.getSelectionStart(content)
+            val end = Selection.getSelectionEnd(content)
+            if (start == end && start >= 0 && start != content.length) {
+                Selection.setSelection(content, content.length)
+                return true
+            }
+            return false
+        }
+
+        private fun scheduleSync() {
+            cancelPending()
+            val task = Runnable {
+                pendingSync = null
+                lastComposingSend = android.os.SystemClock.uptimeMillis()
+                sync()
+            }
+            pendingSync = task
+            imeHandler.postDelayed(task, composeDebounceMs)
+        }
+
+        // When the last composing word went out recently, rewrites are a
+        // typing burst: keep debouncing. An isolated rewrite is a tapped
+        // correction and goes out at once.
+        private var lastComposingSend = 0L
+        private val composeBurstMs = 500L
+    }
 }
 
 /**
@@ -223,7 +790,7 @@ internal class TerminalFeeder(
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun makeView(context: Context): WebView = WebView(context).apply {
+    private fun makeView(context: Context): WebView = TerminalWebView(context).apply {
         // The page paints the theme background itself.
         setBackgroundColor(android.graphics.Color.TRANSPARENT)
         settings.javaScriptEnabled = true
@@ -254,8 +821,8 @@ internal class TerminalFeeder(
         settings.builtInZoomControls = false
         // The terminal takes no keys here, so a tap must not
         // open the keyboard.
-        isFocusable = false
-        isFocusableInTouchMode = false
+        isFocusable = true
+        isFocusableInTouchMode = TERMINAL_FOCUSABLE_IN_TOUCH_MODE
         setOnTouchListener { view, event ->
             // Claim the entire drag before the enclosing Compose
             // scroll column can intercept it and cancel the WebView.

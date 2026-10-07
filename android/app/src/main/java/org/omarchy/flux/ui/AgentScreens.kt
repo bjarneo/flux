@@ -42,6 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableLongStateOf
@@ -384,6 +385,8 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
             liveNote = gone
         }
     }
+    val terminalInput = remember(d.id, pane) { TerminalInput() }
+    val direct = liveInputOffered(terminal != null, d.herdr, sample != null)
     Column(Modifier.fillMaxSize().imePadding().padding(horizontal = TiledGutter)) {
         TiledTopBar(title, onBack, context = context) {
             // The key stays while Live is on, so that Live can always stop.
@@ -450,7 +453,10 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
                     Column(m, verticalArrangement = Arrangement.spacedBy(TileGap)) {
                         if (!review) liveNote?.let { LiveNote(it) }
                         if (terminal != null) {
-                            LiveTerminalView(terminal, d, pane, sample, Modifier.weight(1f).fillMaxWidth())
+                            LiveTerminalView(
+                                terminal, d, pane, sample,
+                                Modifier.weight(1f).fillMaxWidth(), terminalInput,
+                            )
                         } else {
                             AgentOutput(out, Modifier.weight(1f))
                         }
@@ -458,8 +464,12 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
                 },
                 controls = {
                     if (agent != null && d.herdr?.control == true) {
-                        ReplyControls(d, agent, out.takeUnless { review }, d.herdrReply?.takeIf { it.pane == pane },
-                            if (review) appliedReviewPath else null, reviewReady = !review || (out?.loading == false && out.error == null))
+                        if (!review && direct) {
+                            DirectTerminalControls(agent, out, terminalInput)
+                        } else {
+                            ReplyControls(d, agent, out.takeUnless { review }, d.herdrReply?.takeIf { it.pane == pane },
+                                if (review) appliedReviewPath else null, reviewReady = !review || (out?.loading == false && out.error == null))
+                        }
                     } else if (agent != null) {
                         T(
                             "To answer from this phone, set herdr_control = true on ${d.name}.",
@@ -480,6 +490,10 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
  */
 internal fun liveOffered(online: Boolean, agent: Boolean, herdr: HerdrState?, demo: Boolean, sample: Boolean): Boolean =
     if (demo) sample else online && agent && herdr?.liveTerminal == true
+
+/** Direct controls replace the composer only in an opted-in, non-demo Live view. */
+internal fun liveInputOffered(live: Boolean, herdr: HerdrState?, sample: Boolean): Boolean =
+    live && !sample && herdr?.liveTerminal == true && herdr.terminalInput
 
 /**
  * The reason that ends Live when the agent of [pane] is not in [herdr],
@@ -1041,13 +1055,20 @@ private fun rememberLiveTerminal(
  * short tap clicks a cell, and two fingers zoom and pan the view.
  */
 @Composable
-private fun LiveTerminalView(t: LiveTerminal, d: DeviceUi, pane: String, sample: TerminalSample?, modifier: Modifier) {
+private fun LiveTerminalView(
+    t: LiveTerminal,
+    d: DeviceUi,
+    pane: String,
+    sample: TerminalSample?,
+    modifier: Modifier,
+    input: TerminalInput,
+) {
     val session = d.herdrTerminal?.takeIf { it.pane == pane }
     val current by rememberUpdatedState(session)
     val controlling = t.active && t.authorized && session?.open == true && session.mode == "control"
     val visible = sample != null || terminalControlReady(session, t.drawn, t.authorized, t.active)
     // Input needs a valid unlock. An unlock that ended ends Live.
-    fun input(send: (HerdrTerminalSession) -> Unit) {
+    fun guardedInput(send: (HerdrTerminalSession) -> Unit) {
         val s = current
         if (!t.active || !t.authorized) return
         if (!ReplyLock.valid()) {
@@ -1055,6 +1076,51 @@ private fun LiveTerminalView(t: LiveTerminal, d: DeviceUi, pane: String, sample:
         } else if (s?.open == true && s.mode == "control") {
             send(s)
         }
+    }
+    // Typed input needs the drawn baseline of the current control session
+    // and a valid unlock. A debug sample takes no input.
+    val inputReady = controlling && visible && sample == null &&
+        t.pendingGrid == null && d.herdr?.terminalInput == true
+    // The gate and the send are read again at each event, so a stale
+    // footer or a late speech result cannot type into a session that lost
+    // control or changed.
+    SideEffect {
+        input.ready = inputReady
+        input.pasteReady = inputReady && d.herdr?.terminalPaste == true
+        input.imageReady = inputReady && d.herdr?.terminalImage == true
+        input.session = session?.session.orEmpty()
+        input.onText = { text ->
+            if (terminalControlReady(current, t.drawn, t.authorized, t.active)) {
+                guardedInput { s -> HerdrSync.terminalInput(FluxCore, d.id, s.session, text) }
+            }
+        }
+        input.onKey = { key ->
+            if (terminalControlReady(current, t.drawn, t.authorized, t.active)) {
+                guardedInput { s -> HerdrSync.terminalInputKey(FluxCore, d.id, s.session, key) }
+            }
+        }
+        input.onPaste = { text ->
+            if (terminalControlReady(current, t.drawn, t.authorized, t.active)) {
+                guardedInput { s -> HerdrSync.terminalPaste(FluxCore, d.id, s.session, text) }
+            }
+        }
+        input.onImage = { uri, _ ->
+            if (terminalControlReady(current, t.drawn, t.authorized, t.active)) {
+                guardedInput { s -> HerdrSync.terminalPasteImage(FluxCore, d.id, s.session, uri) }
+            }
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            input.ready = false
+            input.onText = null
+            input.onKey = null
+            input.onPaste = null
+            input.onImage = null
+        }
+    }
+    LaunchedEffect(session?.inputError) {
+        session?.inputError?.let { FluxCore.toast(it) }
     }
     Box(modifier) {
         HerdrTerminalView(
@@ -1065,14 +1131,23 @@ private fun LiveTerminalView(t: LiveTerminal, d: DeviceUi, pane: String, sample:
             sample = sample,
             control = controlling && visible && t.pendingGrid == null,
             inputEnabled = visible,
+            inputReady = inputReady,
+            imageReady = inputReady && d.herdr?.terminalImage == true,
+            onText = { input.type(it) },
+            onKey = { input.key(it) },
+            onPaste = { input.paste(it) },
+            onImage = { uri, mime -> input.pasteImage(uri, mime) },
+            input = input,
             theme = ComputerThemes.theme(d.id)?.theme,
             onGrid = { cols, rows -> t.grid(cols to rows) },
             onDrawn = { id -> if (current?.session == id) t.drawn = id },
             onWheel = { column, row, direction ->
-                input { s -> HerdrSync.terminalScroll(FluxCore, d.id, s.session, direction, column, row) }
+                guardedInput { s ->
+                    HerdrSync.terminalScroll(FluxCore, d.id, s.session, direction, column, row)
+                }
             },
             onTap = { column, row ->
-                input { s ->
+                guardedInput { s ->
                     HerdrSync.terminalMouse(FluxCore, d.id, s.session, "down", "left", column, row)
                     HerdrSync.terminalMouse(FluxCore, d.id, s.session, "up", "left", column, row)
                 }
@@ -1461,6 +1536,55 @@ private fun ReplyControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, rep
                 onDismiss = { picking = false },
             )
         }
+    }
+}
+
+/**
+ * The direct controls of the live terminal: the choices of a blocked agent
+ * and one row with Esc, Tab, Up, Down, and the keyboard. Typed text and
+ * named keys go straight to the terminal through [input], so the program
+ * draws its own prompt and its own menus. The phone keyboard's own mic
+ * dictates into the terminal, so this mode has no mic key of its own. The
+ * phone-side draft of [ReplyControls] stays for the Changes tab and for
+ * the later buffered mode.
+ */
+@Composable
+private fun DirectTerminalControls(agent: HerdrAgent, out: HerdrOutput?, input: TerminalInput) {
+    Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
+        val choices = if (agent.status == AgentStatus.Blocked) out?.choices.orEmpty() else emptyList()
+        for (c in choices) ChoiceTile(c, input.ready) { input.type(c.key) }
+        DirectKeys(Modifier.fillMaxWidth(), input)
+    }
+}
+
+/**
+ * The one row of direct keys: Esc, Tab, Up, Down, and the keyboard. The
+ * keyboard key only shows the phone keyboard, and Android hides it again.
+ * The phone keyboard's own paste, mic, and dictation handle those, so the
+ * row has no paste or mic key.
+ */
+@Composable
+private fun DirectKeys(m: Modifier, input: TerminalInput) {
+    KeyRow(m) {
+        KeyTile("esc", "Escape", Modifier.weight(1f)) { input.key("esc") }
+        KeyTile("tab", "Tab", Modifier.weight(1f)) { input.key("tab") }
+        KeyTile("↑", "Up", Modifier.weight(1f)) { input.key("up") }
+        KeyTile("↓", "Down", Modifier.weight(1f)) { input.key("down") }
+        IconKey(Modifier.weight(1f), Ic.keyboard, "Show the keyboard") { input.showKeyboard() }
+    }
+}
+
+/** A key of [DirectKeys] that shows an icon. [description] is what TalkBack reads. */
+@Composable
+private fun IconKey(m: Modifier, icon: Int, description: String, onClick: () -> Unit) {
+    Box(
+        m.fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(Tn.tile)
+            .border(1.dp, Tn.line, RoundedCornerShape(8.dp))
+            .clickable(onClickLabel = description, role = Role.Button, onClick = onClick)
+            .clearAndSetSemantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        Sym(icon, tint = Tn.sub, size = 20.dp)
     }
 }
 
