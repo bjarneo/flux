@@ -311,6 +311,9 @@ private fun TerminalTile(t: HerdrTerminal, onClick: () -> Unit) {
 
 // ───────────────────────── One agent ─────────────────────────
 
+/** The line under the bubble of an answer: the digit that went to the agent, or the menu for the arrows and Enter of a menu. */
+internal fun sentMeta(c: AgentChoice): String = if (c.keys == listOf(c.key)) "Sent key ${c.key}" else "Selected in the menu"
+
 /** How far the dock of the agent screen lies over the end of the thread. */
 private val DockOverlap = 14.dp
 
@@ -1629,8 +1632,8 @@ private fun AgentDock(
     val choices = if (blocked) out?.choices.orEmpty() else emptyList()
     fun answer(c: AgentChoice) = guarded {
         answered = out
-        onSent(SentAnswer(c.label, "Sent key ${c.key}", thread?.blocks?.lastOrNull()))
-        HerdrSync.sendKeys(FluxCore, d.id, agent.pane, listOf(c.key))
+        onSent(SentAnswer(c.label, sentMeta(c), thread?.blocks?.lastOrNull()))
+        HerdrSync.sendKeys(FluxCore, d.id, agent.pane, c.keys)
     }
     // After a reply that failed, the screen reads the output again. The choices then show the question that waits now.
     LaunchedEffect(reply) {
@@ -1967,9 +1970,11 @@ private fun LiveControls(d: DeviceUi, agent: HerdrAgent, out: HerdrOutput?, inpu
         val open = on && choicesOpen(out, answered, sending = false)
         Row(Modifier.fillMaxWidth().height(44.dp), horizontalArrangement = Arrangement.spacedBy(SmallKeyGap)) {
             // A choice of 2 digits would go as 2 keys, and the first key can select another choice.
-            for (c in choices.filter { it.key.length == 1 }) {
+            for (c in choices.filter { it.key.length == 1 && it.keys.isNotEmpty() }) {
                 SmallKey(c.key, "Answer ${c.key}: ${c.label}", Modifier.weight(1f), accent = true, enabled = open) {
-                    if (input.choose(c.key)) {
+                    // A digit goes as typed text. The arrows and Enter of a menu go as keys.
+                    val sent = if (c.keys == listOf(c.key)) input.choose(c.key) else c.keys.all { input.key(it) }
+                    if (sent) {
                         answered = out
                         // A typed digit gets no sent answer, so the screen reads the next dialog itself.
                         if (!isDemo(d.id)) HerdrSync.rereadSoon(FluxCore, d.id, agent.pane)

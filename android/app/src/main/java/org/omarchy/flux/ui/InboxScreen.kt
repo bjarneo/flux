@@ -697,8 +697,8 @@ private fun ColumnScope.AgentMaster(item: AgentItem, d: DeviceUi?, active: Boole
         ReplyLock.run(context, {
             answered = out
             sentAfter = lastSeq
-            inboxAnswers[answerKey] = SentAnswer(c.label, "Sent key ${c.key}", null)
-            HerdrSync.sendKeys(FluxCore, item.deviceId, pane, listOf(c.key))
+            inboxAnswers[answerKey] = SentAnswer(c.label, sentMeta(c), null)
+            HerdrSync.sendKeys(FluxCore, item.deviceId, pane, c.keys)
         }) { lockError = it }
     }
     val open = { actions.open(Route(item.deviceId, "$AGENT_PAGE$pane")) }

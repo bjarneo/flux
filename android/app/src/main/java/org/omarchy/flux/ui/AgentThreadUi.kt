@@ -399,7 +399,7 @@ internal fun statusWord(s: AgentStatus): String = when (s) {
 // ───────────────────────── Thread ─────────────────────────
 
 /** A token that looks like a file path or a file name, or code in backticks. */
-private val codeToken = Regex("""`[^`\n]+`|(?<![\w/.-])(?:[\w.-]+/)+[\w.-]*\w|(?<![\w/.-])[\w-]+\.(?:sql|rb|ts|tsx|js|jsx|mjs|py|go|rs|kt|kts|swift|java|c|h|cpp|md|json|toml|yaml|yml|sh|css|scss|html|txt|lock|xml|qml)\b""")
+private val codeToken = Regex("""`[^`\n]+`|(?<![\w/.-])(?:[\w.-]+/)+[\w.-]*\w|(?<![\w/.-])[\w-]+(?:\.[\w-]+)*\.(?:sql|rb|ts|tsx|js|jsx|mjs|py|go|rs|kt|kts|swift|java|c|h|cpp|md|json|toml|yaml|yml|sh|css|scss|html|txt|lock|xml|qml)\b""")
 
 /** A message of the agent: body text, with paths and code in mono on a tile. */
 @Composable

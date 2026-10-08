@@ -140,7 +140,8 @@ public struct HerdrOutput: Sendable, Equatable {
     public var view: String
     public var path: String
     public private(set) var text = ""
-    /// The numbered choices of the dialog at the end of the output.
+    /// The choices of the dialog at the end of the output: a numbered
+    /// dialog, or a menu row, see `AgentChoice.findMenu`.
     public private(set) var choices: [AgentChoice] = []
 
     public init(pane: String, loading: Bool = true, lines: [TermLine] = [], truncated: Bool = false, error: String? = nil,
@@ -159,7 +160,8 @@ public struct HerdrOutput: Sendable, Equatable {
     private mutating func derive() {
         let plain = lines.map(\.text)
         text = plain.joined(separator: "\n")
-        choices = AgentChoice.find(plain)
+        let numbered = AgentChoice.find(plain)
+        choices = numbered.isEmpty ? AgentChoice.findMenu(lines) : numbered
     }
 }
 

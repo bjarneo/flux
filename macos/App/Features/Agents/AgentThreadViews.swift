@@ -178,7 +178,7 @@ struct AskText: View {
 
 /// A token that looks like a file path or a file name, or code in backticks.
 private let codeToken = try! NSRegularExpression(
-    pattern: #"`[^`\n]+`|(?<![A-Za-z0-9_/.-])(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]*[A-Za-z0-9_]|(?<![A-Za-z0-9_/.-])[A-Za-z0-9_-]+\.(?:sql|rb|ts|tsx|js|jsx|mjs|py|go|rs|kt|kts|swift|java|c|h|cpp|md|json|toml|yaml|yml|sh|css|scss|html|txt|lock|xml|qml)(?![A-Za-z0-9_])"#)
+    pattern: #"`[^`\n]+`|(?<![A-Za-z0-9_/.-])(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]*[A-Za-z0-9_]|(?<![A-Za-z0-9_/.-])[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.(?:sql|rb|ts|tsx|js|jsx|mjs|py|go|rs|kt|kts|swift|java|c|h|cpp|md|json|toml|yaml|yml|sh|css|scss|html|txt|lock|xml|qml)(?![A-Za-z0-9_])"#)
 
 /// A message of the agent: body text, with paths and code in mono on a tile.
 struct ThreadMessage: View {

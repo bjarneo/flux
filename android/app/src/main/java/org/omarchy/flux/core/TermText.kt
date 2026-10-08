@@ -822,8 +822,13 @@ fun invertLightness(rgb: Int): Int {
 /** Parses and tidies the output text of an agent. */
 fun termLines(text: String): List<TermLine> = tidyLines(parseAnsi(text))
 
-/** A numbered choice of a question or an approval dialog. [key] is the digit that selects it. */
-data class AgentChoice(val key: String, val label: String, val selected: Boolean = false)
+/**
+ * A choice of a question or an approval dialog. [key] is the number that
+ * the app shows. [keys] are the herdr key names that select the choice: the
+ * digit of a numbered dialog, or the arrows and Enter of a menu, see
+ * [findMenuChoices].
+ */
+data class AgentChoice(val key: String, val label: String, val selected: Boolean = false, val keys: List<String> = listOf(key))
 
 private val choiceLine = Regex("""^\s*([❯›>]\s*)?(\d{1,2})[.)]\s+(.+)$""")
 
@@ -862,3 +867,53 @@ fun findChoices(lines: List<String>): List<AgentChoice> {
     // A single key selects a choice, so only 1 to 9 work.
     return run.map { it.choice }.filter { it.key.length == 1 }
 }
+
+/** How far from the end of the output a menu row can be, in lines. */
+private const val MENU_SCAN_LINES = 10
+
+/** The words of the hints after the choices of a menu row, for example "⇆ select" and "enter confirm" of opencode. */
+private val menuHints = listOf("⇆", "ctrl+", "enter confirm", "esc ")
+
+/** The space between 2 choices of a menu row. */
+private val menuGap = Regex("""\s{2,}""")
+
+/** The most choices of a menu row. herdr takes 8 keys at most, so the last choice is 6 arrows and Enter away. */
+private const val MENU_MAX = 7
+
+/**
+ * Finds the choices of a menu row near the end of the output, for example
+ * the permission dialog of opencode: "Allow once   Allow always   Reject".
+ * The row has a hint with "⇆" or "enter confirm". Each choice is a run of
+ * text with a background, before the hint. The selected choice has another
+ * background than the others. Right moves the selection to the next choice
+ * and wraps at the end, and Enter confirms it. So the keys of a choice are
+ * the arrows from the selected choice and Enter. It returns an empty list
+ * when it finds no such row or fewer than 2 choices.
+ */
+fun findMenuChoices(lines: List<TermLine>): List<AgentChoice> {
+    for (i in lines.indices.reversed().take(MENU_SCAN_LINES)) {
+        val line = lines[i]
+        if (!line.text.contains("⇆") && !line.text.contains("enter confirm")) continue
+        data class Run(val text: String, val bg: TermColor?)
+        val runs = ArrayList<Run>()
+        scan@ for (span in line.spans) {
+            // Choices in the same style share a span. 2 spaces or more separate them.
+            for (part in span.text.split(menuGap)) {
+                val t = part.trim()
+                if (menuHints.any { part.contains(it) } || t == "enter" || t == "esc") break@scan
+                if (t.isEmpty() || t.none { it.isLetter() }) continue
+                runs += Run(t, if (span.style.inverse) span.style.fg else span.style.bg)
+            }
+        }
+        if (runs.size < 2 || runs.size > MENU_MAX || runs.any { it.bg == null }) return emptyList()
+        // The selected choice has the background that no other choice has.
+        val selected = runs.indices.firstOrNull { k -> runs.count { it.bg == runs[k].bg } == 1 } ?: 0
+        val n = runs.size
+        return runs.mapIndexed { k, r ->
+            val steps = (k - selected + n) % n
+            AgentChoice((k + 1).toString(), r.text, k == selected, List(steps) { "right" } + "enter")
+        }
+    }
+    return emptyList()
+}
+

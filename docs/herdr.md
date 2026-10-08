@@ -66,7 +66,7 @@ The agent screen of Flux for Android and Flux for iOS has these parts:
 - The top bar shows the task, the agent, the pane, and the computer. Its menu has **Refresh**, **Changes**, **Show keys**, and **Close the agent**.
 - A row of pills shows the agents of the computer. Select a pill to open that agent.
 - A thin bar moves under the pills while the agent works.
-- The thread shows the messages of the agent, its tool calls, the files that it changed, and your prompts. Select a tool call to show its result. Flux reads the transcripts of Claude Code and Codex. Lines that it cannot read show as terminal lines.
+- The thread shows the messages of the agent, its tool calls, the files that it changed, and your prompts. Select a tool call to show its result. Flux reads the transcripts of Claude Code, Codex, and opencode. Lines that it cannot read show as terminal lines.
 - The dock at the bottom shows the question and the choices of a blocked agent, the step of a working agent with **Interrupt**, or the end of a finished turn. The text field and the mic key are under it.
 
 The agents window of Flux for macOS keeps its agent list in the place of the pills. Its header has **Changes**, **Keys**, the copy button, and the refresh button. See [Use a Mac](#use-a-mac).
@@ -286,7 +286,7 @@ systemctl --user reload fluxd
 
 The output screen then shows the reply controls:
 
-- When the agent is blocked, the phone shows the numbered choices of the dialog as buttons. A tap sends the number of the choice. On Android, the first choice has the accent fill. **Write** shows the text field in the place of the choices, and **Choices** shows the choices again.
+- When the agent is blocked, the phone shows the numbered choices of the dialog as buttons. A tap sends the number of the choice. opencode shows its choices in 1 row, for example **Allow once**, **Allow always**, and **Reject**. The phone numbers them, and a tap sends the arrow keys that select the choice, then Enter. On Android, the first choice has the accent fill. **Write** shows the text field in the place of the choices, and **Choices** shows the choices again.
 - The key bar sends Esc, Tab, Up, Down, and Enter. On Android, select **Keys** in the dock of a blocked agent, or **Show keys** in the menu, to show it. **Interrupt** on a working agent sends Esc.
 - The text field sends a prompt to the agent. The clear key empties the field. The expand key opens a large editor with **Send** for a long prompt.
 - When the agent waits for a choice, `fluxd` refuses the text with the message `The agent waits for a choice. Pick a choice first.` A digit or Enter in the text can select a choice of the dialog, for example an approval. Pick a choice with the buttons or the key bar first.

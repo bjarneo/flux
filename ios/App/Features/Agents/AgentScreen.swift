@@ -681,15 +681,16 @@ private struct AgentDock: View {
         guarded { plugin?.sendKeys(deviceId, pane: agent.pane, k) }
     }
 
-    /// Sends the digit of a choice, and keeps the answer for the thread.
+    /// Sends the keys of a choice, and keeps the answer for the thread: the
+    /// digit of a numbered dialog, or the arrows and Enter of a menu.
     private func answer(_ c: AgentChoice) {
         let shown = output
         let last = thread?.blocks.last
         guarded {
             guard let plugin else { return }
             answered = shown
-            sentAnswer(SentAnswer(text: c.label, meta: "Sent key \(c.key)", after: last))
-            plugin.sendKeys(deviceId, pane: agent.pane, [c.key])
+            sentAnswer(SentAnswer(text: c.label, meta: c.sentMeta, after: last))
+            plugin.sendKeys(deviceId, pane: agent.pane, c.keys)
         }
     }
 

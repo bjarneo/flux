@@ -117,8 +117,8 @@ data class HerdrOutput(
 ) {
     val text: String = lines.joinToString("\n") { it.text }
 
-    /** The numbered choices of the dialog at the end of the output. */
-    val choices: List<AgentChoice> by lazy { findChoices(lines.map { it.text }) }
+    /** The choices of the dialog at the end of the output: a numbered dialog, or a menu row, see [findMenuChoices]. */
+    val choices: List<AgentChoice> by lazy { findChoices(lines.map { it.text }).ifEmpty { findMenuChoices(lines) } }
 }
 
 /**

@@ -3,8 +3,8 @@ package org.omarchy.flux.core
 /**
  * The thread view of an agent: its output as messages, tool calls, file
  * changes, and prompts, as in a chat. The parser reads the text lines of the
- * output, as [tidyLines] gives them. It knows the transcripts of Claude Code
- * and Codex. Lines that it does not know stay as raw terminal lines, so that
+ * output, as [tidyLines] gives them. It knows the transcripts of Claude Code,
+ * Codex, and opencode. Lines that it does not know stay as raw terminal lines, so that
  * the view never loses output. The parser has no Android imports, so the JVM
  * tests can load it.
  */
@@ -159,6 +159,7 @@ fun dialogStart(lines: List<String>): Int? {
  * command title, the command gets a "$ " in front.
  */
 fun agentAsk(lines: List<String>, maxLines: Int = 4): AgentAsk? {
+    if (isOpencode(lines)) return opencodeAsk(lines, maxLines)
     val start = dialogStart(lines) ?: return null
     val first = (lines.size - 1 downTo start).firstOrNull { firstChoiceLine.matches(lines[it]) } ?: return null
     // The lines of the dialog without rules, box edges, and empty lines. Each keeps its indent and whether a blank line follows it.
@@ -234,6 +235,7 @@ private fun stripInput(lines: List<String>, end: Int): Int {
 
 /** Parses the output [lines] of an agent into its thread. */
 fun agentThread(lines: List<String>): AgentThread {
+    if (isOpencode(lines)) return opencodeThread(lines)
     val dialog = dialogStart(lines)
     var end = dialog ?: stripInput(lines, lines.size)
     // The dialog takes the place of the input, so only the empty lines and the rules above it go.
@@ -425,6 +427,205 @@ private fun mergeEdits(blocks: List<ThreadBlock>): List<ThreadBlock> {
     }
     flush()
     return out
+}
+
+// ───────────────────────── opencode ─────────────────────────
+
+/** The line after a turn of opencode: the mode, the model, and the time, for example "▣  Build · Big Pickle · 21.2s". */
+private val ocFooter = Regex("""^\s*▣\s+\S.*$""")
+
+/** The time at the end of a footer of opencode. */
+private val ocTime = Regex("""·\s*(\d+(?:\.\d+)?s|\d+m(?: \d+(?:\.\d+)?s)?|\d+h(?: \d+m)?)\s*$""")
+
+/** A tool line of opencode, for example "→ Read invoice.js", "← Edit invoice.js", or "✱ Grep total". */
+private val ocTool = Regex("""^([→←✱⚙◇])\s+([A-Za-z][\w-]*)\s*(.*)$""")
+
+/** A shell command of opencode: "$ node invoice.test.js". */
+private val ocShell = Regex("""^\$\s+(.+)$""")
+
+/** A changed line of a diff of opencode: the line number, then + or -. */
+private val ocDiffLine = Regex("""^\s*\d+\s+([+-])\s""")
+
+/** A numbered line of a diff of opencode. */
+private val ocNumbered = Regex("""^\s*\d+\s""")
+
+/** The options of a tool call of opencode, for example " [replaceAll=false]". */
+private val ocOptions = Regex("""\s+\[[^\]]*\]\s*$""")
+
+/** The scroll bar at the right edge of a dialog of opencode. */
+private val ocScrollBar = Regex("""\s+[█▀▄▌▐░▒▓]\s*$""")
+
+/** The first line of a permission dialog of opencode. */
+private const val OC_ASK = "△ Permission required"
+
+/** The text of the panel line [line] of opencode without its bar, or null when it is not a panel line. */
+private fun ocPanel(line: String): String? {
+    val t = line.trimStart()
+    if (!t.startsWith("┃")) return null
+    val c = t.removePrefix("┃")
+    return if (c.startsWith("  ")) c.substring(2) else c.trimStart()
+}
+
+/**
+ * True when [lines] come from opencode: they have the line after a turn,
+ * the status line at the bottom, or a permission dialog.
+ */
+fun isOpencode(lines: List<String>): Boolean =
+    lines.takeLast(6).any { it.contains("ctrl+p commands") } ||
+        lines.any { ocFooter.matches(it) || (ocPanel(it)?.startsWith(OC_ASK) == true) }
+
+/** The end of the thread of opencode, the start of its dialog or null, and whether it works now. */
+private data class OcEnd(val end: Int, val dialog: Int?, val working: Boolean)
+
+/**
+ * Finds the end of the thread of opencode: the status line, the input box,
+ * and the permission dialog at the bottom do not belong to it.
+ */
+private fun opencodeEnd(lines: List<String>): OcEnd {
+    var end = lines.size
+    var working = false
+    while (end > 0 && lines[end - 1].isBlank()) end--
+    if (end > 0 && (lines[end - 1].contains("ctrl+p commands") || lines[end - 1].contains("esc interrupt"))) {
+        working = lines[end - 1].contains("esc interrupt")
+        end--
+    }
+    while (end > 0 && (lines[end - 1].isBlank() || lines[end - 1].trimStart().startsWith("╹"))) end--
+    // The permission dialog takes the place of the input box.
+    var i = end
+    while (i > 0 && ocPanel(lines[i - 1]) != null) i--
+    val ask = (i until end).firstOrNull { ocPanel(lines[it])?.startsWith(OC_ASK) == true }
+    if (ask != null) {
+        var e = ask
+        // The tool call that waits for the answer and the line of the turn are in the dialog too.
+        while (e > 0) {
+            val l = lines[e - 1]
+            val t = l.trim()
+            val pending = ocPanel(l) == null && (t.startsWith("$ ") || t.startsWith("← ") || ocFooter.matches(l))
+            if (t.isEmpty() || ocPanel(l)?.isBlank() == true || pending) e-- else break
+        }
+        return OcEnd(e, ask, working)
+    }
+    // The input box: empty lines and the line with the mode and the model.
+    while (end > 0) {
+        val c = ocPanel(lines[end - 1]) ?: break
+        if (c.isBlank() || c.contains(" · ")) end-- else break
+    }
+    return OcEnd(end, null, working)
+}
+
+/** Parses the output [lines] of opencode into its thread. */
+private fun opencodeThread(lines: List<String>): AgentThread {
+    var (end, _, working) = opencodeEnd(lines)
+    var worked = ""
+    while (end > 0 && lines[end - 1].isBlank()) end--
+    if (end > 0 && ocFooter.matches(lines[end - 1])) {
+        if (!working) worked = ocTime.find(lines[end - 1])?.groupValues?.get(1).orEmpty()
+        end--
+    }
+    val blocks = ArrayList<ThreadBlock>()
+    val message = ArrayList<String>()
+    fun flushMessage() {
+        while (message.isNotEmpty() && message.last().isEmpty()) message.removeAt(message.size - 1)
+        // The lines keep their indent under the first line, for example the lines of code in a message.
+        if (message.isNotEmpty()) blocks += ThreadBlock.Message(dedent(message).joinToString("\n"))
+        message.clear()
+    }
+    var i = 0
+    while (i < end) {
+        val line = lines[i]
+        val panel = ocPanel(line)
+        if (panel != null) {
+            flushMessage()
+            var j = i
+            while (j < end && ocPanel(lines[j]) != null) j++
+            blocks += opencodePanel(lines.subList(i, j).map { ocPanel(it)!! })
+            i = j
+            continue
+        }
+        val t = line.trim()
+        when {
+            t.isEmpty() -> if (message.isNotEmpty()) message += ""
+            ocFooter.matches(line) -> flushMessage()
+            ocShell.matches(t) || ocTool.matches(t) -> {
+                flushMessage()
+                blocks += opencodeTool(t, emptyList())
+            }
+            t.startsWith("···") -> {
+                flushMessage()
+                blocks += ThreadBlock.Raw(i, i + 1)
+            }
+            else -> message += line
+        }
+        i++
+    }
+    flushMessage()
+    return AgentThread(mergeEdits(blocks), if (working) "Working" else "", "", worked)
+}
+
+/** The blocks of a panel of opencode: a prompt of the user, then tool calls with their output. */
+private fun opencodePanel(content: List<String>): List<ThreadBlock> {
+    val out = ArrayList<ThreadBlock>()
+    var k = 0
+    val prompt = ArrayList<String>()
+    while (k < content.size && !isOcMarker(content[k])) prompt += content[k++]
+    val text = prompt.map { it.trim() }.dropWhile { it.isEmpty() }.dropLastWhile { it.isEmpty() }.joinToString("\n")
+    if (text.isNotEmpty()) out += ThreadBlock.Prompt(text)
+    while (k < content.size) {
+        val head = content[k++].trim()
+        val body = ArrayList<String>()
+        while (k < content.size && !isOcMarker(content[k])) body += content[k++]
+        out += opencodeTool(head, body)
+    }
+    return out
+}
+
+/** True when a line of a panel starts a tool call. */
+private fun isOcMarker(c: String): Boolean = c.isNotEmpty() && !c.startsWith(" ") && (ocShell.matches(c) || ocTool.matches(c))
+
+/** A tool call of opencode from its [head] line and the [body] lines under it. */
+private fun opencodeTool(head: String, body: List<String>): ThreadBlock.Tool {
+    val result = dedent(body)
+    ocShell.matchEntire(head)?.let { return ThreadBlock.Tool("Bash", it.groupValues[1], result) }
+    val m = ocTool.matchEntire(head) ?: return ThreadBlock.Tool(head, "", result)
+    val name = m.groupValues[2]
+    val args = m.groupValues[3].replace(ocOptions, "").trim()
+    val failed = result.firstOrNull()?.trimStart()?.startsWith("Error") == true
+    val change = if (m.groupValues[1] == "←" && args.isNotEmpty()) {
+        var added = result.count { ocDiffLine.find(it)?.groupValues?.get(1) == "+" }
+        val removed = result.count { ocDiffLine.find(it)?.groupValues?.get(1) == "-" }
+        // A new file shows its lines with numbers and no mark.
+        if (added == 0 && removed == 0 && name == "Write") added = result.count { ocNumbered.containsMatchIn(it) }
+        FileChange(args, added, removed)
+    } else {
+        null
+    }
+    return ThreadBlock.Tool(name, args, result, failed, change)
+}
+
+/**
+ * The question of the permission dialog of opencode, or null when the
+ * output has no dialog. The title of the dialog, for example "# Shell
+ * command", does not show. A shell command shows as the command. An edit
+ * shows the file, then the first [maxLines] lines of its diff.
+ */
+private fun opencodeAsk(lines: List<String>, maxLines: Int): AgentAsk? {
+    val ask = opencodeEnd(lines).dialog ?: return null
+    val rows = ArrayList<String>()
+    for (l in lines.subList(ask + 1, lines.size)) {
+        val c = ocPanel(l) ?: break
+        if (c.contains("⇆") || c.contains("enter confirm")) break
+        rows += c.replace(ocScrollBar, "").trimEnd()
+    }
+    val content = dedent(rows)
+    if (content.isEmpty()) return AgentAsk(OC_ASK.removePrefix("△ "), emptyList())
+    val title = content.first().trim()
+    val body = content.drop(1).dropWhile { it.isBlank() }.filter { it.isNotBlank() }
+    val question = OC_ASK.removePrefix("△ ")
+    return when {
+        title.startsWith("#") && body.firstOrNull()?.startsWith("$ ") == true -> AgentAsk(question, body.take(maxLines), command = true)
+        title.startsWith("→ ") || title.startsWith("← ") -> AgentAsk(question, (listOf(title.drop(2)) + body).take(maxLines))
+        else -> AgentAsk(question, (listOf(title) + body).take(maxLines))
+    }
 }
 
 /** The kind of a line of a diff, for its color. */

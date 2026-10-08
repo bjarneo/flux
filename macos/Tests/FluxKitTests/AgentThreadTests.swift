@@ -313,4 +313,152 @@ final class AgentThreadTests: XCTestCase {
     func testNoChangesGiveNoFiles() {
         XCTAssertEqual(DiffFile.parse(["No changes in this repository."]), [])
     }
+
+    // MARK: opencode
+
+    /// A finished turn of opencode after the tidy step: a prompt, 2 edits, a shell command, a message, and the input box.
+    private let opencodeDone = [
+        "┃",
+        "┃  Add a tax rate to total, then run the test.",
+        "┃",
+        "",
+        "   → Read invoice.js",
+        "",
+        "┃",
+        "┃  ← Edit invoice.js",
+        "┃",
+        "┃    1   // Invoices of a small billing app.",
+        "┃    2 - export function total(lines) {",
+        "┃    2 + export function total(lines, taxRate = 0) {",
+        "┃    3     let sum = 0",
+        "┃    5 -   return sum",
+        "┃    5 +   return sum * (1 + taxRate)",
+        "┃",
+        "",
+        "┃",
+        "┃  ← Edit invoice.test.js",
+        "┃",
+        "┃    4 + if (total(lines, 0.25) !== 31.25) throw new Error('wrong')",
+        "┃",
+        "",
+        "┃",
+        "┃  $ node invoice.test.js",
+        "┃",
+        "┃  ok",
+        "┃",
+        "",
+        "   Done. The total takes a tax rate:",
+        "     total(lines, 0.25)",
+        "",
+        "   ▣  Build · Big Pickle · 21.2s",
+        "",
+        "┃",
+        "┃  Build · Big Pickle OpenCode Zen",
+        " ~/Code/billing                                          13.1K (7%)  ctrl+p commands",
+    ]
+
+    func testOpencodeTurnGivesPromptToolsChangesAndTime() {
+        let t = AgentThread.parse(opencodeDone)
+        XCTAssertEqual(t.blocks, [
+            .prompt("Add a tax rate to total, then run the test."),
+            .tool(ThreadTool("Read", "invoice.js", [])),
+            .changes(ThreadChanges([FileChange("invoice.js", 2, 2), FileChange("invoice.test.js", 1, 0)])),
+            .tool(ThreadTool("Bash", "node invoice.test.js", ["ok"])),
+            .message("Done. The total takes a tax rate:\n  total(lines, 0.25)"),
+        ])
+        XCTAssertEqual(t.worked, "21.2s")
+        XCTAssertEqual(t.step, "")
+        XCTAssertNil(AgentAsk.find(opencodeDone), "no dialog")
+    }
+
+    func testOpencodeWorkingHasAStepAndNoTime() throws {
+        let lines = [
+            "┃",
+            "┃  ← Edit invoice.js",
+            "┃",
+            "┃    5 +   return sum * (1 + taxRate)",
+            "┃",
+            "",
+            "   ▣  Build · Big Pickle",
+            "┃",
+            "┃",
+            "┃  Build · Big Pickle OpenCode Zen",
+            " ⬝⬝⬝⬝⬝⬝⬝⬝  esc interrupt                                 12.8K (6%)  ctrl+p commands",
+        ]
+        let t = AgentThread.parse(lines)
+        XCTAssertEqual(t.step, "Working")
+        XCTAssertEqual(t.worked, "")
+        XCTAssertEqual(t.blocks.count, 1)
+        let edit = try XCTUnwrap(tool(t.blocks[0]))
+        XCTAssertEqual(edit.name, "Edit")
+        XCTAssertEqual(edit.change, FileChange("invoice.js", 1, 0))
+    }
+
+    func testOpencodeShellPermissionIsTheCommand() {
+        let lines = [
+            "   $ node invoice.test.js",
+            "   ▣  Build · Big Pickle",
+            "┃",
+            "┃  △ Permission required",
+            "┃    # Shell command",
+            "┃",
+            "┃  $ node invoice.test.js",
+            "┃",
+            "┃",
+            "┃   Allow once   Allow always   Reject  ctrl+f fullscreen  ⇆ select  enter confirm",
+            "┃",
+        ]
+        XCTAssertEqual(AgentAsk.find(lines), AgentAsk("Permission required", ["$ node invoice.test.js"], command: true))
+        // The waiting command and the line of the turn belong to the dialog.
+        XCTAssertTrue(AgentThread.parse(lines).blocks.isEmpty)
+    }
+
+    func testOpencodeEditPermissionIsTheFileAndTheDiff() {
+        let lines = [
+            "┃",
+            "┃  △ Permission required",
+            "┃    → Edit invoice.js",
+            "┃",
+            "┃  1   // Invoices of a small billing app.                                      █",
+            "┃  2 - export function total(lines) {                                           █",
+            "┃  2 + export function total(lines, taxRate = 0) {                              ▀",
+            "┃",
+            "┃   Allow once   Allow always   Reject  ctrl+f fullscreen  ⇆ select  enter confirm",
+        ]
+        XCTAssertEqual(
+            AgentAsk.find(lines, maxLines: 3),
+            AgentAsk("Permission required", ["Edit invoice.js", "1   // Invoices of a small billing app.", "2 - export function total(lines) {"])
+        )
+    }
+
+    func testOpencodeMenuRowGivesChoicesWithArrowKeys() {
+        let bar = "\u{1B}[38;2;240;198;116;48;2;43;46;49m┃\u{1B}[0m"
+        let gray = "48;2;50;53;57"
+        let accent = "48;2;240;198;116"
+        let row = bar + "\u{1B}[\(gray)m  \u{1B}[\(accent)m \u{1B}[38;2;29;31;33;\(accent)mAllow once\u{1B}[\(accent)m \u{1B}[0m" +
+            "\u{1B}[\(gray)m  \u{1B}[38;2;169;169;169;\(gray)mAllow always\u{1B}[\(gray)m   \u{1B}[38;2;169;169;169;\(gray)mReject" +
+            "\u{1B}[\(gray)m  \u{1B}[38;2;197;200;198;\(gray)mctrl+f \u{1B}[38;2;169;169;169;\(gray)mfullscreen" +
+            "\u{1B}[\(gray)m  \u{1B}[38;2;197;200;198;\(gray)m⇆ \u{1B}[38;2;169;169;169;\(gray)mselect\u{1B}[0m\n"
+        XCTAssertEqual(AgentChoice.findMenu(TermText.lines(row)), [
+            AgentChoice("1", "Allow once", selected: true, keys: ["enter"]),
+            AgentChoice("2", "Allow always", selected: false, keys: ["right", "enter"]),
+            AgentChoice("3", "Reject", selected: false, keys: ["right", "right", "enter"]),
+        ])
+        // After a move to Reject, the arrows wrap to the first choice.
+        let moved = row.replacingOccurrences(of: "38;2;29;31;33;\(accent)mAllow once", with: "38;2;169;169;169;\(gray)mAllow once")
+            .replacingOccurrences(of: "38;2;169;169;169;\(gray)mReject", with: "38;2;29;31;33;\(accent)mReject")
+        let after = AgentChoice.findMenu(TermText.lines(moved))
+        XCTAssertEqual(after.first?.keys, ["right", "enter"])
+        XCTAssertEqual(after.last?.keys, ["enter"])
+        // The choices of a numbered dialog go as their digit.
+        XCTAssertEqual(AgentChoice.find(["❯ 1. Yes", "  2. No"]).first?.keys, ["1"])
+        XCTAssertEqual(AgentChoice.find(["❯ 1. Yes", "  2. No"]).first?.sentMeta, "Sent key 1")
+        XCTAssertEqual(after.first?.sentMeta, "Selected in the menu")
+    }
+
+    func testClaudeOutputIsNotOpencode() {
+        XCTAssertFalse(AgentThread.isOpencode(text(demo)))
+        XCTAssertTrue(AgentThread.isOpencode(opencodeDone))
+    }
 }
+

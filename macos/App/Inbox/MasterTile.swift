@@ -274,7 +274,7 @@ private struct AgentMaster: View {
             }
             answered = out
             InboxAnswers.shared.sent(choice.label, deviceId, pane: pane)
-            plugin.sendKeys(deviceId, pane: pane, [choice.key])
+            plugin.sendKeys(deviceId, pane: pane, choice.keys)
         }, onError: { lockError = $0 })
     }
 }

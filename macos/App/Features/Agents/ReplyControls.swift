@@ -277,7 +277,8 @@ struct ReplyControls: View {
         guarded { [plugin] in plugin.sendKeys(deviceId, pane: pane, [k]) }
     }
 
-    /// Sends the digit of a choice, and keeps the answer for the thread.
+    /// Sends the keys of a choice, and keeps the answer for the thread: the
+    /// digit of a numbered dialog, or the arrows and Enter of a menu.
     private func answer(_ c: AgentChoice) {
         let deviceId = model.deviceId
         let pane = agent.pane
@@ -285,8 +286,8 @@ struct ReplyControls: View {
         let last = thread?.blocks.last
         guarded {
             answered = shown
-            sentAnswer(SentAnswer(text: c.label, meta: "Sent key \(c.key)", after: last))
-            plugin.sendKeys(deviceId, pane: pane, [c.key])
+            sentAnswer(SentAnswer(text: c.label, meta: c.sentMeta, after: last))
+            plugin.sendKeys(deviceId, pane: pane, c.keys)
         }
     }
 

@@ -407,7 +407,7 @@ A `tile` row with the window title, a 14 sp 600 title, and a 12 sp `sub` line, e
 
 ### Agent screen
 
-The agent screen shows 1 herdr agent as a thread. `agentThread` in `core/AgentThread.kt` reads the output of Claude Code and Codex. Lines that it does not know stay terminal lines.
+The agent screen shows 1 herdr agent as a thread. `agentThread` in `core/AgentThread.kt` reads the output of Claude Code, Codex, and opencode. Lines that it does not know stay terminal lines.
 
 - **Top bar:** A 48 dp back icon, the task in 16 sp 600, and the agent, the pane, and the computer in mono 11 sp. Live is a 36 dp pill. The menu holds Refresh, Changes, Show keys, and Close the agent.
 - **Strip:** 36 dp pills for the agents of the computer, each with a status mark, the project, and the agent in mono. The pill on screen takes `accent-tile` and an accent border.
