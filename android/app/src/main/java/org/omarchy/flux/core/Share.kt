@@ -46,6 +46,19 @@ object WebUrl {
         val host = if (authority.startsWith("[")) authority.substringAfter('[').substringBefore(']') else authority.substringBefore(':')
         return t.takeIf { host.isNotEmpty() }
     }
+
+    /** A host name with a dot, an optional port, and an optional path, with no scheme. */
+    private val bareHost = Regex("^[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)+(:\\d+)?([/?#]\\S*)?$")
+
+    /**
+     * Returns the web link in [text] that the user typed, or null. A host
+     * name with a dot and no scheme gets https://, for example
+     * "omarchy.org/flux". The desktop window uses the same rule.
+     */
+    fun typed(text: String?): String? {
+        val t = text?.trim() ?: return null
+        return of(if (bareHost.matches(t)) "https://$t" else t)
+    }
 }
 
 /**
@@ -293,6 +306,15 @@ object Share {
     fun sendScan(core: FluxCore, id: String, text: String): Boolean {
         val d = core.device(id) ?: return false
         return d.send(Packet(Types.SHARE, bodyOf("text" to text, "scan" to true)))
+    }
+
+    /**
+     * Sends a web link from [WebUrl], and the computer opens it in its
+     * browser. It returns false when the device has no link.
+     */
+    fun sendLink(core: FluxCore, id: String, link: String): Boolean {
+        val d = core.device(id) ?: return false
+        return d.send(Packet(Types.SHARE, bodyOf("url" to link)))
     }
 
     /** Sends text or a link from the share sheet. Only a web link goes as a link, see [WebUrl]. */

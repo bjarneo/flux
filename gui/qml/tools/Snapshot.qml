@@ -338,7 +338,15 @@ Window {
     }, function () {
       var p = pageItem()
       p.open(p.convos.filter(function (c) { return c.thread === 1 })[0])
-    }, 2500]
+    }, 2500],
+    // The link dialog of the Open link tile, with a link in the field.
+    ["58-open-link", function () {
+      view.selectedId = pixel
+      view.tab = "overview"
+      view.openLink()
+    }, function () {
+      findBy(view, "placeholder", "https://omarchy.org").text = "omarchy.org/flux"
+    }]
   ]
 
   function pageItem() {

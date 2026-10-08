@@ -94,6 +94,19 @@ Item {
       compare(Fmt.urlToPath("file:///home/u/a%00b"), "")
     }
 
+    function test_webLink() {
+      compare(Fmt.webLink(" https://omarchy.org/flux?x=1#top "), "https://omarchy.org/flux?x=1#top")
+      compare(Fmt.webLink("HTTP://Example.com"), "HTTP://Example.com")
+      compare(Fmt.webLink("http://user@192.168.1.5:8080/a"), "http://user@192.168.1.5:8080/a")
+      compare(Fmt.webLink("http://[::1]:8080/"), "http://[::1]:8080/")
+      compare(Fmt.webLink("omarchy.org/flux"), "https://omarchy.org/flux")
+      compare(Fmt.webLink("www.example.com:8443?q=1"), "https://www.example.com:8443?q=1")
+      var refused = ["file:///home/u/.ssh/id_ed25519", "ftp://example.com/a", "javascript://x%0aalert(1)",
+        "https://", "http:///etc", "http://:8080/", "http://user@/", "/etc/passwd", "localhost",
+        "mailto:a@example.com", "https://a b", "hello", "", null]
+      for (var i = 0; i < refused.length; i++) compare(Fmt.webLink(refused[i]), "", String(refused[i]))
+    }
+
     function test_hexGroups() {
       compare(Fmt.hexGroups("5EE6825F974ED59A"), "5EE6 825F 974E D59A")
       compare(Fmt.hexGroups("5bb22db11047f34b"), "5BB2 2DB1 1047 F34B")
@@ -889,6 +902,51 @@ Item {
       tryVerify(function () { return start.active }, 4000)
       start.clicked()
       compare(requestsOf("webcam.start").length, 2)
+    }
+  }
+
+  TestCase {
+    name: "OpenLink"
+    when: mock.ready
+
+    function init() {
+      mock.state = mock.fixTimes(mock.fixture.state)
+      mock.requests = []
+      mock.failures = {}
+    }
+
+    // The dialog starts with the newest clipboard entry when it is a link,
+    // sends only a web link, and adds https:// to a host name.
+    function test_sendsLink() {
+      var view = createTemporaryObject(viewComponent, top)
+      tryVerify(function () { return view.allDevices.length > 0 })
+      view.selectedId = top.pixel
+      view.openLink()
+      compare(view.linkTarget.id, top.pixel)
+      var field = findBy(view, "placeholder", "https://omarchy.org")
+      compare(field.text, mock.clipboard[0].text)
+      var send = findBy(view, "objectName", "linkSend")
+      field.text = "not a link"
+      verify(!send.active)
+      send.clicked()
+      compare(requestsOf("share.url").length, 0)
+      field.text = "omarchy.org/flux"
+      verify(send.active)
+      send.clicked()
+      var sent = requestsOf("share.url")
+      compare(sent.length, 1)
+      compare(sent[0].params.device, top.pixel)
+      compare(sent[0].params.url, "https://omarchy.org/flux")
+      compare(view.linkTarget, null)
+    }
+
+    function test_offlineDeviceGetsNoDialog() {
+      var view = createTemporaryObject(viewComponent, top)
+      tryVerify(function () { return view.allDevices.length > 0 })
+      view.selectedId = top.pixel
+      mock.updateDevice(top.pixel, function (d) { d.online = false; return d })
+      view.openLink()
+      compare(view.linkTarget, null)
     }
   }
 }
