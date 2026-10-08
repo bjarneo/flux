@@ -189,6 +189,20 @@ QtObject {
     }
   }
 
+  // The web link in text that the user typed, or "". A link is an http or
+  // https URL with a host, the same rule as fluxd. A host name with a dot
+  // and no scheme gets https://, for example "omarchy.org/flux".
+  function webLink(text) {
+    var t = String(text || "").trim()
+    if (/^[a-z0-9-]+(\.[a-z0-9-]+)+(:\d+)?([\/?#]\S*)?$/i.test(t)) t = "https://" + t
+    var m = /^https?:\/\/([^\s\/?#]*)([\/?#]\S*)?$/i.exec(t)
+    if (!m) return ""
+    // The host follows the user information and comes before the port.
+    var authority = m[1].slice(m[1].lastIndexOf("@") + 1)
+    var host = authority.charAt(0) === "[" ? authority.slice(1, authority.indexOf("]")) : authority.split(":")[0]
+    return host !== "" ? t : ""
+  }
+
   // A verification key or a fingerprint in groups of 4 digits, for example
   // "5EE6 825F 974E D59A".
   function hexGroups(key) {

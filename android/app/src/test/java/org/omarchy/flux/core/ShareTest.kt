@@ -27,6 +27,16 @@ class ShareTest {
     }
 
     @Test
+    fun aTypedHostNameGetsHttps() {
+        assertEquals("https://omarchy.org/flux", WebUrl.typed(" omarchy.org/flux "))
+        assertEquals("https://www.example.com:8443?q=1", WebUrl.typed("www.example.com:8443?q=1"))
+        assertEquals("http://192.168.1.5:8080/a", WebUrl.typed("http://192.168.1.5:8080/a"))
+        for (text in listOf("localhost", "mailto:a@example.com", "file:///etc/passwd", "omarchy org", "hello", "", null)) {
+            assertNull(text, WebUrl.typed(text))
+        }
+    }
+
+    @Test
     fun installerOnlyForANewerFluxWithTheSameKey() {
         val ours = byteArrayOf(1, 2, 3)
         val theirs = byteArrayOf(9, 9, 9)

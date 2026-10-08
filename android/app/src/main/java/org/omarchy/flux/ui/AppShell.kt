@@ -231,6 +231,7 @@ fun FluxShell(
             }
         }
         TargetPickerDialog(picker)
+        LinkDialog(tools)
     }
 }
 

@@ -101,6 +101,14 @@ flux-cli url https://omarchy.org
 
 On Android, share content to Flux from the system share sheet.
 Received files use `download_dir`.
+
+To show a web page on the phone, select **Open link on phone** on the Overview page of the desktop window, or press `o`.
+The field starts with the newest clipboard entry when that entry is a link.
+The phone shows the link in a notification. A tap on the notification opens the link in the browser.
+
+To show a web page on the desktop, tap **Send > Open a link** in Flux for Android.
+The field starts with the phone clipboard when it holds a link, and the desktop opens the link in its browser.
+Both fields add `https://` to a host name without a scheme, for example `omarchy.org/flux`.
 The phone can read folders of the desktop when `share_home` is enabled. See [Browse PC](#browse-pc).
 The tunnel carries SSH traffic without an inbound SSH firewall rule.
 
