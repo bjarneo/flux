@@ -3,7 +3,7 @@ import FluxKit
 import SwiftUI
 
 /// The content of an agents window: the herdr agents of a computer on the
-/// left, and the output of the selected agent on the right. The agents that
+/// left, and the thread of the selected agent on the right. The agents that
 /// need input come first.
 struct AgentsView: View {
     @Bindable var model: AgentsWindowModel
@@ -47,7 +47,7 @@ struct AgentsView: View {
                             .id(pane)
                     } else {
                         ContentUnavailableView("Select an agent", systemImage: "brain",
-                                               description: Text("Its recent output shows here."))
+                                               description: Text("Its thread shows here."))
                     }
                 }
                 .frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
@@ -129,71 +129,103 @@ private struct AgentRow: View {
     }
 }
 
-/// How often the output view reads the output again while the agent works.
+/// How often the thread reads the output again while the agent works.
 private let workingRefresh: Duration = .seconds(5)
 
-/// The recent output of 1 agent in terminal colors, with the newest lines
-/// at the bottom, and the reply controls. The view reads the output again
-/// when the status changes, and every 5 seconds while the agent works and
-/// the window shows.
+/// An answer that this window sent, for the thread: `text` shows as a
+/// bubble of the user with `meta` under it, after the block `after`. The
+/// output of the agent does not show an answer to a dialog, so the window
+/// keeps it while the agent works on it.
+struct SentAnswer: Equatable {
+    var text: String
+    var meta: String
+    var after: ThreadBlock?
+    var working = false
+    var at = Date()
+}
+
+/// 1 agent as a thread: its output as messages, tool calls, and changes,
+/// with the newest at the bottom, and the dock under it. The dock shows
+/// the question of a blocked agent with its choices, the step of a working
+/// agent with Interrupt, or the end of a turn, and the composer. The view
+/// reads the output again when the status changes, and every 5 seconds
+/// while the agent works and the window shows.
 private struct AgentDetail: View {
     let model: AgentsWindowModel
     let pane: String
     let name: String
+    @Environment(\.tn) private var tn
+    /// True while the changes show. The output then holds the diff.
     @State private var review = false
-    @State private var reviewPath = ""
-    @State private var appliedReviewPath = ""
+    @State private var keysOpen = false
+    @State private var sent: SentAnswer?
+    /// The last output of the agent, for the thread while the changes show.
+    @State private var lastAnsi: HerdrOutput?
 
     private struct Refresh: Equatable {
         var online: Bool
         var status: AgentStatus?
         var visible: Bool
+        var review: Bool
     }
 
     var body: some View {
         let agent = model.herdr?.agent(pane)
-        let out = model.plugin.model.output(model.deviceId, pane: pane)
-        VStack(alignment: .leading, spacing: 12) {
+        let read = model.plugin.model.output(model.deviceId, pane: pane)
+        // While the changes show, the output holds the diff, so the thread keeps the last output of the agent.
+        let ansi = read.flatMap { $0.view != "diff" && !(review && $0.loading && $0.lines.isEmpty) ? $0 : nil }
+        let out = ansi ?? lastAnsi
+        let diff = read.flatMap { review && $0.view == "diff" ? $0 : nil }
+        let texts = out?.lines.map(\.text)
+        let thread = texts.map(AgentThread.parse)
+        let ask = texts.flatMap { AgentAsk.find($0, maxLines: 6) }
+        let control = agent != nil && model.herdr?.control == true
+        let canReview = agent != nil && model.herdr?.review == true && model.device?.online == true
+        VStack(spacing: 0) {
             if let agent {
-                AgentHeader(agent: agent, loading: out?.loading == true && !(out?.lines.isEmpty ?? true),
-                            text: out?.text ?? "") {
+                AgentHeader(agent: agent, loading: out?.loading == true && !(out?.lines.isEmpty ?? true), text: out?.text ?? "",
+                            review: canReview ? { review = true } : nil, keysOpen: control ? $keysOpen : nil) {
                     model.plugin.read(model.deviceId, pane: pane)
                 }
-                if model.herdr?.review == true {
-                    Picker("Agent view", selection: $review) {
-                        Text("Output").tag(false)
-                        Text("Changes").tag(true)
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: review) {
-                        if review { appliedReviewPath = reviewPath }
-                        model.plugin.read(model.deviceId, pane: pane, review: review, path: appliedReviewPath)
-                    }
-                    if review {
-                        TextField("File path, or leave empty for all changes", text: $reviewPath)
-                            .onSubmit { appliedReviewPath = reviewPath; model.plugin.read(model.deviceId, pane: pane, review: true, path: appliedReviewPath) }
-                        Text("Replies include the selected review path.").font(.caption).foregroundStyle(.secondary)
-                    }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                // The progress line: it moves while the agent works.
+                ZStack {
+                    Rectangle().fill(tn.line)
+                    if agent.status == .working { SlideBar(color: tn.accent) }
                 }
-                AgentOutput(output: out)
-                if model.herdr?.control == true {
-                    ReplyControls(model: model, agent: agent, output: review ? nil : out, name: name,
-                                  reviewReady: !review || (out?.loading == false && out?.error == nil))
+                .frame(height: 2)
+                ThreadList(output: out, thread: thread, status: agent.status, sent: sent, review: canReview ? { review = true } : nil)
+                if control {
+                    ReplyControls(model: model, agent: agent, output: out, thread: thread, ask: ask, name: name,
+                                  keysOpen: $keysOpen, review: canReview ? { review = true } : nil) { sent = $0 }
                 } else {
                     Text("To answer from this Mac, set herdr_control = true on \(name).")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 12))
+                        .foregroundStyle(tn.sub)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                        .background(DockShape().fill(tn.tile))
                 }
             } else {
                 ContentUnavailableView("The agent is gone", systemImage: "brain",
                                        description: Text("The agent in \(pane) on \(name) stopped or moved to another pane."))
             }
         }
-        .padding(16)
-        .task(id: Refresh(online: model.device?.online == true, status: agent?.status, visible: model.visible)) {
+        .background(tn.bg)
+        .sheet(isPresented: $review) {
+            ChangesSheet(files: diff.flatMap { !$0.loading || !$0.lines.isEmpty ? DiffFile.parse($0.lines.map(\.text)) : nil },
+                         problem: diff?.error ?? diff?.lines.first?.text, truncated: diff?.truncated == true)
+        }
+        .onChange(of: ansi) { _, next in if let next { lastAnsi = next } }
+        .onChange(of: agent?.status) { _, status in
+            guard let s = sent else { return }
+            if status == .working { sent?.working = true } else if s.working { sent = nil }
+        }
+        .task(id: Refresh(online: model.device?.online == true, status: agent?.status, visible: model.visible, review: review)) {
             guard model.visible, model.device?.online == true, agent != nil else { return }
             // A new status reads at once. Only the polls wait for the last read.
-            model.plugin.read(model.deviceId, pane: pane, review: review, path: appliedReviewPath)
+            model.plugin.read(model.deviceId, pane: pane, review: review)
             while agent?.status == .working {
                 try? await Task.sleep(for: workingRefresh)
                 if Task.isCancelled { return }
@@ -204,33 +236,44 @@ private struct AgentDetail: View {
     }
 }
 
+/// The header of an agent: its status, task, agent, and pane, then
+/// Changes, Keys, Copy, and Refresh.
 private struct AgentHeader: View {
     let agent: HerdrAgent
     let loading: Bool
     /// The output as plain text, for the copy button. A row of the output
     /// selects only its own text.
     let text: String
+    let review: (() -> Void)?
+    let keysOpen: Binding<Bool>?
     let refresh: () -> Void
+    @Environment(\.tn) private var tn
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 10) {
-                    AgentStatusLabel(status: agent.status)
-                    Text("\(agent.agent) · \(agent.project.isEmpty ? agent.pane : agent.project)")
-                        .font(.headline)
-                        .lineLimit(1)
-                }
-                if !agent.title.isEmpty {
-                    Text(agent.title)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
+        HStack(alignment: .center, spacing: 12) {
+            StatusMark(status: agent.status)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(agent.title.isEmpty ? (agent.project.isEmpty ? agent.pane : agent.project) : agent.title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(tn.text)
+                    .lineLimit(1)
+                Text("\(agent.agent) · \(agent.pane) · \(agent.status.label)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(tn.sub)
+                    .lineLimit(1)
             }
+            .accessibilityElement(children: .combine)
             Spacer()
-            Text(agent.pane)
-                .font(.caption.monospaced())
-                .foregroundStyle(.secondary)
+            if let review {
+                Button(action: review) { Label("Changes", systemImage: "plusminus") }
+                    .help("Show the changes of the repository")
+                    .keyboardShortcut("d", modifiers: .command)
+            }
+            if let keysOpen {
+                Toggle(isOn: keysOpen) { Label("Keys", systemImage: "keyboard") }
+                    .toggleStyle(.button)
+                    .help("Show the keys Esc, Tab, Up, Down, and Enter")
+            }
             Button {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(text, forType: .string)
@@ -247,13 +290,37 @@ private struct AgentHeader: View {
                     .keyboardShortcut("r", modifiers: .command)
             }
         }
+        .controlSize(.small)
     }
 }
 
-/// The output of the agent as a small terminal: mono, and in the colors of
-/// the agent.
-private struct AgentOutput: View {
+/// The shape of the dock: round corners at the top.
+struct DockShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        UnevenRoundedRectangle(topLeadingRadius: 20, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 20, style: .continuous)
+            .path(in: rect)
+    }
+}
+
+/// How close to the end the thread must be, in points, to follow new blocks.
+private let followSlack: CGFloat = 48
+
+/// The thread of an agent: its blocks with the newest at the bottom, the
+/// line that the agent waits for the user or finished, and the `sent`
+/// answer. The view follows new blocks at the end. When the user scrolls up
+/// to read older blocks, the view stays there, and a button goes back to
+/// the newest blocks.
+private struct ThreadList: View {
     let output: HerdrOutput?
+    let thread: AgentThread?
+    let status: AgentStatus?
+    let sent: SentAnswer?
+    let review: (() -> Void)?
+    @Environment(\.tn) private var tn
+    @State private var follow = true
+    @State private var viewport: CGFloat = 0
+    /// The tool calls that the user opened or closed. The key is the header and its number among the same headers.
+    @State private var opened: [String: Bool] = [:]
 
     var body: some View {
         Group {
@@ -261,131 +328,137 @@ private struct AgentOutput: View {
                 if let error = out.error, out.lines.isEmpty {
                     ContentUnavailableView("No output", systemImage: "exclamationmark.triangle", description: Text(error))
                 } else {
-                    TerminalText(output: out)
+                    list(out)
                 }
             } else {
-                ProgressView("Reading the output…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                VStack {
+                    LineSkeleton(widths: [0.62, 0.9, 0.48, 0.84, 0.7, 0.36], label: "Reading the output")
+                    Spacer(minLength: 0)
+                }
+                .padding(16)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-}
 
-/// How close to the end the output must be, in points, to follow new lines.
-private let followSlack: CGFloat = 48
-
-/// The output in the layout of the phones: the rows that the agent wrapped
-/// at the width of the terminal join, and they wrap again at the width of
-/// the pane. Rules, boxes, and panels fit the pane. The view follows new
-/// lines at the end. When the user scrolls up to read older lines, the view
-/// stays there, and a button goes back to the newest lines.
-private struct TerminalText: View {
-    let output: HerdrOutput
-    @State private var follow = true
-    @State private var viewport: CGFloat = 0
-    @State private var width: CGFloat = 0
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
-        ScrollViewReader { proxy in
+    private func list(_ out: HerdrOutput) -> some View {
+        let blocks = thread?.blocks ?? []
+        // The place of the sent answer: after its block, at the start without one, or at the end when the block left the output.
+        let at: Int = {
+            guard let sent else { return -2 }
+            guard let after = sent.after else { return -1 }
+            return blocks.lastIndex(of: after) ?? blocks.count - 1
+        }()
+        let rows = items(blocks)
+        return ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 6) {
-                    if output.truncated {
-                        Text("Older lines are cut.").font(.caption.monospaced()).foregroundStyle(TermColors.dim)
-                            .padding(.horizontal, termPad)
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    if out.truncated {
+                        Text("Older lines are cut.").font(.system(size: 11, design: .monospaced)).foregroundStyle(tn.sub)
                     }
-                    if let error = output.error {
-                        Text(error).font(.caption).foregroundStyle(TermColors.red)
-                            .padding(.horizontal, termPad)
+                    if let error = out.error {
+                        Text(error).font(.system(size: 12)).foregroundStyle(tn.red)
                     }
-                    if output.lines.isEmpty {
-                        Text("No output yet.").font(TermColors.font).foregroundStyle(TermColors.dim)
-                            .padding(.horizontal, termPad)
-                    } else if width > 0 {
-                        // The rows draw their own side padding, so the fill of a panel reaches both edges.
-                        TermLinesView(lines: output.lines, width: width - scrollerWidth)
-                            .textSelection(.enabled)
+                    if blocks.isEmpty && sent == nil {
+                        Text("No output yet.").font(.system(size: 12, design: .monospaced)).foregroundStyle(tn.sub)
                     }
-                    // The end of the output. Its place in the viewport tells
-                    // whether the newest lines show.
+                    if at == -1, let sent { ThreadYou(text: sent.text, meta: sent.meta) }
+                    ForEach(rows, id: \.id) { row in
+                        block(row, out: out, last: row.index == blocks.count - 1)
+                        if row.index == at, let sent { ThreadYou(text: sent.text, meta: sent.meta) }
+                    }
+                    if status == .blocked { ThreadWaiting() }
+                    if status == .done { ThreadDone(worked: thread?.worked ?? "") }
                     Color.clear
                         .frame(height: 1)
                         .id("end")
                         .background(GeometryReader { g in
-                            Color.clear.preference(key: EndOffset.self, value: g.frame(in: .named("output")).minY)
+                            Color.clear.preference(key: ThreadEnd.self, value: g.frame(in: .named("thread")).minY)
                         })
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
             }
-            .coordinateSpace(name: "output")
+            .coordinateSpace(name: "thread")
             .defaultScrollAnchor(.bottom)
             .background(GeometryReader { g in
                 Color.clear
-                    .onAppear {
-                        viewport = g.size.height
-                        width = g.size.width
-                        stayAtEnd(proxy)
-                    }
-                    .onChange(of: g.size) { _, size in
-                        viewport = size.height
-                        width = size.width
-                        stayAtEnd(proxy)
-                    }
+                    .onAppear { viewport = g.size.height }
+                    .onChange(of: g.size.height) { _, h in viewport = h }
             })
-            .onPreferenceChange(EndOffset.self) { end in
+            .onPreferenceChange(ThreadEnd.self) { end in
                 guard viewport > 0 else { return }
                 follow = end <= viewport + followSlack
             }
-            // New output scrolls to the newest lines, unless the user reads older ones.
-            .onChange(of: output.text) {
+            // New output scrolls to the newest blocks, unless the user reads older ones.
+            .onChange(of: out.text) {
                 if follow { proxy.scrollTo("end", anchor: .bottom) }
             }
             .overlay(alignment: .bottomTrailing) {
-                if !follow && !output.lines.isEmpty {
+                if !follow && !out.lines.isEmpty {
                     Button {
                         follow = true
                         withAnimation { proxy.scrollTo("end", anchor: .bottom) }
                     } label: {
                         Image(systemName: "arrow.down")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(TermColors.blue)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(tn.accent)
                             .frame(width: 32, height: 32)
-                            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(TermColors.background))
-                            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(TermColors.blue))
+                            .background(Circle().fill(tn.tileHi))
+                            .overlay(Circle().strokeBorder(tn.line))
                     }
                     .buttonStyle(.plain)
-                    .padding(10)
+                    .padding(12)
                     .help("Show the newest lines")
                     .accessibilityLabel("Show the newest lines")
                 }
             }
         }
-        .background(shape.fill(TermColors.background))
-        .overlay(shape.strokeBorder(TermColors.border))
-        .clipShape(shape)
+    }
+
+    /// A block with a key that stays the same while the output grows.
+    private struct Row {
+        let id: String
+        let index: Int
+        let block: ThreadBlock
+    }
+
+    private func items(_ blocks: [ThreadBlock]) -> [Row] {
+        var seen: [String: Int] = [:]
+        return blocks.enumerated().map { i, b in
+            var head: String
+            switch b {
+            case .tool(let t): head = "tool:\(t.name)(\(t.args))"
+            case .message(let m): head = "message:" + String(m.prefix(40))
+            case .prompt(let p): head = "prompt:" + String(p.prefix(40))
+            case .changes(let c): head = "changes:" + c.files.map(\.path).joined(separator: ",")
+            case .raw(let from, _): head = "raw:\(from)"
+            }
+            let n = (seen[head] ?? 0) + 1
+            seen[head] = n
+            head += "#\(n)"
+            return Row(id: head, index: i, block: b)
+        }
+    }
+
+    @ViewBuilder
+    private func block(_ row: Row, out: HerdrOutput, last: Bool) -> some View {
+        switch row.block {
+        case .message(let text): ThreadMessage(text: text)
+        case .tool(let t):
+            let running = status == .working && last
+            let open = opened[row.id] ?? running
+            ThreadToolView(tool: t, running: running, open: open) { opened[row.id] = !open }
+        case .changes(let c): ThreadChangesView(changes: c, review: review)
+        case .prompt(let text): ThreadYou(text: text)
+        case .raw(let from, let to):
+            ThreadRaw(lines: Array(out.lines[min(from, out.lines.count)..<min(to, out.lines.count)]))
+        }
     }
 }
 
-extension TerminalText {
-    /// The width of a scroll bar that takes room from the rows. The scroll
-    /// bars of macOS take no room unless the Mac always shows them, for
-    /// example with a mouse.
-    private var scrollerWidth: CGFloat {
-        NSScroller.preferredScrollerStyle == .legacy ? NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy) : 0
-    }
-
-    /// Keeps the newest lines on the screen after the width changes. The
-    /// rows wrap again at the new width, and the first rows come 1 layout
-    /// after the width is known, so the end moves.
-    private func stayAtEnd(_ proxy: ScrollViewProxy) {
-        guard follow else { return }
-        DispatchQueue.main.async { proxy.scrollTo("end", anchor: .bottom) }
-    }
-}
-
-private struct EndOffset: PreferenceKey {
+private struct ThreadEnd: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }

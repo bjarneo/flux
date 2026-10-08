@@ -203,20 +203,21 @@ Each start of Flux begins with **All computers**.
 
 The Inbox shows what happens on the computers in scope, as a Hyprland master layout:
 
-- The item that comes first takes the master tile, in the active border of the theme. An agent that waits for input comes first, then an approval, then a pair request. What plays now, the last clip, the transfers, and the other agents follow.
-- The other items wait in the stack. A click on a stack tile moves it to the master tile.
+- The item that comes first takes the master tile. While it needs you, it has the active border of the theme. An agent that waits for input comes first, then an approval, then a pair request. What plays now, the last clip, the transfers, and the other agents follow.
+- The other items wait in the stack. A click on a stack tile moves it to the master tile. A stack tile of an agent also names the agent and its project. The context menu of a player stack tile plays and pauses.
 - **Later**, Command-], or **Show the next item** in the context menu moves the master item to the end of the stack. A new item that needs you takes the master tile back.
 - In a detail column of 600 pt or more, the master tile takes 60% of the width on the left, and the status line and the stack fill the column on the right. A narrower column shows the master tile above a stack of 2 columns.
 - A finished transfer, the last clip, and a paused player stay for 30 minutes.
 
-The master tile of an agent that waits shows its question with the numbered choices.
+The master tile of an agent that waits shows its question, the command in mono, and the numbered choices. The first choice has the accent fill.
 The tile reads the output of the agent when it shows and when its window comes to the front.
 Choices show only for an output that came after that read.
 The question keeps the lines nearest the choices, because they hold the command that a choice approves, and the tile never cuts them.
 Each answer asks for Touch ID or the password first, see [Touch ID lock](#touch-id-lock).
 After an answer, the choices stay off until a new output comes.
 When the computer does not allow replies, set `herdr_control = true` on it.
-**Reply** and **Open** open the agent in the agents window.
+An agent that works shows your last answer, a moving bar, and its step.
+**Open thread** opens the agent in the agents window. The window shows the output of the agent as a thread, with a dock for the question, the step, and your prompts. See [Use a Mac](herdr.md#use-a-mac).
 
 The master tile of an approval shows the request, and **Review** opens the Touch ID prompt.
 It never approves by itself.

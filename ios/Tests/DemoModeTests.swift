@@ -44,10 +44,14 @@ final class DemoModeTests: XCTestCase {
 
     func testTheDemoInboxHasTheSampleItems() throws {
         let items = DemoMode.inboxItems(now: Date())
-        XCTAssertEqual(items.map(\.kind), [.agentInput, .approval, .media, .clipboard, .transfer, .agentDone])
+        XCTAssertEqual(items.map(\.kind), [.agentInput, .approval, .media, .clipboard, .transfer, .agentDone, .agentWorking])
         XCTAssertEqual(Inbox.needsYou(items), 2)
         XCTAssertEqual(DemoMode.inboxItems(now: Date()).map(\.key), items.map(\.key), "the keys stay the same")
         XCTAssertEqual(DemoMode.output.choices.map(\.key), ["1", "2", "3"])
+        XCTAssertEqual(DemoMode.output(pane: "w2:p1", review: false)?.choices.map(\.key), ["1", "2", "3"])
+        XCTAssertEqual(DemoMode.output(pane: "w1:p1", review: false).map { AgentThread.parse($0.lines.map(\.text)).step }, "Running tests")
+        XCTAssertEqual(DemoMode.output(pane: "w2:p1", review: true).map { DiffFile.parse($0.lines.map(\.text)).map(\.path) },
+                       ["app/models/invoice.rb", "db/migrate/0042_add_invoice_status.sql"])
         XCTAssertEqual(Inbox.agentPrompt(DemoMode.output.lines.map(\.text)),
                        "Bash command\nbin/migrate --apply\nApply the pending migration\nDo you want to proceed?")
     }

@@ -456,6 +456,11 @@ final class InboxModelTests: XCTestCase {
         XCTAssertEqual(paused.tone, .sub)
         XCTAssertEqual(paused.stackTitle, "Unknown title")
         XCTAssertEqual(paused.stackLine, "desk")
+        // The thread design names the computer of a player only with more than 1 computer in scope.
+        XCTAssertEqual(plays.stackLine(many: false), "Artist")
+        XCTAssertEqual(plays.stackLine(many: true), "Artist · desk")
+        XCTAssertEqual(paused.stackLine(many: false), "desk", "a player with no artist keeps its computer")
+        XCTAssertEqual(receiving.stackLine(many: false), "From desk")
     }
 
     @MainActor

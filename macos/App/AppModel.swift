@@ -172,7 +172,8 @@ final class AppModel {
         if next != arrangement { arrangement = next }
         var keys = Set<String>()
         for item in all {
-            if case .agent(let deviceId, let agent, _) = item.content, agent.status == .blocked {
+            // A working agent shows its step on the master, so its prompt stays too.
+            if case .agent(let deviceId, let agent, _) = item.content, agent.status == .blocked || agent.status == .working {
                 keys.insert(HerdrModel.promptKey(deviceId, pane: agent.pane))
             }
         }

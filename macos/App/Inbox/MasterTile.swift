@@ -1,5 +1,6 @@
 import AppKit
 import FluxKit
+import Observation
 import SwiftUI
 
 /// The fit of the master tile. It is compact in a short window and in the
@@ -11,15 +12,16 @@ struct MasterFit: Equatable {
     /// The number of items in the Inbox. Later shows only with more than 1.
     let count: Int
 
-    var padding: CGFloat { compact ? 12 : 16 }
-    var partGap: CGFloat { compact ? 6 : 10 }
+    var padding: CGFloat { compact ? 12 : 14 }
+    var partGap: CGFloat { compact ? 8 : 12 }
     /// The gap between the top part and the actions.
-    var actionGap: CGFloat { compact ? 10 : 16 }
-    var choiceGap: CGFloat { compact ? 6 : 8 }
+    var actionGap: CGFloat { compact ? 8 : 12 }
+    var choiceGap: CGFloat { 6 }
 }
 
-/// The master tile: the item that comes first, with its whole action, in
-/// the active border of Hyprland. `minHeight` lets it fill the master column.
+/// The master tile: the item that comes first, with its whole action. It
+/// has the active border of Hyprland while it needs the user.
+/// `minHeight` lets it fill the master column.
 struct MasterTile: View {
     let item: InboxItem
     let fit: MasterFit
@@ -39,7 +41,8 @@ struct MasterTile: View {
             .padding(fit.padding)
             .frame(maxWidth: .infinity, minHeight: max(0, minHeight), alignment: .topLeading)
             .background(shape.fill(tn.tile))
-            .activeBorder(tn)
+            .overlay(shape.strokeBorder(item.kind.needsYou ? Color.clear : tn.line, lineWidth: 1))
+            .modifier(NeedsBorder(on: item.kind.needsYou))
             .contextMenu {
                 if fit.count > 1 {
                     Button("Show the next item") { model.showNext(item.key) }
@@ -68,8 +71,19 @@ struct MasterTile: View {
     }
 }
 
-/// The header of the master tile: the window title and the computer, then
-/// Later when the Inbox has more than 1 item, then `trailing`.
+/// The active border of the theme, while the master needs the user.
+private struct NeedsBorder: ViewModifier {
+    let on: Bool
+    @Environment(\.tn) private var tn
+
+    func body(content: Content) -> some View {
+        if on { content.activeBorder(tn) } else { content }
+    }
+}
+
+/// The header of the master tile: the window title, then Later when the
+/// Inbox has more than 1 item, then `trailing`. With more than 1 computer
+/// in scope, the window title ends with the computer.
 struct MasterHeader<Trailing: View>: View {
     let item: InboxItem
     let count: Int
@@ -84,21 +98,17 @@ struct MasterHeader<Trailing: View>: View {
     }
 
     var body: some View {
+        let many = model.scope == nil && model.state.devices.filter(\.paired).count > 1
         HStack(alignment: .center, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                WindowTitle(item: item, size: .master)
-                Text(item.computer)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(tn.sub)
-                    .lineLimit(1)
-            }
+            WindowTitle(item: item, size: .master, many: many)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel((item.sourceParts + [item.computer]).joined(separator: ", "))
             .accessibilityValue(item.stateWord)
             Spacer(minLength: 8)
             if count > 1 {
                 Button("Later") { model.showNext(item.key) }
-                    .buttonStyle(FluxButtonStyle(kind: .text))
+                    .buttonStyle(.link)
+                    .font(.system(size: 13, weight: .semibold))
                     .help("Show the next item. The key is Command-].")
             }
             trailing
@@ -109,43 +119,6 @@ struct MasterHeader<Trailing: View>: View {
 extension MasterHeader where Trailing == EmptyView {
     init(item: InboxItem, count: Int) {
         self.init(item: item, count: count) { EmptyView() }
-    }
-}
-
-/// A numbered choice of the question of an agent. A click sends its digit.
-struct InboxChoiceRow: View {
-    let choice: AgentChoice
-    let enabled: Bool
-    let action: () -> Void
-    @Environment(\.tn) private var tn
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: TiledMetrics.smallCorner, style: .continuous)
-        Button(action: action) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(choice.key)
-                    .font(.system(size: 13, weight: .bold, design: .monospaced))
-                    .foregroundStyle(tn.accent)
-                Text(choice.label)
-                    .font(.system(size: 13))
-                    .foregroundStyle(tn.text)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .frame(maxWidth: TiledMetrics.maxActionWidth, minHeight: TiledMetrics.rowHeight, alignment: .leading)
-            .background(shape.fill(choice.selected ? tn.accentTile : tn.bg))
-            .overlay(shape.strokeBorder(choice.selected ? tn.accent : tn.line, lineWidth: choice.selected ? 2 : 1))
-            .contentShape(shape)
-        }
-        .buttonStyle(TilePressStyle())
-        .disabled(!enabled)
-        .opacity(enabled ? 1 : TiledMetrics.disabledAlpha)
-        .help("Answer \(choice.key)")
-        .accessibilityLabel("\(choice.key). \(choice.label)")
-        .accessibilityHint("Answer \(choice.key)")
     }
 }
 
@@ -181,46 +154,48 @@ private struct AgentMaster: View {
     var body: some View {
         let plugin = model.core.plugin(HerdrPlugin.self)
         let blocked = agent.status == .blocked
+        let working = agent.status == .working
         let out = plugin?.model.prompt(deviceId, pane: agent.pane)
         let fresh = Self.fresh(out, didRead: didRead)
         let choices = blocked ? fresh?.choices ?? [] : []
+        let texts = fresh?.lines.map(\.text)
+        let ask = texts.flatMap { AgentAsk.find($0, maxLines: fit.compact ? 3 : 4) }
+        let thread = working ? texts.map(AgentThread.parse) : nil
         let reply = plugin?.model.reply(deviceId, pane: agent.pane)
         let sending = reply?.sending == true
         VStack(alignment: .leading, spacing: fit.partGap) {
             MasterHeader(item: item, count: fit.count) {
-                if fit.compact {
-                    replyButton(blocked: blocked, fresh: fresh != nil, hasChoices: !choices.isEmpty)
-                }
+                if fit.compact { openThread }
             }
             Text(item.masterTitle)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(tn.text)
                 .lineLimit(fit.compact ? 1 : 3)
-            if !blocked {
-                Text(agent.status == .done ? "The agent is done and waits for the next prompt." : "The agent works. Open it to read the output.")
+            if working {
+                MasterWork(answer: InboxAnswers.shared.answer(deviceId, pane: agent.pane), step: thread?.step ?? "", elapsed: thread?.elapsed ?? "")
+            } else if !blocked {
+                Text("The agent is done and waits for the next prompt.")
                     .font(.system(size: 13))
                     .foregroundStyle(tn.sub)
             } else if let error = out?.error {
                 Text(error)
                     .font(.system(size: 12))
                     .foregroundStyle(tn.red)
-            } else if let fresh {
+            } else if let ask {
                 // No line limit: the command that a choice approves shows in full.
-                Text(Inbox.agentPrompt(fresh.lines.map(\.text), maxLines: fit.compact ? 3 : 4, dropAsk: fit.compact))
-                    .font(.system(size: 13, design: .monospaced))
-                    .foregroundStyle(tn.text)
-                    .lineSpacing(4)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
+                AskText(ask: ask)
+            } else if let texts {
+                CodeLines(lines: Inbox.agentPrompt(texts, maxLines: fit.compact ? 3 : 4).components(separatedBy: "\n"))
             } else {
                 LineSkeleton(widths: [0.9, 0.7, 0.5], label: "Reading the question")
             }
             if let fresh, !choices.isEmpty {
                 VStack(alignment: .leading, spacing: fit.choiceGap) {
-                    ForEach(choices) { choice in
-                        InboxChoiceRow(choice: choice, enabled: control && !sending && fresh != answered) {
+                    ForEach(Array(choices.enumerated()), id: \.element.id) { i, choice in
+                        AskChoiceButton(choice: choice, primary: i == 0, enabled: control && !sending && fresh != answered) {
                             answer(choice, fresh)
                         }
+                        .frame(maxWidth: TiledMetrics.maxActionWidth, alignment: .leading)
                     }
                 }
                 .padding(.top, fit.actionGap - fit.partGap)
@@ -237,45 +212,46 @@ private struct AgentMaster: View {
                     .foregroundStyle(tn.sub)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if sending || !fit.compact {
+            if sending {
                 HStack(spacing: 8) {
-                    if sending {
-                        FluxSpinner()
-                        Text("Sending")
-                            .font(.system(size: 12))
-                            .foregroundStyle(tn.sub)
-                    }
-                    Spacer(minLength: 0)
-                    if !fit.compact {
-                        replyButton(blocked: blocked, fresh: fresh != nil, hasChoices: !choices.isEmpty)
-                    }
+                    RingSpinner(size: 14)
+                    Text("Sending")
+                        .font(.system(size: 12))
+                        .foregroundStyle(tn.sub)
                 }
-                .padding(.top, fit.actionGap - fit.partGap)
             }
+            if !fit.compact { openThread }
         }
         .task(id: PromptRead(item: item.key, front: activeState == .key)) {
-            guard agent.status == .blocked, let plugin = model.core.plugin(HerdrPlugin.self) else { return }
+            // A working agent shows its step from the output.
+            guard blocked || working, let plugin = model.core.plugin(HerdrPlugin.self) else { return }
             // The first show reads. Later, only a window that comes to the front reads again.
             if didRead && activeState != .key { return }
             plugin.readPrompt(deviceId, pane: agent.pane)
             didRead = true
         }
+        .onChange(of: agent.status, initial: true) { _, status in
+            InboxAnswers.shared.status(status, deviceId, pane: agent.pane)
+        }
+    }
+
+    /// Open thread: a link with an arrow that opens the agent in the agents window.
+    private var openThread: some View {
+        Button { openAgent() } label: {
+            HStack(spacing: 6) {
+                Text("Open thread")
+                Image(systemName: "arrow.right")
+            }
+            .font(.system(size: 13, weight: .semibold))
+        }
+        .buttonStyle(.link)
+        .help("Open the thread of the agent in the agents window")
     }
 
     /// The output when it came after the read of this tile, else nil.
     private static func fresh(_ out: HerdrOutput?, didRead: Bool) -> HerdrOutput? {
         guard didRead, let out, !out.loading, out.error == nil else { return nil }
         return out
-    }
-
-    /// Reply opens the agent. It is filled when the agent waits for text:
-    /// the output is fresh, it has no choices, and the computer takes replies.
-    @ViewBuilder
-    private func replyButton(blocked: Bool, fresh: Bool, hasChoices: Bool) -> some View {
-        let filled = blocked && fresh && !hasChoices && control
-        Button(blocked ? "Reply" : "Open") { openAgent() }
-            .buttonStyle(FluxButtonStyle(kind: filled ? .filled : .outlined))
-            .help("Open the agent in the agents window")
     }
 
     private func openAgent() {
@@ -297,8 +273,79 @@ private struct AgentMaster: View {
                 return
             }
             answered = out
+            InboxAnswers.shared.sent(choice.label, deviceId, pane: pane)
             plugin.sendKeys(deviceId, pane: pane, [choice.key])
         }, onError: { lockError = $0 })
+    }
+}
+
+/// The work of an agent on the master: the answer that the Inbox sent, a
+/// moving bar, and the step of the agent with its time when the output
+/// shows them.
+struct MasterWork: View {
+    let answer: String?
+    let step: String
+    let elapsed: String
+    @Environment(\.tn) private var tn
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let answer {
+                (Text("You answered: ").foregroundStyle(tn.sub) + Text(answer).foregroundStyle(tn.text))
+                    .font(.system(size: 12))
+            }
+            ZStack {
+                Capsule().fill(tn.line)
+                SlideBar(color: tn.accent)
+            }
+            .frame(height: 3)
+            .clipShape(Capsule())
+            Text([step.isEmpty ? "Working" : step, elapsed].filter { !$0.isEmpty }.joined(separator: " · "))
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(tn.sub)
+                .lineLimit(2)
+        }
+    }
+}
+
+/// The answers that the Inbox sent to the agents, by computer and pane. An
+/// answer shows on the master while the agent works on it, for 10 minutes
+/// at most. The item of an agent changes when its status changes, so the
+/// answers live here and not in the tile.
+@MainActor
+@Observable
+final class InboxAnswers {
+    static let shared = InboxAnswers()
+
+    private struct Entry {
+        var text: String
+        var working = false
+        var at = Date()
+    }
+
+    private var entries: [String: Entry] = [:]
+
+    /// Keeps the answer `text` to the agent in `pane`.
+    func sent(_ text: String, _ deviceId: String, pane: String) {
+        entries[deviceId + "|" + pane] = Entry(text: text)
+    }
+
+    /// The answer to show for the agent in `pane`, or nil.
+    func answer(_ deviceId: String, pane: String) -> String? {
+        guard let e = entries[deviceId + "|" + pane], e.working, Date().timeIntervalSince(e.at) < 600 else { return nil }
+        return e.text
+    }
+
+    /// The agent in `pane` has a new status. The answer shows while the
+    /// agent works, and goes when the agent stops working.
+    func status(_ status: AgentStatus, _ deviceId: String, pane: String) {
+        let key = deviceId + "|" + pane
+        guard let e = entries[key] else { return }
+        if status == .working {
+            if !e.working { entries[key]?.working = true }
+        } else if e.working {
+            entries[key] = nil
+        }
     }
 }
 
