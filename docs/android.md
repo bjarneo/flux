@@ -288,7 +288,7 @@ A contrast guard maps the theme to the colors of the app. It moves only the ligh
 - The selected tile `accentTile` takes the hue of the accent at the luminance of `tileHi`, so it does not change a contrast.
 - Red means "needs you" or an error. When the theme accent looks like red, the theme blue, cyan, or magenta takes its place as the primary color. The border gradient keeps the theme accent.
 - ANSI blue in the agent output uses the theme blue, as in the terminal on the computer.
-- The master tile takes the gradient of `hyprland_active_border`, at 3:1 or more.
+- The master tile that needs you takes the gradient of `hyprland_active_border`, at 3:1 or more.
 
 The theme engine is in `app/src/main/java/org/omarchy/flux/theme`.
 
@@ -340,7 +340,7 @@ The pages are:
 - `about` for **About Flux**.
 - `home` for **Control** with the first paired computer in scope.
 - `media`, `commands`, `browse`, `mic`, `webcam`, `touchpad`, `desktop`, `omarchy`, `agents`, and `camera`.
-- `agent:<pane>` for the output of one herdr agent. The sample blocked agent is `agent:w2:p1`.
+- `agent:<pane>` for the thread of one herdr agent. The sample agents are `agent:w2:p1` (blocked), `agent:w1:p1` (working), and `agent:w3:p1` (done).
 - `newpane` for the screen that starts a herdr agent or opens a terminal.
 - `terminal:<pane>` for one herdr terminal. The sample terminals are `terminal:w1:p2` and `terminal:w3:p3`.
 - `camera:<mode>` for a camera mode: `text`, `qr`, `photo`, `document`, or `signature`. `camera:webcam` opens the `webcam` page.
@@ -370,12 +370,12 @@ ANDROID_SERIAL=emulator-5554 FLUX_DEMO=1 FLUX_THEME=catppuccin-latte tools/shot.
 
 Release builds ignore these extras.
 
-The agent screen of `agent:<pane>` opens on **Output**.
-When the computer offers diff review, the screen has the **Output** and **Changes** choices.
-When the computer allows replies, the screen has the choice tiles, the key bar, and the text field with **Send** and the mic key.
+The agent screen of `agent:<pane>` shows the output of the agent as a thread.
+When the computer offers diff review, the menu and the changes card open the **Changes** sheet. The sample agents have a sample diff.
+When the computer allows replies, the dock has the choices, **Write**, **Keys**, and the text field with **Send** and the mic key.
 When the computer offers terminal control, the top bar also has **Live**.
-**Live** shows the live terminal of the pane in the place of the output.
-With a computer that supports live input, a key row and the phone keyboard take the place of the key bar and the text field.
+**Live** shows the live terminal of the pane in the place of the thread.
+With a computer that supports live input, a key row and the phone keyboard take the place of the dock.
 See [Live terminal on Android](herdr.md#live-terminal-on-android).
 
 To reproduce terminal layout bugs without pairing the emulator, a debug build also

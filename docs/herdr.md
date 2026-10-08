@@ -52,8 +52,9 @@ With `herdr_control = false`, the second line is a note and not a problem:
 
 ## See your agents
 
-The agent screen opens on the **Output** view on each app.
-It also has a **Changes** view for Git diffs and review feedback.
+On Android, the agent screen shows the output of the agent as a thread.
+Flux for iOS and Flux for macOS open the agent screen on the **Output** view.
+Each app also shows the Git changes of the agent.
 See [Agent diff review](workflows.md#agent-diff-review).
 
 1. Start herdr on the computer.
@@ -61,12 +62,20 @@ See [Agent diff review](workflows.md#agent-diff-review).
 3. To see all agents, open **Control** and select **Agents and terminals**.
 4. Select an agent to read its recent output.
 
+On Android, the agent screen has these parts:
+
+- The top bar shows the task, the agent, the pane, and the computer. Its menu has **Refresh**, **Changes**, **Show keys**, and **Close the agent**.
+- A row of pills shows the agents of the computer. Select a pill to open that agent.
+- A thin bar moves under the pills while the agent works.
+- The thread shows the messages of the agent, its tool calls, the files that it changed, and your prompts. Select a tool call to show its result. Flux reads the transcripts of Claude Code and Codex. Lines that it cannot read show as terminal lines.
+- The dock at the bottom shows the question and the choices of a blocked agent, the step of a working agent with **Interrupt**, or the end of a finished turn. The text field and the mic key are under it.
+
 The list puts blocked agents first, then done, working, idle, and unknown agents.
 A blocked agent waits for an approval or for the answer to a question.
 Idle and done agents are ready for new input.
 The **Agents and terminals** tile shows the number of blocked agents.
 
-On Android, the **Live** key in the top bar shows the live terminal of the agent in the place of the output.
+On Android, the **Live** key in the top bar shows the live terminal of the agent in the place of the thread.
 See [Live terminal on Android](#live-terminal-on-android).
 
 The output screen of the phone shows up to 1000 lines of recent output.
@@ -79,7 +88,7 @@ Select refresh to read it at once.
 
 The screen opens at the newest lines.
 When you scroll up to read older lines, the screen stays there when new output comes.
-To go back to the newest lines, select the arrow at the bottom of the output.
+To go back to the newest lines, select the arrow at the bottom of the output. On Android, the arrow is a round key at the bottom right of the thread.
 
 Many agents, such as Claude Code, draw in the alternate screen of the terminal.
 herdr gets the older lines of such an agent only while the agent is idle, and only as plain text.
@@ -126,9 +135,9 @@ To show each diff in 1 column, set `diff_style` in `~/.config/opencode/tui.json`
 
 ### Live terminal on Android
 
-Flux for Android can show the live terminal of an agent in the place of the output.
+Flux for Android can show the live terminal of an agent in the place of the thread.
 The phone then controls the pane on the computer.
-The **Output** view stays the default on each app.
+The thread stays the default on Android.
 Flux for iOS and Flux for macOS show the output of an agent and do not have Live.
 
 Live needs these items:
@@ -140,7 +149,6 @@ Live needs these items:
 - A screen lock on the phone.
 
 The **Live** key shows in the top bar of an agent screen when the computer is online, the agent runs, and the computer offers control.
-It does not show in the **Changes** view.
 With an older `fluxd`, an older herdr, or `herdr_control = false`, the key does not show, and the agent screen shows the output as before.
 To find the cause, run `flux-cli doctor` on the computer.
 It checks `herdr_control`, the herdr server, and the herdr CLI of `fluxd`. See [Requirements](#requirements) for its herdr lines.
@@ -154,10 +162,10 @@ To show the live terminal:
 A valid unlock from the last 5 minutes opens Live with no prompt.
 The replies to agents use the same unlock.
 
-The live terminal then takes the place of the output.
-The choice tiles stay under the terminal.
-With a computer that supports live input, a key row takes the place of the key bar, the text field, **Send**, and the mic key.
-The key row has Esc, Tab, Up, Down, Enter, and a keyboard key.
+The live terminal then takes the place of the thread.
+With a computer that supports live input, a key row takes the place of the dock.
+A line above it tells that the keys go straight to the pane.
+The key row has the digits of the choices of a blocked agent, Esc, Tab, Up, Down, Enter, and a keyboard key.
 The keyboard key shows the phone keyboard.
 A tap on the terminal does not open the keyboard.
 The keyboard types directly into the agent, and Return sends Enter.
@@ -172,13 +180,13 @@ Input waits for the first frame and the unlock.
 A reconnect does not send old input again.
 Live starts with the keyboard hidden.
 When the phone loses control, the keyboard hides, and a reconnect does not show it again.
-**Output** without Live and **Changes** keep the text field, **Send**, and the mic key.
-An older computer keeps these controls in Live too.
+The thread without Live keeps the dock with the text field, **Send**, and the mic key.
+An older computer keeps the dock under the terminal in Live too.
 The text field keeps its draft while Live shows.
 When Live ends after you typed text with no Enter after it, a note above the text field tells you that the input of the agent can still hold that text.
 **Send** then adds the new text after it.
-**Refresh** does not show while Live is on.
-The phone then reads the output when Live opens, when the status changes, and after a tap on a choice, so the choice tiles stay current.
+**Refresh** does not show in the menu while Live is on.
+The phone then reads the output when Live opens, when the status changes, and after a tap on a choice, so the digits of the choices stay current.
 After a tap on a choice, the choices take no tap until the next output arrives.
 Until the first full screen draws, a cover shows **Opening the terminal…**.
 The cover shows **Reconnecting…** while Live opens the stream again.
@@ -209,7 +217,7 @@ It sends Enter, Tab, Shift+Tab, Esc, Backspace, and the arrows as keys.
 AltGr types its characters, for example `@` and `{`.
 A key with Ctrl does nothing.
 
-Live releases control when you select **Live** again, select **Changes**, leave the agent screen, or put the app in the background.
+Live releases control when you select **Live** again, select **Changes** in the menu, leave the agent screen, or put the app in the background.
 When the app comes back while the unlock is valid, Live takes control again.
 The unlock stays valid for 5 minutes, and Live does not extend it.
 When the unlock ends, Live ends, also while the terminal shows.
@@ -222,11 +230,11 @@ Live also ends by itself in these cases:
 - You cancel the unlock, or the phone has no screen lock.
 - The agent ends, or herdr closes the pane. The phone ends Live when the agent list of the computer no longer has the agent. A new agent in the same pane does not open Live. To open it, select **Live** again.
 - `fluxd` stops the stream, for example after a change of `herdr_control` or when herdr stops.
-- The computer refuses the open. The line above the output shows the error of `fluxd`. When `fluxd` marks the error as temporary, Live first tries again, as for a failed stream.
+- The computer refuses the open. The line at the top of the thread shows the error of `fluxd`. When `fluxd` marks the error as temporary, Live first tries again, as for a failed stream.
 - The stream fails, or the computer does not answer. Live first tries again 4 times, after 1, 2, 4, and 8 seconds. After a stream shows for 30 seconds, the count of tries starts again.
 - Android stops the page that draws the terminal, for example to free memory.
 
-When Live ends by itself, a line above the output tells why, for example `The unlock ended. Tap Live to open the terminal again.`
+When Live ends by itself, a line at the top of the thread tells why, for example `The unlock ended. Tap Live to open the terminal again.`
 When the agent ends or herdr closes the pane, the line shows above **The agent is gone**.
 Without `herdr_terminals`, the phone does not get the list of panes, so the line for a closed pane also says that the agent ended.
 TalkBack reads this line.
@@ -234,7 +242,7 @@ The next tap on **Live** removes it.
 
 If TalkBack is on when Live opens, TalkBack can read the rows of the terminal.
 TalkBack does not read each new frame aloud.
-To read or copy the text of the agent, use the **Output** view.
+To read or copy the text of the agent, end Live and use the thread.
 
 Live shows the cells of the terminal with their colors and styles.
 It does not show images that a program draws in the terminal.
@@ -277,8 +285,8 @@ systemctl --user reload fluxd
 
 The output screen then shows the reply controls:
 
-- When the agent is blocked, the phone shows the numbered choices of the dialog as buttons. A tap sends the number of the choice.
-- The key bar sends Esc, Tab, Up, Down, and Enter.
+- When the agent is blocked, the phone shows the numbered choices of the dialog as buttons. A tap sends the number of the choice. On Android, the first choice has the accent fill. **Write** shows the text field in the place of the choices, and **Choices** shows the choices again.
+- The key bar sends Esc, Tab, Up, Down, and Enter. On Android, select **Keys** in the dock of a blocked agent, or **Show keys** in the menu, to show it. **Interrupt** on a working agent sends Esc.
 - The text field sends a prompt to the agent. The clear key empties the field. The expand key opens a large editor with **Send** for a long prompt.
 - When the agent waits for a choice, `fluxd` refuses the text with the message `The agent waits for a choice. Pick a choice first.` A digit or Enter in the text can select a choice of the dialog, for example an approval. Pick a choice with the buttons or the key bar first.
 - After this refusal, the message shows **Send as answer** next to it while the field holds the same text. Select it when the agent asks a question that needs free text, for example an answer that is not in the choices. The app sends the same text again with `"answer": true`. `fluxd` checks that the agent still waits, types the text on one line, and presses Enter. The iPhone and the Mac show the same action.
@@ -435,7 +443,7 @@ It does not start agents, close them, open terminals, or show the live terminal.
 - **Reply** and **Open** on the master tile of the Inbox open the agent in that window. The menu of each computer in the menu bar panel has **Agents…** too.
 - The output uses the colors of Tokyo Night in dark mode and Tokyo Night Day in light mode.
 - The Mac fits the output to the width of the window, as the phone does. See [See your agents](#see-your-agents).
-- When you scroll up to read older lines, the output stays there when new output comes. To go back to the newest lines, select the arrow at the bottom of the output.
+- When you scroll up to read older lines, the output stays there when new output comes. To go back to the newest lines, select the arrow at the bottom of the output. On Android, the arrow is a round key at the bottom right of the thread.
 - Each output line selects its own text. To copy all the output, select the copy button above the output.
 - Press Command-R to read the output again.
 - Return sends the text. Shift-Return adds a line break.
@@ -867,7 +875,7 @@ It also has `cli` with the `path`, the `version`, and the `error` of the version
 | A new agent says that it did not start | Read the last line in the error. Run the agent command in a terminal on the computer to see the problem. |
 | The output shows a dim line about more lines | The agent works, and more lines came than one screen. The phone reads them when the agent stops. |
 | The output shows a dim line about the release of the phone | A phone controls the agent in Live. The older lines update when the phone releases the agent. |
-| The **Live** key is missing on the agent screen | Run `flux-cli doctor` on the computer. Live needs herdr 0.9.3 or newer for the server and for the herdr CLI of `fluxd`, and `herdr_control = true`. Update `fluxd` and Flux for Android. The key does not show in the **Changes** view. |
+| The **Live** key is missing on the agent screen | Run `flux-cli doctor` on the computer. Live needs herdr 0.9.3 or newer for the server and for the herdr CLI of `fluxd`, and `herdr_control = true`. Update `fluxd` and Flux for Android. |
 | Live says that the live terminal did not open | Read the error in the line above the output. Then read the herdr messages of the daemon, as the end of this page shows. |
 | Live says `The live terminal stopped. Tap Live to try again.` | Live tried again 4 times, and each try failed. Or Android stopped the page of the terminal. Select **Live** to try again. If Live stops again, read the herdr messages of the daemon. |
 | Live says that the computer stopped the live terminal | `fluxd` stopped the stream. A change of `herdr_control`, `herdr_terminals`, or the access of the device does this. A herdr server that stops also does this. Check the settings, then select **Live** again. |

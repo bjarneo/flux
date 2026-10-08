@@ -22,6 +22,24 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,8 +61,6 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Text
@@ -307,8 +323,9 @@ private fun ShellTopBar(state: UiState, scope: String?, onScope: (String?) -> Un
     val short = rememberShortWindow()
     Row(
         Modifier.fillMaxWidth().statusBarsPadding()
-            .padding(start = TiledGutter + 6.dp, end = TiledGutter, top = if (short) 0.dp else 6.dp, bottom = if (short) 4.dp else 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(start = TiledGutter + 5.dp, end = TiledGutter, top = if (short) 0.dp else 8.dp, bottom = if (short) 4.dp else 0.dp)
+            .heightIn(min = 48.dp),
+        horizontalArrangement = Arrangement.spacedBy(13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         FluxMark(22.dp, fg = Tn.text, accent = Tn.blue)
@@ -377,13 +394,71 @@ private fun TabIcon(t: Tab, needs: Int) {
     ) { Sym(tabIcon(t)) }
 }
 
-/** The navigation bar of a compact window. */
+/** The height of the navigation bar of a compact window, without the gesture area. */
+private val NavBarHeight = 66.dp
+
+/** The fade above the navigation bar, so that the content goes softly under it. */
+private val NavFade = 24.dp
+
+/**
+ * The navigation bar of a compact window: 4 destinations, each with an
+ * icon in a pill and a label. The pill of the open destination has a fill.
+ * The Inbox shows the number of items that need the user on its pill. The
+ * content fades out above the bar.
+ */
 @Composable
 private fun ShellNavBar(tab: Tab, needs: Int, onSelect: (Tab) -> Unit) {
-    NavigationBar {
-        for (t in Tab.entries) {
-            NavigationBarItem(selected = t == tab, onClick = { onSelect(t) }, icon = { TabIcon(t, needs) }, label = { NavLabel(t.label) })
+    val bg = Tn.bg
+    Row(
+        Modifier.fillMaxWidth()
+            .drawBehind {
+                val fade = NavFade.toPx()
+                drawRect(Brush.verticalGradient(listOf(bg.copy(alpha = 0f), bg), startY = -fade, endY = 0f), Offset(0f, -fade), Size(size.width, fade))
+            }
+            .background(bg)
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .heightIn(min = NavBarHeight)
+            .padding(top = 6.dp)
+            .selectableGroup(),
+    ) {
+        for (t in Tab.entries) NavBarItem(t, t == tab, if (t == Tab.Inbox) needs else 0, Modifier.weight(1f)) { onSelect(t) }
+    }
+}
+
+/** A destination of [ShellNavBar]. [badge] is the number on the pill, or 0 for none. */
+@Composable
+private fun NavBarItem(t: Tab, selected: Boolean, badge: Int, modifier: Modifier, onClick: () -> Unit) {
+    val ink = if (selected) Tn.text else Tn.sub
+    Column(
+        modifier.selectable(selected = selected, role = Role.Tab, onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Box(Modifier.size(56.dp, 30.dp)) {
+            Box(
+                Modifier.fillMaxSize().clip(RoundedCornerShape(15.dp)).background(if (selected) Tn.line else Color.Transparent),
+                contentAlignment = Alignment.Center,
+            ) { Sym(tabIcon(t), tint = ink, size = 22.dp) }
+            if (badge > 0) {
+                MaxFontScale(NAV_FONT_SCALE) {
+                    Box(
+                        Modifier.align(Alignment.TopEnd).offset(x = (-8).dp, y = (-4).dp).heightIn(min = 16.dp).widthIn(min = 16.dp)
+                            .clip(RoundedCornerShape(8.dp)).background(Tn.red).padding(horizontal = 4.dp)
+                            .clearAndSetSemantics { contentDescription = if (badge == 1) "1 item needs you" else "$badge items need you" },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        BasicText(
+                            if (badge > 9) "9+" else "$badge",
+                            style = TextStyle(color = Tn.onAccent, fontSize = 10.sp, fontWeight = FontWeight.Bold, lineHeight = 16.sp),
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
         }
+        CompositionLocalProvider(
+            LocalTextStyle provides TextStyle(color = ink, fontSize = 12.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium),
+        ) { NavLabel(t.label) }
     }
 }
 
@@ -429,7 +504,13 @@ private fun DetailScreen(route: Route, state: UiState, current: () -> Nav, go: (
             onOpenTerminal = { pane -> push(Route(id, "$TERMINAL_PAGE$pane")) },
             onNew = { push(Route(id, NEW_PANE_PAGE)) },
         )
-        page.startsWith(AGENT_PAGE) -> key(page) { TiledAgentScreen(device, page.removePrefix(AGENT_PAGE), pop) }
+        // Another agent of the strip replaces this page, so Back goes where this page came from.
+        page.startsWith(AGENT_PAGE) -> key(page) {
+            TiledAgentScreen(device, page.removePrefix(AGENT_PAGE), pop) { pane ->
+                val nav = current()
+                if (nav.stack.lastOrNull() == route) go(nav.replaceTop(Route(id, "$AGENT_PAGE$pane")))
+            }
+        }
         page.startsWith(TERMINAL_PAGE) -> key(page) { TiledTerminalScreen(device, page.removePrefix(TERMINAL_PAGE), pop) }
         // The new pane replaces this page, so Back skips it.
         page == NEW_PANE_PAGE -> TiledNewPaneScreen(device, pop) { what, pane ->

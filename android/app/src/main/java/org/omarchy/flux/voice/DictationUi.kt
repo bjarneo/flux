@@ -105,6 +105,9 @@ private const val HOLD_MS = 350L
 /** The size of the mic key and the send key. */
 private val KeySize = 56.dp
 
+/** The size of the round mic key of the agent composer. */
+private val RoundKeySize = 48.dp
+
 /** The inner margin of the listening panel. The stop key sits this far from its corner. */
 private val PanelPad = 14.dp
 
@@ -121,7 +124,9 @@ private const val FADE_PART = 0.35f
  * corner. The mic key is the same element in both layouts and slides into
  * the panel, so a long press keeps working while the panel opens.
  * [onStart] asks for the microphone and starts the dictation. It returns
- * false when the dictation did not start.
+ * false when the dictation did not start. With [round], the mic key is a
+ * circle of 48 dp in the tonal fill, as in the composer of the agent
+ * screen.
  */
 @Composable
 fun DictationBar(
@@ -132,8 +137,10 @@ fun DictationBar(
     modifier: Modifier = Modifier,
     send: (@Composable () -> Unit)? = null,
     onLanguage: (() -> Unit)? = null,
+    round: Boolean = false,
 ) {
     val active = d.phase != Dictation.Phase.Idle
+    val keySize = if (round) RoundKeySize else KeySize
     Box(modifier.fillMaxWidth()) {
         AnimatedContent(
             active,
@@ -150,18 +157,18 @@ fun DictationBar(
                 Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(TileGap)) {
                     field(Modifier.weight(1f))
                     // The mic key lies over this place.
-                    if (canDictate) Spacer(Modifier.size(KeySize))
+                    if (canDictate) Spacer(Modifier.size(keySize))
                     send?.invoke()
                 }
             }
         }
         if (canDictate) {
             val spring = spring<Dp>(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
-            val rest = if (send == null) 0.dp else -(KeySize + TileGap)
+            val rest = if (send == null) 0.dp else -(keySize + TileGap)
             val x = animateDpAsState(if (active) -PanelPad else rest, spring, label = "micX")
             val y = animateDpAsState(if (active) -PanelPad else 0.dp, spring, label = "micY")
             MicKey(
-                d, onStart,
+                d, onStart, round,
                 Modifier.align(Alignment.BottomEnd).offset { IntOffset(x.value.roundToPx(), y.value.roundToPx()) },
             )
         }
@@ -176,13 +183,15 @@ fun DictationBar(
  * the voice. Red is only for what needs the user and for errors.
  */
 @Composable
-private fun MicKey(d: Dictation, onStart: () -> Boolean, modifier: Modifier = Modifier) {
+private fun MicKey(d: Dictation, onStart: () -> Boolean, round: Boolean, modifier: Modifier = Modifier) {
     val haptic = LocalHapticFeedback.current
     val start by rememberUpdatedState(onStart)
     val listening = d.phase == Dictation.Phase.Listening
     val finishing = d.phase == Dictation.Phase.Finishing
     val live = Tn.green
-    val fill by animateColorAsState(if (listening) live else Tn.tile, tween(200), label = "micFill")
+    val rest = if (round) Tn.line else Tn.tile
+    val shape = if (round) CircleShape else TileShape
+    val fill by animateColorAsState(if (listening) live else rest, tween(200), label = "micFill")
     val edge by animateColorAsState(if (listening) live else Tn.line, tween(200), label = "micEdge")
     val voice by animateFloatAsState(if (listening) d.level else 0f, tween(110), label = "micLevel")
     val rings = rememberInfiniteTransition(label = "micRings")
@@ -194,7 +203,7 @@ private fun MicKey(d: Dictation, onStart: () -> Boolean, modifier: Modifier = Mo
     }
 
     Box(
-        modifier.size(KeySize)
+        modifier.size(if (round) RoundKeySize else KeySize)
             // The rings draw before the clip, so they spread past the key.
             .drawBehind {
                 if (!listening) return@drawBehind
@@ -206,7 +215,7 @@ private fun MicKey(d: Dictation, onStart: () -> Boolean, modifier: Modifier = Mo
                         color = live.copy(alpha = (1f - p) * (0.3f + 0.6f * voice)),
                         topLeft = Offset(-grow, -grow),
                         size = Size(size.width + grow * 2, size.height + grow * 2),
-                        cornerRadius = CornerRadius(12.dp.toPx() + grow),
+                        cornerRadius = CornerRadius((if (round) size.width / 2 else 12.dp.toPx()) + grow),
                         style = Stroke(2.dp.toPx()),
                     )
                 }
@@ -216,9 +225,9 @@ private fun MicKey(d: Dictation, onStart: () -> Boolean, modifier: Modifier = Mo
                 scaleX = s
                 scaleY = s
             }
-            .clip(TileShape)
+            .clip(shape)
             .background(fill)
-            .border(1.dp, edge, TileShape)
+            .border(1.dp, edge, shape)
             .semantics {
                 role = Role.Button
                 contentDescription = if (listening) "Stop dictation" else "Dictate"
@@ -256,7 +265,7 @@ private fun MicKey(d: Dictation, onStart: () -> Boolean, modifier: Modifier = Mo
             label = "micIcon",
         ) { phase ->
             when (phase) {
-                Dictation.Phase.Idle -> Sym(Ic.mic, tint = Tn.sub, size = 24.dp)
+                Dictation.Phase.Idle -> Sym(Ic.mic, tint = if (round) Tn.text else Tn.sub, size = if (round) 22.dp else 24.dp)
                 Dictation.Phase.Listening -> Sym(Ic.stop, tint = Tn.onAccent, size = 24.dp)
                 Dictation.Phase.Finishing -> Spinner(Modifier.size(20.dp), color = Tn.magenta)
             }

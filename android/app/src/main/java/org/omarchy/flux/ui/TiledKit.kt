@@ -84,6 +84,7 @@ import androidx.compose.ui.graphics.LinearGradientShader
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Shader
 import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -376,13 +377,14 @@ fun Tile(
     verticalArrangement: Arrangement.Vertical = Arrangement.SpaceBetween,
     horizontalAlignment: Alignment.Horizontal = Alignment.Start,
     selected: Boolean? = null,
+    shape: Shape = TileShape,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val stroke = if (pressed && onClick != null) BorderStroke(1.dp, accent) else border
-    var m = modifier.alpha(if (enabled) 1f else DimAlpha).clip(TileShape).background(container)
-    if (stroke != null) m = m.border(stroke, TileShape)
+    var m = modifier.alpha(if (enabled) 1f else DimAlpha).clip(shape).background(container)
+    if (stroke != null) m = m.border(stroke, shape)
     if (onClick != null) {
         if (selected != null) {
             val chosen: Boolean = selected

@@ -211,7 +211,7 @@ components:
 
 **Creative North Star: "The Master Layout of What Needs You"**
 
-Flux for Android looks like the user's own Omarchy desktop. Tiles sit on the page with Hyprland gaps. The item that needs the user most takes the master tile, and the other items wait in the stack. Only the master tile carries the active border gradient of the computer, as the focused window does in Hyprland.
+Flux for Android looks like the user's own Omarchy desktop. Tiles sit on the page with Hyprland gaps. The item that needs the user most takes the master tile, and the other items wait in the stack. Only a master tile that needs the user carries the active border gradient of the computer, as the focused window does in Hyprland.
 
 The app has no palette of its own. The colors come from the live Omarchy theme of the computer in scope, through a contrast guard. Tokyo Night is the fallback when no computer sent a theme. The token values in this file are the Tokyo Night reference set. The roles are the system, and the values change with the theme.
 
@@ -223,7 +223,7 @@ Flux for iOS and Flux for macOS use the same system. They share the token roles,
 
 - The colors are roles from the theme of the computer, not fixed values.
 - Every role pair reaches WCAG 2.2 AA in every theme: 4.5:1 for text, and 3:1 for icons and borders.
-- 1 master tile with the `hyprland_active_border` gradient, and a stack of plain tiles.
+- 1 master tile, with the `hyprland_active_border` gradient while it needs the user, and a stack of plain tiles.
 - Red means only "needs you" and errors.
 - Mono for computer data, Roboto for Flux text.
 - Flat tiles with 1 dp borders. Depth comes from tonal steps.
@@ -300,7 +300,7 @@ The light fallback uses the same roles. Its tiles are darker steps of the page. 
 ### Hierarchy
 
 - **Empty title**, 600, 22 sp: The title of the empty Inbox tile and the media title in the master.
-- **Master title**, 600, 20 sp: The title of the item in the master tile, and the label of a master tool.
+- **Master title**, 600, 20 sp: The title of the item in the master tile, and the label of a master tool. An agent item uses 18 sp with line height 1.25.
 - **Top bar title**, 600, 18 sp, line height 1.2: The title of a feature screen. TalkBack reads it as a heading.
 - **Tool label**, 600, 15 sp: The label of a tool row, an action tile, and a computer row.
 - **Section label**, Material 3 Title Small, 500, 14 sp: The heading of a group of tiles, in sentence case.
@@ -309,7 +309,9 @@ The light fallback uses the same roles. Its tiles are darker steps of the page. 
 - **Secondary**, 400, 13 sp, line height 1.3: The line under a tool label, and error text.
 - **Tile label**, 500, 12 sp, line height 1.35: The label of a value or a group in a tile, in `sub`.
 - **Prompt**, mono 400, 14 sp, line height 1.35: The question of an agent and a clipboard preview.
-- **Window title**, 13 sp in the master and 12 sp in the stack, line height 1.35: The state word in Roboto 500 and the state color, then the source in mono and `sub`.
+- **Window title**, 13 sp in the master and 12 sp in the stack, line height 1.35: The state word in Roboto 500 and the state color, then the source in mono 12 sp and `sub`. A stack tile shows the source only for an agent.
+- **Thread message**, 400, 14 sp, line height 1.5: A message of an agent on the agent screen. Paths and code show in mono 12 sp on `tile`.
+- **Dock question**, 600, 16 sp: The question of a blocked agent in the dock of the agent screen.
 - **Choice key**, mono 700, 15 sp, in the accent: The digit of an agent choice.
 - **Data**, mono 400, 12 sp to 13 sp: The computer name, the top bar context line, the user and TTY of an approval, file names, keys, and badges.
 
@@ -325,10 +327,10 @@ All text grows with the Android font size. Layouts hold at 200%. A key label shr
 
 The app follows the Hyprland master layout. The master tile holds the first item with its whole action. The stack holds the other items.
 
-- **Gaps and gutter:** Tiles keep an 8 dp gap. The screen gutter is 10 dp. The shell top bar starts 6 dp further in, to align the Flux mark.
-- **Phone in portrait:** The Inbox is 1 grid with 2 columns. The status line comes first, then the master across the full width. The master takes at least 55% of the height under the status line, so that 2 stack rows show above the navigation bar. The choices and Reply sit at the bottom of the master, at thumb height.
+- **Gaps and gutter:** Tiles keep an 8 dp gap. The screen gutter is 10 dp. The shell top bar starts 5 dp further in, to align the Flux mark.
+- **Phone in portrait:** The Inbox is 1 grid with 2 columns. The status line comes first, then the master across the full width. The master takes the height of its content, and the stack follows it directly. The choices sit under the question, and Open thread ends the master.
 - **Wide window, 600 dp and more:** A navigation rail replaces the navigation bar. The Inbox splits: the master takes 60% of the width at full height, and the status line and the stack fill a column on the right. The choices sit directly under the prompt.
-- **Short window, under 480 dp high:** The top bar takes less height. Below 460 dp, the master is compact. Its inset is 12 dp, its gaps are 6 dp and 10 dp, the prompt is shorter, and Reply moves to the top row.
+- **Short window, under 480 dp high:** The top bar takes less height. Below 460 dp, the master is compact. Its inset is 12 dp, its gaps are 8 dp, the prompt is shorter, and Open thread moves to the top row.
 - **Content width:** Screens other than the Inbox scroll in `CappedScrollColumn`. The content is at most 840 dp wide and stays in the center. Choice and action rows in the master are at most 600 dp wide.
 - **Destinations:** Inbox, Send, Control, and Computers. Send and Control open with 1 master tool, then groups of tool rows under section labels. In Control, the agent rows come right after the master tool, because the user needs them most often.
 - **Rank:** The Inbox order is the order of `InboxKind` in `core/InboxModel.kt`: agent input, approval, pair request, media, clipboard, transfer, agent done, and agent working. What needs the user comes first.
@@ -336,13 +338,13 @@ The app follows the Hyprland master layout. The master tile holds the first item
 
 ## Elevation & Depth
 
-The system is flat. Tiles have no shadows. Depth comes from 4 tonal surface steps, `bg`, `off-tile`, `tile`, and `tile-hi`, and from 1 dp borders in `line`. In a dark theme, the tiles are lighter steps of the page. In a light theme, they are darker steps. The only emphasis beyond tone is the 2 dp active border gradient of the master tile.
+The system is flat. Tiles have no shadows. Depth comes from 4 tonal surface steps, `bg`, `off-tile`, `tile`, and `tile-hi`, and from 1 dp borders in `line`. In a dark theme, the tiles are lighter steps of the page. In a light theme, they are darker steps. The only emphasis beyond tone is the 2 dp active border gradient of a master tile that needs the user.
 
 ### Named Rules
 
 **The Flat Tile Rule.** Do not add a shadow to a tile. To raise a tile, step its fill to `tile-hi` and its border to `line-hi`.
 
-**The One Active Window Rule.** Only the tile in the master position carries the active border: the master tile, or the empty Inbox tile in its place. The gradient is the `hyprland_active_border` colors of the theme at its angle. Without a theme border, it goes from the accent to cyan, corner to corner.
+**The One Active Window Rule.** Only the tile in the master position carries the active border: the master tile while it needs the user, or the empty Inbox tile in its place. A master that does not need the user has a 1 dp `line` border. The gradient is the `hyprland_active_border` colors of the theme at its angle. Without a theme border, it goes from the accent to cyan, corner to corner.
 
 ## Shapes
 
@@ -359,23 +361,23 @@ A pressed tile changes its border to the accent. A selected choice changes its b
 - **Shape:** The tile corner, 12 dp. The button is at least 48 dp high, and its label wraps at a large font size.
 - **Filled:** The accent fill with `on-accent` text. Use it for the main action of a screen or a tile.
 - **Tonal:** The `line` fill with `text`. Use it for a second action that needs weight, such as Stop or Done.
-- **Outlined:** A 1 dp `dim` border with accent text. Use it for a second action, such as Reply when the master shows choices. Reply is filled when it is the only action of the master.
+- **Outlined:** A 1 dp `dim` border with accent text. Use it for a second action, such as Show Downloads on a transfer.
 - **Destructive:** A 1 dp red border with red text. Use it for an action that ends or deletes something for good.
-- **Text:** Accent text with a 12 dp side inset. Use it for a small action in a line of text, such as Retry or Later.
+- **Text:** Accent text with a 12 dp side inset. Use it for a small action in a line of text, such as Retry. Later and Open thread on the master tile are accent text with no inset, 14 sp, 600.
 - **States:** A busy button shows a spinner in the place of its icon, keeps its colors, and takes no taps. A disabled filled or tonal button takes the `tile` fill and `dim` text.
 
 ### Chips
 
-- **Scope chip:** A `tile` chip with a 10 dp corner and a `line` border, at least 48 dp high. It shows "All computers" or 1 computer, then a link dot and a battery dot for each computer, then an expand icon. A tap opens the scope menu.
+- **Scope chip:** A `tile` chip with a 10 dp corner and a `line` border, 40 dp high, that takes taps on 48 dp. It shows "All computers" or 1 computer, then a 7 dp link dot for each computer, then an expand icon. A tap opens the scope menu.
 - **Choice chip:** A choice of a small group, such as a player or a camera mode. It is at least 40 dp high and takes taps on 48 dp. The label is 13 sp, 600, in `sub`. A selected chip takes `accent-tile`, a 2 dp accent border, and `text`.
 
 ### Cards / Containers
 
-- **Corner Style:** 12 dp.
+- **Corner Style:** 12 dp. The master tile has 14 dp.
 - **Background:** `tile` by default, `tile-hi` for the master tool, and `off-tile` for a tile that is off.
 - **Shadow Strategy:** None. See Elevation & Depth.
 - **Border:** 1 dp `line`. A stack tile that needs the user has a 1 dp red border.
-- **Internal Padding:** 14 dp for a tile, 16 dp for the master tile, 18 dp for the master tool, and 20 dp for the empty Inbox tile.
+- **Internal Padding:** 14 dp for a tile and the master tile, 11 by 10 dp for a stack tile, 18 dp for the master tool, and 20 dp for the empty Inbox tile.
 
 ### Inputs / Fields
 
@@ -385,23 +387,34 @@ A pressed tile changes its border to the accent. A selected choice changes its b
 
 ### Navigation
 
-- **Bar:** The Material 3 navigation bar in a compact window, with 4 destinations: Inbox, Send, Control, and Computers. The Inbox icon shows a red badge with the number of items that need the user, up to "9+".
+- **Bar:** A 66 dp bar on `bg` in a compact window, with 4 destinations: Inbox, Send, Control, and Computers. Each has a 22 dp icon in a 56 by 30 dp pill, and a 12 sp label. The pill of the open destination takes `line`, and its label is 600 in `text`. The Inbox pill shows a red badge with the number of items that need the user, up to "9+". The content fades out over 24 dp above the bar.
 - **Rail:** The Material 3 navigation rail in a window of 600 dp and more, with the same destinations.
-- **Top bar:** A destination shows the Flux mark and the scope chip. A feature screen shows a 40 dp back button, the title, and an optional mono context line. When the actions leave the title too little width, they move to a second row.
+- **Top bar:** A destination shows the Flux mark and the scope chip. A feature screen shows a 40 dp back button, the title, and an optional mono context line. When the actions leave the title too little width, they move to a second row. The agent screen has its own top bar, see Agent screen.
 - **Motion:** Destinations fade through in 240 ms. A feature screen moves on the horizontal axis in 220 ms. Predictive back follows the gesture.
 
 ### Master tile
 
 The signature component. It holds the first Inbox item with its whole action.
 
-- The top row holds the window title, the computer in mono under it, and Later.
-- An agent item shows its title, the prompt in mono, the numbered choices, and Reply. A choice row is at least 48 dp high, on `bg` with a `line` border. The agent's cursor choice takes `accent-tile` and a 2 dp accent border.
-- The prompt comes from `agentPrompt` in `core/InboxModel.kt`. It keeps the lines nearest the choices, because they hold the command that a choice approves.
+- The top row holds the window title and Later. With more than 1 computer in scope, the window title ends with the computer.
+- An agent item shows its title, the question, the command in mono 12 sp on `bg`, the numbered choices, and Open thread. A choice is at least 44 dp high, with a 12 dp corner. The first choice takes the accent fill, and the other choices take `line`. A working agent shows the answer that the Inbox sent, a moving accent bar, and its step.
+- The question comes from `agentAsk` in `core/AgentThread.kt`. It keeps the lines nearest the choices, because they hold the command that a choice approves.
 - A swipe to the side, Later, or the TalkBack action "Show the next item" moves the master to the end of the stack. A tap on a stack tile moves that tile to the master. Each move takes 200 ms.
 
 ### Stack tile
 
-A `tile` row with the window title, a 14 sp 600 title, and a 12 sp `sub` line, each on 1 line. From a font scale of 1.3, the window title takes 2 lines in every tile, so the tiles of 1 row keep the same height. A player tile also has a round play and pause button in green.
+A `tile` row with the window title, a 14 sp 600 title, and a 12 sp `sub` line, each on 1 line. From a font scale of 1.3, the window title takes 2 lines in every tile, so the tiles of 1 row keep the same height. A working agent shows a turning ring in the place of its dot.
+
+### Agent screen
+
+The agent screen shows 1 herdr agent as a thread. `agentThread` in `core/AgentThread.kt` reads the output of Claude Code and Codex. Lines that it does not know stay terminal lines.
+
+- **Top bar:** A 48 dp back icon, the task in 16 sp 600, and the agent, the pane, and the computer in mono 11 sp. Live is a 36 dp pill. The menu holds Refresh, Changes, Show keys, and Close the agent.
+- **Strip:** 36 dp pills for the agents of the computer, each with a status mark, the project, and the agent in mono. The pill on screen takes `accent-tile` and an accent border.
+- **Progress:** A 2 dp `line` rule under the strip. While the agent works, a bar of 40% of the width slides over it in the accent.
+- **Thread:** Messages, tool calls on `off-tile` with a 12 dp corner, a changes card on `tile`, and prompts as bubbles on `accent-tile`. A tap on a tool call shows its result.
+- **Dock:** `tile` with 20 dp top corners and a `line` rule at the top. It lies 14 dp over the end of the thread. It shows the question with 48 dp choices, the step of a working agent with Interrupt, or the end of a turn. The composer is a 48 dp pill on `bg` with a `line-hi` border, a round mic key on `line`, and a round accent send key.
+- **Changes sheet:** `tile` with 20 dp top corners. Each file is a card on `bg` with its diff lines in mono 11 sp: hunks in cyan, added lines in green, and removed lines in red.
 
 ### Window title
 
