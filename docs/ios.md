@@ -157,21 +157,24 @@ The **Inbox** shows what happens on the computers in scope, in this order:
 2. What plays now, the last clip, and the transfers.
 3. Agents that are done, then agents that work.
 
-The first item takes the master tile with its whole action, framed in the active border of the Omarchy theme.
+The first item takes the master tile with its whole action. While it needs you, the active border of the Omarchy theme frames it.
 The other items wait in the stack under it, 2 tiles in each row.
 A tile of an item that needs you has a red border.
+A stack tile of an agent also names the agent and its project. The other stack tiles show only the state.
+To play or pause a player from its stack tile, touch and hold the tile.
 A tap on a stack tile moves it to the master tile.
 To move the master item to the end of the stack, swipe the master tile to the side, or tap **Later**.
 VoiceOver users can select the action **Show the next item** on the master tile.
 A new item that needs you takes the master tile back.
 A finished transfer, the last clip, and a paused player stay for 30 minutes.
 
-An agent that waits shows its question and the numbered choices in the master tile.
+An agent that waits shows its question, the command in mono, and the numbered choices in the master tile. The first choice has the accent fill.
 The tile reads the output of the agent when it shows, and only an output that comes after that read shows choices.
 The question keeps the lines nearest the choices, because they hold the command that a choice approves, and the tile never cuts them.
 Each answer asks for Face ID, Touch ID, or the passcode first.
 After an answer, the choices stay off until the agent shows a new output.
-**Reply** and **Open** open the full output of the agent.
+An agent that works shows your last answer, a moving bar, and its step.
+**Open thread** opens the agent screen. It shows the output of the agent as a thread, with a dock for the question, the step, and your prompts. See [See your agents](herdr.md#see-your-agents).
 **Review** on an approval opens the approval sheet, and **Compare the key** on a pair request opens the pairing sheet. Neither approves or pairs by itself.
 
 In a window of 600 points or wider, such as an iPhone in landscape, the **Inbox** splits.
@@ -200,7 +203,7 @@ To change the theme, open **Computers** and select a choice under **Theme**. The
 The setting keeps the key of the earlier **Appearance** setting. **Automatic** becomes **Computer**, and **Light** and **Dark** stay.
 The light or dark mode of the theme also applies to the sheets, the alerts, and the keyboard.
 A contrast guard maps the theme to the colors of the app, as in [Flux for Android](android.md#theme).
-The master tile takes the gradient of `hyprland_active_border`.
+The master tile that needs you takes the gradient of `hyprland_active_border`.
 The feature screens take the background, the accent, and the light or dark mode of the theme.
 The agent output keeps its terminal colors.
 The theme engine is in `macos/Sources/FluxKit/Theme`, and the colors of the app are in `ios/App/Theme`.

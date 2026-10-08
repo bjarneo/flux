@@ -5,8 +5,8 @@ import SwiftUI
 /// Hyprland master layout. The first item is the master tile with its
 /// whole action. The other items wait in the stack. A swipe on the master,
 /// or Later, moves it to the end of the stack. A tap on a stack tile moves
-/// that tile to the master. Under a width of 600 pt, the master takes about
-/// 55% of the height and the stack has 2 columns under it. From 600 pt, the
+/// that tile to the master. Under a width of 600 pt, the master takes the
+/// height of its content and the stack has 2 columns under it. From 600 pt, the
 /// master takes 60% of the width at full height, and the status line and
 /// the stack fill a column on the right.
 struct InboxView: View {
@@ -88,11 +88,8 @@ struct StackedInbox: View {
         ScrollView {
             VStack(spacing: TiledMetrics.gap) {
                 StatusLine(scoped: scoped, all: all)
-                // The master takes about 55% of the height under the status
-                // line, so that 2 rows of the stack show, and its actions sit
-                // at thumb height.
-                MasterTile(item: master, compact: false, push: true, count: items.count,
-                           minHeight: max(0, (height - 44 - TiledMetrics.gap) * 0.55))
+                // The master takes the height of its content, and the stack follows it.
+                MasterTile(item: master, compact: false, push: false, count: items.count)
                     .matchedGeometryEffect(id: master.key, in: tiles)
                 if typeSize.isAccessibilitySize {
                     ForEach(stack) { item in

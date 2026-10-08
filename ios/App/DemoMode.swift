@@ -57,19 +57,84 @@ enum DemoMode {
         "   3. No",
     ]
 
+    /// The sample agents of the laptop: codex in billing waits for a
+    /// choice, claude in api works, and claude in web is done. They match
+    /// the sample agents of the Android app.
+    static let herdr = HerdrState(enabled: true, running: true, agents: [
+        HerdrAgent(pane: "w2:p1", agent: "codex", status: .blocked, title: "Run the database migration", project: "billing", workspace: "billing"),
+        HerdrAgent(pane: "w1:p1", agent: "claude", status: .working, title: "Add rate limiting to /v1/upload", project: "api", workspace: "api"),
+        HerdrAgent(pane: "w3:p1", agent: "claude", status: .done, title: "Fix the flaky login test", project: "web", workspace: "web"),
+    ], control: true, review: true)
+
+    /// The sample output of a demo agent in `pane`, or with `review` its
+    /// sample diff in the format of fluxd.
+    static func output(pane: String, review: Bool) -> HerdrOutput? {
+        if review {
+            return HerdrOutput(pane: pane, loading: false, lines: TermText.lines(diffs[pane] ?? "No changes in this repository."), view: "diff")
+        }
+        return samples[pane].map { HerdrOutput(pane: pane, loading: false, lines: TermText.lines($0)) }
+    }
+
+    private static let input = "╭────────────────────────────╮\n│ >                          │\n╰────────────────────────────╯\n  ? for shortcuts\n"
+
+    private static let samples: [String: String] = [
+        "w2:p1": [
+            "● I added the migration in db/migrate/0042_add_invoice_status.sql.\n\n",
+            "● Write(db/migrate/0042_add_invoice_status.sql)\n  ⎿  Wrote 18 lines to db/migrate/0042_add_invoice_status.sql\n\n",
+            "● Update(app/models/invoice.rb)\n  ⎿  Updated app/models/invoice.rb with 24 additions and 7 removals\n\n",
+            "● Bash(bin/migrate --dry-run)\n  ⎿  1 migration to apply: 0042_add_invoice_status\n\n",
+            String(repeating: "─", count: 72) + "\n Bash command\n\n   bin/migrate --apply\n   Apply the pending migration\n\n",
+            " Do you want to proceed?\n ❯ 1. Yes\n   2. Yes, and do not ask again for bin/migrate commands\n",
+            "   3. No, and tell Codex what to do differently (esc)\n",
+        ].joined(),
+        "w1:p1": [
+            "● I'll put a token bucket in front of the upload handler, keyed by API key.\n\n",
+            "● Write(src/middleware/rate_limit.ts)\n  ⎿  Wrote 61 lines to src/middleware/rate_limit.ts\n\n",
+            "● Update(src/routes/upload.ts)\n  ⎿  Updated src/routes/upload.ts with 3 additions and 1 removal\n\n",
+            "● Bash(npm test -- upload)\n  ⎿  Running 48 tests… 31 passed\n\n",
+            "✻ Running tests… (2:14 · esc to interrupt)\n\n" + input,
+        ].joined(),
+        "w3:p1": [
+            "● The login test waited on a fixed 2 s timeout. It now waits for the session cookie.\n\n",
+            "● Update(tests/login.spec.ts)\n  ⎿  Updated tests/login.spec.ts with 4 additions and 2 removals\n\n",
+            "● Bash(npm test -- login --repeat 20)\n  ⎿  20 passed\n\n",
+            "● Done. The test passed 20 times in a row.\n\n✻ Worked for 6m 12s\n\n" + input,
+        ].joined(),
+    ]
+
+    private static let diffs: [String: String] = [
+        "w2:p1": [
+            "Changed files\n M app/models/invoice.rb\n?? db/migrate/0042_add_invoice_status.sql\n\nWorking tree changes\n",
+            "diff --git a/app/models/invoice.rb b/app/models/invoice.rb\nindex 3f2a1c0..9b8d7e1 100644\n--- a/app/models/invoice.rb\n+++ b/app/models/invoice.rb\n",
+            "@@ -12,9 +12,26 @@ class Invoice\n   belongs_to :account\n-  def paid?\n-    paid_at.present?\n-  end\n",
+            "+  STATUSES = %w[draft open paid void]\n+  validates :status, inclusion: STATUSES\n+  def paid? = status == \"paid\"\n",
+            "\ndiff --git a/db/migrate/0042_add_invoice_status.sql b/db/migrate/0042_add_invoice_status.sql\nnew file\n",
+            "+ALTER TABLE invoices\n+  ADD COLUMN status text NOT NULL\n+  DEFAULT 'draft';\n+CREATE INDEX invoices_status_idx\n+  ON invoices (status);\n+\n",
+        ].joined(),
+        "w1:p1": [
+            "Changed files\n M src/routes/upload.ts\n?? src/middleware/rate_limit.ts\n\nWorking tree changes\n",
+            "diff --git a/src/routes/upload.ts b/src/routes/upload.ts\nindex 1a2b3c4..5d6e7f8 100644\n--- a/src/routes/upload.ts\n+++ b/src/routes/upload.ts\n",
+            "@@ -4,7 +4,9 @@\n-router.post(\"/v1/upload\", upload)\n+router.post(\"/v1/upload\",\n+  rateLimit({ perMinute: 30 }), upload)\n",
+            "\ndiff --git a/src/middleware/rate_limit.ts b/src/middleware/rate_limit.ts\nnew file\n",
+            "+export function rateLimit(opts: Limits) {\n+  const buckets = new Map<string, Bucket>()\n+  return (req, res, next) => {\n+\n",
+        ].joined(),
+        "w3:p1": [
+            "Changed files\n M tests/login.spec.ts\n\nWorking tree changes\n",
+            "diff --git a/tests/login.spec.ts b/tests/login.spec.ts\nindex 2b3c4d5..6e7f8a9 100644\n--- a/tests/login.spec.ts\n+++ b/tests/login.spec.ts\n",
+            "@@ -21,8 +21,10 @@\n-  await page.waitForTimeout(2000)\n+  await expect.poll(() =>\n+    context.cookies()).toContainEqual(\n",
+            "+      expect.objectContaining({ name: 'session' }))\n",
+        ].joined(),
+    ]
+
     /// The sample transfer keeps 1 ID, so that its Inbox key stays the same.
     private static let transferId = UUID(uuidString: "6F1D5E0A-0D7C-4C1B-9E55-0000000000A1") ?? UUID()
 
     /// The sample Inbox: an agent that waits, an approval, a player, a
-    /// clip, a received file, and an agent that is done. They go through
+    /// clip, a received file, an agent that is done, and an agent that works. They go through
     /// `Inbox.items`, so that the order is the real order.
     static func inboxItems(now: Date) -> [InboxItem] {
         let laptop = computers[0].id
-        let agents = [
-            HerdrAgent(pane: "w2:p1", agent: "codex", status: .blocked, title: "Migrate the billing table", project: "billing"),
-            HerdrAgent(pane: "w1:p1", agent: "claude", status: .done, title: "Add the export tests", project: "reports"),
-        ]
-        let herdr = [laptop: HerdrState(enabled: true, running: true, agents: agents, control: true)]
+        let herdr = [laptop: Self.herdr]
         var player = RemotePlayer(name: "spotify")
         player.title = "Focus mix"
         player.artist = "Lo-fi radio"

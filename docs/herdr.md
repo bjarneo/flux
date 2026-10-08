@@ -52,8 +52,7 @@ With `herdr_control = false`, the second line is a note and not a problem:
 
 ## See your agents
 
-On Android, the agent screen shows the output of the agent as a thread.
-Flux for iOS and Flux for macOS open the agent screen on the **Output** view.
+Each app shows the output of an agent as a thread.
 Each app also shows the Git changes of the agent.
 See [Agent diff review](workflows.md#agent-diff-review).
 
@@ -62,13 +61,15 @@ See [Agent diff review](workflows.md#agent-diff-review).
 3. To see all agents, open **Control** and select **Agents and terminals**.
 4. Select an agent to read its recent output.
 
-On Android, the agent screen has these parts:
+The agent screen of Flux for Android and Flux for iOS has these parts:
 
 - The top bar shows the task, the agent, the pane, and the computer. Its menu has **Refresh**, **Changes**, **Show keys**, and **Close the agent**.
 - A row of pills shows the agents of the computer. Select a pill to open that agent.
 - A thin bar moves under the pills while the agent works.
 - The thread shows the messages of the agent, its tool calls, the files that it changed, and your prompts. Select a tool call to show its result. Flux reads the transcripts of Claude Code and Codex. Lines that it cannot read show as terminal lines.
 - The dock at the bottom shows the question and the choices of a blocked agent, the step of a working agent with **Interrupt**, or the end of a finished turn. The text field and the mic key are under it.
+
+The agents window of Flux for macOS keeps its agent list in the place of the pills. Its header has **Changes**, **Keys**, the copy button, and the refresh button. See [Use a Mac](#use-a-mac).
 
 The list puts blocked agents first, then done, working, idle, and unknown agents.
 A blocked agent waits for an approval or for the answer to a question.
@@ -138,7 +139,7 @@ To show each diff in 1 column, set `diff_style` in `~/.config/opencode/tui.json`
 Flux for Android can show the live terminal of an agent in the place of the thread.
 The phone then controls the pane on the computer.
 The thread stays the default on Android.
-Flux for iOS and Flux for macOS show the output of an agent and do not have Live.
+Flux for iOS and Flux for macOS show the thread and do not have Live.
 
 Live needs these items:
 
@@ -439,13 +440,13 @@ It does not start agents, close them, open terminals, or show the live terminal.
 
 - **Control** has the **Agents and terminals** tool. Its line counts the agents and the terminals. Its badge shows the number of blocked agents.
 - The Inbox shows each agent that waits for input, works, or is done. See [Inbox and navigation](macos.md#inbox-and-navigation).
-- **Agents and terminals** opens a window with the agent list on the left and the output of the selected agent on the right. When more than 1 computer has agents, Flux asks which one.
-- **Reply** and **Open** on the master tile of the Inbox open the agent in that window. The menu of each computer in the menu bar panel has **Agents…** too.
+- **Agents and terminals** opens a window with the agent list on the left and the thread of the selected agent on the right. When more than 1 computer has agents, Flux asks which one.
+- **Open thread** on the master tile of the Inbox opens the agent in that window. The menu of each computer in the menu bar panel has **Agents…** too.
 - The output uses the colors of Tokyo Night in dark mode and Tokyo Night Day in light mode.
 - The Mac fits the output to the width of the window, as the phone does. See [See your agents](#see-your-agents).
 - When you scroll up to read older lines, the output stays there when new output comes. To go back to the newest lines, select the arrow at the bottom of the output. On Android, the arrow is a round key at the bottom right of the thread.
-- Each output line selects its own text. To copy all the output, select the copy button above the output.
-- Press Command-R to read the output again.
+- Each message and each output line selects its own text. To copy all the output, select the copy button above the thread.
+- Press Command-R to read the output again. Press Command-D to show the changes.
 - Return sends the text. Shift-Return adds a line break.
 - Before the first reply, the Mac asks for Touch ID or the Mac password. The unlock stays valid for 5 minutes, until the Mac sleeps or locks.
 - The **Agent needs input** and **Agent finished** switches are in **Settings > Features**. They apply to all computers. A click on a notification opens the agent in the agents window.

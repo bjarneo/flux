@@ -190,6 +190,14 @@ public extension InboxItem {
         }
     }
 
+    /// The line under the title of a stack tile in the thread design. A
+    /// player names its computer only with `many` computers in scope, or
+    /// when it has no artist. The other items give `stackLine`.
+    func stackLine(many: Bool) -> String {
+        if case .media(_, let player) = content, !many, !player.artist.isEmpty { return player.artist }
+        return stackLine
+    }
+
     /// The title of the master tile.
     var masterTitle: String {
         switch content {

@@ -35,12 +35,15 @@ final class RingTests: XCTestCase {
 
     @MainActor
     func testAnOldTimeoutDoesNotStopANewRing() async throws {
-        let plugin = RingPlugin(maxDuration: .milliseconds(200))
+        // The old timeout fires at about 1000 ms, the check comes at about
+        // 1200 ms, and the new timeout fires at about 1600 ms. Each side has
+        // 400 ms of margin for a slow runner.
+        let plugin = RingPlugin(maxDuration: .seconds(1))
         plugin.ring(from: "omarchy")
         plugin.stop()
-        try await Task.sleep(for: .milliseconds(120))
+        try await Task.sleep(for: .milliseconds(600))
         plugin.ring(from: "omarchy")
-        try await Task.sleep(for: .milliseconds(120))
+        try await Task.sleep(for: .milliseconds(600))
         XCTAssertEqual(plugin.model.ringing, "omarchy", "the first ring's timeout is gone")
     }
 

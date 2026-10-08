@@ -195,13 +195,14 @@ final class AppModel {
 
     /// The Inbox items changed. The arrangement forgets the items that are
     /// gone, and the herdr plugin drops the prompts of the agents that no
-    /// longer wait.
+    /// longer wait or work.
     func inboxChanged(all: [InboxItem], scoped: [InboxItem]) {
         let next = arrangement.sync(scoped)
         if next != arrangement { arrangement = next }
         var keys = Set<String>()
         for item in all {
-            if case .agent(let deviceId, let agent, _) = item.content, agent.status == .blocked {
+            // A working agent shows its step on the master, so its prompt stays too.
+            if case .agent(let deviceId, let agent, _) = item.content, agent.status == .blocked || agent.status == .working {
                 keys.insert(HerdrModel.promptKey(deviceId, pane: agent.pane))
             }
         }

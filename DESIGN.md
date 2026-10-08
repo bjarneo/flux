@@ -439,6 +439,7 @@ This section comes from the Swift code. No screen capture of the Apple apps exis
 
 - **Theme engine:** `macos/Sources/FluxKit/Theme/ThemePalette.swift` is the port of `paletteOf`. It has the same contrast needs: 4.5:1 for text, and 3:1 for icons and borders. It has the same Tokyo Night and Tokyo Night Day values as the frontmatter and the light reference.
 - **Theme setting:** `ThemeMode` has the 4 choices Computer, System, Light, and Dark. In the scope of all computers, `ThemeBook` uses the theme that changed most recently.
+- **Agent thread:** `macos/Sources/FluxKit/Plugins/Herdr/AgentThread.swift` is the port of `core/AgentThread.kt`: `AgentThread.parse`, `AgentAsk.find`, `AgentAsk.dialogStart`, and `DiffFile.parse`. `AgentThreadTests` holds the same cases as the Kotlin tests, so both give the same thread.
 - **Inbox:** `macos/Sources/FluxKit/Inbox/` holds the same rank as `InboxKind` on Android, the user order in `InboxArrangement`, and `Inbox.agentPrompt`. The agent prompt keeps the lines nearest the choices, so that a one-tap choice never approves a command that the user cannot see.
 - **Roles in a view:** `ThemeColors` in `App/Theme/ThemeKit.swift` gives each role as a SwiftUI color through `@Environment(\.tn)`. `ThemeRoot` puts the palette into the environment and sets the tint to `accent`. Use a `tn` role where Android uses a `Tn` role.
 - **Shell kit:** `App/Theme/TiledKit.swift` holds `TiledMetrics`, the tile, `ActiveBorder`, `FluxButtonStyle` with the 5 kinds, `MasterTool`, `ToolRow`, `SectionLabel`, `NeedsBadge`, `LinkDot`, `BatteryDot`, `FluxSpinner`, `LineSkeleton`, and `CommandBlock`. iOS and macOS each have their own copy, with the metrics of the platform.
@@ -450,7 +451,8 @@ This section comes from the Swift code. No screen capture of the Apple apps exis
 - **Secret clip:** A clip that is a secret shows "Hidden text", `ClipEvent.hiddenText`. The text is in the body face, not in mono, because it is Flux text and not computer data. The event keeps no part of the secret. An image clip shows "An image".
 - **Active border:** 2 pt on the 12 pt tile corner. 1 border color gives a solid stroke. Without a theme angle, the gradient goes from the top left corner to the bottom right corner.
 - **Motion:** `Motion.standard` is 200 ms with the standard easing, `cubic-bezier(0.4, 0, 0.2, 1)`, or no motion with Reduce Motion. A tile moves between the master and the stack with a matched geometry effect. With Reduce Motion, the spinner is a fixed ring of 3 quarters and the skeleton does not pulse.
-- **Feature pages and windows:** `fluxScreen()` gives a page the theme background, the accent tint, and the light or dark mode of the theme. The inside of a feature keeps its own colors. The agent output keeps its terminal colors.
+- **Feature pages and windows:** `fluxScreen()` gives a page the theme background, the accent tint, and the light or dark mode of the theme. The inside of a feature keeps its own colors. The raw terminal lines of an agent keep their terminal colors.
+- **Agent thread views:** `App/Features/Agents/AgentThreadViews.swift` in each app holds the parts of the Android agent screen: `RingSpinner`, `PulseDot`, `SlideBar`, `AskChoiceButton`, `CodeLines`, the thread blocks, and `ChangesSheet`. The dock has 20 pt top corners and lies under the thread. The first choice takes the accent fill, and the other choices take `line`.
 - **Preserved surfaces:** The pairing views and the approval prompt keep their layout and behavior. They take only the accent and the light or dark mode of the theme. Do not restyle them as part of a system change.
 
 ### iOS
@@ -459,17 +461,17 @@ The iPhone app follows the HIG structure. The code is in `ios/App/`.
 
 - **Navigation:** A `TabView` with 4 tabs: Inbox, Send, Control, and Computers. The Inbox tab shows a badge with the number of items that need the user on all computers, from 1 to "9+". Each tab has its own `NavigationStack`, with the system back button and the edge swipe. A tap on the open tab goes back to its root.
 - **Bars:** The tab bar takes the `tile` fill. The navigation bar of a tab root takes the `bg` fill and an inline title. The scope chip takes the place of the visible title. The title stays for VoiceOver and the back button.
-- **Inbox under 600 pt wide:** The status line, the master, and the stack in 2 columns, in 1 scroll view. The master takes at least 55% of the height under the status line. Its actions sit at the bottom of the master, at thumb height. The 2 tiles of a row keep the same height. At the accessibility text sizes, the stack has 1 column.
+- **Inbox under 600 pt wide:** The status line, the master, and the stack in 2 columns, in 1 scroll view. The master takes the height of its content, and the stack follows it. The 2 tiles of a row keep the same height. At the accessibility text sizes, the stack has 1 column.
 - **Inbox from 600 pt wide:** The master takes 60% of the width at full height. The status line and the stack fill 1 column on the right. The choices sit directly under the prompt. iPad and iPhone in landscape get this split.
-- **Short window:** Below a height of 460 pt, the split master is compact. Its inset is 12 pt, its gaps are 6 pt and 10 pt, the prompt has 3 lines, and Reply moves to the top row. The prompt also has 3 lines at the text size xxLarge and larger.
+- **Short window:** Below a height of 460 pt, the split master is compact. Its inset is 12 pt, its gaps are 8 pt, the prompt has 3 lines, and Open thread moves to the top row. The prompt also has 3 lines at the text size xxLarge and larger.
 - **Swipe:** A horizontal drag of more than 30% of the width, or faster than 1000 pt per second, moves the master to the end of the stack. The tile fades to 40% alpha as it leaves. With Reduce Motion, the move is instant. Later and the VoiceOver action "Show the next item" do the same.
 - **Metrics:** An 8 pt gap, a 10 pt gutter, a 12 pt tile corner, an 8 pt small corner, and a 10 pt chip corner. The content is at most 840 pt wide, and the choice and action rows are at most 600 pt wide.
-- **Targets:** Every control takes taps on 44 by 44 pt or more. A `FluxButton` is 44 pt high or more. Choice rows and stack tiles are 48 pt high or more. A tool row is 56 pt high or more. The master tool is 128 pt high or more. The round media buttons are 48 pt, and the main one is a 56 pt green circle.
+- **Targets:** Every control takes taps on 44 by 44 pt or more. A `FluxButton` is 44 pt high or more. A choice is 44 pt high or more in the master and 48 pt in the dock. Stack tiles are 48 pt high or more. A tool row is 56 pt high or more. The master tool is 128 pt high or more. The round media buttons are 48 pt, and the main one is a 56 pt green circle.
 - **Type:** System text styles, so Dynamic Type works from xSmall to the accessibility sizes. Icons scale with the body style.
 
 | Role | iOS text style |
 | --- | --- |
-| Master title | Title 3, semibold. The media title is Title 2, semibold. |
+| Master title | Title 3, semibold. An agent title is Headline. The media title is Title 2, semibold. |
 | Clip title | Headline |
 | Transfer file name | Headline, mono |
 | Tool label | Subheadline, semibold. The master tool label is Title 3, semibold. |
@@ -484,6 +486,7 @@ The iPhone app follows the HIG structure. The code is in `ios/App/`.
 
 - **States:** A pressed tile changes its border to the accent, as on Android. A pressed `FluxButton` shows at 70% alpha.
 - **VoiceOver:** Each control has a label, a value, and a hint. The master header reads the source and the computer, with the state word as the value, and offers "Show the next item". A stack tile has the hint "Shows it first".
+- **Agent screen:** The system navigation bar holds the task, the agent, the pane, and the computer, and a menu with Refresh, Changes, Show keys, and Close the agent. The strip of pills, the progress line, the thread, and the dock follow the Android agent screen. The Changes sheet is a large sheet on `tile`. iOS has no Live.
 - **Differences from Android:** A tab bar in the place of the navigation bar and the navigation rail. A wide window keeps the tab bar, and only the Inbox splits. The system push and back motion in the place of the 220 ms shared axis and predictive back. 44 pt targets in the place of 48 dp targets. Text styles in the place of fixed sp sizes.
 - **Preserved surfaces:** The pairing sheet, `PairSheet`, and the Face ID approval sheet, `ApprovePrompt`.
 
@@ -497,6 +500,7 @@ The Mac app follows the macOS 14 structure. The code is in `macos/App/`.
 - **Inbox:** The same split at 600 pt, measured on the detail column. The master is on the left at 60% of the width and full height. The status line and the stack fill 1 column on the right. A narrower column shows the status line, the master, and the stack in 2 columns. The master column and the stack column are focus sections. Below a column height of 460 pt, the master is compact.
 - **No thumb push:** The actions of the master always sit directly under its content, because a pointer has no thumb zone. The Mac master has no swipe. Later, Command-], the context menu item "Show the next item", and the VoiceOver action move the master to the end of the stack. A stack tile has the context menu item "Show it first".
 - **Metrics:** An 8 pt gap, a 12 pt gutter, a 12 pt tile corner, an 8 pt small corner, and a 10 pt chip corner. The content is at most 840 pt wide, and the choice and action rows are at most 600 pt wide.
+- **Agents window:** The agent list stays in the sidebar in the place of the strip of pills. The detail shows a header with Changes, Command-D, a Keys toggle, Copy, and Refresh, Command-R. The progress line, the thread, and the dock follow the Android agent screen. The Changes sheet closes with Escape. The Mac has no Live.
 - **Targets:** A button is 28 pt high or more. Choice rows and stack tiles are 36 pt high or more. A tool row is 44 pt high or more. Every action is a `Button`, so Tab and Space reach it with full keyboard access.
 - **Buttons:** `FluxButtonStyle` has the same 5 kinds as Android, on the 8 pt small corner. The label is 13 pt semibold, with 14 pt side insets, or 8 pt for the Text kind. A hover adds 6% of `text` over the button. A press shows the button at 80% alpha.
 - **Tiles:** A pressed tile shows at 80% alpha. Its border does not change to the accent.
