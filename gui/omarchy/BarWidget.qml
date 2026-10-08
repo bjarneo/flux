@@ -1,6 +1,6 @@
 import QtQuick
 import Quickshell
-import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "Flux/components" as FluxUi
 
@@ -63,7 +63,7 @@ BarWidget {
       anchors.centerIn: parent
       size: 14
       fg: button.foreground
-      accent: root.linked ? Color.accent : button.foreground
+      accent: root.linked ? Commons.Color.accent : button.foreground
     }
   }
 }
