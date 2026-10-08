@@ -24,6 +24,11 @@ enum TiledMetrics {
     static let buttonHeight: CGFloat = 28
 }
 
+/// The shape of a tile, as on iOS.
+func tileShape(_ corner: CGFloat = TiledMetrics.tileCorner) -> RoundedRectangle {
+    RoundedRectangle(cornerRadius: corner, style: .continuous)
+}
+
 /// The theme surfaces of a page or a window: the theme background, the
 /// tint, the light or dark mode of the palette, and no system background
 /// behind a `List` or a `Form`. The inside of a feature keeps its colors.
