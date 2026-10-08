@@ -255,8 +255,9 @@ internal fun TextAction(
 
 /**
  * A numbered choice of a dialog. The [primary] choice has the accent fill,
- * and the others have the tonal fill. A tap sends its digit. [height] is
- * the least height, and [size] is the font size.
+ * and the others have the tonal fill. A tap sends its keys. The description
+ * of a choice shows under its label. [height] is the least height, and
+ * [size] is the font size.
  */
 @Composable
 internal fun AskChoice(c: AgentChoice, primary: Boolean, enabled: Boolean, height: Dp, size: Float, onClick: () -> Unit) {
@@ -272,7 +273,13 @@ internal fun AskChoice(c: AgentChoice, primary: Boolean, enabled: Boolean, heigh
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BasicText(c.key, style = TextStyle(color = ink.copy(alpha = 0.65f), fontSize = size.sp, lineHeight = line, fontFamily = Mono, fontWeight = FontWeight.Bold, lineHeightStyle = FullLines))
-        BasicText(c.label, Modifier.weight(1f), style = TextStyle(color = ink, fontSize = size.sp, lineHeight = line, fontWeight = FontWeight.Medium, lineHeightStyle = FullLines))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            BasicText(c.label, style = TextStyle(color = ink, fontSize = size.sp, lineHeight = line, fontWeight = FontWeight.Medium, lineHeightStyle = FullLines))
+            // The description of a choice of a question, under its label.
+            if (c.detail.isNotEmpty()) {
+                BasicText(c.detail, style = TextStyle(color = ink.copy(alpha = 0.72f), fontSize = (size - 1.5f).sp, lineHeight = ((size - 1.5f) * 1.3f).sp, lineHeightStyle = FullLines))
+            }
+        }
     }
 }
 

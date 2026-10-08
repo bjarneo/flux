@@ -826,11 +826,28 @@ fun termLines(text: String): List<TermLine> = tidyLines(parseAnsi(text))
  * A choice of a question or an approval dialog. [key] is the number that
  * the app shows. [keys] are the herdr key names that select the choice: the
  * digit of a numbered dialog, or the arrows and Enter of a menu, see
- * [findMenuChoices].
+ * [findMenuChoices]. [detail] is the line that describes the choice, or
+ * empty.
  */
-data class AgentChoice(val key: String, val label: String, val selected: Boolean = false, val keys: List<String> = listOf(key))
+data class AgentChoice(
+    val key: String,
+    val label: String,
+    val selected: Boolean = false,
+    val keys: List<String> = listOf(key),
+    val detail: String = "",
+)
 
-private val choiceLine = Regex("""^\s*([❯›>]\s*)?(\d{1,2})[.)]\s+(.+)$""")
+/** A numbered choice. The panel bar of opencode can come first. */
+private val choiceLine = Regex("""^\s*(?:┃\s*)?([❯›>]\s*)?(\d{1,2})[.)]\s+(.+)$""")
+
+/** The hints under the choices of a dialog, which are not the description of a choice. */
+private val choiceHints = listOf("↑↓", "enter submit", "Enter to select", "esc dismiss", "Esc to cancel", "to navigate")
+
+/** A line without the panel bar of opencode. */
+private fun barless(line: String): String = line.trimStart().let { if (it.startsWith("┃")) it.removePrefix("┃") else line }
+
+/** The count of spaces at the start of [s]. */
+private fun lead(s: String): Int = s.indexOfFirst { it != ' ' }.let { if (it < 0) s.length else it }
 
 /** How far from the end of the output the dialog can start, in lines. */
 private const val CHOICE_SCAN_LINES = 40
@@ -840,11 +857,12 @@ private const val CHOICE_TAIL_LINES = 15
 
 /**
  * Finds the numbered choices of the dialog at the end of the output, for
- * example the approval dialog of Claude Code. It takes the last run of
- * numbered lines that starts at 1 and counts up by 1. Other lines can come
- * between the choices, for example descriptions or a rule. It returns an
- * empty list when it finds fewer than 2 choices, or when the choices are not
- * near the end.
+ * example the approval dialog of Claude Code or the question of opencode in
+ * its panel. It takes the last run of numbered lines that starts at 1 and
+ * counts up by 1. Other lines can come between the choices, for example
+ * descriptions or a rule. The first line under a choice that is indented
+ * more than the choice is its description. It returns an empty list when it
+ * finds fewer than 2 choices, or when the choices are not near the end.
  */
 fun findChoices(lines: List<String>): List<AgentChoice> {
     val from = maxOf(0, lines.size - CHOICE_SCAN_LINES)
@@ -864,8 +882,17 @@ fun findChoices(lines: List<String>): List<AgentChoice> {
         run += h
     }
     if (run.size < 2 || run.last().index < lines.size - CHOICE_TAIL_LINES) return emptyList()
+    val described = run.mapIndexed { k, h ->
+        val next = if (k + 1 < run.size) run[k + 1].index else minOf(lines.size, h.index + 3)
+        val col = lead(barless(lines[h.index]))
+        val detail = (h.index + 1 until next).map { barless(lines[it]) }
+            .firstOrNull { it.isNotBlank() }
+            ?.takeIf { d -> lead(d) > col && choiceHints.none { d.contains(it) } }
+            ?.trim().orEmpty()
+        h.choice.copy(detail = detail)
+    }
     // A single key selects a choice, so only 1 to 9 work.
-    return run.map { it.choice }.filter { it.key.length == 1 }
+    return described.filter { it.key.length == 1 }
 }
 
 /** How far from the end of the output a menu row can be, in lines. */

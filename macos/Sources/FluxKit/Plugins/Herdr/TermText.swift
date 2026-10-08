@@ -315,18 +315,20 @@ public enum TermText {
 /// A choice of a question or an approval dialog. `key` is the number that
 /// the app shows. `keys` are the herdr key names that select the choice:
 /// the digit of a numbered dialog, or the arrows and Enter of a menu, see
-/// `findMenu`.
+/// `findMenu`. `detail` is the line that describes the choice, or empty.
 public struct AgentChoice: Sendable, Hashable, Identifiable {
     public var key: String
     public var label: String
     public var selected: Bool
     public var keys: [String]
+    public var detail: String
 
-    public init(_ key: String, _ label: String, selected: Bool = false, keys: [String]? = nil) {
+    public init(_ key: String, _ label: String, selected: Bool = false, keys: [String]? = nil, detail: String = "") {
         self.key = key
         self.label = label
         self.selected = selected
         self.keys = keys ?? [key]
+        self.detail = detail
     }
 
     /// The line under the bubble of an answer: the digit that went to the
@@ -340,10 +342,27 @@ public struct AgentChoice: Sendable, Hashable, Identifiable {
     /// The last choice must be this close to the end of the output, in lines.
     private static let tailLines = 15
 
+    /// The hints under the choices of a dialog, which are not the
+    /// description of a choice.
+    private static let choiceHints = ["↑↓", "enter submit", "Enter to select", "esc dismiss", "Esc to cancel", "to navigate"]
+
+    /// A line without the panel bar of opencode.
+    private static func barless(_ line: String) -> String {
+        let t = String(line.drop(while: { $0.isWhitespace }))
+        return t.hasPrefix("┃") ? String(t.dropFirst()) : line
+    }
+
+    /// The count of spaces at the start of `s`.
+    private static func lead(_ s: String) -> Int {
+        s.prefix(while: { $0 == " " }).count
+    }
+
     /// Finds the numbered choices of the dialog at the end of the output,
-    /// for example the approval dialog of Claude Code. It takes the last run
-    /// of numbered lines that starts at 1 and counts up by 1. Other lines can
-    /// come between the choices, for example descriptions or a rule. It
+    /// for example the approval dialog of Claude Code or the question of
+    /// opencode in its panel. It takes the last run of numbered lines that
+    /// starts at 1 and counts up by 1. Other lines can come between the
+    /// choices, for example descriptions or a rule. The first line under a
+    /// choice that is indented more than the choice is its description. It
     /// returns an empty list when it finds fewer than 2 choices, or when the
     /// choices are not near the end.
     public static func find(_ lines: [String]) -> [AgentChoice] {
@@ -360,15 +379,29 @@ public struct AgentChoice: Sendable, Hashable, Identifiable {
             run.append(h)
         }
         guard run.count >= 2, let last = run.last, last.index >= lines.count - tailLines else { return [] }
+        var described: [AgentChoice] = []
+        for (k, h) in run.enumerated() {
+            let next = k + 1 < run.count ? run[k + 1].index : min(lines.count, h.index + 3)
+            let col = lead(barless(lines[h.index]))
+            var choice = h.choice
+            if h.index + 1 < next,
+               let d = (h.index + 1..<next).map({ barless(lines[$0]) }).first(where: { $0.contains(where: { !$0.isWhitespace }) }),
+               lead(d) > col, !choiceHints.contains(where: { d.contains($0) }) {
+                choice.detail = d.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            described.append(choice)
+        }
         // A single key selects a choice, so only 1 to 9 work.
-        return run.map(\.choice).filter { $0.key.count == 1 }
+        return described.filter { $0.key.count == 1 }
     }
 
     /// Reads 1 line in the form `[❯›>] N. label` or `N) label`, with blanks
-    /// before and after the marker, as the Android app does.
+    /// before and after the marker, as the Android app does. The panel bar
+    /// of opencode can come first.
     private static func parse(_ line: String) -> (Int, AgentChoice)? {
         func blank(_ c: Character) -> Bool { c == " " || c == "\t" || c == "\u{0B}" || c == "\u{0C}" || c == "\r" || c == "\n" }
         var s = Substring(line).drop(while: blank)
+        if s.first == "┃" { s = s.dropFirst().drop(while: blank) }
         var selected = false
         if let c = s.first, "❯›>".contains(c) {
             selected = true

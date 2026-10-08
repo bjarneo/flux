@@ -460,5 +460,84 @@ final class AgentThreadTests: XCTestCase {
         XCTAssertFalse(AgentThread.isOpencode(text(demo)))
         XCTAssertTrue(AgentThread.isOpencode(opencodeDone))
     }
+
+    /// A question of opencode with 4 choices and descriptions, after the tidy step.
+    private let opencodeQuestion = [
+        "┃",
+        "┃  ask me a question I can answer a b c or d to",
+        "┃",
+        "",
+        "   + Thought: 984ms",
+        "   The next step is a merge decision.",
+        "   → Asked 1 question",
+        "   ▣  Build · Grok 4.7",
+        "┃",
+        "┃  What should I do with the pull request?",
+        "┃",
+        "┃  1. A. Approve CI, merge if green",
+        "┃     Approve the waiting runs. Merge only if both pass.",
+        "┃  2. B. Full review before any merge",
+        "┃     Read the change for bugs first.",
+        "┃  3. C. Do not merge",
+        "┃     Leave the pull request open.",
+        "┃  4. D. Close the pull request",
+        "┃     Reject the design.",
+        "┃  5. Type your own answer",
+        "┃",
+        "┃  ↑↓ select  enter submit  esc dismiss",
+        "┃",
+    ]
+
+    func testOpencodeQuestionGivesTheQuestionAndChoicesWithDescriptions() {
+        XCTAssertTrue(AgentThread.isOpencode(opencodeQuestion))
+        XCTAssertEqual(AgentAsk.find(opencodeQuestion), AgentAsk("What should I do with the pull request?", []))
+        let choices = AgentChoice.find(opencodeQuestion)
+        XCTAssertEqual(choices.count, 5)
+        XCTAssertEqual(choices.first, AgentChoice("1", "A. Approve CI, merge if green", detail: "Approve the waiting runs. Merge only if both pass."))
+        XCTAssertEqual(choices[3].keys, ["4"])
+        XCTAssertEqual(choices.last?.detail, "")
+        // The thought line, the tool call of the question, and the question itself are not in the thread.
+        XCTAssertEqual(AgentThread.parse(opencodeQuestion).blocks, [
+            .prompt("ask me a question I can answer a b c or d to"),
+            .message("The next step is a merge decision."),
+        ])
+    }
+
+    func testOpencodeAnsweredQuestionIsTheQuestionAndTheAnswer() {
+        let lines = [
+            "┃",
+            "┃  # Questions",
+            "┃",
+            "┃  Which tax rate should total use?",
+            "┃  C 0.25",
+            "┃",
+            "",
+            "   ▣  Build · Big Pickle · 3.1s",
+        ]
+        XCTAssertEqual(AgentThread.parse(lines).blocks, [.message("Which tax rate should total use?"), .prompt("C 0.25")])
+    }
+
+    func testClaudeQuestionDropsTheHeaderAndKeepsDescriptions() {
+        let lines = [
+            "● I need a decision.",
+            "",
+            String(repeating: "─", count: 40),
+            " ☐ Tax rate",
+            "",
+            "Which tax rate should total use?",
+            "",
+            "❯ 1. A 0",
+            "     No tax",
+            "  2. B 0.25",
+            "     A quarter",
+            "  3. Type something.",
+            "",
+            "Enter to select · Tab/Arrow keys to navigate · Esc to cancel",
+        ]
+        XCTAssertEqual(AgentAsk.find(lines), AgentAsk("Which tax rate should total use?", []))
+        let choices = AgentChoice.find(lines)
+        XCTAssertEqual(choices.map(\.detail), ["No tax", "A quarter", ""])
+        XCTAssertEqual(choices.first?.selected, true)
+    }
 }
 

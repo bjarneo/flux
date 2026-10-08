@@ -314,6 +314,8 @@ extension AgentAsk {
                 continue
             }
             if ruleOnly.matches(s) || s.hasPrefix("╭") || s.hasPrefix("╰") { continue }
+            // The header chips of a question of Claude Code, for example "☐ Tax rate".
+            if s.hasPrefix("☐") || s.hasPrefix("☒") || s.hasPrefix("✔") || s.hasPrefix("←  ☐") { continue }
             if s.hasPrefix("│") {
                 var inner = Substring(s).dropFirst()
                 if inner.hasSuffix("│") { inner = inner.dropLast() }
@@ -597,8 +599,16 @@ private let ocNumbered = ThreadPattern("^\(sp)*[0-9]+\(sp)")
 private let ocOptions = ThreadPattern("\(sp)+\\[[^\\]]*\\]\(sp)*$")
 /// The scroll bar at the right edge of a dialog of opencode.
 private let ocScrollBar = ThreadPattern("\(sp)+[█▀▄▌▐░▒▓]\(sp)*$")
+/// The line of opencode that tells how long the model thought.
+private let ocThought = ThreadPattern("^\\+\(sp)+Thought:\(sp)+\(nsp)+$")
+/// The first choice of a question of opencode.
+private let ocChoiceStart = ThreadPattern("^1[.)]\(sp)+.+$")
 /// The first line of a permission dialog of opencode.
 private let ocAsk = "△ Permission required"
+/// The hint under the choices of a question of opencode.
+private let ocQuestionHint = ["↑↓ select", "enter submit"]
+/// The first line of a question of opencode that the user answered.
+private let ocQuestions = "# Questions"
 
 /// The text without whitespace at the start, as Kotlin's trimStart.
 private func trimStart(_ s: String) -> String {
@@ -620,17 +630,23 @@ private func isOcMarker(_ c: String) -> Bool {
 
 extension AgentThread {
     /// True when `lines` come from opencode: they have the line after a
-    /// turn, the status line at the bottom, or a permission dialog.
+    /// turn, the status line at the bottom, a permission dialog, or a
+    /// question.
     public static func isOpencode(_ lines: [String]) -> Bool {
         lines.suffix(6).contains { $0.contains("ctrl+p commands") } ||
-            lines.contains { ocFooter.matches($0) || ocPanel($0)?.hasPrefix(ocAsk) == true }
+            lines.contains { l in
+                if ocFooter.matches(l) { return true }
+                guard let c = ocPanel(l) else { return false }
+                return c.hasPrefix(ocAsk) || ocQuestionHint.allSatisfy { c.contains($0) }
+            }
     }
 
     /// Finds the end of the thread of opencode: the status line, the input
-    /// box, and the permission dialog at the bottom do not belong to it. It
-    /// gives the end, the start of the dialog or nil, and whether the agent
-    /// works now.
-    static func opencodeEnd(_ lines: [String]) -> (end: Int, dialog: Int?, working: Bool) {
+    /// box, and the permission dialog or the question at the bottom do not
+    /// belong to it. It gives the end, the start of the dialog or nil,
+    /// whether the agent works now, and whether the dialog is a question of
+    /// the agent, not a permission.
+    static func opencodeEnd(_ lines: [String]) -> (end: Int, dialog: Int?, working: Bool, question: Bool) {
         var end = lines.count
         var working = false
         while end > 0 && lines[end - 1].isBlank { end -= 1 }
@@ -639,26 +655,31 @@ extension AgentThread {
             end -= 1
         }
         while end > 0 && (lines[end - 1].isBlank || trimStart(lines[end - 1]).hasPrefix("╹")) { end -= 1 }
-        // The permission dialog takes the place of the input box.
+        // A permission dialog or a question takes the place of the input box.
         var i = end
         while i > 0 && ocPanel(lines[i - 1]) != nil { i -= 1 }
-        if let ask = (i..<end).first(where: { ocPanel(lines[$0])?.hasPrefix(ocAsk) == true }) {
-            var e = ask
+        let ask = (i..<end).first(where: { ocPanel(lines[$0])?.hasPrefix(ocAsk) == true })
+        let question = ask == nil && (i..<end).contains { k in
+            guard let c = ocPanel(lines[k]) else { return false }
+            return ocQuestionHint.contains { c.contains($0) }
+        }
+        if ask != nil || question {
+            var e = ask ?? i
             // The tool call that waits for the answer and the line of the turn are in the dialog too.
             while e > 0 {
                 let l = lines[e - 1]
                 let t = l.trimmed
-                let pending = ocPanel(l) == nil && (t.hasPrefix("$ ") || t.hasPrefix("← ") || ocFooter.matches(l))
+                let pending = ocPanel(l) == nil && (t.hasPrefix("$ ") || t.hasPrefix("← ") || t.hasPrefix("→ Asked") || ocFooter.matches(l))
                 if t.isEmpty || ocPanel(l)?.isBlank == true || pending { e -= 1 } else { break }
             }
-            return (e, ask, working)
+            return (e, ask ?? i, working, question)
         }
         // The input box: empty lines and the line with the mode and the model.
         while end > 0 {
             guard let c = ocPanel(lines[end - 1]) else { break }
             if c.isBlank || c.contains(" · ") { end -= 1 } else { break }
         }
-        return (end, nil, working)
+        return (end, nil, working, false)
     }
 
     /// Parses the output `lines` of opencode into its thread.
@@ -699,6 +720,8 @@ extension AgentThread {
             } else if ocShell.matches(t) || ocTool.matches(t) {
                 flushMessage()
                 blocks.append(.tool(opencodeTool(t, [])))
+            } else if ocThought.matches(t) {
+                // The time that the model thought, for example "+ Thought: 37.7s", is not a message.
             } else if t.hasPrefix("···") {
                 flushMessage()
                 blocks.append(.raw(from: i, to: i + 1))
@@ -711,9 +734,32 @@ extension AgentThread {
         return AgentThread(mergeEdits(blocks), step: working ? "Working" : "", elapsed: "", worked: worked)
     }
 
-    /// The blocks of a panel of opencode: a prompt of the user, then tool calls with their output.
+    /// The blocks of a panel of opencode: a prompt of the user, then tool
+    /// calls with their output. A question that the user answered shows as
+    /// the question of the agent and the answer of the user.
     static func opencodePanel(_ content: [String]) -> [ThreadBlock] {
         var out: [ThreadBlock] = []
+        let rows = content.map(\.trimmed).filter { !$0.isEmpty }
+        if rows.first == ocQuestions {
+            // Each line that ends with a question mark starts a question. The lines after it are the answer.
+            var q: String?
+            var answer: [String] = []
+            func flush() {
+                if let q { out.append(.message(q)) }
+                if !answer.isEmpty { out.append(.prompt(answer.joined(separator: "\n"))) }
+                answer = []
+            }
+            for r in rows.dropFirst() {
+                if r.hasSuffix("?") {
+                    flush()
+                    q = r
+                } else {
+                    answer.append(r)
+                }
+            }
+            flush()
+            return out
+        }
         var k = 0
         var prompt: [String] = []
         while k < content.count && !isOcMarker(content[k]) {
@@ -762,7 +808,18 @@ extension AgentThread {
     /// command", does not show. A shell command shows as the command. An
     /// edit shows the file, then the first `maxLines` lines of its diff.
     static func opencodeAsk(_ lines: [String], maxLines: Int) -> AgentAsk? {
-        guard let ask = opencodeEnd(lines).dialog else { return nil }
+        let end = opencodeEnd(lines)
+        guard let ask = end.dialog else { return nil }
+        if end.question {
+            // The question is the text above the first choice. The choices show as buttons.
+            var text: [String] = []
+            for l in lines[ask...] {
+                guard let c = ocPanel(l)?.trimmed else { continue }
+                if ocChoiceStart.matches(c) { break }
+                if !c.isEmpty { text.append(c) }
+            }
+            return AgentAsk(text.joined(separator: " "), [])
+        }
         var rows: [String] = []
         for l in lines[(ask + 1)...] {
             guard let c = ocPanel(l) else { break }

@@ -509,5 +509,93 @@ class AgentThreadTest {
         assertFalse(isOpencode(text(demo)))
         assertTrue(isOpencode(opencodeDone))
     }
+
+    /** A question of opencode with 4 choices and descriptions, after the tidy step. */
+    private val opencodeQuestion = listOf(
+        "┃",
+        "┃  ask me a question I can answer a b c or d to",
+        "┃",
+        "",
+        "   + Thought: 984ms",
+        "   The next step is a merge decision.",
+        "   → Asked 1 question",
+        "   ▣  Build · Grok 4.7",
+        "┃",
+        "┃  What should I do with the pull request?",
+        "┃",
+        "┃  1. A. Approve CI, merge if green",
+        "┃     Approve the waiting runs. Merge only if both pass.",
+        "┃  2. B. Full review before any merge",
+        "┃     Read the change for bugs first.",
+        "┃  3. C. Do not merge",
+        "┃     Leave the pull request open.",
+        "┃  4. D. Close the pull request",
+        "┃     Reject the design.",
+        "┃  5. Type your own answer",
+        "┃",
+        "┃  ↑↓ select  enter submit  esc dismiss",
+        "┃",
+    )
+
+    @Test
+    fun opencodeQuestionGivesTheQuestionAndChoicesWithDescriptions() {
+        assertTrue(isOpencode(opencodeQuestion))
+        assertEquals(AgentAsk("What should I do with the pull request?", emptyList()), agentAsk(opencodeQuestion))
+        val choices = findChoices(opencodeQuestion)
+        assertEquals(5, choices.size)
+        assertEquals(AgentChoice("1", "A. Approve CI, merge if green", detail = "Approve the waiting runs. Merge only if both pass."), choices[0])
+        assertEquals(listOf("4"), choices[3].keys)
+        assertEquals("", choices[4].detail)
+        // The thought line, the tool call of the question, and the question itself are not in the thread.
+        assertEquals(
+            listOf(
+                ThreadBlock.Prompt("ask me a question I can answer a b c or d to"),
+                ThreadBlock.Message("The next step is a merge decision."),
+            ),
+            agentThread(opencodeQuestion).blocks,
+        )
+    }
+
+    @Test
+    fun opencodeAnsweredQuestionIsTheQuestionAndTheAnswer() {
+        val lines = listOf(
+            "┃",
+            "┃  # Questions",
+            "┃",
+            "┃  Which tax rate should total use?",
+            "┃  C 0.25",
+            "┃",
+            "",
+            "   ▣  Build · Big Pickle · 3.1s",
+        )
+        assertEquals(
+            listOf(ThreadBlock.Message("Which tax rate should total use?"), ThreadBlock.Prompt("C 0.25")),
+            agentThread(lines).blocks,
+        )
+    }
+
+    @Test
+    fun claudeQuestionDropsTheHeaderAndKeepsDescriptions() {
+        val lines = listOf(
+            "● I need a decision.",
+            "",
+            "─".repeat(40),
+            " ☐ Tax rate",
+            "",
+            "Which tax rate should total use?",
+            "",
+            "❯ 1. A 0",
+            "     No tax",
+            "  2. B 0.25",
+            "     A quarter",
+            "  3. Type something.",
+            "",
+            "Enter to select · Tab/Arrow keys to navigate · Esc to cancel",
+        )
+        assertEquals(AgentAsk("Which tax rate should total use?", emptyList()), agentAsk(lines))
+        val choices = findChoices(lines)
+        assertEquals(listOf("No tax", "A quarter", ""), choices.map { it.detail })
+        assertTrue(choices[0].selected)
+    }
 }
 
