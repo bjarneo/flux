@@ -43,6 +43,7 @@ fingerprint power_settings_new signature smart_toy
 light_mode dark_mode contrast
 touchpad_mouse keyboard slideshow
 inbox devices expand_more star+fill
+arrow_forward expand_less difference south edit
 public menu_book bug_report alternate_email license
 """.split()
 

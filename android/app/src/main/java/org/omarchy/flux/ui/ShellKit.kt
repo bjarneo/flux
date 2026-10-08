@@ -209,22 +209,22 @@ fun ScopeChip(devices: List<DeviceUi>, scope: String?, onScope: (String?) -> Uni
     val shape = RoundedCornerShape(10.dp)
     Box(modifier) {
         // The clickable merges the description of the inner row. The inner row hides the dots from TalkBack.
+        // The chip is 40 dp high and takes taps on 48 dp.
         Box(
-            Modifier.heightIn(min = 48.dp).clip(shape).background(Tn.tile).border(1.dp, Tn.line, shape)
-                .clickable(onClickLabel = "Change the scope", role = Role.DropdownList) { open = true },
+            Modifier.heightIn(min = 48.dp).clip(shape)
+                .clickable(onClickLabel = "Change the scope", role = Role.DropdownList) { open = true }
+                .padding(vertical = 4.dp).heightIn(min = 40.dp).clip(shape).background(Tn.tile).border(1.dp, Tn.line, shape),
             contentAlignment = Alignment.CenterStart,
         ) {
             Row(
-                Modifier.padding(start = 12.dp, end = 6.dp).clearAndSetSemantics { contentDescription = description },
+                Modifier.padding(start = 12.dp, end = 10.dp).clearAndSetSemantics { contentDescription = description },
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 T(name, Modifier.weight(1f, fill = false), size = 14, weight = FontWeight.SemiBold, maxLines = 1)
-                for (d in shown) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-                        LinkDot(d.online)
-                        val b = d.battery
-                        if (d.online && b != null) Dot(batteryColor(b, d.charging))
+                if (shown.isNotEmpty()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        for (d in shown) LinkDot(d.online, 7.dp)
                     }
                 }
                 Sym(Ic.expand, tint = Tn.sub, size = 20.dp)

@@ -2,6 +2,7 @@ package org.omarchy.flux.ui
 
 import android.app.DownloadManager
 import android.content.Intent
+import android.os.SystemClock
 import android.text.format.DateUtils
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedContent
@@ -17,6 +18,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -61,6 +63,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -119,7 +122,9 @@ import org.omarchy.flux.core.Plugins
 import org.omarchy.flux.core.TransferItem
 import org.omarchy.flux.core.TransferState
 import org.omarchy.flux.core.UiState
+import org.omarchy.flux.core.agentAsk
 import org.omarchy.flux.core.agentPrompt
+import org.omarchy.flux.core.agentThread
 import org.omarchy.flux.core.choicesOpen
 import org.omarchy.flux.core.inboxItems
 import org.omarchy.flux.core.needsYou
@@ -232,17 +237,19 @@ fun InboxScreen(
         InboxEmpty(state, notices, actions)
         return
     }
+    // With more than 1 computer in scope, the window title of the master names the computer.
+    val many = notices.scopeName == null && state.devices.count { it.paired } > 1
     if (wide) {
-        SplitInbox(state, items, active, notices, actions, onSwipe, onPromote)
+        SplitInbox(state, items, active, notices, actions, many, onSwipe, onPromote)
     } else {
-        StackedInbox(state, items, active, notices, actions, onSwipe, onPromote)
+        StackedInbox(state, items, active, notices, actions, many, onSwipe, onPromote)
     }
 }
 
 /**
  * The Inbox of a phone in portrait: the status line, the master, and the
- * stack in 2 columns under it, all in 1 grid. The tiles move to their new
- * places in [MOTION_MS].
+ * stack in 2 columns under it, all in 1 grid. The master takes the height
+ * of its content. The tiles move to their new places in [MOTION_MS].
  */
 @Composable
 private fun StackedInbox(
@@ -251,18 +258,18 @@ private fun StackedInbox(
     active: Boolean,
     notices: InboxNotices,
     actions: InboxActions,
+    many: Boolean,
     onSwipe: (String) -> Unit,
     onPromote: (String) -> Unit,
 ) {
     val reduce = LocalReduceMotion.current
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        // The master takes about 55% of the height under the status line, so that 2 rows of the stack show above the navigation bar.
-        val masterMin = ((maxHeight - StatusMin - TileGap) * 0.55f).coerceAtLeast(0.dp)
+    Box(Modifier.fillMaxSize()) {
         val needs = items.needsYou()
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = TiledGutter, end = TiledGutter, bottom = 16.dp),
+            // The bottom space keeps the last row clear of the fade above the navigation bar.
+            contentPadding = PaddingValues(start = TiledGutter, end = TiledGutter, bottom = 28.dp),
             horizontalArrangement = Arrangement.spacedBy(TileGap),
             verticalArrangement = Arrangement.spacedBy(TileGap),
         ) {
@@ -273,15 +280,15 @@ private fun StackedInbox(
                     master, state.devices, active, actions,
                     canSwipe = items.size > 1,
                     onSwipe = { onSwipe(master.key) },
-                    fit = MasterFit(push = true, compact = false),
+                    fit = MasterFit(push = false, compact = false),
+                    many = many,
                     modifier = Modifier
-                        .animateItem(fadeInSpec = shellMotion(reduce), placementSpec = shellMotion(reduce), fadeOutSpec = shellMotion(reduce))
-                        .heightIn(min = masterMin),
+                        .animateItem(fadeInSpec = shellMotion(reduce), placementSpec = shellMotion(reduce), fadeOutSpec = shellMotion(reduce)),
                 )
             }
             items(items.drop(1), key = { it.key }, contentType = { "stack" }) { item ->
                 StackTile(
-                    item,
+                    item, many,
                     Modifier.animateItem(fadeInSpec = shellMotion(reduce), placementSpec = shellMotion(reduce), fadeOutSpec = shellMotion(reduce)),
                 ) { onPromote(item.key) }
             }
@@ -303,6 +310,7 @@ private fun SplitInbox(
     active: Boolean,
     notices: InboxNotices,
     actions: InboxActions,
+    many: Boolean,
     onSwipe: (String) -> Unit,
     onPromote: (String) -> Unit,
 ) {
@@ -326,6 +334,7 @@ private fun SplitInbox(
                         canSwipe = canSwipe,
                         onSwipe = { onSwipe(master.key) },
                         fit = fit,
+                        many = many,
                         modifier = Modifier.fillMaxWidth().heightIn(min = height),
                     )
                 }
@@ -339,7 +348,7 @@ private fun SplitInbox(
             item(key = "status") { InboxStatus(items.needsYou(), notices, actions) }
             items(items.drop(1), key = { it.key }, contentType = { "stack" }) { item ->
                 StackTile(
-                    item,
+                    item, many,
                     Modifier.animateItem(fadeInSpec = shellMotion(reduce), placementSpec = shellMotion(reduce), fadeOutSpec = shellMotion(reduce)),
                 ) { onPromote(item.key) }
             }
@@ -370,9 +379,9 @@ private fun needsText(count: Int): String = if (count == 1) "1 item needs you" e
 @Composable
 private fun InboxStatus(needs: Int, notices: InboxNotices, actions: InboxActions) {
     val offline = offlineShows(notices)
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Column(Modifier.fillMaxWidth().padding(top = if (offline) 4.dp else 14.dp, bottom = 2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(
-            Modifier.fillMaxWidth().heightIn(min = if (offline) StatusMin else 32.dp).padding(start = 4.dp),
+            Modifier.fillMaxWidth().heightIn(min = if (offline) StatusMin else 0.dp).padding(start = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -382,9 +391,9 @@ private fun InboxStatus(needs: Int, notices: InboxNotices, actions: InboxActions
                     Box(Modifier.padding(top = 5.dp)) { if (needs > 0) Dot(Tn.red) else LinkDot(false) }
                 }
                 val text = buildAnnotatedString {
-                    withStyle(SpanStyle(fontSize = 14.sp)) {
+                    withStyle(SpanStyle(fontSize = 15.sp)) {
                         if (needs > 0) {
-                            withStyle(SpanStyle(color = Tn.text, fontWeight = FontWeight.SemiBold)) { append(needsText(needs)) }
+                            withStyle(SpanStyle(color = Tn.text, fontWeight = FontWeight.Medium)) { append(needsText(needs)) }
                         } else {
                             append(nothingText(notices))
                         }
@@ -499,16 +508,16 @@ private fun InboxEmpty(state: UiState, notices: InboxNotices, actions: InboxActi
  */
 private data class MasterFit(val push: Boolean, val compact: Boolean) {
     /** The space inside the border of the tile. */
-    val padding: Dp get() = if (compact) 12.dp else 16.dp
+    val padding: Dp get() = if (compact) 12.dp else 14.dp
 
     /** The space between the lines of the top part. */
-    val gap: Dp get() = if (compact) 6.dp else 10.dp
+    val gap: Dp get() = if (compact) 8.dp else 12.dp
 
     /** The space between the top part and the actions. */
-    val partGap: Dp get() = if (compact) 10.dp else 16.dp
+    val partGap: Dp get() = if (compact) 8.dp else 12.dp
 
     /** The space between the choices. */
-    val choiceGap: Dp get() = if (compact) 6.dp else 8.dp
+    val choiceGap: Dp get() = 6.dp
 }
 
 /** The top row of a master: it takes the actions to show at its end, after Later. */
@@ -527,6 +536,7 @@ private fun MasterTile(
     canSwipe: Boolean,
     onSwipe: () -> Unit,
     fit: MasterFit,
+    many: Boolean,
     modifier: Modifier,
 ) {
     val reduce = LocalReduceMotion.current
@@ -561,8 +571,13 @@ private fun MasterTile(
             )
         }
     }
-    val header: MasterHeaderSlot = { trailing -> MasterHeader(item, canSwipe, onSwipe, trailing) }
-    Tile(m, border = activeBorder(), padding = PaddingValues(fit.padding), verticalArrangement = Arrangement.spacedBy(fit.partGap, Alignment.Top)) {
+    val header: MasterHeaderSlot = { trailing -> MasterHeader(item, canSwipe, onSwipe, many, trailing) }
+    // Only a master that needs the user takes the active border of the theme.
+    val border = if (item.kind.needsYou) activeBorder() else BorderStroke(1.dp, Tn.line)
+    Tile(
+        m, border = border, padding = PaddingValues(fit.padding), shape = MasterShape,
+        verticalArrangement = Arrangement.spacedBy(fit.partGap, Alignment.Top),
+    ) {
         val d = devices.firstOrNull { it.id in item.deviceIds }
         when (item) {
             is AgentItem -> AgentMaster(item, d, active, fit, header, actions)
@@ -575,29 +590,30 @@ private fun MasterTile(
     }
 }
 
+/** The shape of the master tile. */
+private val MasterShape = RoundedCornerShape(14.dp)
+
 /**
- * The top row of the master tile: the window title with the state, the
- * computer on its own line under it, and the Later button. [trailing]
- * adds actions after Later. A long title or computer name does not push
- * the buttons out of the row. TalkBack reads the state as the state of the
- * row.
+ * The top row of the master tile: the window title with the state, and
+ * the Later button. With [many] computers in scope, the window title also
+ * names the computer. [trailing] adds actions after Later. A long title
+ * does not push the buttons out of the row. TalkBack reads the state as
+ * the state of the row.
  */
 @Composable
-private fun MasterHeader(item: InboxItem, canSwipe: Boolean, onSwipe: () -> Unit, trailing: @Composable RowScope.() -> Unit) {
+private fun MasterHeader(item: InboxItem, canSwipe: Boolean, onSwipe: () -> Unit, many: Boolean, trailing: @Composable RowScope.() -> Unit) {
     val state = stateWord(item)
     val spoken = (windowSource(item) + item.computer).joinToString(", ")
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(
+    Row(Modifier.fillMaxWidth().heightIn(min = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(
             Modifier.weight(1f).clearAndSetSemantics {
                 contentDescription = spoken
                 stateDescription = state
             },
-            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            WindowTitle(item, size = 13, split = splitTitle(LocalDensity.current.fontScale))
-            T(item.computer, size = 12, color = Tn.sub, family = Mono, maxLines = 1)
+            WindowTitle(item, size = 13, sourceSize = 12, split = splitTitle(LocalDensity.current.fontScale), many = many, master = true)
         }
-        if (canSwipe) FluxButton("Later", onSwipe, kind = ButtonKind.Text)
+        if (canSwipe) TextAction("Later", onSwipe, size = 14, height = 24.dp, pad = 0.dp)
         trailing()
     }
 }
@@ -622,21 +638,30 @@ private fun ColumnScope.Push(fit: MasterFit) {
  */
 private fun shortPrompt(fontScale: Float, compact: Boolean): Boolean = compact || fontScale >= 1.15f
 
+/**
+ * The answers that the Inbox sent to the agents, by computer and pane. An
+ * answer shows on the master while the agent works on it. It stays while
+ * the app runs, because the item of the agent changes when its status
+ * changes.
+ */
+private val inboxAnswers = mutableStateMapOf<String, SentAnswer>()
+
 @Composable
 private fun ColumnScope.AgentMaster(item: AgentItem, d: DeviceUi?, active: Boolean, fit: MasterFit, header: MasterHeaderSlot, actions: InboxActions) {
     val a = item.agent
     val pane = a.pane
     val blocked = item.kind == InboxKind.AgentInput
+    val working = item.kind == InboxKind.AgentWorking
     val demo = isDemo(item.deviceId)
-    val out = d?.herdrOutput?.takeIf { it.pane == pane }
-    // The output gives the question and the choices. The tile reads it again
-    // when it shows, because an output from before can hold an older question.
+    val out = d?.herdrOutput?.takeIf { it.pane == pane } ?: if (demo) DebugDemo.output(pane) else null
+    // The output gives the question and the choices, or the step of a working agent. The tile
+    // reads it again when it shows, because an output from before can hold an older question.
     // The agent screen forgets the output when it closes, so the tile reads it again then too.
     val missing = out == null
     var stale by remember(item.key) { mutableStateOf<HerdrOutput?>(null) }
     var asked by remember(item.key) { mutableStateOf(false) }
     LaunchedEffect(active, item.deviceId, pane, missing) {
-        if (!active || !blocked || demo || d?.online != true || (asked && !missing)) return@LaunchedEffect
+        if (!active || !(blocked || working) || demo || d?.online != true || (asked && !missing)) return@LaunchedEffect
         stale = out
         asked = true
         HerdrSync.read(FluxCore, item.deviceId, pane)
@@ -648,8 +673,16 @@ private fun ColumnScope.AgentMaster(item: AgentItem, d: DeviceUi?, active: Boole
     val choices = if (blocked && fresh) out.choices else emptyList()
     val fontScale = LocalDensity.current.fontScale
     val short = shortPrompt(fontScale, fit.compact)
-    val prompt = remember(out?.lines, short) {
-        out?.lines?.let { lines -> agentPrompt(lines.map { it.text }, if (short) 3 else 4, dropAsk = short) }.orEmpty()
+    val texts = remember(out?.lines) { out?.lines?.map { it.text } }
+    val ask = remember(texts, short) { texts?.let { agentAsk(it, if (short) 3 else 4) } }
+    val prompt = remember(texts, short) { if (ask != null) "" else texts?.let { agentPrompt(it, if (short) 3 else 4) }.orEmpty() }
+    val thread = remember(texts, working) { if (working) texts?.let(::agentThread) else null }
+    // The answer that this tile sent shows while the agent works on it.
+    val answerKey = "${item.deviceId}|$pane"
+    val sentAnswer = inboxAnswers[answerKey]?.takeIf { SystemClock.elapsedRealtime() - it.at < SENT_ANSWER_MS }
+    LaunchedEffect(item.kind) {
+        val s = inboxAnswers[answerKey] ?: return@LaunchedEffect
+        if (working) inboxAnswers[answerKey] = s.copy(working = true) else if (s.working) inboxAnswers.remove(answerKey)
     }
     val context = LocalContext.current
     var lockError by remember(item.key) { mutableStateOf<String?>(null) }
@@ -659,54 +692,78 @@ private fun ColumnScope.AgentMaster(item: AgentItem, d: DeviceUi?, active: Boole
     val reply = d?.herdrReply?.takeIf { r -> r.pane == pane && sentAfter.let { it != null && r.seq > it } }
     val sending = reply?.sending == true
     val lastSeq = d?.herdrReply?.seq ?: 0L
-    fun answer(key: String) {
+    fun answer(c: AgentChoice) {
         lockError = null
         ReplyLock.run(context, {
             answered = out
             sentAfter = lastSeq
-            HerdrSync.sendKeys(FluxCore, item.deviceId, pane, listOf(key))
+            inboxAnswers[answerKey] = SentAnswer(c.label, "Sent key ${c.key}", null)
+            HerdrSync.sendKeys(FluxCore, item.deviceId, pane, listOf(c.key))
         }) { lockError = it }
     }
     val open = { actions.open(Route(item.deviceId, "$AGENT_PAGE$pane")) }
-    val replyButton: @Composable () -> Unit = {
-        if (blocked && fresh && choices.isEmpty() && item.control) {
-            FluxButton("Reply", open)
-        } else {
-            FluxButton(if (blocked) "Reply" else "Open", open, kind = ButtonKind.Outlined)
-        }
-    }
+    val openThread: @Composable () -> Unit = { TextAction("Open thread", open, trailing = Ic.forward, size = 14, height = 36.dp) }
 
     Column(verticalArrangement = Arrangement.spacedBy(fit.gap)) {
-        // A compact master shows Reply in the top row, so that it shows with the choices.
-        header { if (fit.compact) replyButton() }
-        T(a.title.ifEmpty { a.project.ifEmpty { pane } }, size = 20, weight = FontWeight.SemiBold, maxLines = if (fit.compact) 1 else if (fontScale >= 1.5f) 2 else 3)
+        // A compact master shows Open thread in the top row, so that it shows with the choices.
+        header { if (fit.compact) openThread() }
+        LineText(
+            a.title.ifEmpty { a.project.ifEmpty { pane } },
+            size = 18f, lineHeight = 1.25f, weight = FontWeight.SemiBold,
+            maxLines = if (fit.compact) 1 else if (fontScale >= 1.5f) 2 else 3,
+        )
         when {
-            !blocked -> T(
-                if (item.kind == InboxKind.AgentDone) "The agent is done and waits for the next prompt." else "The agent works. Open it to read the output.",
-                size = 14, color = Tn.sub,
-            )
-            out?.error != null && !out.loading -> T(out.error, size = 13, color = Tn.red)
-            !fresh -> PromptSkeleton()
-            // The prompt never gets cut on screen, so that the command shows in full.
-            prompt.isNotEmpty() -> T(prompt, size = 14, family = Mono, lineHeight = 1.35f)
+            blocked && out?.error != null && !out.loading -> T(out.error, size = 13, color = Tn.red)
+            blocked && !fresh -> PromptSkeleton()
+            // The question never gets cut on screen, so that the command shows in full.
+            blocked && ask != null -> AskText(ask, 14, FontWeight.Normal, 8.dp)
+            blocked && prompt.isNotEmpty() -> CodeLines(prompt.lines())
+            working -> MasterWork(sentAnswer?.takeIf { it.working }?.text, thread?.step.orEmpty(), thread?.elapsed.orEmpty())
+            item.kind == InboxKind.AgentDone -> T("The agent is done and waits for the next prompt.", size = 14, color = Tn.sub)
         }
     }
     Push(fit)
-    Column(Modifier.widthIn(max = ActionWidth).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(fit.choiceGap)) {
-        for (c in choices) ChoiceRow(c, enabled = item.control && choicesOpen(out, answered, sending)) { answer(c.key) }
-        val problem = lockError ?: reply?.error
-        if (problem != null) T(problem, size = 13, color = Tn.red)
-        if (blocked && !item.control) T("To answer from this phone, set herdr_control = true on ${item.computer}.", size = 13, color = Tn.sub)
-        if (sending || !fit.compact) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (sending) {
-                    Spinner(Modifier.size(18.dp), color = Tn.blue)
+    val problem = lockError ?: reply?.error
+    if (choices.isNotEmpty() || problem != null || (blocked && !item.control) || sending) {
+        Column(Modifier.widthIn(max = ActionWidth).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(fit.choiceGap)) {
+            val enabled = item.control && choicesOpen(out, answered, sending)
+            choices.forEachIndexed { i, c -> AskChoice(c, primary = i == 0, enabled = enabled, height = 44.dp, size = 13.5f) { answer(c) } }
+            if (problem != null) T(problem, size = 13, color = Tn.red)
+            if (blocked && !item.control) T("To answer from this phone, set herdr_control = true on ${item.computer}.", size = 13, color = Tn.sub)
+            if (sending) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    RingSpinner(16.dp, color = Tn.blue)
                     T("Sending", size = 13, color = Tn.sub)
                 }
-                Spacer(Modifier.weight(1f))
-                if (!fit.compact) replyButton()
             }
         }
+    }
+    if (!fit.compact) openThread()
+}
+
+/**
+ * The work of an agent on the master: the answer that the Inbox sent, a
+ * moving bar, and the step of the agent with its time when the output
+ * shows them.
+ */
+@Composable
+private fun MasterWork(answer: String?, step: String, elapsed: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (answer != null) {
+            val sub = Tn.sub
+            val text = Tn.text
+            BasicText(
+                remember(answer, sub, text) {
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(color = sub)) { append("You answered: ") }
+                        withStyle(SpanStyle(color = text)) { append(answer) }
+                    }
+                },
+                style = TextStyle(fontSize = 13.sp, lineHeight = 18.sp),
+            )
+        }
+        Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)).background(Tn.line)) { SlideBar(Tn.blue, Modifier.fillMaxSize()) }
+        LineText(listOf(step.ifEmpty { "Working" }, elapsed).filter { it.isNotEmpty() }.joinToString(" · "), size = 12f, lineHeight = MONO_LINE, color = Tn.sub, family = Mono, maxLines = 2)
     }
 }
 
@@ -714,24 +771,6 @@ private fun ColumnScope.AgentMaster(item: AgentItem, d: DeviceUi?, active: Boole
 @Composable
 private fun PromptSkeleton() {
     LineSkeleton("Reading the question", lines = listOf(0.9f, 0.7f, 0.5f))
-}
-
-/** A numbered choice of the agent. A tap sends its digit, after the phone lock. */
-@Composable
-private fun ChoiceRow(c: AgentChoice, enabled: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(8.dp)
-    Row(
-        Modifier.widthIn(max = ActionWidth).fillMaxWidth().heightIn(min = 48.dp).clip(shape)
-            .background(if (c.selected) Tn.accentTile else Tn.bg)
-            .border(choiceBorder(c.selected), shape)
-            .clickable(enabled = enabled, onClickLabel = "Answer ${c.key}", role = Role.Button, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        T(c.key, size = 15, color = Tn.blue, weight = FontWeight.Bold, family = Mono)
-        T(c.label, Modifier.weight(1f), size = 14)
-    }
 }
 
 /** The modifier of the 1 action button of a master: the full width, up to [ActionWidth]. */
@@ -854,37 +893,55 @@ private fun RoundIcon(@DrawableRes icon: Int, description: String, enabled: Bool
  * font does not wrap the line at a separator. The state then gets smaller
  * to fit its line, and it never gets cut. With [keepLines], the source line
  * shows also when it is empty, so that the tiles of 1 row keep the same
- * height. TalkBack does not read the title. The tile gives the source and
+ * height. [sourceSize] is the size of the source. With [many] computers in
+ * scope, the source ends with the computer. The [master] tile marks what
+ * needs the user with a dot that pulses. A working agent shows a ring that
+ * turns. Without [showSource], only the state shows. TalkBack does not read the title. The tile gives the source and
  * the state.
  */
 @Composable
-private fun WindowTitle(item: InboxItem, size: Int, modifier: Modifier = Modifier, split: Boolean = false, keepLines: Boolean = false) {
-    val source = windowSource(item)
+private fun WindowTitle(
+    item: InboxItem,
+    size: Int,
+    modifier: Modifier = Modifier,
+    sourceSize: Int = size,
+    split: Boolean = false,
+    keepLines: Boolean = false,
+    many: Boolean = false,
+    master: Boolean = false,
+    showSource: Boolean = true,
+) {
+    val source = if (showSource) windowSource(item) + listOfNotNull(item.computer.takeIf { many && it.isNotBlank() }) else emptyList()
     val state = stateWord(item)
     val color = kindColor(item)
     val sub = Tn.sub
     val lineHeight = (size * 1.35f).sp
     val line = with(LocalDensity.current) { lineHeight.toDp() }
-    val dot = if (size < 13) 7.dp else 8.dp
+    val dot = if (master) 8.dp else 7.dp
     Column(modifier.clearAndSetSemantics {}) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.height(line), contentAlignment = Alignment.Center) { Dot(color, dot) }
-            Spacer(Modifier.width(8.dp))
+            Box(Modifier.height(line), contentAlignment = Alignment.Center) {
+                when {
+                    item.kind == InboxKind.AgentWorking -> RingSpinner(11.dp, color = color)
+                    else -> PulseDot(color, dot, pulse = master && item.kind.needsYou)
+                }
+            }
+            Spacer(Modifier.width(if (master) 8.dp else 6.dp))
             if (split) {
                 T(state, size = size, color = color, weight = FontWeight.Medium, maxLines = 1, fit = true)
             } else {
-                val text = remember(source, state, color, sub) {
+                val text = remember(source, state, color, sub, sourceSize) {
                     buildAnnotatedString {
                         withStyle(SpanStyle(color = color, fontWeight = FontWeight.Medium)) { append(state) }
-                        if (source.isNotEmpty()) withStyle(SpanStyle(color = sub, fontFamily = Mono)) { append(" · " + source.joinToString(" · ")) }
+                        if (source.isNotEmpty()) withStyle(SpanStyle(color = sub, fontFamily = Mono, fontSize = sourceSize.sp)) { append(" · " + source.joinToString(" · ")) }
                     }
                 }
-                BasicText(text, style = TextStyle(fontSize = size.sp, lineHeight = lineHeight), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                BasicText(text, style = TextStyle(fontSize = size.sp, lineHeight = lineHeight, lineHeightStyle = FullLines), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         if (split && (source.isNotEmpty() || keepLines)) {
             // The source starts under the state word. A blank keeps the height of the line.
-            T(source.joinToString(" · ").ifEmpty { " " }, Modifier.padding(start = dot + 8.dp), size = size, color = sub, family = Mono, maxLines = 1)
+            T(source.joinToString(" · ").ifEmpty { " " }, Modifier.padding(start = dot + 8.dp), size = sourceSize, color = sub, family = Mono, maxLines = 1)
         }
     }
 }
@@ -904,44 +961,31 @@ private fun windowSource(item: InboxItem): List<String> = when (item) {
 
 /**
  * A tile of the stack: the window title, the title, and 1 line about the
- * computer. Each line takes 1 line at most. From a font scale of 1.3, the
+ * computer. Each line takes 1 line at most. The window title of an agent
+ * also names the agent and its project. The other tiles show only the
+ * state, and TalkBack reads their source. From a font scale of 1.3, the
  * window title takes 2 lines in every tile, see [WindowTitle]. So the tiles
- * of 1 row have the same height at each font size. A tap moves the tile to the
- * master tile. A player tile also plays and pauses.
+ * of 1 row have the same height at each font size. A tap moves the tile to
+ * the master tile.
  */
 @Composable
-private fun StackTile(item: InboxItem, modifier: Modifier, onPromote: () -> Unit) {
+private fun StackTile(item: InboxItem, many: Boolean, modifier: Modifier, onPromote: () -> Unit) {
     val state = stateWord(item)
     val source = windowSource(item).joinToString(", ")
-    Box(
+    Column(
         modifier.fillMaxWidth().heightIn(min = 48.dp).clip(TileShape).background(Tn.tile)
             .border(1.dp, if (item.kind.needsYou) Tn.red else Tn.line, TileShape)
             .clickable(onClickLabel = "Show it first", role = Role.Button, onClick = onPromote)
             .semantics { stateDescription = state }
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 11.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        val media = item is MediaItem
-        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            // TalkBack reads the source here and the state from the tile. The title takes the full width, also next to the play button.
-            Box(Modifier.semantics { if (source.isNotEmpty()) contentDescription = source }) {
-                WindowTitle(item, size = 12, split = splitTitle(LocalDensity.current.fontScale), keepLines = true)
-            }
-            // The 2 lines under the title leave space for the play button.
-            val room = if (media) Modifier.padding(end = 40.dp) else Modifier
-            T(stackTitle(item), room, size = 14, weight = FontWeight.SemiBold, maxLines = 1)
-            T(stackLine(item), room, size = 12, color = Tn.sub, maxLines = 1)
+        // TalkBack reads the source here and the state from the tile.
+        Box(Modifier.semantics { if (source.isNotEmpty()) contentDescription = source }) {
+            WindowTitle(item, size = 12, split = splitTitle(LocalDensity.current.fontScale), keepLines = true, showSource = item is AgentItem)
         }
-        if (item is MediaItem) {
-            val playing = item.player.playing
-            // The button sits next to the 2 lines and reaches into the padding, so that the tile keeps the height of the other tiles.
-            Box(
-                Modifier.align(Alignment.BottomEnd).offset(x = 10.dp, y = 8.dp).size(48.dp).clip(CircleShape)
-                    .clickable(onClickLabel = if (playing) "Pause" else "Play", role = Role.Button) {
-                        Plugins.mediaAction(FluxCore, item.deviceId, "PlayPause")
-                    },
-                contentAlignment = Alignment.Center,
-            ) { Sym(if (playing) Ic.pause else Ic.play, if (playing) "Pause" else "Play", tint = Tn.green, size = 26.dp) }
-        }
+        T(stackTitle(item), size = 14, weight = FontWeight.SemiBold, maxLines = 1)
+        T(stackLine(item, many), size = 12, color = Tn.sub, maxLines = 1)
     }
 }
 
@@ -988,12 +1032,12 @@ private fun stackTitle(item: InboxItem): String = when (item) {
     is MediaItem -> item.player.title.ifEmpty { "Unknown title" }
 }
 
-/** The line under the title of a stack tile. The window title already holds the source and the state. */
-private fun stackLine(item: InboxItem): String = when (item) {
+/** The line under the title of a stack tile. The window title already holds the source and the state. With [many] computers in scope, a player also names its computer. */
+private fun stackLine(item: InboxItem, many: Boolean): String = when (item) {
     is AgentItem -> item.computer
     is ApprovalItem -> "${item.request.user} on ${item.request.host}"
     is PairItem -> "Compare the key to pair"
     is TransferItem -> if (item.transfer.incoming) "From ${item.computer}" else "To ${item.computer}"
     is ClipItem -> if (item.clip.sent) "Sent to ${item.computer}" else "From ${item.computer}"
-    is MediaItem -> listOf(item.player.artist, item.computer).filter { it.isNotEmpty() }.joinToString(" · ")
+    is MediaItem -> if (many || item.player.artist.isEmpty()) listOf(item.player.artist, item.computer).filter { it.isNotEmpty() }.joinToString(" · ") else item.player.artist
 }
