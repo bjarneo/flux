@@ -1,0 +1,81 @@
+<Window x:Class="Flux.Windows.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Flux" WindowStyle="None" ResizeMode="CanResize" Width="1040" Height="820" MinWidth="820" MinHeight="680" FontFamily="Cascadia Mono, Consolas" FontSize="13" Background="{DynamicResource BackgroundBrush}" Foreground="{DynamicResource TextBrush}">
+  <WindowChrome.WindowChrome><WindowChrome CaptionHeight="36" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0" UseAeroCaptionButtons="False"/></WindowChrome.WindowChrome>
+  <Window.Resources><ResourceDictionary><ResourceDictionary.MergedDictionaries><ResourceDictionary Source="Theme.xaml"/></ResourceDictionary.MergedDictionaries></ResourceDictionary></Window.Resources>
+  <Grid>
+    <Grid.ColumnDefinitions><ColumnDefinition Width="260"/><ColumnDefinition/></Grid.ColumnDefinitions>
+    <Grid.RowDefinitions><RowDefinition Height="36"/><RowDefinition/></Grid.RowDefinitions>
+    <StackPanel Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right">
+      <Button Content="&#xE921;" FontFamily="Segoe MDL2 Assets" Width="42" Padding="0" Margin="0" Background="Transparent" BorderThickness="0" Click="MinimizeClick" WindowChrome.IsHitTestVisibleInChrome="True" ToolTip="Minimize" AutomationProperties.Name="Minimize"/>
+      <Button x:Name="Maximize" Content="&#xE922;" FontFamily="Segoe MDL2 Assets" Width="42" Padding="0" Margin="0" Background="Transparent" BorderThickness="0" Click="MaximizeClick" WindowChrome.IsHitTestVisibleInChrome="True" ToolTip="Maximize or restore" AutomationProperties.Name="Maximize or restore"/>
+      <Button Content="&#xE8BB;" FontFamily="Segoe MDL2 Assets" Width="42" Padding="0" Margin="0" Background="Transparent" BorderThickness="0" Click="CloseClick" WindowChrome.IsHitTestVisibleInChrome="True" ToolTip="Close" AutomationProperties.Name="Close"/>
+    </StackPanel>
+    <Border Grid.Row="1" Background="{DynamicResource TileBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,1,0" Padding="14,18">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Bottom" Margin="6,12,0,0"><TextBlock Text="This computer · Windows v22" Style="{StaticResource SubText}" FontSize="11"/><TextBlock x:Name="ConnectionCount" Text="No devices connected" Style="{StaticResource SubText}" FontSize="11" Margin="0,6,0,0"/></StackPanel>
+        <StackPanel>
+          <StackPanel Orientation="Horizontal" Margin="6,0,0,24" Height="30"><Grid Width="26" Height="26" VerticalAlignment="Center"><Rectangle Width="16" Height="16" Stroke="{DynamicResource TextBrush}" StrokeThickness="3" Fill="Transparent"/><Rectangle Width="3" Height="23" Fill="{DynamicResource AccentBrush}"/></Grid><TextBlock Text="flux" FontSize="16" FontWeight="ExtraBold" VerticalAlignment="Center" Margin="10,0,0,0"/></StackPanel>
+          <TextBlock Text="DEVICES" Foreground="{DynamicResource SubBrush}" FontSize="11" Margin="6,0,0,8"/>
+          <ListBox x:Name="Devices" SelectionChanged="DeviceSelected" AutomationProperties.Name="Flux devices" MaxHeight="390">
+            <ListBox.ItemTemplate><DataTemplate><Grid Width="205" MinHeight="48"><Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition/></Grid.ColumnDefinitions>
+              <Border Width="32" Height="32" Background="{DynamicResource LineBrush}" VerticalAlignment="Center"><TextBlock Text="&#xE80F;" FontFamily="Segoe MDL2 Assets" Foreground="{DynamicResource AccentBrush}" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+              <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center"><TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Endpoint}"/><StackPanel Orientation="Horizontal"><Ellipse Width="7" Height="7" Margin="0,0,7,0" VerticalAlignment="Center"><Ellipse.Style><Style TargetType="Ellipse"><Setter Property="Fill" Value="{DynamicResource SubBrush}"/><Style.Triggers><DataTrigger Binding="{Binding IsPairedConnected}" Value="True"><Setter Property="Fill" Value="{DynamicResource GreenBrush}"/></DataTrigger></Style.Triggers></Style></Ellipse.Style></Ellipse><TextBlock Text="{Binding ConnectionLabel}" FontSize="11"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource SubBrush}"/><Style.Triggers><DataTrigger Binding="{Binding IsPairedConnected}" Value="True"><Setter Property="Foreground" Value="{DynamicResource GreenBrush}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock><TextBlock Text="  ·  " FontSize="11" Foreground="{DynamicResource SubBrush}"/><TextBlock Text="{Binding ShortId}" FontSize="11" Foreground="{DynamicResource SubBrush}"/></StackPanel></StackPanel>
+            </Grid></DataTemplate></ListBox.ItemTemplate>
+          </ListBox>
+          <TextBlock x:Name="NoDevices" Text="No devices found yet" Style="{StaticResource SubText}" FontSize="11" Margin="6,8"/>
+          <TextBlock x:Name="PendingNotice" Foreground="{DynamicResource AccentBrush}" FontSize="11" TextWrapping="Wrap" Margin="6,8" Visibility="Collapsed"/>
+          <Button Content="+  Pair new device" Click="FindClick" ToolTip="Search for nearby Flux devices" AutomationProperties.Name="Pair new device" Margin="0,12,0,22"/>
+          <TextBlock Text="PAGES" Foreground="{DynamicResource SubBrush}" FontSize="11" Margin="6,0,0,8"/>
+          <Button x:Name="OverviewNav" Tag="active" Style="{StaticResource NavButton}" Click="OverviewClick"><StackPanel Orientation="Horizontal"><TextBlock Text="&#xE80F;" FontFamily="Segoe MDL2 Assets" Margin="0,0,10,0"/><TextBlock Text="Overview"/></StackPanel></Button>
+          <Button x:Name="ClipboardNav" Style="{StaticResource NavButton}" Click="ClipboardClick"><StackPanel Orientation="Horizontal"><TextBlock Text="&#xE77F;" FontFamily="Segoe MDL2 Assets" Margin="0,0,10,0"/><TextBlock Text="Clipboard"/></StackPanel></Button>
+          <Button x:Name="FilesNav" Style="{StaticResource NavButton}" Click="FilesClick"><StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" Margin="0,0,10,0"/><TextBlock Text="Files"/></StackPanel></Button>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+    <ScrollViewer Grid.Row="1" Grid.Column="1" VerticalScrollBarVisibility="Auto"><StackPanel Margin="28,24,28,28">
+      <TextBlock x:Name="Heading" Text="Overview" FontSize="20" FontWeight="Bold" Margin="0,0,0,18"/>
+      <Border Background="{DynamicResource TileBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" Padding="14,10" Margin="0,0,0,18"><DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center"><Button x:Name="Connect" Content="Connect" Click="ConnectClick" IsEnabled="False"/><Button x:Name="Pair" Content="Pair device" Click="PairClick" IsEnabled="False"/></StackPanel>
+        <StackPanel><TextBlock x:Name="SelectedName" Text="Select a device" FontWeight="SemiBold" FontSize="15"/><StackPanel Orientation="Horizontal" Margin="0,4,0,0"><Ellipse x:Name="ConnectionDot" Width="7" Height="7" Fill="{DynamicResource SubBrush}" VerticalAlignment="Center" Margin="0,0,7,0"/><TextBlock x:Name="ConnectionLabel" Text="offline" Style="{StaticResource SubText}" FontSize="11"/><TextBlock Text="  ·  " Style="{StaticResource SubText}"/><TextBlock x:Name="ActiveAddress" Style="{StaticResource SubText}" FontSize="11"/></StackPanel></StackPanel>
+      </DockPanel></Border>
+      <Border x:Name="PairingCard" Style="{StaticResource Card}" BorderBrush="{DynamicResource AccentBrush}" Margin="0,0,0,18" Visibility="Collapsed"><StackPanel>
+        <TextBlock Text="Pairing request" FontSize="16" FontWeight="SemiBold"/><TextBlock x:Name="PairingPeer" Margin="0,8,0,0"/><TextBlock Text="Compare all 16 characters on both devices before accepting." TextWrapping="Wrap" Margin="0,8,0,0"/>
+        <TextBlock x:Name="Verification" FontFamily="Consolas" FontSize="24" Margin="0,10" TextWrapping="Wrap"/>
+        <WrapPanel><Button x:Name="Accept" Content="The keys match — accept" Click="AcceptClick" IsEnabled="False"/><Button x:Name="Reject" Content="Reject" Click="RejectClick" IsEnabled="False"/></WrapPanel>
+      </StackPanel></Border>
+      <StackPanel x:Name="OverviewPage">
+        <Border Style="{StaticResource Card}" Margin="0,0,0,18"><StackPanel>
+          <TextBlock Text="Device" FontSize="16" FontWeight="SemiBold"/><TextBlock x:Name="Status" Text="Starting…" Foreground="{DynamicResource AccentBrush}" Margin="0,10,0,0" TextWrapping="Wrap"/><TextBlock x:Name="Detail" Style="{StaticResource SubText}" Margin="0,6,0,0"/>
+          <TextBlock Text="Address" Style="{StaticResource SubText}" FontSize="11" Margin="0,16,0,5"/><ComboBox x:Name="Target" SelectionChanged="TargetSelected" DisplayMemberPath="Endpoint" AutomationProperties.Name="Device address" Width="270" HorizontalAlignment="Left"/><TextBlock Text="Active address is shown above; discovered addresses are connection options." Style="{StaticResource SubText}" FontSize="11" Margin="0,6,0,0"/>
+          <Button x:Name="Forget" Content="Forget pairing" Click="ForgetClick" IsEnabled="False" HorizontalAlignment="Left" Margin="0,16,0,0" ToolTip="Remove this device's saved trust"/>
+        </StackPanel></Border>
+        <Border Style="{StaticResource Card}" Margin="0,0,0,18"><StackPanel><TextBlock Text="Clipboard" FontSize="16" FontWeight="SemiBold"/><TextBlock Text="Share text across your connected devices." Style="{StaticResource SubText}" Margin="0,8,0,14"/><Button Content="Open clipboard" Click="ClipboardClick" HorizontalAlignment="Left"/></StackPanel></Border>
+        <Border Style="{StaticResource Card}" Margin="0,0,0,18"><StackPanel><TextBlock Text="Windows startup" FontSize="16" FontWeight="SemiBold"/><TextBlock Text="Keep Flux ready when you sign in. It starts quietly beside the clock." Style="{StaticResource SubText}" Margin="0,8,0,14"/><CheckBox x:Name="StartWithWindows" Content="Start Flux when I sign in" Click="StartupSettingClick"/><TextBlock x:Name="StartupStatus" Text="Login startup is off" Style="{StaticResource SubText}" Margin="0,10,0,0"/></StackPanel></Border>
+        <TextBlock Text="Closing the window keeps Flux running beside the clock. Use Exit Flux there to stop it." Style="{StaticResource SubText}" Margin="0,0,0,18"/>
+        <Expander Header="Connection diagnostics" IsExpanded="False" Foreground="{DynamicResource SubBrush}" Margin="0,4,0,0"><StackPanel><TextBlock x:Name="Network" Style="{StaticResource SubText}" FontFamily="Consolas" FontSize="12" Margin="0,8"/><TextBox x:Name="Diagnostics" IsReadOnly="True" Height="160" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12" Background="{DynamicResource TileBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource LineBrush}" Padding="8"/></StackPanel></Expander>
+      </StackPanel>
+      <StackPanel x:Name="ClipboardPage" Visibility="Collapsed">
+        <Border Style="{StaticResource Card}" Margin="0,0,0,18"><StackPanel>
+          <TextBlock Text="Clipboard" FontSize="16" FontWeight="SemiBold"/>
+          <TextBlock Text="New text copies are shared with all paired, connected devices when sync is on." Style="{StaticResource SubText}" Margin="0,8,0,14"/>
+          <CheckBox x:Name="ClipboardSync" Content="Sync text clipboard" Click="ClipboardSyncClick" ToolTip="Share new text copies with all paired connected devices. Images are not synced."/>
+        </StackPanel></Border>
+        <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Send clipboard" FontSize="16" FontWeight="SemiBold"/><TextBlock Text="Send the text currently copied on Windows. This also works when automatic sync is off." Style="{StaticResource SubText}" Margin="0,8,0,14"/><Button x:Name="SendClipboard" Content="Send now" Click="SendClipboardClick" HorizontalAlignment="Left" IsEnabled="False"/><TextBlock x:Name="ClipboardStatus" Text="Automatic sync is off" Foreground="{DynamicResource AccentBrush}" Margin="0,14,0,0" TextWrapping="Wrap"/></StackPanel></Border>
+      </StackPanel>
+      <StackPanel x:Name="FilesPage" Visibility="Collapsed">
+        <Border Style="{StaticResource Card}" Margin="0,0,0,18" AllowDrop="True" Drop="FilesDrop" DragOver="FilesDragOver"><StackPanel><TextBlock Text="Send files" FontSize="16" FontWeight="SemiBold"/><TextBlock x:Name="SendHint" Style="{StaticResource SubText}" Margin="0,8,0,14"/><Button x:Name="SendFile" Content="Choose files and send" Click="SendFileClick" IsEnabled="False" HorizontalAlignment="Left"/><TextBlock Text="Or drop files here to send to the selected device." Style="{StaticResource SubText}" Margin="0,12,0,0"/></StackPanel></Border>
+        <DockPanel Margin="0,0,0,10"><Button Content="Open received folder" Click="OpenReceivedClick" DockPanel.Dock="Right" Margin="12,0,0,0"/><TextBlock Text="Transfer history" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/></DockPanel>
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,10"><RadioButton x:Name="ThisDeviceFilter" Content="This device" GroupName="HistoryFilter" Checked="FilterChanged" Margin="0,0,16,0"/><RadioButton x:Name="AllDevicesFilter" Content="All devices" GroupName="HistoryFilter" IsChecked="True" Checked="FilterChanged"/></StackPanel>
+        <TextBlock x:Name="ReceivePath" Style="{StaticResource SubText}" FontSize="11" Margin="0,0,0,12"/>
+        <TextBlock x:Name="NoFiles" Text="No transfers for this view yet." Style="{StaticResource SubText}" Margin="0,12,0,0"/>
+        <DockPanel Margin="0,0,0,12"><StackPanel DockPanel.Dock="Right" Orientation="Horizontal"><Button x:Name="PreviousHistory" Content="Previous" Click="PreviousHistoryClick"/><Button x:Name="NextHistory" Content="Next" Click="NextHistoryClick"/></StackPanel><TextBlock x:Name="HistoryPageLabel" Style="{StaticResource SubText}" VerticalAlignment="Center"/></DockPanel>
+        <TextBlock x:Name="HistoryNotice" Foreground="{DynamicResource RedBrush}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+        <ListBox x:Name="Files" ScrollViewer.VerticalScrollBarVisibility="Disabled" AutomationProperties.Name="File transfers"><ListBox.ItemTemplate><DataTemplate><StackPanel>
+          <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock Text="{Binding Summary}" Style="{StaticResource SubText}" FontSize="11" Margin="0,5,0,8"/>
+          <ProgressBar Minimum="0" Maximum="100" Value="{Binding Progress, Mode=OneWay}" Height="4" Foreground="{DynamicResource AccentBrush}" Background="{DynamicResource LineBrush}" BorderThickness="0"/>
+          <TextBlock Text="{Binding ByteSummary}" Style="{StaticResource SubText}" FontSize="11" Margin="0,7,0,0"/><TextBlock Text="{Binding Error}" Foreground="{DynamicResource RedBrush}" TextWrapping="Wrap"/>
+          <Button Content="Cancel transfer" Click="CancelTransferClick" HorizontalAlignment="Left" Margin="0,8,0,0" ToolTip="Stop this file transfer"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsActive}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+        </StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox>
+      </StackPanel>
+    </StackPanel></ScrollViewer>
+  </Grid>
+</Window>

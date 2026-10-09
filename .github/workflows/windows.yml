@@ -1,0 +1,32 @@
+name: Windows prototype checks
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'windows/**'
+      - '.github/workflows/windows.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@9a946fdbd5fb07b82b2f5a4466058b876ab72bb2 # v5.3.0
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore locked dependencies
+        run: |
+          dotnet restore windows/Flux.Protocol.Tests --locked-mode
+          dotnet restore windows/Flux.Windows.Ui.Tests --locked-mode
+      - name: Protocol checks
+        run: dotnet run --project windows/Flux.Protocol.Tests -c Release --no-restore
+      - name: WPF UI checks
+        run: dotnet run --project windows/Flux.Windows.Ui.Tests -c Release --no-restore
+      - name: Build self-contained Windows executable
+        run: dotnet publish windows/Flux.Windows -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o windows/artifacts/win-x64

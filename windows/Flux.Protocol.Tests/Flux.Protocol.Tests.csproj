@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../Flux.Protocol/Flux.Protocol.csproj" /></ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Makaretu.Dns.Multicast" Version="0.27.0" />
+    <Compile Include="../Flux.Windows/DiscoveryCatalog.cs" Link="DiscoveryCatalog.cs" />
+    <Compile Include="../Flux.Windows/PeerSession.cs" Link="PeerSession.cs" />
+    <Compile Include="../Flux.Windows/TransferHistory.cs" Link="TransferHistory.cs" />
+    <Compile Include="../Flux.Windows/ReconnectPlan.cs" Link="ReconnectPlan.cs" />
+  </ItemGroup>
+</Project>
