@@ -5,10 +5,43 @@
   <SolidColorBrush x:Key="TileHiBrush" Color="#24283B"/>
   <SolidColorBrush x:Key="LineBrush" Color="#292E42"/>
   <SolidColorBrush x:Key="TextBrush" Color="#C0CAF5"/>
-  <SolidColorBrush x:Key="SubBrush" Color="#737AA2"/>
+  <SolidColorBrush x:Key="SubBrush" Color="#A3ACCE"/>
   <SolidColorBrush x:Key="AccentBrush" Color="#7AA2F7"/>
   <SolidColorBrush x:Key="GreenBrush" Color="#9ECE6A"/>
   <SolidColorBrush x:Key="RedBrush" Color="#F7768E"/>
+  <Style TargetType="CheckBox">
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
+      <StackPanel Orientation="Horizontal" Background="Transparent">
+        <Border x:Name="Switch" Width="34" Height="18" BorderBrush="{DynamicResource SubBrush}" BorderThickness="1" VerticalAlignment="Center">
+          <Rectangle x:Name="Knob" Width="12" Height="12" Fill="{DynamicResource SubBrush}" HorizontalAlignment="Left" Margin="2,0"/>
+        </Border>
+        <ContentPresenter Margin="10,0,0,0" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+      </StackPanel>
+      <ControlTemplate.Triggers>
+        <Trigger Property="IsChecked" Value="True"><Setter TargetName="Switch" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/><Setter TargetName="Switch" Property="Background" Value="{DynamicResource TileHiBrush}"/><Setter TargetName="Knob" Property="Fill" Value="{DynamicResource AccentBrush}"/><Setter TargetName="Knob" Property="HorizontalAlignment" Value="Right"/></Trigger>
+        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Switch" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/><Setter TargetName="Switch" Property="BorderThickness" Value="2"/></Trigger>
+        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Switch" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Trigger>
+        <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.55"/></Trigger>
+      </ControlTemplate.Triggers>
+    </ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style TargetType="RadioButton">
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton">
+      <Border x:Name="Choice" Background="Transparent" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" Padding="12,8">
+        <ContentPresenter RecognizesAccessKey="True"/>
+      </Border>
+      <ControlTemplate.Triggers>
+        <Trigger Property="IsChecked" Value="True"><Setter TargetName="Choice" Property="Background" Value="{DynamicResource TileHiBrush}"/><Setter TargetName="Choice" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/><Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/></Trigger>
+        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Choice" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/><Setter TargetName="Choice" Property="BorderThickness" Value="2"/></Trigger>
+        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Choice" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Trigger>
+        <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.55"/></Trigger>
+      </ControlTemplate.Triggers>
+    </ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style TargetType="ToolTip"><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="Background" Value="{DynamicResource TileHiBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource SubBrush}"/><Setter Property="Padding" Value="10,8"/></Style>
   <Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/></Style>
   <Style x:Key="SubText" TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource SubBrush}"/><Setter Property="TextWrapping" Value="Wrap"/></Style>
   <Style x:Key="Card" TargetType="Border"><Setter Property="Background" Value="{DynamicResource TileBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource LineBrush}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="0"/><Setter Property="Padding" Value="20"/></Style>

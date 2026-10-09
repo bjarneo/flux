@@ -47,7 +47,7 @@ internal sealed record PeerView(string DeviceId, string ConnectionId, Discovered
     string Status, string Detail, string Key, bool CanPair, bool CanAccept);
 
 internal sealed record FileTransferView(string Id, string DeviceId, string Device, string Name, string Direction,
-    long Bytes, long Size, string Status, string Path = "", string Error = "")
+    long Bytes, long Size, string Status, string Path = "", string Error = "", DateTimeOffset StartedAt = default)
 {
     public bool IsActive => Status is "Sending" or "Receiving";
     public FileTransferView WithFailure(Exception ex, bool cancelledByUser, TransferEpoch epoch, bool shuttingDown)
@@ -58,7 +58,7 @@ internal sealed record FileTransferView(string Id, string DeviceId, string Devic
                 shuttingDown ? "App is closing." : ex is OperationCanceledException ? "Transfer timed out." : ex.Message};
     }
     public double Progress => Size > 0 ? Math.Clamp(100.0 * Bytes / Size, 0, 100) : 0;
-    public string Summary => $"{Direction} · {Device} · {Status}";
+    public string Summary => $"{Direction} · {Device} · {Status}" + (StartedAt == default ? "" : $" · {StartedAt.ToLocalTime():g}");
     public string ByteSummary => $"{Bytes:N0} / {Size:N0} bytes";
     public override string ToString() => $"{Direction}: {Name} — {Device} — {Status} ({Bytes:N0}/{Size:N0} bytes)" +
         (Error.Length == 0 ? "" : " — " + Error);

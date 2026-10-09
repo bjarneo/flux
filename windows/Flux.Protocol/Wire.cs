@@ -34,6 +34,7 @@ public sealed record Packet(
 public sealed record Identity(string DeviceId, string Name, int Version)
 {
     public bool CanTunnel { get; init; }
+    public bool CanClipboard { get; init; }
     public static bool ValidId(string id) => Regex.IsMatch(id, "\\A[A-Za-z0-9_-]{32,38}\\z");
     public static Identity Parse(Packet p)
     {
@@ -47,15 +48,17 @@ public sealed record Identity(string DeviceId, string Name, int Version)
         name = string.Concat(name.Where(c => !char.IsControl(c) && c is not (>= '\u202a' and <= '\u202e') && c is not (>= '\u2066' and <= '\u2069')));
         var canTunnel = p.Body.TryGetProperty("outgoingCapabilities", out var capabilities) && capabilities.ValueKind == JsonValueKind.Array &&
             capabilities.EnumerateArray().Any(c => c.ValueKind == JsonValueKind.String && c.GetString() == "flux.tunnel");
-        return new(id, name[..Math.Min(name.Length, 32)], version) { CanTunnel = canTunnel };
+        var canClipboard = p.Body.TryGetProperty("incomingCapabilities", out var incoming) && incoming.ValueKind == JsonValueKind.Array &&
+            incoming.EnumerateArray().Any(c => c.ValueKind == JsonValueKind.String && c.GetString() == "flux.clipboard");
+        return new(id, name[..Math.Min(name.Length, 32)], version) { CanTunnel = canTunnel, CanClipboard = canClipboard };
     }
     public Packet Packet(int tcpPort = 0, Identity? target = null)
     {
         var body = new Dictionary<string, object> {
             ["deviceId"] = DeviceId, ["deviceName"] = Name, ["deviceType"] = "laptop", ["protocolVersion"] = Version,
             ["app"] = "windows", ["appVersion"] = "0.1.0-prototype",
-            ["incomingCapabilities"] = new[] { "flux.ping", "flux.share.request", "flux.tunnel", "flux.theme" },
-            ["outgoingCapabilities"] = new[] { "flux.ping", "flux.share.request", "flux.tunnel" }
+            ["incomingCapabilities"] = new[] { "flux.ping", "flux.share.request", "flux.tunnel", "flux.theme", "flux.clipboard", "flux.clipboard.connect" },
+            ["outgoingCapabilities"] = new[] { "flux.ping", "flux.share.request", "flux.tunnel", "flux.clipboard" }
         };
         if (tcpPort > 0) body["tcpPort"] = tcpPort;
         if (target is not null) { body["targetDeviceId"] = target.DeviceId; body["targetProtocolVersion"] = target.Version; }

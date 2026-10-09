@@ -27,7 +27,7 @@ public static class FilePayload
             throw new InvalidDataException("Invalid file payload or unsupported size (1 byte to 8 GiB).");
         var info = packet.PayloadTransferInfo;
         if ((info.Port is not null) == (info.Tunnel is not null)) throw new InvalidDataException("Specify one payload port or tunnel.");
-        if (info.Port is not null && info.Port is not (>= 1739 and <= 1764)) throw new InvalidDataException("Payload port is outside the Flux range.");
+        if (info.Port is not null && info.Port is not (>= 12070 and <= 12099)) throw new InvalidDataException("Payload port is outside the Flux range.");
         if (info.Tunnel is not null && !Regex.IsMatch(info.Tunnel,"\\A[A-Za-z0-9_-]{1,128}\\z")) throw new InvalidDataException("Invalid tunnel token.");
         if (!packet.Body.TryGetProperty("filename", out var name) || name.ValueKind != System.Text.Json.JsonValueKind.String)
             throw new InvalidDataException("File payload has no valid filename.");
@@ -41,11 +41,11 @@ public static class FilePayload
     }
     private static TcpListener Listen(IPAddress local)
     {
-        for (var port = 1739; port <= 1764; port++) {
+        for (var port = 12070; port <= 12099; port++) {
             var listener = new TcpListener(local,port);
             try { listener.Start(4); return listener; } catch (SocketException) { listener.Stop(); }
         }
-        throw new IOException("No free Flux payload port from 1739 to 1764.");
+        throw new IOException("No free Flux payload port from 12070 to 12099.");
     }
     public static bool MatchesCertificate(X509Certificate? cert, byte[] expected) => cert is not null && cert.GetRawCertData().AsSpan().SequenceEqual(expected);
     private static SslStream Tls(TcpClient client, X509Certificate2 own, byte[] expected) => new(client.GetStream(),false,
@@ -75,7 +75,7 @@ public static class FilePayload
     }
     private static async Task<SslStream> DialAsync(IPAddress local, IPAddress remote, int port, X509Certificate2 own, byte[] expected, CancellationToken ct)
     {
-        if (port is < 1739 or > 1764) throw new InvalidDataException("Payload port is outside the Flux range.");
+        if (port is < 12070 or > 12099) throw new InvalidDataException("Payload port is outside the Flux range.");
         var client = new TcpClient(local.AddressFamily); client.Client.Bind(new IPEndPoint(local,0));
         SslStream? tls = null;
         try {

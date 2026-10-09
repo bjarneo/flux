@@ -17,6 +17,13 @@ public partial class MainWindow : Window
     private bool connecting;
     private string? connectingId;
     private readonly Dictionary<string, FileTransferView> transfers = new();
+    private readonly HashSet<string> persistedTransfers = new();
+    private TransferHistory? transferHistory;
+    private int historyPage;
+    private const int HistoryPageSize = 25;
+    private TrayIcon? tray;
+    private bool quitting;
+
     private readonly Queue<string> diagnosticLines = new();
     private IReadOnlyList<DiscoveredPeer> discovered = Array.Empty<DiscoveredPeer>();
     private readonly Dictionary<string, PeerConnection> connections = new();
@@ -54,7 +61,7 @@ public partial class MainWindow : Window
         var livePeers = discovered.Concat(views.Values.Where(v => connections.ContainsKey(v.DeviceId)).Select(v => v.Peer)).ToArray();
         var visibleIds = livePeers.Select(p => p.Identity.DeviceId).ToHashSet(StringComparer.Ordinal);
         var offlinePeers = saved.Where(id => !visibleIds.Contains(id)).Select(id =>
-            savedPeers.FirstOrDefault(p => p.DeviceId == id) ?? new SavedPeer(id, id[..8], "", 1716));
+            savedPeers.FirstOrDefault(p => p.DeviceId == id) ?? new SavedPeer(id, id[..8], "", 12100));
         var peers = livePeers.Concat(offlinePeers.Select(p => p.ToPeer()))
             .GroupBy(p => (p.Identity.DeviceId,p.Address,p.Port)).Select(g => g.Last()).ToArray();
         var rows = peers.Select(p => PeerRow.Create(p, connections.GetValueOrDefault(p.Identity.DeviceId) ?? new(null,null,false), saved)).ToArray();
@@ -111,6 +118,7 @@ public partial class MainWindow : Window
         PendingNotice.Text = otherRequests == 1 ? "Another device asks to pair. Select it to compare keys." :
             $"{otherRequests} other devices ask to pair. Select one to compare keys.";
         PendingNotice.Visibility = otherRequests > 0 ? Visibility.Visible : Visibility.Collapsed;
+        UpdateClipboardStatus();
         RefreshTransfers();
     }
     private void UpdateConnectButton()
@@ -131,6 +139,34 @@ public partial class MainWindow : Window
         else SystemCommands.MaximizeWindow(this);
     }
     private void CloseClick(object sender, RoutedEventArgs e) => SystemCommands.CloseWindow(this);
+    private TextClipboard? textClipboard;
+    private void ClipboardSyncClick(object sender, RoutedEventArgs e)
+    {
+        try { textClipboard?.SetEnabled(ClipboardSync.IsChecked == true); UpdateClipboardStatus(); }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException) {
+            ClipboardSync.IsChecked = textClipboard?.Enabled == true;
+            Status.Text = "Could not save clipboard setting";
+        }
+    }
+    private void LoadStartupSetting()
+    {
+        try {
+            StartWithWindows.IsChecked = StartupSetting.Enabled;
+            // Preserve the user's choice when a new preview moves the EXE.
+            if (StartWithWindows.IsChecked == true) StartupSetting.SetEnabled(true);
+            StartupStatus.Text = StartWithWindows.IsChecked == true ? "Login startup is on · starts beside the clock" : "Login startup is off";
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException) {
+            StartupStatus.Text = "Could not read or update the login startup setting.";
+        }
+    }
+    private void StartupSettingClick(object sender, RoutedEventArgs e)
+    {
+        try { StartupSetting.SetEnabled(StartWithWindows.IsChecked == true); LoadStartupSetting(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException) {
+            StartWithWindows.IsChecked = StartWithWindows.IsChecked != true;
+            StartupStatus.Text = "Could not change login startup: " + ex.Message;
+        }
+    }
     public MainWindow() : this(true) { }
     internal MainWindow(bool startCompanion)
     {
@@ -140,20 +176,27 @@ public partial class MainWindow : Window
             fallbackColors[key] = ((SolidColorBrush)FindResource(key)).Color;
         StateChanged += (_, _) => Maximize.Content = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
         Loaded += async (_, _) => {
-            if (!startCompanion) return;
+            if (!startCompanion || companion is not null) return;
             try {
                 companion = new Companion();
+                textClipboard = new TextClipboard(companion, Dispatcher);
+                ClipboardSync.IsChecked = textClipboard.Enabled;
+                UpdateClipboardStatus();
+                tray = new TrayIcon(() => Dispatcher.Invoke(ShowFromTray), () => Dispatcher.Invoke(ExitFromTray));
+                LoadStartupSetting();
+                if (App.StartInBackground) Hide();
+                transferHistory = new TransferHistory(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Flux.Windows", "transfer-history.jsonl"));
+                try {
+                    foreach (var view in transferHistory.Load()) { transfers[view.Id] = view; persistedTransfers.Add(view.Id); }
+                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { HistoryNotice.Text = "Could not load saved transfer history."; }
+                RefreshTransfers();
                 companion.Diagnostic += line => Dispatcher.InvokeAsync(() => {
                     diagnosticLines.Enqueue(line.Length > 1000 ? line[..1000] : line);
                     while (diagnosticLines.Count > 16) diagnosticLines.Dequeue();
                     Diagnostics.Text = string.Join(Environment.NewLine, diagnosticLines);
                     Diagnostics.ScrollToEnd();
                 });
-                companion.TransferChanged += view => Dispatcher.InvokeAsync(() => {
-                    transfers[view.Id] = view;
-                    while (transfers.Count > 50) transfers.Remove(transfers.Keys.First());
-                    RefreshTransfers();
-                });
+                companion.TransferChanged += view => Dispatcher.InvokeAsync(() => SetTransferView(view));
                 ReceivePath.Text = "Received files: " + companion.ReceiveDirectory;
                 saved = companion.SavedPeerIds.ToHashSet(StringComparer.Ordinal);
                 savedPeers = companion.SavedPeers;
@@ -178,9 +221,22 @@ public partial class MainWindow : Window
                 });
                 await companion.StartAsync();
                 Network.Text = companion.NetworkSummary;
-            } catch (Exception ex) { companion?.Dispose(); Status.Text = "Cannot start Flux"; Detail.Text = ex.Message; }
+            } catch (Exception ex) { tray?.Dispose(); tray = null; textClipboard?.Dispose(); companion?.Dispose(); Show(); Status.Text = "Cannot start Flux"; Detail.Text = ex.Message; }
         };
-        Closed += (_, _) => companion?.Dispose();
+        System.Windows.Application.Current.SessionEnding += (_, _) => quitting = true;
+        Closing += (_, e) => {
+            if (tray is not null && !quitting) { e.Cancel = true; Hide(); }
+        };
+        Closed += (_, _) => { tray?.Dispose(); textClipboard?.Dispose(); companion?.Dispose(); };
+    }
+    internal void SetTransferView(FileTransferView view)
+    {
+        transfers[view.Id] = view;
+        if (transferHistory is not null && !view.IsActive && !persistedTransfers.Contains(view.Id)) {
+            try { transferHistory.Save(view); persistedTransfers.Add(view.Id); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { HistoryNotice.Text = "Could not save transfer history. This session's transfers are still shown."; }
+        }
+        RefreshTransfers();
     }
     internal void SetDiscoveredPeers(IReadOnlyList<DiscoveredPeer> peers)
     {
@@ -210,23 +266,73 @@ public partial class MainWindow : Window
     private void ShowPage(string page)
     {
         Heading.Text = page;
+        ClipboardPage.Visibility = page == "Clipboard" ? Visibility.Visible : Visibility.Collapsed;
+        ClipboardNav.Tag = page == "Clipboard" ? "active" : "";
         FilesPage.Visibility = page == "Files" ? Visibility.Visible : Visibility.Collapsed;
         OverviewPage.Visibility = page == "Overview" ? Visibility.Visible : Visibility.Collapsed;
         FilesNav.Tag = page == "Files" ? "active" : "";
         OverviewNav.Tag = page == "Overview" ? "active" : "";
     }
     private void OverviewClick(object sender, RoutedEventArgs e) => ShowPage("Overview");
+    private void ClipboardClick(object sender, RoutedEventArgs e) => ShowPage("Clipboard");
     private void FilesClick(object sender, RoutedEventArgs e) => ShowPage("Files");
     internal static FileTransferView[] VisibleTransfers(IEnumerable<FileTransferView> history, string? deviceId, bool allDevices) =>
         history.Where(t => allDevices || t.DeviceId == deviceId).Reverse().ToArray();
     private void RefreshTransfers()
     {
-        if (Files is null || ThisDeviceFilter is null) return;
+        if (Files is null || ThisDeviceFilter is null || PreviousHistory is null) return;
         var visible = VisibleTransfers(transfers.Values, selectedPeer?.Identity.DeviceId, AllDevicesFilter.IsChecked == true);
-        Files.ItemsSource = visible;
+        historyPage = Math.Clamp(historyPage, 0, Math.Max(0, (visible.Length - 1) / HistoryPageSize));
+        Files.ItemsSource = visible.Skip(historyPage * HistoryPageSize).Take(HistoryPageSize).ToArray();
+        PreviousHistory.IsEnabled = historyPage > 0;
+        NextHistory.IsEnabled = (historyPage + 1) * HistoryPageSize < visible.Length;
+        HistoryPageLabel.Text = visible.Length == 0 ? "0 transfers" : $"{historyPage * HistoryPageSize + 1}–{Math.Min((historyPage + 1) * HistoryPageSize, visible.Length)} of {visible.Length} transfers";
         NoFiles.Visibility = visible.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
-    private void FilterChanged(object sender, RoutedEventArgs e) => RefreshTransfers();
+    private void FilterChanged(object sender, RoutedEventArgs e) { historyPage = 0; RefreshTransfers(); }
+    private void PreviousHistoryClick(object sender, RoutedEventArgs e) { historyPage--; RefreshTransfers(); }
+    private void NextHistoryClick(object sender, RoutedEventArgs e) { historyPage++; RefreshTransfers(); }
+    private void ShowFromTray() { Show(); if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal; Activate(); }
+    private void ExitFromTray() { quitting = true; Close(); }
+    private void UpdateClipboardStatus()
+    {
+        if (ClipboardStatus is null) return;
+        var count = connections.Values.Count(c => c.Connected && c.Paired);
+        SendClipboard.IsEnabled = companion is not null && count > 0;
+        ClipboardStatus.Text = $"Automatic sync {(textClipboard?.Enabled == true ? "on" : "off")} · {count} paired devices connected";
+    }
+    private async void SendClipboardClick(object sender, RoutedEventArgs e)
+    {
+        if (textClipboard is null) return;
+        SendClipboard.IsEnabled = false;
+        try {
+            var count = await textClipboard.SendNowAsync();
+            ClipboardStatus.Text = count > 0 ? $"Clipboard sent to {count} device{(count == 1 ? "" : "s")}." : "No connected device accepted text sync. Enable clipboard sharing on the other device.";
+        }
+        catch (Exception ex) when (ex is IOException or System.Runtime.InteropServices.ExternalException or OperationCanceledException or ObjectDisposedException) { ClipboardStatus.Text = ex.Message; }
+        finally { SendClipboard.IsEnabled = companion is not null && connections.Values.Any(c => c.Connected && c.Paired); }
+    }
+    private void FilesDragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = SendFile.IsEnabled && e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+    private async void FilesDrop(object sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        if (!SendFile.IsEnabled || e.Data.GetData(DataFormats.FileDrop) is not string[] paths) return;
+        await SendFilesAsync(paths);
+    }
+    private async Task SendFilesAsync(IEnumerable<string> paths)
+    {
+        if (companion is null || selectedPeer is null) return;
+        var id = selectedPeer.Identity.DeviceId;
+        foreach (var path in paths) {
+            if (!File.Exists(path)) { Status.Text = "Choose files, not folders"; continue; }
+            try { await companion.SendFileAsync(id, path); }
+            catch (Exception ex) { Status.Text = "File send failed"; Detail.Text = ex.Message; }
+        }
+    }
     private void DeviceSelected(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
         if (refreshingRows) return;
@@ -253,11 +359,8 @@ public partial class MainWindow : Window
     }
     private async void SendFileClick(object sender, RoutedEventArgs e) {
         if (companion is null || selectedPeer is null) return;
-        var peer = selectedPeer;
-        var chooser = new OpenFileDialog {Title="Send a file to " + peer.Identity.Name,Multiselect=false,CheckFileExists=true};
-        if (chooser.ShowDialog(this) != true) return;
-        try { await companion.SendFileAsync(peer.Identity.DeviceId,chooser.FileName); }
-        catch (Exception ex) { Status.Text="File send failed"; Detail.Text=ex.Message; }
+        var chooser = new OpenFileDialog {Title="Send files to " + selectedPeer.Identity.Name,Multiselect=true,CheckFileExists=true};
+        if (chooser.ShowDialog(this) == true) await SendFilesAsync(chooser.FileNames);
     }
     private void OpenReceivedClick(object sender, RoutedEventArgs e) {
         if (companion is null) return;

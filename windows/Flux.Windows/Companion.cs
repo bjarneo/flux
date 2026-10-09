@@ -17,7 +17,8 @@ internal sealed class Companion : IDisposable
 {
     private readonly CancellationTokenSource shutdown = new();
     private readonly SemaphoreSlim state = new(1, 1);
-    private readonly SemaphoreSlim connect = new(1, 1);
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> connectGates = new();
+    private readonly SemaphoreSlim reconnectSlots = new(4, 4);
     private readonly SemaphoreSlim handshakes = new(8, 8);
     private readonly PeerSessions<PeerSession> sessions = new();
     private readonly HashSet<string> dialing = new();
@@ -45,7 +46,7 @@ internal sealed class Companion : IDisposable
     public IReadOnlyList<string> SavedPeerIds => pins.Keys.ToArray();
     public event Action<IReadOnlyList<SavedPeer>>? SavedPeersChanged;
     public IReadOnlyList<SavedPeer> SavedPeers => savedPeers.Values.Where(p => pins.ContainsKey(p.DeviceId)).ToArray();
-    public string NetworkSummary => $"Windows IPv4: {string.Join(", ", addresses.Select(a => a.ToString()))}; LAN announcement: {string.Join(", ", advertisedAddresses.Select(a => a.ToString()))}; TCP {ListenPort}; UDP discovery {(udp is null ? "unavailable" : "1716")}.";
+    public string NetworkSummary => $"Windows IPv4: {string.Join(", ", addresses.Select(a => a.ToString()))}; LAN announcement: {string.Join(", ", advertisedAddresses.Select(a => a.ToString()))}; TCP {ListenPort}; UDP discovery {(udp is null ? "unavailable" : "12100")}.";
     private int ListenPort => ((IPEndPoint)listener!.LocalEndpoint).Port;
     public event Action<string, string, string, bool, bool>? Changed;
     public event Action<PeerView>? ViewChanged;
@@ -57,6 +58,7 @@ internal sealed class Companion : IDisposable
         .Where(pair => pair.Valid is not null)
         .ToDictionary(pair => pair.Key, pair => pair.Valid!, StringComparer.Ordinal);
     public string ReceiveDirectory { get; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "Flux");
+    public event Action<string, string, Packet>? ClipboardReceived;
     public event Action<string>? Diagnostic;
     private void Record(string detail) => Diagnostic?.Invoke(DateTimeOffset.Now.ToString("HH:mm:ss") + " " + detail);
 
@@ -94,9 +96,11 @@ internal sealed class Companion : IDisposable
             // remains the sole authority for paired certificates.
             savedPeers = new Dictionary<string, SavedPeer>();
         }
+        foreach (var key in savedPeers.Keys.ToArray())
+            if (savedPeers[key] is { Port: >= 1716 and <= 1764 } old) savedPeers[key] = old with { Port = 12100 };
         foreach (var key in savedPeers.Where(p => p.Value is null || p.Key != p.Value.DeviceId || !Identity.ValidId(p.Key) ||
             !IPAddress.TryParse(p.Value.Address, out var address) || !DiscoveryCatalog.IsLocalAddress(address) ||
-            p.Value.Port is < 1716 or > 1764).Select(p => p.Key).ToArray())
+            p.Value.Port is < 12100 or > 12108).Select(p => p.Key).ToArray())
             savedPeers.Remove(key);
         var themesPath = Path.Combine(directory, "themes.json");
         try {
@@ -140,12 +144,12 @@ internal sealed class Companion : IDisposable
     }
     public async Task StartAsync()
     {
-        for (var port = 1716; port <= 1764; port++) {
+        for (var port = 12100; port <= 12108; port++) {
             var candidate = new TcpListener(IPAddress.Any, port);
             try { candidate.Start(4); listener = candidate; break; }
             catch (SocketException) { candidate.Stop(); }
         }
-        if (listener is null) throw new IOException("No free Flux port from 1716 to 1764.");
+        if (listener is null) throw new IOException("No free Flux port from 12100 to 12108.");
         addresses = NetworkInterface.GetAllNetworkInterfaces().Where(n => n.OperationalStatus == OperationalStatus.Up)
             .SelectMany(n => n.GetIPProperties().UnicastAddresses).Select(a => a.Address)
             .Where(DiscoveryCatalog.IsLocalAddress).Distinct().ToArray();
@@ -159,12 +163,46 @@ internal sealed class Companion : IDisposable
         discovery.Mdns.AnswerReceived += OnDiscoveryAnswer;
         try {
             udp = new UdpClient(AddressFamily.InterNetwork);
-            udp.Client.Bind(new IPEndPoint(IPAddress.Any, 1716)); udp.EnableBroadcast = true;
+            udp.Client.Bind(new IPEndPoint(IPAddress.Any, 12100)); udp.EnableBroadcast = true;
             _ = ReadDiscoveryAsync();
         } catch (SocketException) { udp?.Dispose(); udp = null; }
         _ = ListenAsync();
         Notify("Searching for Flux devices", "Keep Flux open on the phone and Omarchy. Select a discovered device and Connect, then Pair.");
         await FindAsync();
+        _ = ReconnectAsync();
+    }
+    private async Task ReconnectAsync()
+    {
+        try {
+            // Give discovery time to replace stale saved addresses first.
+            await Task.Delay(TimeSpan.FromSeconds(2), shutdown.Token);
+            while (!shutdown.IsCancellationRequested) {
+                SavedPeer[] remembered;
+                HashSet<string> paired, connected;
+                await state.WaitAsync(shutdown.Token);
+                try {
+                    remembered = savedPeers.Values.ToArray();
+                    paired = pins.Keys.ToHashSet(StringComparer.Ordinal);
+                    connected = sessions.Values.Where(s => !s.Closed).Select(s => s.Remote.DeviceId).ToHashSet(StringComparer.Ordinal);
+                } finally { state.Release(); }
+                DiscoveredPeer[] found;
+                lock (discoveryLock) found = catalog.Peers(identity.DeviceId, DateTimeOffset.UtcNow).Concat(udpPeers.Values).ToArray();
+                var targets = ReconnectPlan.Targets(remembered, found, paired, connected);
+                await Task.WhenAll(targets.Select(ReconnectPeerAsync));
+                await Task.Delay(TimeSpan.FromSeconds(15), shutdown.Token);
+                try { await FindAsync(); }
+                catch (Exception ex) when (ex is IOException or SocketException) { Record("Reconnect discovery failed: " + ex.GetType().Name); }
+            }
+        } catch (OperationCanceledException) when (shutdown.IsCancellationRequested) { }
+        catch (Exception ex) { Record("Automatic reconnect stopped: " + ex.GetType().Name); }
+    }
+    private async Task ReconnectPeerAsync(DiscoveredPeer peer)
+    {
+        await reconnectSlots.WaitAsync(shutdown.Token);
+        try { await ConnectAsync(peer, savedOnly: true); }
+        catch (Exception ex) when (ex is IOException or SocketException or TimeoutException or OperationCanceledException or ObjectDisposedException or AuthenticationException) {
+            if (!shutdown.IsCancellationRequested) Record("Will retry " + peer.Identity.Name + ": " + ex.GetType().Name);
+        } finally { reconnectSlots.Release(); }
     }
     private void OnDiscoveryAnswer(object? sender, MessageEventArgs e)
     {
@@ -191,7 +229,7 @@ internal sealed class Companion : IDisposable
                 try {
                     var packet = Packet.Decode(received.Buffer); var found = Identity.Parse(packet);
                     if (found.DeviceId == identity.DeviceId || !packet.Body.TryGetProperty("tcpPort", out var port) ||
-                        !port.TryGetInt32(out var number) || number is < 1716 or > 1764) continue;
+                        !port.TryGetInt32(out var number) || number is < 12100 or > 12108) continue;
                     lock (discoveryLock) {
                         if (udpPeers.Count < 128 || udpPeers.ContainsKey(found.DeviceId)) {
                             udpPeers[found.DeviceId] = new(found, received.RemoteEndPoint.Address, number); PublishPeers();
@@ -223,7 +261,7 @@ internal sealed class Companion : IDisposable
         if (profile is null) throw new IOException("Discovery has not started.");
         lock (discoveryLock) { queries.Clear(); udpPeers.Clear(); PublishPeers(); }
         discovery!.QueryServiceInstances("_flux._udp");
-        if (udp is not null) await udp.SendAsync(identity.Packet(ListenPort).Encode(), new IPEndPoint(IPAddress.Broadcast, 1716), shutdown.Token);
+        if (udp is not null) await udp.SendAsync(identity.Packet(ListenPort).Encode(), new IPEndPoint(IPAddress.Broadcast, 12100), shutdown.Token);
         await AnnounceAsync(profile);
         Record("Discovery refreshed. Existing device connections remain open.");
     }
@@ -232,10 +270,12 @@ internal sealed class Companion : IDisposable
         await state.WaitAsync(shutdown.Token);
         try { return sessions.Get(id); } finally { state.Release(); }
     }
-    public async Task ConnectAsync(DiscoveredPeer target)
+    public async Task ConnectAsync(DiscoveredPeer target, bool savedOnly = false)
     {
+        var connect = connectGates.GetOrAdd(target.Identity.DeviceId, _ => new SemaphoreSlim(1, 1));
         await connect.WaitAsync(shutdown.Token);
         try {
+            if (savedOnly && !pins.ContainsKey(target.Identity.DeviceId)) return;
             var existing = await GetSessionAsync(target.Identity.DeviceId);
             if (existing is not null) {
                 await existing.Gate.WaitAsync(shutdown.Token);
@@ -246,7 +286,7 @@ internal sealed class Companion : IDisposable
             Notify("Connecting to " + target.Identity.Name, "Announcing Windows and asking this device to connect back. Other connections stay open.");
             if (profile is not null) await AnnounceAsync(profile);
             using var announce = new UdpClient(AddressFamily.InterNetwork);
-            await announce.SendAsync(identity.Packet(ListenPort).Encode(), new IPEndPoint(target.Address, 1716), shutdown.Token);
+            await announce.SendAsync(identity.Packet(ListenPort).Encode(), new IPEndPoint(target.Address, 12100), shutdown.Token);
             await Task.Delay(TimeSpan.FromSeconds(2), shutdown.Token);
             if (await GetSessionAsync(target.Identity.DeviceId) is not null) return;
             await state.WaitAsync(shutdown.Token);
@@ -264,10 +304,11 @@ internal sealed class Companion : IDisposable
                 shutdown.Token.ThrowIfCancellationRequested();
                 var reason = ex is SocketException socket ? socket.SocketErrorCode.ToString()
                     : ex is OperationCanceledException ? "Timed out after 5 seconds" : ex.GetType().Name;
-                Notify("Waiting for " + target.Identity.Name + " to connect to Windows", reason + ". Listening for its return connection for up to 35 seconds.");
+                var returnWait = TimeSpan.FromSeconds(savedOnly ? 8 : 35);
+                Notify("Waiting for " + target.Identity.Name + " to connect to Windows", reason + $". Listening for its return connection for up to {returnWait.TotalSeconds:0} seconds.");
                 if (profile is not null) await AnnounceAsync(profile);
-                if (await ConnectionAttempt.WaitForTargetAsync(token => ObserveAsync(target.Identity.DeviceId, token), TimeSpan.FromSeconds(35), shutdown.Token)) return;
-                throw new IOException("Direct TCP failed: " + reason + ". No verified return connection arrived within 35 seconds. See Connection diagnostics.", ex);
+                if (await ConnectionAttempt.WaitForTargetAsync(token => ObserveAsync(target.Identity.DeviceId, token), returnWait, shutdown.Token)) return;
+                throw new IOException("Direct TCP failed: " + reason + $". No verified return connection arrived within {returnWait.TotalSeconds:0} seconds. See Connection diagnostics.", ex);
             }
             if (!await handshakes.WaitAsync(0, shutdown.Token)) {
                 tcp.Dispose();
@@ -352,9 +393,9 @@ internal sealed class Companion : IDisposable
                 var secure = Identity.Parse(Packet.Decode(await Lines.ReadAsync(tls, 8192, deadline.Token)));
                 plain.VerifySecure(secure, cert);
                 var address = ((IPEndPoint)tcp.Client.RemoteEndPoint!).Address;
-                var port = peerPort ?? (plainPacket.Body.TryGetProperty("tcpPort", out var incomingPort) && incomingPort.TryGetInt32(out var advertisedPort) ? advertisedPort : 1716);
+                var port = peerPort ?? (plainPacket.Body.TryGetProperty("tcpPort", out var incomingPort) && incomingPort.TryGetInt32(out var advertisedPort) ? advertisedPort : 12100);
                 // A discovery port is a hint only; keep a valid Flux range for rows.
-                if (port is < 1716 or > 1764) port = 1716;
+                if (port is < 12100 or > 12108) port = 12100;
                 var candidate = new PeerSession(secure, address, port, tls, cert, reads,
                     ((IPEndPoint)tcp.Client.LocalEndPoint!).Address) { Outgoing = dialTarget is not null };
                 await state.WaitAsync(shutdown.Token);
@@ -392,6 +433,10 @@ internal sealed class Companion : IDisposable
                     finally { session.Gate.Release(); }
                     var packet = Packet.Decode(await Lines.ReadAsync(tls, limit, reads.Token));
                     lastType = packet.Type;
+                    if (packet.Type is "flux.clipboard" or "flux.clipboard.connect") {
+                        if (session.Paired && !session.Closed) ClipboardReceived?.Invoke(secure.DeviceId, session.Id, packet);
+                        continue;
+                    }
                     if (packet.Type == "flux.theme") {
                         if (packet.Body.GetRawText().Length <= 8192 && OmarchyTheme.TryParse(packet.Body, out var theme)) {
                             await state.WaitAsync(shutdown.Token);
@@ -408,7 +453,7 @@ internal sealed class Companion : IDisposable
                             session.Tunnels.TryGetValue(token.GetString()!,out var waiting)) {
                             if (packet.Body.TryGetProperty("error",out var error) && error.ValueKind == JsonValueKind.String && error.GetString()!.Length > 0)
                                 waiting.TrySetException(new IOException("The peer could not open its file tunnel."));
-                            else if (packet.Body.TryGetProperty("port",out var tunnelPort) && tunnelPort.TryGetInt32(out var value) && value is >= 1739 and <= 1764)
+                            else if (packet.Body.TryGetProperty("port",out var tunnelPort) && tunnelPort.TryGetInt32(out var value) && value is >= 12070 and <= 12099)
                                 waiting.TrySetResult(value);
                             else waiting.TrySetException(new IOException("Invalid file tunnel port."));
                         }
@@ -695,7 +740,7 @@ internal sealed class Companion : IDisposable
         using (cancellation) {
             var view = new FileTransferView(Guid.NewGuid().ToString("N"), session.Remote.DeviceId, session.Remote.Name,
                 path is null ? "Incoming file" : "Outgoing file",
-                path is null ? "Received" : "Sent",0,packet?.PayloadSize ?? 0,path is null ? "Receiving" : "Sending");
+                path is null ? "Received" : "Sent",0,packet?.PayloadSize ?? 0,path is null ? "Receiving" : "Sending", StartedAt: DateTimeOffset.UtcNow);
             var last = DateTimeOffset.MinValue;
             void Progress(long bytes) {
                 view = view with {Bytes=bytes};
@@ -740,6 +785,39 @@ internal sealed class Companion : IDisposable
             await SendAsync(session,packet,ct);
             return await waiting.Task.WaitAsync(TimeSpan.FromSeconds(30),ct);
         } finally { session.Tunnels.TryRemove(id,out _); }
+    }
+    public async Task<int> SendClipboardAsync(string text, CancellationToken ct)
+    {
+        if (!ClipboardText.Valid(text)) return 0;
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(shutdown.Token, ct);
+        PeerSession[] targets;
+        await state.WaitAsync(lifetime.Token);
+        try { targets = sessions.Values.Where(s => s.Paired && !s.Closed && s.Remote.CanClipboard).ToArray(); }
+        finally { state.Release(); }
+        var sent = 0;
+        foreach (var target in targets) {
+            await target.Gate.WaitAsync(lifetime.Token);
+            try {
+                await state.WaitAsync(lifetime.Token);
+                try {
+                    if (target.Paired && !target.Closed && ReferenceEquals(sessions.Get(target.Remote.DeviceId), target)) {
+                        await SendAsync(target, Packet.Create("flux.clipboard", new { content = text }), lifetime.Token);
+                        sent++;
+                    }
+                } finally { state.Release(); }
+            } catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException) {
+                Record("Clipboard send failed: " + ex.GetType().Name);
+            } finally { target.Gate.Release(); }
+        }
+        return sent;
+    }
+    public async Task ApplyClipboardAsync(string deviceId, string connectionId, Action apply)
+    {
+        await state.WaitAsync(shutdown.Token);
+        try {
+            var current = sessions.Get(deviceId);
+            if (current is { Paired: true, Closed: false } && current.Id == connectionId && pins.ContainsKey(deviceId)) apply();
+        } finally { state.Release(); }
     }
     public void Dispose()
     {

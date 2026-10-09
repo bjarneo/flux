@@ -24,7 +24,7 @@ internal static class FilePayloadChecks
     }
     private static TcpListener Listener()
     {
-        for (var port=1739;port<=1764;port++) {
+        for (var port=12070;port<=12099;port++) {
             var l=new TcpListener(IPAddress.Loopback,port);
             try { l.Start(); return l; } catch (SocketException) { l.Stop(); }
         }
@@ -50,7 +50,7 @@ internal static class FilePayloadChecks
             Task<string>? receiving=null;
             await FilePayload.SendAsync(input,own,peer.RawData,IPAddress.Loopback,IPAddress.Loopback,p=> {
                 var decoded=Packet.Decode(p.Encode());
-                Check(decoded.PayloadSize==content.Length && decoded.PayloadTransferInfo?.Port is >=1739 and <=1764,"Payload envelope did not roundtrip.");
+                Check(decoded.PayloadSize==content.Length && decoded.PayloadTransferInfo?.Port is >=12070 and <=12099,"Payload envelope did not roundtrip.");
                 receiving=FilePayload.ReceiveAsync(decoded,inbox,peer,own.RawData,IPAddress.Loopback,IPAddress.Loopback,_=>Task.CompletedTask,()=>true,_=>{},deadline.Token);
                 return Task.CompletedTask;
             },()=>true,_=>{},deadline.Token);
@@ -89,7 +89,7 @@ internal static class FilePayloadChecks
             Check(Directory.GetFiles(inbox).Length==before && !Directory.GetFiles(inbox,"*.part").Any(),"Failed transfer left a partial or final file.");
             var bad=reverse with {PayloadTransferInfo=new(80)};
             await Fails(()=>{FilePayload.Validate(bad);return Task.CompletedTask;});
-            await Fails(()=>{FilePayload.Validate(reverse with {PayloadTransferInfo=new(1739,"abc")});return Task.CompletedTask;});
+            await Fails(()=>{FilePayload.Validate(reverse with {PayloadTransferInfo=new(12070,"abc")});return Task.CompletedTask;});
             await Fails(()=>{FilePayload.Validate(reverse with {PayloadSize=FilePayload.MaxBytes+1});return Task.CompletedTask;});
             Console.WriteLine("PASS: payload envelope, direct/reverse/phone-tunnel TLS, wrong certificate rejection, exact bytes, safe names, collision protection and failure cleanup.");
         } finally { Directory.Delete(root,true); }

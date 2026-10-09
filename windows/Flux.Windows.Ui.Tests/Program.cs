@@ -34,8 +34,9 @@ internal static class Program
             // Real WPF templates and data binding, without network or identity state.
             var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
             var window = new MainWindow(startCompanion: false);
-            var first = new DiscoveredPeer(new Identity(new string('a',32), "First",8),IPAddress.Loopback,1716);
-            var second = new DiscoveredPeer(new Identity(new string('b',32), "Second",8),IPAddress.Loopback,1716);
+            Check(((CheckBox)window.FindName("ClipboardSync")).IsChecked != true, "Clipboard sync must default to off.");
+            var first = new DiscoveredPeer(new Identity(new string('a',32), "First",8),IPAddress.Loopback,12100);
+            var second = new DiscoveredPeer(new Identity(new string('b',32), "Second",8),IPAddress.Loopback,12100);
             var connect = (Button)window.FindName("Connect");
             Check(!connect.IsEnabled, "Connect must start disabled without a target.");
             window.SetDiscoveredPeers(new[] { first, second });
@@ -55,7 +56,7 @@ internal static class Program
             devices.SelectedIndex = 0;
             window.SetPeerConnection(new(first.Identity.DeviceId,first.Address,true,Connected:false));
             Check(connect.IsEnabled, "Disconnected target must allow reconnect.");
-            var alternate = first with {Address=IPAddress.Parse("192.168.1.99"),Port=1717};
+            var alternate = first with {Address=IPAddress.Parse("192.168.1.99"),Port=12101};
             window.SetDiscoveredPeers(new[] {first,alternate,second});
             var target = (ComboBox)window.FindName("Target");
             target.SelectedIndex = 1;
@@ -95,7 +96,7 @@ internal static class Program
             Check(MainWindow.VisibleTransfers(history, first.Identity.DeviceId, true).Length == 2,
                 "All devices history must retain transfers from other devices.");
             window.SetDiscoveredPeers(Array.Empty<DiscoveredPeer>());
-            window.SetSavedPeers(new[] { new SavedPeer(first.Identity.DeviceId, "Saved computer", "192.168.1.42", 1716) });
+            window.SetSavedPeers(new[] { new SavedPeer(first.Identity.DeviceId, "Saved computer", "192.168.1.42", 12100) });
             Check(devices.Items.Count == 2, "An authenticated connected device and a saved offline device must both remain visible.");
             window.SetPeerConnection(new(second.Identity.DeviceId, second.Address, true, Connected: false));
             Check(devices.Items.Count == 1 && ((PeerRow)devices.Items[0]).ConnectionLabel == "offline",
@@ -131,6 +132,14 @@ internal static class Program
             window.UpdateLayout(); Pump(); window.UpdateLayout();
             Check(Descendants<Button>(files).Single(b => b.Content?.ToString() == "Cancel transfer").Visibility == Visibility.Collapsed,
                 "A completed transfer must hide Cancel.");
+            for (var i = 0; i < 75; i++) window.SetTransferView(new FileTransferView(i.ToString(), first.Identity.DeviceId, "Peer", $"file-{i}.bin", "Received", 10,10,"Saved"));
+            Check(files.Items.Count == 25 && ((Button)window.FindName("NextHistory")).IsEnabled, "History must paginate rather than discard older transfers.");
+            ((Button)window.FindName("NextHistory")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            ((Button)window.FindName("NextHistory")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(((FileTransferView)files.Items[24]).Id == "0" && !((Button)window.FindName("NextHistory")).IsEnabled, "The last history page must expose the oldest retained transfer.");
+            ((Button)window.FindName("ClipboardNav")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(((StackPanel)window.FindName("ClipboardPage")).Visibility == Visibility.Visible && files.IsVisible == false,
+                "Clipboard navigation must show its own page.");
             window.Close(); app.Shutdown();
             Console.WriteLine("WPF transfer rendering and connection-state checks passed.");
             return 0;

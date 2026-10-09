@@ -15,7 +15,7 @@ internal sealed record SavedPeer(string DeviceId, string Name, string Address, i
 {
     public DiscoveredPeer ToPeer() => new(new(DeviceId, string.IsNullOrWhiteSpace(Name) ? DeviceId[..8] : Name, 8),
         IPAddress.TryParse(Address, out var address) && DiscoveryCatalog.IsLocalAddress(address)
-            ? address : IPAddress.None, Port is >= 1716 and <= 1764 ? Port : 1716);
+            ? address : IPAddress.None, Port is >= 12100 and <= 12108 ? Port : 12100);
 }
 internal sealed record PeerRow(DiscoveredPeer Peer, string Status)
 {
@@ -88,7 +88,7 @@ internal sealed class DiscoveryCatalog
         var live = records.Values.Where(v => v.Expires > now).Select(v => v.Record).ToArray();
         var peers = new List<DiscoveredPeer>();
         foreach (var srv in live.OfType<SRVRecord>().Where(r => Name(r.Name).EndsWith(Suffix, StringComparison.Ordinal))) {
-            if (srv.Port is < 1716 or > 1764) continue;
+            if (srv.Port is < 12100 or > 12108) continue;
             var txt = live.OfType<TXTRecord>().FirstOrDefault(r => r.Name == srv.Name);
             if (txt is null) continue;
             var properties = new Dictionary<string, string>(StringComparer.Ordinal);

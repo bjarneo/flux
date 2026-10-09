@@ -84,7 +84,7 @@ catch (ArgumentException) { }
 using (var badNameBody = System.Text.Json.JsonDocument.Parse("{\"filename\":\"\\uD800\"}")) {
     var badNamePacket = new Packet(System.Text.Json.JsonSerializer.SerializeToElement(1),
         "flux.share.request", badNameBody.RootElement.Clone())
-        {PayloadSize=1, PayloadTransferInfo=new(1739)};
+        {PayloadSize=1, PayloadTransferInfo=new(12070)};
     await Reject(() => { FilePayload.Validate(badNamePacket); return Task.CompletedTask; });
 }
 var stoppedByForget = new TransferEpoch(); stoppedByForget.Stop("Pairing removed.");
@@ -153,7 +153,7 @@ var catalog = new DiscoveryCatalog();
 var peerId = new string('b',32);
 var instance = peerId + "._flux._udp.local";
 var ptr = new PTRRecord {Name = "_flux._udp.local", DomainName = instance};
-var srv = new SRVRecord {Name = instance, Target = "omarchy.local", Port = 1716};
+var srv = new SRVRecord {Name = instance, Target = "omarchy.local", Port = 12100};
 var txt = new TXTRecord {Name = instance, Strings = new List<string> {"id="+peerId,"name=Omarchy","protocol=8"}};
 var address = new ARecord {Name = "omarchy.local", Address = IPAddress.Parse("192.168.1.10")};
 catalog.Add(new ResourceRecord[] {ptr}, now);
@@ -197,7 +197,7 @@ await Task.Delay(80);
 Check(unpaired.Token.IsCancellationRequested, "Unpaired idle timeout was disabled.");
 Console.WriteLine("PASS: connection-scoped read lifetime, promotion across packet boundaries, unpaired timeout and paired shutdown.");
 
-var discoveredPeer = new DiscoveredPeer(new Identity(peerId,"Pixel",8),IPAddress.Parse("192.168.1.10"),1716);
+var discoveredPeer = new DiscoveredPeer(new Identity(peerId,"Pixel",8),IPAddress.Parse("192.168.1.10"),12100);
 var savedPeers = new HashSet<string> {peerId};
 Check(PeerRow.Create(discoveredPeer,new(peerId,discoveredPeer.Address,true),savedPeers).Status == "Paired — connected", "A confirmed connected peer is labelled untrusted.");
 Check(PeerRow.Create(discoveredPeer,new(peerId,discoveredPeer.Address,false),savedPeers).Status == "Connected — pairing needed", "An incomplete pairing is labelled confirmed.");
@@ -279,8 +279,8 @@ await Task.WhenAll(secondServerTls.AuthenticateAsServerAsync(new SslServerAuthen
 },multiDeadline.Token));
 using var firstReads = new ReadLifetime(CancellationToken.None);
 using var secondReads = new ReadLifetime(CancellationToken.None);
-var desktopSession = new PeerSession(new(new string('a',32),"Omarchy",8),IPAddress.Loopback,1716,serverTls,clientCert,firstReads);
-var phoneSession = new PeerSession(new(new string('c',32),"Pixel",8),IPAddress.Loopback,1716,secondServerTls,phoneCert,secondReads);
+var desktopSession = new PeerSession(new(new string('a',32),"Omarchy",8),IPAddress.Loopback,12100,serverTls,clientCert,firstReads);
+var phoneSession = new PeerSession(new(new string('c',32),"Pixel",8),IPAddress.Loopback,12100,secondServerTls,phoneCert,secondReads);
 var registry = new PeerSessions<PeerSession>(2);
 Check(registry.TryAdd(desktopSession.Remote.DeviceId,desktopSession) && registry.TryAdd(phoneSession.Remote.DeviceId,phoneSession),"Two different peers could not stay registered together.");
 Check(!registry.TryAdd(desktopSession.Remote.DeviceId,phoneSession),"A duplicate device replaced a live peer.");
@@ -300,7 +300,7 @@ Check(registry.Remove(desktopSession.Remote.DeviceId,desktopSession),"Disconnect
 serverTls.Dispose();
 await secondClientTls.WriteAsync("phone still connected\n"u8.ToArray(),multiDeadline.Token);
 Check(System.Text.Encoding.UTF8.GetString(await Lines.ReadAsync(secondServerTls,64,multiDeadline.Token))=="phone still connected","Closing Omarchy broke the phone's TLS transport.");
-var replacement = new PeerSession(desktopSession.Remote,IPAddress.Loopback,1716,secondServerTls,clientCert,firstReads);
+var replacement = new PeerSession(desktopSession.Remote,IPAddress.Loopback,12100,secondServerTls,clientCert,firstReads);
 Check(registry.TryAdd(desktopSession.Remote.DeviceId,replacement),"Reconnecting a removed device failed.");
 Check(!registry.Remove(desktopSession.Remote.DeviceId,desktopSession) && ReferenceEquals(registry.Get(desktopSession.Remote.DeviceId),replacement),"Stale cleanup removed a reconnected peer.");
 Check(ReferenceEquals(registry.Get(phoneSession.Remote.DeviceId),phoneSession),"Reconnecting Omarchy replaced the phone.");
@@ -314,3 +314,56 @@ Check(!registry.Replace(phoneSession.Remote.DeviceId,desktopSession,replacement)
 Console.WriteLine("PASS: matching Go crossed-dial arbitration, stale reconnect preference and guarded session replacement.");
 
 await FilePayloadChecks.RunAsync(clientCert,serverCert,changed);
+
+var clipboard = new ClipboardText();
+Check(clipboard.Local("æøå\nline 2 🐧", 100), "Unicode local copy did not sync.");
+Check(!clipboard.Local("æøå\nline 2 🐧", 101), "An unchanged clipboard was resent.");
+var remoteCopy = Packet.Decode(Packet.Create("flux.clipboard", new { content = "remote\ntext" }).Encode());
+Check(clipboard.TryReceive(remoteCopy, 200, out var copied) && copied == "remote\ntext", "Clipboard wire roundtrip failed.");
+clipboard.Observe(copied, 200);
+Check(!clipboard.Local(copied, 201), "Received copy echoed back to peers.");
+Check(!clipboard.TryReceive(Packet.Create("flux.clipboard.connect", new { content = "old", timestamp = 199 }), 202, out _), "Stale reconnect overwrote a newer copy.");
+Check(clipboard.TryReceive(Packet.Create("flux.clipboard.connect", new { content = "new", timestamp = 201 }), 202, out _), "New reconnect copy rejected.");
+clipboard.Observe("local", 300);
+Check(!clipboard.TryReceive(Packet.Create("flux.clipboard.connect", new { content = "bad", timestamp = "invalid" }), 301, out _), "Malformed timestamp accepted.");
+Check(!ClipboardText.TryParse(Packet.Create("flux.clipboard", new { content = 123 }), out _), "Non-text clipboard accepted.");
+Check(!ClipboardText.TryParse(Packet.Create("flux.clipboard.image", new { content = "image" }), out _), "Image packet accepted as text.");
+Check(!ClipboardText.Valid(""), "Empty clipboard accepted.");
+Check(!ClipboardText.Valid("a\0b"), "NUL text would be silently truncated by Windows.");
+Check(ClipboardText.Valid(new string('a', ClipboardText.MaxBytes)), "Exact text limit rejected.");
+Check(!ClipboardText.Valid(new string('a', ClipboardText.MaxBytes + 1)), "Oversized text accepted.");
+Check(!ClipboardText.Valid(new string('æ', ClipboardText.MaxBytes)), "UTF-8 byte limit not enforced.");
+var clipboardIdentity = Identity.Parse(new Identity(new string('a',32), "Windows", 8).Packet());
+Check(clipboardIdentity.CanClipboard, "Clipboard receive capability missing from identity.");
+Console.WriteLine("PASS: clipboard Unicode wire format, echo suppression, reconnect timestamps and byte limits.");
+
+var historyDirectory = Path.Combine(Path.GetTempPath(), "flux-history-test-" + Guid.NewGuid().ToString("N"));
+try {
+    var historyPath = Path.Combine(historyDirectory, "history.jsonl");
+    var store = new TransferHistory(historyPath);
+    Check(!store.Load().Any(), "Missing transfer history must start empty.");
+    for (var i = 0; i < 75; i++) store.Save(new FileTransferView(i.ToString(), new string('a',32), "Peer", $"file-{i}.bin", "Received", 10, 10, "Saved", StartedAt: DateTimeOffset.UtcNow));
+    store.Save(new FileTransferView("active", new string('a',32), "Peer", "active.bin", "Received", 0, 10, "Receiving"));
+    File.AppendAllText(historyPath, "{broken final entry");
+    var restored = new TransferHistory(historyPath).Load().ToArray();
+    Check(restored.Length == 75 && restored.First().Id == "0" && restored.Last().Id == "74", "Transfer history must retain more than 50 entries, survive restart and ignore a damaged final entry.");
+    Check(restored.All(t => t.StartedAt != default && !t.IsActive), "History must preserve dates and exclude unfinished transfers.");
+    store.Save(new FileTransferView("after-damage", new string('a',32), "Peer", "later.bin", "Received", 10,10,"Saved"));
+    Check(store.Load().Count() == 76 && store.Load().Last().Id == "after-damage", "A truncated final line must not swallow the next saved transfer.");
+    Console.WriteLine("PASS: persistent transfer history beyond 50 files, restart, timestamps and damaged-entry recovery.");
+} finally { if (Directory.Exists(historyDirectory)) Directory.Delete(historyDirectory,true); }
+
+var rememberedId = new string('d',32);
+var onlineId = new string('e',32);
+var strangerId = new string('f',32);
+var reconnect = ReconnectPlan.Targets(
+    new[] {new SavedPeer(rememberedId,"Saved desktop","192.168.1.10",12100),new SavedPeer(onlineId,"Online desktop","192.168.1.11",12100)},
+    new[] {new DiscoveredPeer(new(rememberedId,"Moved desktop",8),IPAddress.Parse("192.168.1.20"),12101),new DiscoveredPeer(new(strangerId,"Unpaired",8),IPAddress.Parse("192.168.1.30"),12100)},
+    new HashSet<string>{rememberedId,onlineId},new HashSet<string>{onlineId});
+Check(reconnect.Length == 1 && reconnect[0].Address.Equals(IPAddress.Parse("192.168.1.20")) && reconnect[0].Port == 12101,
+    "Reconnect must prefer fresh discovery, skip connected devices and never dial an unpaired device.");
+Check(ReconnectPlan.Targets(new[]{new SavedPeer(rememberedId,"Saved desktop","192.168.1.10",12100)},Array.Empty<DiscoveredPeer>(),new HashSet<string>{rememberedId},new HashSet<string>()).Length==1,
+    "Startup must reconnect a saved peer even before discovery arrives.");
+Check(ReconnectPlan.Targets(new[]{new SavedPeer(rememberedId,"Saved desktop","192.168.1.10",12100)},Array.Empty<DiscoveredPeer>(),new HashSet<string>(),new HashSet<string>()).Length==0,
+    "Forgetting pairing must stop automatic reconnect.");
+Console.WriteLine("PASS: saved reconnect targets, changed addresses, connected-device filtering and forgotten trust.");
