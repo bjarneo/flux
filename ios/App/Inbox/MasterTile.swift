@@ -356,7 +356,7 @@ struct AgentMaster: View {
             answered = out
             sentAfter = plugin.model.replies[id]?.seq ?? 0
             InboxAnswers.shared.sent(choice.label, id, pane: pane)
-            plugin.sendKeys(id, pane: pane, [choice.key])
+            plugin.sendKeys(id, pane: pane, choice.keys)
         }, onError: { lockError = $0 })
     }
 }

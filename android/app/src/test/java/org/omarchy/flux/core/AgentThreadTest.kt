@@ -350,4 +350,252 @@ class AgentThreadTest {
     fun noChangesGiveNoFiles() {
         assertEquals(emptyList<DiffFile>(), parseDiff(listOf("No changes in this repository.")))
     }
+
+    // ───────────────────────── opencode ─────────────────────────
+
+    /** A finished turn of opencode after the tidy step: a prompt, 2 edits, a shell command, a message, and the input box. */
+    private val opencodeDone = listOf(
+        "┃",
+        "┃  Add a tax rate to total, then run the test.",
+        "┃",
+        "",
+        "   → Read invoice.js",
+        "",
+        "┃",
+        "┃  ← Edit invoice.js",
+        "┃",
+        "┃    1   // Invoices of a small billing app.",
+        "┃    2 - export function total(lines) {",
+        "┃    2 + export function total(lines, taxRate = 0) {",
+        "┃    3     let sum = 0",
+        "┃    5 -   return sum",
+        "┃    5 +   return sum * (1 + taxRate)",
+        "┃",
+        "",
+        "┃",
+        "┃  ← Edit invoice.test.js",
+        "┃",
+        "┃    4 + if (total(lines, 0.25) !== 31.25) throw new Error('wrong')",
+        "┃",
+        "",
+        "┃",
+        "┃  $ node invoice.test.js",
+        "┃",
+        "┃  ok",
+        "┃",
+        "",
+        "   Done. The total takes a tax rate:",
+        "     total(lines, 0.25)",
+        "",
+        "   ▣  Build · Big Pickle · 21.2s",
+        "",
+        "┃",
+        "┃  Build · Big Pickle OpenCode Zen",
+        " ~/Code/billing                                          13.1K (7%)  ctrl+p commands",
+    )
+
+    @Test
+    fun opencodeTurnGivesPromptToolsChangesAndTime() {
+        val t = agentThread(opencodeDone)
+        assertEquals(
+            listOf(
+                ThreadBlock.Prompt("Add a tax rate to total, then run the test."),
+                ThreadBlock.Tool("Read", "invoice.js", emptyList()),
+                ThreadBlock.Changes(listOf(FileChange("invoice.js", 2, 2), FileChange("invoice.test.js", 1, 0))),
+                ThreadBlock.Tool("Bash", "node invoice.test.js", listOf("ok")),
+                ThreadBlock.Message("Done. The total takes a tax rate:\n  total(lines, 0.25)"),
+            ),
+            t.blocks,
+        )
+        assertEquals("21.2s", t.worked)
+        assertEquals("", t.step)
+        assertNull("no dialog", agentAsk(opencodeDone))
+    }
+
+    @Test
+    fun opencodeWorkingHasAStepAndNoTime() {
+        val lines = listOf(
+            "┃",
+            "┃  ← Edit invoice.js",
+            "┃",
+            "┃    5 +   return sum * (1 + taxRate)",
+            "┃",
+            "",
+            "   ▣  Build · Big Pickle",
+            "┃",
+            "┃",
+            "┃  Build · Big Pickle OpenCode Zen",
+            " ⬝⬝⬝⬝⬝⬝⬝⬝  esc interrupt                                 12.8K (6%)  ctrl+p commands",
+        )
+        val t = agentThread(lines)
+        assertEquals("Working", t.step)
+        assertEquals("", t.worked)
+        val edit = t.blocks.single() as ThreadBlock.Tool
+        assertEquals("Edit", edit.name)
+        assertEquals(FileChange("invoice.js", 1, 0), edit.change)
+    }
+
+    @Test
+    fun opencodeShellPermissionIsTheCommand() {
+        val lines = listOf(
+            "   $ node invoice.test.js",
+            "   ▣  Build · Big Pickle",
+            "┃",
+            "┃  △ Permission required",
+            "┃    # Shell command",
+            "┃",
+            "┃  $ node invoice.test.js",
+            "┃",
+            "┃",
+            "┃   Allow once   Allow always   Reject  ctrl+f fullscreen  ⇆ select  enter confirm",
+            "┃",
+        )
+        assertEquals(AgentAsk("Permission required", listOf("$ node invoice.test.js"), command = true), agentAsk(lines))
+        // The waiting command and the line of the turn belong to the dialog.
+        assertTrue(agentThread(lines).blocks.isEmpty())
+    }
+
+    @Test
+    fun opencodeEditPermissionIsTheFileAndTheDiff() {
+        val lines = listOf(
+            "┃",
+            "┃  △ Permission required",
+            "┃    → Edit invoice.js",
+            "┃",
+            "┃  1   // Invoices of a small billing app.                                      █",
+            "┃  2 - export function total(lines) {                                           █",
+            "┃  2 + export function total(lines, taxRate = 0) {                              ▀",
+            "┃",
+            "┃   Allow once   Allow always   Reject  ctrl+f fullscreen  ⇆ select  enter confirm",
+        )
+        assertEquals(
+            AgentAsk(
+                "Permission required",
+                listOf("Edit invoice.js", "1   // Invoices of a small billing app.", "2 - export function total(lines) {"),
+            ),
+            agentAsk(lines, maxLines = 3),
+        )
+    }
+
+    @Test
+    fun opencodeMenuRowGivesChoicesWithArrowKeys() {
+        val bar = "\u001b[38;2;240;198;116;48;2;43;46;49m┃\u001b[0m"
+        val gray = "48;2;50;53;57"
+        val accent = "48;2;240;198;116"
+        val row = bar + "\u001b[${gray}m  \u001b[${accent}m \u001b[38;2;29;31;33;${accent}mAllow once\u001b[${accent}m \u001b[0m" +
+            "\u001b[${gray}m  \u001b[38;2;169;169;169;${gray}mAllow always\u001b[${gray}m   \u001b[38;2;169;169;169;${gray}mReject" +
+            "\u001b[${gray}m  \u001b[38;2;197;200;198;${gray}mctrl+f \u001b[38;2;169;169;169;${gray}mfullscreen" +
+            "\u001b[${gray}m  \u001b[38;2;197;200;198;${gray}m⇆ \u001b[38;2;169;169;169;${gray}mselect\u001b[0m\n"
+        val choices = findMenuChoices(termLines(row))
+        assertEquals(
+            listOf(
+                AgentChoice("1", "Allow once", selected = true, keys = listOf("enter")),
+                AgentChoice("2", "Allow always", selected = false, keys = listOf("right", "enter")),
+                AgentChoice("3", "Reject", selected = false, keys = listOf("right", "right", "enter")),
+            ),
+            choices,
+        )
+        // After a move to Reject, the arrows wrap to the first choice.
+        val moved = row.replace("38;2;29;31;33;${accent}mAllow once", "38;2;169;169;169;${gray}mAllow once")
+            .replace("38;2;169;169;169;${gray}mReject", "38;2;29;31;33;${accent}mReject")
+        assertEquals(listOf("right", "enter"), findMenuChoices(termLines(moved))[0].keys)
+        assertEquals(listOf("enter"), findMenuChoices(termLines(moved))[2].keys)
+        // The choices of a numbered dialog go as their digit.
+        assertEquals(listOf("1"), findChoices(listOf("❯ 1. Yes", "  2. No"))[0].keys)
+    }
+
+    @Test
+    fun claudeOutputIsNotOpencode() {
+        assertFalse(isOpencode(text(demo)))
+        assertTrue(isOpencode(opencodeDone))
+    }
+
+    /** A question of opencode with 4 choices and descriptions, after the tidy step. */
+    private val opencodeQuestion = listOf(
+        "┃",
+        "┃  ask me a question I can answer a b c or d to",
+        "┃",
+        "",
+        "   + Thought: 984ms",
+        "   The next step is a merge decision.",
+        "   → Asked 1 question",
+        "   ▣  Build · Grok 4.7",
+        "┃",
+        "┃  What should I do with the pull request?",
+        "┃",
+        "┃  1. A. Approve CI, merge if green",
+        "┃     Approve the waiting runs. Merge only if both pass.",
+        "┃  2. B. Full review before any merge",
+        "┃     Read the change for bugs first.",
+        "┃  3. C. Do not merge",
+        "┃     Leave the pull request open.",
+        "┃  4. D. Close the pull request",
+        "┃     Reject the design.",
+        "┃  5. Type your own answer",
+        "┃",
+        "┃  ↑↓ select  enter submit  esc dismiss",
+        "┃",
+    )
+
+    @Test
+    fun opencodeQuestionGivesTheQuestionAndChoicesWithDescriptions() {
+        assertTrue(isOpencode(opencodeQuestion))
+        assertEquals(AgentAsk("What should I do with the pull request?", emptyList()), agentAsk(opencodeQuestion))
+        val choices = findChoices(opencodeQuestion)
+        assertEquals(5, choices.size)
+        assertEquals(AgentChoice("1", "A. Approve CI, merge if green", detail = "Approve the waiting runs. Merge only if both pass."), choices[0])
+        assertEquals(listOf("4"), choices[3].keys)
+        assertEquals("", choices[4].detail)
+        // The thought line, the tool call of the question, and the question itself are not in the thread.
+        assertEquals(
+            listOf(
+                ThreadBlock.Prompt("ask me a question I can answer a b c or d to"),
+                ThreadBlock.Message("The next step is a merge decision."),
+            ),
+            agentThread(opencodeQuestion).blocks,
+        )
+    }
+
+    @Test
+    fun opencodeAnsweredQuestionIsTheQuestionAndTheAnswer() {
+        val lines = listOf(
+            "┃",
+            "┃  # Questions",
+            "┃",
+            "┃  Which tax rate should total use?",
+            "┃  C 0.25",
+            "┃",
+            "",
+            "   ▣  Build · Big Pickle · 3.1s",
+        )
+        assertEquals(
+            listOf(ThreadBlock.Message("Which tax rate should total use?"), ThreadBlock.Prompt("C 0.25")),
+            agentThread(lines).blocks,
+        )
+    }
+
+    @Test
+    fun claudeQuestionDropsTheHeaderAndKeepsDescriptions() {
+        val lines = listOf(
+            "● I need a decision.",
+            "",
+            "─".repeat(40),
+            " ☐ Tax rate",
+            "",
+            "Which tax rate should total use?",
+            "",
+            "❯ 1. A 0",
+            "     No tax",
+            "  2. B 0.25",
+            "     A quarter",
+            "  3. Type something.",
+            "",
+            "Enter to select · Tab/Arrow keys to navigate · Esc to cancel",
+        )
+        assertEquals(AgentAsk("Which tax rate should total use?", emptyList()), agentAsk(lines))
+        val choices = findChoices(lines)
+        assertEquals(listOf("No tax", "A quarter", ""), choices.map { it.detail })
+        assertTrue(choices[0].selected)
+    }
 }
+

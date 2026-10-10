@@ -822,10 +822,32 @@ fun invertLightness(rgb: Int): Int {
 /** Parses and tidies the output text of an agent. */
 fun termLines(text: String): List<TermLine> = tidyLines(parseAnsi(text))
 
-/** A numbered choice of a question or an approval dialog. [key] is the digit that selects it. */
-data class AgentChoice(val key: String, val label: String, val selected: Boolean = false)
+/**
+ * A choice of a question or an approval dialog. [key] is the number that
+ * the app shows. [keys] are the herdr key names that select the choice: the
+ * digit of a numbered dialog, or the arrows and Enter of a menu, see
+ * [findMenuChoices]. [detail] is the line that describes the choice, or
+ * empty.
+ */
+data class AgentChoice(
+    val key: String,
+    val label: String,
+    val selected: Boolean = false,
+    val keys: List<String> = listOf(key),
+    val detail: String = "",
+)
 
-private val choiceLine = Regex("""^\s*([❯›>]\s*)?(\d{1,2})[.)]\s+(.+)$""")
+/** A numbered choice. The panel bar of opencode can come first. */
+private val choiceLine = Regex("""^\s*(?:┃\s*)?([❯›>]\s*)?(\d{1,2})[.)]\s+(.+)$""")
+
+/** The hints under the choices of a dialog, which are not the description of a choice. */
+private val choiceHints = listOf("↑↓", "enter submit", "Enter to select", "esc dismiss", "Esc to cancel", "to navigate")
+
+/** A line without the panel bar of opencode. */
+private fun barless(line: String): String = line.trimStart().let { if (it.startsWith("┃")) it.removePrefix("┃") else line }
+
+/** The count of spaces at the start of [s]. */
+private fun lead(s: String): Int = s.indexOfFirst { it != ' ' }.let { if (it < 0) s.length else it }
 
 /** How far from the end of the output the dialog can start, in lines. */
 private const val CHOICE_SCAN_LINES = 40
@@ -835,11 +857,12 @@ private const val CHOICE_TAIL_LINES = 15
 
 /**
  * Finds the numbered choices of the dialog at the end of the output, for
- * example the approval dialog of Claude Code. It takes the last run of
- * numbered lines that starts at 1 and counts up by 1. Other lines can come
- * between the choices, for example descriptions or a rule. It returns an
- * empty list when it finds fewer than 2 choices, or when the choices are not
- * near the end.
+ * example the approval dialog of Claude Code or the question of opencode in
+ * its panel. It takes the last run of numbered lines that starts at 1 and
+ * counts up by 1. Other lines can come between the choices, for example
+ * descriptions or a rule. The first line under a choice that is indented
+ * more than the choice is its description. It returns an empty list when it
+ * finds fewer than 2 choices, or when the choices are not near the end.
  */
 fun findChoices(lines: List<String>): List<AgentChoice> {
     val from = maxOf(0, lines.size - CHOICE_SCAN_LINES)
@@ -859,6 +882,65 @@ fun findChoices(lines: List<String>): List<AgentChoice> {
         run += h
     }
     if (run.size < 2 || run.last().index < lines.size - CHOICE_TAIL_LINES) return emptyList()
+    val described = run.mapIndexed { k, h ->
+        val next = if (k + 1 < run.size) run[k + 1].index else minOf(lines.size, h.index + 3)
+        val col = lead(barless(lines[h.index]))
+        val detail = (h.index + 1 until next).map { barless(lines[it]) }
+            .firstOrNull { it.isNotBlank() }
+            ?.takeIf { d -> lead(d) > col && choiceHints.none { d.contains(it) } }
+            ?.trim().orEmpty()
+        h.choice.copy(detail = detail)
+    }
     // A single key selects a choice, so only 1 to 9 work.
-    return run.map { it.choice }.filter { it.key.length == 1 }
+    return described.filter { it.key.length == 1 }
 }
+
+/** How far from the end of the output a menu row can be, in lines. */
+private const val MENU_SCAN_LINES = 10
+
+/** The words of the hints after the choices of a menu row, for example "⇆ select" and "enter confirm" of opencode. */
+private val menuHints = listOf("⇆", "ctrl+", "enter confirm", "esc ")
+
+/** The space between 2 choices of a menu row. */
+private val menuGap = Regex("""\s{2,}""")
+
+/** The most choices of a menu row. herdr takes 8 keys at most, so the last choice is 6 arrows and Enter away. */
+private const val MENU_MAX = 7
+
+/**
+ * Finds the choices of a menu row near the end of the output, for example
+ * the permission dialog of opencode: "Allow once   Allow always   Reject".
+ * The row has a hint with "⇆" or "enter confirm". Each choice is a run of
+ * text with a background, before the hint. The selected choice has another
+ * background than the others. Right moves the selection to the next choice
+ * and wraps at the end, and Enter confirms it. So the keys of a choice are
+ * the arrows from the selected choice and Enter. It returns an empty list
+ * when it finds no such row or fewer than 2 choices.
+ */
+fun findMenuChoices(lines: List<TermLine>): List<AgentChoice> {
+    for (i in lines.indices.reversed().take(MENU_SCAN_LINES)) {
+        val line = lines[i]
+        if (!line.text.contains("⇆") && !line.text.contains("enter confirm")) continue
+        data class Run(val text: String, val bg: TermColor?)
+        val runs = ArrayList<Run>()
+        scan@ for (span in line.spans) {
+            // Choices in the same style share a span. 2 spaces or more separate them.
+            for (part in span.text.split(menuGap)) {
+                val t = part.trim()
+                if (menuHints.any { part.contains(it) } || t == "enter" || t == "esc") break@scan
+                if (t.isEmpty() || t.none { it.isLetter() }) continue
+                runs += Run(t, if (span.style.inverse) span.style.fg else span.style.bg)
+            }
+        }
+        if (runs.size < 2 || runs.size > MENU_MAX || runs.any { it.bg == null }) return emptyList()
+        // The selected choice has the background that no other choice has.
+        val selected = runs.indices.firstOrNull { k -> runs.count { it.bg == runs[k].bg } == 1 } ?: 0
+        val n = runs.size
+        return runs.mapIndexed { k, r ->
+            val steps = (k - selected + n) % n
+            AgentChoice((k + 1).toString(), r.text, k == selected, List(steps) { "right" } + "enter")
+        }
+    }
+    return emptyList()
+}
+

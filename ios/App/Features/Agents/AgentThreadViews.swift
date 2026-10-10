@@ -91,7 +91,8 @@ struct SlideBar: View {
 // MARK: Dialog
 
 /// A numbered choice of a dialog. The `primary` choice has the accent fill,
-/// and the others have the tonal fill. A tap sends its digit.
+/// and the others have the tonal fill. A tap sends its keys. The
+/// description of a choice shows under its label.
 struct AskChoiceButton: View {
     let choice: AgentChoice
     let primary: Bool
@@ -108,11 +109,20 @@ struct AskChoiceButton: View {
                 Text(choice.key)
                     .font(.subheadline.monospaced().weight(.bold))
                     .foregroundStyle(ink.opacity(0.65))
-                Text(choice.label)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(ink)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(choice.label)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(ink)
+                        .multilineTextAlignment(.leading)
+                    // The description of a choice of a question, under its label.
+                    if !choice.detail.isEmpty {
+                        Text(choice.detail)
+                            .font(.footnote)
+                            .foregroundStyle(ink.opacity(0.72))
+                            .multilineTextAlignment(.leading)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
@@ -123,7 +133,7 @@ struct AskChoiceButton: View {
         .buttonStyle(.plain)
         .disabled(!enabled)
         .opacity(enabled ? 1 : TiledMetrics.disabledAlpha)
-        .accessibilityLabel("\(choice.key). \(choice.label)")
+        .accessibilityLabel(choice.detail.isEmpty ? "\(choice.key). \(choice.label)" : "\(choice.key). \(choice.label). \(choice.detail)")
         .accessibilityHint("Answer \(choice.key)")
     }
 }
@@ -176,7 +186,7 @@ struct AskText: View {
 
 /// A token that looks like a file path or a file name, or code in backticks.
 private let codeToken = try! NSRegularExpression(
-    pattern: #"`[^`\n]+`|(?<![A-Za-z0-9_/.-])(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]*[A-Za-z0-9_]|(?<![A-Za-z0-9_/.-])[A-Za-z0-9_-]+\.(?:sql|rb|ts|tsx|js|jsx|mjs|py|go|rs|kt|kts|swift|java|c|h|cpp|md|json|toml|yaml|yml|sh|css|scss|html|txt|lock|xml|qml)(?![A-Za-z0-9_])"#)
+    pattern: #"`[^`\n]+`|(?<![A-Za-z0-9_/.-])(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]*[A-Za-z0-9_]|(?<![A-Za-z0-9_/.-])[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.(?:sql|rb|ts|tsx|js|jsx|mjs|py|go|rs|kt|kts|swift|java|c|h|cpp|md|json|toml|yaml|yml|sh|css|scss|html|txt|lock|xml|qml)(?![A-Za-z0-9_])"#)
 
 /// A message of the agent: body text, with paths and code in mono on a tile.
 struct ThreadMessage: View {

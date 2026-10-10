@@ -312,18 +312,28 @@ public enum TermText {
     }
 }
 
-/// A numbered choice of a question or an approval dialog. `key` is the
-/// digit that selects it.
+/// A choice of a question or an approval dialog. `key` is the number that
+/// the app shows. `keys` are the herdr key names that select the choice:
+/// the digit of a numbered dialog, or the arrows and Enter of a menu, see
+/// `findMenu`. `detail` is the line that describes the choice, or empty.
 public struct AgentChoice: Sendable, Hashable, Identifiable {
     public var key: String
     public var label: String
     public var selected: Bool
+    public var keys: [String]
+    public var detail: String
 
-    public init(_ key: String, _ label: String, selected: Bool = false) {
+    public init(_ key: String, _ label: String, selected: Bool = false, keys: [String]? = nil, detail: String = "") {
         self.key = key
         self.label = label
         self.selected = selected
+        self.keys = keys ?? [key]
+        self.detail = detail
     }
+
+    /// The line under the bubble of an answer: the digit that went to the
+    /// agent, or the menu for the arrows and Enter of a menu.
+    public var sentMeta: String { keys == [key] ? "Sent key \(key)" : "Selected in the menu" }
 
     public var id: String { key }
 
@@ -332,10 +342,27 @@ public struct AgentChoice: Sendable, Hashable, Identifiable {
     /// The last choice must be this close to the end of the output, in lines.
     private static let tailLines = 15
 
+    /// The hints under the choices of a dialog, which are not the
+    /// description of a choice.
+    private static let choiceHints = ["↑↓", "enter submit", "Enter to select", "esc dismiss", "Esc to cancel", "to navigate"]
+
+    /// A line without the panel bar of opencode.
+    private static func barless(_ line: String) -> String {
+        let t = String(line.drop(while: { $0.isWhitespace }))
+        return t.hasPrefix("┃") ? String(t.dropFirst()) : line
+    }
+
+    /// The count of spaces at the start of `s`.
+    private static func lead(_ s: String) -> Int {
+        s.prefix(while: { $0 == " " }).count
+    }
+
     /// Finds the numbered choices of the dialog at the end of the output,
-    /// for example the approval dialog of Claude Code. It takes the last run
-    /// of numbered lines that starts at 1 and counts up by 1. Other lines can
-    /// come between the choices, for example descriptions or a rule. It
+    /// for example the approval dialog of Claude Code or the question of
+    /// opencode in its panel. It takes the last run of numbered lines that
+    /// starts at 1 and counts up by 1. Other lines can come between the
+    /// choices, for example descriptions or a rule. The first line under a
+    /// choice that is indented more than the choice is its description. It
     /// returns an empty list when it finds fewer than 2 choices, or when the
     /// choices are not near the end.
     public static func find(_ lines: [String]) -> [AgentChoice] {
@@ -352,15 +379,29 @@ public struct AgentChoice: Sendable, Hashable, Identifiable {
             run.append(h)
         }
         guard run.count >= 2, let last = run.last, last.index >= lines.count - tailLines else { return [] }
+        var described: [AgentChoice] = []
+        for (k, h) in run.enumerated() {
+            let next = k + 1 < run.count ? run[k + 1].index : min(lines.count, h.index + 3)
+            let col = lead(barless(lines[h.index]))
+            var choice = h.choice
+            if h.index + 1 < next,
+               let d = (h.index + 1..<next).map({ barless(lines[$0]) }).first(where: { $0.contains(where: { !$0.isWhitespace }) }),
+               lead(d) > col, !choiceHints.contains(where: { d.contains($0) }) {
+                choice.detail = d.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            described.append(choice)
+        }
         // A single key selects a choice, so only 1 to 9 work.
-        return run.map(\.choice).filter { $0.key.count == 1 }
+        return described.filter { $0.key.count == 1 }
     }
 
     /// Reads 1 line in the form `[❯›>] N. label` or `N) label`, with blanks
-    /// before and after the marker, as the Android app does.
+    /// before and after the marker, as the Android app does. The panel bar
+    /// of opencode can come first.
     private static func parse(_ line: String) -> (Int, AgentChoice)? {
         func blank(_ c: Character) -> Bool { c == " " || c == "\t" || c == "\u{0B}" || c == "\u{0C}" || c == "\r" || c == "\n" }
         var s = Substring(line).drop(while: blank)
+        if s.first == "┃" { s = s.dropFirst().drop(while: blank) }
         var selected = false
         if let c = s.first, "❯›>".contains(c) {
             selected = true
@@ -375,5 +416,78 @@ public struct AgentChoice: Sendable, Hashable, Identifiable {
         guard s.count >= 2, let space = s.first, blank(space) else { return nil }
         let label = s.trimmingCharacters(in: .whitespacesAndNewlines)
         return (number, AgentChoice(String(number), label, selected: selected))
+    }
+
+    /// How far from the end of the output a menu row can be, in lines.
+    private static let menuScanLines = 10
+    /// The words of the hints after the choices of a menu row, for example "⇆ select" and "enter confirm" of opencode.
+    private static let menuHints = ["⇆", "ctrl+", "enter confirm", "esc "]
+    /// The most choices of a menu row. herdr takes 8 keys at most, so the last choice is 6 arrows and Enter away.
+    private static let menuMax = 7
+
+    /// Splits `text` at each run of 2 or more blanks, as Kotlin splits at \s{2,}.
+    private static func splitAtGaps(_ text: String) -> [String] {
+        func blank(_ c: Character) -> Bool { c == " " || c == "\t" || c == "\u{0B}" || c == "\u{0C}" || c == "\r" || c == "\n" }
+        var parts: [String] = []
+        var current = ""
+        var gap = ""
+        for c in text {
+            if blank(c) {
+                gap.append(c)
+                continue
+            }
+            if gap.count >= 2 {
+                parts.append(current)
+                current = ""
+            } else {
+                current += gap
+            }
+            gap = ""
+            current.append(c)
+        }
+        if gap.count >= 2 {
+            parts.append(current)
+            current = ""
+        } else {
+            current += gap
+        }
+        parts.append(current)
+        return parts
+    }
+
+    /// Finds the choices of a menu row near the end of the output, for
+    /// example the permission dialog of opencode: "Allow once   Allow
+    /// always   Reject". The row has a hint with "⇆" or "enter confirm".
+    /// Each choice is a run of text with a background, before the hint.
+    /// The selected choice has another background than the others. Right
+    /// moves the selection to the next choice and wraps at the end, and
+    /// Enter confirms it. So the keys of a choice are the arrows from the
+    /// selected choice and Enter. It returns an empty list when it finds no
+    /// such row or fewer than 2 choices.
+    public static func findMenu(_ lines: [TermLine]) -> [AgentChoice] {
+        for i in lines.indices.reversed().prefix(menuScanLines) {
+            let line = lines[i]
+            let text = line.text
+            if !text.contains("⇆") && !text.contains("enter confirm") { continue }
+            var runs: [(text: String, bg: TermColor?)] = []
+            scan: for span in line.spans {
+                // Choices in the same style share a span. 2 spaces or more separate them.
+                for part in splitAtGaps(span.text) {
+                    let t = part.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if menuHints.contains(where: { part.contains($0) }) || t == "enter" || t == "esc" { break scan }
+                    if t.isEmpty || !t.contains(where: { $0.isLetter }) { continue }
+                    runs.append((t, span.style.inverse ? span.style.fg : span.style.bg))
+                }
+            }
+            if runs.count < 2 || runs.count > menuMax || runs.contains(where: { $0.bg == nil }) { return [] }
+            // The selected choice has the background that no other choice has.
+            let selected = runs.indices.first { k in runs.filter { $0.bg == runs[k].bg }.count == 1 } ?? 0
+            let n = runs.count
+            return runs.enumerated().map { k, r in
+                let steps = (k - selected + n) % n
+                return AgentChoice(String(k + 1), r.text, selected: k == selected, keys: Array(repeating: "right", count: steps) + ["enter"])
+            }
+        }
+        return []
     }
 }
