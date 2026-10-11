@@ -126,6 +126,39 @@ enum DemoMode {
         ].joined(),
     ]
 
+    /// The time that the sample agents got their status: the blocked agent
+    /// waits 3 minutes, and the working agent works for 2:14.
+    static func since(pane: String, now: Date = Date()) -> Date? {
+        switch pane {
+        case "w2:p1": return now.addingTimeInterval(-180)
+        case "w1:p1": return now.addingTimeInterval(-134)
+        default: return nil
+        }
+    }
+
+    /// The sample items of the Send thread: a link and a clip of today.
+    static var sent: [SentItem] {
+        let laptop = computers[0].id
+        let day = Calendar.current.startOfDay(for: Date())
+        return [
+            SentItem(deviceId: laptop, kind: .link, text: "https://omarchy.org/manual", at: day.addingTimeInterval(13 * 3600 + 20 * 60)),
+            SentItem(deviceId: laptop, kind: .clip, text: "git push origin ui-shell", at: day.addingTimeInterval(13 * 3600 + 58 * 60)),
+        ]
+    }
+
+    /// The sample files of the Send thread: a photo that went out, and a file that comes in.
+    static var sendTransfers: [FileTransfer] {
+        let laptop = computers[0].id
+        let day = Calendar.current.startOfDay(for: Date())
+        let sentAt = day.addingTimeInterval(13 * 3600 + 41 * 60)
+        return [
+            FileTransfer(deviceId: laptop, name: "holiday.jpg", incoming: false, size: 2_400_000, bytes: 2_400_000, state: .done,
+                         started: sentAt, ended: sentAt),
+            FileTransfer(deviceId: laptop, name: "invoice-2026-09.pdf", incoming: true, size: 3_200_000, bytes: 1_856_000,
+                         started: day.addingTimeInterval(14 * 3600 + 8 * 60)),
+        ]
+    }
+
     /// The sample transfer keeps 1 ID, so that its Inbox key stays the same.
     private static let transferId = UUID(uuidString: "6F1D5E0A-0D7C-4C1B-9E55-0000000000A1") ?? UUID()
 

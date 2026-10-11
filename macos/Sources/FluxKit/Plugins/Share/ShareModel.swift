@@ -45,8 +45,40 @@ public struct FileTransfer: Identifiable, Sendable, Equatable {
     }
 }
 
-/// The share state that the UI shows: the transfers, newest first, and the
-/// download folder.
+/// 1 link, text, or clip that this device sent to a computer, for the Send
+/// thread. The files are in `ShareModel.transfers`. `clipStamp` is the
+/// pasteboard change count of a clip that went out, or 0.
+public struct SentItem: Identifiable, Sendable, Equatable {
+    public enum Kind: Sendable, Equatable {
+        /// A text scan of the camera. The computer saves it as a text file in its scan folder.
+        case link, text, scan, clip, clipImage
+    }
+
+    /// The most characters of a text or a link that an item keeps.
+    public static let maxText = 400
+
+    public let id: UUID
+    public let deviceId: String
+    public let kind: Kind
+    public let text: String
+    public let at: Date
+    public let clipStamp: Int
+
+    /// Makes an item. A text with more than `maxText` characters keeps its start and ends with "…".
+    public init(id: UUID = UUID(), deviceId: String, kind: Kind, text: String, at: Date = Date(), clipStamp: Int = 0) {
+        self.id = id
+        self.deviceId = deviceId
+        self.kind = kind
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.text = t.count > Self.maxText ? String(t.prefix(Self.maxText - 1)) + "…" : t
+        self.at = at
+        self.clipStamp = clipStamp
+    }
+}
+
+/// The share state that the UI shows: the transfers, newest first, the
+/// links, texts, and clips that went out, oldest first, and the download
+/// folder. The sent items stay in memory only.
 @MainActor
 @Observable
 public final class ShareModel {
@@ -54,6 +86,11 @@ public final class ShareModel {
     static let maxTransfers = 50
 
     public private(set) var transfers: [FileTransfer] = []
+    /// The links, texts, and clips that went out, oldest first, at most `maxSent`.
+    public private(set) var sent: [SentItem] = []
+
+    /// The number of sent items that the list keeps.
+    public nonisolated static let maxSent = 60
     public internal(set) var downloadFolder: URL
 
     init(downloadFolder: URL) {
@@ -85,6 +122,16 @@ public final class ShareModel {
             }
             t.ended = Date()
         }
+    }
+
+    /// Adds a link, a text, or a clip that went out.
+    func record(_ item: SentItem) {
+        sent = Self.appending(sent, item)
+    }
+
+    /// The list with `item` at the end, without the oldest items above `max`.
+    nonisolated static func appending(_ list: [SentItem], _ item: SentItem, max: Int = maxSent) -> [SentItem] {
+        Array((list + [item]).suffix(max))
     }
 
     /// Removes the transfers that ended.

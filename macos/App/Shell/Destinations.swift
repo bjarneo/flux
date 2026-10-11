@@ -124,6 +124,9 @@ struct MacRouteView: View {
                 } else {
                     ContentUnavailableView("The computer is gone", systemImage: "desktopcomputer")
                 }
+            case .card(.media, let id):
+                // The media page follows the app design, with the player in a dock.
+                MediaPage(deviceId: id)
             case .card(let card, let id):
                 FeaturePage(card: card, deviceId: id)
             case .computer(let id):

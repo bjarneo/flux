@@ -2,13 +2,16 @@ import AppKit
 import FluxKit
 import SwiftUI
 
-/// The Omarchy panel: move between workspaces and windows, and start the
-/// shortcuts of the computer. The computer runs each action in Hyprland, so
-/// the Omarchy key bindings work also where keys from this Mac do not.
+/// The Omarchy panel: the workspaces as pills, the windows of the active
+/// workspace, and the pinned shortcuts, with the keys of the focused window
+/// in the dock at the bottom. The computer runs each action in Hyprland, so
+/// the Omarchy key bindings work also where keys from this Mac do not. A
+/// click on a window focuses it. An Option-click on a workspace or an arrow
+/// moves the focused window.
 struct OmarchyPanel: View {
     let controller: DesktopController
-    @State private var move = false
     @State private var showAll = false
+    @Environment(\.tn) private var tn
 
     /// The panel reads the workspaces again at this interval, because the computer can change them too.
     private static let refresh: Duration = .seconds(3)
@@ -17,60 +20,59 @@ struct OmarchyPanel: View {
     private var state: ShortcutsState? { model.shortcuts[controller.deviceId] }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                if let error = state?.error {
-                    Text(error).font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
-                } else if state?.loaded != true {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text("Reading the shortcuts of \(controller.name)").font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-                PanelCaption("Workspaces", "Option-click moves the window")
-                Workspaces(state: state) { id, moveWindow in
-                    controller.shortcut(moveWindow ? DesktopShortcuts.moveToWorkspace(id) : DesktopShortcuts.workspace(id))
-                    if moveWindow { controller.app.show("Moved the window to workspace \(id)") }
-                }
-                PanelCaption("Window", move ? "the arrows move it" : "the arrows focus")
-                HStack(alignment: .top, spacing: 8) {
-                    DirectionPad(move: move, onToggle: { move.toggle() }) { dir in
-                        controller.shortcut(move ? DesktopShortcuts.swap(dir) : DesktopShortcuts.focus(dir))
-                    }
-                    Grid(horizontalSpacing: 6, verticalSpacing: 6) {
-                        GridRow {
-                            ActionKey(label: "close", help: "Close the window", tint: .red) { controller.shortcut(DesktopShortcuts.action(.close)) }
-                            ActionKey(label: "full", help: "Full screen") { controller.shortcut(DesktopShortcuts.action(.fullscreen)) }
-                        }
-                        GridRow {
-                            ActionKey(label: "float", help: "Float or tile the window") { controller.shortcut(DesktopShortcuts.action(.float)) }
-                            ActionKey(label: "split", help: "Toggle the split") { controller.shortcut(DesktopShortcuts.action(.split)) }
-                        }
-                        GridRow {
-                            ActionKey(label: "next", help: "Focus the next window") { controller.shortcut(DesktopShortcuts.action(.nextWindow)) }
-                            ActionKey(label: "scratch", help: "Toggle the scratchpad") { controller.shortcut(DesktopShortcuts.action(.scratchpad)) }
-                        }
-                    }
-                }
-                HStack {
-                    Text("Launch").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    Spacer()
-                    Button("All Shortcuts…") { showAll = true }
-                        .buttonStyle(.link)
-                        .font(.caption)
-                }
-                let pinned = DesktopShortcuts.pinned(state?.shortcuts ?? [], pins: model.pins)
-                if state?.loaded == true && pinned.isEmpty {
-                    Text("Pin shortcuts with the star in All Shortcuts.").font(.caption).foregroundStyle(.secondary)
-                }
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)], spacing: 6) {
-                    ForEach(pinned) { s in
-                        LaunchKey(shortcut: s) { controller.shortcut(DesktopShortcuts.run(s)) }
-                    }
-                }
+        let windows = state?.activeWindows ?? []
+        let count = state?.windows != nil ? windows.count : state?.workspaces.first { $0.id == state?.active }?.windows ?? 0
+        VStack(spacing: 0) {
+            WorkspaceStrip(state: state) { id, moveWindow in
+                controller.shortcut(moveWindow ? DesktopShortcuts.moveToWorkspace(id) : DesktopShortcuts.workspace(id))
+                if moveWindow { controller.app.show("Moved the window to workspace \(id)") }
             }
-            .padding(12)
+            ProgressLine()
+            ScrollView {
+                VStack(alignment: .leading, spacing: TiledMetrics.gap) {
+                    if let error = state?.error {
+                        Text(error).font(.system(size: 12)).foregroundStyle(tn.red).fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 4).padding(.top, 8)
+                    } else if state?.loaded != true {
+                        HStack(spacing: 8) {
+                            FluxSpinner(size: 12)
+                            Text("Reading the shortcuts of \(controller.name)").font(.system(size: 12)).foregroundStyle(tn.sub)
+                        }
+                        .padding(.horizontal, 4).padding(.top, 8)
+                    }
+                    ListHeading("Windows", trailing: state?.loaded == true ? "\(count) \(count == 1 ? "window" : "windows")" : "")
+                    if state?.loaded == true && state?.windows == nil {
+                        PanelNote(text: "Update Flux on \(controller.name) to see its windows here.")
+                    } else if state?.loaded == true && windows.isEmpty {
+                        PanelNote(text: "No windows on this workspace.")
+                    }
+                    ForEach(windows) { w in
+                        WindowCard(window: w) {
+                            if !w.focused { controller.shortcut(DesktopShortcuts.focusWindow(w.address)) }
+                        }
+                    }
+                    ListHeading("Launch") {
+                        Button("All Shortcuts…") { showAll = true }
+                            .buttonStyle(.link)
+                            .font(.system(size: 11.5))
+                    }
+                    let pinned = DesktopShortcuts.pinned(state?.shortcuts ?? [], pins: model.pins)
+                    if state?.loaded == true && pinned.isEmpty {
+                        PanelNote(text: "Pin shortcuts with the star in All Shortcuts.")
+                    }
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)], spacing: 6) {
+                        ForEach(pinned) { s in
+                            LaunchKey(shortcut: s) { controller.shortcut(DesktopShortcuts.run(s)) }
+                        }
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.top, 2)
+                .padding(.bottom, 16)
+            }
+            WindowKeys(focused: windows.first { $0.focused }) { controller.shortcut($0) }
         }
+        .background(tn.bg)
         // The list comes once.
         .task(id: controller.deviceId) {
             controller.shortcut(DesktopShortcuts.request())
@@ -96,166 +98,261 @@ struct OmarchyPanel: View {
     }
 }
 
-/// A caption of the panel with a note after it.
-private struct PanelCaption: View {
-    let title: String
-    let note: String
-
-    init(_ title: String, _ note: String) {
-        self.title = title
-        self.note = note
-    }
+/// A line of the panel in the second ink, such as an empty list.
+private struct PanelNote: View {
+    let text: String
+    @Environment(\.tn) private var tn
 
     var body: some View {
-        Text("\(Text(title).fontWeight(.semibold)) · \(note)")
-            .font(.caption)
-            .foregroundStyle(.secondary)
+        Text(text)
+            .font(.system(size: 12))
+            .foregroundStyle(tn.sub)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 8)
     }
 }
 
-/// Workspaces 1 to 10 in 2 rows. The active one is filled, and a workspace
-/// with windows has a dot. A click switches to the workspace, and an
-/// Option-click moves the focused window there.
-private struct Workspaces: View {
+/// Workspaces 1 to 10 as pills that scroll to the side. The active one has
+/// the accent, and a workspace with windows has a dot. A click switches to
+/// the workspace, and an Option-click moves the focused window there.
+private struct WorkspaceStrip: View {
     let state: ShortcutsState?
     let onSelect: (Int, Bool) -> Void
+    @Environment(\.tn) private var tn
 
     var body: some View {
         let windows = Dictionary((state?.workspaces ?? []).map { ($0.id, $0.windows) }, uniquingKeysWith: { a, _ in a })
-        Grid(horizontalSpacing: 6, verticalSpacing: 6) {
-            ForEach([Array(1...5), Array(6...DesktopShortcuts.maxWorkspace)], id: \.self) { row in
-                GridRow {
-                    ForEach(row, id: \.self) { id in
-                        WorkspaceKey(id: id, active: state?.active == id, used: (windows[id] ?? 0) > 0) { moveWindow in
-                            onSelect(id, moveWindow)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(1...DesktopShortcuts.maxWorkspace, id: \.self) { id in
+                    let active = state?.active == id
+                    let used = (windows[id] ?? 0) > 0
+                    Button {
+                        onSelect(id, NSEvent.modifierFlags.contains(.option))
+                    } label: {
+                        HStack(spacing: 5) {
+                            Text("\(id)")
+                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(active ? tn.text : tn.sub)
+                            if used {
+                                Circle().fill(active ? tn.accent : tn.sub).frame(width: 4, height: 4)
+                            }
                         }
+                        .padding(.horizontal, 9)
+                        .frame(minWidth: 34, minHeight: 28)
+                        .background(Capsule().fill(active ? tn.accentTile : tn.tile))
+                        .overlay(Capsule().strokeBorder(active ? tn.accent : tn.line, lineWidth: 1))
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(TilePressStyle())
+                    .help("Switch to workspace \(id). Option-click moves the window there.")
+                    .accessibilityAddTraits(active ? .isSelected : [])
+                    .contextMenu {
+                        Button("Switch to Workspace \(id)") { onSelect(id, false) }
+                        Button("Move the Window to Workspace \(id)") { onSelect(id, true) }
                     }
                 }
             }
+            .padding(.horizontal, 10)
+            .padding(.top, 10)
+            .padding(.bottom, 10)
         }
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
     }
 }
 
-private struct WorkspaceKey: View {
-    let id: Int
-    let active: Bool
-    let used: Bool
-    let action: (Bool) -> Void
-
-    var body: some View {
-        Button {
-            action(NSEvent.modifierFlags.contains(.option))
-        } label: {
-            Text("\(id)")
-                .font(.system(.callout, design: .monospaced).weight(.semibold))
-                .foregroundStyle(active ? Color.white : used ? Color.primary : Color.secondary)
-                .frame(maxWidth: .infinity, minHeight: 30)
-                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(active ? Color.accentColor : Color.primary.opacity(0.06)))
-                .overlay(alignment: .bottom) {
-                    if used && !active {
-                        Circle().fill(Color.accentColor).frame(width: 4, height: 4).padding(.bottom, 3)
-                    }
-                }
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help("Switch to workspace \(id). Option-click moves the window there.")
-        .contextMenu {
-            Button("Switch to Workspace \(id)") { action(false) }
-            Button("Move the Window to Workspace \(id)") { action(true) }
-        }
-    }
+/// The symbol of the app of a window, from its class.
+func windowSymbol(_ windowClass: String) -> String {
+    let c = windowClass.lowercased()
+    func has(_ names: String...) -> Bool { names.contains { c.contains($0) } }
+    if has("alacritty", "kitty", "ghostty", "foot", "wezterm", "konsole", "terminal") { return "terminal" }
+    if has("chrom", "firefox", "brave", "zen", "vivaldi", "librewolf", "edge", "qutebrowser", "browser") { return "globe" }
+    if has("spotify", "music", "rhythmbox", "amberol") { return "music.note" }
+    if has("obsidian", "typora", "notes", "logseq", "xournal") { return "note.text" }
+    if has("signal", "telegram", "discord", "slack", "whatsapp", "element", "chat") { return "bubble.left.and.bubble.right" }
+    if has("nautilus", "thunar", "dolphin", "files", "nemo") { return "folder" }
+    if has("code", "zed", "cursor", "neovide", "jetbrains", "studio") { return "chevron.left.forwardslash.chevron.right" }
+    if has("mpv", "vlc", "obs", "celluloid") { return "film" }
+    if has("imv", "gimp", "krita", "pinta", "inkscape") { return "photo" }
+    return "macwindow"
 }
 
-/// The arrows for the windows: they focus a window, or with `move` they
-/// swap the window. The key in the middle switches between the 2.
-private struct DirectionPad: View {
-    let move: Bool
-    let onToggle: () -> Void
-    let onDirection: (DesktopShortcuts.Direction) -> Void
-
-    var body: some View {
-        let tint: Color = move ? .pink : .accentColor
-        Grid(horizontalSpacing: 6, verticalSpacing: 6) {
-            GridRow {
-                Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
-                arrow(.up, "arrow.up", tint)
-                Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
-            }
-            GridRow {
-                arrow(.left, "arrow.left", tint)
-                Button(action: onToggle) {
-                    Text(move ? "move" : "focus")
-                        .font(.caption2.monospaced().weight(.semibold))
-                        .foregroundStyle(tint)
-                        .frame(width: 34, height: 30)
-                        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(tint))
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help(move ? "Let the arrows focus" : "Let the arrows move the window")
-                arrow(.right, "arrow.right", tint)
-            }
-            GridRow {
-                Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
-                arrow(.down, "arrow.down", tint)
-                Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
-            }
-        }
-    }
-
-    private func arrow(_ dir: DesktopShortcuts.Direction, _ symbol: String, _ tint: Color) -> some View {
-        Button { onDirection(dir) } label: {
-            Image(systemName: symbol)
-                .foregroundStyle(tint)
-                .frame(width: 34, height: 30)
-                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.primary.opacity(0.06)))
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help((move ? "Move the window " : "Focus the window ") + "\(dir)")
-    }
-}
-
-/// A window action, with a mono label.
-private struct ActionKey: View {
-    let label: String
-    let help: String
-    var tint: Color = .primary
+/// A window of the active workspace: the symbol of its app, the app, and
+/// the title in mono. The focused window has the accent.
+private struct WindowCard: View {
+    let window: WindowInfo
     let action: () -> Void
+    @Environment(\.tn) private var tn
 
     var body: some View {
+        let shape = tileShape()
+        let f = window.focused
         Button(action: action) {
-            Text(label)
-                .font(.caption.monospaced().weight(.semibold))
-                .foregroundStyle(tint)
-                .frame(maxWidth: .infinity, minHeight: 30)
-                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.primary.opacity(0.06)))
-                .contentShape(Rectangle())
+            HStack(spacing: 10) {
+                Image(systemName: windowSymbol(window.windowClass))
+                    .font(.system(size: 15))
+                    .foregroundStyle(f ? tn.accent : tn.sub)
+                    .frame(width: 20)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(window.app.isEmpty ? "Window" : window.app)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(tn.text)
+                        .lineLimit(1)
+                    if !window.title.isEmpty {
+                        Text(window.title)
+                            .font(.system(size: 10.5, design: .monospaced))
+                            .foregroundStyle(tn.sub)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+                Spacer(minLength: 4)
+                if f {
+                    Text("Focused")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(tn.accent)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
+            .background(shape.fill(f ? tn.accentTile : tn.tile))
+            .overlay(shape.strokeBorder(f ? tn.accent : tn.line, lineWidth: f ? 2 : 1))
+            .contentShape(shape)
         }
-        .buttonStyle(.plain)
-        .help(help)
+        .buttonStyle(TilePressStyle())
+        .help(f ? window.title : "Focus \(window.app)")
+        .accessibilityValue(f ? "Focused" : "")
     }
 }
 
-/// A pinned shortcut: its description and its keys.
+/// The keys of the focused window in the dock: the arrows focus the window
+/// in that direction, and an Option-click swaps the window there. Under
+/// them, close, full screen, float, and split. The menu of the action keys
+/// holds Focus the Next Window and Toggle the Scratchpad.
+private struct WindowKeys: View {
+    let focused: WindowInfo?
+    let send: (Packet) -> Void
+    @Environment(\.tn) private var tn
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("Window")
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(tn.sub)
+                Text("· " + (focused.map { contextLine([$0.app, $0.title]) } ?? "an arrow focuses a window"))
+                    .font(.system(size: 10.5, design: .monospaced))
+                    .foregroundStyle(tn.sub)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .padding(.horizontal, 4)
+            HStack(spacing: 6) {
+                ForEach(Self.arrows, id: \.self) { dir in
+                    DockKey(help: "Focus the window \(Self.name(dir)). Option-click moves it.", border: tn.line, corner: 10, height: 36) {
+                        send(NSEvent.modifierFlags.contains(.option) ? DesktopShortcuts.swap(dir) : DesktopShortcuts.focus(dir))
+                    } label: {
+                        Image(systemName: Self.symbol(dir))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(tn.text)
+                    }
+                    .contextMenu {
+                        Button("Focus the Window \(Self.name(dir).capitalized)") { send(DesktopShortcuts.focus(dir)) }
+                        Button("Move the Window \(Self.name(dir).capitalized)") { send(DesktopShortcuts.swap(dir)) }
+                    }
+                }
+            }
+            HStack(spacing: 6) {
+                ForEach(Self.actions, id: \.label) { key in
+                    let red = key.action == .close
+                    DockKey(help: key.help, border: red ? tn.red : tn.line, corner: 10, height: 36) {
+                        send(DesktopShortcuts.action(key.action))
+                    } label: {
+                        Text(key.label)
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .foregroundStyle(red ? tn.red : tn.text)
+                    }
+                }
+            }
+            .contextMenu {
+                Button("Focus the Next Window") { send(DesktopShortcuts.action(.nextWindow)) }
+                Button("Toggle the Scratchpad") { send(DesktopShortcuts.action(.scratchpad)) }
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.top, 12)
+        .padding(.bottom, 10)
+        .background(DockShape().fill(tn.tile))
+        .overlay(alignment: .top) {
+            // The line along the top edge and the round corners.
+            DockShape().stroke(tn.line, lineWidth: 1).frame(height: 40).mask(alignment: .top) { Rectangle().frame(height: 20) }
+        }
+    }
+
+    private static let arrows: [DesktopShortcuts.Direction] = [.left, .up, .down, .right]
+
+    /// An action key: its label, its help, and its action.
+    private struct ActionKey {
+        let label: String
+        let help: String
+        let action: DesktopShortcuts.Action
+    }
+
+    private static let actions = [
+        ActionKey(label: "close", help: "Close the window", action: .close),
+        ActionKey(label: "full", help: "Full screen", action: .fullscreen),
+        ActionKey(label: "float", help: "Float or tile the window", action: .float),
+        ActionKey(label: "split", help: "Toggle the split", action: .split),
+    ]
+
+    private static func symbol(_ d: DesktopShortcuts.Direction) -> String {
+        switch d {
+        case .left: return "arrow.left"
+        case .up: return "arrow.up"
+        case .down: return "arrow.down"
+        case .right: return "arrow.right"
+        }
+    }
+
+    private static func name(_ d: DesktopShortcuts.Direction) -> String {
+        switch d {
+        case .left: return "left"
+        case .up: return "up"
+        case .down: return "down"
+        case .right: return "right"
+        }
+    }
+}
+
+/// A pinned shortcut: its description and its keys in mono.
 private struct LaunchKey: View {
     let shortcut: Shortcut
     let action: () -> Void
+    @Environment(\.tn) private var tn
 
     var body: some View {
+        let shape = tileShape()
         Button(action: action) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(shortcut.description).font(.callout.weight(.semibold)).lineLimit(1)
-                Text(DesktopShortcuts.keysLabel(shortcut.keys)).font(.caption2.monospaced()).foregroundStyle(.secondary).lineLimit(1)
+                Text(shortcut.description)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(tn.text)
+                    .lineLimit(1)
+                Text(DesktopShortcuts.keysLabel(shortcut.keys))
+                    .font(.system(size: 10.5, design: .monospaced))
+                    .foregroundStyle(tn.sub)
+                    .lineLimit(1)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
             .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.06)))
-            .contentShape(Rectangle())
+            .padding(.vertical, 7)
+            .background(shape.fill(tn.tile))
+            .overlay(shape.strokeBorder(tn.line, lineWidth: 1))
+            .contentShape(shape)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TilePressStyle())
         .help("Run \(shortcut.description) on the computer")
     }
 }

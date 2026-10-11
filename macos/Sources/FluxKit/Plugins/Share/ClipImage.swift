@@ -19,9 +19,12 @@ public enum ClipImage {
     /// The tunnel error for an image that this device does not take.
     static let rejected = "the phone does not accept this clipboard image"
 
-    /// The packet that offers an image on a payload port.
-    public static func packet(mime: String, size: Int64, port: Int, id: Int64 = Packet.now()) -> Packet {
-        Packet(PacketType.fluxClipboardImage, ["mime": mime], id: id, payloadSize: size, payloadPort: port)
+    /// The packet that offers an image on a payload port. A `manual` image,
+    /// which the user sent, goes on the clipboard of the computer also while
+    /// its automatic sync is off.
+    public static func packet(mime: String, size: Int64, port: Int, id: Int64 = Packet.now(), manual: Bool = false) -> Packet {
+        let body: [String: Any?] = manual ? ["mime": mime, "manual": true] : ["mime": mime]
+        return Packet(PacketType.fluxClipboardImage, body, id: id, payloadSize: size, payloadPort: port)
     }
 
     /// Reports whether the packet carries an image that Flux takes: a
@@ -135,11 +138,11 @@ enum ClipImageTransfer {
 
     /// Offers the image to 1 computer on a payload port and streams it
     /// when the computer connects with its paired certificate.
-    static func send(_ file: URL, size: Int64, mime: String, to deviceId: String, cert: [UInt8], core: FluxCore) async throws {
+    static func send(_ file: URL, size: Int64, mime: String, to deviceId: String, cert: [UInt8], core: FluxCore, manual: Bool = false) async throws {
         let handle = try FileHandle(forReadingFrom: file)
         defer { try? handle.close() }
         let server = try await PayloadServer.open(tls: core.tls, expected: cert)
-        guard core.send(ClipImage.packet(mime: mime, size: size, port: server.port), to: deviceId) else {
+        guard core.send(ClipImage.packet(mime: mime, size: size, port: server.port, manual: manual), to: deviceId) else {
             server.close()
             throw FluxError("Not connected")
         }

@@ -34,27 +34,31 @@ final class DesktopWindows: NSObject, NSWindowDelegate {
     /// Shows the screen of a computer. The computer can show any window,
     /// such as a password manager, so a new window asks for Touch ID or the
     /// password of this Mac first, like the phone asks for its screen lock.
-    func open(_ device: DeviceSnapshot, app: AppModel) {
-        if front(device.id) { return }
+    /// `panel` shows that panel at the side or under the video, for example
+    /// the Omarchy panel from Control.
+    func open(_ device: DeviceSnapshot, panel: DesktopController.Panel? = nil, app: AppModel) {
+        if front(device.id, panel: panel) { return }
         ReplyLock.run(
             reason: "show and control the screen of \(device.name)",
-            action: { [weak self] in self?.show(device, app: app) },
+            action: { [weak self] in self?.show(device, panel: panel, app: app) },
             onError: { app.show($0) }
         )
     }
 
-    private func front(_ deviceId: String) -> Bool {
+    private func front(_ deviceId: String, panel: DesktopController.Panel? = nil) -> Bool {
         guard let entry, entry.deviceId == deviceId else { return false }
+        if let panel { entry.controller.panel = panel }
         entry.window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         return true
     }
 
-    private func show(_ device: DeviceSnapshot, app: AppModel) {
-        guard !front(device.id), let plugin = app.core.plugin(DesktopPlugin.self), let input = app.core.plugin(RemoteInputPlugin.self) else { return }
+    private func show(_ device: DeviceSnapshot, panel: DesktopController.Panel?, app: AppModel) {
+        guard !front(device.id, panel: panel), let plugin = app.core.plugin(DesktopPlugin.self), let input = app.core.plugin(RemoteInputPlugin.self) else { return }
         // The stream of another computer stops with its window.
         entry?.window.close()
         let controller = DesktopController(device: device, app: app, plugin: plugin, input: input)
+        controller.panel = panel
         let hosting = NSHostingController(rootView: DesktopView(controller: controller).themeWindow(app))
         hosting.sizingOptions = [.minSize]
         let window = NSWindow(contentViewController: hosting)

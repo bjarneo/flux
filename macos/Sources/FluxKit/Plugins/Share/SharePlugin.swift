@@ -409,7 +409,9 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
     /// Sends text that the camera read. The "scan" flag makes the computer
     /// save it in a file. It returns false when the computer is not connected.
     public func sendScan(text: String, to deviceId: String) -> Bool {
-        core?.send(ShareWire.scan(text), to: deviceId) ?? false
+        guard core?.send(ShareWire.scan(text), to: deviceId) == true else { return false }
+        ui { $0.record(SentItem(deviceId: deviceId, kind: .scan, text: text)) }
+        return true
     }
 
     /// The largest text or link that `send(text:to:)` sends. The computer
@@ -434,7 +436,9 @@ public final class SharePlugin: FluxPlugin, @unchecked Sendable {
             core.toast("Not connected. Try again in a moment")
             return false
         }
-        core.toast(p.has("url") ? "Link sent to \(peer.name)" : "Text sent to \(peer.name)")
+        let link = p.string("url")
+        ui { $0.record(SentItem(deviceId: deviceId, kind: link != nil ? .link : .text, text: link ?? text)) }
+        core.toast(link != nil ? "Link sent to \(peer.name)" : "Text sent to \(peer.name)")
         return true
     }
 

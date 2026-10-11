@@ -255,7 +255,7 @@ private struct LaunchKey: View {
 
 /// All shortcuts of the computer, with a search. A tap runs a shortcut,
 /// and the star pins it to the panel. A dictation replaces the search.
-private struct AllShortcuts: View {
+struct AllShortcuts: View {
     let shortcuts: [Shortcut]
     let model: DesktopModel
     let onRun: (Shortcut) -> Void

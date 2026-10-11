@@ -181,11 +181,21 @@ In a window of 600 points or wider, such as an iPhone in landscape, the **Inbox*
 The master tile takes 60% of the width at full height, and its choices sit directly under the question.
 The status line and the stack fill a column on the right.
 
-**Send** holds the tools that send to the computer in scope: **Send clipboard**, **Send files**, **Send photos**, **Text and links**, **Get files**, and the camera modes.
-**Control** holds the tools that act on the computer in scope: the Omarchy panel, the touchpad, the remote desktop, the commands, the media, the microphone, the webcam, and the herdr agents.
+Send, Control, and Computers show the computers as pills under the title. Tap a pill to make that computer the scope. Tap it again to show all computers.
+
+**Send** shows what this iPhone sent in this session as a thread: links, text, clips, and files, and the files that come from the computer, with the progress of each transfer.
+The dock under the thread shows the clipboard with **Send**, the tools **Files**, **Get**, **Photo**, **Scan**, **Text**, and **QR**, and a field for text or a link.
+A link opens in the browser of the computer. Other text goes to its clipboard.
+iOS asks before an app reads the clipboard, so the dock shows only the kind of the copy until it goes out.
+The menu at the top holds **Send photos**, the signature mode, and **Queue and transfers**.
+**Control** lists the agents and the terminals of herdr, with the time of each status that this iPhone saw.
+Under them are the tools: the Omarchy panel, the touchpad, the remote desktop, and the commands, then the microphone and the webcam.
+The dock plays the media of the computer. Tap the title to open **Media**.
 With all computers in scope and more than 1 computer online, a tool asks which computer to use.
 **Computers** holds this iPhone, the paired computers, the computers to pair, **Settings**, the theme, and **Turn off Flux**.
-The chevron of a paired computer opens its page with the address, the approval setup, and **Unpair**.
+The dock shows the search with **Scan again**.
+Touch and hold a paired computer to open its page with the address and the approval setup, or to unpair it.
+The **Omarchy panel** lists the windows of the active workspace. Tap a window to focus it. The dock holds the arrows and the window actions. Hold an arrow to move the window.
 
 ## Theme
 
@@ -214,7 +224,7 @@ The theme engine is in `macos/Sources/FluxKit/Theme`, and the colors of the app 
 | --- | --- |
 | Files, text, and links | Send from the Files picker, the photo picker, the Share field, or the share sheet of any app. An `http` or `https` link with a host opens in the browser of the computer. Text and each other link go on its clipboard. Text has a limit of 1 MB. Received files go to the Flux folder in the Files app. A received file or link shows in a notification, and it opens only after a tap on the notification or on the transfer. |
 | Share sheet | **Flux** in the share sheet of other apps queues files, photos, text, and links for a computer. A text file, such as a `.txt` or `.md` file, goes as a file with its name. **Cancel** stops the share. Flux sends the items when it opens and connects. See [limits](#limits-of-ios). |
-| Clipboard | Text and images both ways while **Sync clipboard** is on and Flux is on the screen. When Flux opens, a new copy from another app goes out once. **Send clipboard** in **Send** and in the **Inbox** sends it at once. To send without opening Flux, see [Send the clipboard without opening Flux](#send-the-clipboard-without-opening-flux). |
+| Clipboard | Text and images both ways while **Sync clipboard** is on and Flux is on the screen. When Flux opens, a new copy from another app goes out once. **Send** next to the clipboard in **Send**, and **Send clipboard** in the **Inbox**, send it at once. A clip that you send goes on the clipboard of the computer also while its automatic sync is off. To send without opening Flux, see [Send the clipboard without opening Flux](#send-the-clipboard-without-opening-flux). |
 | Screenshots and photos | **Send new screenshots** and **Send new photos** send new items from the Photos library when Flux opens. An item goes only when its original is on this iPhone and it was taken at most 1 day before its switch turned on. Photos that only iCloud has, for example from your other devices or from a Shared Library, stay home. PhotoKit does not tell which device took a photo, so with **Download and Keep Originals** in iCloud Photos, new photos from those sources can go too. 1 scan sends at most 50 items. The rest go with the next scan, for example when Flux opens again. |
 | Media | Controls the players of the computer. The computer does not control the players on the iPhone. |
 | Commands | Lists and runs the commands configured on the computer. |
@@ -230,7 +240,7 @@ The theme engine is in `macos/Sources/FluxKit/Theme`, and the colors of the app 
 | Touchpad and keyboard | The touchpad gestures of the Android app, a key panel, a type field with dictation, and the keys of a hardware keyboard. The computer needs `remote_input = true`. See [Touchpad and keyboard](remote-input.md). |
 | Remote desktop | Shows the screen of the computer, with touches, keys, the Omarchy panel, dictation, and a monitor picker. The computer needs `remote_desktop = true`, and `remote_input = true` for control. See [Remote desktop](remote-desktop.md). |
 | herdr agents | Shows the agents that herdr runs, their output in color fitted to the phone screen, and notifications for needs input and finished. Answers them, starts agents, and runs terminals when the computer allows it. See [herdr agents](herdr.md). |
-| Dictation | Each text field has a mic key: the agent replies, the touchpad, the remote desktop, **Text or link** in **Send > Text and links**, the scanned text, the shortcut search, the folder search and the task of a new agent, and the terminal command. Searches get the words in place of the search. Other fields get them at the end of the text. The iPhone dictates in its own languages. |
+| Dictation | Each text field has a mic key: the agent replies, the touchpad, the remote desktop, **Text or link** in **Send > Queue and transfers**, the scanned text, the shortcut search, the folder search and the task of a new agent, and the terminal command. Searches get the words in place of the search. Other fields get them at the end of the text. The iPhone dictates in its own languages. |
 | Clear and expand | Each text field has a clear key while it has text. The agent prompt, the terminal command, the task of a new agent, and **Text or link** also have an expand key that opens a large editor. The type field of the touchpad and the remote desktop deletes its typed text on the computer, and its expand key opens the draft editor. See [Clear and expand text fields](features.md#clear-and-expand-text-fields). |
 | Face ID lock | Replies, new agents, terminals, the touchpad, the remote desktop, and the Omarchy panel ask for Face ID, Touch ID, or the passcode. The unlock stays valid for 5 minutes, and it ends when the iPhone locks. An open touchpad, remote desktop, or Omarchy panel asks again when Flux returns after the unlock ended. |
 
@@ -281,7 +291,7 @@ The webcam stops when Flux leaves the screen, also after a start from a request.
 | Other apps' notifications, text messages, and calls | iOS gives apps no access to them. Flux does not advertise `notification.request`, `sms.*`, or `telephony`. |
 | Clipboard | iOS gives apps no event for a new copy, and it asks before each read of text that another app copied. Flux reads the clipboard only while it is on the screen. When Flux opens and when a computer connects, it reads only after the clipboard changed. A shortcut with **Send Text to Computer** sends a copy while Flux stays closed. Text and images from a computer stay on the iPhone and do not go to Universal Clipboard. |
 | Screenshots and photos | They go to the computer when Flux opens, not in the background. |
-| Share sheet | The share extension runs apart from the app and cannot open Flux or hold a link. It queues the items in the App Group. Flux sends them when it opens and connects, and keeps failed items with the reason on the **Share** screen, under **Send > Text and links**. The queue holds up to 200 items and 1 GB, and an item that failed 5 times or waited 7 days goes, with a notification. A try that ends because the link closed, for example when iOS suspends Flux, does not count as a failure. The extension checks the size of each file before the copy, and the size of each text before it decodes the text. Send a file larger than 1 GB from the **Share** screen of Flux. A text or link has a limit of 1 MB. Folders do not go. |
+| Share sheet | The share extension runs apart from the app and cannot open Flux or hold a link. It queues the items in the App Group. Flux sends them when it opens and connects, and keeps failed items with the reason on the **Share** screen, under **Send > Queue and transfers**. The queue holds up to 200 items and 1 GB, and an item that failed 5 times or waited 7 days goes, with a notification. A try that ends because the link closed, for example when iOS suspends Flux, does not count as a failure. The extension checks the size of each file before the copy, and the size of each text before it decodes the text. Send a file larger than 1 GB from the **Share** screen of Flux. A text or link has a limit of 1 MB. Folders do not go. |
 | Focus | Flux cannot read or set the Focus. It reports the Focus through the Focus filter and ignores Do Not Disturb from the computer. A change while Flux has no link goes to each computer that was paired at the change, when that computer connects. |
 | Camera | iOS gives the camera only to the app on the screen, so the webcam stops when Flux leaves it. |
 | Volume keys | iOS gives apps no public way to take the volume keys, so they do not change slides. |

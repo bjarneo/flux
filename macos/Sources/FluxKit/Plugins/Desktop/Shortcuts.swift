@@ -27,6 +27,28 @@ public struct WorkspaceInfo: Equatable, Sendable {
     }
 }
 
+/// 1 window of the computer. `address` focuses it, `app` is the name of its
+/// app, and `focused` is true for the window that has the focus.
+public struct WindowInfo: Equatable, Sendable, Identifiable {
+    public var address: String
+    public var workspace: Int
+    public var app: String
+    public var windowClass: String
+    public var title: String
+    public var focused: Bool
+
+    public init(address: String, workspace: Int, app: String, windowClass: String, title: String, focused: Bool) {
+        self.address = address
+        self.workspace = workspace
+        self.app = app
+        self.windowClass = windowClass
+        self.title = title
+        self.focused = focused
+    }
+
+    public var id: String { address }
+}
+
 /// The key bindings and the workspaces of a computer, for the Omarchy
 /// panel. `loaded` is false until the first answer.
 public struct ShortcutsState: Equatable, Sendable {
@@ -35,8 +57,13 @@ public struct ShortcutsState: Equatable, Sendable {
     public var active = 0
     public var error: String?
     public var loaded = false
+    /// The windows of all workspaces, or nil when the computer does not send them.
+    public var windows: [WindowInfo]?
 
     public init() {}
+
+    /// The windows of the active workspace.
+    public var activeWindows: [WindowInfo] { (windows ?? []).filter { $0.workspace == active } }
 }
 
 /// flux.shortcuts: this Mac moves around Omarchy. The computer sends its
@@ -76,6 +103,9 @@ public enum DesktopShortcuts {
 
     public static func swap(_ d: Direction) -> Packet { Packet(PacketType.fluxShortcuts, ["action": "swap", "direction": d.rawValue]) }
 
+    /// Focuses the window at `address`. The computer answers with the windows again.
+    public static func focusWindow(_ address: String) -> Packet { Packet(PacketType.fluxShortcuts, ["action": "focusWindow", "address": address]) }
+
     /// The workspace action for a digit with super, as the Omarchy bindings
     /// do: super and a digit selects the workspace, and super, shift, and a
     /// digit moves the window there. 0 is workspace 10. It returns nil for
@@ -88,8 +118,8 @@ public enum DesktopShortcuts {
         return mods.shift ? moveToWorkspace(id) : workspace(id)
     }
 
-    /// Returns the state after an answer. An answer without the list keeps
-    /// the list of `old`. An error keeps the rest of `old`.
+    /// Returns the state after an answer. An answer without the list or the
+    /// windows keeps them from `old`. An error keeps the rest of `old`.
     public static func merge(_ old: ShortcutsState?, _ p: Packet) -> ShortcutsState {
         var s = old ?? ShortcutsState()
         s.loaded = true
@@ -107,6 +137,17 @@ public enum DesktopShortcuts {
             s.workspaces = list.compactMap { e in
                 guard let o = e.object, let id = o["id"]?.int else { return nil }
                 return WorkspaceInfo(id: id, windows: o["windows"]?.int ?? 0)
+            }
+        }
+        if let list = p.array("windows") {
+            s.windows = list.compactMap { e in
+                guard let o = e.object, let address = o["address"]?.string, !address.isEmpty, let workspace = o["workspace"]?.int else { return nil }
+                let windowClass = o["class"]?.string ?? ""
+                let app = o["app"]?.string ?? ""
+                return WindowInfo(
+                    address: address, workspace: workspace, app: app.isEmpty ? windowClass : app, windowClass: windowClass,
+                    title: o["title"]?.string ?? "", focused: o["focused"]?.bool ?? false
+                )
             }
         }
         if let active = p.int("active") { s.active = active }

@@ -451,7 +451,7 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
         markSeen(count)
         #if os(iOS)
         if images, ClipboardImage.available, let image = ClipboardImage.read() {
-            let started = known.map { sendImage(image, to: $0) }.contains(true)
+            let started = known.map { sendImage(image, to: $0, stamp: count) }.contains(true)
             if started { sentCount = count }
             return started
         }
@@ -465,7 +465,7 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
         // the text and the types can then come from 2 different copies.
         let secret = ClipboardText.holdsPrivate || ClipboardText.changeCount != count
         timestamp = Packet.now()
-        let p = Packet(PacketType.clipboard, ["content": text])
+        let p = Self.manualClip(text)
         let got = computers(known.filter { core.send(p, to: $0) })
         guard !got.isEmpty else {
             core.toast("Not connected. Try again in a moment")
@@ -473,9 +473,22 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
         }
         noteSent(text)
         sentCount = count
+        recordSent(got.map { $0.id }, kind: .clip, text: secret ? "" : text, stamp: count)
         noteSentClip(ClipEvent.sent(to: got, text: text, secret: secret))
         core.toast("Clipboard sent to \(got.map { $0.name }.joined(separator: ", "))")
         return true
+    }
+
+    /// The clipboard packet of a clip that the user sent. The manual flag
+    /// puts the clip on the clipboard of the computer also while its
+    /// automatic sync is off, and the computer shows a notification.
+    static func manualClip(_ text: String) -> Packet { Packet(PacketType.clipboard, ["content": text, "manual": true]) }
+
+    /// Adds a clip that went out to the Send thread of each computer in `ids`.
+    @MainActor
+    private func recordSent(_ ids: [String], kind: SentItem.Kind, text: String, stamp: Int) {
+        guard let share = core?.plugin(SharePlugin.self)?.model else { return }
+        for id in ids { share.record(SentItem(deviceId: id, kind: kind, text: text, clipStamp: stamp)) }
     }
 
     /// True when the copy on the clipboard went out already, for example
@@ -489,7 +502,9 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
     ///
     /// The text usually comes from the clipboard through the Shortcuts app.
     /// Flux keeps its digest, so that the same copy does not go out again
-    /// when Flux opens, see `sendUnseenCopy`.
+    /// when Flux opens, see `sendUnseenCopy`. An automation can run it
+    /// often, so the packet has no manual flag: the computer shows no
+    /// notification for it, and follows its automatic sync.
     public func sendText(_ text: String, to ids: [String]) async -> [String] {
         guard let core else { return [] }
         let p = Packet(PacketType.clipboard, ["content": text])
@@ -705,7 +720,7 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
 
     /// The Send Clipboard action for an image.
     @MainActor
-    private func sendImage(_ image: ClipboardImage.Image, to id: String) -> Bool {
+    private func sendImage(_ image: ClipboardImage.Image, to id: String, stamp: Int) -> Bool {
         guard let core, let peer = core.withDevice(id, { (name: $0.name, online: $0.online, accepts: $0.accepts(PacketType.fluxClipboardImage)) }) else {
             return false
         }
@@ -724,17 +739,20 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
         }
         timestamp = Packet.now()
         Task.detached { [self] in
-            let got = await send(image, to: [id])
+            let got = await send(image, to: [id], manual: true)
             core.toast(got.isEmpty ? "Sending the image failed" : "Image sent to \(name)")
             guard !got.isEmpty else { return }
-            onMain { plugin in plugin.noteSentClip(ClipEvent.sent(to: plugin.computers(got), text: nil)) }
+            onMain { plugin in
+                plugin.noteSentClip(ClipEvent.sent(to: plugin.computers(got), text: nil))
+                plugin.recordSent(got, kind: .clipImage, text: "", stamp: stamp)
+            }
         }
         return true
     }
 
     /// Sends the image to the computers one after the other and returns the
     /// IDs of the computers that got it.
-    private func send(_ image: ClipboardImage.Image, to ids: [String]) async -> [String] {
+    private func send(_ image: ClipboardImage.Image, to ids: [String], manual: Bool = false) async -> [String] {
         guard let core else { return [] }
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("flux-clip-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -750,7 +768,7 @@ public final class ClipboardPlugin: FluxPlugin, @unchecked Sendable {
         for id in ids {
             guard let cert = core.withDevice(id, { $0.certificate }) ?? nil else { continue }
             do {
-                try await ClipImageTransfer.send(file, size: Int64(image.data.count), mime: image.mime, to: id, cert: cert, core: core)
+                try await ClipImageTransfer.send(file, size: Int64(image.data.count), mime: image.mime, to: id, cert: cert, core: core, manual: manual)
                 sent.append(id)
             } catch {
                 FluxLog.plugin.error("send clipboard image to \(id, privacy: .public) failed: \(String(describing: error), privacy: .public)")

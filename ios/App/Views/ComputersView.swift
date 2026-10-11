@@ -5,20 +5,25 @@ import UIKit
 /// The Computers destination: this iPhone, the paired computers, the
 /// computers to pair, and the settings of the app. A tap on a paired
 /// computer makes it the scope, and a tap on the computer in scope shows
-/// all computers again. The page of a computer holds its approval setup. A
-/// pull down searches again.
+/// all computers again. A long press offers the page of the computer, which
+/// holds its approval setup, and Unpair. The dock shows the search, with
+/// Scan again. A pull down searches again too.
 struct ComputersView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.tn) private var tn
     @Environment(\.colorScheme) private var scheme
     @State private var unpairing: DeviceSnapshot?
     @State private var turningOff = false
+    /// The end time of the last search that this screen saw.
+    @State private var lastScan: Date?
 
     static let localNetworkText = "Flux needs Local Network access to find and reach computers. Turn on Local Network for Flux in Settings."
 
     var body: some View {
         let paired = model.paired
         let available = model.available.filter { $0.online }
+        VStack(spacing: 0) {
+        ProgressLine { if model.state.searching { SlideBar(color: tn.yellow) } }
         ScrollView {
             VStack(alignment: .leading, spacing: TiledMetrics.gap) {
                 if !model.state.enabled {
@@ -34,7 +39,7 @@ struct ComputersView: View {
                     }
                 }
                 phoneRow
-                SectionLabel("Paired")
+                ListHeader("Paired")
                 if paired.isEmpty {
                     Text("No computer is paired. Pair one below. A paired computer connects by itself.")
                         .font(.subheadline)
@@ -48,10 +53,16 @@ struct ComputersView: View {
                         unpairing = d
                     }
                 }
-                SectionLabel("Available")
+                ListHeader("Available")
                 ForEach(available) { AvailableRow(device: $0) }
-                ScanRow(none: available.isEmpty, first: paired.isEmpty)
-                SectionLabel("Settings")
+                if available.isEmpty && !model.state.searching {
+                    Text(paired.isEmpty ? "No computers found. Open Flux on the computer, and use the same Wi-Fi network as this iPhone."
+                         : "No other computers found.")
+                        .font(.subheadline)
+                        .foregroundStyle(tn.sub)
+                        .padding(.horizontal, 4)
+                }
+                ListHeader("Settings")
                 SettingRow(icon: "gearshape", title: "Settings", text: "Name, sync switches, notifications, and agents") {
                     model.computersPath.append(.settings)
                 }
@@ -63,12 +74,18 @@ struct ComputersView: View {
                 .disabled(model.demo || !model.state.enabled)
             }
             .padding(.horizontal, TiledMetrics.gutter)
-            .padding(.bottom, 24)
+            .padding(.top, 6)
+            .padding(.bottom, 28)
             .frame(maxWidth: TiledMetrics.maxContentWidth)
             .frame(maxWidth: .infinity)
         }
         .refreshable { model.core.search() }
-        .tabRoot("Computers")
+        .safeAreaInset(edge: .bottom, spacing: 0) { ScanDock(available: available.count, lastScan: lastScan) }
+        }
+        .destinationRoot("Computers", context: ScreenWords.join(
+            ScreenWords.online(model).isEmpty ? "No computer is paired" : ScreenWords.online(model),
+            paired.isEmpty ? "" : "\(ScreenWords.scopeName(model)) in scope"))
+        .onChange(of: model.state.searching) { was, now in if was && !now { lastScan = Date() } }
         .confirmationDialog(
             unpairing.map { "Unpair \($0.name)?" } ?? "",
             isPresented: Binding(get: { unpairing != nil }, set: { if !$0 { unpairing = nil } }),
@@ -108,7 +125,8 @@ struct ComputersView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 4)
-        .padding(.top, 4)
+        .padding(.top, 10)
+        .padding(.bottom, 2)
         .accessibilityElement(children: .combine)
     }
 
@@ -170,13 +188,14 @@ private struct ThemeChoiceRow: View {
                 }
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(selected ? tn.accent : tn.dim)
+                Image(systemName: selected ? "largecircle.fill.circle" : "circle")
+                    .font(.body)
+                    .foregroundStyle(selected ? tn.accent : tn.sub)
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .frame(minHeight: 56)
+            .padding(.vertical, 6)
+            .frame(minHeight: 52)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -185,17 +204,18 @@ private struct ThemeChoiceRow: View {
 
     private static func icon(_ mode: ThemeMode) -> String {
         switch mode {
-        case .computer: return "laptopcomputer"
-        case .system: return "iphone"
+        case .computer: return "desktopcomputer"
+        case .system: return "circle.lefthalf.filled"
         case .light: return "sun.max"
         case .dark: return "moon"
         }
     }
 }
 
-/// A paired computer: its link, its battery, and its address. A tap makes
-/// it the scope, or shows all computers when it is in scope. The chevron
-/// opens the page of the computer.
+/// A paired computer: its link, its address and battery, and a note while
+/// it is offline. A tap makes it the scope, or shows all computers when it
+/// is in scope. A long press offers the page of the computer and Unpair,
+/// and VoiceOver offers both as actions.
 struct PairedComputerRow: View {
     let device: DeviceSnapshot
     let inScope: Bool
@@ -203,82 +223,88 @@ struct PairedComputerRow: View {
     let onUnpair: () -> Void
     @Environment(AppModel.self) private var model
     @Environment(\.tn) private var tn
-    @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 24
+    @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 22
 
     var body: some View {
         let d = device
         let battery = model.core.plugin(BatteryPlugin.self)?.model.computers[d.id]
-        HStack(spacing: 0) {
-            Button(action: onScope) {
-                HStack(spacing: 12) {
-                    Image(systemName: d.symbol)
-                        .font(.system(size: iconSize))
-                        .foregroundStyle(d.online ? tn.accent : tn.sub)
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 3) {
+        let address = [d.ip, battery.map { "battery \($0.charge)%" + ($0.charging ? ", charging" : "") } ?? ""]
+            .filter { !$0.isEmpty }.joined(separator: " · ")
+        Button(action: onScope) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: d.symbol)
+                    .font(.system(size: iconSize))
+                    .foregroundStyle(d.online ? tn.accent : tn.sub)
+                    .padding(.top, 1)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
                         Text(d.name)
                             .font(.callout.weight(.semibold))
                             .foregroundStyle(tn.text)
-                        HStack(spacing: 6) {
-                            LinkDot(online: d.online, size: 7)
-                            if d.online, let battery {
-                                BatteryDot(battery, size: 7)
-                            }
-                            Text(d.linkText(battery: battery))
-                                .font(.footnote)
-                                .foregroundStyle(tn.sub)
-                                .lineLimit(2)
-                        }
-                        if !d.ip.isEmpty {
-                            Text(d.ip)
-                                .font(.caption.monospaced())
-                                .foregroundStyle(tn.sub)
-                                .lineLimit(1)
-                        }
-                        if !d.online {
-                            Text("Check that Flux runs on \(d.name), and that both are on the same Wi-Fi.")
-                                .font(.footnote)
-                                .foregroundStyle(tn.sub)
-                        }
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         if inScope {
                             Text("In scope")
                                 .font(.caption.weight(.medium))
                                 .foregroundStyle(tn.accent)
                         }
                     }
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    HStack(spacing: 7) {
+                        if d.online { Circle().fill(tn.green).frame(width: 8, height: 8) } else { RingMark() }
+                        Text(Self.linkLine(d))
+                            .font(.footnote)
+                            .foregroundStyle(tn.sub)
+                            .lineLimit(1)
+                    }
+                    if !address.isEmpty {
+                        Text(address)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(tn.sub)
+                            .lineLimit(1)
+                    }
+                    if !d.online {
+                        Text("Check that Flux runs on \(d.name), and that both are on the same Wi-Fi.")
+                            .font(.footnote)
+                            .foregroundStyle(tn.sub)
+                    }
                 }
-                .padding(.leading, 14)
-                .padding(.vertical, 10)
-                .contentShape(Rectangle())
+                .multilineTextAlignment(.leading)
             }
-            .buttonStyle(.plain)
-            .accessibilityHint(inScope ? "Shows all computers" : "Shows only \(d.name)")
-            .accessibilityAddTraits(inScope ? .isSelected : [])
-            Button(action: onUnpair) {
-                Image(systemName: "minus.circle")
-                    .foregroundStyle(tn.sub)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Unpair \(d.name)")
-            Button { model.computersPath.append(.computer(d.id)) } label: {
-                Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(tn.sub)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Open \(d.name)")
-            .accessibilityHint("Shows the approval setup and the address of \(d.name)")
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(tileShape().fill(tn.tile))
+            .overlay(tileShape().strokeBorder(inScope ? tn.accent : tn.line, lineWidth: inScope ? 2 : 1))
+            .contentShape(tileShape())
         }
-        .padding(.trailing, 4)
-        .frame(minHeight: 72)
-        .background(tileShape().fill(tn.tile))
-        .overlay(tileShape().strokeBorder(inScope ? tn.accent : tn.line, lineWidth: inScope ? 2 : 1))
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button { model.computersPath.append(.computer(d.id)) } label: { Label("Details and approvals", systemImage: "info.circle") }
+            if !d.online {
+                Button { model.retry() } label: { Label("Retry", systemImage: "arrow.clockwise") }
+            }
+            Button(role: .destructive, action: onUnpair) { Label("Unpair", systemImage: "minus.circle") }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(inScope ? "Shows all computers" : "Shows only \(d.name)")
+        .accessibilityAddTraits(inScope ? .isSelected : [])
+        .accessibilityAction(named: "Details and approvals") { model.computersPath.append(.computer(d.id)) }
+        .accessibilityAction(named: "Unpair \(d.name)", onUnpair)
+    }
+
+    /// The link of a computer in words: "Connected · Tailscale", "Connected · Wi-Fi", or "Offline".
+    /// An iPhone reaches a computer on the local network only over Wi-Fi.
+    static func linkLine(_ d: DeviceSnapshot) -> String {
+        guard d.online else { return "Offline" }
+        return isTailscale(d.ip) ? "Connected · Tailscale" : "Connected · Wi-Fi"
+    }
+
+    /// True for an address of Tailscale: 100.64.0.0/10 or fd7a:115c:a1e0::/48.
+    static func isTailscale(_ ip: String) -> Bool {
+        if ip.lowercased().hasPrefix("fd7a:115c:a1e0:") { return true }
+        let parts = ip.split(separator: ".").compactMap { Int($0) }
+        return parts.count == 4 && parts[0] == 100 && (64...127).contains(parts[1])
     }
 }
 
@@ -358,6 +384,55 @@ struct ScanRow: View {
         }
         .padding(.horizontal, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// The dock of Computers: the search that runs, or the number of computers
+/// to pair and the time of the last search, with Scan again.
+private struct ScanDock: View {
+    let available: Int
+    let lastScan: Date?
+    @Environment(AppModel.self) private var model
+    @Environment(\.tn) private var tn
+
+    var body: some View {
+        let searching = model.state.searching
+        TimelineView(.periodic(from: .now, by: 30)) { context in
+            HStack(spacing: 12) {
+                Group {
+                    if searching { RingSpinner(size: 16, color: tn.yellow) } else {
+                        Image(systemName: "wifi").font(.body).foregroundStyle(tn.sub)
+                    }
+                }
+                .frame(width: 20)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(searching ? "Looking for computers"
+                         : available == 0 ? "No computer to pair" : available == 1 ? "1 computer to pair" : "\(available) computers to pair")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(tn.text)
+                        .lineLimit(1)
+                    Text(searching ? "on this network" : lastScan.map { "last scan \(AgoText.text($0, now: context.date))" } ?? "pull down to scan")
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(tn.sub)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Button("Scan again") { model.core.search() }
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(tn.text)
+                    .padding(.horizontal, 14)
+                    .frame(height: 40)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(tn.line))
+                    .buttonStyle(.plain)
+                    .disabled(searching || !model.state.enabled || model.demo)
+                    .opacity(searching ? TiledMetrics.disabledAlpha : 1)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
+            .frame(minHeight: 44)
+        }
+        .dockFrame()
     }
 }
 

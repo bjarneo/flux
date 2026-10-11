@@ -24,47 +24,56 @@ struct MediaTile: View {
     }
 }
 
-/// Now Playing: the player picker, the track, the position, the transport,
-/// and the volume.
+/// Media: the players as pills, the album art, the title, the artist, and
+/// the album, and the dock with the position, Previous, Play or Pause,
+/// Next, and the volume. A player that sends no volume shows no volume row.
 struct NowPlayingScreen: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.tn) private var tn
     let deviceId: String
 
     var body: some View {
         if let device = model.device(deviceId), let plugin = model.core.plugin(MprisPlugin.self) {
             let media = plugin.model.media(device.id)
-            Group {
-                if !device.online {
-                    ContentUnavailableView("Not connected", systemImage: "wifi.slash",
-                                           description: Text("The player controls show when \(device.name) is online."))
-                } else if let player = media.player {
-                    ScrollView {
-                        NowPlayingControls(device: device, plugin: plugin, player: player)
-                            .padding(20)
-                            .frame(maxWidth: 520)
-                            .frame(maxWidth: .infinity)
-                    }
-                } else {
-                    ContentUnavailableView("Nothing is playing", systemImage: "music.note",
-                                           description: Text("Play music or a video on \(device.name). The controls show here."))
-                }
-            }
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle("Now Playing")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                if device.online, let player = media.player, media.players.count > 1 {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Menu {
-                            Picker("Player", selection: Binding(get: { player.name }, set: { plugin.select(device.id, player: $0) })) {
-                                ForEach(media.players, id: \.self) { Text($0).tag($0) }
+            let player = media.player
+            TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+                let position = player?.position(at: ProcessInfo.processInfo.systemUptime) ?? 0
+                VStack(spacing: 0) {
+                    if let player, media.players.count > 1 {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(media.players, id: \.self) { name in
+                                    let on = name == player.name
+                                    StripPill(label: name, selected: on, meta: on ? (player.playing ? "playing" : "paused") : "") {
+                                        if !on { plugin.select(device.id, player: name) }
+                                    } mark: {
+                                        if on && player.playing { Circle().fill(tn.green).frame(width: 8, height: 8) } else { RingMark() }
+                                    }
+                                    .accessibilityLabel(name)
+                                }
                             }
-                        } label: {
-                            Label("Player", systemImage: "hifispeaker.2")
+                            .padding(.horizontal, 10)
                         }
+                        .padding(.bottom, 2)
+                    }
+                    ProgressLine {
+                        if let player, player.length > 0 { LineFill(fraction: Double(position) / Double(player.length), color: tn.green) }
+                    }
+                    if !device.online {
+                        ContentUnavailableView("Not connected", systemImage: "wifi.slash",
+                                               description: Text("The player controls show when \(device.name) is online."))
+                    } else if let player {
+                        NowPlayingInfo(player: player)
+                            .safeAreaInset(edge: .bottom, spacing: 0) {
+                                PlayerDock(device: device, plugin: plugin, player: player, position: position)
+                            }
+                    } else {
+                        ContentUnavailableView("Nothing is playing", systemImage: "music.note",
+                                               description: Text("Play music or a video on \(device.name). The controls show here."))
                     }
                 }
             }
+            .featureTitle("Media", context: ScreenWords.join(player?.name ?? "", device.name))
             // The computer pushes changes, and this also catches players that
             // start or stop while the screen is open.
             .task(id: device.online) {
@@ -78,155 +87,189 @@ struct NowPlayingScreen: View {
     }
 }
 
-private struct NowPlayingControls: View {
+/// The album art, the title, the artist, and the album, at the bottom of
+/// the space above the dock.
+private struct NowPlayingInfo: View {
+    let player: RemotePlayer
+    @Environment(\.tn) private var tn
+
+    var body: some View {
+        GeometryReader { geo in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Spacer(minLength: 0)
+                    ArtThumb(url: player.artURL, size: min(230, max(0, geo.size.width - 40)), corner: 16, iconSize: 44)
+                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(tn.line, lineWidth: 1))
+                        .frame(maxWidth: .infinity)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(player.title.isEmpty ? "Unknown title" : player.title)
+                            .font(.title2.weight(.semibold))
+                            .foregroundStyle(tn.text)
+                            .lineLimit(3)
+                        if !player.artist.isEmpty {
+                            Text(player.artist).font(.subheadline).foregroundStyle(tn.sub)
+                        }
+                        if !player.album.isEmpty {
+                            Text(player.album).font(.caption.monospaced()).foregroundStyle(tn.sub)
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 30)
+                .frame(minHeight: geo.size.height, alignment: .bottom)
+            }
+        }
+    }
+}
+
+/// The dock of the player: the position with a thumb, the time and the
+/// length, Previous, Play or Pause, and Next, and the volume.
+private struct PlayerDock: View {
     let device: DeviceSnapshot
     let plugin: MprisPlugin
     let player: RemotePlayer
+    let position: Int64
+    @Environment(\.tn) private var tn
+    /// The position and the volume that the user drags to, until the drag ends.
+    @State private var seeking: Double?
+    @State private var volume: Double?
+    /// The time of the last volume that a drag sent. A drag sends at most 1 volume each 150 ms.
+    @State private var volumeSentAt = Date.distantPast
 
     var body: some View {
-        VStack(spacing: 24) {
-            AlbumArt(url: player.artURL)
-            VStack(spacing: 4) {
-                Text(player.title.isEmpty ? "Unknown title" : player.title)
-                    .font(.title2.weight(.semibold))
-                    .multilineTextAlignment(.center)
-                    .lineLimit(3)
-                Text([player.artist, player.name].filter { !$0.isEmpty }.joined(separator: " · "))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                if !player.album.isEmpty {
-                    Text(player.album)
-                        .font(.subheadline)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                }
-            }
+        VStack(spacing: 10) {
             if player.length > 0 {
-                SeekBar(player: player) { plugin.seek(device.id, to: $0) }
-            }
-            Transport(playing: player.playing) { plugin.action(device.id, $0) }
-            if let volume = player.volume {
-                VolumeBar(volume: volume) { plugin.setVolume(device.id, $0) }
-            }
-        }
-    }
-}
-
-/// The art loads through AlbumArtLoader, which limits the scheme and the size.
-private struct AlbumArt: View {
-    let url: URL?
-    @State private var image: UIImage?
-
-    var body: some View {
-        Group {
-            if let image {
-                Image(uiImage: image).resizable().scaledToFill()
-            } else {
-                placeholder
-            }
-        }
-        .task(id: url) {
-            image = nil
-            guard let url, let data = await AlbumArtLoader.load(url) else { return }
-            image = UIImage(data: data)
-        }
-        .frame(width: 260, height: 260)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .shadow(color: .black.opacity(0.15), radius: 16, y: 8)
-        .accessibilityHidden(true)
-    }
-
-    private var placeholder: some View {
-        ZStack {
-            Rectangle().fill(Color.pink.gradient.opacity(0.25))
-            Image(systemName: "music.note")
-                .font(.system(size: 72))
-                .foregroundStyle(.pink)
-        }
-    }
-}
-
-/// The position of the track. It moves while the player plays, and a drag
-/// seeks when it ends.
-private struct SeekBar: View {
-    let player: RemotePlayer
-    let seek: (Int64) -> Void
-    @State private var dragging: Double?
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 0.5, paused: !player.playing || dragging != nil)) { _ in
-            let position = Double(player.position(at: ProcessInfo.processInfo.systemUptime))
-            VStack(spacing: 2) {
-                Slider(value: Binding(get: { dragging ?? position }, set: { dragging = $0 }), in: 0...Double(player.length)) {
-                    Text("Position")
-                } onEditingChanged: { editing in
-                    if !editing, let target = dragging {
-                        seek(Int64(target))
-                        dragging = nil
+                let shown = seeking.map { Int64($0 * Double(player.length)) } ?? position
+                VStack(spacing: 4) {
+                    LineSlider(value: Double(shown) / Double(player.length), color: tn.green, thumb: player.canSeek, enabled: player.canSeek,
+                               name: "Position", state: ThreadTime.position(shown)) { seeking = $0 } done: { f in
+                        seeking = nil
+                        plugin.seek(device.id, to: Int64(f * Double(player.length)))
                     }
+                    .frame(height: 24)
+                    HStack {
+                        Text(ThreadTime.position(shown))
+                        Spacer()
+                        Text(ThreadTime.position(player.length))
+                    }
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(tn.sub)
                 }
-                .disabled(!player.canSeek)
-                .accessibilityValue(Self.clock(dragging ?? position))
-                HStack {
-                    Text(Self.clock(dragging ?? position))
-                    Spacer()
-                    Text(Self.clock(Double(player.length)))
+                .padding(.horizontal, 4)
+            }
+            // Play or Pause is 1.4 times as wide as Previous and Next.
+            GeometryReader { g in
+                let unit = max((g.size.width - 16) / 3.4, 0)
+                HStack(spacing: 8) {
+                    PlayerKey(icon: "backward.end.fill", name: "Previous", fill: tn.line, ink: tn.text, size: 26) { plugin.action(device.id, "Previous") }
+                        .frame(width: unit)
+                    PlayerKey(icon: player.playing ? "pause.fill" : "play.fill", name: player.playing ? "Pause" : "Play", fill: tn.green,
+                              ink: tn.onAccent, size: 30) { plugin.action(device.id, "PlayPause") }
+                        .frame(width: unit * 1.4)
+                    PlayerKey(icon: "forward.end.fill", name: "Next", fill: tn.line, ink: tn.text, size: 26) { plugin.action(device.id, "Next") }
+                        .frame(width: unit)
                 }
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
+            }
+            .frame(height: 64)
+            if let v = player.volume {
+                let shown = volume ?? Double(v) / 100
+                HStack(spacing: 12) {
+                    Image(systemName: "speaker.wave.1.fill").font(.footnote).foregroundStyle(tn.sub).accessibilityHidden(true)
+                    LineSlider(value: shown, color: tn.text, thumb: false, enabled: true, name: "Volume", state: "\(Int(shown * 100))%") { f in
+                        volume = f
+                        // The player follows the drag.
+                        if Date().timeIntervalSince(volumeSentAt) >= 0.15 {
+                            volumeSentAt = Date()
+                            plugin.setVolume(device.id, Int((f * 100).rounded()))
+                        }
+                    } done: { f in
+                        volume = nil
+                        plugin.setVolume(device.id, Int((f * 100).rounded()))
+                    }
+                    .frame(height: 32)
+                    Text("\(Int((shown * 100).rounded()))%")
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(tn.sub)
+                        .frame(minWidth: 34, alignment: .trailing)
+                }
+                .padding(.horizontal, 4)
+                .frame(height: 40)
             }
         }
-    }
-
-    static func clock(_ ms: Double) -> String {
-        let s = Int(ms / 1000)
-        let h = s / 3600, m = s / 60 % 60, sec = s % 60
-        return h > 0 ? String(format: "%d:%02d:%02d", h, m, sec) : String(format: "%d:%02d", m, sec)
+        .padding(.horizontal, 12)
+        .padding(.top, 16)
+        .padding(.bottom, 10)
+        .dockFrame()
     }
 }
 
-private struct Transport: View {
-    let playing: Bool
-    let action: (String) -> Void
+/// A key of the player dock: a rounded tile with an icon.
+private struct PlayerKey: View {
+    let icon: String
+    let name: String
+    let fill: Color
+    let ink: Color
+    let size: CGFloat
+    let action: () -> Void
 
     var body: some View {
-        HStack(spacing: 44) {
-            Button { action("Previous") } label: { Label("Previous", systemImage: "backward.fill") }
-                .font(.title)
-            Button { action("PlayPause") } label: {
-                Label(playing ? "Pause" : "Play", systemImage: playing ? "pause.circle.fill" : "play.circle.fill")
-            }
-            .font(.system(size: 64))
-            Button { action("Next") } label: { Label("Next", systemImage: "forward.fill") }
-                .font(.title)
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: size))
+                .foregroundStyle(ink)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(fill))
         }
-        .labelStyle(.iconOnly)
-        .buttonStyle(.borderless)
-        .tint(.primary)
+        .buttonStyle(.plain)
+        .accessibilityLabel(name)
     }
 }
 
-/// The player volume. A drag sets the volume when it ends.
-private struct VolumeBar: View {
-    let volume: Int
-    let set: (Int) -> Void
-    @State private var dragging: Double?
+/// A line of 4 pt that the user taps or drags, with the part `value` in
+/// `color`, and a thumb of 4 by 16 pt with `thumb`. `change` follows a drag,
+/// and `done` gets the value at the end of a tap or a drag. VoiceOver reads
+/// `name` with `state`, and can raise or lower the value by 5%.
+private struct LineSlider: View {
+    let value: Double
+    let color: Color
+    let thumb: Bool
+    let enabled: Bool
+    let name: String
+    let state: String
+    let change: (Double) -> Void
+    let done: (Double) -> Void
+    @Environment(\.tn) private var tn
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "speaker.fill")
-                .accessibilityHidden(true)
-            Slider(value: Binding(get: { dragging ?? Double(volume) }, set: { dragging = $0 }), in: 0...100) {
-                Text("Volume")
-            } onEditingChanged: { editing in
-                if !editing, let target = dragging {
-                    set(Int(target.rounded()))
-                    dragging = nil
+        GeometryReader { geo in
+            let w = max(geo.size.width, 1)
+            let v = min(max(value, 0), 1)
+            ZStack(alignment: .leading) {
+                Capsule().fill(tn.line).frame(height: 4)
+                Capsule().fill(color).frame(width: w * v, height: 4)
+                if thumb {
+                    RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 4, height: 16).offset(x: min(max(w * v - 2, 0), w - 4))
                 }
             }
-            Image(systemName: "speaker.wave.3.fill")
-                .accessibilityHidden(true)
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { g in if enabled { change(min(max(g.location.x / w, 0), 1)) } }
+                    .onEnded { g in if enabled { done(min(max(g.location.x / w, 0), 1)) } }
+            )
         }
-        .foregroundStyle(.secondary)
+        .accessibilityElement()
+        .accessibilityLabel(name)
+        .accessibilityValue(state)
+        .accessibilityAdjustableAction { direction in
+            guard enabled else { return }
+            switch direction {
+            case .increment: done(min(value + 0.05, 1))
+            case .decrement: done(max(value - 0.05, 0))
+            @unknown default: break
+            }
+        }
     }
 }

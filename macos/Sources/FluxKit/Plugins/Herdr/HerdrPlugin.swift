@@ -22,6 +22,8 @@ public final class HerdrModel {
     /// `promptKey`. It is apart from `outputs`, so that the Inbox and an
     /// agent screen do not replace each other's output.
     public internal(set) var prompts: [String: HerdrOutput] = [:]
+    /// The time that each agent got its status, by device ID and pane. See `AgentClock`.
+    public internal(set) var since: [String: [String: Date]] = [:]
 
     /// Notify when an agent on a computer needs input. It applies to all computers.
     public var inputAlerts = true {
@@ -60,6 +62,9 @@ public final class HerdrModel {
     public func reply(_ deviceId: String, pane: String) -> HerdrReply? {
         replies[deviceId].flatMap { $0.pane == pane ? $0 : nil }
     }
+
+    /// The time that the agent in `pane` on a computer got its status, or nil when this device did not see it.
+    public func agentSince(device: String, pane: String) -> Date? { since[device]?[pane] }
 
     /// The key of the prompt of `pane` on a computer in `prompts`.
     public nonisolated static func promptKey(_ deviceId: String, pane: String) -> String { deviceId + "|" + pane }
@@ -105,6 +110,8 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
     private weak var core: FluxCore?
 
     @MainActor private var trackers: [String: HerdrTracker] = [:]
+    /// The status times of the agents of each computer, by device ID.
+    @MainActor private var clocks: [String: AgentClock] = [:]
     /// The finished notifications that wait for `finishHold`, by device ID and pane.
     @MainActor private var pending: [String: Task<Void, Never>] = [:]
     /// Counts the reads of each computer and all replies, so that a late
@@ -149,7 +156,12 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
     /// The next agent list sets the start values, so a reconnect posts nothing.
     public func onConnected(_ device: Device) {
         let id = device.id
-        DispatchQueue.main.async { MainActor.assumeIsolated { self.trackers[id, default: HerdrTracker()].restart() } }
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated {
+                self.trackers[id, default: HerdrTracker()].restart()
+                self.clocks[id, default: AgentClock()].restart()
+            }
+        }
     }
 
     /// The core lock is held. The main queue keeps the order of the packets.
@@ -165,6 +177,9 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
         case "state":
             guard let state = HerdrWire.state(p.body) else { return }
             model.states[deviceId] = state
+            // A state with the same times leaves the model as it is, so that the views do not update.
+            let since = clocks[deviceId, default: AgentClock()].update(state.agents, now: Date())
+            if model.since[deviceId] != since { model.since[deviceId] = since }
             let alerts = trackers[deviceId, default: HerdrTracker()].update(state.agents)
             alert(alerts, deviceId: deviceId, computer: computer)
             advanceFirstTask(deviceId)

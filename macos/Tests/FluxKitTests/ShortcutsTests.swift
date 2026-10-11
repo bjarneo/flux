@@ -26,6 +26,33 @@ final class ShortcutsTests: XCTestCase {
         XCTAssertEqual(DesktopShortcuts.focus(.up).string("direction"), "u")
         XCTAssertEqual(DesktopShortcuts.focus(.down).string("direction"), "d")
         XCTAssertEqual(DesktopShortcuts.focus(.right).string("direction"), "r")
+        let focus = DesktopShortcuts.focusWindow("0x5f6b3fd55b00")
+        XCTAssertEqual(focus.string("action"), "focusWindow")
+        XCTAssertEqual(focus.string("address"), "0x5f6b3fd55b00")
+    }
+
+    func testMergeReadsTheWindowsAndKeepsThemForAnAnswerWithout() {
+        let first = DesktopShortcuts.merge(nil, Packet(PacketType.fluxShortcuts, [
+            "workspaces": [["id": 2, "windows": 2]],
+            "active": 2,
+            "windows": [
+                ["address": "0x1", "workspace": 2, "app": "Ghostty", "class": "com.mitchellh.ghostty", "title": "t 0x1", "focused": true],
+                ["address": "0x2", "workspace": 2, "class": "chromium", "title": "t 0x2", "focused": false],
+                ["address": "0x3", "workspace": 5, "app": "Signal", "class": "signal", "title": "t 0x3"],
+                ["address": "", "workspace": 2],
+                ["address": "0x4"],
+            ],
+        ]))
+        XCTAssertEqual(first.activeWindows, [
+            WindowInfo(address: "0x1", workspace: 2, app: "Ghostty", windowClass: "com.mitchellh.ghostty", title: "t 0x1", focused: true),
+            WindowInfo(address: "0x2", workspace: 2, app: "chromium", windowClass: "chromium", title: "t 0x2", focused: false),
+        ])
+        XCTAssertEqual(first.windows?.count, 3)
+        // A computer that is locked sends the workspaces without the windows.
+        let locked = DesktopShortcuts.merge(first, Packet(PacketType.fluxShortcuts, ["workspaces": [], "active": 5]))
+        XCTAssertEqual(locked.activeWindows.map(\.address), ["0x3"])
+        // An older computer sends no windows at all.
+        XCTAssertNil(DesktopShortcuts.merge(nil, Packet(PacketType.fluxShortcuts, ["active": 1])).windows)
     }
 
     func testSuperAndADigitSelectsAWorkspace() throws {
