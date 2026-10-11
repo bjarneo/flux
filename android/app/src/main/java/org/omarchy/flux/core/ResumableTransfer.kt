@@ -18,6 +18,9 @@ object ResumableTransfer {
     /** The Inbox transfer of each file, by its folder key. A retry of the computer keeps the item. The lock guards it. */
     private val inbox = HashMap<String, Long>()
 
+    /** The Send thread entry of each file, by its folder key. The lock guards it. */
+    private val thread = HashMap<String, Long>()
+
     internal fun valid(id: String, name: String, size: Long, hash: String): Boolean =
         Regex("[a-f0-9]{12}").matches(id) && Regex("[a-f0-9]{64}").matches(hash) &&
             size in 0..(1L shl 40) && name.isNotBlank() && name != "." && name != ".." &&
@@ -36,6 +39,7 @@ object ResumableTransfer {
         core.io.execute {
             synchronized(lock) {
                 var item: Long? = null
+                var logged: Long? = null
                 runCatching {
                     if (action == "offer") {
                         val before = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000
@@ -57,12 +61,22 @@ object ResumableTransfer {
                     item = transfer
                     val part = File(dir, "data")
                     var offset = part.length()
+                    val entry = thread[key]?.takeIf { SendLog.fileResumed(it, offset) }
+                        ?: SendLog.fileStarted(d.id, d.identity.deviceName, name, size, incoming = true).also {
+                            thread[key] = it
+                            SendLog.fileProgress(it, offset)
+                        }
+                    logged = entry
                     check(offset <= size) { "Partial file exceeds the transfer size" }
                     if (action == "chunk") {
                         check(p.long("offset") == offset && p.payloadSize in 1..minOf(1L shl 20, size - offset)) { "Invalid transfer chunk" }
                         FileOutputStream(part, true).use { out ->
                             val token = p.payloadTunnel ?: error("The transfer needs a tunnel")
-                            Tunnel.receive(tls, cert, token, p.payloadSize, out, announce = { d.send(it) })
+                            val start = offset
+                            val gate = ProgressGate(size)
+                            Tunnel.receive(tls, cert, token, p.payloadSize, out, announce = { d.send(it) }) {
+                                if (gate.pass(start + it)) SendLog.fileProgress(entry, start + it)
+                            }
                             out.fd.sync()
                         }
                         offset = part.length()
@@ -89,6 +103,8 @@ object ResumableTransfer {
                         part.delete()
                         InboxFeed.transferEnded(transfer, true)
                         inbox.remove(key)
+                        SendLog.fileEnded(entry, true)
+                        thread.remove(key)
                         val open = Intent(Intent.ACTION_VIEW).setDataAndType(download.uri, mime ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         Android.showEvent(core.app, "Received $name", "From ${d.identity.deviceName}, saved in Downloads", open)
                         core.toast("Saved $name in Downloads")
@@ -96,6 +112,7 @@ object ResumableTransfer {
                     } else reply(d, id, "offset", offset)
                 }.onFailure {
                     item?.let { t -> InboxFeed.transferEnded(t, false) }
+                    logged?.let { e -> SendLog.fileEnded(e, false) }
                     d.send(Packet(Types.FLUX_TRANSFER, bodyOf("id" to id, "action" to "error", "error" to (it.message ?: "The transfer failed"))))
                 }
             }

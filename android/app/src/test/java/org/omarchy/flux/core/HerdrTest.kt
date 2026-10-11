@@ -210,6 +210,20 @@ class HerdrTest {
     }
 
     @Test
+    fun clockKnowsOnlyTheChangesThatItSaw() {
+        val c = AgentClock()
+        // The first state after a connection: the start of each status is not known.
+        assertTrue(c.update(listOf(agent("a", AgentStatus.Blocked), agent("b", AgentStatus.Working)), 1_000).isEmpty())
+        val next = c.update(listOf(agent("a", AgentStatus.Working), agent("b", AgentStatus.Working), agent("c", AgentStatus.Blocked)), 5_000)
+        assertEquals(mapOf("a" to 5_000L, "c" to 5_000L), next)
+        // The same status keeps its time, and an unknown status keeps the last status and its time.
+        assertEquals(mapOf("a" to 5_000L, "c" to 5_000L), c.update(listOf(agent("a", AgentStatus.Unknown), agent("c", AgentStatus.Blocked)), 9_000))
+        // A connection again keeps the times that the phone saw, and an agent that is gone leaves.
+        c.restart()
+        assertEquals(mapOf("a" to 5_000L), c.update(listOf(agent("a", AgentStatus.Working), agent("d", AgentStatus.Done)), 12_000))
+    }
+
+    @Test
     fun firstStateOnlySetsTheStart() {
         val t = HerdrTracker()
         val alerts = t.update(listOf(agent("a", AgentStatus.Blocked), agent("b", AgentStatus.Done), agent("c", AgentStatus.Working)))

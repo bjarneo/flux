@@ -33,8 +33,8 @@ data class ThemeChoice(val mode: ThemeMode, val label: String, @param:DrawableRe
  * follows the Omarchy theme of the computer in scope.
  */
 val ThemeChoices = listOf(
-    ThemeChoice(ThemeMode.Computer, "Computer", Ic.laptop),
-    ThemeChoice(ThemeMode.System, "System", Ic.systemTheme),
+    ThemeChoice(ThemeMode.Computer, "Computer", Ic.desktop),
+    ThemeChoice(ThemeMode.System, "System", Ic.autoTheme),
     ThemeChoice(ThemeMode.Light, "Light", Ic.lightMode),
     ThemeChoice(ThemeMode.Dark, "Dark", Ic.darkMode),
 )

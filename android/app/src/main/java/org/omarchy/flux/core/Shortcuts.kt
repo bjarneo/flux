@@ -2,6 +2,7 @@ package org.omarchy.flux.core
 
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import org.omarchy.flux.protocol.Packet
 import org.omarchy.flux.protocol.Types
@@ -15,6 +16,19 @@ data class Shortcut(val ref: String, val keys: String, val description: String)
 data class WorkspaceInfo(val id: Int, val windows: Int)
 
 /**
+ * 1 window of the computer. [address] focuses it, [app] is the name of its
+ * app, and [focused] is true for the window that has the focus.
+ */
+data class WindowInfo(
+    val address: String,
+    val workspace: Int,
+    val app: String,
+    val windowClass: String,
+    val title: String,
+    val focused: Boolean,
+)
+
+/**
  * The key bindings and the workspaces of a computer, for the Omarchy panel.
  * [loaded] is false until the first answer.
  */
@@ -24,7 +38,12 @@ data class ShortcutsState(
     val active: Int = 0,
     val error: String? = null,
     val loaded: Boolean = false,
-)
+    /** The windows of all workspaces, or null when the computer does not send them. */
+    val windows: List<WindowInfo>? = null,
+) {
+    /** The windows of the active workspace. */
+    val activeWindows: List<WindowInfo> get() = windows.orEmpty().filter { it.workspace == active }
+}
 
 /**
  * flux.shortcuts: the phone moves around Omarchy. The computer sends its
@@ -64,6 +83,9 @@ object Shortcuts {
 
     fun swap(d: Direction) = Packet(Types.FLUX_SHORTCUTS, bodyOf("action" to "swap", "direction" to d.key))
 
+    /** Focuses the window at [address]. The computer answers with the windows again. */
+    fun focusWindow(address: String) = Packet(Types.FLUX_SHORTCUTS, bodyOf("action" to "focusWindow", "address" to address))
+
     /**
      * The workspace action for a digit that the keyboard types with super,
      * as the Omarchy bindings do: super and a digit selects the workspace,
@@ -78,8 +100,8 @@ object Shortcuts {
     }
 
     /**
-     * Returns the state after an answer. An answer without the list keeps
-     * the list of [old]. An error keeps the rest of [old].
+     * Returns the state after an answer. An answer without the list or the
+     * windows keeps them from [old]. An error keeps the rest of [old].
      */
     fun merge(old: ShortcutsState?, p: Packet): ShortcutsState {
         val base = old ?: ShortcutsState()
@@ -95,12 +117,26 @@ object Shortcuts {
             val id = (o["id"] as? JsonPrimitive)?.intOrNull ?: return@mapNotNull null
             WorkspaceInfo(id, (o["windows"] as? JsonPrimitive)?.intOrNull ?: 0)
         }
+        val windows = p.array("windows")?.mapNotNull { e ->
+            val o = e as? JsonObject ?: return@mapNotNull null
+            val address = o.str("address")?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            val workspace = (o["workspace"] as? JsonPrimitive)?.intOrNull ?: return@mapNotNull null
+            val windowClass = o.str("class").orEmpty()
+            WindowInfo(
+                address, workspace,
+                app = o.str("app")?.takeIf { it.isNotEmpty() } ?: windowClass,
+                windowClass = windowClass,
+                title = o.str("title").orEmpty(),
+                focused = (o["focused"] as? JsonPrimitive)?.booleanOrNull == true,
+            )
+        }
         return base.copy(
             shortcuts = list ?: base.shortcuts,
             workspaces = workspaces ?: base.workspaces,
             active = p.int("active") ?: base.active,
             error = null,
             loaded = true,
+            windows = windows ?: base.windows,
         )
     }
 

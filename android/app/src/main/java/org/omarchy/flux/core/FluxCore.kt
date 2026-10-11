@@ -54,6 +54,7 @@ object FluxCore {
     @Volatile private var backend: LanBackend? = null
     private var browse: BrowseState? = null
     private var scanning = false
+    private var lastScan = 0L
     private var ringingFrom: String? = null
     private var initialized = false
 
@@ -271,7 +272,10 @@ object FluxCore {
     fun scan() = org.omarchy.flux.service.FluxService.start(app, org.omarchy.flux.service.FluxService.ACTION_SCAN)
 
     fun setScanning(on: Boolean) {
-        synchronized(lock) { scanning = on }
+        synchronized(lock) {
+            if (scanning && !on) lastScan = System.currentTimeMillis()
+            scanning = on
+        }
         publish()
     }
 
@@ -450,6 +454,7 @@ object FluxCore {
                 browse = browse,
                 listeningUdp = backend?.listeningUdp ?: true,
                 scanning = scanning,
+                lastScan = lastScan,
                 connecting = inConnectGrace(connectFrom, SystemClock.elapsedRealtime()),
                 enabled = settings.enabled,
                 theme = settings.theme,

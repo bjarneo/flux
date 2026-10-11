@@ -53,6 +53,72 @@ func TestParseWorkspaces(t *testing.T) {
 	}
 }
 
+func TestParseWindows(t *testing.T) {
+	data := []byte(`[
+		{"address":"0x30","mapped":true,"hidden":false,"at":[960,0],"class":"chromium","title":"Pull request","focusHistoryID":2,"workspace":{"id":2}},
+		{"address":"0x10","mapped":true,"hidden":false,"at":[0,0],"class":"Alacritty","title":"nvim","focusHistoryID":0,"workspace":{"id":2}},
+		{"address":"0x20","mapped":true,"hidden":false,"at":[0,600],"class":"Alacritty","title":"herdr","focusHistoryID":1,"workspace":{"id":2}},
+		{"address":"0x40","mapped":true,"hidden":false,"at":[0,0],"class":"spotify","title":"Weightless","focusHistoryID":3,"workspace":{"id":1}},
+		{"address":"0x50","mapped":true,"hidden":false,"at":[0,0],"class":"btop","title":"btop","focusHistoryID":4,"workspace":{"id":-98}},
+		{"address":"0x60","mapped":false,"hidden":false,"at":[0,0],"class":"x","title":"unmapped","focusHistoryID":5,"workspace":{"id":1}},
+		{"address":"0x70","mapped":true,"hidden":true,"at":[0,0],"class":"x","title":"hidden","focusHistoryID":6,"workspace":{"id":1}},
+		{"address":"bad","mapped":true,"hidden":false,"at":[0,0],"class":"x","title":"bad address","focusHistoryID":7,"workspace":{"id":1}}
+	]`)
+	got, err := parseWindows(data, func(c string) string { return "app " + c })
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Window{
+		{"0x40", 1, "app spotify", "spotify", "Weightless", false},
+		{"0x10", 2, "app Alacritty", "Alacritty", "nvim", true},
+		{"0x30", 2, "app chromium", "chromium", "Pull request", false},
+		{"0x20", 2, "app Alacritty", "Alacritty", "herdr", false},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("windows %+v, want %+v", got, want)
+	}
+	long, err := parseWindows([]byte(`[{"address":"0x1","mapped":true,"at":[0,0],"title":"`+strings.Repeat("é", 150)+`","workspace":{"id":1}}]`), className)
+	if err != nil || len(long) != 1 || len(long[0].Title) > maxWindowTitle {
+		t.Fatalf("long title: %v %v", long, err)
+	}
+	if _, err := parseWindows([]byte("not json"), className); err == nil {
+		t.Fatal("no error for bad JSON")
+	}
+}
+
+// The app name comes from the desktop entry with the class as its
+// StartupWMClass or its file name. The user folder wins, and the Name of a
+// desktop action does not count.
+func TestDesktopAppNames(t *testing.T) {
+	user, system := t.TempDir(), t.TempDir()
+	write := func(dir, file, text string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, file), []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(system, "com.mitchellh.ghostty.desktop", "[Desktop Entry]\nName=Ghostty\nExec=ghostty\n[Desktop Action new-window]\nName=New Window\n")
+	write(system, "foot.desktop", "[Desktop Entry]\nName=Foot\n")
+	write(user, "foot.desktop", "[Desktop Entry]\nName=My Foot\n")
+	write(system, "hey.desktop", "[Desktop Entry]\nName=HEY\nStartupWMClass=chrome-app.hey.com__-Default\n")
+	write(system, "broken.desktop", "[Desktop Action x]\nName=Not an app\n")
+	t.Setenv("XDG_DATA_HOME", filepath.Dir(user))
+	byClass, byID := readDesktopEntries([]string{user, system})
+	a := &appNames{byClass: byClass, byID: byID, read: time.Now()}
+	for class, want := range map[string]string{
+		"com.mitchellh.ghostty":        "Ghostty",
+		"foot":                         "My Foot",
+		"chrome-app.hey.com__-Default": "HEY",
+		"org.gnome.Nautilus":           "Nautilus",
+		"broken":                       "Broken",
+		"":                             "",
+	} {
+		if got := a.name(class); got != want {
+			t.Errorf("name(%q) = %q, want %q", class, got, want)
+		}
+	}
+}
+
 func TestActionLua(t *testing.T) {
 	cases := []struct {
 		body shortcutBody
@@ -64,6 +130,7 @@ func TestActionLua(t *testing.T) {
 		{shortcutBody{Action: "swap", Direction: "d"}, `hl.dsp.window.swap({ direction = "d" })`},
 		{shortcutBody{Action: "close"}, `hl.dsp.window.close()`},
 		{shortcutBody{Action: "scratchpad"}, `hl.dsp.workspace.toggle_special("scratchpad")`},
+		{shortcutBody{Action: "focusWindow", Address: "0x5f6b3fd55b00"}, `hl.dsp.focus({ window = "address:0x5f6b3fd55b00" })`},
 	}
 	for _, c := range cases {
 		got, err := actionLua(c.body)
@@ -77,6 +144,9 @@ func TestActionLua(t *testing.T) {
 		{Action: "focus", Direction: "x"},
 		{Action: "swap", Direction: `l" }) os.exit() --`},
 		{Action: "exec"},
+		{Action: "focusWindow"},
+		{Action: "focusWindow", Address: "0x12 })"},
+		{Action: "focusWindow", Address: "class:firefox"},
 	} {
 		if lua, err := actionLua(bad); err == nil {
 			t.Errorf("%+v: no error, Lua %q", bad, lua)
@@ -126,6 +196,7 @@ func fakeHyprctl(t *testing.T, delay string) string {
 		"case \"$*\" in\n" +
 		"'-j workspaces') echo '[{\"id\":1,\"windows\":2}]' ;;\n" +
 		"'-j activeworkspace') echo '{\"id\":1}' ;;\n" +
+		"'-j clients') echo '[]' ;;\n" +
 		"'-j binds') echo '[]' ;;\n" +
 		"esac\n"
 	if err := os.WriteFile(filepath.Join(dir, "hyprctl"), []byte(script), 0o755); err != nil {
@@ -182,7 +253,8 @@ func TestShortcutsWhileLocked(t *testing.T) {
 	l.mu.Lock()
 	answer := l.sent[0]
 	l.mu.Unlock()
-	if answer["error"] != nil || answer["workspaces"] == nil || answer["shortcuts"] != nil {
+	// The windows stay hidden while the screen is locked.
+	if answer["error"] != nil || answer["workspaces"] == nil || answer["shortcuts"] != nil || answer["windows"] != nil {
 		t.Fatalf("answer %v", answer)
 	}
 }
@@ -211,7 +283,8 @@ func TestShortcutsOneRequestInFlight(t *testing.T) {
 	if n := len(l.states()); n != 2 {
 		t.Fatalf("%d answers, want 2", n)
 	}
-	if got := hyprctlCalls(t, calls); len(got) != 4 {
+	// Each answer reads the workspaces, the active workspace, and the windows.
+	if got := hyprctlCalls(t, calls); len(got) != 6 {
 		t.Fatalf("hyprctl ran %d times: %q", len(got), got)
 	}
 }

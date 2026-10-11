@@ -15,7 +15,7 @@ Run it with a debug build installed and USB debugging on:
 
 With --desktop, the peer streams a monitor of this computer to the Remote
 desktop screen of the phone, like fluxd, and prints the touches. It also
-answers the Omarchy panel with sample shortcuts and workspaces, and prints
+answers the Omarchy panel with sample shortcuts, workspaces, and windows, and prints
 the actions. It does not run them.
 
 Requires: python3, openssl, adb. --desktop also requires gpu-screen-recorder.
@@ -424,10 +424,19 @@ def main():
         ("SUPER SHIFT M", "Music"), ("SUPER ESCAPE", "System menu"), ("SUPER CTRL E", "Emojis"),
     ])]
     spaces = {"active": 1, "windows": {1: 2, 2: 1, 4: 3}}
+    # Sample windows: the workspace, the app, the class, and the title. The first window has the focus.
+    windows = [
+        {"address": f"0x{100 + i:x}", "workspace": ws, "app": app, "class": cls, "title": title, "focused": i == 0}
+        for i, (ws, app, cls, title) in enumerate([
+            (1, "Alacritty", "Alacritty", "nvim ~/code/flux"), (1, "Chromium", "chromium", "Pull request #412"),
+            (2, "Spotify", "spotify", "Marconi Union · Weightless"), (4, "Obsidian", "obsidian", "Flux notes"),
+            (4, "Signal", "signal", "Signal"), (4, "Alacritty", "Alacritty", "herdr · billing"),
+        ])
+    ]
 
     def shortcut_state(with_list):
         body = {"workspaces": [{"id": i, "windows": n} for i, n in sorted(spaces["windows"].items())],
-                "active": spaces["active"]}
+                "active": spaces["active"], "windows": windows}
         if with_list:
             body["shortcuts"] = shortcuts
         return body
@@ -529,6 +538,9 @@ def main():
             elif action == "moveToWorkspace":
                 target = body.get("workspace", 1)
                 spaces["windows"][target] = spaces["windows"].get(target, 0) + 1
+            elif action == "focusWindow":
+                for w in windows:
+                    w["focused"] = w["address"] == body.get("address")
             send("flux.shortcuts", shortcut_state(bool(body.get("request"))))
         elif kind == "flux.tunnel":
             waiter = tunnels.get(body.get("id"))

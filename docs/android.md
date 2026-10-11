@@ -315,7 +315,7 @@ To send an Omarchy theme from the test peer, give it a `colors.toml` file:
 python3 tools/test_peer.py --theme ~/.local/state/omarchy/current/theme/colors.toml
 ```
 
-To test the remote desktop, add `--desktop`. The peer streams the first monitor of this computer with `gpu-screen-recorder`, like `fluxd`, and prints the touches. It also answers the Omarchy panel with sample shortcuts and workspaces. It does not run the touches or the shortcuts:
+To test the remote desktop, add `--desktop`. The peer streams the first monitor of this computer with `gpu-screen-recorder`, like `fluxd`, and prints the touches. It also answers the Omarchy panel with sample shortcuts, workspaces, and windows. It does not run the touches or the shortcuts:
 
 ```bash
 python3 tools/test_peer.py --desktop
@@ -354,7 +354,7 @@ The pages are:
 - `paired` for the success state of a new pairing on the sample computer to pair. It needs `FLUX_DEMO=1`. The success state shows for 6 seconds.
 - `icon` for the launcher and notification icons.
 
-With `FLUX_DEMO=1`, the Inbox also shows a sample approval, 2 sample transfers, and a sample clip, and the sample computer shows the Omarchy panel. A tap on the sample approval does not open the approval screen.
+With `FLUX_DEMO=1`, the Inbox also shows a sample approval, 2 sample transfers, and a sample clip. **Send** shows a sample thread, and the sample computer shows the Omarchy panel with windows. A tap on the sample approval does not open the approval screen.
 
 To show the prompt of a webcam request on an emulator, run:
 

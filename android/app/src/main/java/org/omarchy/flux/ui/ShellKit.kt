@@ -32,7 +32,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -330,16 +329,10 @@ fun TargetPickerDialog(picker: TargetPicker) {
     )
 }
 
-/**
- * The most used actions on the computer in scope: send the clipboard, send
- * files, and open a link. [linkTo] holds the computer of the link dialog,
- * or null while the dialog is closed.
- */
+/** The most used actions on the computer in scope: send the clipboard, and send files. */
 class SendTools(
     val sendClipboard: () -> Unit,
     val sendFiles: () -> Unit,
-    val openLink: () -> Unit,
-    val linkTo: MutableState<DeviceUi?>,
 )
 
 @Composable
@@ -354,7 +347,6 @@ fun rememberSendTools(devices: List<DeviceUi>, scope: String?, picker: TargetPic
     val all by rememberUpdatedState(devices)
     val inScope by rememberUpdatedState(scope)
     return remember(picker, pick) {
-        val linkTo = mutableStateOf<DeviceUi?>(null)
         SendTools(
             sendClipboard = { picker.run(target(inScope, all), "Send the clipboard to") { Plugins.sendClipboard(FluxCore, it.id) } },
             sendFiles = {
@@ -363,8 +355,6 @@ fun rememberSendTools(devices: List<DeviceUi>, scope: String?, picker: TargetPic
                     pick.launch(arrayOf("*/*"))
                 }
             },
-            openLink = { picker.run(target(inScope, all), "Open a link on") { linkTo.value = it } },
-            linkTo = linkTo,
         )
     }
 }

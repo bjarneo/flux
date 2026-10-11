@@ -24,6 +24,8 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.add
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
@@ -226,19 +228,25 @@ fun FluxShell(
                 }
             } else {
                 // The bars are part of the destination, so that the back gesture shows the destination as it is after Back.
-                ShellFrame(wide, nav.tab, needs, select, top = { ShellTopBar(state, scope, onScope) }) {
+                // Each destination draws its own header, so that the header fades with it.
+                ShellFrame(wide, nav.tab, needs, select) {
                     tabs.AnimatedContent(Modifier.fillMaxSize(), transitionSpec = { fadeThrough(reduce) }) { tab ->
                         val active = settled && transition.settledVisible()
                         Box(Modifier.fillMaxSize().semantics { paneTitle = tab.label }) {
                             when (tab) {
-                                Tab.Inbox -> InboxScreen(
-                                    state, arranged, active, notices, actions,
-                                    wide = wide,
-                                    onSwipe = { arrangement = arrangement.swipe(it) },
-                                    onPromote = { arrangement = arrangement.promote(it) },
-                                )
-                                Tab.Send -> SendScreen(state, scope, picker, tools, onOpen = ::open, onPair = toComputers)
-                                Tab.Control -> ControlScreen(state, scope, picker, onOpen = ::open, onPair = toComputers)
+                                Tab.Inbox -> Column(Modifier.fillMaxSize()) {
+                                    ShellTopBar(state, scope, onScope)
+                                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                                        InboxScreen(
+                                            state, arranged, active, notices, actions,
+                                            wide = wide,
+                                            onSwipe = { arrangement = arrangement.swipe(it) },
+                                            onPromote = { arrangement = arrangement.promote(it) },
+                                        )
+                                    }
+                                }
+                                Tab.Send -> SendScreen(state, scope, onScope, picker, tools, onOpen = ::open, onPair = toComputers)
+                                Tab.Control -> ControlScreen(state, scope, onScope, picker, onOpen = ::open, onPair = toComputers)
                                 Tab.Computers -> ComputersScreen(state, scope, onScope, onPair, onUnpair, onSync = toSync, onAbout = toAbout)
                             }
                         }
@@ -247,7 +255,6 @@ fun FluxShell(
             }
         }
         TargetPickerDialog(picker)
-        LinkDialog(tools)
     }
 }
 
@@ -256,9 +263,10 @@ private fun Transition<EnterExitState>.settledVisible(): Boolean =
     currentState == EnterExitState.Visible && targetState == EnterExitState.Visible
 
 /**
- * The frame of a destination: the top bar, the content, and the navigation
- * bar at the bottom. A wide window shows a navigation rail at the side in
- * the place of the navigation bar.
+ * The frame of a destination: the content, and the navigation bar at the
+ * bottom. A wide window shows a navigation rail at the side in the place
+ * of the navigation bar. The content draws its own header under the status
+ * bar.
  */
 @Composable
 private fun ShellFrame(
@@ -266,25 +274,23 @@ private fun ShellFrame(
     tab: Tab,
     needs: Int,
     onSelect: (Tab) -> Unit,
-    top: @Composable () -> Unit,
     content: @Composable () -> Unit,
 ) {
     if (wide) {
         Row(Modifier.fillMaxSize()) {
             ShellNavRail(tab, needs, onSelect)
-            Column(Modifier.weight(1f).fillMaxHeight()) {
-                top()
-                // No bar holds the bottom inset, so the content keeps clear of the gesture area.
-                Box(Modifier.weight(1f).fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
-                    content()
-                }
+            // No bar holds the bottom inset, so the content keeps clear of the gesture area.
+            Box(Modifier.weight(1f).fillMaxHeight().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
+                content()
             }
         }
     } else {
         Column(Modifier.fillMaxSize()) {
-            top()
-            Box(Modifier.weight(1f).fillMaxWidth()) { content() }
-            ShellNavBar(tab, needs, onSelect)
+            // The keyboard covers the navigation bar, so a field of the content moves up only by the rest of the keyboard.
+            val bar = WindowInsets.navigationBars.add(WindowInsets(bottom = NavBarHeight))
+            Box(Modifier.weight(1f).fillMaxWidth().consumeWindowInsets(bar)) { content() }
+            // The other destinations end with a dock, which meets the bar with no fade.
+            ShellNavBar(tab, needs, onSelect, fade = tab == Tab.Inbox)
         }
     }
 }
@@ -403,17 +409,19 @@ private val NavFade = 24.dp
 /**
  * The navigation bar of a compact window: 4 destinations, each with an
  * icon in a pill and a label. The pill of the open destination has a fill.
- * The Inbox shows the number of items that need the user on its pill. The
- * content fades out above the bar.
+ * The Inbox shows the number of items that need the user on its pill. With
+ * [fade], the content fades out above the bar.
  */
 @Composable
-private fun ShellNavBar(tab: Tab, needs: Int, onSelect: (Tab) -> Unit) {
+private fun ShellNavBar(tab: Tab, needs: Int, onSelect: (Tab) -> Unit, fade: Boolean) {
     val bg = Tn.bg
     Row(
         Modifier.fillMaxWidth()
             .drawBehind {
-                val fade = NavFade.toPx()
-                drawRect(Brush.verticalGradient(listOf(bg.copy(alpha = 0f), bg), startY = -fade, endY = 0f), Offset(0f, -fade), Size(size.width, fade))
+                if (fade) {
+                    val h = NavFade.toPx()
+                    drawRect(Brush.verticalGradient(listOf(bg.copy(alpha = 0f), bg), startY = -h, endY = 0f), Offset(0f, -h), Size(size.width, h))
+                }
             }
             .background(bg)
             .windowInsetsPadding(WindowInsets.navigationBars)

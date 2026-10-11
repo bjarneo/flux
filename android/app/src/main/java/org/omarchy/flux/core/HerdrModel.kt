@@ -631,6 +631,45 @@ sealed interface AgentAlert {
 }
 
 /**
+ * Keeps the time that each agent of 1 computer got its status, as this
+ * phone saw it. The first state after a connection only sets the start
+ * values, so the time of a status that started before is not known. An
+ * unknown status keeps the last known status and its time. The core lock
+ * guards it.
+ */
+class AgentClock {
+    private val since = HashMap<String, Pair<AgentStatus, Long>>()
+    private var fresh = true
+
+    /** Makes the next state set the start values. Call it when the computer connects. */
+    fun restart() {
+        fresh = true
+    }
+
+    /**
+     * Takes a new agent list at the time [now] and returns the start time of
+     * the status of each agent by pane, in milliseconds since the epoch. An
+     * agent whose start time is not known is not in the map.
+     */
+    fun update(agents: List<HerdrAgent>, now: Long): Map<String, Long> {
+        val seen = HashSet<String>()
+        for (a in agents) {
+            seen += a.pane
+            if (a.status == AgentStatus.Unknown) continue
+            val prev = since[a.pane]
+            when {
+                prev?.first == a.status -> Unit
+                prev == null && fresh -> since[a.pane] = a.status to 0L
+                else -> since[a.pane] = a.status to now
+            }
+        }
+        since.keys.retainAll(seen)
+        fresh = false
+        return since.filterValues { it.second > 0 }.mapValues { it.value.second }
+    }
+}
+
+/**
  * Finds the status changes of the agents on one computer. The first state
  * after a connection only sets the start values, so it posts nothing. The
  * core lock guards it.

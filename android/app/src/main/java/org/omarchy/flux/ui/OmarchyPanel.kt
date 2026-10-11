@@ -78,28 +78,11 @@ private val KeyHeight = 48.dp
 @Composable
 fun OmarchyPanel(d: DeviceUi, modifier: Modifier = Modifier) {
     val haptic = LocalHapticFeedback.current
-    fun send(p: Packet) {
-        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-        if (!RemoteInput.send(FluxCore, d.id, p)) FluxCore.toast("${d.name} is not reachable")
-    }
-    // The list comes once. The workspaces come again while the panel is visible.
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(d.id) {
-        RemoteInput.send(FluxCore, d.id, Shortcuts.request())
-        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (true) {
-                delay(REFRESH_MS)
-                RemoteInput.send(FluxCore, d.id, Shortcuts.refresh())
-            }
-        }
-    }
+    val send = rememberShortcutsLink(d)
     val state = d.shortcuts
     var all by rememberSaveable { mutableStateOf(false) }
-    var pins by remember { mutableStateOf(FluxCore.settings.pinnedShortcuts ?: Shortcuts.DEFAULT_PINS) }
-    fun togglePin(s: Shortcut) {
-        pins = if (s.description in pins) pins - s.description else pins + s.description
-        FluxCore.settings.pinnedShortcuts = pins
-    }
+    val pinState = rememberShortcutPins()
+    val pins = pinState.pins
 
     Column(modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(TileGap)) {
         when {
@@ -161,11 +144,54 @@ fun OmarchyPanel(d: DeviceUi, modifier: Modifier = Modifier) {
                 all = false
                 send(Shortcuts.run(it))
             },
-            onPin = ::togglePin,
+            onPin = pinState::toggle,
             onDismiss = { all = false },
         )
     }
 }
+
+/**
+ * Asks the computer [d] for its key bindings and workspaces once, and for
+ * its workspaces again each [REFRESH_MS] while the screen is visible. It
+ * returns the function that sends a packet of the panel with a tick of the
+ * phone.
+ */
+@Composable
+internal fun rememberShortcutsLink(d: DeviceUi): (Packet) -> Unit {
+    val haptic = LocalHapticFeedback.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(d.id) {
+        RemoteInput.send(FluxCore, d.id, Shortcuts.request())
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                delay(REFRESH_MS)
+                RemoteInput.send(FluxCore, d.id, Shortcuts.refresh())
+            }
+        }
+    }
+    val id = d.id
+    val name = d.name
+    return remember(id, name, haptic) {
+        { p: Packet ->
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            if (!RemoteInput.send(FluxCore, id, p)) FluxCore.toast("$name is not reachable")
+        }
+    }
+}
+
+/** The shortcuts that the panel pins, by description. The settings keep them. */
+internal class ShortcutPins(initial: List<String>) {
+    var pins by mutableStateOf(initial)
+        private set
+
+    fun toggle(s: Shortcut) {
+        pins = if (s.description in pins) pins - s.description else pins + s.description
+        FluxCore.settings.pinnedShortcuts = pins
+    }
+}
+
+@Composable
+internal fun rememberShortcutPins(): ShortcutPins = remember { ShortcutPins(FluxCore.settings.pinnedShortcuts ?: Shortcuts.DEFAULT_PINS) }
 
 /** Workspaces 1 to 10 in 2 rows. The active one is filled, and a workspace with windows has a dot. */
 @Composable
@@ -282,7 +308,7 @@ private fun LaunchKey(s: Shortcut, modifier: Modifier, onClick: () -> Unit) {
  * star pins it to the panel. A dictation replaces the search.
  */
 @Composable
-private fun ShortcutSheet(all: List<Shortcut>, pins: List<String>, onRun: (Shortcut) -> Unit, onPin: (Shortcut) -> Unit, onDismiss: () -> Unit) {
+internal fun ShortcutSheet(all: List<Shortcut>, pins: List<String>, onRun: (Shortcut) -> Unit, onPin: (Shortcut) -> Unit, onDismiss: () -> Unit) {
     var query by rememberSaveable { mutableStateOf("") }
     val voice = rememberVoiceTyping { query = DictationText.query(it) }
     FluxSheet(onDismiss) {

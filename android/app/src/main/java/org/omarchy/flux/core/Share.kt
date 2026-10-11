@@ -138,18 +138,24 @@ object Share {
     ) {
         val mime = Android.mimeType(name)
         val transfer = InboxFeed.transferStarted(d.id, from, name, incoming = true)
+        val entry = SendLog.fileStarted(d.id, from, name, p.payloadSize, incoming = true)
         val dl = runCatching { Android.createDownload(core.app, name, mime) }.getOrElse {
             InboxFeed.transferEnded(transfer, false)
+            SendLog.fileEnded(entry, false)
             core.toast("Cannot save $name: ${it.message}")
             d.send(TunnelPackets.failed(token, "cannot save the file"))
             return
         }
         // The computer blocks incoming connections. This phone listens, and the computer connects.
-        val ok = runCatching { Tunnel.receive(tls, cert, token, p.payloadSize, dl.stream, announce = { d.send(it) }) }
+        val gate = ProgressGate(p.payloadSize)
+        val ok = runCatching {
+            Tunnel.receive(tls, cert, token, p.payloadSize, dl.stream, announce = { d.send(it) }) { if (gate.pass(it)) SendLog.fileProgress(entry, it) }
+        }
             .onFailure { Log.w(TAG, "receive $name failed", it) }
             .isSuccess
         Android.finishDownload(core.app, dl, ok)
         InboxFeed.transferEnded(transfer, ok)
+        SendLog.fileEnded(entry, ok)
         if (!ok) {
             core.toast("Receiving $name failed")
             return
@@ -202,6 +208,7 @@ object Share {
                 val sent = ArrayList<String>()
                 for ((uri, name, size) in files) {
                     val transfer = InboxFeed.transferStarted(d.id, d.identity.deviceName, name, incoming = false)
+                    val entry = SendLog.fileStarted(d.id, d.identity.deviceName, name, size, incoming = false)
                     val ok = runCatching {
                         // The protocol needs the exact size before the transfer.
                         // A source without a size goes through a cache file.
@@ -224,13 +231,16 @@ object Share {
                                     "totalPayloadSize" to total,
                                 )
                                 d.send(Packet(Types.SHARE, body, payloadSize = length, payloadPort = server.localPort))
-                                Payload.send(tls, server, input, length, cert)
+                                val gate = ProgressGate(length)
+                                SendLog.fileProgress(entry, 0, length)
+                                Payload.send(tls, server, input, length, cert, progress = { if (gate.pass(it)) SendLog.fileProgress(entry, it) })
                             }
                         } finally {
                             temp?.delete()
                         }
                     }.onFailure { Log.w(TAG, "send $name failed", it) }.isSuccess
                     InboxFeed.transferEnded(transfer, ok)
+                    SendLog.fileEnded(entry, ok)
                     if (ok) sent += name else core.toast("Sending $name to ${d.identity.deviceName} failed")
                 }
                 // The message names the computer, so that the user knows where the files went.
@@ -257,6 +267,7 @@ object Share {
             return
         }
         core.io.execute {
+            val entry = SendLog.fileStarted(d.id, d.identity.deviceName, name, 0, incoming = false)
             val result = runCatching {
                 val resolver = core.app.contentResolver
                 var length = -1L
@@ -283,12 +294,15 @@ object Share {
                             server.close()
                             error("Not connected")
                         }
-                        Payload.send(tls, server, input, length, cert)
+                        val gate = ProgressGate(length)
+                        SendLog.fileProgress(entry, 0, length)
+                        Payload.send(tls, server, input, length, cert, progress = { if (gate.pass(it)) SendLog.fileProgress(entry, it) })
                     }
                 } finally {
                     temp?.delete()
                 }
             }.onFailure { Log.w(TAG, "send $name failed", it) }
+            SendLog.fileEnded(entry, result.isSuccess)
             onResult(result)
         }
     }
@@ -305,7 +319,9 @@ object Share {
      */
     fun sendScan(core: FluxCore, id: String, text: String): Boolean {
         val d = core.device(id) ?: return false
-        return d.send(Packet(Types.SHARE, bodyOf("text" to text, "scan" to true)))
+        val sent = d.send(Packet(Types.SHARE, bodyOf("text" to text, "scan" to true)))
+        if (sent) SendLog.text(d.id, d.identity.deviceName, text)
+        return sent
     }
 
     /**
@@ -314,15 +330,25 @@ object Share {
      */
     fun sendLink(core: FluxCore, id: String, link: String): Boolean {
         val d = core.device(id) ?: return false
-        return d.send(Packet(Types.SHARE, bodyOf("url" to link)))
+        val sent = d.send(Packet(Types.SHARE, bodyOf("url" to link)))
+        if (sent) SendLog.link(d.id, d.identity.deviceName, link)
+        return sent
     }
 
-    /** Sends text or a link from the share sheet. Only a web link goes as a link, see [WebUrl]. */
+    /**
+     * Sends text or a link from the share sheet or the composer of Send.
+     * Only a web link goes as a link, see [WebUrl].
+     */
     fun sendText(core: FluxCore, id: String, text: String) {
         val d = core.device(id) ?: return
+        val name = d.identity.deviceName
         val url = WebUrl.of(text)
-        d.send(Packet(Types.SHARE, if (url != null) bodyOf("url" to url) else bodyOf("text" to text)))
-        core.toast(if (url != null) "Link sent to ${d.identity.deviceName}" else "Text sent to ${d.identity.deviceName}")
+        if (!d.send(Packet(Types.SHARE, if (url != null) bodyOf("url" to url) else bodyOf("text" to text)))) {
+            core.toast("$name is not reachable")
+            return
+        }
+        if (url != null) SendLog.link(d.id, name, url) else SendLog.text(d.id, name, text)
+        core.toast(if (url != null) "Link sent to $name" else "Text sent to $name")
     }
 
     /**

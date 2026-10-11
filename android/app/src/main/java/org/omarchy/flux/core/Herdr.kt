@@ -78,6 +78,7 @@ object HerdrSync {
     /** Makes the next agent list set the start values. The core lock is held. */
     fun onConnected(d: Device) {
         d.herdrTracker.restart()
+        d.herdrClock.restart()
     }
 
     /** Handles flux.herdr from a computer. The core lock is held. */
@@ -86,6 +87,7 @@ object HerdrSync {
             "state" -> {
                 val state = parseHerdrState(p.body) ?: return
                 d.herdr = state
+                d.herdrSince = d.herdrClock.update(state.agents, System.currentTimeMillis())
                 val alerts = d.herdrTracker.update(state.agents)
                 if (alerts.isNotEmpty()) {
                     val name = d.identity.deviceName

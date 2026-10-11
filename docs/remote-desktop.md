@@ -142,6 +142,11 @@ To use the panel without the video, select **Omarchy panel** in **Control**.
 
 The active workspace is blue. A workspace with windows has a dot.
 The panel reads the workspaces again every 3 seconds.
+
+The **Omarchy panel** screen of **Control** in Flux for Android also lists the windows of the active workspace, with the app name and the window title.
+Tap a window to focus it. The focused window is blue.
+The dock at the bottom has the arrows and the window actions. Hold an arrow to swap the window in that direction.
+The list needs a `fluxd` that sends the windows. While the computer is locked, the list keeps the last windows that it got.
 The panel pins the Omarchy menu, the Apps menu, the terminal, the browser, the file manager, and the screenshot until you pin others.
 
 The panel needs `remote_input = true` and Hyprland with a Lua configuration, as in Omarchy.
@@ -331,10 +336,15 @@ The Omarchy panel uses `flux.shortcuts`. Each packet needs `remote_input = true`
 | `{"action": "moveToWorkspace", "workspace": 3}` | Move the focused window to the workspace |
 | `{"action": "focus", "direction": "l"}` | Focus the window at the left. The directions are `l`, `r`, `u`, and `d`. |
 | `{"action": "swap", "direction": "l"}` | Swap the window with the window at the left |
+| `{"action": "focusWindow", "address": "0x5f6b3fd55b00"}` | Focus the window with that Hyprland address |
 | `{"action": "close"}` | Also `fullscreen`, `float`, `split`, `scratchpad`, `nextWindow`, `nextWorkspace`, and `previousWorkspace` |
 
-`fluxd` answers with `{"shortcuts": [{"ref", "keys", "description"}], "workspaces": [{"id", "windows"}], "active": 3}`, or with `{"error": "..."}`.
+`fluxd` answers with `{"shortcuts": [{"ref", "keys", "description"}], "workspaces": [{"id", "windows"}], "active": 3, "windows": [...]}`, or with `{"error": "..."}`.
 An answer to an action has no `shortcuts`.
+
+Each entry of `windows` is `{"address", "workspace", "app", "class", "title", "focused"}`, in the order of the workspaces and then from the top left.
+`app` is the `Name` of the desktop entry whose `StartupWMClass` or file name is the class, else the last part of the class.
+`fluxd` sends `windows` only while the computer is unlocked, so that the lock screen keeps the window titles private.
 
 While the computer is locked, `fluxd` answers each body except `{}` with `{"error": "Unlock the computer first"}`.
 It finds the lock in 3 ways: the `LockedHint` of the logind session, a running `hyprlock`, or a Hyprland session lock on a monitor.

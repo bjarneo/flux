@@ -35,6 +35,46 @@ class ShortcutsTest {
         assertEquals("swap", swap.string("action"))
         assertEquals("l", swap.string("direction"))
         assertEquals("u", Shortcuts.focus(Shortcuts.Direction.Up).string("direction"))
+        val focus = Shortcuts.focusWindow("0x5f6b3fd55b00")
+        assertEquals("focusWindow", focus.string("action"))
+        assertEquals("0x5f6b3fd55b00", focus.string("address"))
+    }
+
+    @Test
+    fun mergeReadsTheWindowsAndKeepsThemForAnAnswerWithout() {
+        val w = { address: String, ws: Int, app: String?, cls: String, focused: Boolean ->
+            mapOf("address" to address, "workspace" to ws, "app" to app, "class" to cls, "title" to "t $address", "focused" to focused)
+        }
+        val first = Shortcuts.merge(
+            null,
+            Packet(
+                Types.FLUX_SHORTCUTS,
+                bodyOf(
+                    "workspaces" to listOf(mapOf("id" to 2, "windows" to 2)),
+                    "active" to 2,
+                    "windows" to listOf(
+                        w("0x1", 2, "Ghostty", "com.mitchellh.ghostty", true),
+                        w("0x2", 2, null, "chromium", false),
+                        w("0x3", 5, "Signal", "signal", false),
+                        mapOf("address" to "", "workspace" to 2),
+                        mapOf("address" to "0x4"),
+                    ),
+                ),
+            ),
+        )
+        assertEquals(
+            listOf(
+                WindowInfo("0x1", 2, "Ghostty", "com.mitchellh.ghostty", "t 0x1", true),
+                WindowInfo("0x2", 2, "chromium", "chromium", "t 0x2", false),
+            ),
+            first.activeWindows,
+        )
+        assertEquals(3, first.windows?.size)
+        // A computer that is locked sends the workspaces without the windows.
+        val locked = Shortcuts.merge(first, Packet(Types.FLUX_SHORTCUTS, bodyOf("workspaces" to emptyList<Any>(), "active" to 5)))
+        assertEquals(listOf("0x3"), locked.activeWindows.map { it.address })
+        // An older computer sends no windows at all.
+        assertNull(Shortcuts.merge(null, Packet(Types.FLUX_SHORTCUTS, bodyOf("active" to 1))).windows)
     }
 
     @Test

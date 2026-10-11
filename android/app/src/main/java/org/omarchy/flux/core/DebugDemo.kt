@@ -100,8 +100,8 @@ object DebugDemo {
                 charging = true,
                 players = listOf("Spotify", "Firefox"),
                 player = PlayerState(
-                    name = "Spotify", title = "Weightless", artist = "Marconi Union", album = "Weightless",
-                    playing = true, position = 192_000, length = 489_000, canSeek = true,
+                    name = "Spotify", title = "Weightless", artist = "Marconi Union", album = "Weightless (Ambient Transmissions Vol. 2)",
+                    playing = true, position = 192_000, length = 489_000, canSeek = true, volume = 60,
                     updatedAt = SystemClock.elapsedRealtime(),
                 ),
                 commands = listOf(

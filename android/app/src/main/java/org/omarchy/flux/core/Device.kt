@@ -68,6 +68,10 @@ class Device(private val core: FluxCore, var identity: Identity) {
     /** The terminal session of the pane that this phone streams, or null when none is open. */
     var herdrTerminal: HerdrTerminalSession? = null
     val herdrTracker = HerdrTracker()
+    val herdrClock = AgentClock()
+
+    /** The start time of the status of each agent, by pane. See [AgentClock]. */
+    var herdrSince: Map<String, Long> = emptyMap()
 
     /** True when the computer accepts remote input, or null before it tells. */
     var remoteInput: Boolean? = null
@@ -128,6 +132,7 @@ class Device(private val core: FluxCore, var identity: Identity) {
         commandsLoaded = commandsLoaded,
         herdrSupported = Types.FLUX_HERDR in identity.incoming,
         herdr = herdr,
+        agentSince = herdrSince,
         herdrOutput = herdrOutput,
         herdrReply = herdrReply,
         herdrAction = herdrAction,

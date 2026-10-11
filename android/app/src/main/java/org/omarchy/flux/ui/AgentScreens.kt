@@ -155,12 +155,12 @@ private fun statusColor(s: AgentStatus): Color = when (s) {
 /** The color of the status word. The dim color is not for text, so an idle or unknown status takes the second ink. */
 @Composable
 @ReadOnlyComposable
-private fun statusInk(s: AgentStatus): Color = when (s) {
+internal fun statusInk(s: AgentStatus): Color = when (s) {
     AgentStatus.Idle, AgentStatus.Unknown -> Tn.sub
     else -> statusColor(s)
 }
 
-private fun statusLabel(s: AgentStatus): String = when (s) {
+internal fun statusLabel(s: AgentStatus): String = when (s) {
     AgentStatus.Blocked -> "Needs input"
     AgentStatus.Done -> "Done"
     AgentStatus.Working -> "Working"
@@ -653,7 +653,7 @@ internal fun Modifier.dockFrame(shape: DockShape): Modifier {
  * free at its end.
  */
 @Composable
-private fun DockLayout(
+internal fun DockLayout(
     modifier: Modifier,
     thread: @Composable (bottom: Dp) -> Unit,
     dock: @Composable (DockShape) -> Unit,

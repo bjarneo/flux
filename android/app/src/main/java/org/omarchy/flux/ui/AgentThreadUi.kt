@@ -11,7 +11,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -57,7 +56,6 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -363,33 +361,22 @@ internal fun LivePill(on: Boolean, onClick: () -> Unit) {
  */
 @Composable
 internal fun AgentStrip(agents: List<HerdrAgent>, pane: String, elapsed: String, onPick: (String) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 10.dp, end = 10.dp, bottom = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+    PillStrip {
         for (a in agents) {
             val on = a.pane == pane
-            val shape = RoundedCornerShape(18.dp)
-            Row(
-                Modifier.overhang(6.dp).clip(shape)
-                    .clickable(onClickLabel = "Open ${a.project.ifEmpty { a.agent }}", role = Role.Tab) { if (!on) onPick(a.pane) }
-                    .semantics { stateDescription = if (on) "Shown, ${statusWord(a.status)}" else statusWord(a.status) }
-                    .padding(vertical = 6.dp).height(36.dp).clip(shape)
-                    .background(if (on) Tn.accentTile else Tn.tile).border(1.dp, if (on) Tn.blue else Tn.line, shape)
-                    .padding(start = 11.dp, end = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                StatusMark(a.status)
-                T(a.project.ifEmpty { a.title.ifEmpty { a.pane } }, size = 13, weight = FontWeight.Medium, maxLines = 1)
-                // The agent on screen shows the time of its step when its output shows one.
-                val meta = when {
-                    a.status == AgentStatus.Done -> "done"
-                    on && elapsed.isNotEmpty() -> elapsed
-                    else -> a.agent
-                }
-                T(meta, size = 11, color = Tn.sub, family = Mono, maxLines = 1)
+            // The agent on screen shows the time of its step when its output shows one.
+            val meta = when {
+                a.status == AgentStatus.Done -> "done"
+                on && elapsed.isNotEmpty() -> elapsed
+                else -> a.agent
             }
+            Pill(
+                a.project.ifEmpty { a.title.ifEmpty { a.pane } }, on,
+                onClick = { if (!on) onPick(a.pane) },
+                meta = meta,
+                clickLabel = "Open ${a.project.ifEmpty { a.agent }}",
+                state = if (on) "Shown, ${statusWord(a.status)}" else statusWord(a.status),
+            ) { StatusMark(a.status) }
         }
     }
 }

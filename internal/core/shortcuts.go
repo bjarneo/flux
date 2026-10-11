@@ -28,6 +28,10 @@ import (
 // it waits as the next request. A later request replaces it, and keeps its
 // request for the binding list.
 //
+// While the screen is unlocked, each answer also lists the windows, so that
+// the phone shows the windows of the active workspace and focuses 1 of
+// them by its address.
+//
 // Hyprland 0.56 and later use a Lua configuration. Each binding then calls
 // a Lua function, and hyprctl binds shows the dispatcher "__lua" with the
 // registry reference of that function. fluxd calls a binding only by a
@@ -128,6 +132,8 @@ type shortcutBody struct {
 	Action    string `json:"action"`
 	Workspace int    `json:"workspace"`
 	Direction string `json:"direction"`
+	// Address is the window of the action focusWindow.
+	Address string `json:"address"`
 }
 
 // fixedActions are the actions without a value, as Lua dispatchers. They
@@ -171,6 +177,11 @@ func actionLua(b shortcutBody) (string, error) {
 			return fmt.Sprintf(`hl.dsp.focus({ direction = "%s" })`, b.Direction), nil
 		}
 		return fmt.Sprintf(`hl.dsp.window.swap({ direction = "%s" })`, b.Direction), nil
+	case "focusWindow":
+		if !windowAddress.MatchString(b.Address) {
+			return "", fmt.Errorf("the window %s is not a Hyprland address", peerText(b.Address))
+		}
+		return fmt.Sprintf(`hl.dsp.focus({ window = "address:%s" })`, b.Address), nil
 	}
 	return "", fmt.Errorf("the action %s is not known", peerText(b.Action))
 }
@@ -278,8 +289,9 @@ func (d *Daemon) answerShortcut(dev *Device, job *shortcutJob) {
 		send(map[string]any{"error": msg})
 		return
 	}
-	// While the screen is locked, only the workspace list works.
-	if (b.Run != "" || b.Action != "" || b.Request) && screenLocked(d.ctx) {
+	// While the screen is locked, only the workspace list works, without the windows.
+	locked := screenLocked(d.ctx)
+	if (b.Run != "" || b.Action != "" || b.Request) && locked {
 		send(map[string]any{"error": lockedText})
 		return
 	}
@@ -288,7 +300,7 @@ func (d *Daemon) answerShortcut(dev *Device, job *shortcutJob) {
 		send(map[string]any{"error": err.Error()})
 		return
 	}
-	body, err := d.shortcutState(b.Request)
+	body, err := d.shortcutState(b.Request, !locked)
 	if err != nil {
 		send(map[string]any{"error": err.Error()})
 		return
@@ -334,8 +346,8 @@ func (d *Daemon) runShortcut(b shortcutBody) error {
 }
 
 // shortcutState returns the workspaces and the active workspace. With
-// list, it also returns the shortcuts.
-func (d *Daemon) shortcutState(list bool) (map[string]any, error) {
+// list, it also returns the shortcuts, and with windows the windows.
+func (d *Daemon) shortcutState(list, windows bool) (map[string]any, error) {
 	ctx := d.ctx
 	body := map[string]any{}
 	if list {
@@ -358,6 +370,17 @@ func (d *Daemon) shortcutState(list bool) (map[string]any, error) {
 		return nil, err
 	}
 	body["workspaces"] = workspaces
+	if windows {
+		data, err := hyprctl(ctx, "-j", "clients")
+		if err != nil {
+			return nil, err
+		}
+		list, err := parseWindows(data, desktopApps.name)
+		if err != nil {
+			return nil, err
+		}
+		body["windows"] = list
+	}
 	data, err = hyprctl(ctx, "-j", "activeworkspace")
 	if err != nil {
 		return nil, err

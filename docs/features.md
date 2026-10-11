@@ -106,9 +106,13 @@ To show a web page on the phone, select **Open link on phone** on the Overview p
 The field starts with the newest clipboard entry when that entry is a link.
 The phone shows the link in a notification. A tap on the notification opens the link in the browser.
 
-To show a web page on the desktop, tap **Send > Open a link** in Flux for Android.
-The field starts with the phone clipboard when it holds a link, and the desktop opens the link in its browser.
-Both fields add `https://` to a host name without a scheme, for example `omarchy.org/flux`.
+To show a web page on the desktop, type the link in the field at the bottom of **Send** in Flux for Android, then tap the send key.
+The desktop opens a link that starts with `http://` or `https://` in its browser. Other text goes to the clipboard of the desktop.
+The field of the desktop window adds `https://` to a host name without a scheme, for example `omarchy.org/flux`.
+
+**Send** shows what the phone sent in this session as a thread: links, text, clips, and files, and the files that come from the desktop, with the progress of each transfer.
+Flux keeps the thread in memory only, with at most 400 characters of each text.
+The dock under the thread shows the phone clipboard with **Send**, and the tools for files, the camera, and QR codes.
 The phone can read folders of the desktop when `share_home` is enabled. See [Browse PC](#browse-pc).
 The tunnel carries SSH traffic without an inbound SSH firewall rule.
 
@@ -205,7 +209,7 @@ Turn on `auto_clipboard` on the desktop and **Sync clipboard** on the phone.
 Both are on by default.
 
 - Copy an image on the desktop, for example a screenshot. Then paste it in an app on the phone.
-- Copy an image on the phone, open Flux, and tap **Send clipboard**. Then paste it on the desktop.
+- Copy an image on the phone, open **Send** in Flux, and tap **Send** next to the clipboard. Then paste it on the desktop.
 
 Android lets only the app on the screen read the clipboard.
 Flux sends a phone copy by itself while Flux is on the screen.
@@ -424,7 +428,7 @@ See [camera and streams](camera.md) for direct capture and live media.
 
 ## herdr agents
 
-When [herdr](https://herdr.dev) runs on the computer, an agent that waits for input shows first in the phone's **Inbox**. To see all agents, select **Agents and terminals** in **Control**.
+When [herdr](https://herdr.dev) runs on the computer, an agent that waits for input shows first in the phone's **Inbox**. To see all agents and terminals, open **Control**.
 The phone shows the status and the colored output of each coding agent, and posts a notification when an agent needs input or finishes.
 
 To answer agents from the phone, set:

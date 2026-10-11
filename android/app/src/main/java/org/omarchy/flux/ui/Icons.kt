@@ -52,7 +52,6 @@ object Ic {
     val power = R.drawable.ic_power_settings_new
     val lightMode = R.drawable.ic_light_mode
     val darkMode = R.drawable.ic_dark_mode
-    val systemTheme = R.drawable.ic_contrast
 
     val phone = R.drawable.ic_smartphone
     val laptop = R.drawable.ic_computer
@@ -136,6 +135,15 @@ object Ic {
     val bug = R.drawable.ic_bug_report
     val handle = R.drawable.ic_alternate_email
     val license = R.drawable.ic_license
+    val touchApp = R.drawable.ic_touch_app
+    val autoTheme = R.drawable.ic_brightness_auto
+    val radioOn = R.drawable.ic_radio_button_checked
+    val radioOff = R.drawable.ic_radio_button_unchecked
+    val volumeDown = R.drawable.ic_volume_down
+    val notes = R.drawable.ic_edit_note
+    val chat = R.drawable.ic_chat
+    val window = R.drawable.ic_web_asset
+    val down = R.drawable.ic_arrow_downward
 }
 
 /** An icon from [Ic]. It takes the content color unless [tint] is set. */
