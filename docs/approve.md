@@ -352,6 +352,8 @@ Every failure gives a non-zero exit, and PAM asks for the password.
 | A stale or future time | The helper stops |
 | The phone has no strong biometric | The phone sends an error |
 | A new fingerprint on the phone | The key is invalid, the phone sends an error, and the user enrolls again |
+| The fingerprint check fails, for example after too many tries | The phone sends the error, and the helper or the command stops |
+| The phone cannot sign, for example after a Keystore error | The phone sends the error with its reason, and the helper or the command stops. The command prints the reason |
 | The service is `sshd` | The helper stops at once |
 | Another user asks, for example with the sudoers option `targetpw` | The helper stops at once |
 | `polkit-1` without a setuid `polkit-agent-helper-1` | The helper stops at once. `flux-cli approve enable polkit-1` refuses this service |

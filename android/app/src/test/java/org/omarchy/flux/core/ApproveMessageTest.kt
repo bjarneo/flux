@@ -136,6 +136,21 @@ class ApproveMessageTest {
     }
 
     @Test
+    fun aFailureNamesTheReasonOnOneLine() {
+        val e = java.security.SignatureException("android.security.KeyStoreException: Key user not authenticated\n\tat x")
+        assertEquals(
+            "The phone could not sign the request: android.security.KeyStoreException: Key user not authenticated at x",
+            ApproveMessage.failure("The phone could not sign the request", e),
+        )
+        // An exception with no message names its class.
+        assertEquals("No key: IllegalStateException", ApproveMessage.failure("No key", IllegalStateException()))
+        // A long reason stays a valid field, also when the cut falls in a surrogate pair.
+        val long = ApproveMessage.failure("x".repeat(197), RuntimeException("😀😀"))
+        assertTrue(ApproveMessage.validField(long))
+        assertEquals("x".repeat(197) + ": ", long)
+    }
+
+    @Test
     fun anOpenRequestNeverChanges() {
         assertEquals(ApproveMessage.Admit.Show, ApproveMessage.admit(null, request))
         assertEquals("a repeated packet changes nothing", ApproveMessage.Admit.Repeat, ApproveMessage.admit(request, request.copy()))

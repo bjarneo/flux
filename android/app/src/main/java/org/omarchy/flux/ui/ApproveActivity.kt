@@ -71,6 +71,9 @@ class ApproveActivity : FragmentActivity() {
     private lateinit var prompt: BiometricPrompt
     private var onSigned: ((Signature) -> Unit)? = null
 
+    // The request of the open fingerprint check. A failure of the check or of the signature goes to its computer.
+    private var signing: ApproveRequest? = null
+
     // The new key of an enrollment until the computer gets it. A cancel deletes it, and the old key stays.
     private var pending: ApproveKeys.Pending? = null
 
@@ -86,10 +89,14 @@ class ApproveActivity : FragmentActivity() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                 val s = result.cryptoObject?.signature
                 val done = onSigned
+                val r = signing
                 onSigned = null
-                if (s == null || done == null) {
+                signing = null
+                if (done == null || r == null) return
+                // Each failure goes to the computer, so the command stops at once and prints the reason.
+                if (s == null) {
                     discardPending()
-                    phase.value = Phase.Failed("The fingerprint check gave no key. Try again.")
+                    fail(r, "The fingerprint check gave no key")
                     return
                 }
                 try {
@@ -97,16 +104,19 @@ class ApproveActivity : FragmentActivity() {
                 } catch (e: Exception) {
                     Log.w(TAG, "signing failed", e)
                     discardPending()
-                    phase.value = Phase.Failed("The phone could not sign the request.")
+                    fail(r, ApproveMessage.failure("The phone could not sign the request", e))
                 }
             }
 
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                val r = signing
                 onSigned = null
+                signing = null
                 discardPending()
-                phase.value = when (errorCode) {
-                    BiometricPrompt.ERROR_NEGATIVE_BUTTON, BiometricPrompt.ERROR_USER_CANCELED, BiometricPrompt.ERROR_CANCELED -> Phase.Ask
-                    else -> Phase.Failed(errString.toString())
+                when (errorCode) {
+                    // A cancel keeps the request open, so the user can approve or deny it again.
+                    BiometricPrompt.ERROR_NEGATIVE_BUTTON, BiometricPrompt.ERROR_USER_CANCELED, BiometricPrompt.ERROR_CANCELED -> phase.value = Phase.Ask
+                    else -> if (r != null) fail(r, errString.toString()) else phase.value = Phase.Failed(errString.toString())
                 }
             }
         })
@@ -289,7 +299,7 @@ class ApproveActivity : FragmentActivity() {
         } catch (e: Exception) {
             Log.w(TAG, "the approval key failed", e)
             discardPending()
-            fail(r, "The phone could not use its approval key.")
+            fail(r, ApproveMessage.failure("The phone could not use its approval key", e))
             return
         }
         onSigned = { s ->
@@ -323,6 +333,7 @@ class ApproveActivity : FragmentActivity() {
             .setAllowedAuthenticators(BIOMETRIC_STRONG)
             .setConfirmationRequired(true)
             .build()
+        signing = r
         prompt.authenticate(info, BiometricPrompt.CryptoObject(signature))
     }
 

@@ -161,6 +161,20 @@ object ApproveMessage {
     fun failed(id: String, message: String): Packet =
         Packet(Types.FLUX_APPROVE, bodyOf("kind" to "response", "id" to id, "error" to message.take(200)))
 
+    /**
+     * The text of a failed request: [what], then the reason from [e] on 1
+     * line. The phone shows it, and the computer prints it in the terminal,
+     * so the user can report the reason. fluxd accepts only a valid field.
+     */
+    fun failure(what: String, e: Throwable): String {
+        val reason = (e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName)
+            .map { if (it.isISOControl()) ' ' else it }.joinToString("")
+            .replace(Regex("\\s+"), " ").trim()
+        var text = "$what: $reason".take(200)
+        while (!validField(text)) text = text.dropLast(1)
+        return text
+    }
+
     fun enrolled(id: String, spki: ByteArray, signature: ByteArray): Packet =
         Packet(Types.FLUX_APPROVE, bodyOf("kind" to "enrolled", "id" to id, "publicKey" to b64(spki), "signature" to b64(signature)))
 
