@@ -211,6 +211,11 @@ Both are on by default.
 - Copy an image on the desktop, for example a screenshot. Then paste it in an app on the phone.
 - Copy an image on the phone, open **Send** in Flux, and tap **Send** next to the clipboard. Then paste it on the desktop.
 
+A clip that you send with **Send**, the **Send clipboard** tile, or the notification action goes on the desktop clipboard also while `auto_clipboard` is off.
+The desktop then shows a notification with the start of the text, for example **Clipboard from Pixel 8**.
+The **Clipboard sync** switch of the device in **Device access** still applies.
+A link from the phone opens in the browser, and a notification names the phone.
+
 Android lets only the app on the screen read the clipboard.
 Flux sends a phone copy by itself while Flux is on the screen.
 For a copy in another app, use a 1-tap path.

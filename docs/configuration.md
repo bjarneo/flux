@@ -42,7 +42,7 @@ command = "omarchy-system-lock"
 | `download_dir` | Destination for received files. Defaults to the XDG Downloads directory, then `~/Downloads`. |
 | `scan_dir` | Destination for scanned text and documents. Defaults to `flux/scanned` inside the XDG Documents directory. |
 | `photo_dir` | Destination for camera photos. Defaults to `flux` inside the XDG Pictures directory. Screenshots and signatures use its `screenshots` and `signatures` folders. |
-| `auto_clipboard` | Sync clipboard text and images in both directions. Defaults to `true`. |
+| `auto_clipboard` | Sync clipboard text and images in both directions. Defaults to `true`. A clip that you send by hand from the phone goes on the clipboard also while it is `false`. |
 | `notifications` | Show phone notifications on the desktop. Defaults to `true`. |
 | `share_home` | Let each paired device read the home folder, `download_dir`, and the Documents, Pictures, Music, and Videos folders. Names that start with a dot, such as `~/.ssh`, and the Flux folders stay hidden. Defaults to `true`. Turning it off ends each session at once. See [Browse PC](features.md#browse-pc). |
 | `pause_media_on_call` | Pause desktop media during calls. Defaults to `true`. |

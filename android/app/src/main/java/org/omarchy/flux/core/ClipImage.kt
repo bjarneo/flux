@@ -129,7 +129,7 @@ object ClipImage {
             }
             var sent = 0
             for (d in devices) {
-                runCatching { sendTo(d, data, mime) }
+                runCatching { sendTo(d, data, mime, manual) }
                     .onSuccess { sent++ }
                     .onFailure { Log.w(TAG, "send to ${d.identity.deviceName} failed", it) }
             }
@@ -155,11 +155,13 @@ object ClipImage {
         }
     }
 
-    private fun sendTo(d: Device, data: ByteArray, mime: String) {
+    /** Sends the image to [d]. The [manual] flag puts it on the clipboard of the computer also while its automatic sync is off. */
+    private fun sendTo(d: Device, data: ByteArray, mime: String, manual: Boolean) {
         val cert = d.certificate ?: error("not paired")
         val tls = FluxCore.tls ?: error("no TLS")
         val server = Payload.openServer()
-        val p = Packet(Types.FLUX_CLIPBOARD_IMAGE, bodyOf("mime" to mime), payloadSize = data.size.toLong(), payloadPort = server.localPort)
+        val body = if (manual) bodyOf("mime" to mime, "manual" to true) else bodyOf("mime" to mime)
+        val p = Packet(Types.FLUX_CLIPBOARD_IMAGE, body, payloadSize = data.size.toLong(), payloadPort = server.localPort)
         if (!d.send(p)) {
             server.close()
             error("Not connected")

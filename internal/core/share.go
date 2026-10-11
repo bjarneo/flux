@@ -297,15 +297,16 @@ func webURL(s string) (string, bool) {
 	return u.String(), true
 }
 
-// openLink opens a web link from a device in the browser.
+// openLink opens a web link from a device in the browser. A notification
+// tells where the link came from, because the browser shows only the page.
 func (d *Daemon) openLink(dev *Device, link string) {
 	name := d.nameOf(dev)
 	if err := openWebLink(link); err != nil {
 		d.logf("open %s: %v", link, err)
-		d.toast("Could not open %s from %s: %v", link, name, err)
+		d.notifyAsync(desktop.Notification{AppName: "Flux", Title: "Could not open a link from " + name, Body: previewText(link, maxSharePreview) + "\n" + err.Error()})
 		return
 	}
-	d.toast("%s opened %s", name, link)
+	d.notifyAsync(desktop.Notification{AppName: "Flux", Title: "Link from " + name, Body: "Opened in the browser: " + previewText(link, maxSharePreview)})
 }
 
 // receiveText puts shared text on the clipboard and in the clipboard

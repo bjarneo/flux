@@ -105,7 +105,7 @@ func TestReceiveClipImage(t *testing.T) {
 	d, clip := clipDaemon(t, true)
 	dev := &Device{ID: "phone", Name: "Pixel 8", Paired: true}
 	jpeg := []byte("\xff\xd8\xff\xe0\x00\x10JFIF\x00")
-	d.receiveClipImage(dev, &clipFetch{}, jpeg)
+	d.receiveClipImage(dev, &clipFetch{}, jpeg, false)
 	waitIdle(t, d, &d.content.clipQ)
 	if clip.mime != "image/jpeg" || !bytes.Equal(clip.image, jpeg) {
 		t.Errorf("clipboard has %q as %s", clip.image, clip.mime)
@@ -119,7 +119,7 @@ func TestReceiveClipImage(t *testing.T) {
 
 	// Data that is not an image stays off the clipboard.
 	clip.image, clip.mime = nil, ""
-	d.receiveClipImage(dev, &clipFetch{}, []byte("#!/bin/sh\nrm -rf ~\n"))
+	d.receiveClipImage(dev, &clipFetch{}, []byte("#!/bin/sh\nrm -rf ~\n"), false)
 	waitIdle(t, d, &d.content.clipQ)
 	if clip.image != nil || len(d.clipboard) != 1 {
 		t.Errorf("clipboard has %q, history has %d entries", clip.image, len(d.clipboard))
@@ -127,7 +127,7 @@ func TestReceiveClipImage(t *testing.T) {
 
 	// Without automatic sync, the image goes only into the history.
 	d.cfg.AutoClipboard = false
-	d.receiveClipImage(dev, &clipFetch{}, testPNG(2))
+	d.receiveClipImage(dev, &clipFetch{}, testPNG(2), false)
 	waitIdle(t, d, &d.content.clipQ)
 	if clip.image != nil || len(d.clipboard) != 2 {
 		t.Errorf("clipboard has %q, history has %d entries", clip.image, len(d.clipboard))
@@ -136,7 +136,7 @@ func TestReceiveClipImage(t *testing.T) {
 	// An image that arrives after an unpair is dropped.
 	d.cfg.AutoClipboard = true
 	dev.Paired = false
-	d.receiveClipImage(dev, &clipFetch{}, testPNG(3))
+	d.receiveClipImage(dev, &clipFetch{}, testPNG(3), false)
 	waitIdle(t, d, &d.content.clipQ)
 	if clip.image != nil || len(d.clipboard) != 2 {
 		t.Errorf("unpaired: clipboard has %q, history has %d entries", clip.image, len(d.clipboard))
@@ -155,7 +155,7 @@ func TestClipTextStopsOlderImage(t *testing.T) {
 	if ctx.Err() == nil {
 		t.Fatal("the text did not stop the image")
 	}
-	d.receiveClipImage(dev, f, testPNG(1))
+	d.receiveClipImage(dev, f, testPNG(1), false)
 	waitIdle(t, d, &d.content.clipQ)
 	if clip.image != nil || clip.text != "newer text" {
 		t.Errorf("clipboard has the text %q and the image %q", clip.text, clip.image)
@@ -405,7 +405,7 @@ func TestConnectClipboardTwoDevices(t *testing.T) {
 
 	// The phone image comes after the copy on the Mac.
 	at := time.Now()
-	d.receiveClipImage(phone, &clipFetch{}, testPNG(1))
+	d.receiveClipImage(phone, &clipFetch{}, testPNG(1), false)
 	d.handleClipboard(mac, connectClip("mac text", at))
 	waitIdle(t, d, &d.content.clipQ)
 	if clip.image == nil || clip.text != "phone text" {
@@ -435,6 +435,77 @@ func TestConnectClipboardTwoDevices(t *testing.T) {
 		if clip.text != c.want || len(d.clipboard) != 1 || d.clipboard[0].Device == mac.ID {
 			t.Errorf("%s: clipboard has %q, history %+v", c.name, clip.text, d.clipboard)
 		}
+	}
+}
+
+// A clip that the user sends with Send on the phone goes on the clipboard
+// also without automatic sync, as a shared text with a notification. A clip
+// of the sync stays off the clipboard, and the clipboard switch of the
+// device still applies.
+func TestManualClipboard(t *testing.T) {
+	d, clip := clipDaemon(t, false)
+	d.ctx = t.Context()
+	srv := withNotifier(t, d)
+	phone := &Device{ID: "phone", Name: "Pixel 8", Paired: true}
+	d.handleClipboard(phone, proto.New(proto.TypeClipboard, map[string]any{"content": "synced text"}))
+	waitIdle(t, d, &d.content.clipQ)
+	if clip.text != "" {
+		t.Fatalf("a synced clip without auto_clipboard set %q", clip.text)
+	}
+	d.handleClipboard(phone, proto.New(proto.TypeClipboard, map[string]any{"content": "git push origin ui-shell", "manual": true}))
+	waitIdle(t, d, &d.content.clipQ)
+	if clip.text != "git push origin ui-shell" {
+		t.Fatalf("clipboard has %q", clip.text)
+	}
+	if d.clipboard[0].Source != "share" || d.clipboard[1].Source != "" {
+		t.Fatalf("history %+v", d.clipboard)
+	}
+	waitFor(t, "the notification", func() bool {
+		return slices.Contains(srv.notes(), "Clipboard from Pixel 8|git push origin ui-shell")
+	})
+
+	d.receiveClipImage(phone, &clipFetch{}, testPNG(4), true)
+	waitIdle(t, d, &d.content.clipQ)
+	if !bytes.Equal(clip.image, testPNG(4)) {
+		t.Fatalf("the manual image is not on the clipboard")
+	}
+	waitFor(t, "the image notification", func() bool { return slices.Contains(srv.notes(), "Image from Pixel 8|On the clipboard") })
+
+	// The clipboard switch of the device is off.
+	d.cfg.Devices = map[string]map[string]bool{phone.ID: {"clipboard": false}}
+	d.handleClipboard(phone, proto.New(proto.TypeClipboard, map[string]any{"content": "blocked", "manual": true}))
+	waitIdle(t, d, &d.content.clipQ)
+	if clip.text == "blocked" {
+		t.Fatal("a manual clip passed the clipboard switch of the device")
+	}
+}
+
+// A link from the phone opens in the browser, and a notification names the
+// phone. A link that does not open shows the error.
+func TestOpenLinkNotifies(t *testing.T) {
+	d, _ := clipDaemon(t, false)
+	d.ctx = t.Context()
+	srv := withNotifier(t, d)
+	var opened []string
+	open := openWebLink
+	openWebLink = func(link string) error {
+		opened = append(opened, link)
+		if strings.Contains(link, "fail") {
+			return errors.New("xdg-open failed")
+		}
+		return nil
+	}
+	t.Cleanup(func() { openWebLink = open })
+	phone := &Device{ID: "phone", Name: "Pixel 8", Paired: true}
+	d.openLink(phone, "https://omarchy.org/manual")
+	d.openLink(phone, "https://example.com/fail")
+	waitFor(t, "2 notifications", func() bool { return len(srv.notes()) == 2 })
+	want := []string{
+		"Link from Pixel 8|Opened in the browser: https://omarchy.org/manual",
+		"Could not open a link from Pixel 8|https://example.com/fail\nxdg-open failed",
+	}
+	if got := srv.notes(); !slices.Equal(got, want) || len(opened) != 2 {
+		t.Fatalf("notifications %q, opened %q", got, opened)
 	}
 }
 

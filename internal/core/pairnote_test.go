@@ -26,6 +26,8 @@ type noteServer struct {
 	next   uint32
 	shown  map[uint32][]string
 	closed []uint32
+	// texts holds the title and the body of each notification, in order.
+	texts []string
 }
 
 func (s *noteServer) Notify(app string, replaces uint32, icon, title, body string, actions []string, hints map[string]dbus.Variant, timeout int32) (uint32, *dbus.Error) {
@@ -37,7 +39,15 @@ func (s *noteServer) Notify(app string, replaces uint32, icon, title, body strin
 		id = s.next
 	}
 	s.shown[id] = actions
+	s.texts = append(s.texts, title+"|"+body)
 	return id, nil
+}
+
+// notes returns the title and the body of each notification, as "title|body".
+func (s *noteServer) notes() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.texts)
 }
 
 func (s *noteServer) CloseNotification(id uint32) *dbus.Error {

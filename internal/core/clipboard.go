@@ -347,11 +347,15 @@ func sendClipImage(ctx context.Context, l *lan.Link, data []byte, mime string) e
 }
 
 // handleClipboard stores a clipboard from a device. With automatic sync on,
-// it also sets the local clipboard.
+// it also sets the local clipboard. A clip that the user sent by hand goes
+// on the clipboard also while automatic sync is off, and a notification
+// shows it.
 func (d *Daemon) handleClipboard(dev *Device, p *proto.Packet) {
 	var body struct {
 		Content   string `json:"content"`
 		Timestamp int64  `json:"timestamp"`
+		// Manual marks a clip that the user sent with Send on the device.
+		Manual bool `json:"manual"`
 	}
 	if p.Decode(&body) != nil || body.Content == "" {
 		return
@@ -363,7 +367,10 @@ func (d *Daemon) handleClipboard(dev *Device, p *proto.Packet) {
 		return
 	}
 	d.mu.Lock()
-	auto := d.cfg.AutoClipboard
+	// A clip that the user sent needs the clipboard switch of the device, but not automatic sync.
+	manual := body.Manual && p.Type == proto.TypeClipboard && d.permittedLocked(dev.ID, "clipboard")
+	auto := d.cfg.AutoClipboard || manual
+	name := dev.Name
 	// A clipboard.connect packet is older than the newest clipboard from
 	// the desktop or from any device.
 	connect := p.Type == proto.TypeClipboardConnect && body.Timestamp > 0
@@ -382,13 +389,20 @@ func (d *Daemon) handleClipboard(dev *Device, p *proto.Packet) {
 			f.cancel()
 			f.stale = true
 		}
-		d.addClipLocked(ClipEntry{Text: body.Content, Dir: "in", Device: dev.ID, DeviceName: dev.Name, Time: time.Now().Unix()})
+		source := ""
+		if manual {
+			source = "share"
+		}
+		d.addClipLocked(ClipEntry{Text: body.Content, Dir: "in", Device: dev.ID, DeviceName: dev.Name, Source: source, Time: time.Now().Unix()})
 	}
 	d.mu.Unlock()
 	if auto && !stale {
 		// Run the desktop call outside the read loop of the link, so a slow
 		// clipboard tool cannot block the next packets from the phone.
-		d.setClipboard(dev, body.Content, true)
+		d.setClipboard(dev, body.Content, !manual)
+	}
+	if manual {
+		d.notifyAsync(desktop.Notification{AppName: "Flux", Title: "Clipboard from " + name, Body: previewText(body.Content, maxSharePreview)})
 	}
 	d.markDirty()
 }
@@ -414,6 +428,11 @@ func (d *Daemon) handleClipboardImage(dev *Device, l *lan.Link, p *proto.Packet)
 	}
 	d.content.clipImages[dev.ID] = fetch
 	d.mu.Unlock()
+	// Manual marks an image that the user sent with Send on the device.
+	var body struct {
+		Manual bool `json:"manual"`
+	}
+	_ = p.Decode(&body)
 	cancelOnLinkDown(ctx, l, cancel)
 	go func() {
 		defer func() {
@@ -429,18 +448,19 @@ func (d *Daemon) handleClipboardImage(dev *Device, l *lan.Link, p *proto.Packet)
 			d.logf("%s: receive clipboard image: %v", d.nameOf(dev), err)
 			return
 		}
-		d.receiveClipImage(dev, fetch, data)
+		d.receiveClipImage(dev, fetch, data, body.Manual)
 	}()
 }
 
 // receiveClipImage adds an image from a device to the history and, with
-// automatic sync on, puts it on the local clipboard. An image that arrives
+// automatic sync on or for a [manual] send, puts it on the local
+// clipboard. A manual send also shows a notification. An image that arrives
 // after an unpair is dropped. So is an image of the fetch f after a newer
 // text or image of the device. The worker of the texts from the devices
 // sets the image, so that a text that comes later stays on the clipboard.
 // The history and the worker check f again under d.mu, because a text can
 // come while fluxd saves the image.
-func (d *Daemon) receiveClipImage(dev *Device, f *clipFetch, data []byte) {
+func (d *Daemon) receiveClipImage(dev *Device, f *clipFetch, data []byte, manual bool) {
 	d.mu.Lock()
 	paired, name, stale := dev.Paired && d.permittedLocked(dev.ID, "clipboard"), dev.Name, f.stale
 	d.mu.Unlock()
@@ -466,13 +486,17 @@ func (d *Daemon) receiveClipImage(dev *Device, f *clipFetch, data []byte) {
 	}
 	d.runContentIf(&d.content.clipQ, 0, current, func() {
 		d.mu.Lock()
-		ok := dev.Paired && d.cfg.AutoClipboard && !f.stale
+		ok := dev.Paired && (d.cfg.AutoClipboard || manual) && !f.stale
 		d.mu.Unlock()
 		if !ok {
 			return
 		}
 		if err := d.clip.SetImage(data, mime); err != nil {
 			d.logf("set clipboard image: %v", err)
+			return
+		}
+		if manual {
+			d.notifyAsync(desktop.Notification{AppName: "Flux", Title: "Image from " + name, Body: "On the clipboard"})
 		}
 	})
 }
