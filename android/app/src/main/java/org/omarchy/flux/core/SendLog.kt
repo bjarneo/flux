@@ -10,8 +10,11 @@ enum class SendKind {
     /** A web link that the browser of the computer opened. */
     Link,
 
-    /** Text that went to the clipboard of the computer, for example from the composer or a text scan. */
+    /** Text that went to the clipboard of the computer, for example from the composer. */
     Text,
+
+    /** Text from a scan of the camera. The computer saves it as a text file in its scan folder. */
+    Scan,
 
     /** The clipboard of this phone, with text. */
     Clip,
@@ -134,6 +137,11 @@ object SendLog {
     /** Reports text that went to the clipboard of a computer. */
     fun text(deviceId: String, computer: String, text: String) {
         add(entry(deviceId, computer, SendKind.Text, text.trim()))
+    }
+
+    /** Reports text from a scan of the camera, which the computer saves as a file. */
+    fun scan(deviceId: String, computer: String, text: String) {
+        add(entry(deviceId, computer, SendKind.Scan, text.trim()))
     }
 
     /** Reports the clipboard of this phone that went to a computer. [text] is null for an image. */

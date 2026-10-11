@@ -320,7 +320,7 @@ object Share {
     fun sendScan(core: FluxCore, id: String, text: String): Boolean {
         val d = core.device(id) ?: return false
         val sent = d.send(Packet(Types.SHARE, bodyOf("text" to text, "scan" to true)))
-        if (sent) SendLog.text(d.id, d.identity.deviceName, text)
+        if (sent) SendLog.scan(d.id, d.identity.deviceName, text)
         return sent
     }
 

@@ -239,6 +239,7 @@ private fun sendMeta(context: Context, e: SendEntry, showComputer: Boolean): Str
     return when (e.kind) {
         SendKind.Link -> if (showComputer) "Link · opened on ${e.computer} · $time" else "Link · opened in the browser · $time"
         SendKind.Text -> if (showComputer) "Text · on the clipboard of ${e.computer} · $time" else "Text · on the clipboard · $time"
+        SendKind.Scan -> if (showComputer) "Scan · saved on ${e.computer} · $time" else "Scan · saved as a text file · $time"
         SendKind.Clip, SendKind.ClipImage -> if (showComputer) "Clipboard · to ${e.computer} · $time" else "Clipboard · $time"
         SendKind.File -> when {
             e.incoming && e.state == TransferState.Running -> "From ${e.computer} · $pct"
