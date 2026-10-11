@@ -71,9 +71,12 @@ class FluxService : Service() {
             if (pct == lastBattery && charging == lastCharging) return
             lastBattery = pct
             lastCharging = charging
-            FluxCore.connectedPaired().forEach { Plugins.sendBattery(FluxCore, it) }
+            sendBattery()
         }
     }
+
+    /** Sends the battery state to each connected paired computer. */
+    private fun sendBattery() = FluxCore.connectedPaired().forEach { Plugins.sendBattery(FluxCore, it) }
 
     private val dndReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -246,6 +249,15 @@ class FluxService : Service() {
         // broadcast on the network, which uses the battery. See [multicastNeeded].
         search()
         scope.launch { FluxCore.rediscovered.collect { search() } }
+        // Android can skip a battery broadcast, for example in Doze, and the
+        // computers then show an old state. The phone sends the state again
+        // each BATTERY_RESEND_MS, so the computers correct it.
+        scope.launch {
+            while (true) {
+                delay(BATTERY_RESEND_MS)
+                sendBattery()
+            }
+        }
         scope.launch {
             var online = emptySet<String>()
             FluxCore.state.map { s -> s.devices.filter { it.paired && it.online }.map { it.id }.toSet() }.distinctUntilChanged().collect { now ->
@@ -296,6 +308,7 @@ class FluxService : Service() {
                 FluxCore.rediscover()
                 // The device name can change in the system settings.
                 announce()
+                sendBattery()
             }
             ACTION_SCAN -> scan()
         }
@@ -367,6 +380,9 @@ class FluxService : Service() {
         const val ACTION_TURN_OFF = "org.omarchy.flux.TURN_OFF"
         const val ACTION_SCAN = "org.omarchy.flux.SCAN"
         const val SCAN_MS = 10_000L
+
+        /** The time between 2 battery sends when no broadcast comes. The computer polls its own battery each minute. */
+        private const val BATTERY_RESEND_MS = 5 * 60_000L
 
         /**
          * How long the multicast lock stays on after a trigger while a paired
