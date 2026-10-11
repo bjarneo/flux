@@ -136,7 +136,10 @@ final class DesktopTests: XCTestCase {
         let keySPS = hex("67640c32ac2b4014005ad350101014000003000400000300f23c2211a8")
         let keyPPS = hex("68ee3830")
         let start: [UInt8] = [0, 0, 0, 1]
-        let frame = start + keySPS + start + keyPPS + start + [0x65, 0x88, 0x84]
+        // The frames are joined from typed parts: a long chain of + with a
+        // literal takes the compiler too long to type-check.
+        let slice: [UInt8] = [0x65, 0x88, 0x84]
+        let frame: [UInt8] = [start, keySPS, start, keyPPS, start, slice].flatMap { $0 }
 
         let video = DesktopVideo()
         XCTAssertTrue(video.configure(sps: headerSPS, pps: headerPPS))
@@ -148,7 +151,9 @@ final class DesktopTests: XCTestCase {
         // A set that VideoToolbox refuses keeps the format.
         let bad: [UInt8] = [0x67, 0x00]
         XCTAssertNil(DesktopVideo.format(sps: bad, pps: keyPPS))
-        video.show(start + bad + start + keyPPS + start + [0x65, 0x88], key: true)
+        let badSlice: [UInt8] = [0x65, 0x88]
+        let badFrame: [UInt8] = [start, bad, start, keyPPS, start, badSlice].flatMap { $0 }
+        video.show(badFrame, key: true)
         XCTAssertEqual(video.parameterSets, [keySPS, keyPPS])
     }
 

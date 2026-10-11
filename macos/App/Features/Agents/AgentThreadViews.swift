@@ -80,8 +80,8 @@ struct SlideBar: View {
                 let w = geo.size.width * 0.4
                 let t = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.4) / 1.4
                 // An ease in and out, as the design moves the bar from -100% to 260% of its width.
-                let e = t < 0.5 ? 2 * t * t : 1 - pow(-2 * t + 2, 2) / 2
-                let x = reduceMotion ? (geo.size.width - w) / 2 : -w + e * w * 3.6
+                let e: CGFloat = t < 0.5 ? 2 * t * t : 1 - pow(-2 * t + 2, 2) / 2
+                let x: CGFloat = reduceMotion ? (geo.size.width - w) / 2 : -w + e * w * 3.6
                 Capsule().fill(color).frame(width: w).offset(x: x)
             }
         }
