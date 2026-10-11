@@ -284,6 +284,10 @@ To stop the stream of a phone that you do not trust, unpair the phone.
 4. `fluxd` reads each FLV tag and writes its frame to the phone.
 5. `fluxd` sends `flux.desktop` with `{"state": "live"}`, the monitor, the monitor names, and the stream size.
 6. The phone decodes the frames with the hardware decoder of the phone and shows each frame at once.
+   When the decoder cannot show the stream size, the phone asks for a smaller stream.
+   For example, a decoder of H.264 level 4.2 shows 1920 × 1080, but not 1920 × 1200.
+   The phone also asks for a smaller stream when the decoder shows no frame in 3 seconds.
+   It tries the size of 1920 × 1080 first, then 1280 × 720.
 
 `fluxd` runs 1 stream at a time.
 A new start stops the stream that runs, and the new recorder starts after the old recorder stopped.
@@ -375,6 +379,7 @@ A binding to a key code, such as `SUPER + code:10` for workspace 1, does not mat
 | The Mac shows **View only** | Run `flux-cli input on`, or turn on **Remote input** in the Flux window. |
 | The Mac shows no **Remote desktop** tool in **Control** | Connect the Mac to the computer. The tool shows only when a computer in the scope has a `fluxd` that lists `flux.desktop`. |
 | A Command shortcut goes to the Mac | Move the pointer over the video, then press the shortcut again. |
+| The phone stays black, or says that it cannot show a stream of a size | The decoder of the phone cannot show the stream. Update Flux for Android, which asks for a smaller stream. |
 | The screen capture stops | Run `journalctl --user -u fluxd --no-pager \| grep "remote desktop"` for the error of `gpu-screen-recorder`. |
 | The Mac or the phone says `list the monitors: exit status 22` | `gpu-screen-recorder` does not support the GPU. Install `wf-recorder`, then start the remote desktop again. |
 | `gpu-screen-recorder` cannot capture the monitor | Run `getcap /usr/bin/gsr-kms-server`. The result must show `cap_sys_admin`. Install the package again to restore it. |

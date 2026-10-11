@@ -16,20 +16,23 @@ private const val INPUT_WAIT_US = 10_000L
 
 /**
  * A hardware H.264 decoder that shows each frame on [surface] as soon as it
- * is decoded. [config] holds the SPS and the PPS. [onSize] gets the video
- * size when the decoder reads it from the stream.
+ * is decoded. [config] holds the SPS and the PPS. [onFrame] runs once,
+ * when the first frame shows. [onSize] gets the video size when the
+ * decoder reads it from the stream.
  */
 class VideoDecoder(
     surface: Surface,
     width: Int,
     height: Int,
     config: Pair<ByteArray, ByteArray>,
+    private val onFrame: () -> Unit,
     private val onSize: (Int, Int) -> Unit,
 ) {
     private val codec: MediaCodec = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
     @Volatile private var running = true
     private val render: Thread
     private var frames = 0L
+    private var shown = false
 
     init {
         val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
@@ -87,7 +90,13 @@ class VideoDecoder(
                 val index = codec.dequeueOutputBuffer(info, 10_000)
                 when {
                     index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> reportSize(codec.outputFormat)
-                    index >= 0 -> codec.releaseOutputBuffer(index, true)
+                    index >= 0 -> {
+                        codec.releaseOutputBuffer(index, true)
+                        if (!shown) {
+                            shown = true
+                            onFrame()
+                        }
+                    }
                 }
             }
         } catch (e: Exception) {
