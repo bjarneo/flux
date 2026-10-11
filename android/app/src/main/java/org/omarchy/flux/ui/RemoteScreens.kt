@@ -20,16 +20,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -45,6 +48,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import kotlinx.coroutines.delay
 import org.omarchy.flux.core.Browse
 import org.omarchy.flux.core.BrowseEntry
@@ -110,8 +114,10 @@ fun NotReachableLine(d: DeviceUi, what: String, modifier: Modifier = Modifier) {
  * folder opens it, and a tap on a file downloads it to this phone. Back
  * goes up 1 folder, then leaves the screen. The search finds names in the
  * folder that is open and its subfolders. At the top of the home folder,
- * it finds names in each shared folder.
+ * it finds names in each shared folder. Refresh, a pull down, and a return
+ * to the app list the open folder again.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BrowseScreen(d: DeviceUi, browse: BrowseState?, onBack: () -> Unit) {
     fun open() {
@@ -159,6 +165,15 @@ fun BrowseScreen(d: DeviceUi, browse: BrowseState?, onBack: () -> Unit) {
         val state = FluxCore.browseState() ?: return@LaunchedEffect
         if (isDemo(d.id)) FluxCore.setBrowse(state.copy(search = DebugDemo.search(query, searchFrom))) else Browse.search(FluxCore, query, searchFrom)
     }
+    // A file that the computer made while the phone was away shows when the app returns.
+    LifecycleResumeEffect(d.id) {
+        Browse.refresh(FluxCore)
+        onPauseOrDispose { }
+    }
+    // A pull down shows its own mark while the folder loads again.
+    var pulled by remember { mutableStateOf(false) }
+    val refreshing = pulled && browse?.loading == true
+    LaunchedEffect(browse?.path, browse?.loading) { if (browse?.loading != true) pulled = false }
     // Back goes up 1 folder. While the computer is not reachable, Back leaves the screen.
     val up = {
         if (atRoot || !d.online) onBack() else Browse.list(FluxCore, browse!!.path.trimEnd('/').substringBeforeLast('/').ifEmpty { "/" })
@@ -175,7 +190,9 @@ fun BrowseScreen(d: DeviceUi, browse: BrowseState?, onBack: () -> Unit) {
     val shown = browse?.path?.takeIf { it.isNotEmpty() }?.let { shownPath(it) }
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.padding(horizontal = TiledGutter)) {
-            TiledTopBar("Get files", onBack = { if (searching) query = "" else up() }, context = if (d.online) shown ?: d.name else d.name)
+            TiledTopBar("Get files", onBack = { if (searching) query = "" else up() }, context = if (d.online) shown ?: d.name else d.name) {
+                if (d.online && !searching && shown != null) SquareButton(Ic.refresh, "Refresh", { Browse.refresh(FluxCore) }, enabled = browse?.loading != true)
+            }
         }
         if (!d.online) {
             Box(Modifier.padding(horizontal = TiledGutter)) { NotReachable(d, "The files") }
@@ -191,59 +208,61 @@ fun BrowseScreen(d: DeviceUi, browse: BrowseState?, onBack: () -> Unit) {
         }
         val search = browse?.search?.takeIf { searching }
         val searchBusy = search != null && search.loading && search.results.isNotEmpty()
-        if ((browse != null && browse.loading && browse.entries.isNotEmpty() && !searching) || searchBusy) {
+        if ((browse != null && browse.loading && browse.entries.isNotEmpty() && !searching && !refreshing) || searchBusy) {
             LinearProgressIndicator(Modifier.fillMaxWidth(), color = Tn.blue, trackColor = Tn.line)
         } else {
             Spacer(Modifier.height(4.dp))
         }
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            if (searching) {
-                BrowseResults(d, query, search, searchFrom.isEmpty(), ::shownPath) { e ->
-                    if (e.dir) {
-                        query = ""
-                        focus.clearFocus()
-                        Browse.list(FluxCore, e.path)
-                    } else {
-                        Browse.download(FluxCore, e)
+        PullToRefreshBox(isRefreshing = refreshing, onRefresh = { pulled = Browse.refresh(FluxCore) }, modifier = Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                if (searching) {
+                    BrowseResults(d, query, search, searchFrom.isEmpty(), ::shownPath) { e ->
+                        if (e.dir) {
+                            query = ""
+                            focus.clearFocus()
+                            Browse.list(FluxCore, e.path)
+                        } else {
+                            Browse.download(FluxCore, e)
+                        }
+                    }
+                    Spacer(Modifier.height(96.dp))
+                    return@Column
+                }
+                if (browse != null && browse.roots.size > 1) {
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).selectableGroup().padding(horizontal = Gutter, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        for ((name, path) in browse.roots) {
+                            ChoiceChip(
+                                name, selected = path == root, onClick = { Browse.list(FluxCore, path) },
+                                leading = { Sym(if (name.equals("Home", ignoreCase = true)) Ic.home else Ic.drive, tint = if (path == root) Tn.blue else Tn.sub, size = 18.dp) },
+                            )
+                        }
+                    }
+                }
+                when {
+                    browse?.error != null -> EmptyState(
+                        Ic.error,
+                        "Cannot open the files",
+                        browse.error,
+                        Modifier.padding(top = 32.dp),
+                        action = { FluxButton("Try again", ::open, kind = ButtonKind.Tonal, icon = Ic.refresh) },
+                    )
+                    browse == null || (browse.loading && browse.entries.isEmpty()) -> LineSkeleton(
+                        "Opening the files of ${d.name}",
+                        Modifier.padding(horizontal = Gutter, vertical = 16.dp),
+                        lines = listOf(0.6f, 0.45f, 0.7f, 0.5f, 0.65f, 0.4f),
+                    )
+                    browse.entries.isEmpty() -> EmptyState(Ic.folderOpen, "This folder is empty", "Go back to open another folder.", Modifier.padding(top = 32.dp))
+                }
+                for (e in browse?.entries.orEmpty()) {
+                    BrowseRow(e, if (e.dir) "Folder" else bytes(e.size)) {
+                        if (e.dir) Browse.list(FluxCore, e.path) else Browse.download(FluxCore, e)
                     }
                 }
                 Spacer(Modifier.height(96.dp))
-                return@Column
             }
-            if (browse != null && browse.roots.size > 1) {
-                Row(
-                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).selectableGroup().padding(horizontal = Gutter, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    for ((name, path) in browse.roots) {
-                        ChoiceChip(
-                            name, selected = path == root, onClick = { Browse.list(FluxCore, path) },
-                            leading = { Sym(if (name.equals("Home", ignoreCase = true)) Ic.home else Ic.drive, tint = if (path == root) Tn.blue else Tn.sub, size = 18.dp) },
-                        )
-                    }
-                }
-            }
-            when {
-                browse?.error != null -> EmptyState(
-                    Ic.error,
-                    "Cannot open the files",
-                    browse.error,
-                    Modifier.padding(top = 32.dp),
-                    action = { FluxButton("Try again", ::open, kind = ButtonKind.Tonal, icon = Ic.refresh) },
-                )
-                browse == null || (browse.loading && browse.entries.isEmpty()) -> LineSkeleton(
-                    "Opening the files of ${d.name}",
-                    Modifier.padding(horizontal = Gutter, vertical = 16.dp),
-                    lines = listOf(0.6f, 0.45f, 0.7f, 0.5f, 0.65f, 0.4f),
-                )
-                browse.entries.isEmpty() -> EmptyState(Ic.folderOpen, "This folder is empty", "Go back to open another folder.", Modifier.padding(top = 32.dp))
-            }
-            for (e in browse?.entries.orEmpty()) {
-                BrowseRow(e, if (e.dir) "Folder" else bytes(e.size)) {
-                    if (e.dir) Browse.list(FluxCore, e.path) else Browse.download(FluxCore, e)
-                }
-            }
-            Spacer(Modifier.height(96.dp))
         }
     }
 }

@@ -43,6 +43,9 @@ object Browse {
     /** The ID of the last search. An answer to an older search does not show. */
     private val searchIds = AtomicLong()
 
+    /** The ID of the last list of a folder. An answer to an older list does not show. */
+    private val listIds = AtomicLong()
+
     /**
      * Starts a session. It opens [path] when the computer shares it, else
      * the first root. `fluxd` ends a session when the link drops, so the
@@ -136,21 +139,40 @@ object Browse {
         return true
     }
 
+    /**
+     * Opens the folder [path]. Another folder shows no files until the
+     * computer answers, so the screen never shows the files of the folder
+     * before under the new path. The same folder keeps its files while it
+     * loads again. Only the answer to the last list shows, because the
+     * answers can come in another order.
+     */
     fun list(core: FluxCore, path: String) {
         val client = sftp ?: return
-        val state = core.browseState() ?: return
-        core.setBrowse(state.copy(loading = true, path = path))
+        val id = listIds.incrementAndGet()
+        core.updateBrowse { it.copy(loading = true, path = path, error = null, entries = if (it.path == path) it.entries else emptyList()) }
         core.io.execute {
-            try {
-                val entries = client.ls(path)
+            val entries = runCatching {
+                client.ls(path)
                     .filter { !it.name.startsWith(".") }
                     .map { BrowseEntry(it.name, it.path, it.attributes.type == FileMode.Type.DIRECTORY, it.attributes.size) }
                     .sortedWith(compareBy<BrowseEntry>({ !it.dir }, { it.name.lowercase() }))
-                core.setBrowse(core.browseState()?.copy(loading = false, path = path, entries = entries, error = null))
-            } catch (e: Exception) {
-                core.setBrowse(core.browseState()?.copy(loading = false, error = "Cannot open $path: ${e.message}"))
+            }
+            core.updateBrowse { s ->
+                when {
+                    id != listIds.get() || s.path != path -> s
+                    entries.isSuccess -> s.copy(loading = false, entries = entries.getOrThrow(), error = null)
+                    else -> s.copy(loading = false, error = "Cannot open $path: ${entries.exceptionOrNull()?.message}")
+                }
             }
         }
+    }
+
+    /** Lists the open folder again, for example after a new file on the computer. It returns false when no folder is open. */
+    fun refresh(core: FluxCore): Boolean {
+        val path = core.browseState()?.path?.takeIf { it.isNotEmpty() } ?: return false
+        if (sftp == null) return false
+        list(core, path)
+        return true
     }
 
     /**

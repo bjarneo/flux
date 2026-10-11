@@ -524,6 +524,12 @@ object FluxCore {
 
     fun browseState(): BrowseState? = synchronized(lock) { browse }
 
+    /** Changes the Get files state under the lock, so that 2 changes from 2 threads do not undo each other. */
+    fun updateBrowse(change: (BrowseState) -> BrowseState) {
+        synchronized(lock) { browse = browse?.let(change) }
+        publish()
+    }
+
     fun setRinging(from: String?) {
         synchronized(lock) { ringingFrom = from }
         publish()

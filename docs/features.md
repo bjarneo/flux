@@ -179,6 +179,9 @@ To find a file by its name, type in the search field at the top of **Get files**
 - The search stops after 10 seconds. To find more, open a folder and search there.
 
 A tap on a file downloads it. A tap on a folder opens it.
+Back goes up 1 folder.
+To show the new files of the computer, select **Refresh** or pull the list down.
+The phone also lists the folder again when you return to Flux.
 
 While the phone browses, the desktop shows a notification with a **Stop** button until the session ends.
 The Overview page of the Flux window shows a **BROWSE PC** card with a **Stop** button too.
