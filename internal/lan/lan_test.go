@@ -39,6 +39,16 @@ func newPeer(t *testing.T, ctx context.Context, name string, extraOutgoing ...st
 		t.Fatal(err)
 	}
 	p := &peer{id: id, cert: cert, links: make(chan *Link, 4), pins: map[string]*x509.Certificate{}, logs: make(chan string, 64), oldApps: make(chan string, 4)}
+	// A dial or a broadcast of the provider can log after the test ended,
+	// and t.Log then races with the end of the test. The cleanup stops
+	// the test log under the same lock.
+	var logMu sync.Mutex
+	ended := false
+	t.Cleanup(func() {
+		logMu.Lock()
+		ended = true
+		logMu.Unlock()
+	})
 	p.prov = New(Config{
 		Cert: cert,
 		Identity: func() proto.Identity {
@@ -62,7 +72,11 @@ func newPeer(t *testing.T, ctx context.Context, name string, extraOutgoing ...st
 		},
 		Logf: func(format string, args ...any) {
 			line := fmt.Sprintf(format, args...)
-			t.Log(line)
+			logMu.Lock()
+			if !ended {
+				t.Log(line)
+			}
+			logMu.Unlock()
 			select {
 			case p.logs <- line:
 			default:
