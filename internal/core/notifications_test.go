@@ -1,11 +1,18 @@
 package core
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
 	"log"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -167,4 +174,57 @@ func TestSnapshotUnderLoad(t *testing.T) {
 		}
 	}
 	wg.Wait()
+}
+
+// iconPNG returns a PNG of w × h pixels as base64.
+func iconPNG(t *testing.T, w, h int) string {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	img.Set(0, 0, color.RGBA{R: 255, A: 255})
+	var b bytes.Buffer
+	if err := png.Encode(&b, img); err != nil {
+		t.Fatal(err)
+	}
+	return base64.StdEncoding.EncodeToString(b.Bytes())
+}
+
+func TestNotificationIcon(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	d := testDaemon()
+	dev := newDevice("p1")
+	dev.Paired = true
+	icon := iconPNG(t, 96, 96)
+	d.handleNotification(dev, nil, notificationPacket(map[string]any{"id": "k1", "title": "Hi", "icon": icon}))
+	path := dev.notifications[0].Icon
+	if path == "" || filepath.Dir(path) != iconDir() {
+		t.Fatalf("icon path %q, want a file in %s", path, iconDir())
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if cfg, err := png.DecodeConfig(f); err != nil || cfg.Width != 96 || cfg.Height != 96 {
+		t.Errorf("stored icon: %v, %dx%d", err, cfg.Width, cfg.Height)
+	}
+	// The same icon gives the same file.
+	if again := notificationIcon(icon); again != path {
+		t.Errorf("second icon %q, want %q", again, path)
+	}
+	// The state does not hold the path.
+	if b, _ := json.Marshal(dev.notifications[0]); strings.Contains(string(b), path) {
+		t.Errorf("the state holds the icon path: %s", b)
+	}
+	for name, data := range map[string]string{
+		"not base64":   "%%%",
+		"not a PNG":    base64.StdEncoding.EncodeToString([]byte("GIF89a")),
+		"too wide":     iconPNG(t, maxNotifIconSide+1, 1),
+		"too long":     strings.Repeat("A", maxNotifIcon+4),
+		"no icon":      "",
+		"cut PNG data": icon[:len(icon)/2],
+	} {
+		if got := notificationIcon(data); got != "" {
+			t.Errorf("%s: icon %q, want none", name, got)
+		}
+	}
 }

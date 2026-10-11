@@ -91,6 +91,7 @@ The [workflow controls](workflows.md) describe `[devices]`, `[[notification_rule
 | `~/Pictures/flux/signatures/` | Signatures from the camera by default |
 | `~/.cache/flux/release.json` | The last answer of the [release check](#release-check) |
 | `~/.cache/flux/update/` | The package that `flux-cli update` downloads, until pacman installs it |
+| `~/.cache/flux/icons/` | The app icons of the phone notifications |
 | `$XDG_RUNTIME_DIR/flux/fluxd.sock` | Local IPC socket. Without `XDG_RUNTIME_DIR`, `/run/user/<uid>/flux/fluxd.sock` |
 | `/etc/flux/approve/<user>.pub` | Root-owned phone approval public key |
 | `/etc/flux/approve/pam-backup/` | Original PAM files from approval setup |

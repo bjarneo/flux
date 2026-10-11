@@ -270,6 +270,7 @@ On a Samsung phone, the setting is **Alert when clipboard accessed**.
 
 Enable notification access on the phone to show its notifications on the desktop.
 **Share notifications** on the phone sends them to each connected paired computer.
+The desktop notification shows the icon of the app on the phone.
 
 Some notifications stay on the phone:
 

@@ -1,9 +1,14 @@
 package core
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"image/png"
+	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -31,6 +36,14 @@ const (
 	maxNotifActions = 8
 	maxNotifAction  = 64
 	maxNotifID      = 512
+)
+
+// Limits on the app icon of 1 phone notification. maxNotifIcon is the
+// longest icon as base64 text, and maxNotifIconSide is the largest width
+// and height in pixels. The phone sends a PNG of 96 × 96 pixels.
+const (
+	maxNotifIcon     = 128 << 10
+	maxNotifIconSide = 256
 )
 
 // maxNotifyJobs is the number of desktop notification calls that can wait.
@@ -161,6 +174,10 @@ type PhoneNotification struct {
 	ReplyID string   `json:"replyId"`
 	Actions []string `json:"actions"`
 	Clear   bool     `json:"dismissable"`
+
+	// Icon is the path of the app icon in the cache, or "". The desktop
+	// notification shows it.
+	Icon string `json:"-"`
 }
 
 // flexString decodes a JSON string, number, or boolean as a string.
@@ -222,6 +239,8 @@ func (d *Daemon) handleNotification(dev *Device, l *lan.Link, p *proto.Packet) {
 		OnlyOnce    flexString `json:"onlyOnce"`
 		ReplyID     string     `json:"requestReplyId"`
 		Actions     []string   `json:"actions"`
+
+		Icon string `json:"icon"`
 	}
 	if p.Decode(&b) != nil || b.ID == "" || len(b.ID) > maxNotifID {
 		return
@@ -246,6 +265,7 @@ func (d *Daemon) handleNotification(dev *Device, l *lan.Link, p *proto.Packet) {
 	if n.Time == 0 {
 		n.Time = time.Now().Unix()
 	}
+	n.Icon = notificationIcon(b.Icon)
 	d.mu.Lock()
 	mode := d.notificationModeLocked(dev.ID, n.App, time.Now())
 	if mode == "mute" {
@@ -300,7 +320,7 @@ func (d *Daemon) showNotification(dev *Device, n *PhoneNotification) {
 			app = name
 		}
 		id := d.notify(desktop.Notification{
-			AppName: app + " · " + name, Title: n.Title, Body: n.Text,
+			AppName: app + " · " + name, Title: n.Title, Body: n.Text, IconPath: n.Icon,
 			Actions: actions, ReplacesID: replaces,
 			Silent: mode == "silent",
 		})
@@ -530,3 +550,56 @@ func unb64(s string) string {
 }
 
 func cacheDir() string { return config.CacheDir() }
+
+// iconDir is the folder of the app icons of phone notifications.
+func iconDir() string { return filepath.Join(cacheDir(), "icons") }
+
+// notificationIcon stores the PNG app icon of a phone notification in the
+// cache and returns its path. It returns "" when the icon is missing, too
+// large, or not a valid PNG. fluxd decodes the PNG and encodes it again,
+// so the notification server reads only a PNG that Go wrote. The file name
+// is the SHA-256 of the data from the phone, so each icon is stored once.
+func notificationIcon(data string) string {
+	if data == "" || len(data) > maxNotifIcon {
+		return ""
+	}
+	raw, err := base64.StdEncoding.DecodeString(data)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(raw)
+	dir := iconDir()
+	path := filepath.Join(dir, hex.EncodeToString(sum[:16])+".png")
+	if _, err := os.Stat(path); err == nil {
+		return path
+	}
+	cfg, err := png.DecodeConfig(bytes.NewReader(raw))
+	if err != nil || cfg.Width < 1 || cfg.Height < 1 || cfg.Width > maxNotifIconSide || cfg.Height > maxNotifIconSide {
+		return ""
+	}
+	img, err := png.Decode(bytes.NewReader(raw))
+	if err != nil {
+		return ""
+	}
+	var out bytes.Buffer
+	if png.Encode(&out, img) != nil || os.MkdirAll(dir, 0o700) != nil {
+		return ""
+	}
+	// A temporary file and a rename, so the notification server never reads half an icon.
+	tmp, err := os.CreateTemp(dir, ".icon-*")
+	if err != nil {
+		return ""
+	}
+	_, err = tmp.Write(out.Bytes())
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Rename(tmp.Name(), path)
+	}
+	if err != nil {
+		_ = os.Remove(tmp.Name())
+		return ""
+	}
+	return path
+}

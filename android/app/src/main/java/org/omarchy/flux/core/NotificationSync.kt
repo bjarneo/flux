@@ -5,18 +5,28 @@ import android.app.Notification
 import android.app.RemoteInput
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.os.Build
 import android.os.Bundle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import androidx.core.graphics.drawable.toBitmap
 import org.omarchy.flux.protocol.Packet
 import org.omarchy.flux.protocol.Types
 import org.omarchy.flux.protocol.bodyOf
+import java.io.ByteArrayOutputStream
+import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 private const val TAG = "FluxNotif"
+
+/** The width and height of the app icon that the phone sends with a notification, in pixels. */
+private const val ICON_SIZE = 96
+
+/** The number of app icons that the phone keeps drawn. */
+private const val MAX_ICONS = 200
 
 /**
  * The facts about 1 action of a notification that decide whether a
@@ -99,6 +109,9 @@ object NotificationSync {
     private class Shared(val packet: Packet, val titles: Set<String>)
 
     private val replies = ConcurrentHashMap<String, ReplyTarget>()
+
+    // The app icons as base64 PNG, by package. An empty text is an app with no icon.
+    private val icons = ConcurrentHashMap<String, String>()
     private val replyIds = ConcurrentHashMap<String, String>()
     private val gate = NotificationGate()
 
@@ -304,9 +317,29 @@ object NotificationSync {
                 "onlyOnce" to (n.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0),
                 "requestReplyId" to replyId,
                 "actions" to buttons.ifEmpty { null },
+                "icon" to appIcon(sbn.packageName),
             ).let { o -> kotlinx.serialization.json.JsonObject(o.filterValues { it !is kotlinx.serialization.json.JsonNull }) },
         )
         return Shared(packet, buttons.toSet())
+    }
+
+    /**
+     * The icon of the app [pkg] as a base64 PNG of [ICON_SIZE] pixels, or
+     * null. The computer shows it on the notification. The phone draws each
+     * icon once.
+     */
+    private fun appIcon(pkg: String): String? {
+        icons[pkg]?.let { return it.ifEmpty { null } }
+        val png = runCatching {
+            val bitmap = FluxCore.app.packageManager.getApplicationIcon(pkg).toBitmap(ICON_SIZE, ICON_SIZE, Bitmap.Config.ARGB_8888)
+            ByteArrayOutputStream().use { out ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                out.toByteArray()
+            }
+        }.onFailure { Log.i(TAG, "no icon for $pkg: ${it.message}") }.getOrNull()
+        val text = png?.let { Base64.getEncoder().encodeToString(it) }.orEmpty()
+        if (icons.size < MAX_ICONS) icons[pkg] = text
+        return text.ifEmpty { null }
     }
 
     private fun appName(pkg: String): String = runCatching {
