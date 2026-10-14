@@ -67,11 +67,9 @@ struct ReplyField: NSViewRepresentable {
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSScrollView, context: Context) -> CGSize? {
-        guard let view = nsView.documentView as? NSTextView, let layout = view.layoutManager, let container = view.textContainer else { return nil }
+        guard let view = nsView.documentView as? NSTextView else { return nil }
         let width = proposal.width ?? 300
-        container.containerSize = NSSize(width: max(width - view.textContainerInset.width * 2, 10), height: .greatestFiniteMagnitude)
-        layout.ensureLayout(for: container)
-        let height = layout.usedRect(for: container).height + view.textContainerInset.height * 2
+        let height = context.coordinator.textHeight(of: view, width: width) + view.textContainerInset.height * 2
         return CGSize(width: width, height: min(max(height, Self.minHeight), Self.maxHeight))
     }
 
@@ -79,7 +77,29 @@ struct ReplyField: NSViewRepresentable {
         var parent: ReplyField
         var updating = false
 
-        init(_ parent: ReplyField) { self.parent = parent }
+        // sizeThatFits measures in a text system of its own. SwiftUI asks for
+        // several widths in each layout pass, down to 0. A measure in the text
+        // view itself resized the view in the pass, so AppKit laid out the
+        // window again until it stopped Flux.
+        private let storage = NSTextStorage()
+        private let layout = NSLayoutManager()
+        private let container = NSTextContainer()
+
+        init(_ parent: ReplyField) {
+            self.parent = parent
+            super.init()
+            layout.addTextContainer(container)
+            storage.addLayoutManager(layout)
+        }
+
+        /// The height of the text of `view` at `width`, without a change to `view`.
+        func textHeight(of view: NSTextView, width: CGFloat) -> CGFloat {
+            container.lineFragmentPadding = view.textContainer?.lineFragmentPadding ?? 0
+            container.size = NSSize(width: max(width - view.textContainerInset.width * 2, 10), height: .greatestFiniteMagnitude)
+            storage.setAttributedString(view.attributedString())
+            layout.ensureLayout(for: container)
+            return layout.usedRect(for: container).height
+        }
 
         func textDidChange(_ notification: Notification) {
             guard !updating, let view = notification.object as? NSTextView else { return }
