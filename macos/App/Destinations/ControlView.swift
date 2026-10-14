@@ -36,6 +36,10 @@ struct ControlView: View {
                         let agents = ToolTarget.of(model, can: { $0.accepts(PacketType.fluxHerdr) })
                         AgentList(herdr: herdr, devices: herdrDevices, canOpen: ToolTarget.ready(agents)) {
                             ToolTarget.run(agents, title: "Open the agents of", ask: $ask) { d in AgentsWindows.shared.show(d.id, app: model) }
+                        } startAgent: {
+                            ToolTarget.run(agents, title: "Start an agent on", ask: $ask) { d in
+                                AgentsWindows.shared.show(d.id, startAgent: true, app: model)
+                            }
                         }
                     }
                     ListHeading("Tools")
@@ -177,6 +181,8 @@ private struct AgentList: View {
     let canOpen: Bool
     /// Opens the agents window, which also reads the agents again.
     let openWindow: () -> Void
+    /// Opens the agents window with the sheet that starts an agent.
+    let startAgent: () -> Void
     @Environment(AppModel.self) private var model
     @Environment(\.tn) private var tn
 
@@ -202,11 +208,15 @@ private struct AgentList: View {
             blocked > 0 ? "\(blocked) \(blocked == 1 ? "needs" : "need") you" : "",
         ])
         ListHeading("Agents", trailing: summary) {
-            Button("Agents Window", action: openWindow)
-                .buttonStyle(.link)
-                .font(.system(size: 11.5))
-                .disabled(!canOpen)
-                .help("Open the agents of the computer in their own window")
+            HStack(spacing: 12) {
+                Button("Start Agent", action: startAgent)
+                    .help("Start a coding agent on the computer")
+                Button("Agents Window", action: openWindow)
+                    .help("Open the agents of the computer in their own window")
+            }
+            .buttonStyle(.link)
+            .font(.system(size: 11.5))
+            .disabled(!canOpen)
         }
         note(rows: rows.count, terminals: terms.count)
         TimelineView(.periodic(from: .now, by: 1)) { context in
