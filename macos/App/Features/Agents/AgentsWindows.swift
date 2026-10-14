@@ -13,6 +13,8 @@ final class AgentsWindowModel {
     let plugin: HerdrPlugin
     /// The pane of the selected agent.
     var selection: String?
+    /// True while the sheet that starts an agent shows.
+    var newAgent = false
     /// The reply text of each pane. A draft stays when the user selects another agent.
     var drafts: [String: String] = [:]
     /// The cursor of each reply field, in UTF-16 units.

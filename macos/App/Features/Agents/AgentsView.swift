@@ -23,6 +23,7 @@ struct AgentsView: View {
             }
         }
         .frame(minWidth: 640, minHeight: 420)
+        .sheet(isPresented: $model.newAgent) { NewAgentSheet(model: model, name: name) }
         .task(id: online) {
             if online { model.plugin.request(model.deviceId) }
         }
@@ -36,7 +37,7 @@ struct AgentsView: View {
         } else if !herdr.running {
             unavailable("herdr is not running", "Start herdr on \(name). Its coding agents show here.")
         } else if herdr.agents.isEmpty {
-            unavailable("No agents yet", "Start a coding agent in a herdr pane on \(name). It shows here.")
+            unavailable("No agents yet", "Start a coding agent from here, or in a herdr pane on \(name).", start: true)
         } else {
             HSplitView {
                 AgentList(model: model, agents: herdr.sorted)
@@ -55,12 +56,16 @@ struct AgentsView: View {
         }
     }
 
-    private func unavailable(_ title: String, _ text: String) -> some View {
+    private func unavailable(_ title: String, _ text: String, start: Bool = false) -> some View {
         ContentUnavailableView {
             Label(title, systemImage: "brain")
         } description: {
             Text(text)
         } actions: {
+            if start {
+                Button("Start an agent") { model.newAgent = true }
+                    .buttonStyle(.borderedProminent)
+            }
             Button("Refresh") { model.plugin.request(model.deviceId) }
         }
     }
@@ -82,6 +87,10 @@ private struct AgentList: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
+                Button { model.newAgent = true } label: { Image(systemName: "plus") }
+                    .buttonStyle(.borderless)
+                    .help("Start an agent")
+                    .accessibilityLabel("Start an agent")
                 Button { model.plugin.request(model.deviceId) } label: { Image(systemName: "arrow.clockwise") }
                     .buttonStyle(.borderless)
                     .help("Refresh the agent list")
@@ -196,6 +205,7 @@ private struct AgentDetail: View {
                 }
                 .frame(height: 2)
                 ThreadList(output: out, thread: thread, status: agent.status, sent: sent, review: canReview ? { review = true } : nil)
+                FirstTaskNote(model: model, agent: agent)
                 if control {
                     ReplyControls(model: model, agent: agent, output: out, thread: thread, ask: ask, name: name,
                                   keysOpen: $keysOpen, review: canReview ? { review = true } : nil) { sent = $0 }
