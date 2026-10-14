@@ -3,7 +3,9 @@ import FluxKit
 import SwiftUI
 import UserNotifications
 
-/// The browse windows, 1 per computer. Closing a window ends its SSH session.
+/// The browse windows, 1 per computer. A computer has 1 SSH session, which
+/// its window and the folder pickers share. It ends when the window and the
+/// last picker close.
 @MainActor
 final class BrowseWindows: NSObject, NSWindowDelegate {
     static let shared = BrowseWindows()
@@ -13,7 +15,25 @@ final class BrowseWindows: NSObject, NSWindowDelegate {
         let browser: BrowseModel
     }
     private var open: [String: Entry] = [:]
+    /// The folder pickers that use the session of each computer.
+    private var leases: [String: Int] = [:]
     private weak var plugin: BrowsePlugin?
+
+    /// The browser of a computer for a folder picker. Each lease needs a
+    /// `release` when the picker closes.
+    func lease(_ deviceId: String, app: AppModel) -> BrowseModel? {
+        guard let plugin = app.core.plugin(BrowsePlugin.self), let browser = plugin.browser(for: deviceId) else { return nil }
+        self.plugin = plugin
+        leases[deviceId, default: 0] += 1
+        return browser
+    }
+
+    /// Ends a lease. The session ends when no window and no other picker uses it.
+    func release(_ deviceId: String) {
+        guard let count = leases[deviceId] else { return }
+        leases[deviceId] = count > 1 ? count - 1 : nil
+        if count == 1 && open[deviceId] == nil { plugin?.close(deviceId) }
+    }
 
     /// Shows the browse window of a computer, and opens it when it is not open.
     func show(_ deviceId: String, app: AppModel) {
@@ -58,7 +78,7 @@ final class BrowseWindows: NSObject, NSWindowDelegate {
         guard let window = notification.object as? NSWindow,
               let id = open.first(where: { $0.value.window === window })?.key else { return }
         open[id] = nil
-        plugin?.close(id)
+        if leases[id] == nil { plugin?.close(id) }
     }
 }
 

@@ -35,6 +35,8 @@ struct NewAgentSheet: View {
     @State private var task = ""
     @State private var taskCursor: NSRange?
     @State private var lockError: String?
+    /// True while the folder browser shows.
+    @State private var browsing = false
     /// Only a create from this sheet counts. Its number is higher than the
     /// last action at the click.
     @State private var after = Int.max
@@ -90,6 +92,9 @@ struct NewAgentSheet: View {
             dismiss()
         }
         .interactiveDismissDisabled(action?.sending == true)
+        .sheet(isPresented: $browsing) {
+            FolderBrowserSheet(app: model.app, deviceId: model.deviceId, name: name) { select($0) }
+        }
     }
 
     private func unavailable(_ title: String, _ text: String) -> some View {
@@ -153,18 +158,22 @@ struct NewAgentSheet: View {
 
     private func folderSearch(busy: Bool) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").foregroundStyle(tn.sub)
-            TextField("Search, or type a path such as ~/Code/app", text: $query)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13, design: .monospaced))
-                .autocorrectionDisabled()
-                .onSubmit { if NewPane.looksLikePath(query) { select(query) } }
-            ClearKey(text: $query)
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundStyle(tn.sub)
+                TextField("Search, or type a path such as ~/Code/app", text: $query)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13, design: .monospaced))
+                    .autocorrectionDisabled()
+                    .onSubmit { if NewPane.looksLikePath(query) { select(query) } }
+                ClearKey(text: $query)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 36)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(tn.tile))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(tn.lineHi))
+            Button("Browse…") { browsing = true }
+                .help("Pick a folder from the folders of \(name)")
         }
-        .padding(.horizontal, 12)
-        .frame(height: 36)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(tn.tile))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(tn.lineHi))
         .disabled(busy)
     }
 
