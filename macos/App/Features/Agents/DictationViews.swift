@@ -176,7 +176,8 @@ extension View {
             .padding(.horizontal, 8)
             .frame(minHeight: DictationLayout.keySize)
             .background(shape.fill(Color(nsColor: .textBackgroundColor)))
-            .overlay(shape.strokeBorder(Color.primary.opacity(0.15)))
+            // The border takes no clicks, so the clear and expand keys under it get them.
+            .overlay(shape.strokeBorder(Color.primary.opacity(0.15)).allowsHitTesting(false))
     }
 }
 

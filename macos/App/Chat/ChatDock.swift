@@ -328,7 +328,8 @@ struct ChatDock: View {
                     .padding(.horizontal, 14)
                     .frame(minHeight: DictationLayout.keySize)
                     .background(shape.fill(tn.bg))
-                    .overlay(shape.strokeBorder(reply != nil || focused ? tn.accent : tn.lineHi))
+                    // The border takes no clicks, so the clear and expand keys under it get them.
+                    .overlay(shape.strokeBorder(reply != nil || focused ? tn.accent : tn.lineHi).allowsHitTesting(false))
                     .onSubmit(send)
                     .onExitCommand { if model.chatReply != nil { model.chatReply = nil } }
                     .disabled(!enabled)
