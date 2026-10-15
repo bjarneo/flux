@@ -9,13 +9,11 @@ import (
 )
 
 // dndPoll is how often fluxd reads the Do Not Disturb state of the desktop.
-// The Omarchy shell has no change event, and a read of its state file is
-// cheap.
+// The Omarchy shell has no change event.
 const dndPoll = 2 * time.Second
 
 // dndSettle is how long fluxd waits for the desktop to report a state that
-// a phone set. The Omarchy shell writes its state file 200 ms after a
-// change.
+// a phone set.
 const dndSettle = 3 * time.Second
 
 // dndBackend is the Do Not Disturb of the desktop. desktop.DND implements it.
