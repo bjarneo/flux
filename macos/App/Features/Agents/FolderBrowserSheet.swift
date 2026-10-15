@@ -5,11 +5,13 @@ import SwiftUI
 /// Get files: the home folder and the usual folders, without hidden ones.
 /// fluxd has 1 Get files session for each computer, so the picker shares it
 /// with the Get files window, and a folder that opens here also opens there.
-/// `onPick` gets the folder in the form of herdr, such as `~/Code/app`.
+/// It opens at `chosen`, the chosen folder in the form of herdr. `onPick`
+/// gets the folder in the same form, such as `~/Code/app`.
 struct FolderBrowserSheet: View {
     let app: AppModel
     let deviceId: String
     let name: String
+    let chosen: String
     let onPick: (String) -> Void
     @Environment(\.tn) private var tn
     @Environment(\.dismiss) private var dismiss
@@ -84,6 +86,17 @@ struct FolderBrowserSheet: View {
             }
             .padding(16)
         }
+        .onChange(of: browser.roots, initial: true) { openChosen(browser) }
+    }
+
+    /// Opens the chosen folder when the session knows its shared folders. A
+    /// folder outside them leaves the picker where Get files is.
+    private func openChosen(_ browser: BrowseModel) {
+        guard let home = browser.roots.first?.path,
+              let path = NewPane.absoluteFolder(chosen, home: home),
+              BrowsePath.root(of: path, in: browser.roots) != nil,
+              path != browser.path else { return }
+        browser.open(path)
     }
 
     /// Up, then the folders from the root down to the current one.

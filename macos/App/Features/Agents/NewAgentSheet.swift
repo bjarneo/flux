@@ -93,9 +93,13 @@ struct NewAgentSheet: View {
         }
         .interactiveDismissDisabled(action?.sending == true)
         .sheet(isPresented: $browsing) {
-            FolderBrowserSheet(app: model.app, deviceId: model.deviceId, name: name) { select($0) }
+            FolderBrowserSheet(app: model.app, deviceId: model.deviceId, name: name, chosen: target) { select($0) }
         }
     }
+
+    /// The folder of the new agent. A typed path is the folder at once.
+    /// Return or a click on its row keeps it after the search.
+    private var target: String { NewPane.looksLikePath(query) ? NewPane.normalFolder(query) : folder }
 
     private func unavailable(_ title: String, _ text: String) -> some View {
         ContentUnavailableView(title, systemImage: "brain", description: Text(text))
@@ -104,9 +108,6 @@ struct NewAgentSheet: View {
 
     private func form(_ herdr: HerdrState, action: HerdrAction?) -> some View {
         let busy = action?.sending == true
-        let typed = NewPane.looksLikePath(query)
-        // A typed path is the folder at once. Return or a click on its row keeps it after the search.
-        let target = typed ? NewPane.normalFolder(query) : folder
         let match = NewPane.workspaceFor(herdr, target)
         let workspace = match != nil && !newWorkspace ? match?.id ?? "" : ""
         return VStack(spacing: 0) {
