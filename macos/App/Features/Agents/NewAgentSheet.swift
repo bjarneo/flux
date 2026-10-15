@@ -170,7 +170,8 @@ struct NewAgentSheet: View {
             .padding(.horizontal, 12)
             .frame(height: 36)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(tn.tile))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(tn.lineHi))
+            // The border takes no clicks, so the clear key under it gets them.
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(tn.lineHi).allowsHitTesting(false))
             Button("Browse…") { browsing = true }
                 .help("Pick a folder from the folders of \(name)")
         }
