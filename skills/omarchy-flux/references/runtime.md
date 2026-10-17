@@ -84,6 +84,13 @@ Flux cannot discover or pair a device through Tailscale.
 Pair on the local network first.
 Read `docs/tailscale.md` for the limits and the troubleshooting steps.
 
+On a computer, ZeroTier makes a virtual Ethernet network, so mDNS and the UDP broadcasts of `fluxd` reach a Mac or a Windows computer on it.
+On a phone, ZeroTier One runs as a VPN that carries no mDNS, so Flux cannot discover or pair a phone through ZeroTier.
+Pair the phone on the local network, then add its ZeroTier IP address as an extra address.
+`flux-cli doctor` checks that each `zt*` interface is up, has an IPv4 address, and is not left out by `allow-interfaces` or `deny-interfaces` in `/etc/avahi/avahi-daemon.conf`.
+In `sudo zerotier-cli peers`, a latency of `-1` for the phone means that the desktop gets no answer from it.
+Read `docs/zerotier.md` for the setup, the limits, and the troubleshooting steps.
+
 ## Notifications and commands
 
 ```sh
@@ -290,7 +297,7 @@ Do not change `sshd` or `login` PAM services.
 4. Check that Flux runs on the phone.
 5. Check that the network allows communication between clients. `fluxd` opens the connections itself, so do not add an inbound firewall rule for the Flux ports.
 6. Run `flux-cli discover` and inspect the state again.
-7. For a phone away from the local network, check `flux-cli addresses`, `tailscale ping HOST`, and the `connect to` lines in the `fluxd` log.
+7. For a phone away from the local network, check `flux-cli addresses`, `tailscale ping HOST` or `sudo zerotier-cli peers`, and the `connect to` lines in the `fluxd` log.
 
 If the plugin fails, test the Qt host with `FLUX_GUI=app flux-cli open`.
 If that succeeds, inspect the plugin install and shell logs.

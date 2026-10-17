@@ -65,16 +65,26 @@ func doctor() {
 	check(active("avahi-daemon"), "avahi-daemon runs, so fluxd can find phones with mDNS",
 		"avahi-daemon is not running, so fluxd cannot find phones. Run: sudo systemctl enable --now avahi-daemon")
 
+	conf, _ := os.ReadFile(avahiConf)
+	checkZeroTier(active("zerotier-one"), zerotierIfaces(), string(conf), os.Stdout, check)
+
 	// Extra addresses reach a paired device outside the local network, for
-	// example through Tailscale. A host name must resolve to be of use.
+	// example through Tailscale or ZeroTier. A host name must resolve to be
+	// of use.
 	if err == nil {
-		tailscale := active("tailscaled")
+		var vpns []string
+		if active("tailscaled") {
+			vpns = append(vpns, "Tailscale")
+		}
+		if active("zerotier-one") {
+			vpns = append(vpns, "ZeroTier")
+		}
 		for _, d := range s.Devices {
 			if !d.Paired {
 				continue
 			}
-			if len(d.Addresses) == 0 && tailscale {
-				fmt.Printf("- Tailscale runs. To reach %s away from this network, run: flux-cli --device %q addresses add HOST\n", d.Name, d.Name)
+			if len(d.Addresses) == 0 && len(vpns) > 0 {
+				fmt.Printf("- %s runs. To reach %s away from this network, run: flux-cli --device %q addresses add HOST\n", strings.Join(vpns, " and "), d.Name, d.Name)
 			}
 			for _, a := range d.Addresses {
 				if net.ParseIP(a) != nil {

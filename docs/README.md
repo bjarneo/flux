@@ -1,7 +1,7 @@
 # Flux documentation
 
 Flux connects an Omarchy desktop to Flux for Android, Flux for iOS, or Flux for macOS on the same local network.
-A paired device can also connect through [Tailscale](tailscale.md) away from that network.
+A device can also connect through [ZeroTier](zerotier.md) or [Tailscale](tailscale.md) away from that network.
 
 ## Start here
 
@@ -24,6 +24,7 @@ A paired device can also connect through [Tailscale](tailscale.md) away from tha
 | [Everyday use](features.md) | Pair, share, clipboard images, SMS, media, calls, Do Not Disturb, automatic photo transfers, and dictation in text fields |
 | [Workflow controls](workflows.md) | Offline outbox, resumable transfers, folder archives, saved snippets, device access, notification rules, automation, agent review, and remote audio |
 | [Tailscale](tailscale.md) | Extra addresses, links away from the local network, other VPNs, and connection checks |
+| [ZeroTier](zerotier.md) | Extra addresses for phones, discovery of computers, access, and connection checks |
 | [Camera and streams](camera.md) | Scans, photos, webcam settings, microphone, and screen mirror |
 | [Configuration](configuration.md) | TOML settings, data paths, environment variables, and service control |
 | [Security](security.md) | What a paired device can do, the settings that limit it, network ports, pairing checks, and unpair |

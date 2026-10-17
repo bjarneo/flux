@@ -117,6 +117,7 @@ Scripts can change the list with the `addresses.add` and `addresses.remove` [IPC
 
 An extra address can be any host name or IP address that routes to the phone.
 Use the same command for another VPN, such as WireGuard.
+For ZeroTier, see [Connect through ZeroTier](zerotier.md).
 The desktop must be able to open TCP connections to the phone on ports 12070 to 12108.
 
 ## Access and security

@@ -221,7 +221,7 @@ To pair, do 1 of these steps:
 
 ## The phone does not connect away from home
 
-Flux reaches a phone outside the local network only through an extra address, for example its Tailscale name.
+Flux reaches a phone outside the local network only through an extra address, for example its Tailscale name or its ZeroTier address.
 
 ```sh
 flux-cli addresses
@@ -230,8 +230,8 @@ tailscale ping pixel-8
 journalctl --user -u fluxd -n 50 --no-pager | grep "connect to"
 ```
 
-If `flux-cli addresses` shows `none` for the phone, add its Tailscale name.
-See [Connect through Tailscale](tailscale.md#troubleshoot) for the other checks.
+If `flux-cli addresses` shows `none` for the phone, add its Tailscale name or its ZeroTier address.
+See [Connect through Tailscale](tailscale.md#troubleshoot) or [Connect through ZeroTier](zerotier.md#troubleshoot) for the other checks.
 
 ## The window or bar item is missing
 

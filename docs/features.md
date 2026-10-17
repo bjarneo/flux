@@ -58,7 +58,7 @@ The phone scans for computers for 10 seconds when the app opens.
 The phone takes a connection from a computer that is not paired only while Flux is on the screen or while it scans.
 So keep Flux open on the phone while you pair.
 If the desktop is not in the list, tap **Scan again** on the phone.
-To use the phone away from the local network, see [Connect through Tailscale](tailscale.md).
+To use the phone away from the local network, see [Connect through Tailscale](tailscale.md) or [Connect through ZeroTier](zerotier.md).
 
 ### Pairing security
 
