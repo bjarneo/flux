@@ -46,7 +46,7 @@ The routes are the same for each of them.
 | --- | --- |
 | Discover the phone | mDNS through Avahi |
 | Connect to the phone | Desktop opens the connection |
-| Connect to the phone outside the local network | Desktop dials an [extra address](tailscale.md), for example through Tailscale |
+| Connect to the phone outside the local network | Desktop dials an [extra address](tailscale.md), for example through Tailscale or [ZeroTier](zerotier.md) |
 | Receive files | Desktop connects to the phone's payload port |
 | Send files to the phone | Phone listens for a `flux.tunnel`, then desktop connects |
 | Browse the desktop from the phone | SSH inside a `flux.tunnel` |

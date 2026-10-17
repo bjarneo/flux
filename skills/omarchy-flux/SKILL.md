@@ -1,12 +1,13 @@
 ---
 name: omarchy-flux
-description: Use, install, diagnose, develop, and release Omarchy Flux. Use this skill for the flux-cli command, fluxd, Flux for Android, Flux for iOS, Flux for macOS, phone, iPhone, and Mac pairing, connections through Tailscale, file or clipboard transfers, phone notifications, webcam or microphone streams, screen mirror, fingerprint approval, herdr agents on the phone, the Flux Qt app, the Flux Omarchy plugin, AUR packages, and Flux APK workflows. Scope this skill to Flux tasks, not general Android or Omarchy configuration.
+description: Use, install, diagnose, develop, and release Omarchy Flux. Use this skill for the flux-cli command, fluxd, Flux for Android, Flux for iOS, Flux for macOS, phone, iPhone, and Mac pairing, connections through Tailscale or ZeroTier, file or clipboard transfers, phone notifications, webcam or microphone streams, screen mirror, fingerprint approval, herdr agents on the phone, the Flux Qt app, the Flux Omarchy plugin, AUR packages, and Flux APK workflows. Scope this skill to Flux tasks, not general Android or Omarchy configuration.
 ---
 
 # Omarchy Flux
 
 Flux connects an Omarchy desktop to Flux for Android, Flux for iOS, or Flux for macOS on the same local network.
 A paired device can also connect through Tailscale with an extra address.
+ZeroTier works the same way for a phone: add its ZeroTier address as an extra address.
 The desktop includes the `flux-cli` command, `fluxd`, a Qt app, and an Omarchy shell plugin.
 `flux` is a short name for `flux-cli` when no other program uses it.
 The `fluxcd` package also installs a `flux` command, so always run `flux-cli`.
@@ -100,7 +101,7 @@ Do not open the Flux ports in the firewall, because each host that reaches them 
 Flux for Android takes a new computer only while Flux is on the screen or while it scans.
 Check the daemon, Avahi, Wi-Fi isolation, and phone state first.
 
-Discovery and pairing need the local network.
+Discovery and pairing of a phone need the local network.
 To reach a paired phone away from that network, add its Tailscale name as an extra address:
 
 ```sh
@@ -111,6 +112,7 @@ flux-cli addresses
 
 Use the device name from `flux-cli status --json` and the host name from `tailscale status`.
 Read `docs/tailscale.md` for the dial order, limits, and checks.
+For ZeroTier, add the ZeroTier IP address of the phone in the same way, and read `docs/zerotier.md`. `flux-cli doctor` checks each ZeroTier interface and the Avahi interface lists.
 
 ## Respect the requested operation
 

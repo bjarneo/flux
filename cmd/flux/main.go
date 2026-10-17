@@ -46,7 +46,7 @@ Commands:
   unpair DEVICE          Remove a paired device
   addresses              List the extra addresses of the paired devices
   addresses add HOST     Add a host name or IP address, for example the Tailscale
-                         name of the phone. fluxd tries it while the device is offline
+                         name or the ZeroTier address of the phone. fluxd tries it while the device is offline
   addresses remove HOST  Remove an extra address
   ring                   Ring the phone
   ping [MESSAGE]         Send a ping
