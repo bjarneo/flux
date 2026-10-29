@@ -515,7 +515,9 @@ public sealed record AgentChoice
     // choices, for example descriptions or a rule. The first line under a
     // choice that is indented more than the choice is its description. It
     // returns an empty list when it finds fewer than 2 choices, or when the
-    // choices are not near the end.
+    // choices are not near the end. A dialog takes the place of the input,
+    // so it also returns an empty list when an input prompt comes after the
+    // choices. Then the lines are a numbered list in a message of the agent.
     public static IReadOnlyList<AgentChoice> Find(IReadOnlyList<string> lines)
     {
         var from = Math.Max(0, lines.Count - ScanLines);
@@ -544,6 +546,13 @@ public sealed record AgentChoice
         if (run.Count < 2 || run[^1].Index < lines.Count - TailLines)
         {
             return [];
+        }
+        for (var j = run[^1].Index + 1; j < lines.Count; j++)
+        {
+            if (IsInputPrompt(lines[j]))
+            {
+                return [];
+            }
         }
         var described = new List<AgentChoice>();
         for (var k = 0; k < run.Count; k++)
@@ -584,6 +593,28 @@ public sealed record AgentChoice
             i++;
         }
         return i;
+    }
+
+    // True when line is the input prompt of an agent, also inside a box,
+    // and not a choice. Examples are "❯" of Claude Code and "› Ask Codex to
+    // do anything" of Codex.
+    static bool IsInputPrompt(string line)
+    {
+        if (Parse(line) is not null)
+        {
+            return false;
+        }
+        var t = line.Trim();
+        if (t.StartsWith('│'))
+        {
+            t = t[1..];
+        }
+        if (t.EndsWith('│'))
+        {
+            t = t[..^1];
+        }
+        t = t.Trim();
+        return t.Length > 0 && (t[0] is '❯' or '›' or '>') && (t.Length == 1 || char.IsWhiteSpace(t[1]));
     }
 
     // Reads 1 line in the form [❯›>] N. label or N) label, with blanks

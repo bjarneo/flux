@@ -136,6 +136,42 @@ public class AgentThreadTests
     }
 
     [Fact]
+    public void ANumberedListAtTheEndStaysInTheThread()
+    {
+        var rule = new string('─', 40);
+        string[] lines =
+        [
+            "● Here is what I would add.",
+            "",
+            "  Highest value",
+            "     ",
+            "  1. Notify when an agent needs you. Send a desktop notification when an agent",
+            "     asks a question.",
+            "  2. Hide finished agents.",
+            "",
+            "  Small fixes",
+            "",
+            "  3. Show the full command.",
+            "",
+            "  I would start with 1 and 2.",
+            "",
+            "✻ Cogitated for 24s · done 10:00 AM",
+            "",
+            rule,
+            "❯ ",
+            rule,
+            "  ⏵⏵ auto mode on (shift+tab to cycle)",
+        ];
+        Assert.Null(AgentAsk.DialogStart(lines));
+        var t = AgentThread.Parse(lines);
+        Assert.Equal("24s", t.Worked);
+        var text = Assert.IsType<ThreadBlock.Message>(Assert.Single(t.Blocks)).Text;
+        Assert.StartsWith("Here is what I would add.", text);
+        Assert.Contains("3. Show the full command.", text);
+        Assert.EndsWith("I would start with 1 and 2.", text);
+    }
+
+    [Fact]
     public void CodexWorkingLineGivesTheTime()
     {
         var t = AgentThread.Parse(["• I will run it.", "", "• Working (12s • esc to interrupt)", "", "› Ask Codex to do anything"]);

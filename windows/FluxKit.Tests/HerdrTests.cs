@@ -191,6 +191,21 @@ public class HerdrTests
     }
 
     [Fact]
+    public void ANumberedListAboveTheInputIsNotADialog()
+    {
+        string[] list = ["● I would add these.", "", "  1. Notify when an agent needs you.", "  2. Hide finished agents.", ""];
+        var rule = new string('─', 32);
+        // The input of Claude Code.
+        Assert.Empty(AgentChoice.Find([.. list, "✻ Cogitated for 24s · done 10:00 AM", "", rule, "❯ ", rule, "  ⏵⏵ auto mode on"]));
+        // The input of Codex.
+        Assert.Empty(AgentChoice.Find([.. list, "› Ask Codex to do anything", "", "  100% context left"]));
+        // The input in a box.
+        Assert.Empty(AgentChoice.Find([.. list, "╭────────╮", "│ >      │", "╰────────╯"]));
+        // A dialog has no input.
+        Assert.Equal(["1", "2", "3"], AgentChoice.Find([.. ClaudeDialog, "", " Esc to cancel · Tab to amend"]).Select(c => c.Key));
+    }
+
+    [Fact]
     public void OutputKeepsColorsAndFindsChoices()
     {
         var text = string.Join("\n", ClaudeDialog).Replace(" ❯ 1. Yes", $" {Esc}[38;5;4m❯ 1. Yes{Esc}[0m");

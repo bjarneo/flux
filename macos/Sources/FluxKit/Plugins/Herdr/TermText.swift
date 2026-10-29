@@ -364,7 +364,9 @@ public struct AgentChoice: Sendable, Hashable, Identifiable {
     /// choices, for example descriptions or a rule. The first line under a
     /// choice that is indented more than the choice is its description. It
     /// returns an empty list when it finds fewer than 2 choices, or when the
-    /// choices are not near the end.
+    /// choices are not near the end. A dialog takes the place of the input,
+    /// so it also returns an empty list when an input prompt comes after the
+    /// choices. Then the lines are a numbered list in a message of the agent.
     public static func find(_ lines: [String]) -> [AgentChoice] {
         let from = max(0, lines.count - scanLines)
         var hits: [(index: Int, number: Int, choice: AgentChoice)] = []
@@ -379,6 +381,7 @@ public struct AgentChoice: Sendable, Hashable, Identifiable {
             run.append(h)
         }
         guard run.count >= 2, let last = run.last, last.index >= lines.count - tailLines else { return [] }
+        if lines[(last.index + 1)...].contains(where: isInputPrompt) { return [] }
         var described: [AgentChoice] = []
         for (k, h) in run.enumerated() {
             let next = k + 1 < run.count ? run[k + 1].index : min(lines.count, h.index + 3)
@@ -393,6 +396,19 @@ public struct AgentChoice: Sendable, Hashable, Identifiable {
         }
         // A single key selects a choice, so only 1 to 9 work.
         return described.filter { $0.key.count == 1 }
+    }
+
+    /// True when `line` is the input prompt of an agent, also inside a box,
+    /// and not a choice. Examples are "❯" of Claude Code and "› Ask Codex to
+    /// do anything" of Codex.
+    private static func isInputPrompt(_ line: String) -> Bool {
+        guard parse(line) == nil else { return false }
+        var t = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.hasPrefix("│") { t.removeFirst() }
+        if t.hasSuffix("│") { t.removeLast() }
+        t = t.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let c = t.first, "❯›>".contains(c) else { return false }
+        return t.count == 1 || t.dropFirst().first?.isWhitespace == true
     }
 
     /// Reads 1 line in the form `[❯›>] N. label` or `N) label`, with blanks

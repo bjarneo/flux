@@ -110,6 +110,39 @@ final class AgentThreadTests: XCTestCase {
         ])
     }
 
+    func testANumberedListAtTheEndStaysInTheThread() {
+        let rule = String(repeating: "─", count: 40)
+        let lines = [
+            "● Here is what I would add.",
+            "",
+            "  Highest value",
+            "     ",
+            "  1. Notify when an agent needs you. Send a desktop notification when an agent",
+            "     asks a question.",
+            "  2. Hide finished agents.",
+            "",
+            "  Small fixes",
+            "",
+            "  3. Show the full command.",
+            "",
+            "  I would start with 1 and 2.",
+            "",
+            "✻ Cogitated for 24s · done 10:00 AM",
+            "",
+            rule,
+            "❯ ",
+            rule,
+            "  ⏵⏵ auto mode on (shift+tab to cycle)",
+        ]
+        XCTAssertNil(AgentAsk.dialogStart(lines))
+        let t = AgentThread.parse(lines)
+        XCTAssertEqual(t.worked, "24s")
+        guard t.blocks.count == 1, case .message(let text) = t.blocks[0] else { return XCTFail("\(t.blocks)") }
+        XCTAssertTrue(text.hasPrefix("Here is what I would add."), text)
+        XCTAssertTrue(text.contains("3. Show the full command."), text)
+        XCTAssertTrue(text.hasSuffix("I would start with 1 and 2."), text)
+    }
+
     func testCodexWorkingLineGivesTheTime() {
         let t = AgentThread.parse(["• I will run it.", "", "• Working (12s • esc to interrupt)", "", "› Ask Codex to do anything"])
         XCTAssertEqual(t.step, "Working")

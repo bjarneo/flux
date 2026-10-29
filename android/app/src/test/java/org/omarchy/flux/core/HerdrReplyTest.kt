@@ -158,6 +158,16 @@ class HerdrReplyTest {
     }
 
     @Test
+    fun aNumberedListAboveTheInputIsNotADialog() {
+        val list = listOf("● I would add these.", "", "  1. Notify when an agent needs you.", "  2. Hide finished agents.", "")
+        val rule = "─".repeat(32)
+        assertTrue("the input of Claude Code", findChoices(list + listOf("✻ Cogitated for 24s · done 10:00 AM", "", rule, "❯ ", rule, "  ⏵⏵ auto mode on")).isEmpty())
+        assertTrue("the input of Codex", findChoices(list + listOf("› Ask Codex to do anything", "", "  100% context left")).isEmpty())
+        assertTrue("the input in a box", findChoices(list + listOf("╭────────╮", "│ >      │", "╰────────╯")).isEmpty())
+        assertEquals("a dialog has no input", listOf("1", "2", "3"), findChoices(claudeDialog + listOf("", " Esc to cancel · Tab to amend")).map { it.key })
+    }
+
+    @Test
     fun outputKeepsColorsAndFindsChoices() {
         val text = claudeDialog.joinToString("\n").replace(" ❯ 1. Yes", " $esc[38;5;4m❯ 1. Yes$esc[0m")
         val o = parseHerdrOutput(body("""{"kind":"output","pane":"w5:p1","format":"ansi","text":${kotlinx.serialization.json.JsonPrimitive(text)}}"""))!!
