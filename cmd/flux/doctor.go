@@ -17,6 +17,7 @@ import (
 
 	"flux/internal/approve"
 	"flux/internal/config"
+	"flux/internal/hc"
 	"flux/internal/herdr"
 	"golang.org/x/sys/unix"
 )
@@ -152,7 +153,6 @@ func doctor() {
 	// herdr is optional. When it runs, the phone shows its agents.
 	// The state error err of fluxd decides below whether checkLiveTerminal
 	// gets the state, so the error of LookPath has its own name.
-	herdrServer := false
 	if _, herr := exec.LookPath("herdr"); herr == nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		path := herdr.SocketPath()
@@ -165,7 +165,6 @@ func doctor() {
 			// For example, the socket belongs to another user.
 			check(false, "", safe(fmt.Sprintf("The herdr socket %s does not work: %v", path, perr)))
 		default:
-			herdrServer = true
 			check(pong.Protocol >= herdr.MinProtocol, fmt.Sprintf("herdr %s runs, so the phone can show its agents", pong.Version),
 				fmt.Sprintf("herdr %s uses API protocol %d, and Flux needs %d or newer. Run: herdr update", pong.Version, pong.Protocol, herdr.MinProtocol))
 			if pong.Protocol >= herdr.MinProtocol {
@@ -178,8 +177,20 @@ func doctor() {
 		}
 	}
 
-	if note := herdrCoreNote(herdrServer); note != "" {
-		fmt.Println(note)
+	// The herdr app runs its agents in herdr-core, beside herdr. It is
+	// optional too.
+	if _, herr := exec.LookPath("herdr-core"); herr == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		path := hc.SocketPath()
+		h, perr := hc.Hi(ctx, path)
+		cancel()
+		switch {
+		case herdrDown(perr):
+			fmt.Println("- The herdr app does not run. Start it to show its agents on the phone")
+		default:
+			check(perr == nil, fmt.Sprintf("herdr-core %s runs, so the phone can show the agents of the herdr app", h.Version),
+				safe(fmt.Sprintf("The herdr-core socket %s does not work: %v", path, perr)))
+		}
 	}
 
 	for _, bin := range []string{"wl-copy", "wl-paste", "xdg-open"} {
