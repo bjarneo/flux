@@ -20,6 +20,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"flux/internal/hc"
 	"flux/internal/herdr"
 	"flux/internal/lan"
 	"flux/internal/proto"
@@ -390,6 +391,9 @@ func (d *Daemon) herdrFollow(ctx context.Context, session string) {
 // next failure goes to the log again. Only the default session checks
 // the live terminal bridge and the agent kinds.
 func (d *Daemon) herdrSession(ctx context.Context, session string, wake <-chan struct{}, logged *string) error {
+	if session == herdrAppSession {
+		return d.herdrAppSessionFollow(ctx, wake, logged)
+	}
 	path := d.herdrSocket(session)
 	pong, err := herdr.Ping(ctx, path)
 	if err != nil {
@@ -1247,6 +1251,9 @@ func (d *Daemon) herdrTerminalLocked(pane string) bool {
 // readTerminal reads the recent output of a terminal. A shell keeps its
 // scrollback in herdr, so one read gets the history with its colors.
 func (d *Daemon) readTerminal(ctx context.Context, pane string, lines int, ansi bool) (string, bool, error) {
+	if herdrApp(pane) {
+		return d.readHerdrApp(ctx, pane, lines)
+	}
 	sock, id := d.herdrAt(pane)
 	r, err := herdr.ReadPane(ctx, sock, id, lines, ansi)
 	if err != nil {
@@ -1274,6 +1281,9 @@ func (d *Daemon) readTerminal(ctx context.Context, pane string, lines int, ansi 
 // opencode shows a sidebar in a wide terminal. readAgentOutput removes it
 // from the history and the screen, see dropSidebar.
 func (d *Daemon) readAgentOutput(ctx context.Context, pane string, lines int, ansi bool) (string, bool, error) {
+	if herdrApp(pane) {
+		return d.readHerdrApp(ctx, pane, lines)
+	}
 	held := d.herdrControlled(pane)
 	d.mu.Lock()
 	kind := d.herdrKindLocked(pane)
@@ -1444,7 +1454,12 @@ func hasWord(row string) bool {
 // herdrError returns the text for a phone about a failed herdr call.
 func herdrError(pane string, err error) string {
 	var he *herdr.Error
+	var ce *hc.Error
 	switch {
+	case errors.As(err, &ce) && (ce.Data.Kind == "not_found" || ce.Data.Kind == "finished"):
+		return fmt.Sprintf("The agent in %s is gone", pane)
+	case errors.As(err, &ce):
+		return "herdr app: " + ce.Message
 	case errors.As(err, &he) && he.Code == "agent_not_found":
 		return fmt.Sprintf("The agent in %s is gone", pane)
 	case errors.As(err, &he) && he.Code == "agent_not_ready":

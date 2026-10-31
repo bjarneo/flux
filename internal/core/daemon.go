@@ -22,6 +22,7 @@ import (
 
 	"flux/internal/config"
 	"flux/internal/desktop"
+	"flux/internal/hc"
 	"flux/internal/herdr"
 	"flux/internal/lan"
 	"flux/internal/proto"
@@ -141,6 +142,11 @@ type Daemon struct {
 	herdrNamed       map[string]bool
 	herdrWakers      map[chan struct{}]bool
 	herdrWakeMu      sync.Mutex
+
+	// hcPath is the API socket of herdr-core, the runtime of the herdr
+	// app. fluxd follows it as the session herdrAppSession, see
+	// herdr_app.go. An empty path turns it off.
+	hcPath string
 
 	// herdrStreams is the terminal session of each phone by session ID.
 	// herdrStreamWait counts the control streams that attach to a pane,
@@ -292,6 +298,7 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 
 		herdrPath:        herdr.SocketPath(),
 		herdrSessionsDir: herdr.SessionsDir(),
+		hcPath:           hc.SocketPath(),
 		herdrWake:        make(chan struct{}, 1),
 		dndWake:          make(chan struct{}, 1),
 		releaseWake:      make(chan struct{}, 1),
