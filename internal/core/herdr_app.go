@@ -9,7 +9,8 @@ package core
 // the address stays whole.
 //
 // herdr-core knows no workspaces, layouts, or agent kinds, and it has no
-// live terminal stream that the phone speaks. The phone can see the
+// live terminal stream that the phone speaks. Its screens have colors only
+// with the ansi option of terminal.read, which an older herdr-core lacks. The phone can see the
 // agents and terminals, read them, answer them, and close them. It cannot
 // start agents or open the live terminal there.
 
@@ -182,10 +183,12 @@ func herdrAppAddress(id string) string {
 }
 
 // readHerdrApp reads the screen of a terminal in the herdr app with the
-// history above it. herdr-core reads plain text, so an ANSI read gets
-// the same text without colors. It removes the sidebar of opencode, as
-// readAgentOutput does.
-func (d *Daemon) readHerdrApp(ctx context.Context, pane string, lines int) (string, bool, error) {
+// history above it. herdr-core reads the history as plain text. For
+// ansi, fluxd also reads the screen with its styles, when herdr-core can,
+// and puts it under the plain history, as readAgentOutput does for herdr.
+// An older herdr-core gives an ANSI read the plain text. readHerdrApp
+// removes the sidebar of opencode, as readAgentOutput does.
+func (d *Daemon) readHerdrApp(ctx context.Context, pane string, lines int, ansi bool) (string, bool, error) {
 	addr := herdrAppAddress(pane)
 	// herdr-core collects the history of a terminal on another machine
 	// there, which a slow machine does not finish in time. The screen
@@ -200,12 +203,23 @@ func (d *Daemon) readHerdrApp(ctx context.Context, pane string, lines int) (stri
 	if err != nil {
 		return "", false, err
 	}
-	rows := strings.Split(cleanPlain(r.Text), "\n")
+	history := strings.Split(cleanPlain(r.Text), "\n")
+	var screen []string
+	if ansi {
+		if s, err := hc.ReadScreenANSI(ctx, d.hcPath, addr); err == nil && s.How == "ansi" {
+			screen = strings.Split(cleanANSI(s.Text), "\n")
+		}
+	}
 	d.mu.Lock()
 	kind := d.herdrKindLocked(pane)
 	d.mu.Unlock()
 	if kind == "opencode" {
-		rows = dropSidebar(rows, sidebarColumn(rows), false)
+		col := sidebarColumn(history, screen)
+		history, screen = dropSidebar(history, col, false), dropSidebar(screen, col, true)
+	}
+	rows := history
+	if screen != nil {
+		rows = spliceScreen(history, screen)
 	}
 	truncated := !r.Complete
 	if len(rows) > lines {

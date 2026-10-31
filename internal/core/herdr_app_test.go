@@ -87,11 +87,64 @@ func TestReadHerdrAppFallsBackToScreen(t *testing.T) {
 		}
 	}()
 	d := &Daemon{hcPath: path}
-	text, truncated, err := d.readHerdrApp(context.Background(), "herdr-app/instance1/t1", 200)
+	text, truncated, err := d.readHerdrApp(context.Background(), "herdr-app/instance1/t1", 200, false)
 	if err != nil || text != "screen row" || !truncated {
 		t.Fatalf("read = %q, %v, %v", text, truncated, err)
 	}
 	if a, b := <-asked, <-asked; a != 200 || b != 0 {
 		t.Fatalf("asked for %v then %v lines", a, b)
+	}
+}
+
+// TestReadHerdrAppANSI checks that an ANSI read puts the styled screen
+// under the plain history, and that a plain answer to the ansi option,
+// from an older herdr-core, leaves the plain read.
+func TestReadHerdrAppANSI(t *testing.T) {
+	for _, tc := range []struct {
+		how, want string
+	}{
+		{"ansi", "old row\nhistory row\n\x1b[1mscreen row\x1b[0m"},
+		{"screen", "old row\nhistory row\nscreen row"},
+	} {
+		path := filepath.Join(t.TempDir(), "hc.sock")
+		ln, err := net.Listen("unix", path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		go func() {
+			for {
+				conn, err := ln.Accept()
+				if err != nil {
+					return
+				}
+				go func() {
+					defer conn.Close()
+					line, err := bufio.NewReader(conn).ReadBytes('\n')
+					if err != nil {
+						return
+					}
+					var req struct {
+						Params struct {
+							ANSI bool `json:"ansi"`
+						} `json:"params"`
+					}
+					_ = json.Unmarshal(line, &req)
+					text, how := `old row\nhistory row\nscreen row`, "history"
+					if req.Params.ANSI {
+						text, how = `\u001b[1mscreen row\u001b[0m`, tc.how
+						if tc.how != "ansi" {
+							text = "screen row"
+						}
+					}
+					conn.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"text":"` + text + `","complete":true,"how":"` + how + `"}}` + "\n"))
+				}()
+			}
+		}()
+		d := &Daemon{hcPath: path}
+		text, _, err := d.readHerdrApp(context.Background(), "herdr-app/t1", 200, true)
+		ln.Close()
+		if err != nil || text != tc.want {
+			t.Fatalf("how %s: read = %q, %v; want %q", tc.how, text, err, tc.want)
+		}
 	}
 }

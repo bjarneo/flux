@@ -103,7 +103,11 @@ func (d *Daemon) herdrKeys(dev *Device, pane string, keys []string) *proto.Packe
 		if err != nil {
 			return err
 		}
-		d.logf("%s sent the keys %s to the herdr agent in %s", d.nameOf(dev), strings.Join(keys, " "), pane)
+		where := "herdr agent"
+		if herdrApp(pane) {
+			where = "herdr app agent"
+		}
+		d.logf("%s sent the keys %s to the %s in %s", d.nameOf(dev), strings.Join(keys, " "), where, pane)
 		return nil
 	})
 }

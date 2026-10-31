@@ -1264,7 +1264,7 @@ func (d *Daemon) herdrTerminalLocked(pane string) bool {
 // scrollback in herdr, so one read gets the history with its colors.
 func (d *Daemon) readTerminal(ctx context.Context, pane string, lines int, ansi bool) (string, bool, error) {
 	if herdrApp(pane) {
-		return d.readHerdrApp(ctx, pane, lines)
+		return d.readHerdrApp(ctx, pane, lines, ansi)
 	}
 	sock, id := d.herdrAt(pane)
 	r, err := herdr.ReadPane(ctx, sock, id, lines, ansi)
@@ -1294,7 +1294,7 @@ func (d *Daemon) readTerminal(ctx context.Context, pane string, lines int, ansi 
 // from the history and the screen, see dropSidebar.
 func (d *Daemon) readAgentOutput(ctx context.Context, pane string, lines int, ansi bool) (string, bool, error) {
 	if herdrApp(pane) {
-		return d.readHerdrApp(ctx, pane, lines)
+		return d.readHerdrApp(ctx, pane, lines, ansi)
 	}
 	held := d.herdrControlled(pane)
 	d.mu.Lock()
