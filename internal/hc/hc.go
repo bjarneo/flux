@@ -131,10 +131,12 @@ func (t Terminal) Dir() string {
 	return t.Cwd
 }
 
-// Read is the screen of a terminal with its history.
+// Read is the screen of a terminal with its history. How is "screen",
+// "history", "stitched", or "ansi" for the screen with its styles.
 type Read struct {
 	Text     string `json:"text"`
 	Complete bool   `json:"complete"`
+	How      string `json:"how"`
 }
 
 type request struct {
@@ -185,6 +187,15 @@ func Get(ctx context.Context, path, terminal string) (Terminal, error) {
 func ReadTerminal(ctx context.Context, path, terminal string, lines int) (Read, error) {
 	var r Read
 	err := Call(ctx, path, "terminal.read", map[string]any{"terminal": terminal, "lines": lines}, &r)
+	return r, err
+}
+
+// ReadScreenANSI returns the screen of a terminal with its colors and
+// styles as SGR sequences. A herdr-core without the ansi option ignores
+// it and returns the plain screen, with How "screen", not "ansi".
+func ReadScreenANSI(ctx context.Context, path, terminal string) (Read, error) {
+	var r Read
+	err := Call(ctx, path, "terminal.read", map[string]any{"terminal": terminal, "ansi": true}, &r)
 	return r, err
 }
 
