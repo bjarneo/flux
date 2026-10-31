@@ -171,6 +171,10 @@ data class UiState(
      * counts as connecting, not as not reachable.
      */
     val connecting: Boolean = false,
+    /** True while the userspace tailnet node is on. */
+    val remoteAccess: Boolean = false,
+    /** True when the user saved a tailnet auth key. */
+    val tailnetKeySet: Boolean = false,
     /** False while the user has turned Flux off. */
     val enabled: Boolean = true,
     val theme: ThemeMode = ThemeMode.Computer,

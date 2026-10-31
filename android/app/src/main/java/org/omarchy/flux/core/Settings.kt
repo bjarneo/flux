@@ -23,6 +23,16 @@ class Settings(context: Context) {
             prefs.edit().putBoolean("enabled", v).commit()
         }
 
+    /** Runs the userspace tailnet node, so a paired computer can reach this phone away from home. */
+    var remoteAccess: Boolean
+        get() = prefs.getBoolean("remoteAccess", false)
+        set(v) = prefs.edit().putBoolean("remoteAccess", v).apply()
+
+    /** The Tailscale auth key of the userspace node. Empty until the user enters one. */
+    var tailnetAuthKey: String
+        get() = prefs.getString("tailnetAuthKey", "").orEmpty()
+        set(v) = prefs.edit().putString("tailnetAuthKey", v).apply()
+
     /** The descriptions of the shortcuts that the Omarchy panel pins, or null for the defaults. */
     var pinnedShortcuts: List<String>?
         get() = prefs.getString("pinnedShortcuts", null)?.split('\n')?.filter { it.isNotEmpty() }

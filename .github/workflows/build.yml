@@ -111,6 +111,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: android/tsnet/go.mod
+          cache-dependency-path: android/tsnet/go.sum
       # The default packages of the action include "tools", which the
       # current cmdline-tools no longer have.
       - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4

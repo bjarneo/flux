@@ -239,6 +239,7 @@ class FluxService : Service() {
         ContextCompat.registerReceiver(this, screenReceiver, IntentFilter(Intent.ACTION_SCREEN_ON), ContextCompat.RECEIVER_NOT_EXPORTED)
         CaptureWatch.refresh(this)
         FluxCore.startNetwork()
+        if (FluxCore.remoteAccess) FluxCore.applyTsnet()
         nsd = getSystemService(NsdManager::class.java)
         scan()
         scope.launch { FluxCore.listenPort.collect { announce() } }
@@ -327,6 +328,7 @@ class FluxService : Service() {
         runCatching { unregisterReceiver(screenReceiver) }
         CaptureWatch.stop(this)
         runCatching { multicast?.release() }
+        FluxCore.stopTsnet()
         FluxCore.stopNetwork()
         super.onDestroy()
     }

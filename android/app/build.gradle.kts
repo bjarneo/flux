@@ -15,6 +15,21 @@ require(releaseCredentials.all { it.isNullOrBlank() } || releaseCredentials.all 
 val fluxVersionCode = providers.environmentVariable("FLUX_VERSION_CODE").orElse("1").get().toInt()
 require(fluxVersionCode in 1..2100000000) { "FLUX_VERSION_CODE must be between 1 and 2100000000." }
 
+// The userspace tailnet node is a Go executable. It ships as
+// libflux_tsnet.so so that Android extracts it and the app can run it.
+val tsnetDir = rootProject.layout.projectDirectory.dir("tsnet")
+val tsnetJniLibs = layout.buildDirectory.dir("tsnet/jniLibs").get().asFile
+val buildTsnet by tasks.registering(Exec::class) {
+    inputs.dir(tsnetDir)
+    outputs.dir(tsnetJniLibs)
+    commandLine(
+        "sh",
+        tsnetDir.file("build.sh").asFile.absolutePath,
+        tsnetJniLibs.absolutePath,
+        "arm64-v8a",
+    )
+}
+
 android {
     namespace = "org.omarchy.flux"
     compileSdk = 36
@@ -57,11 +72,19 @@ android {
         buildConfig = true
     }
 
+    sourceSets.getByName("main").jniLibs.srcDir(tsnetJniLibs)
+
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
         resources.excludes += "/META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+        // The tailnet node is an executable, not a library that the app
+        // links. Android runs it from the native library directory, so the
+        // APK must keep the file extracted.
+        jniLibs.useLegacyPackaging = true
     }
 }
+
+tasks.named("preBuild") { dependsOn(buildTsnet) }
 
 kotlin {
     compilerOptions {
