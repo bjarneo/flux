@@ -33,6 +33,10 @@ const errHerdrAppCreate = "Flux cannot start agents or open terminals in the her
 // errHerdrAppTerminal is the answer to a live terminal in the herdr app.
 const errHerdrAppTerminal = "the live terminal does not work with the herdr app yet"
 
+// herdrAppHistoryTimeout limits the history part of a read. The read of
+// the screen alone then has the rest of herdrReadTimeout.
+const herdrAppHistoryTimeout = 5 * time.Second
+
 // herdrApp reports whether a qualified ID belongs to the herdr app.
 func herdrApp(id string) bool { return herdrSessionOf(id) == herdrAppSession }
 
@@ -182,7 +186,17 @@ func herdrAppAddress(id string) string {
 // the same text without colors. It removes the sidebar of opencode, as
 // readAgentOutput does.
 func (d *Daemon) readHerdrApp(ctx context.Context, pane string, lines int) (string, bool, error) {
-	r, err := hc.ReadTerminal(ctx, d.hcPath, herdrAppAddress(pane), lines)
+	addr := herdrAppAddress(pane)
+	// herdr-core collects the history of a terminal on another machine
+	// there, which a slow machine does not finish in time. The screen
+	// alone comes fast, so a failed history read falls back to it.
+	hctx, cancel := context.WithTimeout(ctx, herdrAppHistoryTimeout)
+	r, err := hc.ReadTerminal(hctx, d.hcPath, addr, lines)
+	cancel()
+	if err != nil && ctx.Err() == nil && hc.Kind(err) != "not_found" && hc.Kind(err) != "finished" {
+		r, err = hc.ReadTerminal(ctx, d.hcPath, addr, 0)
+		r.Complete = false
+	}
 	if err != nil {
 		return "", false, err
 	}
