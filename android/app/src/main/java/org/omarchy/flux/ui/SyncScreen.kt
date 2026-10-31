@@ -1,6 +1,8 @@
 package org.omarchy.flux.ui
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Intent
 import android.os.Build
@@ -18,8 +20,13 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,6 +46,7 @@ import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.NotificationSync
 import org.omarchy.flux.core.SmsSync
 import org.omarchy.flux.core.UiState
+import org.omarchy.flux.net.TsnetNode
 import org.omarchy.flux.service.FluxNotificationListener
 
 /** 1 sync switch: what it does, and its state. [key] names the switch, so that a refused permission shows under it. */
@@ -218,6 +226,84 @@ fun SyncScreen(state: UiState, onBack: () -> Unit) {
                 if (text != null && refusedKey == s.key) PermissionNotice(text)
             }
         }
+        RemoteAccessSection(state)
+    }
+}
+
+/**
+ * The userspace tailnet node. It lets a paired computer reach this phone
+ * away from home without a VPN app, so another VPN keeps the VPN slot.
+ */
+@Composable
+private fun RemoteAccessSection(state: UiState) {
+    val context = LocalContext.current
+    val nodeState by TsnetNode.state.collectAsState()
+    var showKey by rememberSaveable { mutableStateOf(false) }
+    var keyText by rememberSaveable { mutableStateOf("") }
+
+    fun askKey() {
+        keyText = ""
+        showKey = true
+    }
+    fun toggle() {
+        if (!state.remoteAccess && !state.tailnetKeySet) askKey()
+        else FluxCore.setRemoteAccess(!state.remoteAccess)
+    }
+
+    val detail = when (val n = nodeState) {
+        is TsnetNode.State.Ready -> "Address ${n.address}. Add it as an extra address on the computer."
+        is TsnetNode.State.Starting -> "Connecting to the tailnet."
+        is TsnetNode.State.Failed -> n.reason
+        else -> if (state.tailnetKeySet) "Reach this phone away from home without a VPN app." else "Needs a tailnet auth key."
+    }
+
+    Column(Modifier.padding(top = 24.dp), verticalArrangement = Arrangement.spacedBy(TileGap)) {
+        SyncRow(SyncItem("remote", Ic.link, "Remote access", detail, state.remoteAccess) { toggle() })
+        if (state.remoteAccess) {
+            val address = (nodeState as? TsnetNode.State.Ready)?.address
+            if (address != null) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    T(address, Modifier.weight(1f), size = 14)
+                    TextButton(onClick = {
+                        val clipboard = context.getSystemService(ClipboardManager::class.java)
+                        clipboard?.setPrimaryClip(ClipData.newPlainText("Flux tailnet address", address))
+                        FluxCore.toast("Copied the tailnet address")
+                    }) { Text("Copy") }
+                }
+            }
+            TextButton(onClick = { askKey() }) { Text("Change key") }
+        }
+    }
+
+    if (showKey) {
+        AlertDialog(
+            onDismissRequest = { showKey = false },
+            title = { Text("Tailnet auth key") },
+            text = {
+                OutlinedTextField(
+                    value = keyText,
+                    onValueChange = { keyText = it },
+                    label = { Text("tskey-auth-...") },
+                    singleLine = false,
+                    minLines = 3,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = keyText.isNotBlank(),
+                    onClick = {
+                        FluxCore.setTailnetAuthKey(keyText)
+                        if (!state.remoteAccess) FluxCore.setRemoteAccess(true)
+                        showKey = false
+                    },
+                ) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { showKey = false }) { Text("Cancel") } },
+        )
     }
 }
 

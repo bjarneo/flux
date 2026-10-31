@@ -17,9 +17,43 @@ The link still uses the pinned TLS certificates from pairing.
 
 The steps are the same for a Mac that runs Flux for macOS.
 
+## Use the node built into Flux for Android
+
+Flux for Android can join the tailnet itself, without the Tailscale app.
+The node runs inside the app as a userspace node, so it takes no VPN slot:
+another VPN, such as Google VPN, keeps running.
+The phone gets a tailnet address, and the computer reaches every Flux port
+through it, so files, transfers, and the screen mirror work away from home.
+
+1. Pair the phone on the local network.
+2. On the phone, open **Sync** and turn on **Remote access**.
+3. Enter a tailnet auth key from the Tailscale admin console.
+   Use a key with an expiry, and remove the phone from the tailnet when you
+   stop using it.
+4. Copy the address that Flux shows, for example `100.101.102.103`.
+5. On the computer, add the address:
+
+   ```sh
+   flux-cli --device "Pixel 11 Pro" addresses add 100.101.102.103
+   ```
+
+6. Check the result:
+
+   ```sh
+   flux-cli doctor
+   ```
+
+The node keeps its key and identity in the app storage.
+It starts with the Flux service and stops when Flux is off.
+The node is in the arm64 APK. A build without it shows that the helper is
+missing, and the app works as before on the local network.
+Limit the Flux ports of the phone to the computer with tailnet access
+controls, as in [access and security](#access-and-security).
+
 ## Requirements
 
 - Tailscale runs on the desktop and on the phone, in the same tailnet.
+  The built-in node above needs Tailscale only on the desktop.
 - The phone is paired with the desktop. Pair it on the local network first.
 - Flux for Android runs on the phone.
 

@@ -235,6 +235,12 @@ java -version
 ```
 
 Set `JAVA_HOME` to your JDK 21 directory if your default Java version differs.
+The APK also contains the userspace tailnet node for remote access.
+The Gradle build compiles it from `android/tsnet` with Go 1.27 or later.
+Put `go` on `PATH`, or install it with `mise install go@1.27.1`.
+The build compiles the node for arm64. A build without Go fails the
+Gradle `buildTsnet` task.
+
 Use the committed Gradle wrapper rather than a system Gradle installation.
 
 From the repository root, build a debug APK:

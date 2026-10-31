@@ -458,6 +458,8 @@ object FluxCore {
                 lastScan = lastScan,
                 connecting = inConnectGrace(connectFrom, SystemClock.elapsedRealtime()),
                 enabled = settings.enabled,
+                remoteAccess = settings.remoteAccess,
+                tailnetKeySet = settings.tailnetAuthKey.isNotBlank(),
                 theme = settings.theme,
                 computerTheme = ComputerThemes.current(),
                 themeScope = ComputerThemes.scope,
@@ -571,6 +573,41 @@ object FluxCore {
             org.omarchy.flux.screen.ScreenSession.stop()
             app.stopService(android.content.Intent(app, org.omarchy.flux.service.FluxService::class.java))
         }
+    }
+
+    /** True while the user wants the userspace tailnet node. */
+    val remoteAccess: Boolean get() = settings.remoteAccess
+
+    /**
+     * Starts or stops the userspace tailnet node after a setting changed.
+     * The node joins the tailnet without a VPN interface, so another VPN
+     * app keeps the VPN slot.
+     */
+    fun applyTsnet() {
+        if (!settings.enabled || !settings.remoteAccess || settings.tailnetAuthKey.isBlank()) {
+            io.execute { org.omarchy.flux.net.TsnetNode.stop() }
+            return
+        }
+        val key = settings.tailnetAuthKey
+        val id = local.deviceId.lowercase().filter { it.isLetterOrDigit() || it == '-' }.take(20)
+        val host = "flux-" + id.ifBlank { "phone" }
+        io.execute { org.omarchy.flux.net.TsnetNode.start(app, key, host) }
+    }
+
+    fun setRemoteAccess(on: Boolean) {
+        settings.remoteAccess = on
+        publish()
+        applyTsnet()
+    }
+
+    fun setTailnetAuthKey(key: String) {
+        settings.tailnetAuthKey = key.trim()
+        publish()
+        if (settings.remoteAccess) applyTsnet()
+    }
+
+    fun stopTsnet() {
+        io.execute { org.omarchy.flux.net.TsnetNode.stop() }
     }
 
     fun setTheme(mode: ThemeMode) {
