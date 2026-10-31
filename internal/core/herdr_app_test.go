@@ -1,6 +1,11 @@
 package core
 
 import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"net"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -41,5 +46,52 @@ func TestHerdrAppIDs(t *testing.T) {
 	}
 	if herdrApp("w5:p1") || herdrApp("omarchy/w5:p1") {
 		t.Fatal("a herdr pane counts as the herdr app")
+	}
+}
+
+// TestReadHerdrAppFallsBackToScreen checks that a history read that
+// fails, as on a slow machine, falls back to the screen alone.
+func TestReadHerdrAppFallsBackToScreen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hc.sock")
+	ln, err := net.Listen("unix", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	asked := make(chan float64, 4)
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer conn.Close()
+				line, err := bufio.NewReader(conn).ReadBytes('\n')
+				if err != nil {
+					return
+				}
+				var req struct {
+					Params struct {
+						Lines float64 `json:"lines"`
+					} `json:"params"`
+				}
+				_ = json.Unmarshal(line, &req)
+				asked <- req.Params.Lines
+				if req.Params.Lines > 0 {
+					conn.Write([]byte(`{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"instance1 didn't answer within 30 s","data":{"kind":"unavailable"}}}` + "\n"))
+					return
+				}
+				conn.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"text":"screen row","complete":true,"how":"screen"}}` + "\n"))
+			}()
+		}
+	}()
+	d := &Daemon{hcPath: path}
+	text, truncated, err := d.readHerdrApp(context.Background(), "herdr-app/instance1/t1", 200)
+	if err != nil || text != "screen row" || !truncated {
+		t.Fatalf("read = %q, %v, %v", text, truncated, err)
+	}
+	if a, b := <-asked, <-asked; a != 200 || b != 0 {
+		t.Fatalf("asked for %v then %v lines", a, b)
 	}
 }
