@@ -18,7 +18,9 @@ const maxAddresses = 5
 
 // Extra addresses let fluxd reach a paired device outside the local
 // network, for example through Tailscale. mDNS and UDP broadcasts do not
-// cross a VPN, so fluxd dials each address directly. The device listens on
+// cross a VPN, so fluxd dials each address directly. On a computer, ZeroTier
+// makes an Ethernet network that carries them, but on a phone it runs as a
+// VPN, so a phone needs its ZeroTier address here too. The device listens on
 // all interfaces, and fluxd opens every connection, so the payloads,
 // tunnels, and streams also use the address of the link.
 

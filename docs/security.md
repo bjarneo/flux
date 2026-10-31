@@ -138,7 +138,7 @@ sudo ufw status verbose
 ```
 
 Without such a firewall, each host that reaches the computer can open a link to `fluxd` and send a pair request.
-The same is true for a rule that lets in the traffic of an interface, for example `ufw allow in on tailscale0`.
+The same is true for a rule that lets in the traffic of an interface, for example `ufw allow in on tailscale0` or a rule for a ZeroTier interface.
 The [limits below](#devices-that-are-not-paired) apply to such hosts.
 
 The Android phone, the iPhone, and the Mac also listen on TCP ports 12100 to 12108 for links.

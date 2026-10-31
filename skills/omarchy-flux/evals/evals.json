@@ -30,6 +30,12 @@
       "prompt": "I installed omarchy-flux, and fluxcd is also installed for work. Now flux status prints a Kubernetes error. How do I use Flux? Do not change the system.",
       "expected_output": "Explain that fluxcd owns /usr/bin/flux, which comes before the Flux short name in PATH. Use flux-cli, for example flux-cli status and flux-cli doctor. Do not remove fluxcd, overwrite /usr/bin/flux, or edit PATH.",
       "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "My desktop and my Pixel 8 are in the same ZeroTier network. Can Flux find and pair the phone through it while I am away from home? Give the steps and checks without running them.",
+      "expected_output": "Explain that ZeroTier One runs as a VPN on the phone and carries no mDNS, so Flux cannot find or pair the phone through ZeroTier. Pair on the local network, then add the ZeroTier IP of the phone with flux-cli --device \"Pixel 8\" addresses add IP, and check with sudo zerotier-cli listnetworks, flux-cli addresses, and flux-cli doctor. Do not add a ufw rule for the ZeroTier interface.",
+      "files": []
     }
   ]
 }

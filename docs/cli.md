@@ -220,7 +220,7 @@ flux-cli --device "Pixel 8" addresses remove 100.101.102.103
 An extra address is a host name or an IP address without a port, for example the Tailscale name of the phone.
 While the device is offline, `fluxd` dials the extra addresses after the last address.
 The device must be paired.
-See [Connect through Tailscale](tailscale.md).
+See [Connect through Tailscale](tailscale.md) and [Connect through ZeroTier](zerotier.md).
 
 ## Share and communicate
 
