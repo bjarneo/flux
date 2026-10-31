@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode"
 
+	"flux/internal/hc"
 	"flux/internal/herdr"
 	"flux/internal/proto"
 )
@@ -92,11 +93,21 @@ func (d *Daemon) herdrKeys(dev *Device, pane string, keys []string) *proto.Packe
 				return herdrRefusal(fmt.Sprintf("The key %q is not allowed", k))
 			}
 		}
-		sock, id := d.herdrAt(pane)
-		if err := herdr.SendKeys(ctx, sock, id, keys); err != nil {
+		var err error
+		if herdrApp(pane) {
+			err = hc.Keys(ctx, d.hcPath, herdrAppAddress(pane), keys)
+		} else {
+			sock, id := d.herdrAt(pane)
+			err = herdr.SendKeys(ctx, sock, id, keys)
+		}
+		if err != nil {
 			return err
 		}
-		d.logf("%s sent the keys %s to the herdr agent in %s", d.nameOf(dev), strings.Join(keys, " "), pane)
+		where := "herdr agent"
+		if herdrApp(pane) {
+			where = "herdr app agent"
+		}
+		d.logf("%s sent the keys %s to the %s in %s", d.nameOf(dev), strings.Join(keys, " "), where, pane)
 		return nil
 	})
 }
@@ -116,6 +127,14 @@ func (d *Daemon) herdrPrompt(dev *Device, pane, text string, answer bool) *proto
 			return herdrRefusal("The text is empty")
 		case len(text) > herdrMaxPrompt:
 			return herdrRefusal(fmt.Sprintf("The text is longer than %d KB", herdrMaxPrompt>>10))
+		}
+		if herdrApp(pane) {
+			what, err := d.herdrAppPrompt(ctx, pane, text, answer)
+			if err != nil {
+				return err
+			}
+			d.logf("%s sent %s of %d characters to the herdr app agent in %s", d.nameOf(dev), what, len([]rune(text)), pane)
+			return nil
 		}
 		what := "a prompt"
 		sock, id := d.herdrAt(pane)
@@ -173,8 +192,14 @@ func (d *Daemon) herdrInput(dev *Device, pane, text string, keys []string) *prot
 				return herdrRefusal(fmt.Sprintf("The key %q is not allowed", k))
 			}
 		}
-		sock, id := d.herdrAt(pane)
-		if err := herdr.SendInput(ctx, sock, id, text, keys); err != nil {
+		var err error
+		if herdrApp(pane) {
+			err = d.herdrAppInput(ctx, pane, text, keys)
+		} else {
+			sock, id := d.herdrAt(pane)
+			err = herdr.SendInput(ctx, sock, id, text, keys)
+		}
+		if err != nil {
 			return err
 		}
 		d.logf("%s sent %d characters and the keys %q to the herdr terminal %s", d.nameOf(dev), len([]rune(text)), strings.Join(keys, " "), pane)
@@ -282,6 +307,8 @@ func (d *Daemon) herdrCreate(dev *Device, what, kind, cwd, workspace, session st
 		err = herdrRefusal(fmt.Sprintf("Flux cannot open a %q", what))
 	case what == "agent" && !kindKnown:
 		err = herdrRefusal(fmt.Sprintf("herdr cannot start the agent %q on this computer", kind))
+	case session == herdrAppSession:
+		err = herdrRefusal(errHerdrAppCreate)
 	case !sessionKnown:
 		err = herdrRefusal(fmt.Sprintf("The herdr session %s does not run", session))
 	case !placeKnown:
@@ -435,8 +462,13 @@ func (d *Daemon) herdrClose(dev *Device, pane string) *proto.Packet {
 		reply["error"] = fmt.Sprintf("No agent runs in %s", pane)
 	default:
 		ctx, cancel := context.WithTimeout(d.ctx, herdrCallTimeout)
-		sock, id := d.herdrAt(pane)
-		err := herdr.ClosePane(ctx, sock, id)
+		var err error
+		if herdrApp(pane) {
+			err = hc.Kill(ctx, d.hcPath, herdrAppAddress(pane))
+		} else {
+			sock, id := d.herdrAt(pane)
+			err = herdr.ClosePane(ctx, sock, id)
+		}
 		cancel()
 		if err != nil {
 			reply["error"] = herdrError(pane, err)

@@ -536,6 +536,39 @@ An app with session support shows no picker when the computer has an older `flux
 The live terminal works in each session.
 `fluxd` checks the herdr version of the live terminal with the default session, so the default session must run.
 
+## Use the herdr app
+
+The herdr app runs its agents in herdr-core, not in the herdr server, so the app and the terminal app do not share agents.
+`fluxd` follows herdr-core as one more session, named `herdr-app`, next to the herdr sessions.
+Pick `herdr-app` in the session picker to see the agents and terminals of the app.
+The agents of the machines that the app added, such as a server over SSH, are there too, with the machine name before the space.
+
+A terminal is an agent when its program reports its status to herdr-core, as Claude Code, Codex, and opencode do.
+The other terminals are terminals.
+
+In the herdr app, you can read an agent, answer it with text and keys, get its notifications, review its changes, and close it.
+Flux cannot start agents or open terminals in the app yet, and the live terminal does not work there.
+The output of an agent in the app has colors with a herdr-core that has the `ansi` option of `terminal.read`.
+With an older herdr-core, the output is plain text, and the choices of an opencode permission dialog take Keys instead of buttons.
+A terminal of the app takes text only with Enter after it.
+
+`fluxd` finds herdr-core at the first path that applies:
+
+1. `$HC_SOCKET`
+2. `$XDG_RUNTIME_DIR/herdr-core/default.sock`
+3. `/run/user/UID/herdr-core/default.sock`
+4. `~/.local/state/herdr-core/default/default.sock`
+
+`fluxd` checks that the socket belongs to the same user.
+herdr = true in config.toml turns the herdr app on and off with herdr.
+`flux-cli doctor` prints a line about herdr-core when it is installed:
+
+```text
+✓ herdr-core 0.1.15 runs, so the phone can show the agents of the herdr app
+```
+
+A herdr session named `herdr-app` is not followed, because the herdr app uses the name.
+
 ## Access and privacy
 
 The phone can read the agent list and the recent output of an agent pane.

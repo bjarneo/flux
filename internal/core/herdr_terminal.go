@@ -317,6 +317,8 @@ func (d *Daemon) herdrTerminalErrorLocked(dev *Device, pane, mode string, skip *
 		return "this device is not paired"
 	case mode != "observe" && mode != "control":
 		return "fluxd does not know that terminal mode"
+	case herdrApp(pane):
+		return errHerdrAppTerminal
 	case !d.herdrBridge:
 		return errHerdrNoBridge
 	// A pane without an agent needs herdr_terminals in each mode. A pane

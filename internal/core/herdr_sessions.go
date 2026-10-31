@@ -207,11 +207,15 @@ func (d *Daemon) herdrLoop(ctx context.Context) {
 		want := map[string]bool{}
 		if d.herdrEnabled() && d.herdrSessionsDir != "" {
 			for _, name := range herdr.Sessions(d.herdrSessionsDir, d.herdrPath) {
-				// The phone names the default session "default".
-				if name != herdrDefaultName {
+				// The phone names the default session "default", and the
+				// herdr app has its own name.
+				if name != herdrDefaultName && name != herdrAppSession {
 					want[name] = true
 				}
 			}
+		}
+		if d.herdrEnabled() && d.hcPath != "" {
+			want[herdrAppSession] = true
 		}
 		for name := range followers {
 			if !want[name] {

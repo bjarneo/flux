@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"flux/internal/config"
+	"flux/internal/hc"
 	"flux/internal/herdr"
 	"golang.org/x/sys/unix"
 )
@@ -155,6 +156,22 @@ func doctor() {
 				}
 				checkLiveTerminal(pong.Version, fluxd, os.Stdout, check)
 			}
+		}
+	}
+
+	// The herdr app runs its agents in herdr-core, beside herdr. It is
+	// optional too.
+	if _, herr := exec.LookPath("herdr-core"); herr == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		path := hc.SocketPath()
+		h, perr := hc.Hi(ctx, path)
+		cancel()
+		switch {
+		case herdrDown(perr):
+			fmt.Println("- The herdr app does not run. Start it to show its agents on the phone")
+		default:
+			check(perr == nil, fmt.Sprintf("herdr-core %s runs, so the phone can show the agents of the herdr app", h.Version),
+				safe(fmt.Sprintf("The herdr-core socket %s does not work: %v", path, perr)))
 		}
 	}
 
