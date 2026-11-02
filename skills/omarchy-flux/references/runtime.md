@@ -252,6 +252,21 @@ flux-cli desktop off
 flux-cli input off
 ```
 
+## Motion cues
+
+The phone sends its acceleration for the motion cues only with `motion_cues = true`. It is off by default.
+Only the Flux plugin of omarchy-shell draws the dots, so check the plugin with `flux-cli doctor`.
+`motion_auto = true`, the default, starts the cues when the Android phone detects a vehicle.
+Read `docs/motion-cues.md` for the settings, the look, and the `flux.motion` bodies.
+
+```sh
+flux-cli motion on
+flux-cli motion start
+flux-cli motion
+flux-cli motion stop
+flux-cli motion off
+```
+
 ## Fingerprint approval
 
 Read `docs/approvals.md` for setup and `docs/approve.md` for the security design.

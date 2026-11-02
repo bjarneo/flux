@@ -36,6 +36,9 @@ type Daemon struct {
 	selfID  string
 	lan     *lan.Provider
 	devices map[string]*Device
+	// motion is the state of the motion cues. Use d.mot().
+	motion     *motionState
+	motionOnce sync.Once
 
 	clipboard     []ClipEntry
 	snippets      []ClipEntry
@@ -281,6 +284,7 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 		cfg: cfg, trust: trust, cert: cert, selfID: id,
 		opts:    opts,
 		devices: map[string]*Device{},
+		motion:  newMotionState(),
 		clip:    desktop.NewClipboard(),
 		clipDir: filepath.Join(config.RuntimeDir(), "clipboard"),
 		input:   desktop.NewInput(),
@@ -457,6 +461,7 @@ func (d *Daemon) Run() error {
 	go d.outboxLoop(ctx)
 	go d.snippetLoop(ctx)
 	go d.automationLoop(ctx)
+	go d.motionLoop(ctx)
 	if d.opts.Headless {
 		go d.publishLoop(ctx)
 		go d.discoveryLoop(ctx)
@@ -1039,6 +1044,9 @@ func (d *Daemon) receive(dev *Device, l *lan.Link) {
 	name := dev.Name
 	d.mu.Unlock()
 	d.closeNotes(note)
+	if current {
+		d.motionLinkDown(dev.ID)
+	}
 	d.logf("link down: %s: %v", name, err)
 	if stopped {
 		d.toast("Pairing with %s stopped, because the connection closed", name)
@@ -1146,6 +1154,7 @@ func (d *Daemon) onPairedLink(dev *Device, l *lan.Link) {
 		_ = l.Send(state)
 	}
 	d.sendThemeTo(dev, l)
+	d.sendMotionConfig(dev, l)
 }
 
 // markDirty schedules a state event for all subscribers.

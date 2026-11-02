@@ -127,6 +127,8 @@ func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.handleHerdr(dev, l, p)
 	case proto.TypeMousepadRequest:
 		d.handleMousepad(dev, p)
+	case proto.TypeFluxMotion:
+		d.handleMotion(dev, l, p)
 	case proto.TypeSmsMessages:
 		d.handleSms(dev, p)
 	case proto.TypeTelephony:

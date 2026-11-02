@@ -106,6 +106,10 @@ The computer can send files, links, text, and notifications to a paired device.
 Each app opens a link or a file from the computer only after a tap.
 Flux for Android installs no app that the computer sends, except a newer Flux with the signing key of the installed Flux, after your tap.
 
+With [motion cues](motion-cues.md) on, a paired phone sends the acceleration of its motion sensor while the cues run.
+The samples only move the dots. They cannot control the computer.
+Vehicle detection runs on the phone, and the phone sends only whether it is in a vehicle.
+
 The computer can ask a paired device to start its camera or its microphone.
 `flux-cli webcam start`, `flux-cli mic start`, and **Start** in the Flux window send the request.
 The device never turns on its camera or its microphone without a tap on the device, also while Flux is on its screen.

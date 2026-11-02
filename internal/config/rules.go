@@ -8,7 +8,7 @@ import (
 var DeviceFeatures = map[string]bool{
 	"clipboard": true, "notifications": true, "shareHome": true,
 	"remoteInput": true, "remoteDesktop": true, "herdr": true,
-	"herdrControl": true, "herdrTerminals": true,
+	"herdrControl": true, "herdrTerminals": true, "motionCues": true,
 }
 
 type NotificationRule struct {

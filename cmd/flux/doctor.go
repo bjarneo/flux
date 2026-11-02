@@ -168,6 +168,10 @@ func doctor() {
 	plugin := pluginInstalled()
 	check(aerr == nil || plugin, "a Flux window is available: "+windowName(aerr == nil, plugin),
 		"No Flux window is installed. Install flux-gui, or add the flux plugin to omarchy-shell")
+	if err == nil && s.Settings.MotionCues {
+		check(plugin, "the flux plugin can draw the motion cues",
+			"Motion cues are on, but only the flux plugin of omarchy-shell draws them. Run: flux-cli setup")
+	}
 
 	fmt.Println()
 	fmt.Println("Config:", config.Path())

@@ -58,7 +58,8 @@ Method names and parameter handling live in `internal/core/api.go`.
 ## State and events
 
 Call `state` for a snapshot.
-The snapshot includes `self`, `devices`, `clipboard`, `transfers`, `commands`, `settings`, `webcam`, `mic`, `screen`, `desktop`, `browse`, and `herdr`.
+The snapshot includes `self`, `devices`, `clipboard`, `transfers`, `commands`, `settings`, `webcam`, `mic`, `screen`, `desktop`, `browse`, `herdr`, and `motion`.
+`motion` is the state of the [motion cues](motion-cues.md): `running`, the feeding `device` and its `deviceName`, `auto` for a start of vehicle detection, `active` while fresh motion arrives, and the last phone `error`.
 `browse` lists the [Browse PC](features.md#browse-pc) sessions, the oldest first: the `device` ID, the `name`, and `since`, the Unix time of the start.
 
 `self` describes this computer:
@@ -107,6 +108,31 @@ The socket buffer of the kernel takes the data first.
 When that buffer is full and a write does not end in 5 seconds, the client loses its connection.
 So read the socket all the time, also while you wait for a response.
 
+### Motion events
+
+A client that draws the [motion cues](motion-cues.md) asks for the `motion` events:
+
+```json
+{"id":4,"method":"subscribe","params":{"motion":true}}
+```
+
+A later `subscribe` without `"motion":true` turns them off. The `state` and `toast` events go on.
+fluxd sends a `motion` event at once, then at most 30 each second while the cues run:
+
+```json
+{"event":"motion","data":{"active":true,"device":"<id>","size":"medium","offsetX":-12.5,"offsetY":3.25,"flowX":-40,"flowY":9.5,"density":0.21}}
+```
+
+| Field | Value |
+| --- | --- |
+| `active` | `true` while fresh motion arrives. With `false`, the other values are 0 and the dots fade out. |
+| `size` | The dot size: `small`, `medium`, or `large`. |
+| `offsetX`, `offsetY` | The shift of all dots in logical pixels, from -46 to 46. y grows down. |
+| `flowX`, `flowY` | The drift speed of the dots in logical pixels each second, from -180 to 180. |
+| `density` | From 0 to 1. It shows the extra dots. |
+
+Like `state`, a slow client gets only the newest `motion` event, and a `motion` event never takes a place in the queue.
+
 For shell scripts, use the CLI wrappers:
 
 ```sh
@@ -148,6 +174,7 @@ A device that is not paired shows only while it has a link.
 | Notifications | `notification.dismiss`, `notification.dismissAll`, `notification.reply`, `notification.action`, `notify.send` |
 | Text messages | `sms.refresh`, `sms.thread`, `sms.send` |
 | Streams | `webcam.start`, `webcam.config`, `webcam.stop`, `mic.start`, `mic.stop`, `screen.stop`, `desktop.stop`, `browse.stop` |
+| Motion cues | `motion.start` with an optional `device`, `motion.stop` |
 | Approval | `approve.request`, `approve.wait`, `approve.enroll`, `approve.cancel` |
 | Settings and updates | `settings.set`, `update.install`, `update.sendApp` |
 

@@ -104,6 +104,9 @@ dependencies {
     // QR and barcodes with the bundled model, and the Play services document scanner.
     implementation(libs.mlkit.barcode.scanning)
     implementation(libs.mlkit.document.scanner)
+    // Motion cues: the Activity Recognition Transition API detects a
+    // vehicle for automatic start. Only PlayServicesVehicleDetector uses it.
+    implementation(libs.play.services.location)
 
     // Approve sudo with a fingerprint: BiometricPrompt signs with a key in
     // the Android Keystore. docs/approve.md is the design.

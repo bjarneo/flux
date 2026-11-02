@@ -178,6 +178,11 @@ func (d *Daemon) Snapshot() json.RawMessage {
 			"remoteInput":       d.cfg.RemoteInput,
 			"remoteDesktop":     d.cfg.RemoteDesktop,
 			"checkUpdates":      d.cfg.CheckUpdates,
+			"motionCues":        d.cfg.MotionCues,
+			"motionAuto":        d.cfg.MotionAuto,
+			"motionSensitivity": d.cfg.MotionScale(),
+			"motionSize":        d.cfg.MotionDotSize(),
+			"motionIdle":        d.cfg.MotionIdleSeconds(),
 			"deviceRules":       d.cfg.Devices,
 			"notificationRules": d.cfg.NotificationRules,
 			"automationRules":   d.cfg.AutomationRules,
@@ -188,6 +193,7 @@ func (d *Daemon) Snapshot() json.RawMessage {
 		"desktop": d.desktopViewLocked(),
 		"browse":  d.browseViewLocked(),
 		"herdr":   d.herdrViewLocked(),
+		"motion":  d.motionViewLocked(),
 	}
 	d.mu.Unlock()
 	return mustJSON(state)
@@ -271,6 +277,19 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		return ok, d.StopScreen()
 	case "desktop.stop":
 		return ok, d.StopDesktop()
+	case "motion.start":
+		id := ""
+		if p.Device != "" {
+			dev, err := d.find(p.Device, nil)
+			if err != nil {
+				return nil, err
+			}
+			id = dev.ID
+		}
+		return ok, d.StartMotion(id)
+	case "motion.stop":
+		d.StopMotion()
+		return ok, nil
 	case "browse.stop":
 		return ok, d.StopBrowse(p.Device)
 	case "approve.request", "approve.enroll":
@@ -554,6 +573,33 @@ func (d *Daemon) setSetting(key string, value any) error {
 		d.cfg.RemoteDesktop = b
 	case key == "checkUpdates" && isBool:
 		d.cfg.CheckUpdates = b
+	case key == "motionCues" && isBool:
+		d.cfg.MotionCues = b
+	case key == "motionAuto" && isBool:
+		d.cfg.MotionAuto = b
+	case key == "motionSize" && isString:
+		if !slices.Contains(config.MotionSizes, s) {
+			d.mu.Unlock()
+			cfgSaves.Unlock()
+			return apiErr("bad_params", "motionSize must be small, medium, or large")
+		}
+		d.cfg.MotionSize = s
+	case key == "motionSensitivity":
+		v, ok := numberValue(value)
+		if !ok || !slices.Contains(config.MotionSensitivities, v) {
+			d.mu.Unlock()
+			cfgSaves.Unlock()
+			return apiErr("bad_params", "motionSensitivity must be 0.5, 1, or 1.6")
+		}
+		d.cfg.MotionSensitivity = v
+	case key == "motionIdle":
+		v, ok := numberValue(value)
+		if !ok || v != float64(int(v)) || v < config.MinMotionIdle || v > config.MaxMotionIdle {
+			d.mu.Unlock()
+			cfgSaves.Unlock()
+			return apiErr("bad_params", "motionIdle must be a whole number of seconds from %d to %d", config.MinMotionIdle, config.MaxMotionIdle)
+		}
+		d.cfg.MotionIdle = int(v)
 	case key == "name" && isString:
 		d.cfg.Name = strings.TrimSpace(s)
 	case key == "downloadDir" && isString:
@@ -620,6 +666,9 @@ func (d *Daemon) setSetting(key string, value any) error {
 	}
 	if key == "checkUpdates" {
 		d.wakeRelease()
+	}
+	if strings.HasPrefix(key, "motion") {
+		d.motionChanged()
 	}
 	if key == "shareHome" {
 		d.policiesChanged()
@@ -688,6 +737,16 @@ func (d *Daemon) unsavedSetting(key string, before *config.Config, err error) er
 		d.cfg.Herdr = before.Herdr
 	case "checkUpdates":
 		d.cfg.CheckUpdates = before.CheckUpdates
+	case "motionCues":
+		d.cfg.MotionCues = before.MotionCues
+	case "motionAuto":
+		d.cfg.MotionAuto = before.MotionAuto
+	case "motionSize":
+		d.cfg.MotionSize = before.MotionSize
+	case "motionSensitivity":
+		d.cfg.MotionSensitivity = before.MotionSensitivity
+	case "motionIdle":
+		d.cfg.MotionIdle = before.MotionIdle
 	case "name":
 		d.cfg.Name = before.Name
 	case "downloadDir":

@@ -13,6 +13,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -48,6 +49,16 @@ type Handler interface {
 	Call(ctx context.Context, method string, params json.RawMessage) (any, error)
 	Subscribe(send func(event string, data any)) (cancel func())
 }
+
+// MotionHandler is a Handler that also sends motion events. A client gets
+// them after it sends subscribe with {"motion": true}.
+type MotionHandler interface {
+	SubscribeMotion(send func(data any)) (cancel func())
+}
+
+// latestEvents are the events of which a slow client gets only the newest.
+// They never take a place in the queue, so they cannot close a connection.
+var latestEvents = []string{"state", "motion"}
 
 // maxSocketPath is the longest Unix socket path that Linux accepts.
 const maxSocketPath = 107
@@ -124,15 +135,16 @@ const maxQueued = 256
 const writeTimeout = 5 * time.Second
 
 // writer sends the messages of 1 connection from 1 goroutine, so a slow
-// client does not block fluxd. It keeps only the newest state event.
+// client does not block fluxd. It keeps only the newest state event and
+// the newest motion event.
 type writer struct {
-	conn  net.Conn
-	queue chan []byte
-	mu    sync.Mutex
-	state []byte
-	wake  chan struct{}
-	done  chan struct{}
-	once  sync.Once
+	conn   net.Conn
+	queue  chan []byte
+	mu     sync.Mutex
+	latest map[string][]byte
+	wake   chan struct{}
+	done   chan struct{}
+	once   sync.Once
 
 	// flush closes when the client sends no more requests. The writer
 	// then sends the queued messages and closes the connection.
@@ -142,11 +154,12 @@ type writer struct {
 
 func newWriter(conn net.Conn) *writer {
 	w := &writer{
-		conn:  conn,
-		queue: make(chan []byte, maxQueued),
-		wake:  make(chan struct{}, 1),
-		done:  make(chan struct{}),
-		flush: make(chan struct{}),
+		conn:   conn,
+		queue:  make(chan []byte, maxQueued),
+		latest: map[string][]byte{},
+		wake:   make(chan struct{}, 1),
+		done:   make(chan struct{}),
+		flush:  make(chan struct{}),
 	}
 	go w.run()
 	return w
@@ -161,7 +174,10 @@ func (w *writer) run() {
 		case b = <-w.queue:
 		case <-w.wake:
 			w.mu.Lock()
-			b, w.state = w.state, nil
+			for _, name := range latestEvents {
+				b = append(b, w.latest[name]...)
+				delete(w.latest, name)
+			}
 			w.mu.Unlock()
 			if b == nil {
 				continue
@@ -208,18 +224,18 @@ func (w *writer) reply(m Message) {
 	}
 }
 
-// event queues an event without a wait. A new state event replaces a state
-// event that is not sent yet. When the queue is full, the client loses its
-// connection.
+// event queues an event without a wait. A new state or motion event
+// replaces an event of the same name that is not sent yet. When the queue
+// is full, the client loses its connection.
 func (w *writer) event(m Message) {
 	b, err := json.Marshal(m)
 	if err != nil {
 		return
 	}
 	b = append(b, '\n')
-	if m.Event == "state" {
+	if slices.Contains(latestEvents, m.Event) {
 		w.mu.Lock()
-		w.state = b
+		w.latest[m.Event] = b
 		w.mu.Unlock()
 		select {
 		case w.wake <- struct{}{}:
@@ -243,10 +259,13 @@ func serveConn(ctx context.Context, conn net.Conn, h Handler) {
 	ctx, cancelCalls := context.WithCancel(ctx)
 	defer cancelCalls()
 	w := newWriter(conn)
-	var cancel func()
+	var cancel, cancelMotion func()
 	defer func() {
 		if cancel != nil {
 			cancel()
+		}
+		if cancelMotion != nil {
+			cancelMotion()
 		}
 	}()
 	var calls sync.WaitGroup
@@ -266,6 +285,24 @@ func serveConn(ctx context.Context, conn net.Conn, h Handler) {
 						w.event(Message{Event: event, Data: raw})
 					}
 				})
+			}
+			// A later subscribe can turn the motion events on or off.
+			var opts struct {
+				Motion bool `json:"motion"`
+			}
+			_ = json.Unmarshal(req.Params, &opts)
+			mh, canMotion := h.(MotionHandler)
+			switch {
+			case opts.Motion && canMotion && cancelMotion == nil:
+				cancelMotion = mh.SubscribeMotion(func(data any) {
+					raw, err := marshal(data)
+					if err == nil {
+						w.event(Message{Event: "motion", Data: raw})
+					}
+				})
+			case !opts.Motion && cancelMotion != nil:
+				cancelMotion()
+				cancelMotion = nil
 			}
 			w.reply(Message{ID: req.ID, Result: json.RawMessage("{}")})
 			continue

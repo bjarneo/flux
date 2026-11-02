@@ -13,6 +13,8 @@ Card {
   property var dev: null
   readonly property var settings: view && view.backend ? (view.backend.settings || ({})) : ({})
   readonly property var rules: dev && settings.deviceRules ? (settings.deviceRules[dev.id] || {}) : ({})
+  readonly property var motion: view && view.backend && view.backend.state ? (view.backend.state.motion || ({})) : ({})
+  readonly property bool motionHere: !!dev && motion.running === true && motion.device === dev.id
   readonly property string devName: dev ? (dev.name || "the device") : "the device"
 
   // global is the setting of this computer. computer is true for a feature
@@ -25,7 +27,8 @@ Card {
     { key: "remoteInput", label: "Remote input", global: "remoteInput", computer: true },
     { key: "herdr", label: "Agent output", global: "herdr" },
     { key: "herdrControl", label: "Agent control", global: "herdrControl" },
-    { key: "herdrTerminals", label: "Agent terminals", global: "herdrTerminals" }
+    { key: "herdrTerminals", label: "Agent terminals", global: "herdrTerminals" },
+    { key: "motionCues", label: "Motion cues", global: "motionCues", computer: true }
   ]
 
   implicitHeight: col.implicitHeight + 36
@@ -78,6 +81,7 @@ Card {
             if (!globalOn) return "Off on this computer."
             if (needsAgents && root.rules.herdr === false) return "Needs Agent output."
             if (modelData.key === "herdrTerminals" && root.rules.herdrControl === false) return "Needs Agent control."
+            if (modelData.key === "motionCues" && root.motionHere) return root.motion.active ? "Showing the motion of this device." : "Waiting for the motion of this device."
             if (modelData.computer) return "Allowed on this computer."
             return ""
           }
@@ -107,6 +111,19 @@ Card {
               text: feature.setOn ? "Turn off" : "Turn on"
               font.pixelSize: 11
               onClicked: root.setGlobal(feature.modelData.global, !feature.setOn)
+            }
+            // Motion cues also start and stop here, for this device.
+            TextAction {
+              objectName: feature.modelData.key === "motionCues" ? "motion-run" : ""
+              // shown is the wish of this item. visible also needs the parents.
+              readonly property bool shown: feature.modelData.key === "motionCues" && feature.globalOn && root.rules.motionCues !== false
+              visible: shown
+              text: root.motionHere ? "Stop" : "Start"
+              font.pixelSize: 11
+              onClicked: {
+                if (root.motionHere) root.view.call("motion.stop", {})
+                else root.view.call("motion.start", { device: root.dev.id })
+              }
             }
           }
         }

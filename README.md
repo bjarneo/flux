@@ -28,6 +28,7 @@ https://github.com/user-attachments/assets/4b8445fe-6734-4100-b200-92f57e1b353a
 | Use the phone or the Mac as a touchpad and keyboard | [Touchpad and keyboard](docs/remote-input.md) |
 | Show and control the computer screen on the phone or the Mac | [Remote desktop](docs/remote-desktop.md) |
 | Approve sudo with the phone's fingerprint sensor | [Fingerprint approval](docs/approvals.md) |
+| Show motion cues for a passenger from the motion of the phone | [Motion cues](docs/motion-cues.md) |
 | Reach your phone away from home through Tailscale | [Connect through Tailscale](docs/tailscale.md) |
 | See herdr coding agents on the phone or the Mac, read their output, and answer them | [herdr agents](docs/herdr.md) |
 | Update Flux on the computer and send the new app to the phone | [Update](docs/install.md#update) |

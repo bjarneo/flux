@@ -146,6 +146,13 @@ class Link(
 
     val isOpen: Boolean get() = !closed.get()
 
+    /**
+     * The number of packets that wait for the writer. A sender of data that
+     * goes old fast, such as motion samples, drops its data while this
+     * number is high, so that the link does not fall behind.
+     */
+    val queued: Int get() = writer.queue.size
+
     fun close() {
         if (!closed.compareAndSet(false, true)) return
         open -= this

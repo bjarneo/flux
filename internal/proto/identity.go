@@ -99,7 +99,12 @@ const (
 	// it only to a paired, connected device that lists it as incoming.
 	// docs/camera.md describes it.
 	TypeFluxStreamRequest = "flux.stream.request"
-	TypeFluxTransfer      = "flux.transfer"
+	// TypeFluxMotion carries motion cues. fluxd sends the setting, start,
+	// and stop to the phone. The phone sends acceleration samples, its
+	// sensor state, vehicle detection, and the starts and stops of its
+	// user. Both sides send it. docs/motion-cues.md describes the bodies.
+	TypeFluxMotion   = "flux.motion"
+	TypeFluxTransfer = "flux.transfer"
 )
 
 // Incoming lists the packet types that Flux accepts. The phone enables a
@@ -111,7 +116,7 @@ var Incoming = []string{
 	TypeSmsMessages, TypeTelephony,
 	TypeFluxTunnel, TypeFluxWebcam, TypeFluxDnd, TypeFluxMic, TypeFluxScreen,
 	TypeFluxApprove, TypeFluxHerdr, TypeFluxClipboardImage, TypeMousepadRequest,
-	TypeFluxDesktop, TypeFluxShortcuts, TypeFluxTransfer,
+	TypeFluxDesktop, TypeFluxShortcuts, TypeFluxTransfer, TypeFluxMotion,
 }
 
 // Outgoing lists the packet types that Flux sends.
@@ -123,7 +128,7 @@ var Outgoing = []string{
 	TypeSmsConversation, TypeSftp, TypeFluxWebcam, TypeFluxDnd,
 	TypeFluxMic, TypeFluxScreen, TypeFluxApprove, TypeFluxHerdr,
 	TypeFluxClipboardImage, TypeFluxInput, TypeFluxDesktop, TypeFluxShortcuts, TypeFluxTransfer,
-	TypeFluxTheme, TypeFluxStreamRequest,
+	TypeFluxTheme, TypeFluxStreamRequest, TypeFluxMotion,
 }
 
 // Identity is the body of a flux.identity packet.

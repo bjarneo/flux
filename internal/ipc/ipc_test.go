@@ -394,3 +394,88 @@ func TestCheckSocketOwner(t *testing.T) {
 		t.Fatalf("a missing socket: %v", err)
 	}
 }
+
+// motionHandler is a testHandler that also sends motion events.
+type motionHandler struct {
+	*testHandler
+	motion   chan func(any)
+	canceled chan struct{}
+}
+
+func (h *motionHandler) SubscribeMotion(send func(data any)) func() {
+	h.motion <- send
+	return func() { h.canceled <- struct{}{} }
+}
+
+// A client gets motion events only after it asks for them, a slow client
+// gets only the newest one, and a later subscribe turns them off.
+func TestMotionEvents(t *testing.T) {
+	path := filepath.Join(shortDir(t), "s")
+	base := &testHandler{subs: make(chan struct{}, 1), gone: make(chan struct{}), ended: make(chan error, 1)}
+	h := &motionHandler{testHandler: base, motion: make(chan func(any), 1), canceled: make(chan struct{}, 1)}
+	ln, err := Listen(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go Serve(ctx, ln, h)
+
+	conn := subscribe(t, base, path)
+	select {
+	case <-h.motion:
+		t.Fatal("a plain subscribe got motion events")
+	case <-time.After(100 * time.Millisecond):
+	}
+	if _, err := conn.Write([]byte(`{"id":2,"method":"subscribe","params":{"motion":true}}` + "\n")); err != nil {
+		t.Fatal(err)
+	}
+	var send func(any)
+	select {
+	case send = <-h.motion:
+	case <-time.After(2 * time.Second):
+		t.Fatal("no motion subscription")
+	}
+	for i := range 10 * maxQueued {
+		send(map[string]int{"n": i})
+	}
+	r := bufio.NewReader(conn)
+	last := -1
+	deadline := time.Now().Add(2 * time.Second)
+	for last != 10*maxQueued-1 && time.Now().Before(deadline) {
+		_ = conn.SetReadDeadline(deadline)
+		line, err := r.ReadBytes('\n')
+		if err != nil {
+			t.Fatal(err)
+		}
+		var m struct {
+			Event string `json:"event"`
+			Data  struct {
+				N int `json:"n"`
+			} `json:"data"`
+		}
+		if json.Unmarshal(line, &m) != nil || m.Event != "motion" {
+			continue
+		}
+		if m.Data.N <= last {
+			t.Fatalf("motion %d came after motion %d", m.Data.N, last)
+		}
+		last = m.Data.N
+	}
+	if last != 10*maxQueued-1 {
+		t.Errorf("the last motion event is %d, want %d", last, 10*maxQueued-1)
+	}
+	if _, err := conn.Write([]byte(`{"id":3,"method":"subscribe","params":{"motion":false}}` + "\n")); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-h.canceled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("subscribe without motion kept the motion events")
+	}
+	select {
+	case <-base.gone:
+		t.Error("motion events closed the connection")
+	default:
+	}
+}

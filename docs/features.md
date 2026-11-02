@@ -500,6 +500,13 @@ Then select **Remote desktop** in **Control** on the phone. The phone turns to l
 In Flux for macOS, select **Remote desktop** in **Control**.
 See [Remote desktop](remote-desktop.md) for the gestures, the monitors, and the stream.
 
+## Motion cues
+
+The phone can send its motion, so that flat dots at the edges of the screen move with the vehicle.
+They can help a passenger who reads on the laptop.
+Select **Turn on** under **Motion cues** in the **Access** card on the **Phone** page, or run `flux-cli motion on`.
+See [motion cues](motion-cues.md).
+
 ## Dictation in text fields
 
 Each text field of the app has a mic key.

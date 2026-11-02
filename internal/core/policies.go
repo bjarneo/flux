@@ -95,6 +95,7 @@ func (d *Daemon) policiesChanged() {
 	d.mu.Unlock()
 	d.inputChanged()
 	d.herdrChanged()
+	d.motionChanged()
 	d.markDirty()
 }
 

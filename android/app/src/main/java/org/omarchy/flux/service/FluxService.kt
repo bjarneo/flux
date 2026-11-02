@@ -34,6 +34,7 @@ import org.omarchy.flux.core.Android
 import org.omarchy.flux.core.CaptureWatch
 import org.omarchy.flux.core.DndSync
 import org.omarchy.flux.core.FluxCore
+import org.omarchy.flux.core.MotionCues
 import org.omarchy.flux.core.Plugins
 import org.omarchy.flux.core.Ringer
 import org.omarchy.flux.core.SmsSync
@@ -317,6 +318,7 @@ class FluxService : Service() {
 
     override fun onDestroy() {
         scope.cancel()
+        MotionCues.stopAll()
         calls?.stop()
         SmsSync.stop(this)
         stopScan()

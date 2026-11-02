@@ -43,6 +43,8 @@
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <!-- Android 12 and later: the pair sheet and the approval screen hide the windows of other apps. -->
     <uses-permission android:name="android.permission.HIDE_OVERLAY_WINDOWS" />
+    <!-- Motion cues: automatic start detects a vehicle. Flux asks only when the user turns on automatic start. -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
 
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
@@ -194,5 +196,10 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <!-- The vehicle events of Google Play services for motion cues, through a PendingIntent of Flux. -->
+        <receiver
+            android:name=".core.VehicleReceiver"
+            android:exported="false" />
     </application>
 </manifest>
