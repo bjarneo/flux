@@ -9,7 +9,7 @@ APP_VERSION ?= $(or $(shell git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/
 
 GUI_BUILD  := gui/app/build
 PLUGIN_DIR ?= $(HOME)/.config/omarchy/plugins/flux
-PLUGIN_FILES := manifest.json Service.qml Backend.qml BarWidget.qml Panel.qml
+PLUGIN_FILES := manifest.json Service.qml Backend.qml BarWidget.qml Panel.qml MotionCues.qml MotionColors.js
 
 # copy-plugin DEST copies the plugin in the layout that `omarchy plugin
 # validate` accepts: real files, the shared views in Flux/, and no tools/.

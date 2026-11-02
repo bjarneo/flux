@@ -144,6 +144,7 @@ object Ic {
     val chat = R.drawable.ic_chat
     val window = R.drawable.ic_web_asset
     val down = R.drawable.ic_arrow_downward
+    val car = R.drawable.ic_directions_car
 }
 
 /** An icon from [Ic]. It takes the content color unless [tint] is set. */

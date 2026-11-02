@@ -26,6 +26,8 @@ herdr_control = false
 herdr_terminals = false
 remote_input = false
 remote_desktop = false
+motion_cues = false
+motion_auto = true
 check_updates = true
 gui = ""
 approve_timeout = 20
@@ -52,6 +54,11 @@ command = "omarchy-system-lock"
 | `herdr_terminals` | Let each paired device open herdr terminals, read them, and type commands in them. The terminals include the herdr panes that you opened, for example a `sudo -i` shell. Needs `herdr_control`. Defaults to `false`. See [Use terminals](herdr.md#use-terminals). |
 | `remote_input` | Let the phone or the Mac move the pointer and type on this computer. Defaults to `false`. `flux-cli input on` and `flux-cli input off` change it. Turning it off drops the input that waits and releases a held button. See [Touchpad and keyboard](remote-input.md). |
 | `remote_desktop` | Let the phone or the Mac show the screen of this computer. Defaults to `false`. The touches and the mouse on the screen also need `remote_input`. `flux-cli desktop on` and `flux-cli desktop off` change it. Turning it off stops each stream, also a stream that still starts. See [Remote desktop](remote-desktop.md). |
+| `motion_cues` | Let a paired phone send its motion, so that the Flux plugin of omarchy-shell shows [motion cues](motion-cues.md). Defaults to `false`. `flux-cli motion on` and `flux-cli motion off` change it. |
+| `motion_auto` | Start the motion cues when the phone detects that it is in a vehicle. Defaults to `true`. Needs `motion_cues`. |
+| `motion_sensitivity` | How far and how fast the motion cues move: `0.5`, `1`, or `1.6`. An omitted or other value uses `1`. |
+| `motion_size` | The motion cue dot size: `small`, `medium`, or `large`. An omitted or other value uses `medium`. |
+| `motion_idle` | Stop the motion cues after this many seconds without motion, from 30 to 3600. Zero or an omitted value uses 300. |
 | `check_updates` | Ask GitHub once a day for the latest release. Defaults to `true`. See [release check](#release-check). |
 | `gui` | Use `app`, `plugin`, or an empty value for automatic host selection. |
 | `approve_timeout` | Wait 5 to 120 seconds for approval. Zero or an omitted value uses 20 seconds. |

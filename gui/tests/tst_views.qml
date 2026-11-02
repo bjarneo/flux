@@ -1088,5 +1088,33 @@ Item {
       compare(rule[0].params.key, "remoteDesktop")
       compare(rule[0].params.value, false)
     }
+
+    // Motion cues turn on for every device, and start and stop for this
+    // device from the card.
+    function test_motionCues() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "device"
+      var card = null
+      tryVerify(function () { card = findBy(page(view), "objectName", "accessCard"); return !!card })
+      var run = findBy(card, "objectName", "motion-run")
+      verify(!run.shown)
+      var turn = findBy(card, "objectName", "computer-motionCues")
+      compare(turn.text, "Turn on")
+      turn.clicked()
+      compare(requestsOf("settings.set")[0].params.key, "motionCues")
+      tryCompare(run, "shown", true)
+      compare(run.text, "Start")
+      run.clicked()
+      var start = requestsOf("motion.start")
+      compare(start.length, 1)
+      compare(start[0].params.device, top.pixel)
+      var st = JSON.parse(JSON.stringify(mock.state))
+      st.motion = { running: true, active: true, device: top.pixel }
+      mock.state = st
+      tryCompare(run, "text", "Stop")
+      run.clicked()
+      compare(requestsOf("motion.stop").length, 1)
+    }
   }
 }

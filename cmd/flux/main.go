@@ -84,6 +84,13 @@ Commands:
   browse [stop]          Show the devices that browse this computer, or stop them
   input [on|off]         Show whether a paired phone or Mac can move the pointer
                          and type on this computer, or turn that on or off
+  motion [status]        Show the motion cues for a passenger
+  motion on|off          Let a paired phone send its motion for the cues, or stop that
+  motion start|stop      Start or stop the motion cues now
+  motion auto on|off     Start the cues when the phone detects a vehicle
+  motion sensitivity N   Set the cue strength: 0.5, 1, or 1.6
+  motion size S          Set the dot size: small, medium, or large
+  motion idle SECONDS    Stop the cues after this time without motion, 30 to 3600
   approve [status]       Show whether a phone can approve sudo with a fingerprint
   approve setup [SVC…]   Enroll the phone and turn approval on for sudo, or for
                          polkit-1 and hyprlock. Run it with sudo.
@@ -181,6 +188,8 @@ func main() {
 		err = browse(args, device)
 	case "input":
 		err = remoteInput(args)
+	case "motion":
+		err = motion(args, device)
 	case "approve":
 		err = approveCmd(args, device)
 	case "watch":
@@ -312,6 +321,9 @@ type State struct {
 		CheckedAt int64  `json:"checkedAt"`
 		Error     string `json:"error"`
 	} `json:"update"`
+	Settings struct {
+		MotionCues bool `json:"motionCues"`
+	} `json:"settings"`
 	Devices []struct {
 		ID         string `json:"id"`
 		Name       string `json:"name"`

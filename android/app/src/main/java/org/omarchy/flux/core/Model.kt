@@ -127,6 +127,23 @@ data class DeviceUi(
     val shortcuts: ShortcutsState? = null,
     /** The time that the last link to the computer ended, in milliseconds since the epoch, or 0 when no link ended while the app ran. */
     val lastSeen: Long = 0,
+    /** True when the computer takes motion cues from this phone. */
+    val motionSupported: Boolean = false,
+    /** The motion cues state with this computer. */
+    val motion: MotionUi = MotionUi(),
+)
+
+/**
+ * The motion cues state with 1 computer. [enabled] is the setting of the
+ * computer, or null before it tells. [auto] is the automatic start setting
+ * of the computer. [running] is true while this phone sends samples.
+ */
+data class MotionUi(
+    val enabled: Boolean? = null,
+    val auto: Boolean = false,
+    val running: Boolean = false,
+    val error: String? = null,
+    val mount: Mount = Mount.Flat,
 )
 
 /** A snapshot of the whole app for the UI. */
@@ -185,4 +202,20 @@ data class UiState(
     val themeScope: String? = null,
     /** The name of the theme of each computer that sent one, by device ID. */
     val computerThemes: Map<String, String> = emptyMap(),
+    /** Automatic start of motion cues is on on this phone. */
+    val motionAuto: Boolean = false,
+    /** Whether this phone can detect a vehicle for automatic start. */
+    val vehicleDetect: VehicleDetect = VehicleDetect.Unavailable,
 )
+
+/** Whether this phone can detect a vehicle. */
+enum class VehicleDetect {
+    /** The phone can detect a vehicle. */
+    Ready,
+
+    /** The phone has Google Play services, but the user did not allow physical activity access. */
+    NoPermission,
+
+    /** The phone has no Google Play services, so the cues start only by hand. */
+    Unavailable,
+}

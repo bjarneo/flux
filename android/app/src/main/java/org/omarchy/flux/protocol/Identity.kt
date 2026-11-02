@@ -82,6 +82,13 @@ object Types {
      * phone starts a stream only after a tap of the user.
      */
     const val FLUX_STREAM_REQUEST = "flux.stream.request"
+
+    /**
+     * Motion cues. The computer sends config, start, and stop. This phone
+     * sends acceleration samples, its state, vehicle events, and start and
+     * stop of the user. Both sides send it. See [org.omarchy.flux.core.MotionMessage].
+     */
+    const val FLUX_MOTION = "flux.motion"
     const val FLUX_TRANSFER = "flux.transfer"
 }
 
@@ -93,6 +100,7 @@ val INCOMING = listOf(
     Types.SFTP, Types.FLUX_TUNNEL, Types.FLUX_WEBCAM, Types.FLUX_DND,
     Types.FLUX_MIC, Types.FLUX_SCREEN, Types.FLUX_APPROVE, Types.FLUX_HERDR, Types.FLUX_INPUT,
     Types.FLUX_DESKTOP, Types.FLUX_SHORTCUTS, Types.FLUX_THEME, Types.FLUX_STREAM_REQUEST, Types.FLUX_TRANSFER,
+    Types.FLUX_MOTION,
 )
 
 /** Packet types that the phone sends. */
@@ -101,7 +109,7 @@ val OUTGOING = listOf(
     Types.SHARE_UPDATE, Types.NOTIFICATION, Types.RUN_COMMAND_REQUEST, Types.MPRIS_REQUEST,
     Types.SFTP_REQUEST, Types.TELEPHONY, Types.FLUX_TUNNEL, Types.FLUX_WEBCAM, Types.FLUX_DND,
     Types.FLUX_MIC, Types.FLUX_SCREEN, Types.FLUX_APPROVE, Types.FLUX_HERDR, Types.FLUX_CLIPBOARD_IMAGE,
-    Types.MOUSEPAD_REQUEST, Types.FLUX_DESKTOP, Types.FLUX_SHORTCUTS, Types.FLUX_TRANSFER,
+    Types.MOUSEPAD_REQUEST, Types.FLUX_DESKTOP, Types.FLUX_SHORTCUTS, Types.FLUX_TRANSFER, Types.FLUX_MOTION,
 )
 
 /**

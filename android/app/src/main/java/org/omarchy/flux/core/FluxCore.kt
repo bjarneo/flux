@@ -125,6 +125,7 @@ object FluxCore {
         }
         trust = TrustStore(app)
         settings = Settings(app)
+        MotionCues.init(app)
         // The trust store holds only entries with a readable certificate.
         for (t in trust.all()) {
             val identity = Identity(t.id, t.name, t.type, 8, emptyList(), emptyList())
@@ -176,6 +177,9 @@ object FluxCore {
         notificationAccess = Android.hasNotificationAccess(app)
         callAccess = Android.hasPhoneState(app)
         smsAccess = SmsSync.hasAccess(app)
+        val detect = MotionCues.detect
+        MotionCues.refreshAccess(app)
+        if (MotionCues.detect != detect) MotionCues.updateDetection(this)
     }
 
     /** Reads all system flags again and publishes the state. */
@@ -322,6 +326,8 @@ object FluxCore {
             // new link first, so closing the old one keeps the device
             // online.
             if (!terminalSurvivesLinkChange(old, link)) d.herdrTerminal = null
+            // The motion samples also belong to the link. The computer starts them again on the new link.
+            if (old != null && old !== link) MotionCues.onLinkLost(d)
             if (old != null && old !== link) old.close()
             d.certificate = link.peerCertificate
             d.lastIp = link.address.hostAddress ?: ""
@@ -384,6 +390,7 @@ object FluxCore {
             // session would otherwise wait for a terminal_closed that can
             // no longer arrive, so a reconnect could never open a stream.
             if (!terminalSurvivesLinkChange(link, null)) d.herdrTerminal = null
+            MotionCues.onLinkLost(d)
             d.link = null
             d.lastSeen = System.currentTimeMillis()
             d.dropPairing()
@@ -408,6 +415,7 @@ object FluxCore {
         // The computer can no longer dismiss, answer, or press a button on a phone notification.
         NotificationSync.forgetDevice(id)
         ComputerThemes.forget(this, id)
+        MotionCues.forget(this, d)
         val browsing = browse?.deviceId == id
         if (browsing) browse = null
         io.execute {
@@ -462,6 +470,8 @@ object FluxCore {
                 computerTheme = ComputerThemes.current(),
                 themeScope = ComputerThemes.scope,
                 computerThemes = ComputerThemes.names(),
+                motionAuto = MotionCues.auto,
+                vehicleDetect = MotionCues.detect,
             )
         }
         _state.value = snapshot
@@ -472,6 +482,9 @@ object FluxCore {
     }
 
     fun device(id: String): Device? = synchronized(lock) { devices[id] }
+
+    /** The paired devices, online or not. */
+    fun pairedDevices(): List<Device> = synchronized(lock) { devices.values.filter { it.paired } }
 
     fun connectedPaired(): List<Device> = synchronized(lock) { devices.values.filter { it.paired && it.online } }
 
@@ -565,6 +578,7 @@ object FluxCore {
     fun setEnabled(on: Boolean) {
         settings.enabled = on
         publish()
+        MotionCues.updateDetection(this)
         if (on) {
             org.omarchy.flux.service.FluxService.start(app)
         } else {

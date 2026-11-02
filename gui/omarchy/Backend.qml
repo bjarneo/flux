@@ -54,6 +54,23 @@ Scope {
 
   signal toast(string text)
 
+  // True while the motion cues overlay needs the motion events of fluxd.
+  // The events come about 30 times each second, so the window does not
+  // take them while no cue shows.
+  property bool wantMotion: false
+  // The newest motion event: active, offsetX, offsetY, flowX, flowY,
+  // density, and size.
+  property var motion: ({})
+
+  function subscribe() {
+    call("subscribe", wantMotion ? { motion: true } : {}, null)
+  }
+
+  onWantMotionChanged: {
+    if (!wantMotion) motion = ({})
+    if (connected) subscribe()
+  }
+
   property int nextId: 1
   property var pending: ({})
 
@@ -154,6 +171,10 @@ Scope {
       state = msg.data || {}
       return
     }
+    if (msg.event === "motion") {
+      if (wantMotion) motion = msg.data || {}
+      return
+    }
     if (msg.event === "toast") {
       if (msg.data && msg.data.text) toast(msg.data.text)
       return
@@ -210,8 +231,9 @@ Scope {
         root.attempted = true
         if (connected) {
           root.retryDelay = root.minRetryDelay
-          root.call("subscribe", {}, null)
+          root.subscribe()
         } else {
+          root.motion = ({})
           root.failPending()
         }
       }

@@ -327,3 +327,23 @@ func TestClipboardCommandArgs(t *testing.T) {
 		t.Fatal("clipboard limit abc should fail")
 	}
 }
+
+func TestMotionText(t *testing.T) {
+	var s motionStatus
+	if got := motionText(s); !strings.Contains(got, "flux-cli motion on") {
+		t.Fatalf("off: %q", got)
+	}
+	s.Settings.MotionCues, s.Settings.MotionAuto = true, true
+	s.Settings.MotionSensitivity, s.Settings.MotionSize, s.Settings.MotionIdle = 1.6, "large", 300
+	if got := motionText(s); !strings.Contains(got, "stopped") || !strings.Contains(got, "detects a vehicle") || !strings.Contains(got, "Sensitivity: 1.6") {
+		t.Fatalf("stopped: %q", got)
+	}
+	s.Motion.Running, s.Motion.DeviceName = true, "Pixel 8"
+	if got := motionText(s); !strings.Contains(got, "wait for the motion of Pixel 8") {
+		t.Fatalf("waiting: %q", got)
+	}
+	s.Motion.Active, s.Motion.Error = true, "no accelerometer"
+	if got := motionText(s); !strings.Contains(got, "show the motion of Pixel 8") || !strings.Contains(got, "no accelerometer") {
+		t.Fatalf("active: %q", got)
+	}
+}

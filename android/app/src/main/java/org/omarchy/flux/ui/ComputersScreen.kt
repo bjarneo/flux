@@ -108,6 +108,7 @@ fun ComputersScreen(
                         }
                         for (d in paired) {
                             ComputerCard(d, state.onWifi, inScope = scope == d.id, onScope = { onScope(if (scope == d.id) null else d.id) }, onUnpair = { onUnpair(d) })
+                            if (showsMotion(d)) MotionRow(d, state)
                         }
                         ListHeader("Available")
                         for (d in available) AvailableRow(d) { onPair(d) }

@@ -368,6 +368,24 @@ To take the access back, run `flux-cli desktop off` and `flux-cli input off`.
 The **Access** card on the **Phone** page of the Flux window has the same 2 switches, as **Turn on** and **Turn off** under **Remote desktop** and **Remote input**.
 See [remote desktop](remote-desktop.md) and [touchpad and keyboard](remote-input.md).
 
+## Motion cues
+
+To let a paired phone send its motion for the [motion cues](motion-cues.md), run:
+
+```sh
+flux-cli motion on
+```
+
+| Command | Effect |
+| --- | --- |
+| `flux-cli motion` | Show the state and the settings. |
+| `flux-cli motion on`, `off` | Turn the feature on or off. |
+| `flux-cli motion start`, `stop` | Start or stop the cues now. `start` takes `--device NAME`. |
+| `flux-cli motion auto on`, `off` | Start the cues when the phone detects a vehicle. |
+| `flux-cli motion sensitivity 0.5\|1\|1.6` | Set how far and how fast the dots move. |
+| `flux-cli motion size small\|medium\|large` | Set the dot size. |
+| `flux-cli motion idle SECONDS` | Stop after this time without motion, from 30 to 3600 seconds. |
+
 ## Watch state changes
 
 ```sh
