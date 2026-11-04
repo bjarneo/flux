@@ -123,6 +123,12 @@ const maxQueued = 256
 // reads nothing for this time loses its connection.
 const writeTimeout = 5 * time.Second
 
+// sendBuffer is the kernel send buffer of 1 connection. fluxd sets it, so a
+// slow client fills its queue at the same point on every system. Without it,
+// the buffer follows net.core.wmem_default, and a raised default lets a client
+// that reads nothing hold many megabytes before it loses its connection.
+const sendBuffer = 64 * 1024
+
 // writer sends the messages of 1 connection from 1 goroutine, so a slow
 // client does not block fluxd. It keeps only the newest state event.
 type writer struct {
@@ -141,6 +147,9 @@ type writer struct {
 }
 
 func newWriter(conn net.Conn) *writer {
+	if uc, ok := conn.(*net.UnixConn); ok {
+		_ = uc.SetWriteBuffer(sendBuffer)
+	}
 	w := &writer{
 		conn:  conn,
 		queue: make(chan []byte, maxQueued),
