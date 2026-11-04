@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
@@ -249,12 +250,8 @@ fun WebcamPanel(deviceId: String, startNow: MutableState<Boolean>) {
             )
         } else {
             StatusLine(status, cameraError, pcName, config)
+            CameraPicker(config, caps)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (caps.cameras.size > 1) {
-                    ActionChip(Ic.switchCamera, if (config.camera == "front") "Back camera" else "Front camera") {
-                        WebcamSettings.update { it.copy(camera = if (it.camera == "front") "back" else "front") }
-                    }
-                }
                 ActionChip(Ic.rotate, "Rotate") { rotation = (rotation + 90) % 360 }
                 ActionChip(Ic.tune, "Settings") { settingsOpen = true }
             }
@@ -335,12 +332,8 @@ private fun WebcamSettingsPanel(
             if (streaming) Text("A new shape or quality starts the stream again.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Section("Camera") {
-            FlowRow(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (caps.cameras.size > 1) {
-                    for (c in caps.cameras) Choice(c.replaceFirstChar { it.uppercase() }, selected = c == config.camera) { set { it.copy(camera = c) } }
-                }
-                ActionChip(Ic.rotate, "Rotate", onRotate)
-            }
+            CameraPicker(config, caps)
+            ActionChip(Ic.rotate, "Rotate", onRotate)
         }
         Row(
             Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = config.mirror, role = Role.Switch) { on -> set { it.copy(mirror = on) } },
@@ -435,4 +428,26 @@ private fun Choice(label: String, selected: Boolean, onClick: () -> Unit) {
 @Composable
 private fun ActionChip(@DrawableRes icon: Int, label: String, onClick: () -> Unit) {
     FluxButton(label, onClick, kind = ButtonKind.Tonal, icon = icon)
+}
+
+/**
+ * The cameras in a "Rear" and a "Front" row, each with all its lenses, so
+ * one tap picks any camera. It shows only when the phone has more than 1.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CameraPicker(config: WebcamConfig, caps: WebcamCaps) {
+    if (caps.cameras.size <= 1) return
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        for (group in cameraGroups(caps.cameras)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(group.title, Modifier.width(48.dp), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                FlowRow(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for ((name, label) in group.lenses) {
+                        Choice(label, selected = name == config.camera) { WebcamSettings.update { it.copy(camera = name) } }
+                    }
+                }
+            }
+        }
+    }
 }

@@ -56,9 +56,12 @@ class CameraSource(context: Context) {
     /**
      * A camera to open, with the facts that the renderer and the settings
      * need. [exposureStep] is the EV of 1 step of exposure compensation.
+     * With a [physicalId], the frames come from that lens of camera [id].
      */
     data class Choice(
         val id: String,
+        val physicalId: String?,
+        val name: String,
         val facing: String,
         val size: Size,
         val sensorOrientation: Int,
@@ -70,41 +73,118 @@ class CameraSource(context: Context) {
         val activeArray: Rect?,
     )
 
-    /** Returns the camera directions of this phone: "back", "front", or both. */
-    fun facings(): List<String> {
-        val present = runCatching { manager.cameraIdList.map { manager.getCameraCharacteristics(it).get(CameraCharacteristics.LENS_FACING) } }.getOrDefault(emptyList())
-        return buildList {
-            if (CameraCharacteristics.LENS_FACING_BACK in present) add("back")
-            if (CameraCharacteristics.LENS_FACING_FRONT in present) add("front")
-        }.ifEmpty { listOf("back") }
+    /**
+     * Returns the cameras of this phone, named as [nameLenses] names them:
+     * "back", "front", and the other back and front lenses, such as
+     * "back 0.6x" or "back 3x". The extra lenses of a logical camera count
+     * too, as many phones show them only this way.
+     */
+    fun cameras(): List<NamedLens> {
+        cached?.let { return it }
+        val lenses = runCatching { lenses() }.getOrDefault(emptyList())
+        val all = nameLenses(lenses).ifEmpty { listOf(NamedLens("back", Lens(manager.cameraIdList.firstOrNull() ?: "0", null, "back", 0f))) }
+        // The lenses of a phone do not change, so they are read once.
+        if (lenses.isNotEmpty()) cached = all
+        return all
     }
 
-    /** Picks the first camera that faces the user ([front]) or away from the user. */
-    fun choose(front: Boolean): Choice? {
-        val facing = if (front) CameraCharacteristics.LENS_FACING_FRONT else CameraCharacteristics.LENS_FACING_BACK
-        val id = manager.cameraIdList.firstOrNull { manager.getCameraCharacteristics(it).get(CameraCharacteristics.LENS_FACING) == facing }
-            ?: manager.cameraIdList.firstOrNull()
-            ?: return null
+    @Volatile private var cached: List<NamedLens>? = null
+
+    private fun lenses(): List<Lens> {
+        val ids = manager.cameraIdList.toList()
+        val chars = ids.associateWith { manager.getCameraCharacteristics(it) }
+        val plain = ids.mapNotNull { id -> chars.getValue(id).takeIf { colorCamera(it) }?.let { lensOf(id, null, it) } }
+        val physical = ids.flatMap { id ->
+            val c = chars.getValue(id)
+            val logical = c.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES)
+                ?.contains(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_LOGICAL_MULTI_CAMERA) == true
+            if (!logical) return@flatMap emptyList()
+            c.physicalCameraIds.mapNotNull { pid ->
+                runCatching { manager.getCameraCharacteristics(pid) }.getOrNull()?.let { pc ->
+                    // A lens that cannot stream on its own surface, or that
+                    // sees no color, such as a depth or mono lens, is left out.
+                    if (pc.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP) == null || !colorCamera(pc)) null
+                    else lensOf(id, pid, pc, facingOf(c))
+                }
+            }
+        }
+        return plain + physical
+    }
+
+    /** Reports whether [c] streams a color image, and is not only a depth or mono sensor. */
+    private fun colorCamera(c: CameraCharacteristics): Boolean {
+        val caps = c.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES)
+        // A physical lens may leave out its capabilities. It then counts as a color lens.
+        if (caps != null && CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_BACKWARD_COMPATIBLE !in caps) return false
+        val cfa = c.get(CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && cfa != null &&
+            (cfa == CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT_MONO || cfa == CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT_NIR)
+        ) return false
+        return true
+    }
+
+    private fun facingOf(c: CameraCharacteristics): String? = when (c.get(CameraCharacteristics.LENS_FACING)) {
+        CameraCharacteristics.LENS_FACING_BACK -> "back"
+        CameraCharacteristics.LENS_FACING_FRONT -> "front"
+        else -> null
+    }
+
+    private fun lensOf(id: String, physicalId: String?, c: CameraCharacteristics, facing: String? = facingOf(c)): Lens? {
+        facing ?: return null
+        val focal = c.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)?.firstOrNull() ?: 0f
+        val width = c.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE)?.width ?: 0f
+        return Lens(id, physicalId, facing, if (focal > 0f && width > 0f) focal / width else 0f)
+    }
+
+    /**
+     * Picks the camera named [name]. An unknown name picks the main camera
+     * of the same direction, and then the first camera.
+     */
+    fun choose(name: String): Choice? {
+        val named = pickNamed(cameras(), name) ?: return null
+        return choiceFor(named)
+    }
+
+    private fun choiceFor(named: NamedLens): Choice {
+        val lens = named.lens
+        val id = lens.id
+        // The request controls belong to the opened camera. The sizes, the
+        // orientation, and the crop of a lens come from that lens, which
+        // zooms by its crop, see repeat().
         val c = manager.getCameraCharacteristics(id)
-        val sizes = c.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)?.getOutputSizes(SurfaceTexture::class.java).orEmpty()
-        val zoomMax = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        val p = lens.physicalId?.let { manager.getCameraCharacteristics(it) } ?: c
+        val pmap = p.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+        var sizes = pmap?.getOutputSizes(SurfaceTexture::class.java).orEmpty().toList()
+        if (lens.physicalId != null) {
+            // The logical camera streams the lens, so the size must suit both.
+            val logical = c.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)?.getOutputSizes(SurfaceTexture::class.java).orEmpty().toSet()
+            sizes = sizes.filter { it in logical }.ifEmpty { sizes }
+        }
+        // A size that the lens cannot stream at 30 fps is left out, when another size can.
+        val fast = sizes.filter { size -> pmap?.let { it.getOutputMinFrameDuration(SurfaceTexture::class.java, size) <= FRAME_NS } ?: true }
+        sizes = fast.ifEmpty { sizes }
+        val zoomMax = (if (lens.physicalId != null) {
+            p.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM)
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             c.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE)?.upper
         } else {
             c.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM)
-        } ?: 1f
+        }) ?: 1f
         val awb = c.get(CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES)?.toSet().orEmpty()
         return Choice(
             id = id,
-            facing = if (c.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT) "front" else "back",
-            size = pickSize(sizes.toList()),
-            sensorOrientation = c.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 90,
+            physicalId = lens.physicalId,
+            name = named.name,
+            facing = lens.facing,
+            size = pickSize(sizes),
+            sensorOrientation = p.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 90,
             fps = pickFps(c.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES)),
             // More than 10x zoom only shows noise on a webcam.
             zoomMax = zoomMax.coerceIn(1f, 10f),
             exposureRange = c.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE) ?: Range(0, 0),
             exposureStep = c.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP)?.toFloat() ?: 0f,
             whiteBalance = WHITE_BALANCE_MODES.filter { AWB_MODES[it] in awb }.ifEmpty { listOf("auto") },
-            activeArray = c.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE),
+            activeArray = p.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE),
         )
     }
 
@@ -120,7 +200,10 @@ class CameraSource(context: Context) {
         val s = session ?: return
         val (choice, target) = active ?: return
         try {
-            val request = s.device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
+            // A request that sets keys of a lens must name that lens when it is made.
+            val builder = choice.physicalId?.let { s.device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD, setOf(it)) }
+                ?: s.device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD)
+            val request = builder.apply {
                 addTarget(target)
                 set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO)
                 choice.fps?.let { set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, it) }
@@ -128,7 +211,12 @@ class CameraSource(context: Context) {
                 set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, c.exposureIndex.coerceIn(choice.exposureRange.lower, choice.exposureRange.upper))
                 set(CaptureRequest.CONTROL_AWB_MODE, c.awbMode)
                 val zoom = c.zoom.coerceIn(1f, choice.zoomMax)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val physical = choice.physicalId
+                if (physical != null) {
+                    // A zoom ratio on the logical camera can switch lenses, so a chosen lens zooms by its own crop.
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) set(CaptureRequest.CONTROL_ZOOM_RATIO, 1f)
+                    choice.activeArray?.let { setPhysicalCameraKey(CaptureRequest.SCALER_CROP_REGION, cropFor(it, zoom), physical) }
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     set(CaptureRequest.CONTROL_ZOOM_RATIO, zoom)
                 } else {
                     choice.activeArray?.let { set(CaptureRequest.SCALER_CROP_REGION, cropFor(it, zoom)) }
@@ -202,6 +290,7 @@ class CameraSource(context: Context) {
             // the framework mirrors the front camera, and GlRenderer removes
             // that mirror, see FrameGeometry.unmirror.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) mirrorMode = OutputConfiguration.MIRROR_MODE_NONE
+            choice.physicalId?.let { setPhysicalCameraId(it) }
         }
         val config = SessionConfiguration(SessionConfiguration.SESSION_REGULAR, listOf(output), executor, object : CameraCaptureSession.StateCallback() {
             override fun onConfigured(s: CameraCaptureSession) {
@@ -216,6 +305,13 @@ class CameraSource(context: Context) {
             }
         })
         try {
+            val physical = choice.physicalId
+            if (physical != null && runCatching { camera.isSessionConfigurationSupported(config) }.getOrDefault(true) == false) {
+                // The phone cannot stream this lens alone. The logical camera
+                // streams instead, so the image keeps going.
+                Log.w(TAG, "lens $physical cannot stream alone, using camera ${choice.id}")
+                return startSession(camera, choice.copy(physicalId = null, activeArray = null), target, current, fail)
+            }
             camera.createCaptureSession(config)
         } catch (e: Exception) {
             Log.w(TAG, "session failed", e)
@@ -252,6 +348,9 @@ class CameraSource(context: Context) {
     }
 
     companion object {
+        /** The longest frame at 30 fps, in nanoseconds, with a little room. */
+        private const val FRAME_NS = 34_000_000L
+
         /** The Camera2 white balance mode for each protocol name. */
         val AWB_MODES = mapOf(
             "auto" to CameraMetadata.CONTROL_AWB_MODE_AUTO,

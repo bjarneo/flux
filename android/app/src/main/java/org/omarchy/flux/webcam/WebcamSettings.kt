@@ -50,9 +50,15 @@ object WebcamSettings {
     /** Applies a "config" message from the computer. */
     fun applyRemote(reset: Boolean, partial: JsonObject?) = update { c -> (if (reset) c.reset() else c).merged(partial) }
 
-    /** Sets what the current camera supports, and clamps the settings to it. */
-    fun setCaps(caps: WebcamCaps) {
-        synchronized(lock) { _caps.value = caps }
-        update { it }
+    /**
+     * Sets what the current camera supports, and clamps the settings to it.
+     * With [camera], the settings name the camera that opened, in the same
+     * change, so the camera does not open twice.
+     */
+    fun setCaps(caps: WebcamCaps, camera: String? = null) {
+        synchronized(lock) {
+            _caps.value = caps
+            update { if (camera != null) it.copy(camera = camera) else it }
+        }
     }
 }
