@@ -341,6 +341,8 @@ func (d *Daemon) handlePair(dev *Device, l *lan.Link, p *proto.Packet) {
 	refuse := ""
 	skew := time.Since(time.Unix(body.Timestamp, 0))
 	switch {
+	case !d.cfg.PairRequests:
+		refuse = "off"
 	case body.Timestamp == 0:
 		refuse = "no timestamp"
 	case skew > maxClockSkew || skew < -maxClockSkew:
@@ -358,6 +360,8 @@ func (d *Daemon) handlePair(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.closeNotes(notes...)
 		_ = l.Send(proto.New(proto.TypePair, map[string]any{"pair": false}))
 		switch refuse {
+		case "off":
+			d.logf("%s (%s): refused a pair request, because pair_requests is off", name, ip)
 		case "clock":
 			d.toast("%s has a clock that differs by more than 30 minutes. Fix the time and pair again", name)
 		case "retry":
