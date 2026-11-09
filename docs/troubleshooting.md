@@ -145,6 +145,25 @@ See [check a release](install.md#check-a-release) to check the files by hand.
    flux-cli status
    ```
 
+   `flux-cli discover` asks Avahi for the address of each Flux device again, and `fluxd` connects to each one.
+   Avahi reports a device only when it appears on the network.
+   So a phone that stayed on the network after its link closed, for example after an unpair, connects again only after `flux-cli discover` or after **+ Pair new device** in the Flux window.
+
+5. Read the mDNS lines in the log:
+
+   ```sh
+   journalctl --user -u fluxd -e | grep mDNS
+   ```
+
+   | Line | Meaning |
+   | --- | --- |
+   | `mDNS: publishing this computer and looking for _flux._udp devices through Avahi` | mDNS runs. |
+   | `mDNS: resolving the N devices that Avahi reports` | `flux-cli discover` ran. With 0, Avahi reports no Flux device to `fluxd`. Compare with `avahi-browse -r -t _flux._udp`. |
+   | `mDNS: found "NAME" at IP:PORT` | `fluxd` has the address of the device and connects to it. A failed connection logs a `connect to` line. |
+   | `mDNS: cannot resolve ID: ERROR` | Avahi has the device but cannot get its address. |
+   | `mDNS: ID has no IPv4 address that Flux can use` | The device has only an IPv6 or loopback address. Flux finds devices over IPv4 only. |
+   | `mDNS: the Avahi browser failed, starting it again` | Avahi stopped the search. `fluxd` starts a new one. |
+
 Guest Wi-Fi and client isolation can block devices on the same access point.
 `fluxd` listens on 1 TCP port from 12100 to 12108 and on UDP port 12100, but it does not need inbound traffic.
 It finds the devices through mDNS and opens the connections itself.

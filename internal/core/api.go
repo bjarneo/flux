@@ -252,6 +252,12 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		return d.Snapshot(), nil
 	case "discover":
 		d.announce()
+		// Avahi reports a device only when it appears. Resolve each device
+		// again, so a phone whose link closed connects again.
+		d.mu.Lock()
+		m := d.mdns
+		d.mu.Unlock()
+		m.Rescan()
 		return ok, nil
 	case "webcam.start", "mic.start":
 		// The request picks its own device: only a device that accepts

@@ -121,6 +121,10 @@ flux-cli reject "Pixel 8"
 flux-cli unpair "Pixel 8"
 ```
 
+`flux-cli discover` sends the identity of the computer over UDP and asks Avahi for the address of each Flux device again.
+`fluxd` then connects to each device that it can reach.
+Use it when a phone that is on the network does not show.
+
 The verification key has 16 uppercase hex digits in 4 groups of 4, for example `5EE6 825F 974E D59A`.
 Compare all 16 characters on both devices before you accept.
 An earlier Flux app shows only 8 characters, so update Flux on each device before you pair.

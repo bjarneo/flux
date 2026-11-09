@@ -42,8 +42,9 @@ type MDNSInfo struct {
 	Type     string
 	Protocol int
 	Port     int
-	// Logf receives a line when the system bus closes, when Avahi stops,
-	// and when mDNS runs again. It can be nil.
+	// Logf receives a line when mDNS starts, when the system bus closes,
+	// when Avahi stops, when mDNS runs again, and for each device that
+	// mDNS finds or cannot resolve. It can be nil.
 	Logf func(format string, args ...any)
 }
 
@@ -57,13 +58,34 @@ type MDNSPeer struct {
 	Port     int
 }
 
+// maxServices is the number of browser entries that an MDNS keeps for
+// Rescan. Devices on the network cannot fill the memory of fluxd past it.
+const maxServices = 256
+
 // MDNS is a running mDNS publisher and browser.
 type MDNS struct {
 	self  string
 	found func(MDNSPeer)
+	logf  func(format string, args ...any)
 
 	mu     sync.Mutex
 	server dbus.BusObject
+	// services holds the entries that the browser reports now. The
+	// browser reports an entry only when it appears. Rescan resolves them
+	// again, so fluxd finds a device that stayed on the network after its
+	// link closed.
+	services map[service]bool
+	// noted holds the last log line of each entry, so that an entry that
+	// resolves again logs only a change. Avahi reports a device once on
+	// each network interface.
+	noted map[service]string
+}
+
+// service is 1 entry of the browser: a service name on 1 interface and
+// protocol.
+type service struct {
+	iface, proto      int32
+	name, typ, domain string
 }
 
 // avahi is 1 connection to the system bus. While Avahi runs, it also has
@@ -91,14 +113,45 @@ func (m *MDNS) Refresh(deviceID string) {
 	if server == nil {
 		return
 	}
-	go resolve(server, ifaceUnspec, protoInet, deviceID, serviceType, "local", m.found)
+	// A paired device that is offline fails each resolve, so Refresh does
+	// not log failures.
+	go m.resolve(server, service{ifaceUnspec, protoInet, deviceID, serviceType, "local"}, false)
 }
 
-// setServer sets the Avahi server for Refresh. A nil server stops Refresh
-// while Avahi does not run.
+// Rescan resolves each entry that the browser reports now, and calls found
+// for each entry that resolves. It returns the number of entries. The
+// browser reports an entry only when it appears. A phone that unpaired,
+// or whose link closed, keeps its entry, so fluxd finds it again only
+// through Rescan. A nil MDNS does nothing.
+func (m *MDNS) Rescan() int {
+	if m == nil {
+		return 0
+	}
+	m.mu.Lock()
+	server := m.server
+	list := make([]service, 0, len(m.services))
+	for s := range m.services {
+		list = append(list, s)
+	}
+	m.mu.Unlock()
+	if server == nil {
+		m.logf("mDNS: cannot look for devices, because Avahi does not run")
+		return 0
+	}
+	m.logf("mDNS: resolving the %d devices that Avahi reports", len(list))
+	for _, s := range list {
+		go m.resolve(server, s, true)
+	}
+	return len(list)
+}
+
+// setServer sets the Avahi server for Refresh and Rescan. A nil server
+// stops them while Avahi does not run. A new server starts with no
+// browser entries, because its browser reports each entry again.
 func (m *MDNS) setServer(server dbus.BusObject) {
 	m.mu.Lock()
 	m.server = server
+	m.services = map[service]bool{}
 	m.mu.Unlock()
 }
 
@@ -110,11 +163,16 @@ func (m *MDNS) setServer(server dbus.BusObject) {
 // the system bus closes or Avahi starts again later, the MDNS publishes the
 // device again.
 func StartMDNS(ctx context.Context, info MDNSInfo, found func(MDNSPeer)) (*MDNS, error) {
-	m := &MDNS{self: info.DeviceID, found: found}
+	logf := info.Logf
+	if logf == nil {
+		logf = func(string, ...any) {}
+	}
+	m := &MDNS{self: info.DeviceID, found: found, logf: logf, services: map[service]bool{}, noted: map[service]string{}}
 	a, err := dialBus()
 	if err == nil {
 		if err = a.publish(info, 0); err == nil {
-			m.server = a.server
+			m.setServer(a.server)
+			logf("mDNS: publishing this computer and looking for %s devices through Avahi", serviceType)
 		}
 	}
 	go m.run(ctx, info, a)
@@ -128,11 +186,13 @@ func dialBus() (*avahi, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Add the match rules before the browser exists, so no ItemNew signal
-	// is lost.
+	// Add the match rules before the browser exists, so no signal of the
+	// browser is lost.
 	rules := [][]dbus.MatchOption{
 		{dbus.WithMatchSender(busName), dbus.WithMatchInterface(busName), dbus.WithMatchMember("NameOwnerChanged"), dbus.WithMatchArg(0, avahiBus)},
 		{dbus.WithMatchInterface(avahiBrowser), dbus.WithMatchMember("ItemNew")},
+		{dbus.WithMatchInterface(avahiBrowser), dbus.WithMatchMember("ItemRemove")},
+		{dbus.WithMatchInterface(avahiBrowser), dbus.WithMatchMember("Failure")},
 	}
 	for _, rule := range rules {
 		if err := conn.AddMatchSignal(rule...); err != nil {
@@ -196,11 +256,12 @@ func (a *avahi) unpublish() {
 // attempt, and the wait doubles after each failure. A retry does not ask
 // the bus to start Avahi.
 func (m *MDNS) run(ctx context.Context, info MDNSInfo, a *avahi) {
-	logf := info.Logf
-	if logf == nil {
-		logf = func(string, ...any) {}
-	}
+	logf := m.logf
 	wait := mdnsRetryMin
+	// failWait is the wait after a failure of the browser. It does not
+	// start again at mdnsRetryMin after a publish, so a browser that fails
+	// again and again logs less and less often.
+	failWait := mdnsRetryMin
 	for {
 		if a == nil {
 			select {
@@ -224,7 +285,7 @@ func (m *MDNS) run(ctx context.Context, info MDNSInfo, a *avahi) {
 				retry = time.After(wait)
 			}
 		}
-		switch watch(ctx, a.conn.Context().Done(), a.signals, retry, func(sig *dbus.Signal) { m.itemNew(a, sig) }) {
+		switch watch(ctx, a.conn.Context().Done(), a.signals, retry, func(sig *dbus.Signal) bool { return m.item(a, sig) }) {
 		case ctxDone:
 			a.unpublish()
 			a.conn.Close()
@@ -243,7 +304,19 @@ func (m *MDNS) run(ctx context.Context, info MDNSInfo, a *avahi) {
 			// free that service before the next publish.
 			a.unpublish()
 			m.setServer(nil)
-			wait = mdnsRetryMin
+			wait, failWait = mdnsRetryMin, mdnsRetryMin
+		case browserFailed:
+			// Publish the service and start a new browser after a wait.
+			a.unpublish()
+			m.setServer(nil)
+			retry := time.After(failWait)
+			failWait = nextRetry(failWait)
+			select {
+			case <-ctx.Done():
+				a.conn.Close()
+				return
+			case <-retry:
+			}
 		case retryNow:
 			wait = nextRetry(wait)
 		}
@@ -254,17 +327,19 @@ func (m *MDNS) run(ctx context.Context, info MDNSInfo, a *avahi) {
 type watchEnd int
 
 const (
-	ctxDone      watchEnd = iota // the context ended
-	busClosed                    // the bus connection closed
-	avahiStopped                 // Avahi left the bus
-	avahiStarted                 // Avahi joined the bus
-	retryNow                     // the retry time came
+	ctxDone       watchEnd = iota // the context ended
+	busClosed                     // the bus connection closed
+	avahiStopped                  // Avahi left the bus
+	avahiStarted                  // Avahi joined the bus
+	retryNow                      // the retry time came
+	browserFailed                 // the browser reported a failure
 )
 
 // watch passes each signal to item until ctx ends, the bus connection
-// closes, Avahi stops or starts, or the time comes on retry. godbus closes
-// signals and closed when the connection closes. retry can be nil.
-func watch(ctx context.Context, closed <-chan struct{}, signals <-chan *dbus.Signal, retry <-chan time.Time, item func(*dbus.Signal)) watchEnd {
+// closes, Avahi stops or starts, the time comes on retry, or item returns
+// true for a failure of the browser. godbus closes signals and closed when
+// the connection closes. retry can be nil.
+func watch(ctx context.Context, closed <-chan struct{}, signals <-chan *dbus.Signal, retry <-chan time.Time, item func(*dbus.Signal) bool) watchEnd {
 	for {
 		select {
 		case <-ctx.Done():
@@ -286,7 +361,9 @@ func watch(ctx context.Context, closed <-chan struct{}, signals <-chan *dbus.Sig
 				}
 				return avahiStarted
 			}
-			item(sig)
+			if item(sig) {
+				return browserFailed
+			}
 		}
 	}
 }
@@ -308,23 +385,69 @@ func nextRetry(wait time.Duration) time.Duration {
 	return min(2*wait, mdnsRetryMax)
 }
 
-// itemNew resolves the service of an ItemNew signal from the browser of a.
-func (m *MDNS) itemNew(a *avahi, sig *dbus.Signal) {
-	if sig.Path != a.browser || len(sig.Body) < 5 {
-		return
+// item handles a signal of the browser of a. It resolves the service of
+// an ItemNew signal, and keeps the entry for Rescan until an ItemRemove
+// signal. It returns true when the browser failed.
+func (m *MDNS) item(a *avahi, sig *dbus.Signal) bool {
+	if sig.Path != a.browser {
+		return false
 	}
-	iface, _ := sig.Body[0].(int32)
-	proto, _ := sig.Body[1].(int32)
-	name, _ := sig.Body[2].(string)
-	typ, _ := sig.Body[3].(string)
-	domain, _ := sig.Body[4].(string)
-	if name == m.self {
-		return
+	switch sig.Name {
+	case avahiBrowser + ".Failure":
+		msg := ""
+		if len(sig.Body) > 0 {
+			msg, _ = sig.Body[0].(string)
+		}
+		m.logf("mDNS: the Avahi browser failed, starting it again: %s", msg)
+		return true
+	case avahiBrowser + ".ItemNew", avahiBrowser + ".ItemRemove":
+	default:
+		return false
 	}
-	go resolve(a.server, iface, proto, name, typ, domain, m.found)
+	if len(sig.Body) < 5 {
+		return false
+	}
+	var s service
+	s.iface, _ = sig.Body[0].(int32)
+	s.proto, _ = sig.Body[1].(int32)
+	s.name, _ = sig.Body[2].(string)
+	s.typ, _ = sig.Body[3].(string)
+	s.domain, _ = sig.Body[4].(string)
+	if s.name == m.self || s.name == "" {
+		return false
+	}
+	m.mu.Lock()
+	if sig.Name == avahiBrowser+".ItemRemove" {
+		delete(m.services, s)
+		delete(m.noted, s)
+		m.mu.Unlock()
+		return false
+	}
+	if len(m.services) < maxServices {
+		m.services[s] = true
+	}
+	m.mu.Unlock()
+	go m.resolve(a.server, s, true)
+	return false
 }
 
-func resolve(server dbus.BusObject, iface, proto int32, name, typ, domain string, found func(MDNSPeer)) {
+// note logs line for the entry s when it differs from the last line of
+// that entry.
+func (m *MDNS) note(s service, line string) {
+	m.mu.Lock()
+	same := m.noted[s] == line
+	if !same && len(m.noted) < maxServices {
+		m.noted[s] = line
+	}
+	m.mu.Unlock()
+	if !same {
+		m.logf("%s", line)
+	}
+}
+
+// resolve asks Avahi for the address of s and calls found with it. With
+// report, it also logs a failure. It logs each found address once.
+func (m *MDNS) resolve(server dbus.BusObject, s service, report bool) {
 	var (
 		rIface, rProto, aProto int32
 		rName, rType, rDomain  string
@@ -333,12 +456,29 @@ func resolve(server dbus.BusObject, iface, proto int32, name, typ, domain string
 		txt                    [][]byte
 		flags                  uint32
 	)
-	err := server.Call(avahiServer+".ResolveService", 0, iface, proto, name, typ, domain, protoInet, lookupNoFlags).
+	err := server.Call(avahiServer+".ResolveService", 0, s.iface, s.proto, s.name, s.typ, s.domain, protoInet, lookupNoFlags).
 		Store(&rIface, &rProto, &rName, &rType, &rDomain, &host, &aProto, &address, &port, &txt, &flags)
-	ip := net.ParseIP(address)
-	if err != nil || ip == nil || ip.To4() == nil || ip.IsLoopback() {
+	if err != nil {
+		if report {
+			m.note(s, fmt.Sprintf("mDNS: cannot resolve %s: %v", s.name, err))
+		}
 		return
 	}
+	ip := net.ParseIP(address)
+	if ip == nil || ip.To4() == nil || ip.IsLoopback() {
+		if report {
+			m.note(s, fmt.Sprintf("mDNS: %s has no IPv4 address that Flux can use: %q", s.name, address))
+		}
+		return
+	}
+	peer := parsePeer(s.name, address, port, txt)
+	m.note(s, fmt.Sprintf("mDNS: found %q at %s", peer.Name, net.JoinHostPort(address, strconv.Itoa(int(port)))))
+	m.found(peer)
+}
+
+// parsePeer reads the TXT record of a resolved service. The service name
+// is the device ID when the record has no id entry.
+func parsePeer(name, address string, port uint16, txt [][]byte) MDNSPeer {
 	peer := MDNSPeer{DeviceID: name, IP: address, Port: int(port), Protocol: 8}
 	for _, entry := range txt {
 		k, v, _ := strings.Cut(string(entry), "=")
@@ -355,5 +495,5 @@ func resolve(server dbus.BusObject, iface, proto int32, name, typ, domain string
 			}
 		}
 	}
-	found(peer)
+	return peer
 }
