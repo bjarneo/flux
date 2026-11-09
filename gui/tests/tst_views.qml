@@ -336,6 +336,44 @@ Item {
       tryVerify(function () { return !findVisibleBy(p, "text", "Not sent") })
     }
 
+    // A failed entry shows at its time among the messages. A pending entry
+    // stays at the end.
+    function test_outboxInTimeOrder() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "messages"
+      tryVerify(function () { return !!page(view) && page(view).loaded })
+      var p = page(view)
+      compare(p.selected.thread, 1)
+      var now = Math.floor(Date.now() / 1000)
+      mock.updateDevice(top.pixel, function (d) {
+        d.outbox = [
+          { thread: 1, address: "+4791234567", body: "Not yet", time: now - 240, outgoing: true, pending: false, failed: true },
+          { thread: 1, address: "+4791234567", body: "Still sending", time: now - 600, outgoing: true, pending: true, failed: false },
+        ]
+        return d
+      })
+      compare(p.shown.map(function (m) { return m.body }), ["Hi honey!", "Not yet", "Dinner sunday? bring the kids", "Still sending"])
+    }
+
+    // A message that the phone reports loads the open thread again, also
+    // when the message is older than the last message.
+    function test_reportedChangeLoadsThread() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "messages"
+      tryVerify(function () { return !!page(view) && page(view).loaded })
+      var p = page(view)
+      compare(p.selected.thread, 1)
+      var loads = requestsOf("sms.thread").length
+      mock.updateDevice(top.pixel, function (d) {
+        d.conversations[0].changes = 1
+        return d
+      })
+      compare(requestsOf("sms.thread").length, loads + 1)
+      compare(requestsOf("sms.thread")[loads].params.thread, 1)
+    }
+
     function test_sendRefusesThreadOfOtherDevice() {
       var view = createTemporaryObject(viewComponent, top)
       view.selectedId = top.pixel

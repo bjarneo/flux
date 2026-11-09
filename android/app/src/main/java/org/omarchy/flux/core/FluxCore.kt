@@ -85,6 +85,7 @@ object FluxCore {
     @Volatile private var notificationAccess = false
     @Volatile private var callAccess = false
     @Volatile private var smsAccess = false
+    @Volatile private var contactsAccess = false
     @Volatile private var smsSupported = false
 
     private val _state = MutableStateFlow(UiState())
@@ -176,6 +177,7 @@ object FluxCore {
         notificationAccess = Android.hasNotificationAccess(app)
         callAccess = Android.hasPhoneState(app)
         smsAccess = SmsSync.hasAccess(app)
+        contactsAccess = Android.hasContacts(app)
     }
 
     /** Reads all system flags again and publishes the state. */
@@ -448,6 +450,7 @@ object FluxCore {
                 callAccess = callAccess,
                 smsSync = settings.syncSms,
                 smsAccess = smsAccess,
+                contactsAccess = contactsAccess,
                 smsSupported = smsSupported,
                 agentInputAlerts = settings.agentInputAlerts,
                 agentDoneAlerts = settings.agentDoneAlerts,

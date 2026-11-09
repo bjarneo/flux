@@ -98,6 +98,12 @@ type Conversation struct {
 	Pending   bool     `json:"pending"`
 	Failed    bool     `json:"failed"`
 
+	// Changes counts the new and changed messages of the thread that the
+	// phone reported since the last list of conversations. A message that
+	// is older than Last also counts, so the page loads the thread again
+	// and shows that message.
+	Changes int64 `json:"changes"`
+
 	id    int64
 	ms    int64
 	subID int64
@@ -200,13 +206,24 @@ func (d *Daemon) handleSms(dev *Device, p *proto.Packet) {
 	if b.Conversations && b.ThreadID == nil {
 		dev.conversations = map[int64]*Conversation{}
 	}
+	// The phone reports a new or changed message without a thread request.
+	report := b.ThreadID == nil && !b.Conversations
 	for _, m := range msgs {
 		// A newer message replaces the latest message of its thread. The
 		// same message can come again with a new type or read state.
 		c, ok := dev.conversations[m.Thread]
-		if !ok || m.ms > c.ms || (m.ms == c.ms && m.ID == c.id) {
-			dev.conversations[m.Thread] = m.conversation()
+		var changes int64
+		if ok {
+			changes = c.Changes
 		}
+		if report {
+			changes++
+		}
+		if !ok || m.ms > c.ms || (m.ms == c.ms && m.ID == c.id) {
+			c = m.conversation()
+			dev.conversations[m.Thread] = c
+		}
+		c.Changes = changes
 	}
 	pruneConversations(dev.conversations, maxConversations)
 	confirmOutboxLocked(dev, msgs)
@@ -358,14 +375,45 @@ func confirmOutboxLocked(dev *Device, msgs []SmsMessage) {
 }
 
 // reportedBy reports whether m from the phone is the message of the entry.
+// The thread or the address of m must match. The phone can put a message
+// in another thread than the conversation that the user replied to, for
+// example when it has 2 threads with the same number.
 func (e OutboxMessage) reportedBy(m SmsMessage) bool {
-	if !m.Outgoing || m.Body != e.Body || m.Time < e.Time-smsClockSlack {
+	if !m.Outgoing || m.Time < e.Time-smsClockSlack || !sameSmsText(m.Body, e.Body) {
 		return false
 	}
-	if e.Thread >= 0 {
-		return m.Thread == e.Thread
+	if e.Thread >= 0 && m.Thread == e.Thread {
+		return true
 	}
 	return len(m.Addresses) == 1 && samePhone(m.Addresses[0], e.Address)
+}
+
+// sameSmsText reports whether phone, the text of a message of the phone,
+// is the text that fluxd sent. Android keeps a long message as the
+// text of its parts. On some phones, these parts have other line ends,
+// and plain characters in place of special characters. So the texts also
+// match when they have the same characters after the line ends, except
+// where sent has a character that is not ASCII.
+func sameSmsText(phone, sent string) bool {
+	if phone == sent {
+		return true
+	}
+	a, b := []rune(smsLines(phone)), []rune(smsLines(sent))
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] && b[i] < utf8.RuneSelf {
+			return false
+		}
+	}
+	return true
+}
+
+// smsLines returns s with Unix line ends and without the space at the
+// start and the end.
+func smsLines(s string) string {
+	return strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\r", "\n"))
 }
 
 // conversationThread returns the thread of the newest conversation with

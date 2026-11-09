@@ -51,7 +51,7 @@ Item {
       if (composing) return e.thread < 0 && samePhone(e.address, sentTo)
       return selectedDev === devId && inThread(e, selected)
     })
-    return composing ? extra : messages.concat(extra)
+    return composing ? extra : withOutbox(messages, extra)
   }
 
   implicitHeight: 480
@@ -78,6 +78,24 @@ Item {
     var phone = /^[0-9+\-(). ]+$/
     if (da.length < 3 || db.length < 3 || !phone.test(a) || !phone.test(b)) return a.toLowerCase() === b.toLowerCase()
     return da.slice(-8) === db.slice(-8)
+  }
+
+  // Puts the outbox entries in msgs, which has the oldest message first.
+  // A failed entry goes after the messages of its time and the earlier
+  // messages, so a message that came after it shows under it. A pending
+  // entry stays at the end, because it is the newest message, also when
+  // the clock of the phone is ahead of the clock of the computer.
+  function withOutbox(msgs, entries) {
+    var out = msgs.slice()
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i]
+      var j = out.length
+      if (!e.pending) {
+        while (j > 0 && out[j - 1].time > e.time) j--
+      }
+      out.splice(j, 0, e)
+    }
+    return out
   }
 
   function inThread(e, c) {
@@ -261,8 +279,10 @@ Item {
     for (var i = 0; i < convos.length; i++) {
       var c = convos[i]
       if (c.thread !== selected.thread) continue
-      // A new message, or a new state of the last message, loads the thread.
-      if (c.time !== selected.time || c.last !== selected.last || !!c.pending !== !!selected.pending || !!c.failed !== !!selected.failed) load(c)
+      // A new message, or a new state of a message, loads the thread. A
+      // message that is older than the last message changes only the count
+      // of changes.
+      if (c.time !== selected.time || c.last !== selected.last || !!c.pending !== !!selected.pending || !!c.failed !== !!selected.failed || (c.changes || 0) !== (selected.changes || 0)) load(c)
       // Each state event gives a new object for the same conversation. Keep
       // the old object when nothing that the page shows changed. A new
       // object makes the thread list build again and scroll to the end

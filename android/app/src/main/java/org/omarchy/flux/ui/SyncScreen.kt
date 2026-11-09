@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.toggleable
@@ -119,6 +120,13 @@ fun SyncScreen(state: UiState, onBack: () -> Unit) {
             refuse(SMS, "Text messages need SMS access. Allow it in the app settings.")
         }
     }
+    // Without the contacts, the computers show the numbers of the
+    // conversations. Android does not ask again after the user refused
+    // twice, so the notice then opens the app settings.
+    val askContacts = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        FluxCore.refresh()
+        if (granted) clearRefused() else refuse(SMS, "Names need access to the contacts. Allow Contacts in the app settings.")
+    }
     // The first capture switch that turns on asks for access to photos.
     var asking by remember { mutableStateOf<CaptureKind?>(null) }
     val askPhotos = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -178,7 +186,12 @@ fun SyncScreen(state: UiState, onBack: () -> Unit) {
         // A tablet without a SIM slot has no text messages.
         if (state.smsSupported) {
             add(SyncItem(SMS, Ic.sms, "Text messages", "Shows text messages on the computers, and sends the replies from them.", state.smsSync && state.smsAccess) {
-                if (!state.smsAccess) askSms.launch(SmsSync.permissions()) else FluxCore.setSyncSms(!state.smsSync)
+                when {
+                    !state.smsAccess -> askSms.launch(SmsSync.permissions())
+                    // Access to SMS can come from the app settings. The switch then asks for the contacts.
+                    !state.smsSync && !state.contactsAccess -> askSms.launch(arrayOf(Manifest.permission.READ_CONTACTS))
+                    else -> FluxCore.setSyncSms(!state.smsSync)
+                }
             })
         }
         add(
@@ -215,9 +228,26 @@ fun SyncScreen(state: UiState, onBack: () -> Unit) {
                 SyncRow(s)
                 // The notice shows under the switch that asked, where the user looks after the tap.
                 val text = refused
-                if (text != null && refusedKey == s.key) PermissionNotice(text)
+                if (text != null && refusedKey == s.key) {
+                    PermissionNotice(text)
+                } else if (s.key == SMS && state.smsSync && state.smsAccess && !state.contactsAccess) {
+                    ContactsNotice { askContacts.launch(Manifest.permission.READ_CONTACTS) }
+                }
             }
         }
+    }
+}
+
+/**
+ * Shows under Text messages while Flux cannot read the contacts. The
+ * computers then show the numbers of the conversations. [onAllow] asks
+ * for the contacts.
+ */
+@Composable
+private fun ContactsNotice(onAllow: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        T("The computers show numbers in place of names. Allow access to the contacts to show the names.", size = 13, color = Tn.sub, lineHeight = 1.3f)
+        FluxButton("Allow contacts", onAllow, Modifier.offset(x = (-12).dp), kind = ButtonKind.Text)
     }
 }
 

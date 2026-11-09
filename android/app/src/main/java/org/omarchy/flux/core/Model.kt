@@ -154,6 +154,8 @@ data class UiState(
     val smsSync: Boolean = false,
     val smsAccess: Boolean = false,
     val smsSupported: Boolean = false,
+    /** Flux may read the contacts. The computers then show names in place of numbers. */
+    val contactsAccess: Boolean = false,
     /** Notify when a herdr agent on a computer needs input. */
     val agentInputAlerts: Boolean = true,
     /** Notify when a herdr agent on a computer finishes. */

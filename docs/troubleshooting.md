@@ -285,7 +285,23 @@ Then turn on **Text messages** again.
 
 If a sent message shows **Not sent**, the phone could not send it, or the phone did not report it in 60 seconds.
 Check the signal and the SMS app on the phone.
+When the phone reports the message later, **Not sent** goes away.
 Flux does not send messages to a group. Reply to a group on the phone.
+
+If a message is on the phone but not on the desktop, check these causes:
+
+- The app on the phone keeps the message in its own database, for example an RCS chat. Flux reads only the SMS and MMS database of the phone.
+- The message is older than the last 100 messages of the conversation. The desktop shows only these 100 messages.
+
+## Conversations show numbers
+
+Flux shows the numbers of the conversations when it cannot read the contacts of the phone.
+
+1. Open **Computers > Sync** in Flux for Android.
+2. Under **Text messages**, select **Allow contacts**, and allow the access.
+3. Open the **Messages** page on the desktop again.
+
+If Android does not ask, select **Open app settings** and allow **Contacts**.
 
 ## A phone copy does not reach the computer
 

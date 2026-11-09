@@ -335,6 +335,7 @@ Turn on **Text messages** in **Computers > Sync** on the phone.
 The switch applies to every paired computer: each of them can then read your conversations and send text messages.
 The phone asks for SMS access and contacts access.
 Flux needs SMS access. Contacts access adds names to the conversations.
+Without contacts access, the conversations show numbers, and **Allow contacts** shows under the switch.
 A tablet without a SIM slot does not show the switch.
 
 The desktop then shows the **Messages** page for that phone:
@@ -343,6 +344,7 @@ The desktop then shows the **Messages** page for that phone:
 - Select a conversation to read its last 100 messages and to reply.
 - Select **New message** to send a text message to a phone number.
 - A new message on the phone appears on the desktop in about 1 second.
+- A sent message shows **Sending…** until the phone reports it. When the phone does not report it in 60 seconds, it shows **Not sent** at the time that you sent it.
 - A reply goes out on the SIM of the conversation. A new message uses the default SMS SIM of the phone.
 - The list keeps the 500 newest conversations and shows the first 1 KiB of each latest message.
 - A conversation keeps up to 20 addresses and the first 256 bytes of its name. `fluxd` ignores an address that is longer than 64 bytes.
