@@ -53,6 +53,7 @@ command = "omarchy-system-lock"
 | `remote_input` | Let the phone or the Mac move the pointer and type on this computer. Defaults to `false`. `flux-cli input on` and `flux-cli input off` change it. Turning it off drops the input that waits and releases a held button. See [Touchpad and keyboard](remote-input.md). |
 | `remote_desktop` | Let the phone or the Mac show the screen of this computer. Defaults to `false`. The touches and the mouse on the screen also need `remote_input`. `flux-cli desktop on` and `flux-cli desktop off` change it. Turning it off stops each stream, also a stream that still starts. See [Remote desktop](remote-desktop.md). |
 | `check_updates` | Ask GitHub once a day for the latest release. Defaults to `true`. See [release check](#release-check). |
+| `remote_desktop_encoder` | Select the video encoder of the remote desktop: `auto`, `gpu`, or `cpu`. An omitted value is `auto`. Use `cpu` when the GPU encoder hangs the computer. See [choose the encoder](remote-desktop.md#choose-the-encoder). |
 | `gui` | Use `app`, `plugin`, or an empty value for automatic host selection. |
 | `approve_timeout` | Wait 5 to 120 seconds for approval. Zero or an omitted value uses 20 seconds. |
 | `commands` | Desktop commands available to the phone. A new configuration has no commands. |

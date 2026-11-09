@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"flux/internal/config"
 	"flux/internal/desktop"
 	"flux/internal/proto"
 )
@@ -151,6 +152,14 @@ func desktopArgs(name string, w, h int) []string {
 	}
 }
 
+// desktopCPUArgs returns the arguments of gpu-screen-recorder that
+// capture the monitor on the GPU and encode it on the CPU, with x264. The
+// GPU encoder does not start, so an encoder that hangs cannot stop the
+// computer.
+func desktopCPUArgs(name string, w, h int) []string {
+	return append(desktopArgs(name, w, h), "-encoder", "cpu")
+}
+
 // cpuRecorderArgs returns the arguments of wf-recorder for a monitor and a
 // stream size. wf-recorder captures a frame only when the screen changes,
 // so a still screen needs almost no CPU. x264 encodes without B-frames
@@ -177,20 +186,50 @@ func gpuRecorder(path string) recorder {
 		func(ctx context.Context) ([]monitor, error) { return listMonitors(ctx, path) }, desktopArgs}
 }
 
+// gpuRecorderCPU returns gpu-screen-recorder with the CPU encoder.
+func gpuRecorderCPU(path string) recorder {
+	r := gpuRecorder(path)
+	r.name, r.args = desktopRecorder+" on the CPU", desktopCPUArgs
+	return r
+}
+
 func cpuRecorder(path string) recorder {
 	return recorder{desktopCPURecorder, path, hyprMonitors, cpuRecorderArgs}
 }
 
-// pickRecorder returns gpu-screen-recorder when it runs on this GPU, else
-// wf-recorder. gpu-screen-recorder fails to list the monitors on a GPU
-// that it does not support, and it lists no monitor when the displays are
-// off. Only the failure selects wf-recorder.
-func pickRecorder(ctx context.Context, lookPath func(string) (string, error)) (recorder, error) {
+// errNoRecorder tells the user to install gpu-screen-recorder.
+var errNoRecorder = errors.New("the remote desktop needs gpu-screen-recorder on the computer. Install it with: sudo pacman -S gpu-screen-recorder")
+
+// pickRecorder returns the recorder for the encoder of config.toml.
+//
+//   - config.EncoderAuto: gpu-screen-recorder when it runs on this GPU,
+//     else wf-recorder. gpu-screen-recorder fails to list the monitors on
+//     a GPU that it does not support, and it lists no monitor when the
+//     displays are off. Only the failure selects wf-recorder.
+//   - config.EncoderGPU: gpu-screen-recorder.
+//   - config.EncoderCPU: gpu-screen-recorder with its CPU encoder, else
+//     wf-recorder.
+func pickRecorder(ctx context.Context, lookPath func(string) (string, error), encoder string) (recorder, error) {
 	gpu, gpuErr := lookPath(desktopRecorder)
 	cpu, cpuErr := lookPath(desktopCPURecorder)
+	switch encoder {
+	case config.EncoderGPU:
+		if gpuErr != nil {
+			return recorder{}, errNoRecorder
+		}
+		return gpuRecorder(gpu), nil
+	case config.EncoderCPU:
+		switch {
+		case gpuErr == nil:
+			return gpuRecorderCPU(gpu), nil
+		case cpuErr == nil:
+			return cpuRecorder(cpu), nil
+		}
+		return recorder{}, errNoRecorder
+	}
 	switch {
 	case gpuErr != nil && cpuErr != nil:
-		return recorder{}, errors.New("the remote desktop needs gpu-screen-recorder on the computer. Install it with: sudo pacman -S gpu-screen-recorder")
+		return recorder{}, errNoRecorder
 	case gpuErr != nil:
 		return cpuRecorder(cpu), nil
 	case cpuErr != nil:
@@ -432,7 +471,10 @@ func (d *Daemon) runDesktop(s *desktopSession, b desktopStart) {
 	if !waitTurn(ctx, s.prev) {
 		return
 	}
-	rec, err := pickRecorder(ctx, exec.LookPath)
+	d.mu.Lock()
+	encoder := d.cfg.Encoder()
+	d.mu.Unlock()
+	rec, err := pickRecorder(ctx, exec.LookPath, encoder)
 	if err != nil {
 		fail(err)
 		return

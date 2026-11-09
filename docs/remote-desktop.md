@@ -35,6 +35,31 @@ On another system, install it with `sudo pacman -S gpu-screen-recorder`.
 On another GPU, for example an older NVIDIA card on `nouveau`, install `wf-recorder` with `sudo pacman -S wf-recorder`.
 `fluxd` then captures the monitor through Hyprland and encodes it on the CPU.
 
+### Choose the encoder
+
+`fluxd` encodes the stream on the GPU by default.
+The video encoder of some older GPUs, for example AMD Polaris cards with VCE 3.0, can hang and stop the computer.
+To keep the stream off the GPU encoder, set this key in `~/.config/flux/config.toml`:
+
+```toml
+remote_desktop_encoder = "cpu"
+```
+
+Then reload the daemon:
+
+```sh
+systemctl --user reload fluxd
+```
+
+| Value | Encoder |
+| --- | --- |
+| `auto` | The GPU encoder of `gpu-screen-recorder`. `gpu-screen-recorder` uses the CPU when the GPU has no H.264 encoder. On a GPU that `gpu-screen-recorder` does not support, `wf-recorder` encodes on the CPU. This is the default. |
+| `gpu` | The GPU encoder of `gpu-screen-recorder` only. |
+| `cpu` | `gpu-screen-recorder` captures on the GPU and encodes on the CPU. Without `gpu-screen-recorder`, `wf-recorder` encodes on the CPU. |
+
+The CPU encoder uses more CPU time.
+The log shows the encoder at each start, for example `remote desktop of DP-2 at 1920x1080 with gpu-screen-recorder on the CPU`.
+
 `fluxd` saves the settings as `remote_desktop` and `remote_input` in `~/.config/flux/config.toml`.
 After a manual edit of that file, run `systemctl --user reload fluxd`.
 
@@ -382,6 +407,7 @@ A binding to a key code, such as `SUPER + code:10` for workspace 1, does not mat
 | The phone stays black, or says that it cannot show a stream of a size | The decoder of the phone cannot show the stream. Update Flux for Android, which asks for a smaller stream. |
 | The screen capture stops | Run `journalctl --user -u fluxd --no-pager \| grep "remote desktop"` for the error of `gpu-screen-recorder`. |
 | The Mac or the phone says `list the monitors: exit status 22` | `gpu-screen-recorder` does not support the GPU. Install `wf-recorder`, then start the remote desktop again. |
+| The computer freezes or restarts when the remote desktop starts | The GPU encoder hangs. Set `remote_desktop_encoder = "cpu"`. See [choose the encoder](#choose-the-encoder). |
 | `gpu-screen-recorder` cannot capture the monitor | Run `getcap /usr/bin/gsr-kms-server`. The result must show `cap_sys_admin`. Install the package again to restore it. |
 | The pointer goes to the wrong place | The compositor must name its monitors with `wl_output` version 4. Hyprland does. |
 | The Omarchy panel shows an error | Run `flux-cli input on`. The panel also needs `hyprctl` and a Hyprland with a Lua configuration. |
