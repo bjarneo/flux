@@ -27,7 +27,11 @@ To open or close the window, use `omarchy-shell shell toggle flux '{}'`.
 
 The panel loads the Flux view when the window opens and unloads it when the
 window closes. The service keeps its connection to fluxd while the window is
-closed. It reads each state event for the bar widget. A closed window builds
+closed. It reads each state event for the bar widget. Under a replacement bar,
+such as a clone of `omarchy.bar` that `omarchy bar use` selects, Omarchy 4.5
+does not give the widget the service. The widget then opens its own connection
+to fluxd, so the mark and the tooltip still show the connected devices. A closed
+window builds
 no views, and its pages send no requests to the phone. The next open shows
 the last tab and device.
 Each open also reads `colors.toml` again. When fluxd is down, each open

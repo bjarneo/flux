@@ -6,7 +6,9 @@ import "Flux/components" as FluxUi
 
 // The Flux bar widget: the Flux mark alone. The mark takes the accent color
 // while a paired device is connected. The tooltip lists every paired device.
-// A left click opens or closes the Flux window.
+// A left click opens or closes the Flux window. The widget reads the state
+// of fluxd from the Flux service, or from its own Backend under a
+// replacement bar.
 BarWidget {
   id: root
   moduleName: "flux"
@@ -15,7 +17,18 @@ BarWidget {
     if (!bar || !bar.shell || typeof bar.shell.serviceFor !== "function") return null
     return bar.shell.serviceFor(root.moduleName)
   }
-  readonly property var backend: service ? service.backend : null
+  // Since Omarchy 4.5, a replacement bar gives its widgets a shell whose
+  // serviceFor returns null. The widget then opens its own connection to
+  // fluxd.
+  readonly property bool needsOwnBackend: !!bar && !!bar.shell && !service
+
+  LazyLoader {
+    id: ownBackend
+    active: root.needsOwnBackend
+    Backend {}
+  }
+
+  readonly property var backend: service ? service.backend : (ownBackend.item || null)
   readonly property bool up: !!backend && backend.connected
   readonly property var paired: backend ? (backend.devices || []).filter(d => d.paired) : []
   readonly property var primary: paired.find(d => d.online) || null
