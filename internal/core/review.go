@@ -228,6 +228,30 @@ func colorDiff(text string) string {
 	return out.String()
 }
 
+// herdrAgentDir returns the project folder of the agent in the pane.
+func (d *Daemon) herdrAgentDir(ctx context.Context, pane string) (string, error) {
+	if herdrApp(pane) {
+		return d.herdrAppDir(ctx, pane)
+	}
+	sock, id := d.herdrAt(pane)
+	snap, err := herdr.GetSnapshot(ctx, sock)
+	if err != nil {
+		return "", err
+	}
+	for _, agent := range snap.Agents {
+		if agent.PaneID == id {
+			if agent.ForegroundCwd != "" {
+				return agent.ForegroundCwd, nil
+			}
+			if agent.Cwd != "" {
+				return agent.Cwd, nil
+			}
+			break
+		}
+	}
+	return "", errors.New("the agent has no project folder")
+}
+
 func (d *Daemon) readReview(pane, path string) *proto.Packet {
 	reply := map[string]any{"kind": "output", "pane": pane, "format": "ansi", "review": true}
 	d.mu.Lock()
@@ -239,23 +263,7 @@ func (d *Daemon) readReview(pane, path string) *proto.Packet {
 	}
 	ctx, cancel := context.WithTimeout(d.ctx, 10*time.Second)
 	defer cancel()
-	sock, id := d.herdrAt(pane)
-	snap, err := herdr.GetSnapshot(ctx, sock)
-	var dir string
-	if err == nil {
-		for _, agent := range snap.Agents {
-			if agent.PaneID == id {
-				dir = agent.ForegroundCwd
-				if dir == "" {
-					dir = agent.Cwd
-				}
-				break
-			}
-		}
-		if dir == "" {
-			err = errors.New("the agent has no project folder")
-		}
-	}
+	dir, err := d.herdrAgentDir(ctx, pane)
 	if err == nil {
 		reply["text"], reply["truncated"], err = repositoryDiff(ctx, dir, path)
 	}
