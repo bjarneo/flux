@@ -462,6 +462,7 @@ object FluxCore {
                 connecting = inConnectGrace(connectFrom, SystemClock.elapsedRealtime()),
                 enabled = settings.enabled,
                 theme = settings.theme,
+                touchpadScroll = settings.touchpadScroll,
                 computerTheme = ComputerThemes.current(),
                 themeScope = ComputerThemes.scope,
                 computerThemes = ComputerThemes.names(),
@@ -579,6 +580,11 @@ object FluxCore {
     fun setTheme(mode: ThemeMode) {
         settings.theme = mode
         ComputerThemes.applyNightMode(app)
+        publish()
+    }
+
+    fun setTouchpadScroll(mode: ScrollMode) {
+        settings.touchpadScroll = mode
         publish()
     }
 

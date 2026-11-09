@@ -349,7 +349,7 @@ It moves the pointer through a `zwlr_virtual_pointer_v1` pointer for the monitor
 `fluxd` ignores a position when the phone shows no remote desktop.
 See the [wire format of remote input](remote-input.md#how-it-works).
 
-`fluxd` sends `flux.input` with `{"enabled": bool, "desktop": bool, "keyRepeat": true}` after the link starts and after a setting changes.
+`fluxd` sends `flux.input` with `{"enabled": bool, "desktop": bool, "keyRepeat": true, "naturalScroll": bool}` after the link starts and after a setting changes.
 The phone uses `desktop` to show the **Remote desktop** tile as on or off.
 
 ### Omarchy panel

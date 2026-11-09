@@ -82,6 +82,9 @@ class Device(private val core: FluxCore, var identity: Identity) {
     /** True when the computer reads repeat with a special key. */
     var keyRepeat = false
 
+    /** The scroll direction of the touchpads of the computer, or null when the computer does not tell it. */
+    var naturalScroll: Boolean? = null
+
     /** True when the computer shows its screen on this phone, or null before it tells. */
     var remoteDesktop: Boolean? = null
 
@@ -143,6 +146,7 @@ class Device(private val core: FluxCore, var identity: Identity) {
         inputSupported = Types.MOUSEPAD_REQUEST in identity.incoming,
         remoteInput = remoteInput,
         keyRepeat = keyRepeat,
+        naturalScroll = naturalScroll,
         desktopSupported = Types.FLUX_DESKTOP in identity.incoming,
         remoteDesktop = remoteDesktop,
         shortcutsSupported = Types.FLUX_SHORTCUTS in identity.incoming,

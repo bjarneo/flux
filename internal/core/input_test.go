@@ -496,3 +496,53 @@ func TestInputQueueKeepsClicksWhole(t *testing.T) {
 		t.Fatalf("the queue holds %d characters", text)
 	}
 }
+
+func TestParseNaturalScroll(t *testing.T) {
+	cases := []struct {
+		out         string
+		natural, ok bool
+	}{
+		{`{"option": "input:touchpad:natural_scroll", "bool": false, "set": true }`, false, true},
+		{`{"option": "input:touchpad:natural_scroll", "bool": true, "set": true }`, true, true},
+		{`{"option": "input:touchpad:natural_scroll", "int": 1, "set": true}`, true, true},
+		{`{"option": "input:touchpad:natural_scroll", "int": 0, "set": false}`, false, true},
+		{`no such option`, false, false},
+		{`{"option": "input:touchpad:natural_scroll"}`, false, false},
+	}
+	for _, c := range cases {
+		natural, ok := parseNaturalScroll([]byte(c.out))
+		if natural != c.natural || ok != c.ok {
+			t.Errorf("parseNaturalScroll(%s) = %v, %v, want %v, %v", c.out, natural, ok, c.natural, c.ok)
+		}
+	}
+}
+
+// TestInputStateNaturalScroll checks that flux.input has the scroll
+// direction of the Hyprland touchpads, and no direction without Hyprland.
+func TestInputStateNaturalScroll(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	desk, phone, _, _ := linkPair(t, ctx)
+	got := packets(phone)
+	d, _ := inputDaemon(t, true)
+	old := touchpadNaturalScroll
+	t.Cleanup(func() { touchpadNaturalScroll = old })
+	for _, c := range []struct{ natural, ok bool }{{false, true}, {true, true}, {false, false}} {
+		touchpadNaturalScroll = func(context.Context) (bool, bool) { return c.natural, c.ok }
+		d.sendInputState(desk)
+		var p *proto.Packet
+		select {
+		case p = <-got:
+		case <-time.After(5 * time.Second):
+			t.Fatal("the phone got no flux.input")
+		}
+		var b map[string]any
+		if p.Type != proto.TypeFluxInput || p.Decode(&b) != nil {
+			t.Fatalf("packet %s", p.Type)
+		}
+		v, has := b["naturalScroll"]
+		if has != c.ok || (has && v != c.natural) {
+			t.Errorf("hyprctl %v, %v: naturalScroll %v, %v", c.natural, c.ok, v, has)
+		}
+	}
+}

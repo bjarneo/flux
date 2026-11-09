@@ -288,5 +288,10 @@ final class RemoteInputTests: XCTestCase {
         XCTAssertTrue(model.canRepeat("a"))
         model.set("a", true)
         XCTAssertFalse(model.canRepeat("a"), "each flux.input tells the state again")
+        XCTAssertTrue(model.scrollsNaturally("a"), "a computer without Hyprland scrolls the natural way")
+        model.set("a", true, naturalScroll: false)
+        XCTAssertFalse(model.scrollsNaturally("a"))
+        model.set("a", true)
+        XCTAssertTrue(model.scrollsNaturally("a"))
     }
 }

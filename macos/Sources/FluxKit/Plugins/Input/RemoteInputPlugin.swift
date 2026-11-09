@@ -14,6 +14,10 @@ public final class RemoteInputModel {
     /// The `keyRepeat` field of the last flux.input: true when the computer
     /// presses a special key many times for 1 packet.
     public private(set) var keyRepeat: [String: Bool] = [:]
+    /// The `naturalScroll` field of the last flux.input: the scroll
+    /// direction of the Hyprland touchpads of the computer. A computer
+    /// without Hyprland has no entry.
+    public private(set) var naturalScroll: [String: Bool] = [:]
 
     public init() {}
 
@@ -27,10 +31,16 @@ public final class RemoteInputModel {
     /// see `RemoteInput.keys(_:count:mods:repeat:)`.
     public func canRepeat(_ deviceId: String) -> Bool { keyRepeat[deviceId] == true }
 
-    func set(_ deviceId: String, _ on: Bool, desktop shows: Bool? = nil, keyRepeat repeats: Bool = false) {
+    /// True when a touchpad scrolls the natural way for the computer, so
+    /// the content moves with the fingers. A computer that does not tell
+    /// gets the natural way.
+    public func scrollsNaturally(_ deviceId: String) -> Bool { naturalScroll[deviceId] ?? true }
+
+    func set(_ deviceId: String, _ on: Bool, desktop shows: Bool? = nil, keyRepeat repeats: Bool = false, naturalScroll natural: Bool? = nil) {
         enabled[deviceId] = on
         desktop[deviceId] = shows
         keyRepeat[deviceId] = repeats
+        naturalScroll[deviceId] = natural
     }
 }
 
@@ -38,9 +48,11 @@ public final class RemoteInputModel {
 /// and the keyboard of this Mac control the pointer and the keys of the
 /// computer. The computer runs the input only while its remote_input
 /// setting is on. It sends flux.input {"enabled": bool, "desktop": bool,
-/// "keyRepeat": bool} after the link starts and after a setting changes.
-/// `desktop` tells whether remote_desktop is on, for `DesktopPlugin`.
-/// `keyRepeat` tells that a key packet can have `repeat`.
+/// "keyRepeat": bool, "naturalScroll": bool} after the link starts and
+/// after a setting changes. `desktop` tells whether remote_desktop is on,
+/// for `DesktopPlugin`. `keyRepeat` tells that a key packet can have
+/// `repeat`. `naturalScroll` is the scroll direction of the Hyprland
+/// touchpads, and it is missing without Hyprland.
 public final class RemoteInputPlugin: FluxPlugin, @unchecked Sendable {
     private weak var core: FluxCore?
     public let model: RemoteInputModel
@@ -61,11 +73,12 @@ public final class RemoteInputPlugin: FluxPlugin, @unchecked Sendable {
         guard let on = packet.bool("enabled") else { return }
         let desktop = packet.bool("desktop")
         let repeats = packet.bool("keyRepeat") ?? false
+        let natural = packet.bool("naturalScroll")
         let shows = desktop.map { $0 ? "on" : "off" } ?? "not reported"
         FluxLog.plugin.info("remote input is \(on ? "on" : "off", privacy: .public), remote desktop is \(shows, privacy: .public) on \(device.name, privacy: .public)")
         let id = device.id
         let model = model
-        DispatchQueue.main.async { MainActor.assumeIsolated { model.set(id, on, desktop: desktop, keyRepeat: repeats) } }
+        DispatchQueue.main.async { MainActor.assumeIsolated { model.set(id, on, desktop: desktop, keyRepeat: repeats, naturalScroll: natural) } }
     }
 
     /// Sends 1 input packet. It returns false when the computer is offline.

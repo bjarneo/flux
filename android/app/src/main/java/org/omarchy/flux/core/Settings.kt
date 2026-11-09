@@ -42,6 +42,11 @@ class Settings(context: Context) {
         get() = prefs.getString("computerThemes", null)
         set(v) = prefs.edit().putString("computerThemes", v).apply()
 
+    /** The scroll direction of the touchpad screen. Without a choice, it is [ScrollMode.Computer]. */
+    var touchpadScroll: ScrollMode
+        get() = ScrollMode.fromKey(prefs.getString("touchpadScroll", null))
+        set(v) = prefs.edit().putString("touchpadScroll", v.key).apply()
+
     /** Sends the calls of this phone to the computers. It needs the phone permission. */
     var callAlerts: Boolean
         get() = prefs.getBoolean("callAlerts", false)

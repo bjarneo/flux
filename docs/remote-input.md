@@ -68,7 +68,7 @@ On the lock screen, the touchpad and the remote desktop keep working, but the [O
 | Tap with 1 finger | Click |
 | Tap with 2 fingers | Right-click |
 | Tap with 3 fingers | Middle-click |
-| Move 2 fingers | Scroll. The content follows the fingers. |
+| Move 2 fingers | Scroll in the direction of **Touchpad scrolling**. |
 | Hold 1 finger still, then move it | Drag. The drag ends when the finger lifts. |
 
 Hold **left** with 1 thumb and move a finger on the touchpad to drag with 2 hands.
@@ -76,6 +76,31 @@ Hold **left** with 1 thumb and move a finger on the touchpad to drag with 2 hand
 
 A fast finger moves the pointer further than a slow finger.
 The screen stays on while the touchpad shows.
+
+### Scroll direction
+
+To change the scroll direction of the touchpad, open **Computers** on the phone and select 1 choice under **Touchpad scrolling**:
+
+| Choice | Result |
+| --- | --- |
+| **Computer** | The touchpad scrolls like the touchpads of the computer. This is the default. |
+| **Natural** | The content moves with the fingers. |
+| **Traditional** | 2 fingers down scroll down, like a scroll wheel. |
+
+**Computer** follows the `input:touchpad:natural_scroll` option of Hyprland.
+Omarchy turns this option off, so the touchpad scrolls the traditional way.
+`fluxd` reads the option when the phone connects and when a remote input setting changes.
+After a change of the option, connect the phone again.
+Without Hyprland, **Computer** scrolls the natural way.
+
+The setting applies only to the touchpad.
+On the [remote desktop](remote-desktop.md), 2 fingers move the content with the fingers, because the fingers touch the image of the screen.
+
+To see the option on the computer:
+
+```sh
+hyprctl getoption -j input:touchpad:natural_scroll
+```
 
 ## Type on the phone
 
@@ -208,8 +233,9 @@ A presenter remote that sends Page Up and Page Down works the same way.
 
 The phone and the Mac send `flux.mousepad.request` packets.
 `fluxd` runs them only while `remote_input` is on.
-After the link starts and after the setting changes, `fluxd` sends `flux.input` with `{"enabled": true, "keyRepeat": true}` or `{"enabled": false, "keyRepeat": true}`.
+After the link starts and after the setting changes, `fluxd` sends `flux.input` with `{"enabled": true, "keyRepeat": true, "naturalScroll": false}` or `{"enabled": false, "keyRepeat": true, "naturalScroll": false}`.
 `keyRepeat` tells the phone and the Mac that `fluxd` reads `repeat`.
+`naturalScroll` is the `input:touchpad:natural_scroll` option of Hyprland. Without Hyprland, the packet has no `naturalScroll`.
 
 The actions wait in 1 queue of at most 256 actions, and of at most 16384 characters of text and repeated key presses.
 A packet goes into the queue with all of its actions, or `fluxd` drops it.

@@ -136,6 +136,7 @@ object Plugins {
                 d.remoteInput = p.bool("enabled")
                 d.remoteDesktop = p.bool("desktop")
                 d.keyRepeat = p.bool("keyRepeat") == true
+                d.naturalScroll = p.bool("naturalScroll")
             }
             Types.FLUX_DESKTOP -> org.omarchy.flux.desktop.DesktopSession.onPacket(core, d, p)
             Types.FLUX_SHORTCUTS -> d.shortcuts = Shortcuts.merge(d.shortcuts, p)

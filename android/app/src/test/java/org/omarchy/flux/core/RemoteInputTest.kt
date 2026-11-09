@@ -33,6 +33,26 @@ class RemoteInputTest {
     }
 
     @Test
+    fun scrollDirection() {
+        // Omarchy turns natural scrolling off for the touchpads.
+        assertEquals(false, RemoteInput.naturalScroll(ScrollMode.Computer, false))
+        assertEquals(true, RemoteInput.naturalScroll(ScrollMode.Computer, true))
+        // A computer that does not tell gets natural scrolling.
+        assertEquals(true, RemoteInput.naturalScroll(ScrollMode.Computer, null))
+        assertEquals(true, RemoteInput.naturalScroll(ScrollMode.Natural, false))
+        assertEquals(false, RemoteInput.naturalScroll(ScrollMode.Traditional, true))
+
+        // 2 fingers move down. Natural scrolling scrolls up, and traditional scrolling scrolls down.
+        assertEquals("-6.0", RemoteInput.touchpadScroll(0f, 6f, natural = true).body["dy"].toString())
+        assertEquals("6.0", RemoteInput.touchpadScroll(0f, 6f, natural = false).body["dy"].toString())
+        assertEquals("-3.0", RemoteInput.touchpadScroll(-3f, 0f, natural = false).body["dx"].toString())
+
+        assertEquals(ScrollMode.Traditional, ScrollMode.fromKey("traditional"))
+        assertEquals(ScrollMode.Computer, ScrollMode.fromKey(null))
+        assertEquals(ScrollMode.Computer, ScrollMode.fromKey("sideways"))
+    }
+
+    @Test
     fun clicksAndHold() {
         assertEquals(true, RemoteInput.click(RemoteInput.Click.Left).body.bool("singleclick"))
         assertEquals(true, RemoteInput.click(RemoteInput.Click.Right).body.bool("rightclick"))

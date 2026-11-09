@@ -33,6 +33,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,6 +65,7 @@ import kotlin.math.max
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.RemoteInput
+import org.omarchy.flux.core.ScrollMode
 import org.omarchy.flux.core.Shortcuts
 import org.omarchy.flux.core.TypeMirror
 import org.omarchy.flux.protocol.Packet
@@ -89,10 +91,11 @@ private const val RESTART_LENGTH = 48
 
 /**
  * The touchpad and the keyboard for a computer. The computer runs the
- * input only while its remote_input setting is on.
+ * input only while its remote_input setting is on. [scroll] is the scroll
+ * direction setting of this phone.
  */
 @Composable
-fun TouchpadScreen(d: DeviceUi, onBack: () -> Unit) {
+fun TouchpadScreen(d: DeviceUi, scroll: ScrollMode, onBack: () -> Unit) {
     var slides by remember { mutableStateOf(false) }
     // The touchpad takes input only after the phone lock, see rememberRemoteUnlock.
     val unlocked = rememberRemoteUnlock(
@@ -132,14 +135,16 @@ fun TouchpadScreen(d: DeviceUi, onBack: () -> Unit) {
                 Modifier.padding(top = 48.dp),
             )
             !unlocked -> EmptyState(Ic.touchpad, "Unlock to continue", "Confirm with the phone lock to use the touchpad.", Modifier.padding(top = 48.dp))
-            else -> Touchpad(d)
+            else -> Touchpad(d, scroll)
         }
     }
 }
 
 @Composable
-private fun Touchpad(d: DeviceUi) {
+private fun Touchpad(d: DeviceUi, scroll: ScrollMode) {
     val haptic = LocalHapticFeedback.current
+    // The gestures start 1 time, so they read the direction through this state.
+    val natural by rememberUpdatedState(RemoteInput.naturalScroll(scroll, d.naturalScroll))
     fun send(p: Packet) {
         if (!RemoteInput.send(FluxCore, d.id, p)) FluxCore.toast("${d.name} is not reachable")
     }
@@ -162,7 +167,7 @@ private fun Touchpad(d: DeviceUi) {
             Modifier.weight(1f).fillMaxWidth().clip(TileShape).background(Tn.tile).border(1.dp, Tn.line, TileShape)
                 .touchpad(
                     onMove = { dx, dy -> send(RemoteInput.move(dx, dy)) },
-                    onScroll = { dx, dy -> send(RemoteInput.scroll(dx, dy)) },
+                    onScroll = { dx, dy -> send(RemoteInput.touchpadScroll(dx, dy, natural)) },
                     onClick = {
                         typing.end()
                         send(RemoteInput.click(it))
@@ -431,7 +436,9 @@ private fun TypeField(
  * The gestures of the touchpad. 1 finger moves the pointer, and a tap
  * clicks. 2 fingers scroll, and a tap with 2 fingers clicks the right
  * button. A tap with 3 fingers clicks the middle button. A finger that
- * holds still starts a drag, which ends when the finger lifts.
+ * holds still starts a drag, which ends when the finger lifts. [onScroll]
+ * gets the motion of the fingers in scroll units. A positive value is a
+ * motion down or to the right.
  */
 private fun Modifier.touchpad(
     onMove: (Float, Float) -> Unit,
@@ -481,8 +488,7 @@ private fun Modifier.touchpad(
                 for (c in down) sum += c.positionChange()
                 val delta = sum / down.size.toFloat()
                 travel += delta.getDistance()
-                // Natural scrolling: the content follows the fingers.
-                if (travel >= slop) onScroll(-delta.x * dpPerPx * SCROLL_SPEED, -delta.y * dpPerPx * SCROLL_SPEED)
+                if (travel >= slop) onScroll(delta.x * dpPerPx * SCROLL_SPEED, delta.y * dpPerPx * SCROLL_SPEED)
             }
             event.changes.forEach { it.consume() }
         }

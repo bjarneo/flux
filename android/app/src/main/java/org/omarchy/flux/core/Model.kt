@@ -21,6 +21,22 @@ enum class ThemeMode(val key: String) {
     }
 }
 
+/**
+ * The scroll direction of the touchpad of this phone. [Computer] uses the
+ * touchpad setting of the computer, and [Natural] when the computer does
+ * not tell it. [Natural] moves the content with the fingers. [Traditional]
+ * scrolls down when the fingers move down, as a scroll wheel does.
+ */
+enum class ScrollMode(val key: String) {
+    Computer("computer"),
+    Natural("natural"),
+    Traditional("traditional");
+
+    companion object {
+        fun fromKey(key: String?): ScrollMode = entries.firstOrNull { it.key == key } ?: Computer
+    }
+}
+
 /** The now-playing state of one player on the PC. */
 data class PlayerState(
     val name: String,
@@ -117,6 +133,8 @@ data class DeviceUi(
     val remoteInput: Boolean? = null,
     /** True when the computer reads repeat with a special key, see RemoteInput.keys. */
     val keyRepeat: Boolean = false,
+    /** The scroll direction of the touchpads of the computer, or null when the computer does not tell it. */
+    val naturalScroll: Boolean? = null,
     /** True when the computer can stream its screen to this phone. */
     val desktopSupported: Boolean = false,
     /** True when the remote desktop is on at the computer, or null before it tells. */
@@ -176,6 +194,8 @@ data class UiState(
     /** False while the user has turned Flux off. */
     val enabled: Boolean = true,
     val theme: ThemeMode = ThemeMode.Computer,
+    /** The scroll direction of the touchpad screen. */
+    val touchpadScroll: ScrollMode = ScrollMode.Computer,
     /**
      * The theme that [ThemeMode.Computer] draws. With a [themeScope], it is
      * the theme of that computer. Without a scope, it is the theme that
