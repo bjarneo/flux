@@ -73,7 +73,14 @@ data class WebcamConfig(
         return copy(
             aspect = if (aspect in caps.aspects) aspect else caps.aspects.firstOrNull() ?: "16:9",
             resolution = caps.resolutions.minByOrNull { abs(it - resolution) } ?: 720,
-            camera = if (camera in caps.cameras) camera else caps.cameras.firstOrNull() ?: "back",
+            // Before the camera reports its list, a name of the right shape
+            // stays, such as a saved "back 3x". After it, the open camera
+            // decides, see WebcamSettings.setCaps.
+            camera = when {
+                camera in caps.cameras -> camera
+                caps.cameras.isEmpty() -> if (isCameraName(camera)) camera else "back"
+                else -> pickName(caps.cameras, camera) ?: camera
+            },
             zoom = round(zoom.coerceIn(1f, max(1f, caps.zoomMax)), 100f),
             exposure = round(ev, 1000f),
             whiteBalance = if (whiteBalance in caps.whiteBalance) whiteBalance else "auto",
@@ -123,7 +130,7 @@ data class WebcamCaps(
         /** Wide limits for the time before the camera reports its real limits. */
         val LOOSE = WebcamCaps(
             zoomMax = 10f, exposureMin = -10f, exposureMax = 10f,
-            whiteBalance = WHITE_BALANCE_MODES, cameras = listOf("back", "front"),
+            whiteBalance = WHITE_BALANCE_MODES, cameras = emptyList(),
         )
     }
 

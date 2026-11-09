@@ -105,14 +105,16 @@ class WebcamController(context: Context) : WebcamSession.Listener {
     }
 
     private fun openCamera(config: WebcamConfig) {
-        val front = config.camera == "front"
-        val c = runCatching { camera.choose(front) }.getOrNull()
+        val c = runCatching { camera.choose(config.camera) }.getOrNull()
         if (c == null) {
             _cameraError.value = "This phone has no usable camera"
             return
         }
         choice = c
         _cameraError.value = null
+        // The settings name the camera that opened, so a missing camera
+        // does not reopen as another one when the caps clamp the settings.
+        applied = config.copy(camera = c.name)
         WebcamSettings.setCaps(
             WebcamCaps(
                 zoomMax = c.zoomMax,
@@ -120,8 +122,9 @@ class WebcamController(context: Context) : WebcamSession.Listener {
                 exposureMax = c.exposureRange.upper * c.exposureStep,
                 exposureStep = c.exposureStep,
                 whiteBalance = c.whiteBalance,
-                cameras = camera.facings(),
+                cameras = cameraList(runCatching { camera.cameras() }.getOrDefault(emptyList()).map { it.name }, c.name),
             ),
+            camera = c.name,
         )
         camera.setControls(controlsFor(WebcamSettings.config.value))
         renderer.front = c.facing == "front"
