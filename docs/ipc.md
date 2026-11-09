@@ -140,7 +140,7 @@ A device that is not paired shows only while it has a link.
 | Group | Methods |
 | --- | --- |
 | State | `state`, `subscribe`, `discover` |
-| Pairing | `pair.request`, `pair.accept`, `pair.reject`, `pair.unpair` |
+| Pairing | `pair.address`, `pair.request`, `pair.accept`, `pair.reject`, `pair.unpair` |
 | Addresses | `addresses.add`, `addresses.remove` |
 | Device | `ring`, `ping` |
 | Sharing | `clipboard.send`, `clipboard.copy`, `share.files`, `share.text`, `share.url`, `transfer.cancel` |
@@ -167,6 +167,7 @@ Without `device`, a method uses the only connected paired device.
 | Method | Parameters |
 | --- | --- |
 | `state`, `subscribe`, `discover` | None |
+| `pair.address` | `address`: an IP address or a host name, with an optional port |
 | `pair.request`, `pair.unpair` | `device` |
 | `pair.accept`, `pair.reject` | `device`, and an optional `key`. See [pairing](#pairing). |
 | `addresses.add`, `addresses.remove` | `device`, `address` |
@@ -221,6 +222,11 @@ To turn the release check off or on over IPC, send:
 | `key` | The verification key of the request: 16 uppercase hex digits, without spaces. Empty for `pair.unpair` when no pair request is open. |
 | `fingerprint` | The `fingerprint` of the device, as in the state. |
 
+`pair.address` connects to a device without discovery and returns its `device` ID and its `name`.
+It waits up to 40 seconds. Then send `pair.request` with that ID.
+The device must show Flux, because a phone takes a link from a new computer only then.
+A failed connection returns the code `unreachable` with the cause.
+
 `pair.request` finds a name only among the devices that are connected and not paired.
 `pair.accept` and `pair.reject` find a name only among the devices with `pairState` `incoming` or `confirm`.
 A client follows the device ID of the result, so that another device with the same name cannot change the answer.
@@ -260,6 +266,7 @@ These codes need a step from the client:
 | `already_active` | A stream of that kind runs. Stop it first. |
 | `too_soon` | The same request went to the same device less than 3 seconds ago. Wait, then send it again. |
 | `not_paired`, `offline` | The device is not paired, or it has no link now. |
+| `unreachable` | `pair.address` cannot open a link to the address. The message gives the cause. |
 | `no_request` | No device with the name has an open pair request, or the open pairing has another `key`. |
 | `not_saved` | `pair.unpair` could not save `devices.json`. The device is unpaired only until fluxd restarts. |
 | `too_large` | The text has more than 256 KiB, the most that fluxd sends to a device. |

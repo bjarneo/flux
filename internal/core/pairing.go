@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"maps"
 	"slices"
@@ -617,4 +618,27 @@ func (dev *Device) clearPairingLocked() uint32 {
 	dev.pairLink, dev.pairCert, dev.pairNote = nil, nil, 0
 	dev.confirmQueue = nil
 	return note
+}
+
+// linkAddress opens a link to the device at addr without discovery, and
+// returns its ID and name. The caller then asks the device to pair with
+// pair.request. The device must show Flux, because a phone takes a link
+// from a new computer only then.
+func (d *Daemon) linkAddress(ctx context.Context, addr string) (any, error) {
+	addr = strings.TrimSpace(addr)
+	if addr == "" {
+		return nil, apiErr("bad_params", "Give the IP address or the host name of the device")
+	}
+	p := d.provider()
+	if p == nil {
+		return nil, apiErr("not_ready", "fluxd does not run its network yet")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 40*time.Second)
+	defer cancel()
+	id, err := p.DialAddress(ctx, addr)
+	if err != nil {
+		return nil, apiErr("unreachable", "%s", err.Error())
+	}
+	d.logf("link to %s at %s, which the user gave", id.DeviceName, addr)
+	return map[string]any{"device": id.DeviceID, "name": id.DeviceName}, nil
 }

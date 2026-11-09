@@ -288,6 +288,25 @@ Item {
     return others.some(o => o.paired) ? "Same name as a paired device" : "Same name as another device"
   }
 
+  // The address that the pair field connects to now.
+  property bool addressBusy: false
+  property string addressTried: ""
+
+  function pairAddress(address) {
+    var addr = (address || "").trim()
+    if (addr === "" || addressBusy) return
+    addressBusy = true
+    addressTried = addr
+    call("pair.address", { address: addr }, function (res) {
+      addressBusy = false
+      addressField.clear()
+      call("pair.request", { device: res.device })
+    }, function (err) {
+      addressBusy = false
+      toast(err.message || err.code || "Error")
+    })
+  }
+
   function startPair() {
     if (!wideLayout) drawerOpen = true
     pairMode = !pairMode
@@ -667,6 +686,30 @@ Item {
             color: Theme.dim
             font.pixelSize: 11
             wrapMode: Text.Wrap
+          }
+
+          // Pair by address, for a network that blocks discovery. fluxd
+          // connects to the address, then the window asks the device to
+          // pair as for a discovered device.
+          Txt {
+            visible: root.pairMode && !root.requested
+            width: parent.width
+            topPadding: 6
+            leftPadding: 4
+            rightPadding: 4
+            text: root.addressBusy ? "Connecting to " + root.addressTried + "…" : "Not found? Type the IP address of the phone, then press Enter."
+            color: Theme.dim
+            font.pixelSize: 11
+            wrapMode: Text.Wrap
+          }
+          Field {
+            id: addressField
+            visible: root.pairMode && !root.requested
+            width: parent.width
+            padY: 7
+            placeholder: "192.168.1.20"
+            enabled: !root.addressBusy
+            onAccepted: root.pairAddress(text)
           }
         }
 

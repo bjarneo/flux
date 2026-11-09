@@ -165,6 +165,7 @@ See [check a release](install.md#check-a-release) to check the files by hand.
    | `mDNS: the Avahi browser failed, starting it again` | Avahi stopped the search. `fluxd` starts a new one. |
 
 Guest Wi-Fi and client isolation can block devices on the same access point.
+When discovery finds no device, pair by the IP address of the phone with `flux-cli pair --address`. See [pair by address](cli.md#pair-by-address).
 `fluxd` listens on 1 TCP port from 12100 to 12108 and on UDP port 12100, but it does not need inbound traffic.
 It finds the devices through mDNS and opens the connections itself.
 So a new inbound desktop firewall rule is not the default fix.

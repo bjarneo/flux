@@ -212,6 +212,27 @@ flux-cli pair 9f1c0e5b7a2d4c3e8b6a1f0d2c4e6a8b
 
 See [phone pairing](features.md#pair-a-phone) and [security](security.md).
 
+### Pair by address
+
+On a network that blocks mDNS and broadcasts, for example eduroam or a guest Wi-Fi with client isolation, discovery finds no device.
+To pair, open Flux on the phone, then give the IP address or the host name of the phone:
+
+```sh
+flux-cli pair --address 192.168.1.20
+flux-cli pair --address 100.101.102.103
+flux-cli pair --address pixel-8.tailnet.ts.net:12100
+```
+
+`fluxd` connects to the address and gets the device ID from the TLS certificate of the device.
+Without a port, it tries each port from 12100 to 12108.
+Then `flux-cli pair --address` shows the 16-character key and asks you to confirm it, as `flux-cli pair` does.
+The key comparison authenticates the device, also when you typed a wrong address.
+
+The phone takes a link from a new computer only while Flux is on the screen.
+The 2 devices must reach each other over TCP.
+A network that also blocks unicast traffic between its clients needs a VPN, such as [Tailscale](tailscale.md).
+To find the IP address of an Android phone, open **Settings > About phone > Status information**, or the details of the Wi-Fi network.
+
 ## Reach a device away from the local network
 
 ```sh

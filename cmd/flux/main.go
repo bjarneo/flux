@@ -35,9 +35,12 @@ Commands:
                          enabled, else flux-gui. Pages: overview, clipboard, files,
                          notifications, messages, commands
   status [--json]        Show this computer and the known devices
-  discover               Broadcast this computer on the network now
+  discover               Broadcast this computer and find the devices again
   pair DEVICE            Ask a device to pair, show the verification key, and
                          ask you to confirm it
+  pair --address HOST[:PORT]
+                         Connect to the device at an IP address or a host name,
+                         without discovery, then pair as above
   accept DEVICE [KEY]    Accept a pair request, or confirm a pairing that the
                          device accepted. With KEY, only the pairing with that key.
                          Without KEY, show the key and ask you to compare it
@@ -119,7 +122,11 @@ func main() {
 	case "discover":
 		err = call("discover", nil)
 	case "pair":
-		err = pair(need(args, "DEVICE"))
+		if addr, ok := addressArg(args); ok {
+			err = pairAddress(addr)
+		} else {
+			err = pair(need(args, "DEVICE"))
+		}
 	case "accept":
 		name := need(args, "DEVICE")
 		err = accept(name, keyArg(args[1:]))
@@ -454,6 +461,31 @@ func pair(device string) error {
 		in = os.Stdin
 	}
 	return waitPair(c, in, os.Stdout, res)
+}
+
+// addressArg returns the address of flux-cli pair --address ADDRESS or
+// --address=ADDRESS.
+func addressArg(args []string) (string, bool) {
+	switch {
+	case len(args) == 0:
+		return "", false
+	case args[0] == "--address":
+		return need(args[1:], "ADDRESS"), true
+	case strings.HasPrefix(args[0], "--address="):
+		return strings.TrimPrefix(args[0], "--address="), true
+	}
+	return "", false
+}
+
+// pairAddress connects to the device at addr without discovery, then asks
+// it to pair as pair does.
+func pairAddress(addr string) error {
+	fmt.Printf("Connecting to %s…\n", addr)
+	var res pairResult
+	if err := callInto("pair.address", map[string]any{"address": addr}, &res); err != nil {
+		return err
+	}
+	return pair(res.Device)
 }
 
 // pairClient is the part of ipc.Client that waitPair uses.

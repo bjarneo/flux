@@ -250,6 +250,8 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 	switch method {
 	case "state":
 		return d.Snapshot(), nil
+	case "pair.address":
+		return d.linkAddress(ctx, p.Address)
 	case "discover":
 		d.announce()
 		// Avahi reports a device only when it appears. Resolve each device

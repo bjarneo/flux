@@ -522,6 +522,24 @@ Item {
       tryCompare(card, "armed", true, 3000)
     }
 
+    // A connect by address asks the device that answered to pair. A failed
+    // connect asks nothing and frees the field.
+    function test_pairByAddress() {
+      var view = createTemporaryObject(viewComponent, top)
+      tryVerify(function () { return view.allDevices.length > 0 })
+      view.startPair()
+      view.pairAddress("  192.168.1.20 ")
+      compare(requestsOf("pair.address")[0].params.address, "192.168.1.20")
+      tryVerify(function () { return requestsOf("pair.request").length === 1 })
+      compare(requestsOf("pair.request")[0].params.device, "c0ffee00000000000000000000000add")
+      verify(!view.addressBusy)
+      mock.failures = { "pair.address": { code: "unreachable", message: "cannot reach 10.0.0.9" } }
+      view.pairAddress("10.0.0.9")
+      tryVerify(function () { return !view.addressBusy })
+      compare(requestsOf("pair.request").length, 1)
+      mock.failures = {}
+    }
+
     function test_discoveredTwinIsMarked() {
       var view = createTemporaryObject(viewComponent, top)
       tryVerify(function () { return view.allDevices.length > 0 })

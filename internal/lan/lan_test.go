@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -735,5 +736,53 @@ func TestOldAppIdentity(t *testing.T) {
 	case id := <-desk.oldApps:
 		t.Fatalf("a current identity was reported as an old app: %s", id)
 	default:
+	}
+}
+
+// TestDialAddress opens a link to a device that only its address names.
+// The certificate of the device gives its ID.
+func TestDialAddress(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	desk := newPeer(t, ctx, "desk")
+	phone := newPeer(t, ctx, "phone")
+	id, err := desk.prov.DialAddress(ctx, net.JoinHostPort("127.0.0.1", strconv.Itoa(phone.prov.TCPPort())))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id.DeviceID != phone.id || id.DeviceName != "phone" {
+		t.Fatalf("identity %+v, want the phone", id)
+	}
+	onDesk := waitLink(t, desk.links)
+	onPhone := waitLink(t, phone.links)
+	if !onDesk.Outgoing || onDesk.DeviceID() != phone.id || onPhone.DeviceID() != desk.id {
+		t.Fatal("wrong link")
+	}
+	if onDesk.PeerPort != phone.prov.TCPPort() {
+		t.Fatalf("peer port %d, want %d", onDesk.PeerPort, phone.prov.TCPPort())
+	}
+}
+
+// TestDialAddressErrors checks the answers for a bad address and for an
+// address where no device listens.
+func TestDialAddressErrors(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	desk := newPeer(t, ctx, "desk")
+	for _, addr := range []string{"", "a b", "127.0.0.1:99999", "127.0.0.1:x"} {
+		if _, err := desk.prov.DialAddress(ctx, addr); err == nil {
+			t.Fatalf("%q: no error", addr)
+		}
+	}
+	// A closed port refuses the connection.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+	_, err = desk.prov.DialAddress(ctx, net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+	if err == nil || !strings.Contains(err.Error(), "no Flux device listens") {
+		t.Fatalf("closed port: %v", err)
 	}
 }
