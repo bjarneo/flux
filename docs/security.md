@@ -61,7 +61,7 @@ It also tells which setting turns a feature off, when one exists.
 | Notifications | `notifications = true` | Show its notifications on the computer. | `notifications = false` |
 | Do Not Disturb | `sync_dnd = true` | Turn Do Not Disturb of the computer on and off. | `sync_dnd = false` |
 | Calls | `pause_media_on_call = true` | Pause the media players of the computer during a call. | `pause_media_on_call = false` |
-| Media | On | Play, pause, skip, seek, and set the volume of the media players of the computer. | No setting. Unpair the device. |
+| Media | On | Play, pause, skip, seek, and set the volume of the media players of the computer. Select the default audio output, and set the volume and the mute state of each output. See [audio outputs](features.md#audio-outputs). | No setting. Unpair the device. |
 | Desktop commands | No commands | Run each command in `commands`. | `flux-cli commands remove ID` |
 | herdr agents | `herdr = true` | Read the list of the [herdr agents](herdr.md) and the recent output of each agent. Watch the live terminal of an agent pane, with no input. | `herdr = false` |
 | Agent control | `herdr_control = false` | Send keys and prompts to the agents, start agents, and close them. Control the [live terminal](herdr.md#live-terminal-on-android) of an agent pane: type, paste text and images, click at any cell, scroll, and resize the pane. An image paste replaces the clipboard of the computer, also with `auto_clipboard = false`. A click can press each button of the agent, for example an approval. An agent runs commands, so the device can run any command as your user. | `herdr_control = false` |

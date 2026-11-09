@@ -105,6 +105,20 @@ const (
 	TypeFluxTransfer      = "flux.transfer"
 )
 
+// Packet types of the audio outputs of this computer.
+const (
+	// TypeFluxAudio carries the audio outputs of this computer to the
+	// phone: the name, the description, the volume, and the mute state of
+	// each output, and which output is the default. fluxd sends it as the
+	// answer to each flux.audio.request. docs/features.md describes the
+	// body.
+	TypeFluxAudio = "flux.audio"
+	// TypeFluxAudioRequest asks for the audio outputs, selects the default
+	// output, or sets the volume or the mute state of 1 output. The phone
+	// sends it.
+	TypeFluxAudioRequest = "flux.audio.request"
+)
+
 // Incoming lists the packet types that Flux accepts. The phone enables a
 // plugin only when the other side lists the matching type.
 var Incoming = []string{
@@ -115,6 +129,7 @@ var Incoming = []string{
 	TypeFluxTunnel, TypeFluxWebcam, TypeFluxDnd, TypeFluxMic, TypeFluxScreen,
 	TypeFluxApprove, TypeFluxHerdr, TypeFluxClipboardImage, TypeMousepadRequest,
 	TypeFluxDesktop, TypeFluxShortcuts, TypeFluxTransfer,
+	TypeFluxAudioRequest,
 }
 
 // Outgoing lists the packet types that Flux sends.
@@ -127,6 +142,7 @@ var Outgoing = []string{
 	TypeFluxMic, TypeFluxScreen, TypeFluxApprove, TypeFluxHerdr,
 	TypeFluxClipboardImage, TypeFluxInput, TypeFluxDesktop, TypeFluxShortcuts, TypeFluxTransfer,
 	TypeFluxTheme, TypeFluxStreamRequest,
+	TypeFluxAudio,
 }
 
 // Identity is the body of a flux.identity packet.

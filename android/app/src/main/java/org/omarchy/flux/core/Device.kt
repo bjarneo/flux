@@ -97,6 +97,9 @@ class Device(private val core: FluxCore, var identity: Identity) {
     /** The key bindings and workspaces of the computer, or null before the first answer. */
     var shortcuts: ShortcutsState? = null
 
+    /** The audio outputs of the computer, or null before the first answer. */
+    var outputs: AudioOutputs? = null
+
     /**
      * The certificate from which [pairKey] came, while a pairing is open. A
      * new link must present it, and pairing pins it.
@@ -160,6 +163,8 @@ class Device(private val core: FluxCore, var identity: Identity) {
         shortcuts = shortcuts,
         lastSeen = lastSeen,
         canWake = wake.isNotEmpty(),
+        outputsSupported = Types.FLUX_AUDIO_REQUEST in identity.incoming,
+        outputs = outputs,
     )
 
     // ---------------------------------------------------------------- pairing

@@ -87,6 +87,12 @@ object Types {
 
     /** The computer sends the network cards that can wake it. See core/Wake.kt. */
     const val FLUX_WAKE = "flux.wake"
+
+    /** The computer sends its audio outputs, as the answer to [FLUX_AUDIO_REQUEST]. */
+    const val FLUX_AUDIO = "flux.audio"
+
+    /** This phone asks for the audio outputs of the computer, selects the default output, or sets the volume or the mute state of 1 output. */
+    const val FLUX_AUDIO_REQUEST = "flux.audio.request"
 }
 
 /** Packet types that the phone accepts. */
@@ -98,6 +104,7 @@ val INCOMING = listOf(
     Types.FLUX_MIC, Types.FLUX_SCREEN, Types.FLUX_APPROVE, Types.FLUX_HERDR, Types.FLUX_INPUT,
     Types.FLUX_DESKTOP, Types.FLUX_SHORTCUTS, Types.FLUX_THEME, Types.FLUX_STREAM_REQUEST, Types.FLUX_TRANSFER,
     Types.FLUX_WAKE,
+    Types.FLUX_AUDIO,
 )
 
 /** Packet types that the phone sends. */
@@ -107,6 +114,7 @@ val OUTGOING = listOf(
     Types.SFTP_REQUEST, Types.TELEPHONY, Types.FLUX_TUNNEL, Types.FLUX_WEBCAM, Types.FLUX_DND,
     Types.FLUX_MIC, Types.FLUX_SCREEN, Types.FLUX_APPROVE, Types.FLUX_HERDR, Types.FLUX_CLIPBOARD_IMAGE,
     Types.MOUSEPAD_REQUEST, Types.FLUX_DESKTOP, Types.FLUX_SHORTCUTS, Types.FLUX_TRANSFER,
+    Types.FLUX_AUDIO_REQUEST,
 )
 
 /**

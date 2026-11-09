@@ -47,6 +47,7 @@ arrow_forward expand_less difference south edit
 public menu_book bug_report alternate_email license
 touch_app brightness_auto radio_button_checked radio_button_unchecked
 volume_down edit_note chat web_asset arrow_downward
+volume_off speaker speaker_phone
 """.split()
 
 BASE = "https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android"

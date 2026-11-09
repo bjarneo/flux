@@ -149,6 +149,10 @@ data class DeviceUi(
     val lastSeen: Long = 0,
     /** True when the computer sent the network cards that can wake it. See [Wake]. */
     val canWake: Boolean = false,
+    /** True when the computer lists its audio outputs and changes them for this phone. */
+    val outputsSupported: Boolean = false,
+    /** The audio outputs of the computer, or null before the first answer. */
+    val outputs: AudioOutputs? = null,
 )
 
 /** A snapshot of the whole app for the UI. */

@@ -124,6 +124,7 @@ object Plugins {
                 d.commandsLoaded = true
             }
             Types.MPRIS -> receiveMpris(d, p)
+            Types.FLUX_AUDIO -> AudioOutputsSync.onPacket(d, p)
             Types.SFTP -> Browse.onCredentials(core, d, p)
             Types.FLUX_WEBCAM -> org.omarchy.flux.webcam.WebcamSession.onPacket(core, d, p)
             Types.FLUX_DND -> DndSync.onPacket(core, d, p)

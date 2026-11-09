@@ -204,6 +204,10 @@ type Daemon struct {
 	// extended is true while Hyprland can have the virtual monitor of the
 	// extended screen, see extend.go. fluxd removes it at its stop.
 	extended bool
+
+	// outputs reads and changes the audio outputs of this computer. It is
+	// nil in a headless daemon.
+	outputs audioOutputs
 }
 
 // Options change how the daemon runs. The zero value is the normal mode.
@@ -338,6 +342,7 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 		} else {
 			d.logf("media control off: %v", err)
 		}
+		d.outputs = desktop.NewOutputs()
 		// The first link can come before the theme watch starts, so the
 		// theme loads now.
 		d.themePath = desktop.ThemePath()

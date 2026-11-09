@@ -107,6 +107,8 @@ func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.handleRunCommand(dev, l, p)
 	case proto.TypeMprisRequest:
 		d.handleDesktopMediaRequest(l, p)
+	case proto.TypeFluxAudioRequest:
+		d.handleAudioRequest(l, p)
 	case proto.TypeSftpRequest:
 		d.handleBrowseRequest(dev, l, p)
 	case proto.TypeFluxWebcam:

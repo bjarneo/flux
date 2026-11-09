@@ -342,6 +342,27 @@ Restart it with `systemctl --user restart fluxd`.
 A player that does not accept a new volume shows no volume control.
 Chromium is an example.
 
+## Audio outputs do not show on the phone
+
+**Audio outputs** in **Media** needs `pactl` on the computer.
+When the phone shows an error in the place of the outputs, check `pactl` and the log of the daemon:
+
+```sh
+pactl --format=json list sinks
+journalctl --user -u fluxd --no-pager | grep "audio output"
+```
+
+If `pactl` is not installed, install it:
+
+```sh
+sudo pacman -S libpulse
+```
+
+The list leaves out an output whose ports are all not available, such as headphones that are not plugged in.
+Plug in the device, then wait up to 10 seconds, or open **Media** again.
+An earlier `fluxd` does not send the outputs, and the dock of **Media** then shows no output key.
+Update Flux on the computer.
+
 ## Camera, microphone, or screen fails
 
 ```sh

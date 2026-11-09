@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -44,6 +46,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
@@ -57,6 +60,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import org.omarchy.flux.core.AudioOutput
+import org.omarchy.flux.core.AudioOutputsSync
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.PlayerState
@@ -66,7 +71,8 @@ import org.omarchy.flux.core.Plugins
  * The player of 1 computer: the players as pills, the album art, the
  * title, the artist, and the album, and the dock with the position,
  * Previous, Play or Pause, Next, and the volume. A player that sends no
- * volume shows no volume row.
+ * volume shows no volume row. The dock also shows the audio output of the
+ * computer, which opens the list of the outputs.
  */
 @Composable
 fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
@@ -77,10 +83,14 @@ fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
                 Plugins.requestPlayers(FluxCore, d.id)
+                AudioOutputsSync.request(FluxCore, d.id)
                 delay(10_000)
             }
         }
     }
+    var outputs by remember { mutableStateOf(false) }
+    // The dock shows also when nothing plays, because the outputs are in it.
+    val audio = d.outputsSupported
     // The position that the user drags to, until the drag ends.
     var dragging by remember { mutableStateOf<Float?>(null) }
     val position = if (p != null) rememberPlayerPosition(p) else 0L
@@ -104,17 +114,26 @@ fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
         ProgressLine { if (p != null && p.length > 0) LineFill(shown.toFloat() / p.length, Tn.green) }
         when {
             !d.online -> Box(Modifier.padding(horizontal = TiledGutter)) { NotReachable(d, "The player controls") }
-            p == null -> EmptyState(Ic.music, "Nothing is playing", "Play music or a video on ${d.name}. The controls show here.", Modifier.padding(top = 48.dp))
+            p == null && !audio -> NothingPlays(d)
             else -> DockLayout(
                 Modifier.weight(1f).fillMaxWidth(),
-                thread = { bottom -> NowPlaying(p, bottom) },
-                dock = { shape -> PlayerDock(d, p, shown, shape, onDrag = { dragging = it }, onSeek = { f ->
-                    dragging = null
-                    Plugins.seek(FluxCore, d.id, (f * p.length).toLong())
-                }) },
+                thread = { bottom -> if (p != null) NowPlaying(p, bottom) else NothingPlays(d) },
+                dock = { shape ->
+                    PlayerDock(d, p, shown, shape, onDrag = { dragging = it }, onOutputs = { outputs = true }, onSeek = { f ->
+                        dragging = null
+                        if (p != null) Plugins.seek(FluxCore, d.id, (f * p.length).toLong())
+                    })
+                },
             )
         }
     }
+    if (outputs && d.online && audio) OutputsSheet(d) { outputs = false }
+}
+
+/** The text of a computer that plays nothing. */
+@Composable
+private fun NothingPlays(d: DeviceUi) {
+    EmptyState(Ic.music, "Nothing is playing", "Play music or a video on ${d.name}. The controls show here.", Modifier.padding(top = 48.dp))
 }
 
 /** The position of [p] in milliseconds now. It moves each half second while the player plays. */
@@ -167,14 +186,32 @@ private fun NowPlaying(p: PlayerState, bottom: Dp) {
  * The dock of the player: the position with a thumb, the time and the
  * length, Previous, Play or Pause, and Next, and the volume. [onDrag]
  * follows a drag of the position, and [onSeek] gets the part of the length
- * at the end of a tap or a drag.
+ * at the end of a tap or a drag. Without a player [p], the dock shows only
+ * the audio row. [onOutputs] opens the list of the outputs.
  */
 @Composable
-private fun PlayerDock(d: DeviceUi, p: PlayerState, position: Long, shape: DockShape, onDrag: (Float) -> Unit, onSeek: (Float) -> Unit) {
+private fun PlayerDock(
+    d: DeviceUi,
+    p: PlayerState?,
+    position: Long,
+    shape: DockShape,
+    onDrag: (Float) -> Unit,
+    onOutputs: () -> Unit,
+    onSeek: (Float) -> Unit,
+) {
     Column(
         Modifier.fillMaxWidth().dockFrame(shape).padding(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        if (p != null) PlayerControls(d, p, position, onDrag, onSeek)
+        if (d.outputsSupported) AudioRow(d, onOutputs)
+    }
+}
+
+/** The position, Previous, Play or Pause, Next, and the volume of the player [p]. */
+@Composable
+private fun PlayerControls(d: DeviceUi, p: PlayerState, position: Long, onDrag: (Float) -> Unit, onSeek: (Float) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         if (p.length > 0) {
             Column(Modifier.padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 LineSlider(
@@ -212,34 +249,153 @@ private fun PlayerKey(icon: Int, description: String, fill: Color, ink: Color, i
     ) { Sym(icon, tint = ink, size = iconSize) }
 }
 
-/** The volume of the player: the icon, a line to tap or drag, and the value. At most 1 request goes out each 150 ms during a drag. */
+/** The volume of the player: the icon, a line to tap or drag, and the value. */
 @Composable
 private fun VolumeRow(d: DeviceUi, volume: Int) {
-    var drag by remember { mutableStateOf<Float?>(null) }
-    var sentAt by remember { mutableLongStateOf(0L) }
-    val shown = drag?.let { (it * 100).roundToInt() } ?: volume
     Row(
         Modifier.fillMaxWidth().height(40.dp).padding(horizontal = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Sym(Ic.volumeDown, tint = Tn.sub, size = 20.dp)
+        VolumeLine(volume, "Volume", muted = false, Modifier.weight(1f)) { Plugins.setVolume(FluxCore, d.id, it) }
+    }
+}
+
+/**
+ * A volume from 0 to 100: a line to tap or drag, and the value in percent.
+ * A [muted] volume shows its line in `sub`. [onSet] gets the volume at
+ * most each 150 ms during a drag, and at the end of a tap or a drag.
+ */
+@Composable
+private fun VolumeLine(volume: Int, label: String, muted: Boolean, modifier: Modifier, onSet: (Int) -> Unit) {
+    var drag by remember { mutableStateOf<Float?>(null) }
+    var sentAt by remember { mutableLongStateOf(0L) }
+    val shown = drag?.let { (it * 100).roundToInt() } ?: volume
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         LineSlider(
-            shown / 100f, Tn.text, "Volume", "$shown%", Modifier.weight(1f).height(32.dp), thumb = false,
+            shown / 100f, if (muted) Tn.sub else Tn.text, label, if (muted) "Muted, $shown%" else "$shown%",
+            Modifier.weight(1f).height(32.dp), thumb = false,
             onChange = {
                 drag = it
                 val now = SystemClock.elapsedRealtime()
                 if (now - sentAt >= 150) {
                     sentAt = now
-                    Plugins.setVolume(FluxCore, d.id, (it * 100).roundToInt())
+                    onSet((it * 100).roundToInt())
                 }
             },
             onDone = {
-                Plugins.setVolume(FluxCore, d.id, (it * 100).roundToInt())
+                onSet((it * 100).roundToInt())
                 drag = null
             },
         )
         T("$shown%", Modifier.widthIn(min = 34.dp), size = 11, color = Tn.sub, family = Mono, align = TextAlign.End)
+    }
+}
+
+// ───────────────────────── Audio outputs ─────────────────────────
+
+/** The audio row at the bottom of the dock: the default output of the computer, which opens the list of the outputs. */
+@Composable
+private fun AudioRow(d: DeviceUi, onOutputs: () -> Unit) {
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutputKey(d, Modifier.weight(1f), onOutputs)
+    }
+}
+
+/** A key of the audio row: an icon, a label, and a line in mono under it. */
+@Composable
+private fun AudioKey(icon: Int, label: String, line: String, description: String, modifier: Modifier, tint: Color = Tn.blue, onClick: () -> Unit) {
+    DockKey(description, modifier.fillMaxHeight().heightIn(min = 56.dp), border = Tn.line, onClick = onClick) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Sym(icon, tint = tint, size = 22.dp)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                T(label, size = 14, weight = FontWeight.SemiBold, maxLines = 1)
+                T(line, size = 11, color = Tn.sub, family = Mono, maxLines = 1)
+            }
+        }
+    }
+}
+
+/** The default output of the computer and its volume. A tap opens the list of the outputs. */
+@Composable
+private fun OutputKey(d: DeviceUi, modifier: Modifier, onClick: () -> Unit) {
+    val o = d.outputs?.current
+    val label = o?.description ?: "Audio outputs"
+    val line = when {
+        o == null -> "Output"
+        o.muted -> "Output · muted"
+        else -> "Output · ${o.volume}%"
+    }
+    AudioKey(if (o?.muted == true) Ic.volumeOff else Ic.speaker, label, line, "Audio outputs of ${d.name}. $label", modifier, onClick = onClick)
+}
+
+/**
+ * The audio outputs of the computer [d]: a choice of the default output,
+ * and the volume and the mute key of each output.
+ */
+@Composable
+private fun OutputsSheet(d: DeviceUi, onDismiss: () -> Unit) {
+    LaunchedEffect(d.id) { AudioOutputsSync.request(FluxCore, d.id) }
+    FluxSheet(onDismiss) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Column(Modifier.padding(bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                T("Audio outputs", Modifier.semantics { heading() }, size = 18, weight = FontWeight.SemiBold)
+                T(d.name, size = 11, color = Tn.sub, family = Mono, maxLines = 1)
+            }
+            val outs = d.outputs
+            when {
+                outs == null -> Row(Modifier.heightIn(min = 48.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Spinner(Modifier.size(18.dp))
+                    T("Asking ${d.name} for its outputs…", size = 14, color = Tn.sub)
+                }
+                outs.list.isEmpty() -> T(outs.error ?: "${d.name} has no audio output.", size = 14, color = if (outs.error != null) Tn.red else Tn.sub)
+                else -> {
+                    for (o in outs.list) OutputTile(d, o)
+                    outs.error?.let { T(it, size = 13, color = Tn.red) }
+                    T("Select an output to make it the default. Apps on ${d.name} then play to it.", size = 13, color = Tn.sub)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 1 output: a choice that makes it the default, and under it the mute key
+ * and the volume.
+ */
+@Composable
+private fun OutputTile(d: DeviceUi, o: AudioOutput) {
+    val shape = RoundedCornerShape(12.dp)
+    Column(Modifier.fillMaxWidth().clip(shape).background(choiceFill(o.isDefault)).border(choiceBorder(o.isDefault), shape)) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                .selectable(selected = o.isDefault, role = Role.RadioButton) { if (!o.isDefault) AudioOutputsSync.select(FluxCore, d.id, o.name) }
+                .padding(start = 14.dp, end = 14.dp, top = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Sym(if (o.isDefault) Ic.radioOn else Ic.radioOff, tint = if (o.isDefault) Tn.blue else Tn.sub, size = 20.dp)
+            T(o.description, Modifier.weight(1f), size = 15, weight = FontWeight.SemiBold, maxLines = 2)
+            if (o.isDefault) T("Default", size = 12, color = Tn.sub)
+        }
+        Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 14.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            val muteLabel = if (o.muted) "Turn on the sound of ${o.description}" else "Mute ${o.description}"
+            Box(
+                Modifier.size(48.dp).clip(RoundedCornerShape(8.dp))
+                    .clickable(onClickLabel = muteLabel, role = Role.Button) { AudioOutputsSync.setMute(FluxCore, d.id, o.name, !o.muted) }
+                    .semantics { contentDescription = muteLabel },
+                contentAlignment = Alignment.Center,
+            ) { Sym(if (o.muted) Ic.volumeOff else Ic.volume, tint = if (o.muted) Tn.sub else Tn.text, size = 22.dp) }
+            VolumeLine(o.volume, "Volume of ${o.description}", o.muted, Modifier.weight(1f)) { AudioOutputsSync.setVolume(FluxCore, d.id, o.name, it) }
+        }
     }
 }
 

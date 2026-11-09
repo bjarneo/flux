@@ -409,6 +409,55 @@ When a player reports album art at an `https` address, the phone loads the image
 Without album art, the controls move up.
 The desktop does not show or control the players on the phone.
 
+### Audio outputs
+
+To select the output of the computer, such as its speakers, an HDMI monitor, or Bluetooth headphones, open **Media** in **Control** on the phone.
+The dock of **Media** shows the default output and its volume, also while nothing plays.
+Tap it to open **Audio outputs**:
+
+- To make an output the default, select it. Apps on the computer then play to that output.
+- To set the volume of an output, tap or drag its volume line.
+- To mute an output or to turn its sound on again, tap the speaker key next to its volume line.
+
+The list uses the rules of the Omarchy output switch, `omarchy-audio-output-switch`.
+It leaves out an output whose ports are all not available, such as headphones that are not plugged in.
+On a laptop with an Omarchy speaker tuning, it leaves out the speakers behind the tuning, because the tuning is the output to select.
+The default output always shows.
+On Omarchy, `fluxd` selects the default output with `omarchy-audio-output-set-default`, which also moves the apps that play now to that output.
+Without Omarchy, `fluxd` runs `pactl set-default-sink`.
+
+The volume line sets the loudest channel, and the other channels keep their balance.
+`fluxd` reads and changes the outputs with `pactl` from `libpulse`, which talks to the PulseAudio server of PipeWire.
+Omarchy installs both.
+To list the outputs that the phone shows, run:
+
+```sh
+pactl --format=json list sinks
+pactl get-default-sink
+```
+
+The phone asks for the outputs when **Media** opens and each 10 seconds while it shows.
+A change on the computer shows on the phone at the next request.
+Each paired device that can control the media can also change the outputs.
+Only Flux for Android has **Audio outputs**.
+Flux for iOS, Flux for macOS, and Flux for Windows do not have this feature.
+
+The phone sends `flux.audio.request`, and `fluxd` answers each request with `flux.audio`:
+
+```json
+{"type":"flux.audio.request","body":{"request":true}}
+{"type":"flux.audio.request","body":{"output":"alsa_output.pci-0000_00_1f.3.hdmi-stereo","default":true}}
+{"type":"flux.audio.request","body":{"output":"alsa_output.pci-0000_00_1f.3.hdmi-stereo","volume":60}}
+{"type":"flux.audio.request","body":{"output":"alsa_output.pci-0000_00_1f.3.hdmi-stereo","mute":true}}
+{"type":"flux.audio","body":{"outputs":[{"name":"alsa_output.pci-0000_00_1f.3.hdmi-stereo","description":"HDMI Monitor","volume":60,"muted":false,"default":true}]}}
+```
+
+`volume` is a percent of the loudest channel.
+The phone sends 0 to 100, and `fluxd` accepts at most 150.
+`fluxd` changes only an output that is in the list of `flux.audio`.
+When `fluxd` cannot read or change the outputs, the answer has an `error` field, for example when `pactl` is not installed.
+A headless `fluxd` has no outputs.
+
 Add desktop commands in the **Commands** section of the **Phone** page or through the CLI:
 
 ```sh
