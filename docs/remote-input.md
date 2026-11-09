@@ -76,6 +76,7 @@ Hold **left** with 1 thumb and move a finger on the touchpad to drag with 2 hand
 
 A fast finger moves the pointer further than a slow finger.
 The screen stays on while the touchpad shows.
+In landscape, the touchpad takes the full height at the right, and the buttons and the keys show in a column at the left.
 
 ### Scroll direction
 

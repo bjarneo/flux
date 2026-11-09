@@ -1,5 +1,6 @@
 package org.omarchy.flux.ui
 
+import android.content.res.Configuration
 import android.os.SystemClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -9,6 +10,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -20,6 +22,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -43,6 +48,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
@@ -85,6 +93,9 @@ private const val SCROLL_SPEED = 1.2f
  * gets the backspace.
  */
 private const val SENTINEL = "​"
+
+/** The width of the column of the buttons and the keys in landscape. */
+private val LandscapeKeysWidth = 340.dp
 
 /** The length after which the type field starts again for a computer without repeat, see [RemoteTyping.change]. */
 private const val RESTART_LENGTH = 48
@@ -162,9 +173,9 @@ private fun Touchpad(d: DeviceUi, scroll: ScrollMode) {
         send(p)
     }
 
-    Column(Modifier.fillMaxSize().padding(bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(TileGap)) {
+    val pad: @Composable (Modifier) -> Unit = { modifier ->
         Box(
-            Modifier.weight(1f).fillMaxWidth().clip(TileShape).background(Tn.tile).border(1.dp, Tn.line, TileShape)
+            modifier.clip(TileShape).background(Tn.tile).border(1.dp, Tn.line, TileShape)
                 .touchpad(
                     onMove = { dx, dy -> send(RemoteInput.move(dx, dy)) },
                     onScroll = { dx, dy -> send(RemoteInput.touchpadScroll(dx, dy, natural)) },
@@ -187,7 +198,9 @@ private fun Touchpad(d: DeviceUi, scroll: ScrollMode) {
                 size = 12, color = Tn.sub, align = TextAlign.Center, lineHeight = 1.5f,
             )
         }
-        KeyRow(Modifier.heightIn(min = 52.dp), gap = TileGap) {
+    }
+    val buttons: @Composable (Modifier) -> Unit = { modifier ->
+        KeyRow(modifier.heightIn(min = 52.dp), gap = TileGap) {
             HoldButton("Left button", Modifier.weight(1f)) { down ->
                 if (down) typing.end()
                 send(RemoteInput.hold(down))
@@ -197,7 +210,35 @@ private fun Touchpad(d: DeviceUi, scroll: ScrollMode) {
                 send(RemoteInput.click(RemoteInput.Click.Right))
             }
         }
-        KeyPanel(d, typing, ::sendKey, voice = voice)
+    }
+
+    if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+        // In landscape, the touchpad takes the full height at the right. The
+        // buttons and the keys make a column at the left.
+        Row(Modifier.fillMaxSize().padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(TileGap)) {
+            BoxWithConstraints(Modifier.width(LandscapeKeysWidth).fillMaxHeight()) {
+                // The buttons take the height that the keys leave. When the
+                // phone keyboard leaves too little room, the column scrolls,
+                // and the type field at its bottom stays above the keyboard.
+                val room = maxHeight
+                val density = LocalDensity.current
+                var keysHeight by remember { mutableStateOf(0.dp) }
+                Column(
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState(), reverseScrolling = true),
+                    verticalArrangement = Arrangement.spacedBy(TileGap),
+                ) {
+                    buttons(Modifier.height(maxOf(52.dp, room - keysHeight - TileGap)))
+                    KeyPanel(d, typing, ::sendKey, Modifier.onSizeChanged { keysHeight = with(density) { it.height.toDp() } }, voice = voice)
+                }
+            }
+            pad(Modifier.weight(1f).fillMaxHeight())
+        }
+    } else {
+        Column(Modifier.fillMaxSize().padding(bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(TileGap)) {
+            pad(Modifier.weight(1f).fillMaxWidth())
+            buttons(Modifier)
+            KeyPanel(d, typing, ::sendKey, voice = voice)
+        }
     }
 }
 
