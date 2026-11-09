@@ -16,6 +16,7 @@ optdepends=(
 	'mpv: the phone screen mirror'
 	'wtype: the phone keyboard'
 	'gpu-screen-recorder: the remote desktop on the phone'
+	'wf-recorder: the extended screen on a phone or a tablet'
 )
 makedepends=('go>=1.27.1' 'cmake' 'ninja' 'git')
 install=omarchy-flux.install

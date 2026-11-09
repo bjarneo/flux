@@ -166,6 +166,7 @@ func remoteDesktop(args []string) error {
 			Width   int    `json:"width"`
 			Height  int    `json:"height"`
 			Error   string `json:"error"`
+			Extend  bool   `json:"extend"`
 		} `json:"desktop"`
 	}
 	if err := callInto("state", nil, &s); err != nil {
@@ -175,8 +176,12 @@ func remoteDesktop(args []string) error {
 	switch {
 	case v != nil && v.Error != "":
 		fmt.Println("The remote desktop failed:", v.Error)
+	case v != nil && v.Active && v.Extend:
+		fmt.Printf("%s extends this screen as the monitor %s, %dx%d. Stop it with: flux-cli desktop stop\n", v.ToName, v.Monitor, v.Width, v.Height)
 	case v != nil && v.Active:
 		fmt.Printf("%s shows %s, %dx%d. Stop it with: flux-cli desktop stop\n", v.ToName, v.Monitor, v.Width, v.Height)
+	case v != nil && v.Extend:
+		fmt.Printf("%s is starting the extended screen %s\n", v.ToName, v.Monitor)
 	case v != nil:
 		fmt.Printf("%s is starting the remote desktop of %s\n", v.ToName, v.Monitor)
 	case !s.Settings.RemoteDesktop:

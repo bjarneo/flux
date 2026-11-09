@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -75,6 +76,8 @@ fun ControlScreen(
     onPair: () -> Unit,
 ) {
     val context = LocalContext.current
+    // The Extend screen tool names this device.
+    val kind = if (LocalConfiguration.current.smallestScreenWidthDp >= 600) "tablet" else "phone"
     val devices = state.devices
     val any = target(scope, devices)
     val one = (any as? Target.One)?.device
@@ -173,6 +176,14 @@ fun ControlScreen(
                             }
                             add(ControlTool(Ic.desktop, "Remote desktop", sub, canRun { it.desktopSupported }) {
                                 open({ it.desktopSupported }, "Show the screen of", "desktop", "Show the computer screen" to "show the computer screen")
+                            })
+                        }
+                        if (shows { it.extendSupported }) {
+                            // The computer adds a monitor that this phone or tablet shows. It uses the switch and the phone lock of the remote desktop.
+                            val can = { d: DeviceUi -> d.extendSupported }
+                            val sub = if (one != null && one.remoteDesktop != true) "Off on ${one.name}" else "Use this $kind as a second monitor"
+                            add(ControlTool(Ic.devices, "Extend screen", sub, canRun(can)) {
+                                open(can, "Extend the screen of", EXTEND_PAGE, "Extend the computer screen" to "extend the computer screen")
                             })
                         }
                         add(ControlTool(Ic.terminal, "Commands", "Run a command", any !is Target.None) { open({ true }, "Run the commands of", "commands") })

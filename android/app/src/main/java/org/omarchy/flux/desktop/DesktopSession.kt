@@ -22,7 +22,9 @@ private const val STALL_MS = 3_000L
 /**
  * The screen of a computer on this phone. The session opens a listener,
  * the computer connects and streams 1 monitor, and a [VideoDecoder] shows
- * the frames on the surface of the screen. 1 session runs at a time.
+ * the frames on the surface of the screen. 1 session runs at a time. For
+ * the extended screen, the computer adds a monitor with the size of this
+ * phone and streams that monitor.
  */
 object DesktopSession {
     enum class Phase { Idle, Connecting, Live, Error }
@@ -54,9 +56,9 @@ object DesktopSession {
         if (_volume.value > 0f) previousVolume = _volume.value
     }
     fun toggleMute() { setVolume(if (_volume.value == 0f) previousVolume else 0f) }
-    fun setAudio(core: FluxCore, deviceId: String, enabled: Boolean) {
+    fun setAudio(core: FluxCore, deviceId: String, enabled: Boolean, extend: ExtendSize? = null) {
         _audio.value = enabled
-        start(core, deviceId, _status.value.monitor.ifEmpty { null })
+        start(core, deviceId, _status.value.monitor.ifEmpty { null }, extend)
     }
 
     private val lock = Any()
@@ -66,10 +68,15 @@ object DesktopSession {
     // The longest side that the phone asks each computer for, after the decoder could not show a larger stream.
     private val limits = mutableMapOf<String, Int>()
 
-    /** Starts the stream from [deviceId]. A running stream stops first. [monitor] selects a monitor of the computer. */
-    fun start(core: FluxCore, deviceId: String, monitor: String? = null) {
-        val size = synchronized(lock) { limits[deviceId] } ?: DesktopPackets.MAX_SIZE
-        val next = Run(core, deviceId, monitor, _audio.value, size)
+    /**
+     * Starts the stream from [deviceId]. A running stream stops first. [monitor] selects a monitor of the computer.
+     * With [extend], the computer adds a monitor of that size and streams it.
+     */
+    fun start(core: FluxCore, deviceId: String, monitor: String? = null, extend: ExtendSize? = null) {
+        // The added monitor has the size of the phone, so that each of its pixels is 1 pixel of the phone.
+        val full = extend?.let { minOf(DesktopPackets.MAX_EXTEND_SIZE, maxOf(it.width, it.height)) }
+        val size = synchronized(lock) { limits[deviceId] } ?: full ?: DesktopPackets.MAX_SIZE
+        val next = Run(core, deviceId, monitor, _audio.value, size, extend)
         val old = synchronized(lock) {
             val old = run
             run = next
@@ -122,6 +129,12 @@ object DesktopSession {
         when (reply) {
             is DesktopReply.Live -> {
                 val s = _status.value
+                // A computer that does not know the extended screen streams a monitor that exists.
+                val asked = synchronized(lock) { run?.takeIf { it.deviceId == d.id }?.extend }
+                if (asked != null && !reply.extend) {
+                    core.io.execute { stop(notify = true, Status(Phase.Error, "Update Flux on $name to extend its screen", d.id)) }
+                    return
+                }
                 if (s.active) {
                     _status.value = s.copy(
                         phase = Phase.Live, message = "Shows $name", monitor = reply.monitor, monitors = reply.monitors,
@@ -156,7 +169,7 @@ object DesktopSession {
             limits[r.deviceId] = size
         }
         Log.i(TAG, "the decoder cannot show the stream, asks for $size pixels")
-        start(r.core, r.deviceId, _status.value.monitor.ifEmpty { null })
+        start(r.core, r.deviceId, _status.value.monitor.ifEmpty { null }, r.extend)
     }
 
     /** The decoder of [r] showed no frame of the stream [w] × [h]. The stream starts again smaller, or ends with an error. */
@@ -185,8 +198,11 @@ object DesktopSession {
         if (current) _status.value = Status(Phase.Error, message, r.deviceId)
     }
 
-    /** 1 stream: its thread, its sockets, and its decoder. [maxSize] is the longest side that the phone asks for. */
-    private class Run(val core: FluxCore, val deviceId: String, val monitor: String?, val wantsAudio: Boolean, val maxSize: Int) {
+    /**
+     * 1 stream: its thread, its sockets, and its decoder. [maxSize] is the longest side that the phone asks for.
+     * [extend] is the size of the monitor that the computer adds, or null for a monitor that exists.
+     */
+    private class Run(val core: FluxCore, val deviceId: String, val monitor: String?, val wantsAudio: Boolean, val maxSize: Int, val extend: ExtendSize?) {
         val thread = Thread(::work, "flux-desktop").apply { isDaemon = true }
         @Volatile var stopped = false
         @Volatile var surface: Surface? = null
@@ -221,9 +237,10 @@ object DesktopSession {
             try {
                 if (d == null) error("$name is not known")
                 if (Types.FLUX_DESKTOP !in d.identity.incoming) error("Update Flux on $name to show its screen")
+                if (extend != null && !d.extendSupported) error("Update Flux on $name to extend its screen")
                 val ssl = PinnedStream.accept(core, d, CONNECT_TIMEOUT_MS, { srv ->
                     if (stopped) runCatching { srv.close() } else server = srv
-                }) { port -> DesktopPackets.start(port, monitor, maxSize, audio = wantsAudio) }
+                }) { port -> DesktopPackets.start(port, monitor, maxSize, audio = wantsAudio, extend = extend) }
                 server = null
                 socket = ssl
                 if (stopped) {

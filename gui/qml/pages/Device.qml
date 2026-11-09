@@ -323,7 +323,7 @@ Item {
           heading: "Remote desktop"
           readonly property var d: root.desktop || ({})
           stream: ({ active: !!d.active })
-          title: (d.toName || "A device") + " shows " + (d.monitor || "this screen")
+          title: (d.toName || "A device") + (d.extend ? " extends this screen as " : " shows ") + (d.monitor || "this screen")
           detail: d.width ? d.width + "×" + d.height : ""
           onStop: root.view.call("desktop.stop", {})
         }

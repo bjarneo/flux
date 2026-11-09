@@ -75,11 +75,12 @@ const (
 	TypeFluxClipboardImage = "flux.clipboard.image"
 	// TypeFluxInput tells the phone whether this computer accepts remote
 	// input and whether it shows its screen on the phone, {"enabled":
-	// bool, "desktop": bool, "keyRepeat": true, "naturalScroll": bool}.
-	// keyRepeat tells that a special key can have a repeat count.
-	// naturalScroll is the scroll direction of the Hyprland touchpads, and
-	// it is missing without Hyprland. fluxd sends it after the link starts
-	// and after a setting changes.
+	// bool, "desktop": bool, "keyRepeat": true, "naturalScroll": bool,
+	// "extend": bool}. keyRepeat tells that a special key can have a repeat
+	// count. naturalScroll is the scroll direction of the Hyprland
+	// touchpads, and it is missing without Hyprland. extend tells that the
+	// phone can extend the screen of this computer. fluxd sends it after
+	// the link starts and after a setting changes.
 	TypeFluxInput = "flux.input"
 	// TypeFluxDesktop starts and stops the stream of this screen to the
 	// phone. Both sides send it.

@@ -122,7 +122,9 @@ func doctor() {
 	check(gsrErr == nil || wfErr == nil, "gpu-screen-recorder is installed, so the phone can show this screen",
 		"The remote desktop needs gpu-screen-recorder. Install it with: sudo pacman -S gpu-screen-recorder")
 	if wfErr == nil {
-		fmt.Println("✓ wf-recorder is installed, so the remote desktop also works on a GPU that gpu-screen-recorder does not support")
+		fmt.Println("✓ wf-recorder is installed, so a phone or a tablet can extend this screen, and the remote desktop also works on a GPU that gpu-screen-recorder does not support")
+	} else {
+		fmt.Println("- To extend this screen to a phone or a tablet, install wf-recorder: sudo pacman -S wf-recorder")
 	}
 	if gsrErr == nil {
 		kms := filepath.Join(filepath.Dir(gsr), "gsr-kms-server")

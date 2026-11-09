@@ -262,7 +262,7 @@ Only a try with a connected computer counts.
 
 ### Remote control and the phone lock
 
-**Touchpad and keyboard** and **Remote desktop** ask for the phone lock before they open.
+**Touchpad and keyboard**, **Remote desktop**, and **Extend screen** ask for the phone lock before they open.
 They ask also when the switch on the computer is off, because the computer can turn it on while the page shows.
 An unlock stays valid for 5 minutes.
 After this time, the page asks for the phone lock again in these cases:

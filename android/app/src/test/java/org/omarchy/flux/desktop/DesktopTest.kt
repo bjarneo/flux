@@ -57,6 +57,27 @@ class DesktopTest {
     }
 
     @Test
+    fun extendStartHasTheScreenAndNoMonitor() {
+        val p = DesktopPackets.start(1742, "eDP-1", 2182, extend = ExtendSize(2182, 1080, 2.625f))
+        assertEquals(true, p.bool("extend"))
+        assertEquals(2182, p.int("width"))
+        assertEquals(1080, p.int("height"))
+        assertEquals(2.625, p.double("density")!!, 0.0001)
+        assertEquals(2182, p.int("maxSize"))
+        assertFalse(p.has("monitor"))
+        assertFalse(DesktopPackets.start(1742).has("extend"))
+    }
+
+    @Test
+    fun parsesAnExtendedLive() {
+        val live = Packet(
+            Types.FLUX_DESKTOP,
+            bodyOf("state" to "live", "monitor" to "FLUX-1", "monitors" to listOf("FLUX-1"), "width" to 2182, "height" to 1080, "extend" to true),
+        )
+        assertEquals(DesktopReply.Live("FLUX-1", listOf("FLUX-1"), 2182, 1080, extend = true), DesktopReply.parse(live))
+    }
+
+    @Test
     fun parsesReplies() {
         val live = Packet(
             Types.FLUX_DESKTOP,

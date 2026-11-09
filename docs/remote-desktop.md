@@ -7,6 +7,8 @@ The phone or the Mac controls the computer. The computer does not control the ph
 The phone is an Android phone or an iPhone with [Flux for iOS](ios.md). The iPhone uses the same touches as the Android phone.
 The remote desktop is off by default, because the phone or the Mac can then see each window, such as a password manager.
 
+Flux for Android can also [extend the screen](#extend-the-screen): the computer adds a monitor, and the phone or the tablet shows it.
+
 ## Turn on the remote desktop
 
 1. Select **Turn on** under **Remote desktop** and under **Remote input** in the **Access** card of the Flux window.
@@ -34,6 +36,8 @@ On another system, install it with `sudo pacman -S gpu-screen-recorder`.
 `gpu-screen-recorder` supports AMD, Intel, and NVIDIA drivers.
 On another GPU, for example an older NVIDIA card on `nouveau`, install `wf-recorder` with `sudo pacman -S wf-recorder`.
 `fluxd` then captures the monitor through Hyprland and encodes it on the CPU.
+
+The [extended screen](#extend-the-screen) always needs `wf-recorder`.
 
 ### Choose the encoder
 
@@ -107,6 +111,59 @@ The stream runs while the remote desktop shows.
 It stops when you leave the screen, when the app goes to the background, or when the link drops.
 It also stops when the phone closes the stream, and when the device is unpaired.
 The screen of the phone stays on while the stream runs.
+
+## Extend the screen
+
+The computer adds a monitor with the size of the phone screen, and the phone shows that monitor.
+The phone or the tablet is then a second monitor of the computer.
+Only Flux for Android has the extended screen. Flux for iOS, Flux for macOS, and Flux for Windows do not have it.
+
+The extended screen has the same access rules as the remote desktop:
+
+- `remote_desktop = true` lets the phone add and show the monitor.
+- `remote_input = true` lets the touches, the keys, and the Omarchy panel control the computer.
+- The phone asks for its screen lock before the monitor shows. See [Show the screen](#show-the-screen).
+
+The computer needs Hyprland and `wf-recorder`:
+
+```sh
+sudo pacman -S wf-recorder
+```
+
+To use the phone or the tablet as a second monitor, follow these steps:
+
+1. On the phone, open **Control** and select **Extend screen**.
+   The tool shows only for a computer whose `fluxd` has the extended screen.
+2. Confirm with the phone lock.
+3. Wait until the video shows. The phone turns to landscape, and the computer adds the monitor `FLUX-1` at the right of its other monitors.
+4. Move a window to `FLUX-1` with the pointer of the computer, or with a key binding that moves a window to another monitor.
+
+The monitor has the size of the video on the phone, in pixels, so each pixel of the monitor is 1 pixel of the phone.
+The buttons at the side of the video take part of the width.
+For example, a phone of 2400 × 1080 pixels gets a monitor of about 2250 × 1080 pixels.
+The scale of the monitor follows the density of the phone screen, from 1 to 2.
+A phone gets scale 2, and a tablet of 10 inches gets about 1.5.
+The monitor shows 30 frames each second.
+
+The touches, the keys, the mic, and the Omarchy panel work as on the remote desktop.
+See [Use the touches](#use-the-touches) and [Type](#type).
+On Omarchy, `FLUX-1` has its own workspaces, as each monitor has.
+
+The computer removes `FLUX-1` when the stream stops.
+The stream stops when you leave the screen, when Flux goes to the background, when the link drops, and when `fluxd` stops.
+It also stops when you select **Stop** on the computer. See [Stop from the computer](#stop-from-the-computer).
+Hyprland then moves the windows of `FLUX-1` to another monitor.
+When the phone adds `FLUX-1` again, Hyprland moves its workspaces back to it.
+The screen of the phone stays on while the stream runs.
+
+The computer runs 1 remote desktop or 1 extended screen at a time.
+When one of them starts, the other stops.
+
+`wf-recorder` encodes the stream on the CPU, so a large tablet screen uses more CPU time than the remote desktop on the GPU.
+
+Hyprland gives `FLUX-1` its default mode again when it reads its configuration again, for example after a theme change.
+`fluxd` then sets the mode of `FLUX-1` again and starts a new recorder on the same stream.
+The video stops for a short time.
 
 ## Unlock the computer
 
@@ -282,12 +339,15 @@ The Mac saves the pinned shortcuts.
 When the stream starts, the computer shows a notification with a **Stop** button.
 
 The **Remote desktop** card on the page of the device in the Flux window shows the monitor, with a **Stop** button.
+For the extended screen, the card says that the device extends this screen as `FLUX-1`.
 To see the state or to stop the stream from a terminal, run:
 
 ```sh
 flux-cli desktop
 flux-cli desktop stop
 ```
+
+For the extended screen, `flux-cli desktop` prints a line such as `Pixel 8 extends this screen as the monitor FLUX-1, 2252x1080.`
 
 To turn off the remote desktop, turn off **Remote desktop** in the Flux window, or run:
 
@@ -349,8 +409,43 @@ It moves the pointer through a `zwlr_virtual_pointer_v1` pointer for the monitor
 `fluxd` ignores a position when the phone shows no remote desktop.
 See the [wire format of remote input](remote-input.md#how-it-works).
 
-`fluxd` sends `flux.input` with `{"enabled": bool, "desktop": bool, "keyRepeat": true, "naturalScroll": bool}` after the link starts and after a setting changes.
+`fluxd` sends `flux.input` with `{"enabled": bool, "desktop": bool, "keyRepeat": true, "naturalScroll": bool, "extend": true}` after the link starts and after a setting changes.
 The phone uses `desktop` to show the **Remote desktop** tile as on or off.
+The phone shows the **Extend screen** tile only when `extend` is true.
+
+### Extended screen
+
+1. The phone waits until the video has its place in landscape.
+   It sends `flux.desktop` with `{"state": "start", "port": PORT, "maxSize": 2252, "extend": true, "width": 2252, "height": 1080, "density": 2.625}`.
+   `width` and `height` are the size of the video in pixels, and `density` is the Android density of the screen.
+   `maxSize` is the longest side, so the stream has the full size of the phone.
+2. `fluxd` checks the switch and the pairing, as for the remote desktop, and connects to the port.
+3. `fluxd` sets the mode of the monitor, then adds a headless output to Hyprland:
+
+   ```sh
+   hyprctl eval 'hl.monitor({ output = "FLUX-1", mode = "2252x1080@30", position = "auto-right", scale = 2 })'
+   hyprctl output create headless FLUX-1
+   ```
+
+   A Hyprland without a Lua configuration gets `hyprctl keyword monitor FLUX-1,2252x1080@30,auto-right,2` instead.
+   `fluxd` then reads `hyprctl monitors -j` until `FLUX-1` shows with its size.
+4. `wf-recorder` captures `FLUX-1` through the screencopy protocol of Hyprland, and `libx264` encodes it.
+   `gpu-screen-recorder` captures the monitors through KMS, and a headless output has no KMS plane, so `fluxd` always uses `wf-recorder` for `FLUX-1`.
+5. `fluxd` sends `flux.desktop` with `{"state": "live", "monitor": "FLUX-1", "monitors": ["FLUX-1"], "extend": true}` and the stream size.
+   The frames have the same form as for the remote desktop.
+6. The touches move the pointer on `FLUX-1`.
+7. At the end of the session, `fluxd` runs `hyprctl output remove FLUX-1`.
+   `fluxd` also removes `FLUX-1` when it stops, and at its start it removes a `FLUX-1` that a crashed `fluxd` left.
+
+The size keeps the shape of the phone screen, with even sides, and `maxSize` limits its longest side from 640 to 3840 pixels.
+When the decoder of the phone cannot show that size, the phone asks for a smaller monitor, as for the remote desktop.
+The scale is the value from 1, 1.25, 1.5, 1.6, 1.75, and 2 nearest to the density that gives whole logical pixels.
+Hyprland shows a warning for a scale that gives parts of pixels.
+
+`hyprctl` exits with 0 also when Hyprland refuses a request, so `fluxd` reads the answer `ok`.
+When `wf-recorder` stops after it sent frames, `fluxd` sets the mode again and starts a new recorder on the same stream.
+The phone then gets the video size, the SPS and the PPS, and a key frame again.
+A recorder that stops again within 5 seconds ends the session with an error.
 
 ### Omarchy panel
 
@@ -413,3 +508,9 @@ A binding to a key code, such as `SUPER + code:10` for workspace 1, does not mat
 | The Omarchy panel shows an error | Run `flux-cli input on`. The panel also needs `hyprctl` and a Hyprland with a Lua configuration. |
 | A shortcut is gone | Hyprland read its configuration again, so the references changed. Close the panel and open it again. |
 | The Omarchy panel shows **Unlock the computer first** | The computer is locked. Unlock it on the remote desktop, then open the panel again. |
+| The phone shows no **Extend screen** tool | Update `fluxd` on the computer. The tool shows only for a `fluxd` that sends `extend` in `flux.input`. |
+| The phone says that the extended screen needs `wf-recorder` | Run `sudo pacman -S wf-recorder`, then select **Extend screen** again. |
+| The phone says that Hyprland shows no monitor `FLUX-1` | A saved setting of the Omarchy monitor panel or of another monitor tool can change the size of `FLUX-1`. Remove that setting. Then run `hyprctl output create headless TEST` and `hyprctl output remove TEST`. Each command must answer `ok`. |
+| `FLUX-1` stays after `fluxd` stopped | Run `hyprctl output remove FLUX-1`. `fluxd` also removes it at its next start. |
+| The text on `FLUX-1` is too small or too large | The scale follows the **Display size** setting of Android. Change it on the phone, then select **Extend screen** again. |
+| `FLUX-1` moves or changes its workspaces after it shows | Another monitor tool, such as `hyprmoncfg`, reacts to the new monitor. Change the rules of that tool for `FLUX-1`. |

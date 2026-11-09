@@ -60,6 +60,7 @@ object Types {
     /**
      * The computer tells whether it accepts remote input and
      * whether it shows its screen, {"enabled": bool, "desktop": bool}.
+     * "extend" is true when it can add a monitor that this phone shows.
      */
     const val FLUX_INPUT = "flux.input"
 

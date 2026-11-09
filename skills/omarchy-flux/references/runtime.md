@@ -238,7 +238,8 @@ Do not turn on `remote_desktop` unless the user asks for it.
 `flux-cli desktop on` and `flux-cli desktop off` change the setting without a reload.
 The **Access** card on the page of the device in the Flux window has the same 2 switches, as **Turn on** and **Turn off**.
 The stream needs `gpu-screen-recorder`.
-Read `docs/remote-desktop.md` for the gestures, the monitors, the lock screen, the Omarchy panel, and the stream format.
+Flux for Android can also extend the screen: `fluxd` adds the Hyprland headless output `FLUX-1` with the size of the phone and removes it when the stream ends. The extended screen needs `wf-recorder` and the same switches.
+Read `docs/remote-desktop.md` for the gestures, the monitors, the extended screen, the lock screen, the Omarchy panel, and the stream format.
 The stream shows the lock screen. `fluxd` turns the displays on when they are off.
 The Omarchy panel runs Hyprland key bindings and workspace actions for the phone with `flux.shortcuts`. It needs `remote_input = true`.
 While the session is locked, `fluxd` refuses the bindings and the window actions with `Unlock the computer first`. Remote input and the remote desktop stay available on the lock screen.

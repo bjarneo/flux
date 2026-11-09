@@ -158,6 +158,7 @@ object DebugDemo {
                 remoteInput = true,
                 desktopSupported = true,
                 remoteDesktop = true,
+                extendSupported = true,
                 herdr = withSessions(HerdrState(
                     enabled = true,
                     running = true,

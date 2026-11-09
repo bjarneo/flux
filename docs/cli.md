@@ -369,6 +369,7 @@ flux-cli webcam start --device "Pixel 8"
 See [start from the computer](camera.md#start-from-the-computer) for what the phone shows and for the errors.
 
 `flux-cli desktop` shows whether a phone shows the screen of this computer, and `flux-cli desktop stop` ends it.
+The same commands show and stop the [extended screen](remote-desktop.md#extend-the-screen) of a phone or a tablet.
 `flux-cli browse` shows the devices that browse this computer with [Browse PC](features.md#browse-pc).
 `flux-cli browse stop` ends each session, or only the session of the device that `--device` names.
 See [remote desktop](remote-desktop.md).

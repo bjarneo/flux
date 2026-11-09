@@ -91,6 +91,9 @@ class Device(private val core: FluxCore, var identity: Identity) {
     /** True when the computer shows its screen on this phone, or null before it tells. */
     var remoteDesktop: Boolean? = null
 
+    /** True when the computer can add a monitor that this phone shows, see DesktopSession. */
+    var extendSupported = false
+
     /** The key bindings and workspaces of the computer, or null before the first answer. */
     var shortcuts: ShortcutsState? = null
 
@@ -152,6 +155,7 @@ class Device(private val core: FluxCore, var identity: Identity) {
         naturalScroll = naturalScroll,
         desktopSupported = Types.FLUX_DESKTOP in identity.incoming,
         remoteDesktop = remoteDesktop,
+        extendSupported = extendSupported,
         shortcutsSupported = Types.FLUX_SHORTCUTS in identity.incoming,
         shortcuts = shortcuts,
         lastSeen = lastSeen,

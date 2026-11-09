@@ -535,6 +535,11 @@ Then select **Remote desktop** in **Control** on the phone. The phone turns to l
 In Flux for macOS, select **Remote desktop** in **Control**.
 See [Remote desktop](remote-desktop.md) for the gestures, the monitors, and the stream.
 
+To use an Android phone or tablet as a second monitor, select **Extend screen** in **Control**.
+The computer adds a monitor with the size of the phone screen, and it removes that monitor when the stream stops.
+The extended screen uses the same switches and needs `wf-recorder` on the computer.
+Only Flux for Android has it. See [Extend the screen](remote-desktop.md#extend-the-screen).
+
 ## Dictation in text fields
 
 Each text field of the app has a mic key.

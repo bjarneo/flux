@@ -200,6 +200,10 @@ type Daemon struct {
 	// herdrCLI is the herdr CLI that fluxd runs for the live terminal,
 	// with the result of its last version check.
 	herdrCLI herdrCLI
+
+	// extended is true while Hyprland can have the virtual monitor of the
+	// extended screen, see extend.go. fluxd removes it at its stop.
+	extended bool
 }
 
 // Options change how the daemon runs. The zero value is the normal mode.
@@ -422,6 +426,11 @@ func (d *Daemon) nameLocked() string {
 // context of New ends.
 func (d *Daemon) Run() error {
 	ctx := d.ctx
+	// A virtual monitor that a crashed fluxd left goes away before a
+	// phone can start a session.
+	if !d.opts.Headless {
+		d.removeLeftoverOutput(ctx)
+	}
 	p := lan.New(lan.Config{
 		Cert: d.cert,
 		Identity: func() proto.Identity {
@@ -508,6 +517,9 @@ func (d *Daemon) Run() error {
 
 	<-ctx.Done()
 	d.closeLinks()
+	// The session also removes the virtual monitor, but fluxd can exit
+	// before its goroutine ends.
+	d.removeExtendOutput()
 	removeClipImages(d.clipDir)
 	_ = os.Remove(d.clipDir)
 	if in, ok := d.input.(*desktop.Input); ok {

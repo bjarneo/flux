@@ -56,6 +56,9 @@ const val AGENTS_PAGE = "agents"
 /** The Omarchy panel: workspaces, windows, and key bindings. */
 const val OMARCHY_PAGE = "omarchy"
 
+/** The extended screen: the computer adds a monitor that this phone shows. */
+const val EXTEND_PAGE = "extend"
+
 /** The webcam of 1 computer, in the Stream band of Control. */
 const val WEBCAM_PAGE = "webcam"
 

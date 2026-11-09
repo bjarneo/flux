@@ -455,14 +455,16 @@ func (d *Daemon) runInput(ctx context.Context, a inputAction) error {
 // and whether it shows its screen on the phone. keyRepeat tells the phone
 // that it can send repeat with a special key. naturalScroll is the scroll
 // direction of the touchpads of Hyprland. The phone uses it for its
-// touchpad. Without Hyprland, the packet has no naturalScroll.
+// touchpad. Without Hyprland, the packet has no naturalScroll. extend
+// tells the phone that this fluxd can extend its screen to the phone,
+// see extend.go.
 func (d *Daemon) sendInputState(l *lan.Link) {
 	d.mu.Lock()
 	on := d.cfg.RemoteInput && d.input != nil && d.permittedLocked(l.DeviceID(), "remoteInput")
 	desktop := d.cfg.RemoteDesktop && !d.opts.Headless && d.permittedLocked(l.DeviceID(), "remoteDesktop")
 	headless := d.opts.Headless
 	d.mu.Unlock()
-	body := map[string]any{"enabled": on, "desktop": desktop, "keyRepeat": true}
+	body := map[string]any{"enabled": on, "desktop": desktop, "keyRepeat": true, "extend": !headless}
 	if !headless {
 		if natural, ok := touchpadNaturalScroll(context.Background()); ok {
 			body["naturalScroll"] = natural
