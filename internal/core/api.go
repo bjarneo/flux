@@ -290,6 +290,8 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		return d.ApproveWait(ctx, p.ID)
 	case "approve.cancel":
 		return ok, d.ApproveCancel(p.ID)
+	case "ssh.keys":
+		return d.sshView(), nil
 	case "clipboard.copy":
 		if p.ID != "" {
 			return ok, d.CopyClip(p.ID)

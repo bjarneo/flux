@@ -47,12 +47,16 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.net.InetAddress
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import org.omarchy.flux.BuildConfig
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.ScrollMode
+import org.omarchy.flux.core.SshKeys
 import org.omarchy.flux.core.ThemeMode
 import org.omarchy.flux.core.UiState
 import org.omarchy.flux.net.isTailscale
@@ -73,6 +77,7 @@ fun ComputersScreen(
     onPair: (DeviceUi) -> Unit,
     onUnpair: (DeviceUi) -> Unit,
     onSync: () -> Unit,
+    onSsh: () -> Unit,
     onAbout: () -> Unit,
 ) {
     val paired = state.devices.filter { it.paired }
@@ -121,6 +126,9 @@ fun ComputersScreen(
                         ListHeader("Settings")
                         val (on, total) = syncSummary(state)
                         SettingRow(Ic.sync, "Sync", "$on of $total switches on. They apply to every computer.", onClick = onSync)
+                        val ssh by SshKeys.info.collectAsStateWithLifecycle()
+                        LaunchedEffect(Unit) { withContext(Dispatchers.IO) { SshKeys.load() } }
+                        SettingRow(Ic.key, "SSH key", sshSummary(ssh), onClick = onSsh)
                         ThemeRow(state)
                         ScrollRow(state)
                         // The row runs an action and opens no screen, so it has no chevron. A dialog asks first.

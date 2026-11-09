@@ -214,6 +214,13 @@ type Daemon struct {
 	speaker     *speakerSession
 	speakerErr  string
 	speakerMute outputMute
+
+	// sshSigns holds the SSH sign requests that wait for a phone.
+	// sshSocket is the path of the ssh-agent socket, or "" when fluxd
+	// could not make it. sshSocketErr then tells why.
+	sshSigns     sshBook
+	sshSocket    string
+	sshSocketErr string
 }
 
 // Options change how the daemon runs. The zero value is the normal mode.
@@ -414,6 +421,9 @@ func (d *Daemon) Busy() string {
 	d.mu.Unlock()
 	if what == "" && d.approvals.pending() > 0 {
 		what = "a fingerprint approval"
+	}
+	if what == "" && d.sshSigns.pending() > 0 {
+		what = "an SSH signature"
 	}
 	return what
 }
@@ -1186,6 +1196,7 @@ func (d *Daemon) onPairedLink(dev *Device, l *lan.Link) {
 		_ = l.Send(state)
 	}
 	d.sendThemeTo(dev, l)
+	d.requestSSHKey(dev, l)
 }
 
 // markDirty schedules a state event for all subscribers.

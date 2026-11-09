@@ -48,6 +48,7 @@ object Android {
     const val ID_RING = 3
     const val ID_APPROVE = 4
     const val ID_STREAMS = 5
+    const val ID_SSH = 6
 
     /** The request code of the PendingIntent that opens Chats. */
     private const val ID_OPEN_CHATS = 20

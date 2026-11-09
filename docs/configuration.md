@@ -94,6 +94,7 @@ The [workflow controls](workflows.md) describe `[devices]`, `[[notification_rule
 | `~/.cache/flux/update/` | The package that `flux-cli update` downloads, until pacman installs it |
 | `~/.cache/flux/icons/` | The app icons of the phone notifications |
 | `$XDG_RUNTIME_DIR/flux/fluxd.sock` | Local IPC socket. Without `XDG_RUNTIME_DIR`, `/run/user/<uid>/flux/fluxd.sock` |
+| `$XDG_RUNTIME_DIR/flux/ssh-agent.sock` | The ssh-agent socket of the [phone SSH keys](ssh.md). `FLUX_SOCKET` does not move it. |
 | `/etc/flux/approve/<user>.pub` | Root-owned phone approval public key |
 | `/etc/flux/approve/pam-backup/` | Original PAM files from approval setup |
 

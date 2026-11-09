@@ -456,6 +456,8 @@ A status dot and a state word in the state color, then " · " and the source in 
 
 The pairing sheet, `TiledPairSheet`, and the fingerprint approval screen, `ApproveActivity`, keep their layout and behavior. Their colors follow the theme. Do not restyle them as part of a system change.
 
+The SSH key screen, `SshSignActivity`, uses the layout and the guards of the approval screen: the 88 dp key badge, the question, the computer, the program in mono in a box, the red warning, and Deny and Approve. The program comes from the computer, so it stays in its box and never joins the question. The **SSH key** page under Computers uses the sync switch row, a `tile` with the public key and the fingerprint in mono, and the command block.
+
 ## Apple platforms
 
 Flux for iOS and Flux for macOS use the system of this file. This section gives only what differs from Android. All other sections apply to the 3 apps.

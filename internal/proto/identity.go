@@ -103,6 +103,12 @@ const (
 	// docs/camera.md describes it.
 	TypeFluxStreamRequest = "flux.stream.request"
 	TypeFluxTransfer      = "flux.transfer"
+
+	// TypeFluxSSH carries the SSH key of a phone and the sign requests of
+	// the ssh-agent of fluxd. fluxd asks for the key and sends the sign
+	// requests. The phone sends its key and the signatures. docs/ssh.md
+	// describes the body.
+	TypeFluxSSH = "flux.ssh"
 )
 
 // Packet types of the audio outputs of this computer.
@@ -130,6 +136,7 @@ var Incoming = []string{
 	TypeFluxApprove, TypeFluxHerdr, TypeFluxClipboardImage, TypeMousepadRequest,
 	TypeFluxDesktop, TypeFluxShortcuts, TypeFluxTransfer,
 	TypeFluxAudioRequest,
+	TypeFluxSSH,
 }
 
 // Outgoing lists the packet types that Flux sends.
@@ -143,6 +150,7 @@ var Outgoing = []string{
 	TypeFluxClipboardImage, TypeFluxInput, TypeFluxDesktop, TypeFluxShortcuts, TypeFluxTransfer,
 	TypeFluxTheme, TypeFluxStreamRequest,
 	TypeFluxAudio,
+	TypeFluxSSH,
 }
 
 // Identity is the body of a flux.identity packet.

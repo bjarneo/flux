@@ -96,6 +96,13 @@ object Types {
 
     /** The computer streams the audio of its default output to this phone, which plays it. Both sides send it. */
     const val FLUX_SPEAKER = "flux.speaker"
+
+    /**
+     * The SSH key of this phone. The computer asks for the key and sends
+     * the sign requests of its ssh-agent. This phone sends its key and the
+     * signatures. Both sides send it.
+     */
+    const val FLUX_SSH = "flux.ssh"
 }
 
 /** Packet types that the phone accepts. */
@@ -109,6 +116,7 @@ val INCOMING = listOf(
     Types.FLUX_WAKE,
     Types.FLUX_AUDIO,
     Types.FLUX_SPEAKER,
+    Types.FLUX_SSH,
 )
 
 /** Packet types that the phone sends. */
@@ -120,6 +128,7 @@ val OUTGOING = listOf(
     Types.MOUSEPAD_REQUEST, Types.FLUX_DESKTOP, Types.FLUX_SHORTCUTS, Types.FLUX_TRANSFER,
     Types.FLUX_AUDIO_REQUEST,
     Types.FLUX_SPEAKER,
+    Types.FLUX_SSH,
 )
 
 /**

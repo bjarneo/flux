@@ -138,6 +138,17 @@
             android:turnScreenOn="true"
             android:taskAffinity="org.omarchy.flux.approve" />
 
+        <!-- The SSH key prompt. It shows over the lock screen like the approval screen. -->
+        <activity
+            android:name=".ui.SshSignActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|density|fontScale|uiMode"
+            android:launchMode="singleTop"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:taskAffinity="org.omarchy.flux.ssh" />
+
         <service
             android:name=".service.FluxService"
             android:exported="false"

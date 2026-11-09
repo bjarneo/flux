@@ -71,6 +71,7 @@ It also tells which setting turns a feature off, when one exists.
 | Webcam, microphone, and screen mirror | On | Stream its camera to the **Flux Camera** device, its microphone to a PipeWire source, and its screen to a window. The device starts each stream. The computer can ask the device to start its camera or its microphone, but the device asks its user first. See [camera and streams](camera.md). | No setting. `flux-cli webcam stop`, `flux-cli mic stop`, and `flux-cli screen stop` stop a stream. |
 | Phone speaker | On | Hear what the computer plays, while the stream runs, and mute the default output for the time of the stream. The computer shows a notification with **Stop** while the device plays its audio. See [phone as speaker](camera.md#phone-as-speaker). | No setting. `flux-cli speaker stop` stops the stream. |
 | Approvals | Off | Approve `sudo`, and `hyprlock` or `polkit-1` when you enable them, for the user who enrolled the device. See [fingerprint approval](approvals.md). | `sudo flux-cli approve disable` or `sudo flux-cli approve remove` |
+| SSH key | Off | Offer its SSH key on the ssh-agent socket of `fluxd`. Programs of your user can then ask the phone to sign an SSH login or an SSH signature. See [SSH key on the phone](#ssh-key-on-the-phone). | Turn off **SSH key** on the phone, or unpair the device |
 
 To change a setting, edit `~/.config/flux/config.toml`, then reload `fluxd`:
 
@@ -114,6 +115,26 @@ The device plays the audio of the computer only after a tap on **Play on phone**
 The tap is the consent.
 `fluxd` sends at most 1 request of each kind to a device in 3 seconds, and the device ignores a request that comes sooner.
 See [start from the computer](camera.md#start-from-the-computer).
+
+## SSH key on the phone
+
+Flux for Android can keep an SSH key for SSH logins and Git signatures. See [SSH key on the phone](ssh.md).
+The key is off until you turn on **SSH key** on the phone.
+These rules apply while it is on:
+
+- The private key stays in the Android Keystore, in StrongBox when the phone has it. No computer and no backup gets it.
+- Each signature needs a new check on the phone: a strong biometric, or the screen lock on Android 11 and later. 1 check signs 1 request.
+- The screen lock can sign. This differs from [fingerprint approval](approve.md), where only a biometric can approve. So anyone who knows the screen lock and has the phone can approve a request.
+- The phone signs only 2 kinds of data: an SSH login request with its key, and the signed data of an SSH signature. `fluxd` and the phone both refuse each other data.
+- The phone shows what the request does, the name of the computer, and the program that asks. The phone reads the action from the data that it signs. The program name comes from `fluxd`. A program can choose its own command line, so the name is only a hint.
+- A login request does not name the server. A program can ask for a login to another server than you expect. Approve a request only right after you started the program.
+- The ssh-agent socket has mode 0600 in the runtime folder of Flux, which has mode 0700. `fluxd` accepts only processes of your user and of root.
+- Code that runs as your user can use the socket, and it can replace `fluxd`. It can send requests to the phone, but it cannot sign without your approval, and it cannot read the private key.
+- Each paired computer that runs `fluxd` can send sign requests to the phone. Unpair a computer that you do not trust.
+- With agent forwarding, `ssh -A`, the remote host can ask for signatures too. Each request still needs your approval.
+- A sign request waits at most 30 seconds. When the program stops or the link closes, the request ends on the phone.
+- When the screen lock of the phone goes away, Android makes the key invalid, and the phone deletes it.
+- If you lose the phone, remove its public key from each server and Git host.
 
 ## Network ports
 
@@ -204,6 +225,7 @@ flux-cli unpair "Pixel 8"
 After an unpair, the device must send a new pair request, and you must accept it again.
 
 If you lose a device, unpair it on the computer at once.
+If the phone has an [SSH key](ssh.md), remove its public key from each server and Git host.
 If the device can approve `sudo`, also remove its key:
 
 ```sh

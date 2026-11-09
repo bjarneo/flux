@@ -346,8 +346,8 @@ private val NavSaver = listSaver<Nav, String>(save = { it.save() }, restore = { 
 /** A pairing that this phone starts. The dialog shows the key before the request goes out. */
 private data class Outgoing(val deviceId: String, val timestamp: Long, val key: String, val sent: Boolean = false)
 
-/** The debug pages that need no computer: the destinations, the sync switches, and About Flux. */
-private val DestinationPages = setOf("chat", "inbox", "send", "control", "computers", "devices", SYNC_PAGE, ABOUT_PAGE)
+/** The debug pages that need no computer: the destinations, the sync switches, the SSH key, and About Flux. */
+private val DestinationPages = setOf("chat", "inbox", "send", "control", "computers", "devices", SYNC_PAGE, ABOUT_PAGE, SSH_PAGE)
 
 /** How long the chat shows that a new computer is paired, in milliseconds while the app is in the front. */
 private const val WELCOME_MS = 6_000L

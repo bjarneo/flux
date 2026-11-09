@@ -132,6 +132,7 @@ object Plugins {
             Types.FLUX_SPEAKER -> org.omarchy.flux.speaker.SpeakerSession.onPacket(core, d, p)
             Types.FLUX_SCREEN -> org.omarchy.flux.screen.ScreenSession.onPacket(core, d, p)
             Types.FLUX_APPROVE -> Approvals.onPacket(core, d, p)
+            Types.FLUX_SSH -> SshAgent.onPacket(core, d, p)
             Types.FLUX_HERDR -> HerdrSync.onPacket(core, d, p)
             Types.FLUX_CLIPBOARD_IMAGE -> ClipImage.receive(core, d, p)
             Types.FLUX_INPUT -> {

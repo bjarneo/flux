@@ -422,6 +422,7 @@ object FluxCore {
             org.omarchy.flux.desktop.DesktopSession.stopFor(id, message)
             if (browsing) Browse.close()
             Approvals.current.value?.takeIf { it.computerId == id }?.let { Approvals.clear(app, it.id) }
+            SshAgent.forget(app, id)
             Android.cancelFromComputer(app, id)
             StreamRequests.forget(app, id)
         }

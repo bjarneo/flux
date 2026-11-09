@@ -283,6 +283,19 @@ The Omarchy lock screen runs in `omarchy-shell` with its own PAM services, `omar
 Flux does not change them, so the phone cannot unlock the Omarchy lock screen.
 The `hyprlock` service applies only when `hyprlock` is the lock screen.
 
+## SSH key on the phone
+
+Read `docs/ssh.md`.
+Flux for Android can keep an SSH key in the Android Keystore. `fluxd` offers it on the ssh-agent socket `$XDG_RUNTIME_DIR/flux/ssh-agent.sock`.
+Each signature needs the fingerprint or the screen lock on the phone. The user turns the key on in Flux on the phone: **Computers**, then **SSH key**.
+Do not change the SSH configuration or the Git configuration of the user unless the user asks.
+
+```sh
+flux-cli ssh
+flux-cli ssh key
+SSH_AUTH_SOCK="$(flux-cli ssh socket)" ssh-add -l
+```
+
 Use root commands only for the requested setup or removal.
 Keep the password fallback.
 Do not change `sshd` or `login` PAM services.

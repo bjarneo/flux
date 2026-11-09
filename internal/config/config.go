@@ -171,6 +171,10 @@ func SocketPath() string {
 	return filepath.Join(RuntimeDir(), "fluxd.sock")
 }
 
+// SSHAgentPath returns the path of the ssh-agent socket of fluxd:
+// ssh-agent.sock in RuntimeDir. A client sets SSH_AUTH_SOCK to it.
+func SSHAgentPath() string { return filepath.Join(RuntimeDir(), "ssh-agent.sock") }
+
 func xdg(env, fallback string) string {
 	if d := os.Getenv(env); d != "" {
 		return d

@@ -351,6 +351,9 @@ flux-cli desktop stop
 flux-cli browse
 flux-cli browse stop
 flux-cli approve
+flux-cli ssh
+flux-cli ssh key
+flux-cli ssh socket
 ```
 
 Start camera, microphone, and screen capture on the phone.
@@ -390,6 +393,12 @@ The same commands show and stop the [extended screen](remote-desktop.md#extend-t
 `flux-cli browse stop` ends each session, or only the session of the device that `--device` names.
 See [remote desktop](remote-desktop.md).
 See [camera and streams](camera.md) for settings and [fingerprint approval](approvals.md) for root setup commands.
+
+`flux-cli ssh` prints the SSH key of each connected Android phone with SSH key on, and the ssh-agent socket of `fluxd`.
+`flux-cli ssh key` prints only the lines for `authorized_keys`, and `flux-cli ssh socket` prints only the socket path.
+Add `--json` for the socket and the keys with their device IDs and fingerprints.
+When no connected phone has a key, the command exits with 1.
+See [SSH key on the phone](ssh.md).
 
 ## Remote access
 

@@ -29,6 +29,7 @@ https://github.com/user-attachments/assets/4b8445fe-6734-4100-b200-92f57e1b353a
 | Show and control the computer screen on the phone or the Mac | [Remote desktop](docs/remote-desktop.md) |
 | Use an Android phone or tablet as a second monitor | [Extend the screen](docs/remote-desktop.md#extend-the-screen) |
 | Approve sudo with the phone's fingerprint sensor | [Fingerprint approval](docs/approvals.md) |
+| Log in with SSH and sign Git commits with a key on the Android phone | [SSH key on the phone](docs/ssh.md) |
 | Reach your phone away from home through Tailscale | [Connect through Tailscale](docs/tailscale.md) |
 | See herdr coding agents on the phone or the Mac, read their output, and answer them | [herdr agents](docs/herdr.md) |
 | Update Flux on the computer and send the new app to the phone | [Update](docs/install.md#update) |

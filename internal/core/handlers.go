@@ -127,6 +127,8 @@ func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.handleShortcuts(dev, l, p)
 	case proto.TypeFluxApprove:
 		d.handleApprove(dev, p)
+	case proto.TypeFluxSSH:
+		d.handleSSH(dev, p)
 	case proto.TypeFluxHerdr:
 		d.handleHerdr(dev, l, p)
 	case proto.TypeMousepadRequest:

@@ -98,6 +98,9 @@ Commands:
   approve enable [SVC…]  Turn approval on in PAM for an enrolled phone. Run it with sudo.
   approve disable [SVC…] Turn approval off in PAM. Run it with sudo.
   approve remove         Delete the phone key and turn approval off. Run it with sudo.
+  ssh [key|socket] [--json]  Print the SSH key of each connected phone for
+                         authorized_keys, and the ssh-agent socket. key prints
+                         only the keys, and socket only the path
   watch                  Print each state change as one JSON line
   setup [--dry-run]      Start fluxd for this user and add the omarchy-shell plugin
   off                    Stop fluxd, and do not start it at login
@@ -196,6 +199,8 @@ func main() {
 		err = remoteInput(args)
 	case "approve":
 		err = approveCmd(args, device)
+	case "ssh":
+		err = sshCmd(args, device)
 	case "watch":
 		err = watch()
 	case "off":

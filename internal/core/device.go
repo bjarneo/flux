@@ -6,6 +6,8 @@ import (
 	"slices"
 	"time"
 
+	"golang.org/x/crypto/ssh"
+
 	"flux/internal/config"
 	"flux/internal/lan"
 	"flux/internal/proto"
@@ -109,6 +111,11 @@ type Device struct {
 	// outboxSeq numbers the entries.
 	outbox    []OutboxMessage
 	outboxSeq int64
+
+	// sshKey is the SSH key that the phone offers, or nil. sshSPKI is the
+	// same key in base64, as the phone sent it.
+	sshKey  ssh.PublicKey
+	sshSPKI string
 }
 
 // Battery is the battery state of a device.

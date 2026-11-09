@@ -149,6 +149,7 @@ A device that is not paired shows only while it has a link.
 | Text messages | `sms.refresh`, `sms.thread`, `sms.send` |
 | Streams | `webcam.start`, `webcam.config`, `webcam.stop`, `mic.start`, `mic.stop`, `speaker.start`, `speaker.stop`, `screen.stop`, `desktop.stop`, `browse.stop` |
 | Approval | `approve.request`, `approve.wait`, `approve.enroll`, `approve.cancel` |
+| SSH key | `ssh.keys` |
 | Settings and updates | `settings.set`, `update.install`, `update.sendApp` |
 
 `share.files` takes `paths`, a list of absolute file paths. A relative path returns the error code `bad_params`.
@@ -191,6 +192,7 @@ Without `device`, a method uses the only connected paired device.
 | `webcam.stop`, `mic.stop`, `speaker.stop`, `screen.stop`, `desktop.stop` | None |
 | `browse.stop` | An optional `device`. Without `device`, it ends every Browse PC session. It returns `not_active` when no session ends. |
 | `approve.request`, `approve.enroll`, `approve.wait`, `approve.cancel` | For the approval helper and `flux-cli approve`. See [approval](#approval). |
+| `ssh.keys` | None. The result has the ssh-agent `socket`, an `error` when `fluxd` has no socket, and the `keys` of the connected phones. Each key has `device`, `name`, `key` for `authorized_keys`, and `fingerprint`. See [SSH key on the phone](ssh.md). |
 | `settings.set` | `key`, `value` |
 | `update.install` | None |
 | `update.sendApp` | `device` |

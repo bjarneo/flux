@@ -60,6 +60,7 @@ It waits while 1 of these runs:
 - A Browse PC session
 - The send of the Android app
 - A fingerprint approval
+- An SSH signature that waits for the phone
 
 The journal then shows a line such as `the restart waits for Browse PC`.
 To end a Browse PC session, select **Stop** in its desktop notification.
