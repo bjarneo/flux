@@ -108,8 +108,9 @@ While the field has text, Backspace deletes the last character of the field and 
 For example, select **ctrl**, then type `c` to send Ctrl+C.
 Select **super**, then type a space to open the Omarchy launcher.
 
-`wtype` sends each character as its own key symbol.
+`fluxd` sends each character as its own key symbol.
 The keyboard layout of the computer does not change the text.
+Each character goes on a key of the letter, digit, or space rows, so a browser address bar keeps the spaces.
 
 ## Change slides on the phone
 
@@ -217,14 +218,17 @@ Before each action, `fluxd` checks again that `remote_input` is on, that the dev
 When 1 of these checks fails, `fluxd` does these steps:
 
 - It drops the actions that wait.
-- It stops the text that `wtype` still types.
+- It stops the text that `fluxd` or `wtype` still types.
 - It releases a button that the device holds, for example after a drag.
 
-A `wtype` run stops after 5 seconds plus 5 milliseconds for each character, so a compositor that does not answer does not stop the next keys.
+A text stops after 5 seconds plus 5 milliseconds for each character, so a compositor that does not answer does not stop the next keys.
 
 `fluxd` moves the pointer through the `zwlr_virtual_pointer_v1` Wayland protocol.
-It types with `wtype`, which uses the `zwp_virtual_keyboard_v1` Wayland protocol.
-Neither needs access to `/dev/uinput` or root.
+It types text through a `zwp_virtual_keyboard_v1` Wayland keyboard of its own.
+The keymap of that keyboard puts each character on a key of the letter, digit, or space rows, and Enter and Tab on their own keys.
+`fluxd` presses keys with names, such as Escape and the arrow keys, and keys with modifiers, such as Ctrl+C, with `wtype`.
+When the compositor does not offer `zwp_virtual_keyboard_v1`, `fluxd` also types the text with `wtype`.
+None of these needs access to `/dev/uinput` or root.
 
 A packet holds 1 action:
 

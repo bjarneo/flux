@@ -389,7 +389,7 @@ The phone can run only a binding that the configuration defines.
 
 `fluxd` runs each action with `hyprctl dispatch` and a fixed Lua dispatcher, for example `hl.dsp.focus({ workspace = "3" })`.
 It checks the workspace number and the direction first.
-The keys of the phone go through `wtype`, which has its own keymap.
+The keys of the phone go through a virtual keyboard of `fluxd` or through `wtype`, and each has its own keymap.
 A binding to a key code, such as `SUPER + code:10` for workspace 1, does not match those keys, so the phone uses the actions for the workspaces.
 
 ## Troubleshooting
