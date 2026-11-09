@@ -49,6 +49,9 @@ object Android {
     const val ID_APPROVE = 4
     const val ID_STREAMS = 5
 
+    /** The request code of the PendingIntent that opens Chats. */
+    private const val ID_OPEN_CHATS = 20
+
     /**
      * The ID of the next event notification. Threads share it, and it starts
      * from the clock, so that a new process does not replace the
@@ -304,6 +307,31 @@ object Android {
     private fun agentId(deviceId: String, pane: String) = "$deviceId|$pane".hashCode()
 
     /**
+     * Opens the chat of the agent in [pane] on the computer [deviceId]. The
+     * agent notification and the agents widget use it. Back goes to Chats.
+     */
+    fun openAgent(context: Context, deviceId: String, pane: String): PendingIntent {
+        // The action and the identifier make this PendingIntent differ from
+        // each other PendingIntent of Flux, also when the hash of the pane
+        // is the same as another request code.
+        val open = Intent(context, MainActivity::class.java)
+            .setAction(MainActivity.ACTION_OPEN_AGENT)
+            .setIdentifier("$deviceId|$pane")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .putExtra(MainActivity.EXTRA_DEVICE, deviceId)
+            .putExtra(MainActivity.EXTRA_PANE, pane)
+        return PendingIntent.getActivity(context, agentId(deviceId, pane), open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
+    /** Opens Chats, the first destination of the app. The header of the agents widget uses it. */
+    fun openChats(context: Context): PendingIntent = PendingIntent.getActivity(
+        context, ID_OPEN_CHATS,
+        Intent(context, MainActivity::class.java).setAction(MainActivity.ACTION_OPEN_CHATS)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
+
+    /**
      * Shows that a herdr agent needs input or finished. Each pane has 1
      * notification, and a tap opens the screen of the agent.
      */
@@ -313,16 +341,7 @@ object Android {
         val id = agentId(deviceId, agent.pane)
         val blocked = agent.status == AgentStatus.Blocked
         val where = agent.project.ifEmpty { agent.workspace }.ifEmpty { agent.pane }
-        // The action and the identifier make this PendingIntent differ from
-        // each other PendingIntent of Flux, also when the hash of the pane
-        // is the same as another request code.
-        val open = Intent(context, MainActivity::class.java)
-            .setAction(MainActivity.ACTION_OPEN_AGENT)
-            .setIdentifier("$deviceId|${agent.pane}")
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            .putExtra(MainActivity.EXTRA_DEVICE, deviceId)
-            .putExtra(MainActivity.EXTRA_PANE, agent.pane)
-        val pi = PendingIntent.getActivity(context, id, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val pi = openAgent(context, deviceId, agent.pane)
         val b = NotificationCompat.Builder(context, if (blocked) CHANNEL_AGENT_INPUT else CHANNEL_AGENT_DONE)
             .setSmallIcon(R.drawable.ic_stat_flux)
             .setContentTitle(if (blocked) "${agent.agent} in $where needs input" else "${agent.agent} in $where finished")

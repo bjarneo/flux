@@ -408,6 +408,18 @@ The signature component: 1 chat for each agent and each computer, as in a messag
 - **Computer row:** The name, and the newest entry of its chat, such as "You: Dinner at 7". A computer that is not reachable shows at 55% with "Offline · last seen 09:12".
 - **Approval and pair request:** A card on `tile` with 12 dp corners and a 2 dp red border, with Deny and Approve, 44 dp high. Approve opens the approval screen.
 
+### Agents widget
+
+The home screen widget of Android: the Needs you and Agents groups of Chats, without the computers. The code is in `widget/`.
+
+- **Ground:** `bg` with the corner of the launcher, 16 dp before Android 12. The inset is 8 dp. It has no shadow and no border.
+- **Header:** 36 dp: the 20 dp Flux mark in `text` and the accent, **Agents** in 15 sp 600, then the count in red mono 11 sp and " · 1 of 2 online" in `sub` mono 11 sp at the end. A widget narrower than 240 dp hides the title and the online count. The mark is `dim` while no computer can send agents. A tap opens Chats.
+- **Row:** At least 48 dp high, with 4 dp between rows and a 10 dp inset. A 10 dp dot, the task in 14 sp 600 on 1 line, the computer in mono 11 sp `sub` at the end of the task, and under them the state word in 12 sp 500 in the state color and " · agent · project" in mono 12 sp `sub`. A narrow widget puts the computer at the end of the source. Below 180 dp, the row shows no source. The dot is red, green, or `dim`. An agent that works has a 2 dp ring in the accent that does not turn.
+- **Needs you:** An agent that waits takes `tile` and a 1 dp red border on 12 dp corners. An approval and a pair request take a 2 dp red border. The widget has no buttons: a tap opens the chat or the approval screen.
+- **More:** When not all rows fit, a 24 dp line in 12 sp `sub` at the end says "3 more in Chats". When that line would take the place of a row, the header says "3 more" in the place of the computers online.
+- **Quiet state:** With no rows, a title in 14 sp 600 and a line in 12 sp, both in `sub`, such as "No computer is connected". The quiet state has no red.
+- **Colors:** The roles of the theme of all computers through the contrast guard: `text`, `sub`, red, green, and the accent on `bg` and `tile`, and `dim` only for the dot and the mark. `WidgetModelTest` checks each pair in each sample theme.
+
 ### Chat
 
 The chat of 1 computer: 1 thread of the computer and the device.

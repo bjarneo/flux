@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The agents widget. widget/WidgetViews.kt fills it and sets each color
+    from the palette of the computer theme. The colors here are Tokyo Night
+    Day, or Tokyo Night in the dark mode, for the time before the first update.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:clipToOutline="true"
+    tools:targetApi="s">
+
+    <ImageView
+        android:id="@+id/widget_ground"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no"
+        android:scaleType="fitXY"
+        android:src="@drawable/widget_ground" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="8dp">
+
+        <LinearLayout
+            android:id="@+id/widget_header"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/widget_press"
+            android:gravity="center_vertical"
+            android:minHeight="36dp"
+            android:orientation="horizontal"
+            android:paddingStart="4dp"
+            android:paddingEnd="6dp">
+
+            <FrameLayout
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:importantForAccessibility="noHideDescendants">
+
+                <ImageView
+                    android:id="@+id/widget_mark_ring"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/widget_mark_ring" />
+
+                <ImageView
+                    android:id="@+id/widget_mark_bar"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/widget_mark_bar" />
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/widget_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:fontFamily="sans-serif-medium"
+                android:singleLine="true"
+                android:text="@string/widget_label"
+                android:textColor="@color/widget_text"
+                android:textFontWeight="600"
+                android:textSize="15sp" />
+
+            <FrameLayout
+                android:id="@+id/widget_spacer"
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <!-- What needs the user in red, then the rest of the context line. -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/widget_needs"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="monospace"
+                    android:singleLine="true"
+                    android:textColor="@color/widget_red"
+                    android:textSize="11sp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/widget_context"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:fontFamily="monospace"
+                    android:singleLine="true"
+                    android:textColor="@color/widget_sub"
+                    android:textSize="11sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/widget_rows"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:divider="@drawable/widget_gap"
+            android:orientation="vertical"
+            android:showDividers="middle" />
+
+        <TextView
+            android:id="@+id/widget_more"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/widget_press"
+            android:gravity="end|center_vertical"
+            android:minHeight="24dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:singleLine="true"
+            android:textColor="@color/widget_sub"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <!-- The quiet state fills the room under the header, with its text in the middle. -->
+        <LinearLayout
+            android:id="@+id/widget_quiet"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="2dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_press"
+            android:gravity="center_vertical"
+            android:minHeight="48dp"
+            android:orientation="vertical"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/widget_quiet_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:fontFamily="sans-serif-medium"
+                android:singleLine="true"
+                android:textColor="@color/widget_sub"
+                android:textFontWeight="600"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/widget_quiet_line"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:textColor="@color/widget_sub"
+                android:textSize="12sp" />
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

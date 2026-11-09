@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The preview of the agents widget in the widget picker of Android 12 and
+    later: sample rows in Tokyo Night Day, or Tokyo Night in the dark mode.
+    The launcher inflates it without AppCompat, so the dots use android:tint.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_ground"
+    android:clipToOutline="true"
+    tools:ignore="HardcodedText,UseAppTint"
+    tools:targetApi="s">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="8dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:minHeight="36dp"
+            android:orientation="horizontal"
+            android:paddingStart="4dp"
+            android:paddingEnd="6dp">
+
+            <FrameLayout
+                android:layout_width="20dp"
+                android:layout_height="20dp">
+
+                <ImageView
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/widget_mark_ring" />
+
+                <ImageView
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/widget_mark_bar" />
+            </FrameLayout>
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:fontFamily="sans-serif-medium"
+                android:singleLine="true"
+                android:text="@string/widget_label"
+                android:textColor="@color/widget_text"
+                android:textFontWeight="600"
+                android:textSize="15sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:singleLine="true"
+                android:text="1 needs you"
+                android:textColor="@color/widget_red"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="2dp"
+            android:background="@drawable/widget_tile">
+
+            <ImageView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:importantForAccessibility="no"
+                android:scaleType="fitXY"
+                android:src="@drawable/widget_edge" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp">
+
+                <ImageView
+                    android:layout_width="10dp"
+                    android:layout_height="10dp"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/widget_dot"
+                    android:tint="@color/widget_red" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:fontFamily="sans-serif-medium"
+                        android:singleLine="true"
+                        android:text="Run the database migration"
+                        android:textColor="@color/widget_text"
+                        android:textFontWeight="600"
+                        android:textSize="14sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="sans-serif-medium"
+                            android:singleLine="true"
+                            android:text="Needs input"
+                            android:textColor="@color/widget_red"
+                            android:textSize="12sp" />
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:ellipsize="end"
+                            android:fontFamily="monospace"
+                            android:singleLine="true"
+                            android:text=" · codex · billing"
+                            android:textColor="@color/widget_sub"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="4dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp">
+
+            <ImageView
+                android:layout_width="10dp"
+                android:layout_height="10dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/widget_ring"
+                android:tint="@color/widget_accent" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:fontFamily="sans-serif-medium"
+                    android:singleLine="true"
+                    android:text="Add rate limiting to /v1/upload"
+                    android:textColor="@color/widget_text"
+                    android:textFontWeight="600"
+                    android:textSize="14sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="sans-serif-medium"
+                        android:singleLine="true"
+                        android:text="Working"
+                        android:textColor="@color/widget_accent"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:ellipsize="end"
+                        android:fontFamily="monospace"
+                        android:singleLine="true"
+                        android:text=" · claude · api"
+                        android:textColor="@color/widget_sub"
+                        android:textSize="12sp" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

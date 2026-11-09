@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The state mark of an agent that works: a ring in the place of the dot. It does not turn, so the home screen does not draw each frame. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <!-- A shape with a color filter and no fill color draws an opaque fill, so the fill is clear. -->
+    <solid android:color="@android:color/transparent" />
+    <stroke android:width="2dp" android:color="#FFFFFFFF" />
+    <size android:width="10dp" android:height="10dp" />
+</shape>

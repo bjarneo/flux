@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="16"
+    android:viewportHeight="16">
+    <!-- The bar of the Flux mark on the 16-unit box, for the agents widget. The widget tints it with the accent. -->
+    <path
+        android:fillColor="@color/widget_accent"
+        android:pathData="M7,1 L9,1 L9,15 L7,15 Z" />
+</vector>

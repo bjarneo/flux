@@ -94,6 +94,14 @@ object ComputerThemes {
         return book.current(s)
     }
 
+    /**
+     * The theme of the scope of all computers: the theme that changed most
+     * recently, whatever the scope chip shows. The agents widget shows all
+     * computers, so it uses this theme. It is null when no computer sent a
+     * theme.
+     */
+    fun latest(): ComputerTheme? = DebugTheme.current() ?: book.current(null)
+
     /** The name of the theme of each computer, by device ID. */
     fun names(): Map<String, String> {
         val names = book.names()

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The agents widget. It is 4 by 2 cells by default. It shrinks to 2 by 1
+    cells and grows in both directions. It has no periodic update: the app
+    draws it when the state of a computer changes, so it never wakes the phone.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:description="@string/widget_description"
+    android:initialLayout="@layout/widget_agents"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="40dp"
+    android:previewLayout="@layout/widget_agents_preview"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen"
+    tools:targetApi="s" />

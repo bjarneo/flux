@@ -186,6 +186,19 @@
                 android:resource="@xml/clipboard_paths" />
         </provider>
 
+        <!-- The agents widget on the home screen. The system sends it the widget broadcasts, so it needs no export. -->
+        <receiver
+            android:name=".widget.AgentsWidget"
+            android:exported="false"
+            android:label="@string/widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/agents_widget_info" />
+        </receiver>
+
         <receiver
             android:name=".service.BootReceiver"
             android:exported="false">

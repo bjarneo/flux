@@ -65,8 +65,11 @@ class MainActivity : ComponentActivity() {
     /** Debug builds only: the page that the `flux.debug.page` extra asks for. */
     val debugPage = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 
-    /** The device ID and the pane of the agent that a notification opens. */
+    /** The device ID and the pane of the agent that a notification or the agents widget opens. */
     val openAgent = kotlinx.coroutines.flow.MutableStateFlow<Pair<String, String>?>(null)
+
+    /** True after a tap on the header of the agents widget, until the root opens Chats. */
+    val openChats = kotlinx.coroutines.flow.MutableStateFlow(false)
 
     /** The page of a stream that the Start action of a stream request notification opens. */
     val openStream = kotlinx.coroutines.flow.MutableStateFlow<StreamOpen?>(null)
@@ -101,6 +104,8 @@ class MainActivity : ComponentActivity() {
         debugShowWhenLocked(intent)
         takeOpenAgent(intent)
         takeOpenStream(intent)
+        // A recreation keeps the screen that the user opened after the tap.
+        if (savedInstanceState == null) takeOpenChats(intent)
         // The system splash screen shows the Flux mark until the first frame. The app plays no start animation.
         setContent { TiledTheme { FluxRoot(this) } }
     }
@@ -155,6 +160,14 @@ class MainActivity : ComponentActivity() {
         debugShowWhenLocked(intent)
         takeOpenAgent(intent)
         takeOpenStream(intent)
+        takeOpenChats(intent)
+    }
+
+    /** Reads a tap on the header of the agents widget. The action goes, so that a new activity does not use it again. */
+    private fun takeOpenChats(intent: android.content.Intent?) {
+        if (intent?.action != ACTION_OPEN_CHATS) return
+        intent.action = null
+        openChats.value = true
     }
 
     /**
@@ -209,8 +222,11 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
-        /** The intent action of an agent notification. */
+        /** The intent action of an agent notification and of an agent in the agents widget. */
         const val ACTION_OPEN_AGENT = "org.omarchy.flux.OPEN_AGENT"
+
+        /** The intent action of the header of the agents widget: it opens Chats. */
+        const val ACTION_OPEN_CHATS = "org.omarchy.flux.OPEN_CHATS"
 
         /** The device ID of the agent that a notification opens. */
         const val EXTRA_DEVICE = "flux.open.device"
@@ -433,6 +449,12 @@ fun FluxRoot(activity: MainActivity) {
             activity.debugPage.value = null
             return@LaunchedEffect
         }
+        // "widget" asks the launcher to add the agents widget to the home screen.
+        if (request == "widget") {
+            if (!org.omarchy.flux.widget.AgentsWidgets.requestPin(activity)) FluxCore.toast("This launcher cannot add the widget from the app")
+            activity.debugPage.value = null
+            return@LaunchedEffect
+        }
         if (request == "empty") {
             org.omarchy.flux.core.DebugDemo.on = false
             FluxCore.publish()
@@ -476,13 +498,21 @@ fun FluxRoot(activity: MainActivity) {
         activity.debugPage.value = null
     }
 
-    // A tap on an agent notification opens the screen of the agent. Back goes to the chat.
+    // A tap on an agent notification or on an agent in the widget opens the screen of the agent. Back goes to the chat.
     val openAgent by activity.openAgent.collectAsStateWithLifecycle()
     LaunchedEffect(openAgent, state.devices.size) {
         val (id, pane) = openAgent ?: return@LaunchedEffect
         if (state.devices.none { it.id == id && it.paired }) return@LaunchedEffect
         nav = Nav.agent(id, pane)
         activity.openAgent.value = null
+    }
+
+    // A tap on the header of the agents widget opens Chats.
+    val openChats by activity.openChats.collectAsStateWithLifecycle()
+    LaunchedEffect(openChats) {
+        if (!openChats) return@LaunchedEffect
+        nav = Nav()
+        activity.openChats.value = false
     }
 
     // A tap on the Start action of a stream request notification opens the page of the stream above the current screen.

@@ -292,6 +292,30 @@ A contrast guard maps the theme to the colors of the app. It moves only the ligh
 
 The theme engine is in `app/src/main/java/org/omarchy/flux/theme`.
 
+## Home screen widget
+
+The **Agents** widget shows the approvals, the pair requests, and the herdr agents of all paired computers on the home screen.
+[Home screen widget](herdr.md#home-screen-widget) describes what it shows and how to add it.
+The code is in `app/src/main/java/org/omarchy/flux/widget`.
+
+The widget uses `RemoteViews` and needs no other library:
+
+- Jetpack Glance 1.1.1 adds WorkManager, DataStore, and a protobuf library to the APK. It also runs each update in a WorkManager job. `RemoteViews` adds only the layouts and the code of the widget, about 29 KB to the release APK.
+- `AgentsWidgets` watches the state of the app only while the home screen has a widget. It draws the widget when what the widget shows changes, at most once each second. The widget has `updatePeriodMillis="0"`, no alarm, and no WorkManager job, so it never wakes the phone. An update comes only from a packet that the link of a computer already received.
+- `widgetModel` builds the rows with `chatList`, so the widget has the order of **Chats**. `widgetFit` gives the number of rows for the size of the widget and the real size of its text. Both are plain Kotlin with JVM tests in `WidgetModelTest`.
+- Android 12 and later get 1 layout for each size of the widget, for example in portrait and in landscape. An earlier Android gets the layout of the portrait size.
+- An agent row uses `Android.openAgent`, the same `PendingIntent` as the agent notification. An approval row uses `Approvals.openScreen`, the same `PendingIntent` as the approval notification. The header uses `Android.openChats`. Each `PendingIntent` is immutable.
+- The colors come from `resolvePalette` with the theme of all computers, `ComputerThemes.latest`. Android 12 and later get the color of the light and of the dark mode, and the launcher picks the color of its mode. `WidgetModelTest` checks that each color pair of the widget reaches WCAG 2.2 AA in each sample theme.
+
+To add the widget on an emulator without a drag, open the debug page `widget`.
+The launcher then asks to add the widget:
+
+```bash
+ANDROID_SERIAL=emulator-5554 FLUX_DEMO=1 tools/shot.sh widget /tmp/widget-ask.png
+```
+
+Select **Add to home screen**, then press Home.
+
 ## Test
 
 To run the JVM tests for packets, identity, certificates, and the verification key, run:
@@ -354,6 +378,7 @@ The pages are:
 - `firstrun` for the pairing guide of **Chats** before the first pairing, with the sample computer to pair. It needs `FLUX_DEMO=1`.
 - `paired` for the success state of a new pairing on the sample computer to pair. It needs `FLUX_DEMO=1`. The success state shows for 6 seconds.
 - `icon` for the launcher and notification icons.
+- `widget` for the dialog of the launcher that adds the agents widget to the home screen. See [Home screen widget](#home-screen-widget).
 
 With `FLUX_DEMO=1`, **Chats** shows a sample approval, a blocked agent, a working agent, a done agent, an idle agent, the sample computer, and a sample computer that is not reachable. The chat of the sample computer shows a link, a photo, a clip from the computer, a file that comes in, a text, and the sample approval. The sample computer shows the Omarchy panel with windows. **Approve** and **Deny** on the sample approval send nothing.
 
@@ -450,6 +475,7 @@ python3 tools/fetch_icons.py
 | `app/src/main/java/org/omarchy/flux/stream` | The stream connection, and the foreground service that keeps the webcam and the mic running in the background |
 | `app/src/main/java/org/omarchy/flux/theme` | The computer theme, the contrast guard, and the palettes. Plain Kotlin with JVM tests. |
 | `app/src/main/java/org/omarchy/flux/ui` | The Compose screens |
+| `app/src/main/java/org/omarchy/flux/widget` | The agents widget on the home screen. The model is plain Kotlin with JVM tests. |
 | `app/src/main/assets/terminal` | The page of the live terminal, with xterm.js and its license. See [Update xterm.js](development.md#update-xtermjs). |
 | `tools` | The test peer, the screenshot helper, and the icon script |
 

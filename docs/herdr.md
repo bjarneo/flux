@@ -4,6 +4,7 @@
 
 Flux for Android and Flux for macOS show the coding agents that [herdr](https://herdr.dev) runs on your Omarchy computer.
 You can see the status of each agent, read its recent output in color, and get a notification when an agent needs input or finishes.
+On Android, a [home screen widget](#home-screen-widget) shows the agents that need you.
 When you turn on control, you can also answer an agent with taps, send it text, start new agents, and close agents.
 When you also turn on terminals, Flux for Android opens herdr terminals and types commands in them.
 With control on, Flux for Android can also show the live terminal of an agent, and you can scroll and tap in it.
@@ -269,6 +270,67 @@ When the agent works again, the phone removes its notification.
 To turn off a notification type, use the **Agent needs input** or **Agent finished** switch in **Computers > Sync** on the phone.
 The switches apply to all computers.
 Android also lists the two types as the **Agents that need input** and **Agents that finish** channels.
+
+## Home screen widget
+
+Flux for Android has an **Agents** widget for the home screen.
+It shows what needs you on all paired computers, so you see it without opening Flux.
+
+To add the widget:
+
+1. Touch and hold an empty part of the home screen.
+2. Select **Widgets**.
+3. Find **Flux**.
+4. Touch and hold **Agents**, then drag it to the home screen.
+
+The widget shows the same items as **Chats**, in the same order:
+
+1. A fingerprint approval that waits and a pair request. These rows have a 2 dp red border.
+2. The agents that wait for input, the newest first. These rows have a 1 dp red border.
+3. The agents that work, then the agents that are done, then the idle agents.
+
+Each row shows a dot, the task of the agent, the state word, the agent and the project, and the computer.
+The dot is red for an agent that needs input, green for an agent that is done, and dim for an idle agent.
+An agent that works has a ring in the accent color.
+The state word tells the status in words, so the color is never the only sign.
+
+The header shows the Flux mark, **Agents**, the number of items that need you in red, and the number of computers online.
+
+- Select an agent to open its chat. The widget opens the same screen as the notification of the agent. Back goes to **Chats**.
+- Select an approval to open the approval screen. The screen asks for the fingerprint before it signs.
+- Select a pair request, the header, or the line under the rows to open **Chats**.
+
+The widget is 4 by 2 cells when you add it.
+To resize it, touch and hold it, then drag its edges.
+It shrinks to 2 by 1 cells and grows in both directions:
+
+- At 2 by 1 cells, the widget shows the header and the first row. When the first row does not fit, it shows only the header.
+- A larger widget shows more rows. When not all rows fit, a line under the rows tells how many more rows are in **Chats**, for example `3 more in Chats`. When that line has no room, the header shows the number in the place of the computers online, for example `3 more`.
+- A widget narrower than 240 dp hides **Agents** in the header, and it shows the computer after the agent and the project.
+- A widget narrower than 180 dp, for example at 2 by 1 cells, shows only the state word under the task.
+- With a large font size, the rows are higher, so fewer rows fit. The widget also takes the narrow form at a larger width.
+
+When the widget has no rows, it shows a quiet state with no red:
+
+| State | The widget shows |
+| --- | --- |
+| No computer is connected | `No computer is connected` and the time that Flux last saw the computer. The mark is dim. |
+| The computers still connect after a start | `Connecting to COMPUTER` |
+| No agent runs on a connected computer | `Nothing needs you` and `No agents run on COMPUTER.` |
+| No computer is paired | `No computer is paired` |
+| Flux is off | `Flux is off` |
+
+The widget uses the theme of the app.
+With the **Computer** theme, it uses the theme that changed most recently, as the scope **All computers** does.
+Without a theme from a computer, it follows the light or dark mode of the phone.
+The widget uses only the color pairs that the contrast guard checks, so its text reaches 4.5:1 and its dots and borders reach 3:1.
+See [Theme](android.md#theme).
+
+The widget updates when the agent list of a computer changes, when a computer connects or disconnects, and when an approval or a pair request comes or goes.
+A burst of changes gives 1 update, and the widget updates at most once each second.
+The widget has no timer and no periodic update, so it never wakes the phone.
+When Android stops Flux, the widget keeps its last state until Flux runs again.
+Open Flux to update it.
 
 ## Answer an agent
 
@@ -576,6 +638,11 @@ When the input to a live terminal fails, it logs only the first error of the str
 Terminal output can contain secrets.
 The output and the live terminal go only to paired devices over the Flux TLS link.
 `fluxd` does not write the output or the frames of a live terminal to its log.
+
+The [home screen widget](#home-screen-widget) shows the task of each agent, and an agent can make its task from the conversation.
+The widget shows no output.
+It does not show on the lock screen, but each person who sees the home screen of the unlocked phone can read the tasks.
+When that is a problem, remove the widget.
 
 ## How it works
 
@@ -892,6 +959,7 @@ It also has `cli` with the `path`, the `version`, and the `error` of the version
 | Problem | Next step |
 | --- | --- |
 | The **Agents and terminals** tile is missing | Update `fluxd` and Flux for Android. The tile shows in **Control** only when the computer sends `flux.herdr`. |
+| The home screen widget shows old agents | Android stopped Flux, so the widget keeps its last state. Open Flux. The widget updates when the computer connects. |
 | The phone says that herdr is not running | Run `herdr status` and `flux-cli doctor` on the computer. |
 | The list is empty | Run `herdr agent list`. herdr must detect the agent in its pane. |
 | The phone says that the feature is off | Set `herdr = true` and reload `fluxd`. |

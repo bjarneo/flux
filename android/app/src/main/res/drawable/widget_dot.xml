@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The state dot of a widget row. The widget tints it with the state color. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <solid android:color="#FFFFFFFF" />
+    <size android:width="10dp" android:height="10dp" />
+</shape>
