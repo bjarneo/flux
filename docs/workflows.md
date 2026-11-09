@@ -161,6 +161,8 @@ Use its command ID in a rule:
 ```sh
 flux-cli automation add file.received COMMAND_ID
 flux-cli --device "Pixel 8" automation add battery.low COMMAND_ID 20
+flux-cli --device "Pixel 8" automation add device.disconnected COMMAND_ID 60
+flux-cli automation add agent.blocked COMMAND_ID
 flux-cli automation
 flux-cli automation remove RULE_ID
 ```
@@ -168,22 +170,56 @@ flux-cli automation remove RULE_ID
 | Event | Trigger |
 | --- | --- |
 | `device.connected` | A paired device connects. |
+| `device.disconnected` | A paired device stays offline for the wait of the rule after its link drops. The default wait is 30 seconds. |
 | `file.received` | A received file completes. |
 | `battery.low` | Battery charge falls below the threshold while the device does not charge. |
+| `call.ringing` | The phone rings. The rule runs once for each call. |
+| `call.missed` | The phone reports a missed call. |
+| `notification.received` | The phone posts a new notification that is not silent. An update of a notification does not count. A muted app does not count. |
+| `agent.blocked` | A herdr agent on this computer waits for input. |
+| `agent.done` | A herdr agent on this computer stops work, and stays done or idle for 2 seconds. |
 
+The number after the command ID is the threshold in percent for `battery.low`, and the wait in seconds for `device.disconnected`.
 The default battery threshold is 15 percent.
 A battery rule runs once per low-charge period.
+The agent events come from this computer, so their rules take no `--device`.
+The first agent list after herdr starts runs no rule.
+
+To lock the computer when the phone leaves, add a lock command, then a rule for `device.disconnected` with the ID that `flux-cli commands` shows:
+
+```sh
+flux-cli commands add "Lock screen" omarchy-system-lock
+flux-cli commands
+flux-cli --device "Pixel 8" automation add device.disconnected COMMAND_ID 60
+```
+
+A phone that leaves the Wi-Fi can connect again at once through Tailscale.
+The link then stays up, and the rule does not run.
+
 A rule has a default cooldown of 60 seconds per device.
+An agent rule has the cooldown for each agent, and a notification rule for each app.
 Set `cooldown` in its `[[automation_rules]]` table to change that interval.
+Set `after` in that table to change the wait of a `device.disconnected` rule.
 Set `disabled = true` in that table to disable the rule.
 Each command has a one-minute time limit.
+Rules run one at a time, in the order of their events.
 
 The command receives these environment variables:
 
 - `FLUX_EVENT` contains the event name.
-- `FLUX_DEVICE_ID` contains the device ID.
+- `FLUX_DEVICE_ID` contains the device ID. It is empty for an agent event.
 - `FLUX_FILE` contains the received file path for a file event.
 - `FLUX_BATTERY` contains the charge for a battery event.
+- `FLUX_CALLER` contains the contact name, else the number, for a call event. `FLUX_CALLER_NUMBER` contains the number when the phone sends it.
+- `FLUX_APP`, `FLUX_TITLE`, and `FLUX_TEXT` contain the app name, the title, and the text of a notification event.
+- `FLUX_AGENT`, `FLUX_AGENT_TITLE`, `FLUX_AGENT_PROJECT`, `FLUX_AGENT_PANE`, and `FLUX_AGENT_STATUS` contain the kind, the task title, the project, the herdr pane, and the status of an agent event.
+
+This example rings the phone when an agent waits for input:
+
+```sh
+flux-cli commands add "Ring for an agent" 'flux-cli ring'
+flux-cli automation add agent.blocked COMMAND_ID
+```
 
 Quote these variables when a command uses them as arguments.
 Flux passes event data through the environment, without inserting it into the command text.

@@ -117,7 +117,7 @@ func automationCommand(device string, args []string) error {
 		return call("automation.remove", map[string]any{"id": args[1]})
 	}
 	if len(args) < 3 || len(args) > 4 || args[0] != "add" {
-		return fmt.Errorf("use: flux-cli automation add EVENT COMMAND_ID [BELOW]")
+		return fmt.Errorf("use: flux-cli automation add EVENT COMMAND_ID [NUMBER]")
 	}
 	r := map[string]any{"event": args[1], "command": args[2]}
 	if device != "" {
@@ -136,11 +136,20 @@ func automationCommand(device string, args []string) error {
 		}
 	}
 	if len(args) == 4 {
-		below, err := strconv.Atoi(args[3])
+		n, err := strconv.Atoi(args[3])
 		if err != nil {
 			return err
 		}
-		r["below"] = below
+		// The number is the charge in percent for battery.low, and the wait
+		// in seconds for device.disconnected.
+		switch args[1] {
+		case "battery.low":
+			r["below"] = n
+		case "device.disconnected":
+			r["after"] = n
+		default:
+			return fmt.Errorf("%s takes no number. Only battery.low and device.disconnected take one", args[1])
+		}
 	}
 	return printCall("automation.add", map[string]any{"config": r})
 }

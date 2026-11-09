@@ -747,6 +747,12 @@ func (d *Daemon) setHerdrSession(ctx context.Context, session string, running bo
 		d.mu.Unlock()
 		return
 	}
+	// The first agent list after herdr starts has no change, so it runs no
+	// automation rule.
+	var blocked, done []HerdrAgent
+	if wasRunning {
+		blocked, done = d.agentEventsLocked(live.Agents)
+	}
 	for pane, h := range d.herdrHistory {
 		if herdrSessionOf(pane) != session {
 			continue
@@ -773,6 +779,12 @@ func (d *Daemon) setHerdrSession(ctx context.Context, session string, running bo
 		go d.stopHerdrTerminal(t, t.stop)
 	}
 	d.mu.Unlock()
+	for _, a := range blocked {
+		d.emitAutomation(agentEvent("agent.blocked", a))
+	}
+	for _, a := range done {
+		d.emitAgentDone(a)
+	}
 	d.sendHerdr()
 }
 

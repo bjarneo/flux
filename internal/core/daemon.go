@@ -1036,8 +1036,11 @@ func (d *Daemon) receive(dev *Device, l *lan.Link) {
 		stopped = state == "requested" || state == "confirm"
 		note = dev.pairLinkEndedLocked()
 	}
-	name := dev.Name
+	name, paired := dev.Name, dev.Paired
 	d.mu.Unlock()
+	if current && paired && d.ctx.Err() == nil {
+		d.watchDisconnect(dev)
+	}
 	d.closeNotes(note)
 	d.logf("link down: %s: %v", name, err)
 	if stopped {

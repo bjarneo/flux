@@ -62,7 +62,7 @@ Commands:
                          Ongoing notifications, such as a media player, stay
   notification-rules     List rules. Actions: add APP MODE [DURATION], quiet START END, remove ID
   device-settings [KEY true|false|inherit]  Set access for the selected device
-  automation [add EVENT COMMAND_ID [BELOW]|remove ID]  Manage local event rules
+  automation [add EVENT COMMAND_ID [NUMBER]|remove ID]  Manage local event rules
   notify TITLE [BODY]    Show a notification on the phone
   notify --run -- CMD…   Run CMD, then show on the phone how it ended. Exits with
                          the exit code of CMD. The phone gets only the program
