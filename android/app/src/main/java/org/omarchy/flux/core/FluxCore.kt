@@ -132,6 +132,7 @@ object FluxCore {
             val d = Device(this, identity)
             d.pairState = PairState.Paired
             d.lastIp = t.lastIp
+            d.wake = t.wake
             d.certificate = trust.certificate(t.id)
             devices[t.id] = d
         }
@@ -469,6 +470,11 @@ object FluxCore {
             )
         }
         _state.value = snapshot
+    }
+
+    /** Sends a Wake-on-LAN magic packet to the paired computer [id]. */
+    fun wake(id: String) {
+        device(id)?.let { Wake.send(this, it) }
     }
 
     fun toast(message: String) {

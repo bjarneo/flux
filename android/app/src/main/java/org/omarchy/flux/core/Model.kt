@@ -145,6 +145,8 @@ data class DeviceUi(
     val shortcuts: ShortcutsState? = null,
     /** The time that the last link to the computer ended, in milliseconds since the epoch, or 0 when no link ended while the app ran. */
     val lastSeen: Long = 0,
+    /** True when the computer sent the network cards that can wake it. See [Wake]. */
+    val canWake: Boolean = false,
 )
 
 /** A snapshot of the whole app for the UI. */

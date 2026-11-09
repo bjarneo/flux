@@ -36,6 +36,9 @@ class Device(private val core: FluxCore, var identity: Identity) {
     var certificate: X509Certificate? = null
     var lastIp: String = ""
 
+    /** The network cards that can wake the computer. See [Wake]. */
+    var wake: List<WakeTarget> = emptyList()
+
     /** The time that the last link ended, in milliseconds since the epoch, or 0. */
     var lastSeen: Long = 0
 
@@ -152,6 +155,7 @@ class Device(private val core: FluxCore, var identity: Identity) {
         shortcutsSupported = Types.FLUX_SHORTCUTS in identity.incoming,
         shortcuts = shortcuts,
         lastSeen = lastSeen,
+        canWake = wake.isNotEmpty(),
     )
 
     // ---------------------------------------------------------------- pairing

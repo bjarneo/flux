@@ -86,6 +86,39 @@ If `devices.json` does not parse, `fluxd` moves it to `devices.json.broken-<Unix
 The journal and a desktop notification name the moved file.
 Pair your devices again.
 
+## Wake the computer
+
+Flux for Android can wake a paired computer that sleeps, with Wake-on-LAN.
+The computer sends its network cards to the phone each time the phone connects.
+When the computer is offline, its card in **Computers** shows **Wake**.
+The long-press menu and TalkBack also offer **Wake**.
+
+The phone sends a magic packet to UDP ports 9 and 7 on these addresses:
+
+- The broadcast address of each network card of the computer.
+- The broadcast address of each network of the phone, and `255.255.255.255`.
+- The last address of the computer.
+
+The phone and the computer must be on the same local network.
+A magic packet does not go through Tailscale.
+
+The computer must allow Wake-on-LAN in its firmware and on its network card.
+Most computers wake only through a wired card.
+To turn on Wake-on-LAN for the card `eno1` until the next start, run:
+
+```sh
+sudo ethtool -s eno1 wol g
+```
+
+To keep the setting with NetworkManager, set it on the connection of the card:
+
+```sh
+nmcli connection modify "Wired connection 1" 802-3-ethernet.wake-on-lan magic
+```
+
+A computer whose `fluxd` does not send its network cards shows no **Wake**.
+Update Flux on the computer, then connect the phone to it 1 time.
+
 ## Files, clipboard, and links
 
 The [workflow controls](workflows.md) add an offline desktop outbox, folder archives, and saved clipboard snippets.

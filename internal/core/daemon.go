@@ -1125,7 +1125,11 @@ func (d *Daemon) onPairedLink(dev *Device, l *lan.Link) {
 	notifications := dev.supports(proto.TypeNotification)
 	dnd, input := dev.accepts(proto.TypeFluxDnd), dev.accepts(proto.TypeFluxInput)
 	players, herdr := dev.supports(proto.TypeMprisRequest), dev.accepts(proto.TypeFluxHerdr)
+	wake := dev.accepts(proto.TypeFluxWake) && !d.opts.Headless
 	d.mu.Unlock()
+	if wake {
+		d.sendWakeTargets(l)
+	}
 	d.sendBattery(l)
 	d.sendCommandList(l)
 	d.sendConnectClipboard(l)

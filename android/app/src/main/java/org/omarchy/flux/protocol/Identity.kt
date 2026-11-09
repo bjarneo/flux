@@ -83,6 +83,9 @@ object Types {
      */
     const val FLUX_STREAM_REQUEST = "flux.stream.request"
     const val FLUX_TRANSFER = "flux.transfer"
+
+    /** The computer sends the network cards that can wake it. See core/Wake.kt. */
+    const val FLUX_WAKE = "flux.wake"
 }
 
 /** Packet types that the phone accepts. */
@@ -93,6 +96,7 @@ val INCOMING = listOf(
     Types.SFTP, Types.FLUX_TUNNEL, Types.FLUX_WEBCAM, Types.FLUX_DND,
     Types.FLUX_MIC, Types.FLUX_SCREEN, Types.FLUX_APPROVE, Types.FLUX_HERDR, Types.FLUX_INPUT,
     Types.FLUX_DESKTOP, Types.FLUX_SHORTCUTS, Types.FLUX_THEME, Types.FLUX_STREAM_REQUEST, Types.FLUX_TRANSFER,
+    Types.FLUX_WAKE,
 )
 
 /** Packet types that the phone sends. */

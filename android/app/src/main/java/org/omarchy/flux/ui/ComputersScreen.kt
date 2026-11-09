@@ -215,6 +215,14 @@ private fun ComputerCard(d: DeviceUi, onWifi: Boolean, inScope: Boolean, onScope
                                 true
                             }
                         },
+                        if (d.online || !d.canWake) {
+                            null
+                        } else {
+                            CustomAccessibilityAction("Wake ${d.name}") {
+                                FluxCore.wake(d.id)
+                                true
+                            }
+                        },
                     )
                 }
                 .padding(horizontal = 14.dp, vertical = 12.dp),
@@ -236,6 +244,7 @@ private fun ComputerCard(d: DeviceUi, onWifi: Boolean, inScope: Boolean, onScope
                 val ip = listOfNotNull(d.ip.takeIf { it.isNotBlank() }, battery).joinToString(" · ")
                 if (ip.isNotEmpty()) T(ip, size = 12, color = Tn.sub, family = Mono, maxLines = 1)
                 if (!d.online) T("Check that Flux runs on ${d.name}, and that both are on the same Wi-Fi.", size = 13, color = Tn.sub, lineHeight = 1.35f)
+                if (!d.online && d.canWake) WakeButton(d)
             }
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
@@ -245,11 +254,39 @@ private fun ComputerCard(d: DeviceUi, onWifi: Boolean, inScope: Boolean, onScope
                     FluxCore.rediscover()
                 })
             }
+            if (!d.online && d.canWake) {
+                DropdownMenuItem(text = { Text("Wake") }, leadingIcon = { Sym(Ic.power) }, onClick = {
+                    menu = false
+                    FluxCore.wake(d.id)
+                })
+            }
             DropdownMenuItem(text = { Text("Unpair") }, leadingIcon = { Sym(Ic.unlink) }, onClick = {
                 menu = false
                 onUnpair()
             })
         }
+    }
+}
+
+/**
+ * Wake for a paired computer that is offline and sent its network cards.
+ * It sends a Wake-on-LAN magic packet. It is 36 dp high and takes taps on
+ * 48 dp.
+ */
+@Composable
+private fun WakeButton(d: DeviceUi) {
+    val shape = RoundedCornerShape(18.dp)
+    Row(
+        Modifier.padding(top = 4.dp).overhang(6.dp).clip(shape)
+            .clickable(onClickLabel = "Wake ${d.name}", role = Role.Button) { FluxCore.wake(d.id) }
+            .padding(vertical = 6.dp).height(36.dp).clip(shape)
+            .background(Tn.tile).border(1.dp, Tn.line, shape)
+            .padding(start = 11.dp, end = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Sym(Ic.power, null, tint = Tn.blue, size = 18.dp)
+        T("Wake", size = 13, weight = FontWeight.Medium, maxLines = 1)
     }
 }
 
