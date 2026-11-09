@@ -63,7 +63,7 @@ func pairDaemon(t *testing.T, ctx context.Context) (*Daemon, *logLines) {
 	}
 	logs := &logLines{}
 	d := &Daemon{
-		cfg: &config.Config{}, trust: trust, cert: cert, selfID: id,
+		cfg: &config.Config{PairRequests: true}, trust: trust, cert: cert, selfID: id,
 		devices: map[string]*Device{}, clip: &memClipboard{},
 		dirty: make(chan struct{}, 1), ctx: ctx, logger: log.New(logs, "", 0),
 	}
@@ -625,6 +625,39 @@ func TestHandlePairChecks(t *testing.T) {
 	waitClosed(t, onDesk)
 	if pinned(t, d, dev.ID) != nil || field(d, func() bool { return dev.Paired }) {
 		t.Fatal("the device keeps its trust after it unpaired")
+	}
+}
+
+// TestPairRequestsOff checks that with pair_requests = false fluxd refuses
+// the pair request of a device and shows no request, and that a pairing
+// that this computer starts still pins the device.
+func TestPairRequestsOff(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d, logs, phoneCert, dev, _, onPhone, fromDesk := phonePair(t, ctx)
+	d.mu.Lock()
+	cfg := *d.cfg
+	cfg.PairRequests = false
+	d.cfg = &cfg
+	d.mu.Unlock()
+
+	if err := onPhone.Send(proto.New(proto.TypePair, map[string]any{"pair": true, "timestamp": time.Now().Unix()})); err != nil {
+		t.Fatal(err)
+	}
+	if body := nextPair(t, fromDesk); body["pair"] != false {
+		t.Fatalf("a pair request: answer %v", body)
+	}
+	waitFor(t, "the log of the refusal", func() bool { return logs.has("pair_requests is off") })
+	if s := field(d, func() string { return dev.pairState }); s != "" {
+		t.Fatalf("a refused request left the pair state %q", s)
+	}
+
+	key := confirmState(t, d, dev, onPhone, fromDesk)
+	if err := d.AcceptPair(dev, key); err != nil {
+		t.Fatal(err)
+	}
+	if c := pinned(t, d, dev.ID); c == nil || !c.Equal(phoneCert.Leaf) {
+		t.Fatal("a pairing that this computer started did not pin the phone")
 	}
 }
 

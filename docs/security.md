@@ -38,6 +38,10 @@ When stdin is not a terminal, it accepts nothing and prints the command with the
 The Flux window and the notification also send the key with a reject.
 Without a key, `flux-cli reject` rejects the pairing that is open when it runs.
 
+Each host that `fluxd` finds on the network can send a pair request, and the request can copy the name of your phone.
+To refuse every pair request, set `pair_requests = false` in `~/.config/flux/config.toml`, then reload the service.
+`fluxd` then shows no request from the network, and you pair from the computer with `flux-cli pair` or the Flux window.
+
 After the pairing, `fluxd` pins the certificate of the device.
 It refuses each link that does not show that certificate.
 Each device in `flux-cli status --json` has a `fingerprint`: 16 hex digits from the public key of its certificate.

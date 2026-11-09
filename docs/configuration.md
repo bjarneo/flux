@@ -26,6 +26,7 @@ herdr_control = false
 herdr_terminals = false
 remote_input = false
 remote_desktop = false
+pair_requests = true
 check_updates = true
 gui = ""
 approve_timeout = 20
@@ -52,6 +53,7 @@ command = "omarchy-system-lock"
 | `herdr_terminals` | Let each paired device open herdr terminals, read them, and type commands in them. The terminals include the herdr panes that you opened, for example a `sudo -i` shell. Needs `herdr_control`. Defaults to `false`. See [Use terminals](herdr.md#use-terminals). |
 | `remote_input` | Let the phone or the Mac move the pointer and type on this computer. Defaults to `false`. `flux-cli input on` and `flux-cli input off` change it. Turning it off drops the input that waits and releases a held button. See [Touchpad and keyboard](remote-input.md). |
 | `remote_desktop` | Let the phone or the Mac show the screen of this computer. Defaults to `false`. The touches and the mouse on the screen also need `remote_input`. `flux-cli desktop on` and `flux-cli desktop off` change it. Turning it off stops each stream, also a stream that still starts. See [Remote desktop](remote-desktop.md). |
+| `pair_requests` | Let a device on the network ask this computer to pair. Defaults to `true`. With `false`, `fluxd` refuses each pair request and shows nothing, and you pair from this computer with `flux-cli pair` or the Flux window. See [security](security.md#pair-only-with-your-own-device). |
 | `check_updates` | Ask GitHub once a day for the latest release. Defaults to `true`. See [release check](#release-check). |
 | `remote_desktop_encoder` | Select the video encoder of the remote desktop: `auto`, `gpu`, or `cpu`. An omitted value is `auto`. Use `cpu` when the GPU encoder hangs the computer. See [choose the encoder](remote-desktop.md#choose-the-encoder). |
 | `gui` | Use `app`, `plugin`, or an empty value for automatic host selection. |

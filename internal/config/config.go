@@ -61,6 +61,12 @@ type Config struct {
 	// RemoteDesktop lets the phone show the screen of this computer. It is
 	// off by default. The touches on the screen also need RemoteInput.
 	RemoteDesktop bool `toml:"remote_desktop"`
+	// PairRequests lets a device on the network ask this computer to pair.
+	// With false, fluxd refuses each pair request, and a pairing starts on
+	// this computer, with flux-cli pair or the Flux window. Then a device
+	// that the user did not pick cannot show a pair request here. It is on
+	// by default.
+	PairRequests bool `toml:"pair_requests"`
 	// CheckUpdates lets fluxd ask GitHub once a day for the latest
 	// release. It is on by default. Without a network, the check fails
 	// and Flux works as before.
@@ -188,7 +194,7 @@ var mu sync.Mutex
 func Load() (*Config, error) {
 	mu.Lock()
 	defer mu.Unlock()
-	c := &Config{AutoClipboard: true, Notifications: true, ShareHome: true, PauseMediaOnCall: true, SyncDnd: true, Herdr: true, CheckUpdates: true}
+	c := &Config{AutoClipboard: true, Notifications: true, ShareHome: true, PauseMediaOnCall: true, SyncDnd: true, Herdr: true, PairRequests: true, CheckUpdates: true}
 	data, err := os.ReadFile(Path())
 	if errors.Is(err, os.ErrNotExist) {
 		c.Commands = []Command{}
