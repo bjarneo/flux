@@ -151,6 +151,8 @@ Open Flux on the phone before you pair.
 The phone takes a connection from a new computer only while the app is on screen or while it scans.
 When the app comes to the front, the phone sends its identity, so a computer on the network connects at once.
 A paired computer connects at any time, also through Tailscale.
+When the computer cannot find the phone, pair by the IP address of the phone. See [pair by address](cli.md#pair-by-address).
+When a paired computer sleeps, its card in **Computers** shows **Wake**. See [wake the computer](features.md#wake-the-computer).
 
 Flux for Android applies these limits to the network:
 

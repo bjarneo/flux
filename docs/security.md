@@ -25,6 +25,8 @@ Before you accept a pair request, check these items:
 - All 16 characters are the same on both screens.
 
 If 1 item is not true, reject the request.
+These checks are the same for a phone that you pair by its address with `flux-cli pair --address`.
+`fluxd` takes the device ID from the certificate of the device at that address, and the key comparison authenticates the device.
 An earlier Flux app shows only 8 characters.
 Update Flux on the computer and on each phone, iPhone, and Mac before you pair, and compare all 16 characters.
 
@@ -67,11 +69,12 @@ It also tells which setting turns a feature off, when one exists.
 | Agent control | `herdr_control = false` | Send keys and prompts to the agents, start agents, and close them. Control the [live terminal](herdr.md#live-terminal-on-android) of an agent pane: type, paste text and images, click at any cell, scroll, and resize the pane. An image paste replaces the clipboard of the computer, also with `auto_clipboard = false`. A click can press each button of the agent, for example an approval. An agent runs commands, so the device can run any command as your user. | `herdr_control = false` |
 | Terminals | `herdr_terminals = false` | Read and type in each herdr pane that has no agent, also a `sudo -i` shell or an SSH session that you opened. Watch and control the live terminal of such a pane. Needs `herdr_control`. | `herdr_terminals = false` |
 | Remote input | `remote_input = false` | Move the pointer and type in each window, also on the lock screen. See [touchpad and keyboard](remote-input.md). | `flux-cli input off` |
-| Remote desktop | `remote_desktop = false` | See the screen, each window, and the lock screen. See [remote desktop](remote-desktop.md). | `flux-cli desktop off`. It stops each stream at once. |
+| Remote desktop | `remote_desktop = false` | See the screen, each window, and the lock screen. Flux for Android can also add the extended screen `FLUX-1` and see it. See [remote desktop](remote-desktop.md). | `flux-cli desktop off`. It stops each stream at once. |
 | Webcam, microphone, and screen mirror | On | Stream its camera to the **Flux Camera** device, its microphone to a PipeWire source, and its screen to a window. The device starts each stream. The computer can ask the device to start its camera or its microphone, but the device asks its user first. See [camera and streams](camera.md). | No setting. `flux-cli webcam stop`, `flux-cli mic stop`, and `flux-cli screen stop` stop a stream. |
 | Phone speaker | On | Hear what the computer plays, while the stream runs, and mute the default output for the time of the stream. The computer shows a notification with **Stop** while the device plays its audio. See [phone as speaker](camera.md#phone-as-speaker). | No setting. `flux-cli speaker stop` stops the stream. |
 | Approvals | Off | Approve `sudo`, and `hyprlock` or `polkit-1` when you enable them, for the user who enrolled the device. See [fingerprint approval](approvals.md). | `sudo flux-cli approve disable` or `sudo flux-cli approve remove` |
 | SSH key | Off | Offer its SSH key on the ssh-agent socket of `fluxd`. Programs of your user can then ask the phone to sign an SSH login or an SSH signature. See [SSH key on the phone](#ssh-key-on-the-phone). | Turn off **SSH key** on the phone, or unpair the device |
+| Wake-on-LAN | On | Get the MAC address and the broadcast address of each network card of the computer, and send a magic packet that wakes the computer from sleep. A packet wakes the computer only when Wake-on-LAN is on for its network card. | Turn off Wake-on-LAN on the network card, for example with `sudo ethtool -s eno1 wol d`. |
 
 To change a setting, edit `~/.config/flux/config.toml`, then reload `fluxd`:
 

@@ -20,7 +20,7 @@ https://github.com/user-attachments/assets/4b8445fe-6734-4100-b200-92f57e1b353a
 | --- | --- |
 | Send files, clipboard text and images, and links between devices | [Everyday use](docs/features.md) |
 | Queue files offline, send folder archives, and save clipboard snippets | [Workflow controls](docs/workflows.md) |
-| Set device access, notification rules, and local automation | [Workflow controls](docs/workflows.md#per-device-access) |
+| Set device access, notification rules, and local automation for device, call, notification, and agent events | [Workflow controls](docs/workflows.md#per-device-access) |
 | Read notifications, send SMS, control media, and run desktop commands from your phone | [CLI reference](docs/cli.md) |
 | Sync Do Not Disturb and pause media during calls | [Phone integration](docs/features.md#calls) |
 | Scan text, send photos, and use the phone as a webcam, a microphone, or a speaker of the computer | [Camera and streams](docs/camera.md) |
@@ -30,8 +30,10 @@ https://github.com/user-attachments/assets/4b8445fe-6734-4100-b200-92f57e1b353a
 | Use an Android phone or tablet as a second monitor | [Extend the screen](docs/remote-desktop.md#extend-the-screen) |
 | Approve sudo with the phone's fingerprint sensor | [Fingerprint approval](docs/approvals.md) |
 | Log in with SSH and sign Git commits with a key on the Android phone | [SSH key on the phone](docs/ssh.md) |
+| Pair a phone by its IP address when discovery finds nothing | [Pair by address](docs/cli.md#pair-by-address) |
+| Wake a sleeping computer from the Android phone with Wake-on-LAN | [Wake the computer](docs/features.md#wake-the-computer) |
 | Reach your phone away from home through Tailscale | [Connect through Tailscale](docs/tailscale.md) |
-| See herdr coding agents on the phone or the Mac, read their output, and answer them | [herdr agents](docs/herdr.md) |
+| See herdr coding agents on the phone or the Mac, read their output, and answer them. On Android, also see them in a home screen widget | [herdr agents](docs/herdr.md) |
 | Update Flux on the computer and send the new app to the phone | [Update](docs/install.md#update) |
 
 Flux for Android requires Android 10 or later.

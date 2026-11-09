@@ -15,7 +15,7 @@ At the desk, they move clipboard text, files, and photos between the phone and t
 ## Product Purpose
 
 Flux makes the phone and the Omarchy computer work as one.
-With the phone, the user answers an agent that waits for input, approves `sudo` and polkit with a fingerprint, sends the clipboard and files, controls media and the desktop, and uses the phone as webcam, microphone, touchpad, and keyboard.
+With the phone, the user answers an agent that waits for input, approves `sudo` and polkit with a fingerprint, signs SSH logins and Git commits, sends the clipboard and files, controls media and the desktop, wakes the computer, and uses the phone as webcam, microphone, speaker, touchpad, keyboard, and second monitor.
 It works on the local network, and through Tailscale away from it.
 Success means that the user acts on what needs them in seconds, from the phone, without walking back to the desk.
 

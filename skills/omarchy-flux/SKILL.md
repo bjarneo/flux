@@ -101,7 +101,14 @@ Do not open the Flux ports in the firewall, because each host that reaches them 
 Flux for Android takes a new computer only while Flux is on the screen or while it scans.
 Check the daemon, Avahi, Wi-Fi isolation, and phone state first.
 
-Discovery and pairing need the local network.
+Discovery needs the local network.
+When discovery finds nothing, for example on a network with client isolation or through Tailscale, pair by the address of the phone:
+
+```sh
+flux-cli pair --address 192.168.1.20
+```
+
+The phone must show Flux, and the key comparison stays the same.
 To reach a paired phone away from that network, add its Tailscale name as an extra address:
 
 ```sh

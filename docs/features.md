@@ -39,6 +39,10 @@ flux-cli pair "Pixel 8"
 flux-cli status
 ```
 
+When the computer and the phone cannot find each other, for example on a guest Wi-Fi with client isolation, pair by the IP address of the phone.
+Type the address in the pair mode of the Flux window, or run `flux-cli pair --address 192.168.1.20`.
+See [pair by address](cli.md#pair-by-address).
+
 After the phone accepts, `flux-cli pair` asks `Does Pixel 8 show 5EE6 825F 974E D59A? [y/N]`.
 Type `y` only when the phone shows the same key.
 When stdin is not a terminal, `flux-cli pair` prints the `flux-cli accept` command with the device ID and the key. Run it after you compare the key.

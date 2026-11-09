@@ -27,6 +27,7 @@ Omarchy shell plugin ┘
 | Desktop services | `internal/desktop/` | Clipboard, notifications, media, audio, and camera integration |
 | Updates | `internal/upgrade/`, `internal/plugin/` | The restart of fluxd into a new binary, and the copy of the shell plugin |
 | herdr client | `internal/herdr/` | API socket client that reads the [herdr agents](herdr.md) for the phone, and the bridge of the live terminal |
+| SSH agent | `internal/sshagent/` | The ssh-agent socket that offers the SSH key of a phone and sends each signature request to the phone |
 | Approval | `internal/approve/`, `cmd/flux-approve/` | Root trust anchor, PAM setup, and signature verification |
 | Shared views | `gui/qml/` | Qt Quick screens and controls for both desktop hosts |
 | Qt host | `gui/app/` | Native C++ host, backend adapter, and theme watcher |

@@ -20,10 +20,10 @@ A paired device can also connect through [Tailscale](tailscale.md) away from tha
 | [iOS](ios.md) | iPhone app build, installation with Xcode, pairing, features, limits, permissions, and local tests |
 | [macOS](macos.md) | Mac app build, pairing, features, permissions, and local tests |
 | [Windows](windows.md) | Windows app build, pairing, features, data, and tests against `fluxd` |
-| [CLI](cli.md) | Commands, device selection, JSON state, and notifications from scripts |
+| [CLI](cli.md) | Commands, device selection, pairing by address, JSON state, and notifications from scripts |
 | [Everyday use](features.md) | Pair, wake the computer, share, clipboard images, SMS, media, audio outputs, calls, Do Not Disturb, automatic photo transfers, and dictation in text fields |
 | [Workflow controls](workflows.md) | Offline outbox, resumable transfers, folder archives, saved snippets, device access, notification rules, automation, agent review, and remote audio |
-| [Tailscale](tailscale.md) | Extra addresses, links away from the local network, other VPNs, and connection checks |
+| [Tailscale](tailscale.md) | Extra addresses, pairing by the Tailscale address, links away from the local network, other VPNs, and connection checks |
 | [Camera and streams](camera.md) | Scans, photos, webcam settings, microphone, phone as speaker, and screen mirror |
 | [Configuration](configuration.md) | TOML settings, data paths, environment variables, and service control |
 | [Security](security.md) | What a paired device can do, the settings that limit it, network ports, pairing checks, and unpair |
@@ -32,7 +32,7 @@ A paired device can also connect through [Tailscale](tailscale.md) away from tha
 | [SSH key on the phone](ssh.md) | The SSH key of Flux for Android, the ssh-agent socket, SSH logins, Git commit signatures, failures, and security |
 | [herdr agents](herdr.md) | Agent status, colored output, notifications, replies, new agents, and terminals on the phone and the Mac, and the live terminal and the home screen widget on Android |
 | [Touchpad and keyboard](remote-input.md) | Remote input from the phone or the Mac, gestures, typing, slides, and the wire format |
-| [Remote desktop](remote-desktop.md) | The computer screen on the phone or the Mac, the extended screen on Android, touches, the mouse, the Omarchy panel, dictation, monitors, and the stream format |
+| [Remote desktop](remote-desktop.md) | The computer screen on the phone or the Mac, the extended screen on Android, the encoder, touches, the mouse, the Omarchy panel, dictation, monitors, and the stream format |
 | [Troubleshooting](troubleshooting.md) | Service, discovery, plugin, media, Android, and build failures |
 
 ## Develop and automate

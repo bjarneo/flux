@@ -38,6 +38,7 @@ Pages: `chat`, `messages`, `notifications`, and `device`. The earlier keys `over
 ```sh
 flux-cli discover
 flux-cli pair "Pixel 8"
+flux-cli pair --address 192.168.1.20
 flux-cli accept "Pixel 8"
 flux-cli reject "Pixel 8"
 flux-cli unpair "Pixel 8"
@@ -64,6 +65,9 @@ An earlier Flux app shows only 8 characters, so the user must update Flux on eve
 `flux-cli unpair` prints the name, the ID, and the certificate fingerprint.
 An unpair from either side ends every session of the device and closes its link.
 Flux for Android takes a new computer only while Flux is on the screen or while it scans.
+`flux-cli discover` asks Avahi for each Flux device again, so a phone whose link closed connects again.
+When discovery finds nothing, `flux-cli pair --address HOST[:PORT]` connects to the phone without discovery, then pairs as `flux-cli pair` does. Without a port, it tries each port from 12100 to 12108.
+Flux for Android shows **Wake** for a paired computer that sleeps. It sends a Wake-on-LAN magic packet. Read `docs/features.md#wake-the-computer`.
 
 ## Extra addresses and Tailscale
 
@@ -80,8 +84,8 @@ Each device in `flux-cli status --json` has an `addresses` list.
 `flux-cli doctor` reports an extra host name that does not resolve.
 The addresses are in `~/.local/share/flux/devices.json`. Change them with the CLI, not by hand, while `fluxd` runs.
 
-Flux cannot discover or pair a device through Tailscale.
-Pair on the local network first.
+Flux cannot discover a device through Tailscale.
+To pair through Tailscale, run `flux-cli pair --address` with the Tailscale address of the phone.
 Read `docs/tailscale.md` for the limits and the troubleshooting steps.
 
 ## Notifications and commands
@@ -99,6 +103,20 @@ flux-cli run COMMAND_ID
 
 Put `--device` before `--` with `notify --run`.
 The process exits with the wrapped command's exit code.
+
+An automation rule runs a configured command after an event:
+
+```sh
+flux-cli automation
+flux-cli automation add agent.blocked COMMAND_ID
+flux-cli --device "Pixel 8" automation add device.disconnected COMMAND_ID 60
+flux-cli automation remove RULE_ID
+```
+
+The events are `device.connected`, `device.disconnected`, `file.received`, `battery.low`, `call.ringing`, `call.missed`, `notification.received`, `agent.blocked`, and `agent.done`.
+The agent events take no `--device`.
+Read `docs/workflows.md#local-automation` for the numbers, the cooldown, and the `FLUX_` variables.
+Add a rule only when the user asks for it, because the command runs as the user.
 
 For SMS, use the recipient and message from the user:
 
@@ -168,6 +186,7 @@ Key settings:
 | `herdr_terminals` | Let the phone open herdr terminals and type commands in them. Needs `herdr_control`. Off by default |
 | `remote_input` | Let the phone move the pointer and type on the desktop. Off by default |
 | `remote_desktop` | Let the phone show the desktop screen. Off by default |
+| `remote_desktop_encoder` | `auto`, `gpu`, or `cpu`. Use `cpu` when the GPU encoder hangs the computer, for example on AMD Polaris |
 | `gui` | Select the enabled plugin, otherwise the Qt app |
 | `approve_timeout` | Wait 20 seconds for fingerprint approval |
 
@@ -242,6 +261,7 @@ Do not turn on `remote_desktop` unless the user asks for it.
 `flux-cli desktop on` and `flux-cli desktop off` change the setting without a reload.
 The **Access** card on the page of the device in the Flux window has the same 2 switches, as **Turn on** and **Turn off**.
 The stream needs `gpu-screen-recorder`.
+When the computer freezes or restarts at the start of the stream, set `remote_desktop_encoder = "cpu"` and reload `fluxd`.
 Flux for Android can also extend the screen: `fluxd` adds the Hyprland headless output `FLUX-1` with the size of the phone and removes it when the stream ends. The extended screen needs `wf-recorder` and the same switches.
 Read `docs/remote-desktop.md` for the gestures, the monitors, the extended screen, the lock screen, the Omarchy panel, and the stream format.
 The stream shows the lock screen. `fluxd` turns the displays on when they are off.
