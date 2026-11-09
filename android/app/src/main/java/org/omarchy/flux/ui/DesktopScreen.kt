@@ -166,8 +166,12 @@ fun DesktopScreen(d: DeviceUi, onBack: () -> Unit, extend: Boolean = false) {
         panel = if (panel == p) null else p
     }
     val buttons: @Composable () -> Unit = {
-        if (ready && (!extend || extendSize.value != null)) {
-            TextButton(onClick = { DesktopSession.setAudio(FluxCore, d.id, !audio, extendSize.value) }) { Text(if (audio) "Audio off" else "Audio on", color = audioText) }
+        if (ready) {
+            // The button shows from the start, so that the rail keeps its width when the extended screen takes its size.
+            // Before that size, the button does nothing, because a start without the size shows a monitor that exists.
+            TextButton(onClick = {
+                if (!extend || extendSize.value != null) DesktopSession.setAudio(FluxCore, d.id, !audio, extendSize.value)
+            }) { Text(if (audio) "Audio off" else "Audio on", color = audioText) }
         }
         if (ready && !extend && status.deviceId == d.id && status.monitors.size > 1) {
             val next = status.monitors[(status.monitors.indexOf(status.monitor) + 1) % status.monitors.size]

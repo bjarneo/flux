@@ -245,7 +245,7 @@ func remoteDesktop(args []string) error {
 	case !s.Settings.RemoteDesktop:
 		fmt.Println("The remote desktop is off. Turn it on with: flux-cli desktop on")
 	default:
-		fmt.Println("No phone shows this screen. Start it in Flux for Android: Remote desktop.")
+		fmt.Println("No phone shows this screen. Start it in Flux for Android: Remote desktop or Extend screen.")
 	}
 	return nil
 }
