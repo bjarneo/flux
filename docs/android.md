@@ -181,11 +181,12 @@ See [send a copy from another app](features.md#send-a-copy-from-another-app).
 
 ## Webcam and mic requests
 
-The computer can ask the phone to start the webcam or the mic:
+The computer can ask the phone to start the webcam or the mic, or to play the audio of the computer:
 
 ```sh
 flux-cli --device "Pixel 8" webcam start
 flux-cli --device "Pixel 8" mic start
+flux-cli --device "Pixel 8" speaker start
 ```
 
 The request only asks.
@@ -201,6 +202,7 @@ The phone turns on the camera or the microphone only after you tap Start on the 
 - Without the notification permission, the phone shows a request only in the prompt. The prompt shows while Flux is on the screen, or when Flux comes on the screen within 60 seconds.
 - The prompt and the notification go away after 60 seconds.
 - A tap on Start opens the **Webcam** or **Mic** page of that computer, and the page starts the stream with the saved settings. On a locked phone, Android asks you to unlock it first.
+- A speaker request shows `omarchy asks to play its audio on this phone` with **Play on phone**. A tap opens **Media** of that computer, and the audio starts there with the saved mute choice. See [phone as speaker](camera.md#phone-as-speaker).
 - When the page cannot start the stream in 60 seconds, for example while the computer is not reachable, it does not start it. Then press Start on the page.
 - While a stream of that kind runs to that computer, a request does nothing.
 - The phone ignores a request of the same kind from the same computer that comes less than 3 seconds after the last request. An ignored request also counts as the last request.
@@ -219,6 +221,7 @@ When the Flux process starts again, it removes the notifications of the stream r
 
 The phone lists `flux.stream.request` in its incoming packet types.
 An earlier Flux for Android does not list it, so the computer sends no request to it.
+The phone lists `flux.speaker` too, so the computer can send it a speaker request.
 
 ## Build and install
 
@@ -472,7 +475,8 @@ python3 tools/fetch_icons.py
 | `app/src/main/java/org/omarchy/flux/net` | UDP discovery, TCP links, TLS, and payload transfers |
 | `app/src/main/java/org/omarchy/flux/core` | Devices, pairing, trust store, and the plugins |
 | `app/src/main/java/org/omarchy/flux/service` | The foreground service and the notification listener |
-| `app/src/main/java/org/omarchy/flux/stream` | The stream connection, and the foreground service that keeps the webcam and the mic running in the background |
+| `app/src/main/java/org/omarchy/flux/stream` | The stream connection, and the foreground service that keeps the webcam, the mic, and the audio of the computer running in the background |
+| `app/src/main/java/org/omarchy/flux/speaker` | The audio of the computer on the phone: the packets, the session, and the player |
 | `app/src/main/java/org/omarchy/flux/theme` | The computer theme, the contrast guard, and the palettes. Plain Kotlin with JVM tests. |
 | `app/src/main/java/org/omarchy/flux/ui` | The Compose screens |
 | `app/src/main/java/org/omarchy/flux/widget` | The agents widget on the home screen. The model is plain Kotlin with JVM tests. |

@@ -240,6 +240,9 @@ func (dev *Device) plugins() []string {
 		// The device can start its camera and its microphone when this
 		// computer asks, after a tap of its user.
 		{"streamrequest", dev.accepts(proto.TypeFluxStreamRequest)},
+		// The device can play the audio of this computer, and start it
+		// after a request of this computer and a tap of its user.
+		{"speaker", dev.accepts(proto.TypeFluxSpeaker) && dev.accepts(proto.TypeFluxStreamRequest)},
 	}
 	out := []string{}
 	for _, c := range checks {

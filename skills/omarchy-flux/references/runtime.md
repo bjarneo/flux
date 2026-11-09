@@ -116,7 +116,7 @@ The command ID comes from the list or the add result.
 
 Start capture on the phone.
 The CLI reports state, changes webcam settings, and stops streams.
-It can also ask the phone to start the webcam or the mic.
+It can also ask the phone to start the webcam or the mic, or to play the audio of the computer.
 
 ```sh
 flux-cli webcam
@@ -127,14 +127,18 @@ flux-cli webcam stop
 flux-cli mic
 flux-cli mic start
 flux-cli mic stop
+flux-cli speaker
+flux-cli speaker start
+flux-cli speaker stop
 flux-cli screen
 flux-cli screen stop
 ```
 
-`flux-cli webcam start` and `flux-cli mic start` only ask.
+`flux-cli webcam start`, `flux-cli mic start`, and `flux-cli speaker start` only ask.
 The stream starts after the user taps start on the phone.
 Tell the user to confirm on the phone.
-Before you report that the stream runs, check `webcam` or `mic` in `flux-cli status --json`.
+Before you report that the stream runs, check `webcam`, `mic`, or `speaker` in `flux-cli status --json`.
+The phone speaker needs `pw-record` from PipeWire, and its mute option needs `pactl`.
 
 The webcam needs `ffmpeg` and `v4l2loopback-dkms` with the matching kernel headers.
 The microphone needs PipeWire and `pw-cat`.

@@ -58,6 +58,7 @@ import org.omarchy.flux.core.StreamKind
 import org.omarchy.flux.core.StreamRequest
 import org.omarchy.flux.core.StreamRequests
 import org.omarchy.flux.mic.MicSession
+import org.omarchy.flux.speaker.SpeakerSession
 import org.omarchy.flux.service.FluxService
 import org.omarchy.flux.webcam.WebcamSession
 
@@ -620,7 +621,8 @@ private fun StreamPrompt(r: StreamRequest, paired: Boolean, onOpen: () -> Unit) 
     val context = LocalContext.current
     val webcam by WebcamSession.status.collectAsStateWithLifecycle()
     val mic by MicSession.status.collectAsStateWithLifecycle()
-    val running = remember(r, webcam, mic) { StreamRequests.running(r.deviceId, r.kind) }
+    val speaker by SpeakerSession.status.collectAsStateWithLifecycle()
+    val running = remember(r, webcam, mic, speaker) { StreamRequests.running(r.deviceId, r.kind) }
     LaunchedEffect(running, paired) {
         if (running || !paired) StreamRequests.dismiss(context, r.deviceId, r.kind)
     }

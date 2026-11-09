@@ -386,7 +386,18 @@ Window {
       view.selectedId = pixel
       view.tab = "device"
       view.openLink()
-    }]
+    }],
+    // The phone plays the audio of this computer, and fluxd muted the
+    // speakers of this computer for it.
+    ["65-speaker-live", function () {
+      mock.setState(function (s) {
+        s.speaker = { active: true, to: pixel, toName: "Pixel 8", rate: 48000, channels: 2, mute: true, muted: "Laptop Speakers" }
+        for (var i = 0; i < s.devices.length; i++)
+          if (s.devices[i].id === pixel) s.devices[i].plugins = s.devices[i].plugins.concat(["speaker"])
+      })
+      view.selectedId = pixel
+      view.tab = "device"
+    }, function () { scrollTo(findBy(pageItem(), "objectName", "speakerCard")) }]
   ]
 
   function pageItem() {

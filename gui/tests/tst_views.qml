@@ -965,6 +965,43 @@ Item {
       start.clicked()
       compare(requestsOf("webcam.start").length, 2)
     }
+
+    // The phone speaker card shows Start only for a device that lists
+    // speaker, asks the device, and shows the stream with its muted output.
+    function test_speakerCard() {
+      canAsk(true)
+      var view = overview()
+      var card = null
+      tryVerify(function () { card = findBy(page(view), "objectName", "speakerCard"); return !!card })
+      verify(!card.visible)
+      mock.updateDevice(top.pixel, function (d) { d.plugins.push("speaker"); return d })
+      verify(card.visible)
+      compare(card.idleTitle, "The phone speaker is off")
+      var start = findBy(card, "objectName", "startButton")
+      verify(start.visible)
+      start.clicked()
+      compare(requestsOf("speaker.start").length, 1)
+      compare(requestsOf("speaker.start")[0].params.device, top.pixel)
+      tryCompare(card, "note", "Confirm on Pixel 8.")
+      compare(card.idleTitle, "Asked Pixel 8 to play the audio of this computer")
+      tryVerify(function () { var t = findBy(view, "message", "Asked Pixel 8 to play the audio of this computer. Confirm on Pixel 8."); return !!t && t.visible })
+
+      mock.setState(function (s) { s.speaker = { active: true, to: top.pixel, toName: "Pixel 8", rate: 48000, channels: 2, mute: true, muted: "Laptop Speakers" } })
+      verify(card.live)
+      verify(!start.visible)
+      compare(card.note, "")
+      compare(card.title, "Pixel 8 plays the audio of this computer")
+      compare(card.detail, "Laptop Speakers is muted")
+      mock.setState(function (s) { s.speaker.muted = "" })
+      compare(card.detail, "48 kHz · stereo")
+      card.stop()
+      compare(requestsOf("speaker.stop").length, 1)
+      verify(!card.live)
+
+      // A stream to another device shows on the page of that device.
+      mock.setState(function (s) { s.speaker = { active: true, to: "another", toName: "Other" } })
+      verify(card.idle)
+    }
   }
 
   TestCase {

@@ -27,6 +27,8 @@ Item {
   readonly property var screen: own(state.screen || null, "from")
   // The remote desktop of this computer on the device. Null when not used.
   readonly property var desktop: own(state.desktop || null, "to")
+  // The device as a speaker of this computer. Null when not used.
+  readonly property var speaker: own(state.speaker || null, "to")
   // The Browse computer session of the device. An earlier fluxd sends no
   // list.
   readonly property var browse: (state.browse || []).filter(function (b) { return !!dev && b.device === dev.id })
@@ -34,6 +36,9 @@ Item {
   // asks. The device asks its user first. An earlier fluxd or app does not
   // list streamrequest.
   readonly property bool canAsk: online && !!dev.paired && Array.isArray(dev.plugins) && dev.plugins.indexOf("streamrequest") >= 0
+  // The device can also play the audio of this computer when this computer
+  // asks. An earlier fluxd or app does not list speaker.
+  readonly property bool canAskSpeaker: canAsk && dev.plugins.indexOf("speaker") >= 0
   // The ID of the device that got the last request of this window for the
   // webcam and for the mic, or "". The card then tells the user to confirm
   // on the device. The device removes its notification after 60 seconds,
@@ -42,62 +47,68 @@ Item {
   // starts or a start that fails at once.
   property string webcamAsked: ""
   property string micAsked: ""
+  property string speakerAsked: ""
   // The stream state of the kind at the time of the request, as JSON. fluxd
   // sends at most 1 state every 100 ms, so a start that fails at once can
   // come only as an error. A comparison with this value finds that change.
   property string webcamSeen: ""
   property string micSeen: ""
+  property string speakerSeen: ""
   // The ID of the device that got a request of this window for the kind in
   // the last 3 seconds, or "". fluxd refuses a second request in that time,
   // so Start is inactive for that device. An error of the request makes
   // Start active again at once.
   property string webcamSent: ""
   property string micSent: ""
+  property string speakerSent: ""
   // streamRequestGap in internal/core/streamrequest.go, in milliseconds.
   readonly property int requestGap: 3000
 
   onWebcamChanged: if (webcamAsked !== "" && JSON.stringify(webcam) !== webcamSeen) webcamAsked = ""
   onMicChanged: if (micAsked !== "" && JSON.stringify(mic) !== micSeen) micAsked = ""
+  onSpeakerChanged: if (speakerAsked !== "" && JSON.stringify(speaker) !== speakerSeen) speakerAsked = ""
 
   Timer { id: webcamWait; interval: 60000; onTriggered: root.webcamAsked = "" }
   Timer { id: micWait; interval: 60000; onTriggered: root.micAsked = "" }
   Timer { id: webcamGap; interval: root.requestGap; onTriggered: root.webcamSent = "" }
   Timer { id: micGap; interval: root.requestGap; onTriggered: root.micSent = "" }
+  Timer { id: speakerWait; interval: 60000; onTriggered: root.speakerAsked = "" }
+  Timer { id: speakerGap; interval: root.requestGap; onTriggered: root.speakerSent = "" }
 
-  // Asks the device to start its camera or its mic. kind is "webcam" or
-  // "mic". The toast and the card tell the user to confirm on the device.
-  // A second request of the kind to the device in requestGap does nothing.
+  // Asks the device to start its camera or its mic, or to play the audio
+  // of this computer. kind is "webcam", "mic", or "speaker". The toast and
+  // the card tell the user to confirm on the device. A second request of
+  // the kind to the device in requestGap does nothing.
   function askStream(kind) {
     if (!view || !dev) return
     // The view outlives this page, so the replies use it.
     var v = view
-    var mic = kind === "mic"
     var id = dev.id
     var name = dev.name || "the device"
-    var gap = mic ? micGap : webcamGap
-    if ((mic ? micSent : webcamSent) === id) return
-    if (mic) micSent = id
-    else webcamSent = id
+    var gap = kind === "mic" ? micGap : kind === "speaker" ? speakerGap : webcamGap
+    if (root[kind + "Sent"] === id) return
+    root[kind + "Sent"] = id
     gap.restart()
     v.call(kind + ".start", { device: id }, function () {
       // The gap of fluxd starts before this reply. A restart here keeps
       // Start inactive until that gap ends.
       gap.restart()
-      if (mic) {
-        root.micAsked = id
-        root.micSeen = JSON.stringify(root.mic)
-        micWait.restart()
-      } else {
-        root.webcamAsked = id
-        root.webcamSeen = JSON.stringify(root.webcam)
-        webcamWait.restart()
-      }
-      v.toast("Asked " + name + " to start " + (mic ? "the mic" : "the webcam") + ". Confirm on " + name + ".")
+      root[kind + "Asked"] = id
+      root[kind + "Seen"] = JSON.stringify(root[kind])
+      if (kind === "mic") micWait.restart()
+      else if (kind === "speaker") speakerWait.restart()
+      else webcamWait.restart()
+      v.toast("Asked " + name + " to " + askWhat(kind) + ". Confirm on " + name + ".")
     }, function (err) {
-      if (mic && root.micSent === id) root.micSent = ""
-      if (!mic && root.webcamSent === id) root.webcamSent = ""
+      if (root[kind + "Sent"] === id) root[kind + "Sent"] = ""
       v.toast(err.message || err.code || "Error")
     })
+  }
+
+  // What a request of kind asks the device to do.
+  function askWhat(kind) {
+    if (kind === "speaker") return "play the audio of this computer"
+    return "start " + (kind === "mic" ? "the mic" : "the webcam")
   }
 
   // True when Start can send a request to the device. sent is webcamSent
@@ -121,7 +132,7 @@ Item {
   implicitHeight: col.implicitHeight
 
   // The cards of the streams that show now.
-  readonly property bool anyStream: !!webcam || !!mic || !!screen || browse.length > 0 || desktopShown || canAsk
+  readonly property bool anyStream: !!webcam || !!mic || !!screen || !!speaker || browse.length > 0 || desktopShown || canAsk
   readonly property bool desktopShown: !!desktop && !desktop.error
 
   Column {
@@ -310,6 +321,29 @@ Item {
           idleTitle: root.idleTitle(root.micAsked, "the mic")
           startActive: root.canSend(root.micSent)
           onStart: root.askStream("mic")
+        }
+
+        // The device as a speaker of this computer.
+        StreamCard {
+          objectName: "speakerCard"
+          visible: !!root.speaker || root.canAskSpeaker
+          Layout.fillWidth: true
+          Layout.fillHeight: true
+          Layout.preferredWidth: 340
+          icon: "cellphone-sound"
+          heading: "Phone speaker"
+          readonly property var s: root.speaker || ({})
+          stream: root.speaker || ({})
+          title: (s.toName || "The phone") + " plays the audio of this computer"
+          // The muted output tells why this computer is silent.
+          detail: s.muted ? s.muted + " is muted" : Math.round((s.rate || 48000) / 1000) + " kHz · " + (s.channels === 1 ? "mono" : "stereo")
+          onStop: root.view.call("speaker.stop", {})
+          idle: !root.speaker
+          canStart: root.canAskSpeaker
+          note: root.confirmNote(root.speakerAsked)
+          idleTitle: root.confirmNote(root.speakerAsked) !== "" ? "Asked " + (root.dev.name || "the device") + " to play the audio of this computer" : "The phone speaker is off"
+          startActive: root.canSend(root.speakerSent)
+          onStart: root.askStream("speaker")
         }
 
         // The remote desktop of this computer on a device.

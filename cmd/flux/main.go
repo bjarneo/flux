@@ -81,6 +81,10 @@ Commands:
   webcam reset           Set the phone camera back to the neutral values
   mic [stop]             Show the phone microphone state, or stop the phone microphone
   mic start              Ask the phone to start its microphone. You confirm on the phone
+  speaker [stop]         Show whether the phone plays the audio of this computer,
+                         or stop it
+  speaker start          Ask the phone to play the audio of this computer. You
+                         confirm on the phone
   screen [stop]          Show the phone screen mirror state, or stop the mirror
   desktop [stop]         Show whether a phone shows this screen, or stop it
   desktop on|off         Let a paired phone or Mac show this screen, or stop that
@@ -180,6 +184,8 @@ func main() {
 		err = webcam(args, device)
 	case "mic":
 		err = mic(args, device)
+	case "speaker":
+		err = speaker(args, device, os.Stdout)
 	case "screen":
 		err = screen(args)
 	case "desktop":

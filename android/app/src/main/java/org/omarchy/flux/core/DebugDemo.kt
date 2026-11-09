@@ -160,6 +160,7 @@ object DebugDemo {
                 remoteDesktop = true,
                 extendSupported = true,
                 outputsSupported = true,
+                speakerSupported = true,
                 outputs = AudioOutputs(
                     listOf(
                         AudioOutput("alsa_output.speakers", "Laptop Speakers", 72, muted = false, isDefault = true),

@@ -117,6 +117,8 @@ func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.handleDnd(dev, p)
 	case proto.TypeFluxMic:
 		d.handleMic(dev, l, p)
+	case proto.TypeFluxSpeaker:
+		d.handleSpeaker(dev, l, p)
 	case proto.TypeFluxScreen:
 		d.handleScreen(dev, l, p)
 	case proto.TypeFluxDesktop:

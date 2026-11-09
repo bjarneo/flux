@@ -185,6 +185,7 @@ The other permissions need no prompt.
 | `READ_MEDIA_IMAGES`, `READ_MEDIA_VISUAL_USER_SELECTED`, `READ_EXTERNAL_STORAGE` | **Send new screenshots** and **Send new photos** | When you turn on the switch |
 | `CAMERA` | The camera modes and the webcam | When a camera page opens |
 | `RECORD_AUDIO`, `FOREGROUND_SERVICE_MEDIA_PROJECTION` | The microphone, dictation, and the screen mirror | When the feature starts |
+| `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | [Play on phone](camera.md#phone-as-speaker) keeps the audio of the computer playing in the background | No prompt |
 | `USE_BIOMETRIC` | [Fingerprint approval](approvals.md) of `sudo` and polkit | No prompt |
 | `HIDE_OVERLAY_WINDOWS` | The pair sheet and the approval screen hide the windows of other apps on Android 12 and later | No prompt |
 | `REQUEST_INSTALL_PACKAGES` | [Updates that the computer sends](android.md#update-the-app) | Android asks to allow **Install unknown apps** at the first update |

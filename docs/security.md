@@ -69,6 +69,7 @@ It also tells which setting turns a feature off, when one exists.
 | Remote input | `remote_input = false` | Move the pointer and type in each window, also on the lock screen. See [touchpad and keyboard](remote-input.md). | `flux-cli input off` |
 | Remote desktop | `remote_desktop = false` | See the screen, each window, and the lock screen. See [remote desktop](remote-desktop.md). | `flux-cli desktop off`. It stops each stream at once. |
 | Webcam, microphone, and screen mirror | On | Stream its camera to the **Flux Camera** device, its microphone to a PipeWire source, and its screen to a window. The device starts each stream. The computer can ask the device to start its camera or its microphone, but the device asks its user first. See [camera and streams](camera.md). | No setting. `flux-cli webcam stop`, `flux-cli mic stop`, and `flux-cli screen stop` stop a stream. |
+| Phone speaker | On | Hear what the computer plays, while the stream runs, and mute the default output for the time of the stream. The computer shows a notification with **Stop** while the device plays its audio. See [phone as speaker](camera.md#phone-as-speaker). | No setting. `flux-cli speaker stop` stops the stream. |
 | Approvals | Off | Approve `sudo`, and `hyprlock` or `polkit-1` when you enable them, for the user who enrolled the device. See [fingerprint approval](approvals.md). | `sudo flux-cli approve disable` or `sudo flux-cli approve remove` |
 
 To change a setting, edit `~/.config/flux/config.toml`, then reload `fluxd`:
@@ -106,9 +107,10 @@ The computer can send files, links, text, and notifications to a paired device.
 Each app opens a link or a file from the computer only after a tap.
 Flux for Android installs no app that the computer sends, except a newer Flux with the signing key of the installed Flux, after your tap.
 
-The computer can ask a paired device to start its camera or its microphone.
-`flux-cli webcam start`, `flux-cli mic start`, and **Start** in the Flux window send the request.
+The computer can ask a paired device to start its camera or its microphone, or to play the audio of the computer.
+`flux-cli webcam start`, `flux-cli mic start`, `flux-cli speaker start`, and **Start** in the Flux window send the request.
 The device never turns on its camera or its microphone without a tap on the device, also while Flux is on its screen.
+The device plays the audio of the computer only after a tap on **Play on phone**.
 The tap is the consent.
 `fluxd` sends at most 1 request of each kind to a device in 3 seconds, and the device ignores a request that comes sooner.
 See [start from the computer](camera.md#start-from-the-computer).

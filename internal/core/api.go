@@ -186,6 +186,7 @@ func (d *Daemon) Snapshot() json.RawMessage {
 		"mic":     d.micViewLocked(),
 		"screen":  d.screenViewLocked(),
 		"desktop": d.desktopViewLocked(),
+		"speaker": d.speakerViewLocked(),
 		"browse":  d.browseViewLocked(),
 		"herdr":   d.herdrViewLocked(),
 	}
@@ -261,7 +262,7 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		d.mu.Unlock()
 		m.Rescan()
 		return ok, nil
-	case "webcam.start", "mic.start":
+	case "webcam.start", "mic.start", "speaker.start":
 		// The request picks its own device: only a device that accepts
 		// flux.stream.request counts.
 		id, name, err := d.requestStream(strings.TrimSuffix(method, ".start"), p.Device)
@@ -275,6 +276,8 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		return ok, d.ConfigureWebcam(p.Config, p.Reset)
 	case "mic.stop":
 		return ok, d.StopMic()
+	case "speaker.stop":
+		return ok, d.StopSpeaker()
 	case "screen.stop":
 		return ok, d.StopScreen()
 	case "desktop.stop":

@@ -9,6 +9,7 @@ import org.omarchy.flux.core.Android
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.Plugins
 import org.omarchy.flux.core.Share
+import org.omarchy.flux.speaker.SpeakerSettings
 import org.omarchy.flux.stream.LiveStreams
 import org.omarchy.flux.webcam.WebcamHost
 import org.omarchy.flux.widget.AgentsWidgets
@@ -24,6 +25,7 @@ class FluxApp : Application() {
         FluxCore.io.execute { Share.cleanCache(cacheDir) }
         // A webcam or mic stream keeps running while Flux is in the background.
         WebcamHost.start(this)
+        SpeakerSettings.load(this)
         LiveStreams.start(this)
         // The agents widget on the home screen follows the state while the home screen has one.
         AgentsWidgets.start(this)

@@ -23,7 +23,7 @@ https://github.com/user-attachments/assets/4b8445fe-6734-4100-b200-92f57e1b353a
 | Set device access, notification rules, and local automation | [Workflow controls](docs/workflows.md#per-device-access) |
 | Read notifications, send SMS, control media, and run desktop commands from your phone | [CLI reference](docs/cli.md) |
 | Sync Do Not Disturb and pause media during calls | [Phone integration](docs/features.md#calls) |
-| Scan text, send photos, and use the phone as a webcam or microphone | [Camera and streams](docs/camera.md) |
+| Scan text, send photos, and use the phone as a webcam, a microphone, or a speaker of the computer | [Camera and streams](docs/camera.md) |
 | Show the phone screen in a desktop window | [Screen mirror](docs/camera.md#screen-mirror) |
 | Use the phone or the Mac as a touchpad and keyboard | [Touchpad and keyboard](docs/remote-input.md) |
 | Show and control the computer screen on the phone or the Mac | [Remote desktop](docs/remote-desktop.md) |

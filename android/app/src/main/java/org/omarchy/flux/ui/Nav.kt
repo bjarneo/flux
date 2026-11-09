@@ -65,10 +65,14 @@ const val WEBCAM_PAGE = "webcam"
 /** The mic of 1 computer, in the Stream band of Control. */
 const val MIC_PAGE = "mic"
 
+/** The media of 1 computer, with its audio outputs and Play on phone. */
+const val MEDIA_PAGE = "media"
+
 /** The page of a stream of [kind]. A stream request opens it. */
 fun streamPage(kind: StreamKind): String = when (kind) {
     StreamKind.Webcam -> WEBCAM_PAGE
     StreamKind.Mic -> MIC_PAGE
+    StreamKind.Speaker -> MEDIA_PAGE
 }
 
 /** Debug builds only: the page prefix that shows the prompt of a stream request, such as ask:webcam. */

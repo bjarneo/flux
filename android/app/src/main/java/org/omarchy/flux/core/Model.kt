@@ -153,6 +153,8 @@ data class DeviceUi(
     val outputsSupported: Boolean = false,
     /** The audio outputs of the computer, or null before the first answer. */
     val outputs: AudioOutputs? = null,
+    /** True when the computer can play its audio on this phone. */
+    val speakerSupported: Boolean = false,
 )
 
 /** A snapshot of the whole app for the UI. */

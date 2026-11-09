@@ -39,6 +39,8 @@
     <!-- The webcam and the mic keep streaming while Flux is in the background. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- The audio of the computer keeps playing while Flux is in the background. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <!-- Approve sudo and polkit with a fingerprint. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <!-- Android 12 and later: the pair sheet and the approval screen hide the windows of other apps. -->
@@ -146,11 +148,11 @@
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
 
-        <!-- Keeps the webcam and the mic running while Flux is in the background. -->
+        <!-- Keeps the webcam, the mic, and the audio of the computer running while Flux is in the background. -->
         <service
             android:name=".stream.StreamService"
             android:exported="false"
-            android:foregroundServiceType="camera|microphone|connectedDevice" />
+            android:foregroundServiceType="camera|microphone|mediaPlayback|connectedDevice" />
 
         <!-- Quick Settings tile that sends the clipboard to the computers. -->
         <service

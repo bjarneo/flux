@@ -253,6 +253,7 @@ The computer needs `pw-record` from PipeWire.
 Flux captures the default output monitor, without changing the computer's output volume.
 Audio uses stereo, 48 kHz, signed 16-bit PCM through the existing authenticated stream.
 Its uncompressed data rate is about 1.54 Mbit/s.
+To hear the computer on the phone without the remote desktop, use the [phone as speaker](camera.md#phone-as-speaker).
 
 ## State files
 

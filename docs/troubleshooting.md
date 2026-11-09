@@ -377,6 +377,34 @@ The microphone needs PipeWire and phone microphone permission.
 The screen mirror needs `mpv` or `ffplay` and the Android capture prompt.
 See [camera and streams](camera.md) for setup commands.
 
+## The phone plays no audio of the computer
+
+```sh
+flux-cli speaker
+pw-record --version
+journalctl --user -u fluxd --no-pager | grep speaker
+```
+
+The phone speaker needs `pw-record` from PipeWire.
+If the phone shows `pw-record is not installed on the computer`, install it:
+
+```sh
+sudo pacman -S pipewire
+```
+
+The phone plays what the default output of the computer plays.
+If you hear nothing, play a sound on the computer, and check its default output with `pactl get-default-sink`.
+If the computer stays loud while the phone plays, check **Mute omarchy while this phone plays** in the audio sheet of **Media**.
+`flux-cli speaker` then shows the output that `fluxd` muted, or why it could not mute it.
+If an output stays muted after a crash, turn its sound on again:
+
+```sh
+pactl set-sink-mute @DEFAULT_SINK@ 0
+```
+
+A gap in the audio comes from a stall of the network.
+`fluxd` and the phone then drop the old audio, so the delay stays short.
+
 ## herdr agents do not show
 
 ```sh

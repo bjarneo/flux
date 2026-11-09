@@ -68,7 +68,7 @@ Windows asks once whether Flux may use the network. Allow private networks, or t
 | Battery | Sends the battery of a laptop. Shows the battery of a computer in the scope menu and in Computers |
 | Notifications | Shows the notifications of `flux-cli notify` as Windows notifications. A click on a notification opens the chat of its computer |
 | Commands | Runs the commands of the computer from Control |
-| Media | Plays, pauses, skips, seeks, and sets the volume of the players of the computer, from Control |
+| Media | Plays, pauses, skips, seeks, and sets the volume of the players of the computer, from Control. The [audio outputs](features.md#audio-outputs) and the [phone as speaker](camera.md#phone-as-speaker) are only in Flux for Android. |
 | Ping | Sends a ping from the tray. A ping from the computer shows in the window |
 | herdr agents | Shows each agent as a chat in the list of Chats, and the agents in Control and the tray panel. The chat of an agent shows its thread, the question with its choices, the changes, and the keys. The agents window shows the same thread for each agent of a computer. A click on an agent notification opens the chat of the agent. **Start Agent** starts a coding agent in a folder of the computer |
 | Touchpad | Moves the pointer, clicks, scrolls, and types on the computer. A click on the pad holds the pointer, and `Ctrl+Alt` gives it back |

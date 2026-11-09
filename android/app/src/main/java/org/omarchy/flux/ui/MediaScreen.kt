@@ -25,10 +25,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.Switch
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -43,6 +46,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -66,13 +70,16 @@ import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.PlayerState
 import org.omarchy.flux.core.Plugins
+import org.omarchy.flux.core.StreamKind
+import org.omarchy.flux.speaker.SpeakerSession
+import org.omarchy.flux.speaker.SpeakerSettings
 
 /**
  * The player of 1 computer: the players as pills, the album art, the
  * title, the artist, and the album, and the dock with the position,
  * Previous, Play or Pause, Next, and the volume. A player that sends no
  * volume shows no volume row. The dock also shows the audio output of the
- * computer, which opens the list of the outputs.
+ * computer, which opens the audio sheet, and Play on phone.
  */
 @Composable
 fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
@@ -89,8 +96,13 @@ fun TiledMediaScreen(d: DeviceUi, onBack: () -> Unit) {
         }
     }
     var outputs by remember { mutableStateOf(false) }
-    // The dock shows also when nothing plays, because the outputs are in it.
-    val audio = d.outputsSupported
+    // The dock shows also when nothing plays, because the outputs and Play on phone are in it.
+    val audio = d.outputsSupported || d.speakerSupported
+    // A tap on Play on phone in a request of the computer starts the audio here.
+    val startNow = rememberStreamStart(d.id, StreamKind.Speaker)
+    StartAfterTap(startNow, ready = d.online && d.speakerSupported, StreamKind.Speaker) {
+        if (!SpeakerSession.runsTo(d.id)) SpeakerSession.start(FluxCore, d.id)
+    }
     // The position that the user drags to, until the drag ends.
     var dragging by remember { mutableStateOf<Float?>(null) }
     val position = if (p != null) rememberPlayerPosition(p) else 0L
@@ -204,7 +216,7 @@ private fun PlayerDock(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (p != null) PlayerControls(d, p, position, onDrag, onSeek)
-        if (d.outputsSupported) AudioRow(d, onOutputs)
+        if (d.outputsSupported || d.speakerSupported) AudioRow(d, onOutputs)
     }
 }
 
@@ -295,18 +307,60 @@ private fun VolumeLine(volume: Int, label: String, muted: Boolean, modifier: Mod
 
 // ───────────────────────── Audio outputs ─────────────────────────
 
-/** The audio row at the bottom of the dock: the default output of the computer, which opens the list of the outputs. */
+/**
+ * The audio row at the bottom of the dock: the default output of the
+ * computer, which opens the list of the outputs, and Play on phone.
+ */
 @Composable
 private fun AudioRow(d: DeviceUi, onOutputs: () -> Unit) {
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutputKey(d, Modifier.weight(1f), onOutputs)
+        if (d.outputsSupported) OutputKey(d, Modifier.weight(1f), onOutputs)
+        if (d.speakerSupported) SpeakerKey(d, Modifier.weight(1f), onOutputs)
+    }
+}
+
+/**
+ * Play on phone: a tap starts the audio of the computer on this phone, and
+ * a tap while it plays stops it. The line under the label tells the state.
+ * A long press opens the sheet with the mute choice.
+ */
+@Composable
+private fun SpeakerKey(d: DeviceUi, modifier: Modifier, onSettings: () -> Unit) {
+    val status by SpeakerSession.status.collectAsState()
+    val mine = status.deviceId == d.id
+    val active = mine && status.active
+    val live = mine && status.phase == SpeakerSession.Phase.Live
+    val label = if (live) "Plays on phone" else "Play on phone"
+    val line = when {
+        live && status.muted.isNotEmpty() -> "Live · ${d.name} muted"
+        live -> "Live"
+        active -> "Connecting…"
+        mine && status.phase == SpeakerSession.Phase.Error -> "Failed · tap to try again"
+        else -> "Off"
+    }
+    val description = when {
+        live -> "Stop the audio of ${d.name} on this phone"
+        active -> "Stop the connection to ${d.name}"
+        else -> "Play the audio of ${d.name} on this phone"
+    }
+    AudioKey(Ic.speakerPhone, label, line, description, modifier, tint = if (live) Tn.green else Tn.blue, onLongClick = onSettings) {
+        if (active) SpeakerSession.stop(FluxCore, notify = true) else SpeakerSession.start(FluxCore, d.id)
     }
 }
 
 /** A key of the audio row: an icon, a label, and a line in mono under it. */
 @Composable
-private fun AudioKey(icon: Int, label: String, line: String, description: String, modifier: Modifier, tint: Color = Tn.blue, onClick: () -> Unit) {
-    DockKey(description, modifier.fillMaxHeight().heightIn(min = 56.dp), border = Tn.line, onClick = onClick) {
+private fun AudioKey(
+    icon: Int,
+    label: String,
+    line: String,
+    description: String,
+    modifier: Modifier,
+    tint: Color = Tn.blue,
+    onLongClick: (() -> Unit)? = null,
+    onClick: () -> Unit,
+) {
+    DockKey(description, modifier.fillMaxHeight().heightIn(min = 56.dp), border = Tn.line, onLongClick = onLongClick, onClick = onClick) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -335,8 +389,9 @@ private fun OutputKey(d: DeviceUi, modifier: Modifier, onClick: () -> Unit) {
 }
 
 /**
- * The audio outputs of the computer [d]: a choice of the default output,
- * and the volume and the mute key of each output.
+ * The audio of the computer [d]: the mute choice of Play on phone, and the
+ * outputs with a choice of the default output, and the volume and the mute
+ * key of each output.
  */
 @Composable
 private fun OutputsSheet(d: DeviceUi, onDismiss: () -> Unit) {
@@ -346,24 +401,71 @@ private fun OutputsSheet(d: DeviceUi, onDismiss: () -> Unit) {
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Column(Modifier.padding(bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                T("Audio outputs", Modifier.semantics { heading() }, size = 18, weight = FontWeight.SemiBold)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                T("Audio", Modifier.semantics { heading() }, size = 18, weight = FontWeight.SemiBold)
                 T(d.name, size = 11, color = Tn.sub, family = Mono, maxLines = 1)
             }
-            val outs = d.outputs
-            when {
-                outs == null -> Row(Modifier.heightIn(min = 48.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Spinner(Modifier.size(18.dp))
-                    T("Asking ${d.name} for its outputs…", size = 14, color = Tn.sub)
-                }
-                outs.list.isEmpty() -> T(outs.error ?: "${d.name} has no audio output.", size = 14, color = if (outs.error != null) Tn.red else Tn.sub)
-                else -> {
-                    for (o in outs.list) OutputTile(d, o)
-                    outs.error?.let { T(it, size = 13, color = Tn.red) }
-                    T("Select an output to make it the default. Apps on ${d.name} then play to it.", size = 13, color = Tn.sub)
-                }
+            if (d.speakerSupported) {
+                SheetLabel("Play on phone")
+                MuteRow(d)
+            }
+            if (d.outputsSupported) {
+                SheetLabel("Outputs")
+                OutputList(d)
             }
         }
+    }
+}
+
+/** The label of a part of the sheet. */
+@Composable
+private fun SheetLabel(text: String) {
+    T(text, Modifier.padding(start = 4.dp, top = 10.dp).semantics { heading() }, size = 14, weight = FontWeight.Medium)
+}
+
+/** The outputs of the computer [d], or the wait for them, or why the computer has none. */
+@Composable
+private fun OutputList(d: DeviceUi) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        val outs = d.outputs
+        when {
+            outs == null -> Row(Modifier.heightIn(min = 48.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Spinner(Modifier.size(18.dp))
+                T("Asking ${d.name} for its outputs…", size = 14, color = Tn.sub)
+            }
+            outs.list.isEmpty() -> T(outs.error ?: "${d.name} has no audio output.", size = 14, color = if (outs.error != null) Tn.red else Tn.sub)
+            else -> {
+                for (o in outs.list) OutputTile(d, o)
+                outs.error?.let { T(it, size = 13, color = Tn.red) }
+                T("Select an output to make it the default. Apps on ${d.name} then play to it.", size = 13, color = Tn.sub)
+            }
+        }
+    }
+}
+
+/**
+ * The choice to mute the computer while this phone plays its audio. The
+ * computer turns the sound of its output on again when the audio stops.
+ * A change applies at once to the audio that plays.
+ */
+@Composable
+private fun MuteRow(d: DeviceUi) {
+    val context = LocalContext.current
+    val on by SpeakerSettings.muteComputer.collectAsState()
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(TileShape).background(Tn.tile).border(1.dp, Tn.line, TileShape)
+            .toggleable(value = on, role = Role.Switch, onValueChange = { SpeakerSession.setMute(FluxCore, context, it) })
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Sym(Ic.speakerPhone, tint = if (on) Tn.blue else Tn.sub, size = 22.dp)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            T("Mute ${d.name} while this phone plays", size = 15, weight = FontWeight.SemiBold)
+            T("Play on phone mutes the default output. Its sound comes back when the audio stops.", size = 13, color = Tn.sub, lineHeight = 1.3f)
+        }
+        // The row takes the tap and gives the state to TalkBack, so the switch only shows it.
+        Switch(checked = on, onCheckedChange = null)
     }
 }
 

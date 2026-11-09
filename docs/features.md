@@ -439,6 +439,7 @@ pactl get-default-sink
 The phone asks for the outputs when **Media** opens and each 10 seconds while it shows.
 A change on the computer shows on the phone at the next request.
 Each paired device that can control the media can also change the outputs.
+To hear the computer on the phone, tap **Play on phone** next to the output key. See [phone as speaker](camera.md#phone-as-speaker).
 Only Flux for Android has **Audio outputs**.
 Flux for iOS, Flux for macOS, and Flux for Windows do not have this feature.
 

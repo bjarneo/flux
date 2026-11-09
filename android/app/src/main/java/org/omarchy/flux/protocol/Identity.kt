@@ -93,6 +93,9 @@ object Types {
 
     /** This phone asks for the audio outputs of the computer, selects the default output, or sets the volume or the mute state of 1 output. */
     const val FLUX_AUDIO_REQUEST = "flux.audio.request"
+
+    /** The computer streams the audio of its default output to this phone, which plays it. Both sides send it. */
+    const val FLUX_SPEAKER = "flux.speaker"
 }
 
 /** Packet types that the phone accepts. */
@@ -105,6 +108,7 @@ val INCOMING = listOf(
     Types.FLUX_DESKTOP, Types.FLUX_SHORTCUTS, Types.FLUX_THEME, Types.FLUX_STREAM_REQUEST, Types.FLUX_TRANSFER,
     Types.FLUX_WAKE,
     Types.FLUX_AUDIO,
+    Types.FLUX_SPEAKER,
 )
 
 /** Packet types that the phone sends. */
@@ -115,6 +119,7 @@ val OUTGOING = listOf(
     Types.FLUX_MIC, Types.FLUX_SCREEN, Types.FLUX_APPROVE, Types.FLUX_HERDR, Types.FLUX_CLIPBOARD_IMAGE,
     Types.MOUSEPAD_REQUEST, Types.FLUX_DESKTOP, Types.FLUX_SHORTCUTS, Types.FLUX_TRANSFER,
     Types.FLUX_AUDIO_REQUEST,
+    Types.FLUX_SPEAKER,
 )
 
 /**

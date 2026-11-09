@@ -165,6 +165,7 @@ class Device(private val core: FluxCore, var identity: Identity) {
         canWake = wake.isNotEmpty(),
         outputsSupported = Types.FLUX_AUDIO_REQUEST in identity.incoming,
         outputs = outputs,
+        speakerSupported = Types.FLUX_SPEAKER in identity.incoming,
     )
 
     // ---------------------------------------------------------------- pairing

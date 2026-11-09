@@ -184,6 +184,7 @@ QtObject {
     "camera": 0xF0D5D, "webcam": 0xF05A0, "video": 0xF0BDC, "record": 0xF044B,
     "switch-camera": 0xF084A, "rotate": 0xF0467,
     "mic": 0xF036C, "mic-off": 0xF036D, "screen-share": 0xF1483,
+    "cellphone-sound": 0xF0952,
 
     "calendar": 0xF0B67, "github": 0xF02A4, "bank": 0xF0E80, "chat": 0xF0EDE, "mail": 0xF01F0,
     "account": 0xF0B55, "whatsapp": 0xF05A3, "slack": 0xF04B1, "spotify": 0xF04C7,

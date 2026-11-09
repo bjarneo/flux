@@ -341,6 +341,9 @@ flux-cli webcam stop
 flux-cli mic
 flux-cli mic start
 flux-cli mic stop
+flux-cli speaker
+flux-cli speaker start
+flux-cli speaker stop
 flux-cli screen
 flux-cli screen stop
 flux-cli desktop
@@ -352,21 +355,34 @@ flux-cli approve
 
 Start camera, microphone, and screen capture on the phone.
 `flux-cli webcam start` and `flux-cli mic start` ask the phone to start its camera or its microphone.
+`flux-cli speaker start` asks the phone to play the audio of this computer.
 The phone asks you first, and the stream starts only after you tap start on the phone.
 On success, the command prints the device:
 
 ```text
 Asked Pixel 8 to start the webcam. Confirm on Pixel 8.
+Asked Pixel 8 to play the audio of this computer. Confirm on Pixel 8.
 ```
 
 Without `--device`, the command selects the only paired, connected device that can take the request.
-For these 2 commands, `--device NAME` can also come after `start`:
+For these 3 commands, `--device NAME` can also come after `start`:
 
 ```sh
 flux-cli webcam start --device "Pixel 8"
 ```
 
 See [start from the computer](camera.md#start-from-the-computer) for what the phone shows and for the errors.
+
+`flux-cli speaker` shows whether a phone plays the audio of this computer, and which output `fluxd` muted for it.
+`flux-cli speaker stop` ends the stream and turns the sound of that output on again:
+
+```text
+Pixel 8 plays the audio of this computer, 48000 Hz, stereo
+Laptop Speakers is muted until the stream stops.
+Stop it with: flux-cli speaker stop
+```
+
+See [phone as speaker](camera.md#phone-as-speaker).
 
 `flux-cli desktop` shows whether a phone shows the screen of this computer, and `flux-cli desktop stop` ends it.
 The same commands show and stop the [extended screen](remote-desktop.md#extend-the-screen) of a phone or a tablet.

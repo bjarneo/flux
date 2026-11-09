@@ -418,6 +418,7 @@ object FluxCore {
             org.omarchy.flux.screen.ScreenSession.stopFor(id, message)
             org.omarchy.flux.webcam.WebcamSession.stopFor(this, id, message)
             org.omarchy.flux.mic.MicSession.stopFor(this, id, message)
+            org.omarchy.flux.speaker.SpeakerSession.stopFor(this, id, message)
             org.omarchy.flux.desktop.DesktopSession.stopFor(id, message)
             if (browsing) Browse.close()
             Approvals.current.value?.takeIf { it.computerId == id }?.let { Approvals.clear(app, it.id) }

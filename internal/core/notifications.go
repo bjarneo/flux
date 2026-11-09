@@ -529,6 +529,8 @@ func (d *Daemon) onNotificationAction(_ uint32, key string) {
 		}
 	case "desktop-stop":
 		_ = d.StopDesktop()
+	case "speaker-stop":
+		_ = d.StopSpeaker()
 	case "browse-stop":
 		d.stopBrowse(rest)
 	case "notif-dismiss":

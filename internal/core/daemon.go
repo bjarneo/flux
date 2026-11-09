@@ -208,6 +208,12 @@ type Daemon struct {
 	// outputs reads and changes the audio outputs of this computer. It is
 	// nil in a headless daemon.
 	outputs audioOutputs
+
+	// speaker plays the audio of this computer on a phone. speakerMute is
+	// the output that fluxd muted for it.
+	speaker     *speakerSession
+	speakerErr  string
+	speakerMute outputMute
 }
 
 // Options change how the daemon runs. The zero value is the normal mode.
@@ -393,6 +399,8 @@ func (d *Daemon) Busy() string {
 		what = "the screen mirror"
 	case d.desktop != nil:
 		what = "the remote desktop"
+	case d.speaker != nil:
+		what = "the phone speaker"
 	case len(d.sessions.browse) > 0:
 		what = "Browse PC"
 	case d.appSending != "":
@@ -471,6 +479,7 @@ func (d *Daemon) Run() error {
 	go d.outboxLoop(ctx)
 	go d.snippetLoop(ctx)
 	go d.automationLoop(ctx)
+	go d.restoreCrashedMute(ctx, speakerMuteFile(), 5, 2*time.Second)
 	if d.opts.Headless {
 		go d.publishLoop(ctx)
 		go d.discoveryLoop(ctx)
@@ -525,6 +534,13 @@ func (d *Daemon) Run() error {
 	// The session also removes the virtual monitor, but fluxd can exit
 	// before its goroutine ends.
 	d.removeExtendOutput()
+	// The session of the phone speaker can still run, so the output that
+	// it muted gets its sound back now.
+	if d.outputs != nil {
+		stop, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		_ = d.speakerMute.restore(stop, d.outputs, speakerMuteFile())
+		cancel()
+	}
 	removeClipImages(d.clipDir)
 	_ = os.Remove(d.clipDir)
 	if in, ok := d.input.(*desktop.Input); ok {
