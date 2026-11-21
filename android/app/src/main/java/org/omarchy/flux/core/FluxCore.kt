@@ -444,6 +444,7 @@ object FluxCore {
                 shareNotifications = settings.shareNotifications,
                 syncClipboard = settings.syncClipboard,
                 syncDnd = settings.syncDnd,
+                approveAutoPrompt = settings.approveAutoPrompt,
                 dndAccess = dndAccess,
                 sendScreenshots = settings.sendScreenshots,
                 sendPhotos = settings.sendPhotos,
@@ -617,6 +618,11 @@ object FluxCore {
     fun setSyncDnd(on: Boolean) {
         settings.syncDnd = on
         refreshAccess()
+        publish()
+    }
+
+    fun setApproveAutoPrompt(on: Boolean) {
+        settings.approveAutoPrompt = on
         publish()
     }
 

@@ -33,6 +33,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.omarchy.flux.R
 import org.omarchy.flux.core.Android
 import org.omarchy.flux.core.CaptureKind
 import org.omarchy.flux.core.CaptureWatch
@@ -70,6 +71,7 @@ fun syncSummary(state: UiState): Pair<Int, Int> {
         add(state.callAlerts && state.callAccess)
         if (state.smsSupported) add(state.smsSync && state.smsAccess)
         add(state.syncDnd && state.dndAccess)
+        add(state.approveAutoPrompt)
         add(state.sendScreenshots && state.mediaAccess)
         add(state.sendPhotos && state.mediaAccess)
         if (hasAgents(state)) {
@@ -204,6 +206,9 @@ fun SyncScreen(state: UiState, onBack: () -> Unit) {
                 }
             },
         )
+        add(SyncItem("approveAuto", R.drawable.ic_fingerprint, "Open the fingerprint check at once", "When a computer asks to approve sudo, the fingerprint check opens by itself. You still need your fingerprint for each approval.", state.approveAutoPrompt) {
+            FluxCore.setApproveAutoPrompt(!state.approveAutoPrompt)
+        })
         add(SyncItem(CaptureKind.Screenshot.name, Ic.screenshot, "Send new screenshots", "Sends each new screenshot of this phone to the computers.", state.sendScreenshots && state.mediaAccess) {
             captureToggle(CaptureKind.Screenshot, state.sendScreenshots)
         })

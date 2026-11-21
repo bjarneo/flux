@@ -1,5 +1,6 @@
 package org.omarchy.flux.ui
 
+import android.os.Build
 import android.os.Bundle
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.util.Log
@@ -42,6 +43,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.omarchy.flux.R
+import org.omarchy.flux.core.ApproveAutoPrompt
 import org.omarchy.flux.core.ApproveKeys
 import org.omarchy.flux.core.ApproveMessage
 import org.omarchy.flux.core.ApproveRequest
@@ -79,6 +81,9 @@ class ApproveActivity : FragmentActivity() {
 
     // True when a window of another app covered this window during the last touch.
     private var touchObscured = false
+
+    // The id of the request whose fingerprint check opened by itself. A request opens it once, so a cancel keeps the screen.
+    private var autoStartedId: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -123,6 +128,26 @@ class ApproveActivity : FragmentActivity() {
         setContent { TiledTheme { Screen() } }
     }
 
+    override fun onResume() {
+        super.onResume()
+        autoStart(Approvals.current.value)
+    }
+
+    /**
+     * Opens the fingerprint check at once for an approval, when the user
+     * turned on the setting. Never for an enrollment, and once for each
+     * request. The check still needs a fresh strong fingerprint for the
+     * signature, so nothing changes in what the computer trusts.
+     * The tap check of [start] needs a tap, so this needs Android 12, where
+     * [Overlays.hide] removes the windows of other apps over this one.
+     */
+    private fun autoStart(r: ApproveRequest?) {
+        if (r == null) return
+        if (!ApproveAutoPrompt.shouldOpen(r, FluxCore.settings.approveAutoPrompt, Build.VERSION.SDK_INT, phase.value == Phase.Ask, autoStartedId)) return
+        autoStartedId = r.id
+        start(r)
+    }
+
     override fun onDestroy() {
         discardPending()
         super.onDestroy()
@@ -151,6 +176,10 @@ class ApproveActivity : FragmentActivity() {
         // timed out. The key code of an enrollment stays on screen.
         LaunchedEffect(current, p) {
             if (current == null && p !is Phase.Enrolled && p !is Phase.Failed) finish()
+        }
+        // A new request while the screen is open. onResume covers the first one.
+        LaunchedEffect(current?.id) {
+            if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) autoStart(current)
         }
         Box(Modifier.fillMaxSize().systemBarsPadding().padding(24.dp), contentAlignment = Alignment.Center) {
             when (val ph = p) {

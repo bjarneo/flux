@@ -165,6 +165,7 @@ data class UiState(
     val shareNotifications: Boolean = true,
     val syncClipboard: Boolean = true,
     val syncDnd: Boolean = true,
+    val approveAutoPrompt: Boolean = false,
     /** Flux may read and set Do Not Disturb. */
     val dndAccess: Boolean = false,
     val sendScreenshots: Boolean = false,

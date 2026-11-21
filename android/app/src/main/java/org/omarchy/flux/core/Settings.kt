@@ -62,6 +62,15 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("syncDnd", true)
         set(v) = prefs.edit().putBoolean("syncDnd", v).apply()
 
+    /**
+     * Opens the fingerprint check at once when a computer asks to approve
+     * sudo, so one touch approves. It never applies to an enrollment. Off by
+     * default: the check then waits for a tap on Approve.
+     */
+    var approveAutoPrompt: Boolean
+        get() = prefs.getBoolean("approveAutoPrompt", false)
+        set(v) = prefs.edit().putBoolean("approveAutoPrompt", v).apply()
+
     /** Notifies when a herdr agent on a computer needs input. */
     var agentInputAlerts: Boolean
         get() = prefs.getBoolean("agentInputAlerts", true)
