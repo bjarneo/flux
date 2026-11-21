@@ -65,6 +65,20 @@ The helper approves only for the user that asks.
 It refuses a request that another user makes for your account, for example with the `targetpw` or `runaspw` option of sudoers.
 PAM then asks for the password.
 
+## Open the fingerprint check at once
+
+On Android, **Open the fingerprint check at once** on the **Sync** screen removes the tap on **Approve**.
+When a computer asks to approve `sudo`, the phone wakes and asks for the fingerprint, so 1 touch approves.
+The switch is off by default, and it needs Android 12 or later.
+
+- The check opens once for each request, and only for an approval, never for an enrollment.
+- When you cancel the check, the request stays on the screen with **Approve** and **Deny**.
+- The signature still needs a new strong fingerprint check, so the key and what the computer trusts do not change.
+- The system dialog shows the service, the user, the host, and the terminal.
+- The phone wakes over the lock screen only when Android lets Flux use full-screen notifications. Android 14 and later can leave this permission off for an app that was not installed from Play. Without it, only the notification sounds. Turn it on in **Settings › Apps › Special access › Full screen intents**. Samsung One UI calls it **Full screen alerts**.
+
+See [the approval design](approve.md#android) for what this changes in the threat model.
+
 ## PAM services
 
 Setup checks the helper ownership and backs up the PAM file in `/etc/flux/approve/pam-backup/`.

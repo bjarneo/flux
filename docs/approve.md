@@ -128,6 +128,16 @@ Windows Hello also accepts its PIN, see the section Windows.
 - On Android 12 and later, the approval screen hides the windows of other
   apps. The phone refuses **Approve** when the window of another app
   covered the screen during the tap.
+- **Open the fingerprint check at once** is a setting of the phone, off by
+  default, for Android 12 and later. With it, the approval screen opens
+  `BiometricPrompt` by itself once for each approval request, so the tap on
+  **Approve** is not needed. It never applies to an enrollment. A cancel
+  returns to the screen with **Approve** and **Deny**, and the check does
+  not open again for that request. The key, the `CryptoObject`, and the
+  strong biometric check do not change, so each signature still needs a new
+  fingerprint. The tap check has nothing to examine without a tap, so the
+  setting needs the windows of other apps to be hidden, which is true from
+  Android 12. The logic is in `ApproveAutoPrompt`.
 
 ### iPhone and Mac
 
@@ -436,6 +446,11 @@ person at the keyboard. The password protects against the same person.
   user, the host, the TTY, and the time. Approve a request only right
   after you typed the command. Code that runs as the user can also get the
   password in other ways, for example with a shell alias for `sudo`.
+  With **Open the fingerprint check at once**, the phone asks for the
+  fingerprint without the tap on **Approve**, so a request that nobody
+  expects can reach the fingerprint sensor at once. The system dialog shows
+  the service, the user, the host, and the terminal. Turn the setting on
+  only if you accept this trade-off. It is off by default.
 - **No key attestation.** The computer trusts that the phone made the key
   with the settings above. Android key attestation can prove it, but Flux
   does not check it yet. The computer also cannot check the settings of a
