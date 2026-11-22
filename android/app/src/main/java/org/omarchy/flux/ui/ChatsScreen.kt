@@ -66,6 +66,7 @@ import org.omarchy.flux.core.ComputerRow
 import org.omarchy.flux.core.DebugInbox
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.HerdrSync
+import org.omarchy.flux.core.LinkNote
 import org.omarchy.flux.core.PairRow
 import org.omarchy.flux.core.SeenClock
 import org.omarchy.flux.core.SendEntry
@@ -316,7 +317,8 @@ private fun AgentChatRow(r: AgentRow, many: Boolean, context: Context, actions: 
     // The project shows in the line under the title, so an agent with no task shows its pane.
     val title = a.title.ifEmpty { a.pane }
     val source = agentSource(r, many)
-    val word = statusLabel(s)
+    // A row of a computer that is not reachable shows when Flux last saw it, in place of the state word.
+    val word = LinkNote.rowLine(r.reachable, r.since) { timeText(context, it) } ?: statusLabel(s)
     val sub = Tn.sub
     ChatRowFrame(
         avatar = {
@@ -339,23 +341,27 @@ private fun AgentChatRow(r: AgentRow, many: Boolean, context: Context, actions: 
         line = {
             val text = remember(word, source, color, sub) {
                 buildAnnotatedString {
-                    withStyle(SpanStyle(color = color, fontWeight = FontWeight.Medium)) { append(word) }
+                    withStyle(SpanStyle(color = if (r.reachable) color else sub, fontWeight = FontWeight.Medium)) { append(word) }
                     if (source.isNotEmpty()) withStyle(SpanStyle(color = sub, fontFamily = Mono)) { append(" · $source") }
                 }
             }
             BasicText(text, style = TextStyle(fontSize = 12.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
         },
-        time = when (s) {
-            AgentStatus.Blocked, AgentStatus.Working -> ""
+        time = when {
+            !r.reachable -> ""
+            s == AgentStatus.Blocked || s == AgentStatus.Working -> ""
             else -> shortTime(context, r.at)
         },
-        timeTicker = when (s) {
-            AgentStatus.Blocked -> ({ Ticking(r.at, 30_000L) { agoShort(it) } })
-            AgentStatus.Working -> if (r.at > 0) ({ Ticking(r.at, 1_000L) { clockText(it) } }) else null
+        // The waiting time and the working time stop while the computer is not reachable.
+        timeTicker = when {
+            !r.reachable -> null
+            s == AgentStatus.Blocked -> ({ Ticking(r.at, 30_000L) { agoShort(it) } })
+            s == AgentStatus.Working -> if (r.at > 0) ({ Ticking(r.at, 1_000L) { clockText(it) } }) else null
             else -> null
         },
         description = listOf(title, word, source).filter { it.isNotEmpty() }.joinToString(", "),
         ask = blocked,
+        dim = !r.reachable,
         selected = selected == Route(r.deviceId, "$AGENT_PAGE${a.pane}"),
         onClick = { actions.open(Route(r.deviceId, "$AGENT_PAGE${a.pane}")) },
     )
@@ -388,14 +394,14 @@ private fun shortTime(context: Context, at: Long): String {
 
 /**
  * A computer: its name, the newest entry of its chat, and the time of that
- * entry. A computer that is not reachable shows at 55% with the time that
- * Flux last saw it. Without entries, the line shows the link and battery.
+ * entry. A computer that is not reachable shows at 55% with
+ * `Not reachable since HH:MM`. Without entries, the line shows the link and battery.
  */
 @Composable
 private fun ComputerChatRow(r: ComputerRow, context: Context, actions: ChatActions, selected: Route?) {
     val d = r.device
     val line = when {
-        !d.online -> if (d.lastSeen > 0) "Offline · last seen ${shortTime(context, d.lastSeen)}" else "Offline"
+        !d.online -> LinkNote.rowLine(false, d.lastSeen) { timeText(context, it) }.orEmpty()
         r.last != null -> entryPreview(r.last)
         else -> computerContext(d).replaceFirstChar { it.uppercase() }
     }
@@ -403,7 +409,7 @@ private fun ComputerChatRow(r: ComputerRow, context: Context, actions: ChatActio
         avatar = { ChatAvatar(deviceIcon(d.type), Tn.text, badge = if (d.online) Tn.green else null) },
         title = d.name,
         line = { T(line, size = 13, color = Tn.sub, maxLines = 1) },
-        time = if (!d.online && r.last == null) shortTime(context, d.lastSeen) else shortTime(context, r.at),
+        time = if (!d.online && r.last == null) "" else shortTime(context, r.at),
         description = listOf(d.name, linkText(d), line).distinct().joinToString(", "),
         dim = !d.online,
         selected = selected?.deviceId == d.id && (selected.page == CHAT_PAGE || selected.page == CHAT_TRAY_PAGE),

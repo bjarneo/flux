@@ -7,6 +7,7 @@ import org.omarchy.flux.core.ApproveRequest
 import org.omarchy.flux.core.ChatRow
 import org.omarchy.flux.core.ComputerRow
 import org.omarchy.flux.core.DeviceUi
+import org.omarchy.flux.core.LinkNote
 import org.omarchy.flux.core.PairRow
 import org.omarchy.flux.core.SeenClock
 import org.omarchy.flux.core.chatList
@@ -52,7 +53,9 @@ sealed interface WidgetTarget {
  * a request. [status] is the state word in the color of [tone]. [source] is
  * the computer data after it, such as the agent and the project. [computer]
  * names the computer. A row that [needs] the user takes the tile and a red
- * border, 2 dp when it is [strong].
+ * border, 2 dp when it is [strong]. [reachable] is false for an agent of a
+ * computer that is not reachable. [since] is then the time that Flux last
+ * saw the computer, or 0.
  */
 data class WidgetRow(
     val key: String,
@@ -64,6 +67,8 @@ data class WidgetRow(
     val needs: Boolean,
     val strong: Boolean,
     val target: WidgetTarget,
+    val reachable: Boolean = true,
+    val since: Long = 0,
 )
 
 /** Why the widget shows no rows. Each state is quiet: it has no red and no fill. */
@@ -120,6 +125,10 @@ private fun toneOf(s: AgentStatus): WidgetTone = when (s) {
 
 private fun join(vararg parts: String): String = parts.filter { it.isNotBlank() }.joinToString(" · ")
 
+/** The state line of a row: `Not reachable since HH:MM` for a computer that is not reachable, else the state word. */
+fun WidgetRow.statusText(time: (Long) -> String = LinkNote::clock): String =
+    LinkNote.rowLine(reachable, since, time) ?: status
+
 /** The row of 1 chat of the Chats list, or null for a computer. */
 private fun rowOf(r: ChatRow): WidgetRow? = when (r) {
     is ApprovalRow -> {
@@ -160,6 +169,8 @@ private fun rowOf(r: ChatRow): WidgetRow? = when (r) {
             needs = a.status == AgentStatus.Blocked,
             strong = false,
             target = WidgetTarget.Agent(r.deviceId, a.pane),
+            reachable = r.reachable,
+            since = r.since,
         )
     }
     is ComputerRow -> null

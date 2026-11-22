@@ -186,6 +186,15 @@ class HerdrTest {
     }
 
     @Test
+    fun anOutputKeepsTheTimeOfItsParse() {
+        val o = parseHerdrOutput(body("""{"kind":"output","pane":"w5:p1","text":"a"}"""), now = 42_000L)!!
+        assertEquals(42_000L, o.at)
+        assertEquals("a read that waits has no time", 0L, HerdrOutput("w5:p1").at)
+        val e = parseHerdrOutput(body("""{"kind":"output","pane":"w5:p1","error":"gone"}"""), now = 7L)!!
+        assertEquals(7L, e.at)
+    }
+
+    @Test
     fun tidiesRules() {
         val rule = "─".repeat(120)
         val lines = termLines("$rule\n❯ 1. Yes  \n  \n")

@@ -199,10 +199,23 @@ object DebugDemo {
                     pane = "w2:p1",
                     loading = false,
                     lines = termLines(agentOutput ?: demoOutput),
+                    at = System.currentTimeMillis(),
                 ),
             ),
             // The sample desk computer was last seen at the last 09:12, today or yesterday.
-            device(OFFLINE, "omarchy-desk", "desktop", "192.168.2.40", paired = true, online = false).copy(lastSeen = lastAt(9, 12)),
+            // It keeps 1 agent and its output from 09:10, as a computer keeps them after a link closes.
+            device(OFFLINE, "omarchy-desk", "desktop", "192.168.2.40", paired = true, online = false).copy(
+                lastSeen = lastAt(9, 12),
+                canWake = true,
+                herdrSupported = true,
+                herdr = HerdrState(
+                    enabled = true,
+                    running = true,
+                    control = true,
+                    agents = listOf(HerdrAgent("w2:p1", "codex", AgentStatus.Blocked, "Run the database migration", "billing", "billing")),
+                ),
+                herdrOutput = HerdrOutput(pane = "w2:p1", loading = false, lines = termLines(demoOutput), at = lastAt(9, 10)),
+            ),
             device(NEW, "framework-13", "laptop", "192.168.2.77", paired = false, online = true),
         )
     }
