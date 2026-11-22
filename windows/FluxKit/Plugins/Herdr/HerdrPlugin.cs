@@ -21,6 +21,9 @@ public sealed class HerdrPlugin : IFluxPlugin
     public const string NotificationCategory = "herdr";
     internal const string DeviceKey = "device";
     internal const string PaneKey = "pane";
+    internal const string DialogKey = "dialog";
+    internal const string ChoiceAction = "choice:";
+    internal const string ReplyAction = "reply";
     internal const string InputAlertsKey = "herdr.inputAlerts";
     internal const string DoneAlertsKey = "herdr.doneAlerts";
     internal const string DictationLanguageKey = "herdr.dictationLanguage";
@@ -93,6 +96,36 @@ public sealed class HerdrPlugin : IFluxPlugin
     // also after KeepPrompts drops a prompt. A late timeout or parse of a
     // dropped prompt then does not match a new read of the same agent.
     readonly Dictionary<string, int> promptReads = [];
+
+    // The dialog reads that wait for an answer, by HerdrModel.PromptKey. A
+    // pane has at most 1, because fluxd answers only the newest read of a
+    // pane. See PeekDialog.
+    readonly Dictionary<string, DialogWait> dialogWaits = [];
+
+    // The last dialog that a read found for each blocked pane, by HerdrModel.PromptKey.
+    readonly Dictionary<string, AgentDialog> dialogs = [];
+
+    // The categories of notifications that are registered, by dialog ID.
+    readonly HashSet<string> dialogCategories = [];
+    int dialogSeq;
+
+    sealed class DialogWait
+    {
+        public List<Action<AgentDialog?>> Callbacks { get; } = [];
+
+        // The request number of the read, or null for a read of the agent screen.
+        public int? Request { get; set; }
+    }
+
+    // The time of this device. Tests set their own.
+    internal Func<DateTimeOffset> Now { get; set; } = () => DateTimeOffset.Now;
+
+    // Asks the person at this computer to unlock before an answer from a
+    // notification goes out. The app sets it to Windows Hello. It calls the
+    // first action when the unlock is valid, and the second action with a
+    // message when the check fails. A cancel calls neither. Without it, an
+    // answer from a notification sends nothing and opens the thread.
+    public Action<string, Action, Action<string>>? Unlock { get; set; }
     internal Dictionary<string, int> PromptParses { get; } = [];
     int promptSeq;
 
@@ -134,18 +167,7 @@ public sealed class HerdrPlugin : IFluxPlugin
     {
         this.core = core;
         Model.Load(core.Settings);
-        core.Host.Notifier.Register(NotificationCategory, [], (action, info, _) =>
-        {
-            if (action != Notifier.DefaultAction || !info.TryGetValue(DeviceKey, out var id) || !info.TryGetValue(PaneKey, out var pane))
-            {
-                return;
-            }
-            Post(() => Locked(() =>
-            {
-                Model.Reveal(id, pane);
-                Model.Open?.Invoke(id, pane);
-            }));
-        });
+        core.Host.Notifier.Register(NotificationCategory, [], OnNotificationAction);
     }
 
     // The next agent list sets the start values, so a reconnect posts nothing.
@@ -319,7 +341,9 @@ public sealed class HerdrPlugin : IFluxPlugin
             PromptParses[key] = promptSeq;
             prompt = promptSeq;
         }
-        if (window is null && prompt is null)
+        // An older fluxd sends no request number, so the pane is the match.
+        var dialog = dialogWaits.TryGetValue(key, out var wait) && wait.Request is { } number && (p.Int("request") is not { } got || got == number);
+        if (window is null && prompt is null && !dialog)
         {
             return;
         }
@@ -328,7 +352,7 @@ public sealed class HerdrPlugin : IFluxPlugin
         {
             if (HerdrWire.Output(body) is { } output)
             {
-                Post(() => Show(output, deviceId, window, prompt));
+                Post(() => Show(output, deviceId, window, prompt, dialog));
             }
         });
     }
@@ -401,17 +425,30 @@ public sealed class HerdrPlugin : IFluxPlugin
     // Inbox. Each place skips it when a newer output came, or when the agent
     // screen shows another pane now. window and prompt are the numbers of
     // the parse for each place, or null when the place did not want it.
-    internal void Show(HerdrOutput output, string deviceId, int? window, int? prompt)
+    internal void Show(HerdrOutput output, string deviceId, int? window, int? prompt, bool dialog = false)
     {
         lock (gate)
         {
+            var key = HerdrModel.PromptKey(deviceId, output.Pane);
             if (window is { } w && parses.GetValueOrDefault(deviceId) == w && Model.Outputs.TryGetValue(deviceId, out var shown) &&
                 shown.Pane == output.Pane && AcceptsView(deviceId, output.Pane, output.Request, output.View, output.Path))
             {
                 Model.Outputs = Model.Outputs.SetItem(deviceId, output);
+                if (output.View != "diff" && output.Error is null)
+                {
+                    Model.OutputTimes = Model.OutputTimes.SetItem(key, Now());
+                }
                 AdvanceFirstTask(deviceId);
+                // A dialog read that went through the agent screen takes this output.
+                if (dialogWaits.TryGetValue(key, out var routed) && routed.Request is null && output.View != "diff")
+                {
+                    FinishDialog(key, output);
+                }
             }
-            var key = HerdrModel.PromptKey(deviceId, output.Pane);
+            if (dialog && dialogWaits.TryGetValue(key, out var own) && own.Request is not null)
+            {
+                FinishDialog(key, output);
+            }
             if (prompt is { } n && PromptParses.TryGetValue(key, out var last) && last == n && Model.Prompts.ContainsKey(key))
             {
                 Model.Prompts = Model.Prompts.SetItem(key, output);
@@ -501,6 +538,7 @@ public sealed class HerdrPlugin : IFluxPlugin
         {
             reviews.Remove(deviceId + ":" + pane);
             viewReads.Remove(deviceId + ":" + pane);
+            Model.OutputTimes = Model.OutputTimes.Remove(HerdrModel.PromptKey(deviceId, pane));
             if (Model.Outputs.TryGetValue(deviceId, out var o) && o.Pane == pane)
             {
                 Model.Outputs = Model.Outputs.Remove(deviceId);
@@ -898,9 +936,184 @@ public sealed class HerdrPlugin : IFluxPlugin
 
     string ComputerName(string deviceId) => core?.WithDevice(deviceId, d => d.Name) ?? "The computer";
 
+    // Dialogs
+
+    // The last dialog that a read found for pane, or null.
+    public AgentDialog? LatestDialog(string deviceId, string pane) =>
+        dialogs.GetValueOrDefault(HerdrModel.PromptKey(deviceId, pane));
+
+    // Reads the dialog of pane and calls done with it. done gets null when
+    // the read fails, takes more than AgentDialogs.ReadTimeout, or finds no
+    // dialog. A second call while a read waits joins that read. When the
+    // agent screen shows the pane, the read goes through the screen, so that
+    // the screen and the dialog share 1 answer.
+    public void PeekDialog(string deviceId, string pane, Action<AgentDialog?> done)
+    {
+        lock (gate)
+        {
+            var key = HerdrModel.PromptKey(deviceId, pane);
+            if (dialogWaits.TryGetValue(key, out var joined))
+            {
+                joined.Callbacks.Add(done);
+                return;
+            }
+            var wait = new DialogWait();
+            wait.Callbacks.Add(done);
+            dialogWaits[key] = wait;
+            if (Model.Output(deviceId, pane) is { } shown)
+            {
+                if (!shown.Loading)
+                {
+                    Read(deviceId, pane);
+                }
+                if (Model.Output(deviceId, pane) is { Loading: false, Error: not null })
+                {
+                    FinishDialog(key, null);
+                    return;
+                }
+            }
+            else
+            {
+                wait.Request = ++dialogSeq;
+                if (!Send(HerdrWire.DialogRead(pane, wait.Request.Value), deviceId))
+                {
+                    FinishDialog(key, null);
+                    return;
+                }
+            }
+            Schedule(AgentDialogs.ReadTimeout, () =>
+            {
+                if (dialogWaits.TryGetValue(key, out var now) && now == wait)
+                {
+                    FinishDialog(key, null);
+                }
+            });
+        }
+    }
+
+    // Ends the dialog read of a pane with its output, or with null.
+    void FinishDialog(string key, HerdrOutput? output)
+    {
+        if (!dialogWaits.Remove(key, out var wait))
+        {
+            return;
+        }
+        var dialog = output is null ? null : AgentDialogs.Parse(output, Now());
+        if (dialog is not null)
+        {
+            dialogs[key] = dialog;
+        }
+        foreach (var callback in wait.Callbacks)
+        {
+            callback(dialog);
+        }
+    }
+
+    // Reads the dialog again and calls onSame with the new dialog when its
+    // ID is id. Else it calls onChanged with the new dialog, or with null
+    // when the read failed. A caller sends only the choice of the new read,
+    // because a menu choice needs the arrows from the new selection.
+    public void VerifyDialog(string deviceId, string pane, string id, Action<AgentDialog> onSame, Action<AgentDialog?> onChanged) =>
+        PeekDialog(deviceId, pane, d =>
+        {
+            if (d is not null && d.Id == id)
+            {
+                onSame(d);
+            }
+            else
+            {
+                onChanged(d);
+            }
+        });
+
     // Notifications
 
     internal static string NotificationId(string deviceId, string pane) => $"herdr-{deviceId}-{pane}";
+
+    bool ControlOf(string deviceId) => Model.States.GetValueOrDefault(deviceId)?.Control == true;
+
+    // Opens the output of an agent in the app.
+    void OpenThread(string deviceId, string pane)
+    {
+        Model.Reveal(deviceId, pane);
+        Model.Open?.Invoke(deviceId, pane);
+    }
+
+    // A click on the notification or on 1 of its buttons. A click on the
+    // notification opens the thread. A choice or a reply needs the unlock
+    // first, and then a new read of the pane. It sends only when the dialog
+    // has the same ID as the dialog of the notification. In each other case
+    // it sends nothing and opens the thread.
+    void OnNotificationAction(string action, IReadOnlyDictionary<string, string> info, string? text)
+    {
+        if (!info.TryGetValue(DeviceKey, out var deviceId) || !info.TryGetValue(PaneKey, out var pane))
+        {
+            return;
+        }
+        var dialogId = info.GetValueOrDefault(DialogKey, "");
+        Post(() => Locked(() =>
+        {
+            var choice = action.StartsWith(ChoiceAction, StringComparison.Ordinal) ? action[ChoiceAction.Length..] : null;
+            var reply = action == ReplyAction;
+            if (choice is null && !reply)
+            {
+                OpenThread(deviceId, pane);
+                return;
+            }
+            var typed = (text ?? "").Trim();
+            if (!ControlOf(deviceId) || !IsOnline(deviceId) || Unlock is not { } unlock || (reply && typed.Length == 0))
+            {
+                OpenThread(deviceId, pane);
+                return;
+            }
+            unlock($"answer agents on {ComputerName(deviceId)}", () => Locked(() => Answer(deviceId, pane, dialogId, choice, typed)), _ =>
+                Locked(() => OpenThread(deviceId, pane)));
+        }));
+    }
+
+    // The check after the unlock. A new read must show the same dialog.
+    void Answer(string deviceId, string pane, string dialogId, string? choice, string text)
+    {
+        if (!ControlOf(deviceId) || !IsOnline(deviceId))
+        {
+            OpenThread(deviceId, pane);
+            return;
+        }
+        VerifyDialog(deviceId, pane, dialogId, same =>
+        {
+            if (choice is not null)
+            {
+                if (same.Choices.FirstOrDefault(c => c.Key == choice) is { } c && HerdrWire.Allowed(c.Keys))
+                {
+                    SendKeys(deviceId, pane, c.Keys);
+                    core?.Host.Notifier.Remove(NotificationId(deviceId, pane));
+                    return;
+                }
+            }
+            else if (AgentDialogs.ReplyMatches(same, dialogId))
+            {
+                SendPrompt(deviceId, pane, text, answer: true);
+                core?.Host.Notifier.Remove(NotificationId(deviceId, pane));
+                return;
+            }
+            OpenThread(deviceId, pane);
+        }, _ => OpenThread(deviceId, pane));
+    }
+
+    // The category of the notification of a dialog. It holds the buttons of
+    // that dialog, so that each dialog ID has its own category.
+    string DialogCategory(AgentNotice notice)
+    {
+        var category = $"{NotificationCategory}.{notice.DialogId}";
+        if (dialogCategories.Add(notice.DialogId))
+        {
+            var buttons = notice.Actions.Select(a => a.Kind == NoticeKind.Reply
+                ? new NotificationAction(ReplyAction, a.Label, TextInput: true)
+                : new NotificationAction(ChoiceAction + a.Key, a.Label)).ToArray();
+            core?.Host.Notifier.Register(category, buttons, OnNotificationAction);
+        }
+        return category;
+    }
 
     // Posts and removes the notifications for alerts.
     void Alert(IReadOnlyList<AgentAlert> alerts, string deviceId, string computer)
@@ -916,11 +1129,16 @@ public sealed class HerdrPlugin : IFluxPlugin
             {
                 case AgentAlert.Clear clear:
                     core?.Host.Notifier.Remove(NotificationId(deviceId, clear.Pane));
+                    dialogs.Remove(HerdrModel.PromptKey(deviceId, clear.Pane));
                     break;
                 case AgentAlert.NeedsInput needs:
                     if (Model.InputAlerts)
                     {
-                        PostNotification(needs.Agent, deviceId, computer);
+                        PostNotification(needs.Agent, deviceId, computer, null);
+                        if (ControlOf(deviceId))
+                        {
+                            ReadForNotification(needs.Agent, deviceId, computer);
+                        }
                     }
                     break;
                 case AgentAlert.Finished finished:
@@ -935,7 +1153,7 @@ public sealed class HerdrPlugin : IFluxPlugin
                         // The agent must still be ready after the hold.
                         if (Model.States.GetValueOrDefault(deviceId)?.Agent(finished.Pane) is { } now && now.Status.Ready() && Model.DoneAlerts)
                         {
-                            PostNotification(now, deviceId, computer);
+                            PostNotification(now, deviceId, computer, null);
                         }
                     });
                     break;
@@ -943,25 +1161,50 @@ public sealed class HerdrPlugin : IFluxPlugin
         }
     }
 
+    // Reads the dialog of a blocked agent and posts the notification again
+    // with the question and the buttons. When the read fails or takes more
+    // than 3 seconds, the first notification stays, with no buttons.
+    void ReadForNotification(HerdrAgent agent, string deviceId, string computer)
+    {
+        PeekDialog(deviceId, agent.Pane, dialog =>
+        {
+            if (dialog is null || !Model.InputAlerts || !ControlOf(deviceId) ||
+                Model.States.GetValueOrDefault(deviceId)?.Agent(agent.Pane) is not { Status: AgentStatus.Blocked } now)
+            {
+                return;
+            }
+            PostNotification(now, deviceId, computer, dialog);
+        });
+    }
+
     // Shows that an agent needs input or finished. Each pane has 1
     // notification, and a click opens the output of the agent. A system
     // notification has no subtitle, so the name of the computer is the
-    // first line of the body, and the title of the agent is the second.
-    void PostNotification(HerdrAgent agent, string deviceId, string computer)
+    // first line of the body, and the text of the agent is the second. A
+    // notification of a dialog has 1 button for each choice or a Reply
+    // button, see AgentNotice.
+    void PostNotification(HerdrAgent agent, string deviceId, string computer, AgentDialog? dialog)
     {
         if (core is null)
         {
             return;
         }
-        var place = new[] { agent.Project, agent.Workspace, agent.Pane }.FirstOrDefault(s => s.Length > 0) ?? agent.Pane;
-        var blocked = agent.Status == AgentStatus.Blocked;
+        var notice = AgentNotice.Build(agent, dialog, ControlOf(deviceId));
+        var info = new Dictionary<string, string> { [DeviceKey] = deviceId, [PaneKey] = agent.Pane };
+        var category = NotificationCategory;
+        if (notice.Actions.Count > 0)
+        {
+            info[DialogKey] = notice.DialogId;
+            category = DialogCategory(notice);
+        }
+        var text = dialog is not null ? notice.BigText : notice.Text;
         core.Host.Notifier.Post(new SystemNotification(
             NotificationId(deviceId, agent.Pane),
-            NotificationCategory,
-            blocked ? $"{agent.Agent} in {place} needs input" : $"{agent.Agent} in {place} finished",
-            agent.Title.Length > 0 ? $"{computer}\n{agent.Title}" : computer)
+            category,
+            notice.Title,
+            string.Join('\n', new[] { computer, text }.Where(s => s.Length > 0)))
         {
-            UserInfo = new Dictionary<string, string> { [DeviceKey] = deviceId, [PaneKey] = agent.Pane },
+            UserInfo = info,
         });
     }
 }

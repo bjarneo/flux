@@ -301,7 +301,7 @@ public sealed class ChatAgentCard : View
             }
             if (!AgentItem.Control)
             {
-                extra.Add(Ui.Text($"To answer from this computer, set herdr_control = true on {item.Computer}.", 12, color: tn.Sub, wrap: true));
+                extra.Add(Ui.Text($"To answer from this computer, turn on Agent control in Flux on {item.Computer}, on the Access card.", 12, color: tn.Sub, wrap: true));
             }
             if (sending)
             {

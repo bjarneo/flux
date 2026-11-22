@@ -175,7 +175,7 @@ public sealed class NewAgentDialog : Window
             else if (!herdr.Control)
             {
                 layout.Children.Add(Parts.Unavailable(AgentGlyphs.Agent, "Control is off",
-                    $"To start agents from this computer, set herdr_control = true on {name}. Then run systemctl --user reload fluxd."));
+                    $"To start agents from this computer, turn on Agent control in Flux on {name}, on the Access card."));
             }
             else
             {

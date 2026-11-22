@@ -217,7 +217,8 @@ public sealed class AgentsView : View
             Model.Plugin.Request(Model.DeviceId);
         }
         online = isOnline;
-        if (!isOnline)
+        // An open thread stays while the computer is away. It shows the last output and a note, see AgentDetail.
+        if (!isOnline && (Detail is null || Model.Shown is null))
         {
             return Parts.Unavailable(Icons.Wifi, $"{name} is offline", $"The agents show when {name} is on the same network.");
         }
@@ -368,6 +369,7 @@ public sealed class AgentDetail : View
     readonly Border headerHost = new();
     readonly Border lineHost = new();
     readonly Border taskHost = new();
+    readonly Border noteHost = new();
     readonly Border noControl = new() { CornerRadius = new CornerRadius(20, 20, 0, 0), Padding = new Thickness(16) };
     readonly Grid threadHost = new();
     readonly Border placeholder = new();
@@ -398,10 +400,12 @@ public sealed class AgentDetail : View
         taskNote = new FirstTaskNote(model, pane, controls.Fill);
         DockPanel.SetDock(headerHost, Dock.Top);
         DockPanel.SetDock(lineHost, Dock.Top);
+        DockPanel.SetDock(noteHost, Dock.Top);
         var bottom = Ui.V(0, taskHost, controls, noControl);
         DockPanel.SetDock(bottom, Dock.Bottom);
         root.Children.Add(headerHost);
         root.Children.Add(lineHost);
+        root.Children.Add(noteHost);
         root.Children.Add(bottom);
         threadHost.Children.Add(placeholder);
         threadHost.Children.Add(scroll);
@@ -548,16 +552,34 @@ public sealed class AgentDetail : View
             lineHost.Tag = (agent.Status, tn);
         }
         taskHost.Child = taskNote.Build(agent);
-        controls.Shown(control);
+        // The keys and the field take no click while the computer is not reachable.
+        var online = model.Device?.Online == true;
+        controls.Shown(control && online);
         noControl.Shown(!control);
         noControl.Background = tn.Tile;
-        noControl.Child = Ui.Text($"To answer from this computer, set herdr_control = true on {model.Name}.", 12, color: tn.Sub, wrap: true);
-        if (control)
+        noControl.Child = Ui.Text($"To answer from this computer, turn on Agent control in Flux on {model.Name}, on the Access card.", 12, color: tn.Sub, wrap: true);
+        var note = online ? null : LinkNote.ThreadNote(false, model.App.Connecting, model.Name, model.Plugin.Model.OutputAt(model.DeviceId, Pane),
+            DateTimeOffset.Now, Texts.ClockTime);
+        noteHost.Shown(note is not null);
+        noteHost.Child = note is null ? null : LinkNoteView(note);
+        if (control && online)
         {
             controls.Show(agent, output, thread, ask, CanReview ? ShowChanges : null);
         }
         ThreadList(output, agent.Status);
         return root;
+    }
+
+    // The note about the link above the thread: that the computer is not
+    // reachable and when the output is from, with Retry, or that Flux connects to it.
+    UIElement LinkNoteView(ThreadNote note)
+    {
+        var tn = Tn.Current;
+        var text = note.Detail.Length == 0 ? note.Title : $"{note.Title} {note.Detail}";
+        var mark = note.State == ThreadLink.Connecting ? Parts.Spinner() : Parts.LinkDot(false);
+        UIElement? retry = note.State == ThreadLink.Unreachable ? new FluxButton("Retry", ButtonKind.Text, model.App.Retry).Named("Retry") : null;
+        var row = Ui.H(10, Ui.Box(mark, 0, 0, 0, 0).Width(18), Ui.Text(text, 12, color: tn.Sub, wrap: true).Fill(), retry);
+        return Ui.Box(row, Metrics.Gutter, 6, Metrics.Gutter, 6);
     }
 
     // The header: the status, the task, the agent and the pane, then
