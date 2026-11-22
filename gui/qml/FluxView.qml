@@ -237,6 +237,18 @@ Item {
     })
   }
 
+  // Asks a question before an action. onConfirm runs only after the user
+  // selects the confirm key. Cancel, Escape, and a click on the scrim run
+  // nothing.
+  property var confirmAction: null
+  function confirm(title, text, confirmText, onConfirm) {
+    confirmAction = onConfirm
+    confirmSheet.title = title
+    confirmSheet.text = text
+    confirmSheet.confirmText = confirmText
+    confirmSheet.open = true
+  }
+
   property alias sidebarFlick: sideFlick
 
   // Scrolls the sidebar so that item is in view, for example the device
@@ -1099,6 +1111,18 @@ Item {
         }
       }
     }
+  }
+
+  ConfirmSheet {
+    id: confirmSheet
+    objectName: "confirmSheet"
+    z: 40
+    onConfirmed: {
+      var action = root.confirmAction
+      root.confirmAction = null
+      if (action) action()
+    }
+    onCanceled: root.confirmAction = null
   }
 
   Toast {
