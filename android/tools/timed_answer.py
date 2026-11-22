@@ -77,11 +77,13 @@ def parse_notifications(dump, package=PACKAGE, channel=CHANNEL):
     return found
 
 
-def find_node(xml_text, pattern):
+def find_node(xml_text, pattern, button_only=False):
     """Return the center (x, y) of the first node with a text or description that matches.
 
     pattern is a regular expression. The match ignores the case. It returns
-    None when no node matches.
+    None when no node matches. When button_only is true, a node counts only
+    when its class is a button. The action keys of a notification are
+    buttons, and the expanded text of the notification is not.
     """
     end = xml_text.find("</hierarchy>")
     if end >= 0:
@@ -97,6 +99,8 @@ def find_node(xml_text, pattern):
     for node in root.iter("node"):
         label = node.get("text") or node.get("content-desc") or ""
         if not label or not rx.search(label):
+            continue
+        if button_only and not (node.get("class") or "").endswith("Button"):
             continue
         m = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.get("bounds", ""))
         if m:
@@ -220,7 +224,7 @@ def run_once(phone, args, n):
         if args.no_tap:
             return 0, notify_s, None, "-"
         phone.expand()
-        xy = wait_for(lambda: find_node(phone.ui(), args.action), args.timeout, step=0.3)
+        xy = wait_for(lambda: find_node(phone.ui(), args.action, button_only=True), args.timeout, step=0.3)
         if not xy:
             phone.collapse()
             return 0, notify_s, None, "-"
@@ -246,7 +250,7 @@ def main():
     ap.add_argument("--fake-log", required=True, help="the log file of fake_herdr.py")
     ap.add_argument("--control", required=True, help="the control file of fake_herdr.py")
     ap.add_argument("--scenario", help="a scenario of fake_herdr.py for each run")
-    ap.add_argument("--action", default=r"yes", help="a regular expression for the text of the action to tap (default: yes)")
+    ap.add_argument("--action", default=r"^yes", help="a regular expression for the text of the action to tap (default: ^yes)")
     ap.add_argument("--expect", help="the send that must reach herdr, for example send_keys:1")
     ap.add_argument("--channel", default=CHANNEL, help="the notification channel of the question")
     ap.add_argument("--limit", type=float, default=LIMIT_S, help="the limit of tap to herdr, in seconds")

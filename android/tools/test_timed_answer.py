@@ -33,6 +33,14 @@ UI hierarchy dumped to: /dev/stdout
 """
 
 
+UI_EXPANDED = """<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<hierarchy rotation="0">
+  <node text="1. Yes, proceed (y)" class="android.widget.TextView" bounds="[40,300][1040,360]" />
+  <node text="Yes, proceed" class="android.widget.Button" bounds="[40,500][340,580]" />
+</hierarchy>
+"""
+
+
 class ParserTest(unittest.TestCase):
     def test_notifications_match_package_and_channel(self):
         (n,) = timed_answer.parse_notifications(DUMP)
@@ -50,6 +58,13 @@ class ParserTest(unittest.TestCase):
         self.assertEqual(timed_answer.find_node(UI, "tell codex"), (510, 540))
         self.assertIsNone(timed_answer.find_node(UI, "reject"))
         self.assertIsNone(timed_answer.find_node("not xml", "yes"))
+
+    def test_action_key_beats_expanded_text(self):
+        # The expanded text comes first in the dump and also matches "yes".
+        self.assertEqual(timed_answer.find_node(UI_EXPANDED, "yes"), (540, 330))
+        self.assertEqual(timed_answer.find_node(UI_EXPANDED, "yes", button_only=True), (190, 540))
+        self.assertEqual(timed_answer.find_node(UI_EXPANDED, "^yes"), (190, 540))
+        self.assertIsNone(timed_answer.find_node(UI_EXPANDED, "proceed \\(y\\)", button_only=True))
 
     def test_row(self):
         self.assertEqual(timed_answer.row(1, 1, 0.5, 1.234, "send_keys:1", 2.0), "| 1 | 1 | 0.50 | 1.23 | send_keys:1 | pass |")
