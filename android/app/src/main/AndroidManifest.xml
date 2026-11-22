@@ -118,6 +118,15 @@
             android:taskAffinity="org.omarchy.flux.clip"
             android:theme="@style/Theme.Flux.Invisible" />
 
+        <!-- Answers an agent from its notification. It draws nothing, see AgentAnswerActivity. -->
+        <activity
+            android:name=".ui.AgentAnswerActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity="org.omarchy.flux.answer"
+            android:theme="@style/Theme.Flux.Invisible" />
+
         <activity
             android:name=".ui.RingActivity"
             android:exported="false"

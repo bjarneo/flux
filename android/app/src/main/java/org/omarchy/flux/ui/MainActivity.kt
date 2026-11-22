@@ -208,9 +208,13 @@ class MainActivity : ComponentActivity() {
     private fun takeOpenAgent(intent: android.content.Intent?) {
         val device = intent?.getStringExtra(EXTRA_DEVICE) ?: return
         val pane = intent.getStringExtra(EXTRA_PANE) ?: return
+        val changed = intent.getBooleanExtra(EXTRA_CHANGED, false)
         intent.removeExtra(EXTRA_DEVICE)
         intent.removeExtra(EXTRA_PANE)
+        intent.removeExtra(EXTRA_CHANGED)
         if (!PANE_ID.matches(pane)) return
+        // A notification answer that found a new question adds a line to the dock of the thread.
+        if (changed) org.omarchy.flux.core.QuestionChanged.show(device, pane)
         openAgent.value = device to pane
     }
 
@@ -234,6 +238,9 @@ class MainActivity : ComponentActivity() {
 
         /** The herdr pane of the agent that a notification opens. */
         const val EXTRA_PANE = "flux.open.pane"
+
+        /** True when a notification answer found that the question changed. The thread then says so. */
+        const val EXTRA_CHANGED = "flux.open.changed"
 
         /** The device ID of the computer of a stream request that a notification opens. */
         const val EXTRA_STREAM_DEVICE = "flux.stream.device"
@@ -492,6 +499,12 @@ fun FluxRoot(activity: MainActivity) {
         val ask = page.startsWith(ASK_PAGE)
         if ((ask || page.startsWith(NOTIFY_PAGE)) && d != null) {
             StreamKind.fromKey(page.substringAfter(':'))?.let { StreamRequests.debugShow(activity, d.id, d.name, it, notification = !ask) }
+        }
+        // "notify:agent", "notify:agent-reply", "notify:agent-four", and "notify:agent-readonly" post a sample agent notification.
+        if (page.startsWith(NOTIFY_PAGE) && d != null) org.omarchy.flux.core.DebugAgentNotice.show(activity, d.id, d.name, page.substringAfter(':'))
+        // "agent:<pane>@changed" shows the thread with the line of a notification answer that found a new question.
+        if (request.endsWith("@changed") && page.startsWith(AGENT_PAGE) && d != null) {
+            org.omarchy.flux.core.QuestionChanged.show(d.id, page.removePrefix(AGENT_PAGE))
         }
         val (next, pageScope) = Nav.debug(page, d?.id.orEmpty())
         nav = next
