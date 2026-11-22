@@ -52,6 +52,15 @@ class ChatListTest {
     }
 
     @Test
+    fun theBadgeCountsTheBlockedAgentOfAComputerThatIsNotReachable() {
+        val pc = device("pc", "omarchy-xps", agents = listOf(migrate))
+        val desk = device("desk", "omarchy-desk", online = false, agents = listOf(migrate.copy(pane = "w9:p1")), lastSeen = 1L)
+        val devices = listOf(pc, desk)
+        assertEquals(3, needsYouCount(devices, approval("pc")))
+        assertEquals(chatList(devices, approval("pc"), emptyList(), SeenClock(), 0L).needsYou, needsYouCount(devices, approval("pc")))
+    }
+
+    @Test
     fun anAgentWithNoStartTakesTheTimeThatTheListSawIt() {
         val clock = SeenClock()
         val pc = device("pc", "omarchy-xps", agents = listOf(flaky))

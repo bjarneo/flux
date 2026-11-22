@@ -88,12 +88,12 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.launch
 import org.omarchy.flux.camera.CameraMode
 import org.omarchy.flux.camera.CameraScreen
+import org.omarchy.flux.core.Approvals
 import org.omarchy.flux.core.ApproveRequest
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.UiState
 import org.omarchy.flux.core.inboxReach
-import org.omarchy.flux.core.needsYou
 import org.omarchy.flux.mic.MicScreen
 import org.omarchy.flux.stream.LiveStreams
 import org.omarchy.flux.webcam.WebcamScreen
@@ -137,7 +137,9 @@ fun FluxShell(
 
     // The agents, the approval, and the pair requests of all computers. The badge counts what needs the user.
     val all = rememberChatEvents(state)
-    val needs = all.needsYou()
+    val approval by Approvals.current.collectAsStateWithLifecycle()
+    val shownApproval = approval ?: if (demoShown()) org.omarchy.flux.core.DebugInbox.approval() else null
+    val needs = remember(state.devices, shownApproval) { org.omarchy.flux.core.needsYouCount(state.devices, shownApproval) }
     val live by LiveStreams.live.collectAsStateWithLifecycle()
     // The notices of the list of chats are about all computers. The chat of 1 computer has the notices of that computer.
     fun notices(computer: String?): InboxNotices {

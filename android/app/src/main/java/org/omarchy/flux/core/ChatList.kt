@@ -135,6 +135,14 @@ fun chatList(
 val ChatList.needsYou: Int get() = needs.size
 
 /**
+ * The number of rows that need the user, for the badge of the Chats tab.
+ * It equals the Needs you count of the list, also for a blocked agent of a
+ * computer that is not reachable (decision 004).
+ */
+fun needsYouCount(devices: List<DeviceUi>, approval: ApproveRequest?): Int =
+    chatList(devices, approval, emptyList(), SeenClock(), 0L).needsYou
+
+/**
  * The rows of 1 computer. With [scope] null, all rows stay. A pair request
  * has no paired computer, so it stays in each scope.
  */

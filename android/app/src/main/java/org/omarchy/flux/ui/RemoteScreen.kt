@@ -159,7 +159,7 @@ fun RemoteScreen(
 
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.statusBarsPadding()) {
-            ScreenHeader("Remote", onlineText(devices)) { ScopeChip(devices, scope, onScope, compact = true, onUnpair = onUnpair) }
+            ScreenHeader("Remote", onlineText(devices))
         }
         Column(
             Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
@@ -169,7 +169,7 @@ fun RemoteScreen(
             if (none) {
                 TargetLine(any, devices, "Acts on", onPair)
             } else {
-                ComputerRow(computer, devices, onClick = onPair)
+                ComputerRow(computer, devices, scope, onScope, onUnpair)
             }
             val columns = if (!side) 1 else 2
             if (columns == 1) {
@@ -254,7 +254,8 @@ private fun RemoteRowView(r: RemoteRow, onClick: () -> Unit) {
  * online.
  */
 @Composable
-private fun ComputerRow(d: DeviceUi?, devices: List<DeviceUi>, onClick: () -> Unit) {
+private fun ComputerRow(d: DeviceUi?, devices: List<DeviceUi>, scope: String?, onScope: (String?) -> Unit, onUnpair: (DeviceUi) -> Unit) {
+    var menu by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val paired = devices.filter { it.paired }
     if (paired.isEmpty()) return
@@ -267,31 +268,34 @@ private fun ComputerRow(d: DeviceUi?, devices: List<DeviceUi>, onClick: () -> Un
         else -> LinkNote.rowLine(false, d.lastSeen) { timeText(context, it) }.orEmpty()
     }
     val up = if (d != null) d.online else paired.any { it.online }
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(shape).background(Tn.tile)
-            .border(if (offline) 2.dp else 1.dp, if (offline) Tn.orange else Tn.line, shape)
-            .clickable(onClickLabel = "Open Computers", role = Role.Button, onClick = onClick)
-            .semantics(mergeDescendants = true) { }
-            .padding(start = 14.dp, end = if (offline && d?.canWake == true) 8.dp else 12.dp, top = 6.dp, bottom = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (up) Dot(Tn.green, 10.dp) else Dot(Tn.orange, 10.dp)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            T(name, size = 15, weight = FontWeight.SemiBold, maxLines = 1)
-            if (line.isNotEmpty()) T(line, size = 13, color = Tn.sub, maxLines = 1)
+    Box {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(shape).background(Tn.tile)
+                .border(if (offline) 2.dp else 1.dp, if (offline) Tn.orange else Tn.line, shape)
+                .clickable(onClickLabel = "Change the scope", role = Role.DropdownList) { menu = true }
+                .semantics(mergeDescendants = true) { }
+                .padding(start = 14.dp, end = if (offline && d?.canWake == true) 8.dp else 12.dp, top = 6.dp, bottom = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (up) Dot(Tn.green, 10.dp) else Dot(Tn.orange, 10.dp)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                T(name, size = 15, weight = FontWeight.SemiBold, maxLines = 1)
+                if (line.isNotEmpty()) T(line, size = 13, color = Tn.sub, maxLines = 1)
+            }
+            if (offline && d?.canWake == true) {
+                Box(
+                    Modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp))
+                        .clickable(onClickLabel = "Wake ${d.name}", role = Role.Button) { FluxCore.wake(d.id) }
+                        .padding(vertical = 6.dp).heightIn(min = 36.dp).clip(RoundedCornerShape(12.dp)).background(Tn.line)
+                        .padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.Center,
+                ) { T("Wake", size = 13, weight = FontWeight.SemiBold, maxLines = 1) }
+            } else {
+                Sym(Ic.expand, tint = Tn.sub, size = 20.dp)
+            }
         }
-        if (offline && d?.canWake == true) {
-            Box(
-                Modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp))
-                    .clickable(onClickLabel = "Wake ${d.name}", role = Role.Button) { FluxCore.wake(d.id) }
-                    .padding(vertical = 6.dp).heightIn(min = 36.dp).clip(RoundedCornerShape(12.dp)).background(Tn.line)
-                    .padding(horizontal = 16.dp),
-                contentAlignment = Alignment.Center,
-            ) { T("Wake", size = 13, weight = FontWeight.SemiBold, maxLines = 1) }
-        } else {
-            Sym(Ic.chevron, tint = Tn.sub, size = 20.dp)
-        }
+        ScopeMenu(menu, { menu = false }, devices, scope, onScope, onUnpair)
     }
 }
 

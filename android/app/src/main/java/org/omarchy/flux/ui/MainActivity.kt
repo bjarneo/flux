@@ -483,7 +483,8 @@ fun FluxRoot(activity: MainActivity) {
             FluxCore.publish()
         }
         val d = if (offline) {
-            state.devices.firstOrNull { it.paired && !it.online }
+            // The sample computer omarchy-desk comes first. It has a last seen time and can wake.
+            state.devices.firstOrNull { it.paired && !it.online && isDemo(it.id) } ?: state.devices.firstOrNull { it.paired && !it.online }
         } else {
             state.devices.firstOrNull { it.paired && it.online } ?: state.devices.firstOrNull { it.paired }
         }
