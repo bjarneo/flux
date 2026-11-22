@@ -56,14 +56,46 @@ final class ChatListTests: XCTestCase {
         XCTAssertEqual(agentAt(working, 120), at(120), "a new status is new")
     }
 
-    func testAComputerThatIsNotReachableAddsNoAgents() {
+    func testAComputerThatIsNotReachableKeepsItsLastKnownAgentsInTheirGroups() {
+        let desk = device("desk", "omarchy-desk", online: false)
+        let pc = device("pc", "omarchy-xps")
+        var clock = SeenClock()
+        let list = Chats.list(devices: [desk, pc], herdr: ["desk": herdr([migrate, flaky]), "pc": herdr([refactor])], approval: nil, log: [],
+                              since: { _, _ in nil }, lastSeen: { $0 == "desk" ? self.at(4_000) : nil }, seen: &clock, now: at(9_000))
+        XCTAssertEqual(ids(list.needs), ["agent|desk|w2:p1"], "a blocked agent stays in Needs you")
+        XCTAssertEqual(ids(list.agents), ["agent|pc|w1:p1", "agent|desk|w3:p1"])
+        guard case .agent(_, _, let blocked, _, _, let blockedLink) = list.needs[0],
+              case .agent(_, _, let done, _, _, let doneLink) = list.agents[1],
+              case .agent(_, _, _, _, _, let worksLink) = list.agents[0] else { return XCTFail("agent rows") }
+        XCTAssertEqual(blocked.status, .blocked)
+        XCTAssertEqual(blockedLink, AgentLink(reachable: false, since: at(4_000)))
+        XCTAssertEqual(done.status, .done, "the agent keeps its group")
+        XCTAssertEqual(doneLink, AgentLink(reachable: false, since: at(4_000)))
+        XCTAssertEqual(worksLink, AgentLink(reachable: true, since: nil))
+        XCTAssertEqual(ids(list.computers), ["computer|pc", "computer|desk"])
+    }
+
+    func testAComputerThatIsNotReachableAndHasNoAgentListAddsNoAgents() {
         let desk = device("desk", "omarchy-desk", online: false)
         var clock = SeenClock()
-        let list = Chats.list(devices: [desk], herdr: ["desk": herdr([migrate])], approval: nil, log: [],
+        let list = Chats.list(devices: [desk], herdr: [:], approval: nil, log: [],
                               since: { _, _ in nil }, seen: &clock, now: at(1))
         XCTAssertTrue(list.needs.isEmpty)
         XCTAssertTrue(list.agents.isEmpty)
         XCTAssertEqual(ids(list.computers), ["computer|desk"])
+    }
+
+    func testTheRowOfAnAgentOfAComputerThatIsNotReachableSaysWhenFluxSawTheComputer() {
+        var clock = SeenClock()
+        let desk = device("desk", "omarchy-desk", online: false)
+        let list = Chats.list(devices: [desk], herdr: ["desk": herdr([migrate])], approval: nil, log: [],
+                              since: { _, _ in nil }, lastSeen: { _ in self.at(5_000) }, seen: &clock, now: at(9_000))
+        guard case .agent(_, _, _, _, _, let link) = list.needs[0] else { return XCTFail("agent row") }
+        XCTAssertEqual(LinkNote.rowLine(online: link.reachable, lastSeen: link.since, time: { _ in "14:02" }), "Not reachable since 14:02")
+        let unknown = Chats.list(devices: [desk], herdr: ["desk": herdr([migrate])], approval: nil, log: [],
+                                 since: { _, _ in nil }, seen: &clock, now: at(9_000))
+        guard case .agent(_, _, _, _, _, let none) = unknown.needs[0] else { return XCTFail("agent row") }
+        XCTAssertEqual(LinkNote.rowLine(online: none.reachable, lastSeen: none.since, time: { _ in "14:02" }), "Not reachable")
     }
 
     func testEachComputerShowsItsNewestEntryAndTheOnlineComputersComeFirst() {

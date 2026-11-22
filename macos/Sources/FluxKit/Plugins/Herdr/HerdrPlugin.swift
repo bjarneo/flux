@@ -43,9 +43,23 @@ public final class HerdrModel {
         didSet { defaults?.set(dictationLanguage, forKey: HerdrPlugin.dictationLanguageKey) }
     }
 
+    /// The agents whose thread shows "The question changed. Pick again.", by
+    /// `promptKey`. An answer from a notification sets it when the agent
+    /// asks another question. The thread clears it when it closes.
+    public internal(set) var questionChanged: Set<String> = []
+
     /// Opens the output of an agent: the device ID and the pane. The app sets
     /// it, and a click on an agent notification calls it.
     @ObservationIgnored public var open: (@MainActor (_ deviceId: String, _ pane: String) -> Void)?
+
+    /// Asks for the unlock of the app, then calls `action`. `computer` is
+    /// the name of the computer that the answer goes to. The app sets it
+    /// with its Touch ID, Face ID, or password check, which stays valid for
+    /// 5 minutes. `onError` gets a message when the check fails. A cancel
+    /// calls neither. Without it, an answer from a notification sends
+    /// nothing and opens the thread.
+    @ObservationIgnored public var unlock: (@MainActor (_ computer: String, _ action: @escaping @MainActor () -> Void,
+                                                         _ onError: @escaping @MainActor (String) -> Void) -> Void)?
 
     @ObservationIgnored private var defaults: UserDefaults?
 
@@ -117,6 +131,11 @@ public final class HerdrModel {
     /// The time that the agent in `pane` on a computer got its status, or nil when this device did not see it.
     public func agentSince(device: String, pane: String) -> Date? { since[device]?[pane] }
 
+    /// True while the thread of `pane` shows that the question changed, see `questionChanged`.
+    public func isQuestionChanged(_ deviceId: String, pane: String) -> Bool {
+        questionChanged.contains(Self.promptKey(deviceId, pane: pane))
+    }
+
     /// The key of the prompt of `pane` on a computer in `prompts`.
     public nonisolated static func promptKey(_ deviceId: String, pane: String) -> String { deviceId + "|" + pane }
 
@@ -134,6 +153,13 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
     public static let notificationCategory = "herdr"
     static let deviceKey = "device"
     static let paneKey = "pane"
+    static let dialogKey = "dialog"
+    /// The identifier of the action that sends the text of a Reply.
+    static let replyAction = "reply"
+    /// The start of the identifier of a choice action. The key of the choice follows.
+    static let choiceAction = "choice."
+    /// The request numbers of the dialog reads start here, so that they do not meet the numbers of the window reads.
+    static let dialogRequestBase = 1 << 40
     static let inputAlertsKey = "herdr.inputAlerts"
     static let doneAlertsKey = "herdr.doneAlerts"
     static let dictationLanguageKey = "herdr.dictationLanguage"
@@ -193,23 +219,40 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
     @MainActor private var promptReads: [String: Int] = [:]
     @MainActor private(set) var promptParses: [String: Int] = [:]
     @MainActor private var promptSeq = 0
+    /// The dialog of each blocked pane, for the notification and for its answer.
+    private let dialogs: DialogBook
+    private let dialogLink: DialogLink
+    @MainActor private var dialogSeq = 0
+    /// The category of each notification that has actions, by notification ID.
+    @MainActor private var noticeCategories: [String: String] = [:]
+    /// Tests set these to replace the link: it sends a packet and says whether the link took it.
+    @MainActor var sender: ((Packet, String) -> Bool)?
+    /// Tests set this to say whether the link to a computer is open.
+    @MainActor var linkProbe: ((String) -> Bool)?
 
     @MainActor
-    public init() { model = HerdrModel() }
+    public init() {
+        model = HerdrModel()
+        dialogLink = DialogLink()
+        dialogs = DialogBook(io: dialogLink)
+        dialogLink.plugin = self
+    }
 
     public func attach(core: FluxCore) {
         self.core = core
         let defaults = core.defaults
         let model = model
         DispatchQueue.main.async { MainActor.assumeIsolated { model.load(defaults) } }
-        Notifier.shared.register(category: Self.notificationCategory) { action, info, _ in
-            guard action == UNNotificationDefaultActionIdentifier,
-                  let id = info[Self.deviceKey] as? String, let pane = info[Self.paneKey] as? String else { return }
+        Notifier.shared.register(category: Self.notificationCategory, handler: noticeHandler)
+    }
+
+    /// The handler of the notification actions. All categories of the agent notifications use it.
+    private var noticeHandler: Notifier.Handler {
+        { [weak self] action, info, text in
+            guard let id = info[Self.deviceKey] as? String, let pane = info[Self.paneKey] as? String else { return }
+            let dialog = info[Self.dialogKey] as? String ?? ""
             DispatchQueue.main.async {
-                MainActor.assumeIsolated {
-                    model.reveal(id, pane: pane)
-                    model.open?(id, pane)
-                }
+                MainActor.assumeIsolated { self?.noticeAction(action, deviceId: id, pane: pane, dialog: dialog, text: text) }
             }
         }
     }
@@ -249,6 +292,15 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
             // their output. The check reads the pane before the parse, and
             // the parse of up to 1 MiB of text runs off the main actor.
             guard let pane = p.body["pane"]?.string, !pane.isEmpty else { return }
+            // The answer to a dialog read of the notification is for the dialog book only.
+            if dialogs.takes(deviceId, pane, request: p.int("request")) {
+                let body = p.body
+                Task.detached { [weak self] in
+                    guard let out = HerdrWire.output(body) else { return }
+                    await self?.finishDialogRead(out, deviceId: deviceId)
+                }
+                return
+            }
             let key = HerdrModel.promptKey(deviceId, pane: pane)
             var windowParse: Int?
             if model.outputs[deviceId]?.pane == pane && acceptsView(deviceId, pane: pane, request: p.int("request"), view: p.string("view") ?? "ansi", path: p.string("path") ?? "") {
@@ -321,6 +373,7 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
         if let window, parses[deviceId] == window, model.outputs[deviceId]?.pane == out.pane,
            acceptsView(deviceId, pane: out.pane, request: out.request, view: out.view, path: out.path) {
             model.outputs[deviceId] = out
+            dialogs.onScreenOutput(deviceId, out)
             advanceFirstTask(deviceId)
         }
         let key = HerdrModel.promptKey(deviceId, pane: out.pane)
@@ -388,6 +441,7 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
     public func closeOutput(_ deviceId: String, pane: String) {
         reviews[deviceId + ":" + pane] = nil
         viewReads[deviceId + ":" + pane] = nil
+        model.questionChanged.remove(HerdrModel.promptKey(deviceId, pane: pane))
         if model.outputs[deviceId]?.pane == pane { model.outputs[deviceId] = nil }
         if model.replies[deviceId]?.pane == pane { model.replies[deviceId] = nil }
     }
@@ -539,7 +593,7 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
         var a = start
         a.seq = seq
         model.actions[deviceId] = a
-        guard core?.send(HerdrWire.numbered(packet, request: seq), to: deviceId) == true else {
+        guard transmit(HerdrWire.numbered(packet, request: seq), to: deviceId) else {
             a.sending = false
             a.error = "\(computerName(deviceId)) is not reachable"
             model.actions[deviceId] = a
@@ -637,6 +691,42 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
 
     static func notificationId(_ deviceId: String, _ pane: String) -> String { "herdr-\(deviceId)-\(pane)" }
 
+    /// The category of the notification of a dialog. The ID of the dialog follows the family name.
+    static func categoryId(dialog: String) -> String { "\(notificationCategory):\(dialog)" }
+
+    /// The actions of a notification. On an iPhone, Flux comes to the front
+    /// for Face ID, and iOS asks for the unlock before it runs an action.
+    /// A Reply takes text in the notification. The action that this Mac or
+    /// iPhone runs asks for the check of the app again, see `answer`.
+    static func notificationActions(_ actions: [NoticeAction], platform: FluxPlatform) -> [UNNotificationAction] {
+        let options: UNNotificationActionOptions = platform == .phone ? [.foreground, .authenticationRequired] : []
+        return actions.map { a -> UNNotificationAction in
+            switch a.kind {
+            case .choice:
+                return UNNotificationAction(identifier: choiceAction + a.key, title: a.label, options: options)
+            case .reply:
+                return UNTextInputNotificationAction(identifier: replyAction, title: a.label, options: options,
+                                                     textInputButtonTitle: "Send", textInputPlaceholder: "Answer")
+            case .open:
+                return UNNotificationAction(identifier: "open", title: a.label, options: [.foreground])
+            }
+        }
+    }
+
+    /// Sends a packet. Tests replace the link with `sender`.
+    @MainActor
+    private func transmit(_ packet: Packet, to deviceId: String) -> Bool {
+        if let sender { return sender(packet, deviceId) }
+        return core?.send(packet, to: deviceId) == true
+    }
+
+    /// True while the link to a computer is open.
+    @MainActor
+    private func linkOpen(_ deviceId: String) -> Bool {
+        if let linkProbe { return linkProbe(deviceId) }
+        return core?.withDevice(deviceId) { $0.online } ?? false
+    }
+
     /// Posts and removes the notifications for `alerts`.
     @MainActor
     private func alert(_ alerts: [AgentAlert], deviceId: String, computer: String) {
@@ -645,12 +735,12 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
             pending.removeValue(forKey: key)?.cancel()
             switch a {
             case .clear(let pane):
-                Notifier.shared.remove(id: Self.notificationId(deviceId, pane))
+                removeNotice(deviceId, pane)
             case .needsInput(let agent):
                 if model.inputAlerts { post(agent, deviceId: deviceId, computer: computer) }
             case .finished(let agent):
                 guard model.doneAlerts else {
-                    Notifier.shared.remove(id: Self.notificationId(deviceId, agent.pane))
+                    removeNotice(deviceId, agent.pane)
                     continue
                 }
                 pending[key] = Task { @MainActor [weak self] in
@@ -665,19 +755,211 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
         }
     }
 
+    /// Removes the notification of a pane, its category, and its dialog.
+    @MainActor
+    private func removeNotice(_ deviceId: String, _ pane: String) {
+        let id = Self.notificationId(deviceId, pane)
+        Notifier.shared.remove(id: id)
+        if let category = noticeCategories.removeValue(forKey: id) { Notifier.shared.unregister(category: category) }
+        dialogs.forget(deviceId, pane)
+    }
+
     /// Shows that an agent needs input or finished. Each pane has 1
-    /// notification, and a click opens the output of the agent.
+    /// notification, and a click opens the output of the agent. A blocked
+    /// agent posts at once. Then 1 read of its pane finds the dialog, and the
+    /// same notification gets the question and the actions.
     @MainActor
     private func post(_ agent: HerdrAgent, deviceId: String, computer: String) {
-        let place = [agent.project, agent.workspace, agent.pane].first { !$0.isEmpty } ?? agent.pane
-        let blocked = agent.status == .blocked
+        let control = model.states[deviceId]?.control == true
+        postNotice(agent, agentNotice(agent, dialog: nil, control: control), deviceId: deviceId, computer: computer, quiet: false)
+        guard agent.status == .blocked else { return }
+        dialogs.peek(deviceId, agent.pane) { [weak self] dialog in
+            guard let self, let dialog, self.model.inputAlerts,
+                  let now = self.model.states[deviceId]?.agent(agent.pane), now.status == .blocked else { return }
+            let control = self.model.states[deviceId]?.control == true
+            self.postNotice(now, agentNotice(now, dialog: dialog, control: control), deviceId: deviceId, computer: computer, quiet: true)
+        }
+    }
+
+    /// Posts `notice`. A notice with actions gets the category of its
+    /// dialog. A later post of the same pane replaces the notification, and
+    /// `quiet` keeps the sound off for that update.
+    @MainActor
+    private func postNotice(_ agent: HerdrAgent, _ notice: AgentNotice, deviceId: String, computer: String, quiet: Bool) {
+        let id = Self.notificationId(deviceId, agent.pane)
+        var category = Self.notificationCategory
+        if !notice.actions.isEmpty {
+            category = Self.categoryId(dialog: notice.dialogId)
+            Notifier.shared.register(category: category, actions: Self.notificationActions(notice.actions, platform: .current),
+                                     handler: noticeHandler)
+        }
+        let old = noticeCategories[id]
+        noticeCategories[id] = category == Self.notificationCategory ? nil : category
         Notifier.shared.post(
-            id: Self.notificationId(deviceId, agent.pane),
-            category: Self.notificationCategory,
-            title: blocked ? "\(agent.agent) in \(place) needs input" : "\(agent.agent) in \(place) finished",
-            body: agent.title,
+            id: id,
+            category: category,
+            title: notice.title,
+            body: notice.bigText,
             subtitle: computer,
-            userInfo: [Self.deviceKey: deviceId, Self.paneKey: agent.pane]
+            userInfo: [Self.deviceKey: deviceId, Self.paneKey: agent.pane, Self.dialogKey: notice.dialogId],
+            sound: quiet ? nil : UNNotificationSound.default
         )
+        if let old, old != category { Notifier.shared.unregister(category: old) }
+    }
+
+    // MARK: Answers from a notification
+
+    /// What a tap on a notification does. The tap on the notification opens
+    /// the thread. A choice or a Reply answers the agent, see `answer`.
+    @MainActor
+    func noticeAction(_ action: String, deviceId: String, pane: String, dialog: String, text: String?) {
+        switch action {
+        case UNNotificationDefaultActionIdentifier:
+            openThread(deviceId, pane: pane, changed: false)
+        case Self.replyAction:
+            answer(deviceId, pane: pane, dialog: dialog, choice: nil, text: text ?? "")
+        case _ where action.hasPrefix(Self.choiceAction):
+            answer(deviceId, pane: pane, dialog: dialog, choice: String(action.dropFirst(Self.choiceAction.count)), text: nil)
+        default:
+            break
+        }
+    }
+
+    /// Opens the thread of `pane`. With `changed`, the thread says that the question changed.
+    @MainActor
+    private func openThread(_ deviceId: String, pane: String, changed: Bool) {
+        removeNotice(deviceId, pane)
+        if changed { model.questionChanged.insert(HerdrModel.promptKey(deviceId, pane: pane)) }
+        model.reveal(deviceId, pane: pane)
+        model.open?(deviceId, pane)
+    }
+
+    /// True when the agent still waits and the computer takes input from this device over an open link.
+    @MainActor
+    private func answerReady(_ deviceId: String, _ pane: String) -> Bool {
+        guard linkOpen(deviceId), let state = model.states[deviceId] else { return false }
+        return state.control && state.agent(pane)?.status == .blocked
+    }
+
+    /// Answers an agent from its notification: the `choice` key, or the
+    /// `text` of a Reply. It sends nothing before the unlock of the app
+    /// succeeds. When the link is closed, the agent no longer waits, or
+    /// the unlock fails, it sends nothing and opens the thread. After the
+    /// unlock, it reads the pane again and sends only when the dialog is
+    /// still the one of the notification, with `dialog` as its ID.
+    @MainActor
+    func answer(_ deviceId: String, pane: String, dialog: String, choice: String?, text: String?) {
+        guard answerReady(deviceId, pane), let unlock = model.unlock else {
+            openThread(deviceId, pane: pane, changed: false)
+            return
+        }
+        // A Reply with an empty field sends nothing.
+        if choice == nil, (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return }
+        unlock(computerName(deviceId), { [weak self] in
+            self?.verifyAndSend(deviceId, pane: pane, dialog: dialog, choice: choice, text: text)
+        }, { [weak self] _ in
+            self?.openThread(deviceId, pane: pane, changed: false)
+        })
+    }
+
+    @MainActor
+    private func verifyAndSend(_ deviceId: String, pane: String, dialog: String, choice: String?, text: String?) {
+        guard answerReady(deviceId, pane) else {
+            openThread(deviceId, pane: pane, changed: false)
+            return
+        }
+        if let choice {
+            dialogs.verify(deviceId, pane, id: dialog, onSame: { [weak self] d in
+                guard let self else { return }
+                guard let c = d.choices.first(where: { $0.key == choice }), HerdrWire.allowed(c.keys), self.answerReady(deviceId, pane) else {
+                    self.openThread(deviceId, pane: pane, changed: true)
+                    return
+                }
+                self.sendKeys(deviceId, pane: pane, c.keys)
+                self.sent(deviceId, pane)
+            }, onChanged: { [weak self] d in
+                self?.openThread(deviceId, pane: pane, changed: d != nil)
+            })
+        } else if let text {
+            dialogs.peek(deviceId, pane) { [weak self] d in
+                guard let self else { return }
+                // A Reply sends only while the dialog is the one of the notification.
+                if replyMatches(d, dialog), self.answerReady(deviceId, pane) {
+                    self.sendPrompt(deviceId, pane: pane, text, answer: true)
+                    self.sent(deviceId, pane)
+                } else {
+                    self.openThread(deviceId, pane: pane, changed: d != nil)
+                }
+            }
+        }
+    }
+
+    /// Removes the notification after a send. A send that failed opens the thread.
+    @MainActor
+    private func sent(_ deviceId: String, _ pane: String) {
+        if let r = model.replies[deviceId], !r.sending, r.error != nil {
+            openThread(deviceId, pane: pane, changed: false)
+        } else {
+            removeNotice(deviceId, pane)
+        }
+    }
+
+    // MARK: Dialog reads
+
+    @MainActor
+    fileprivate func sendDialogRead(_ deviceId: String, _ pane: String, register: (Int) -> Void) -> Bool {
+        dialogSeq += 1
+        let request = Self.dialogRequestBase + dialogSeq
+        register(request)
+        return transmit(HerdrWire.read(pane: pane, lines: dialogReadLines, request: request), to: deviceId)
+    }
+
+    @MainActor
+    fileprivate func finishDialogRead(_ out: HerdrOutput, deviceId: String) {
+        dialogs.onOutput(deviceId, out)
+    }
+
+    @MainActor
+    fileprivate func screenRead(_ deviceId: String, _ pane: String) -> (open: Bool, loading: Bool) {
+        guard let out = model.outputs[deviceId], out.pane == pane else { return (false, false) }
+        return (true, out.loading)
+    }
+
+    @MainActor
+    fileprivate func readScreen(_ deviceId: String, _ pane: String) -> Bool {
+        read(deviceId, pane: pane)
+        return model.outputs[deviceId]?.error == nil
+    }
+
+    /// Connects `DialogBook` to the plugin. The book runs on the main actor, so each call is already there.
+    fileprivate final class DialogLink: DialogIo, @unchecked Sendable {
+        weak var plugin: HerdrPlugin?
+
+        func screenOpen(_ deviceId: String, _ pane: String) -> Bool {
+            MainActor.assumeIsolated { plugin?.screenRead(deviceId, pane).open ?? false }
+        }
+
+        func screenReading(_ deviceId: String, _ pane: String) -> Bool {
+            MainActor.assumeIsolated { plugin?.screenRead(deviceId, pane).loading ?? false }
+        }
+
+        func readScreen(_ deviceId: String, _ pane: String) -> Bool {
+            MainActor.assumeIsolated { plugin?.readScreen(deviceId, pane) ?? false }
+        }
+
+        func send(_ deviceId: String, _ pane: String, register: (Int) -> Void) -> Bool {
+            MainActor.assumeIsolated { plugin?.sendDialogRead(deviceId, pane, register: register) ?? false }
+        }
+
+        func now() -> Date { Date() }
+
+        func later(_ delay: Duration, _ task: @escaping () -> Void) {
+            Task { @MainActor in
+                try? await Task.sleep(for: delay)
+                task()
+            }
+        }
+
+        func post(_ task: @escaping () -> Void) { task() }
     }
 }
