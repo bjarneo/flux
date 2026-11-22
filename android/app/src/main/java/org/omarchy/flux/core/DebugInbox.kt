@@ -72,9 +72,9 @@ object DebugInbox {
         )
     }
 
-    /** A sample sudo request from the sample computer. */
+    /** A sample sudo request from the sample computer. It is off when the demo has no blocked agent. */
     fun approval(): ApproveRequest? {
-        if (!DebugDemo.on) return null
+        if (!DebugDemo.on || !DebugDemo.blocked) return null
         return ApproveRequest(
             computerId = DebugDemo.PC,
             computerName = "omarchy-xps",
