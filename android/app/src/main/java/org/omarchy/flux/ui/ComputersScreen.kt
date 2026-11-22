@@ -166,8 +166,9 @@ private fun linkLine(d: DeviceUi, onWifi: Boolean): String {
 /**
  * A paired computer: its link, its address and battery, and a note while
  * it is offline. A tap makes it the scope, and a tap on the computer in
- * scope shows all computers again. A long press opens Unpair, and Retry
- * for a computer that is offline. TalkBack offers both as actions.
+ * scope shows all computers again. The menu key and a long press open
+ * Unpair, and Retry and Wake for a computer that is not reachable.
+ * TalkBack offers the same actions.
  */
 @Composable
 private fun ComputerCard(d: DeviceUi, onWifi: Boolean, inScope: Boolean, onScope: () -> Unit, onUnpair: () -> Unit) {
@@ -208,7 +209,7 @@ private fun ComputerCard(d: DeviceUi, onWifi: Boolean, inScope: Boolean, onScope
                         },
                     )
                 }
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(start = 14.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.Top,
         ) {
@@ -229,6 +230,8 @@ private fun ComputerCard(d: DeviceUi, onWifi: Boolean, inScope: Boolean, onScope
                 if (!d.online) T("Check that Flux runs on ${d.name}, and that both are on the same Wi-Fi.", size = 13, color = Tn.sub, lineHeight = 1.35f)
                 if (!d.online && d.canWake) WakeButton(d)
             }
+            // The key shows the same actions as the long press. It sits level with the name, and the row keeps its height.
+            Box(Modifier.offset(y = (-8).dp)) { ComputerMenuKey(d, onUnpair) }
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
             if (!d.online) {

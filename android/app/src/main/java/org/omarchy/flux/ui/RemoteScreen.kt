@@ -2,6 +2,18 @@ package org.omarchy.flux.ui
 
 import android.app.Activity
 import android.media.projection.MediaProjectionManager
+import android.content.res.Configuration
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.heightIn
+import org.omarchy.flux.core.LinkNote
+import org.omarchy.flux.core.RemoteGroup
+import org.omarchy.flux.core.RemoteRow
+import org.omarchy.flux.core.RemoteTool
+import org.omarchy.flux.core.SpeakerState
+import org.omarchy.flux.core.inGroup
+import org.omarchy.flux.core.remoteComputer
+import org.omarchy.flux.core.remoteRows
+import org.omarchy.flux.speaker.SpeakerSession
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -54,10 +66,12 @@ import org.omarchy.flux.screen.ScreenSession
 
 /**
  * The Remote destination: the tools that act on the computer and the
- * streams of this phone. It holds no agents. They live in Chats. The dock shows the player of the computer. A tool shows when a
- * computer in scope has the feature, and it is dimmed while no such
- * computer is online. With more than 1 computer online, a tap asks for the
- * computer.
+ * streams of this phone, as rows in the groups See, Use, and Share. It
+ * holds no agents. They live in Chats. A row shows when a computer in scope
+ * has the feature, and it is dimmed while no such computer is online. With
+ * more than 1 computer online, a tap asks for the computer. The dock shows
+ * the player of the computer. A tablet in landscape shows the groups side
+ * by side. In portrait it shows the layout of a phone.
  */
 @Composable
 fun RemoteScreen(
@@ -70,15 +84,10 @@ fun RemoteScreen(
     onPair: () -> Unit,
 ) {
     val context = LocalContext.current
-    // The Extend screen tool names this device.
-    val kind = if (LocalConfiguration.current.smallestScreenWidthDp >= 600) "tablet" else "phone"
     val devices = state.devices
     val any = target(scope, devices)
-    val one = (any as? Target.One)?.device
-    // Before the first pairing, all tools show, dimmed, so that the destination shows what it holds.
+    // Before the first pairing, all rows show, dimmed, so that the destination shows what it holds.
     val none = devices.none { it.paired }
-    fun shows(can: (DeviceUi) -> Boolean) = none || hasFeature(scope, devices, can)
-    fun canRun(can: (DeviceUi) -> Boolean) = target(scope, devices, can) !is Target.None
     fun open(can: (DeviceUi) -> Boolean, title: String, page: String, lock: Pair<String, String>? = null) {
         picker.run(target(scope, devices, can), title) { d ->
             if (lock == null) {
@@ -103,99 +112,188 @@ fun RemoteScreen(
     LaunchedEffect(screen) {
         if (screen != shownFirst && screen.phase == ScreenSession.Phase.Error) FluxCore.toast(screen.message)
     }
+    val speaker by SpeakerSession.status.collectAsState()
+    val speakerState = when (speaker.phase) {
+        SpeakerSession.Phase.Live -> SpeakerState.Live
+        SpeakerSession.Phase.Connecting -> SpeakerState.Connecting
+        SpeakerSession.Phase.Error -> SpeakerState.Failed
+        SpeakerSession.Phase.Idle -> SpeakerState.Off
+    }
+    val rows = remoteRows(devices, scope, screen.active, speakerState)
+
+    fun tap(tool: RemoteTool) {
+        when (tool) {
+            RemoteTool.Panel -> open({ it.shortcutsSupported }, "Open the Omarchy panel of", OMARCHY_PAGE)
+            // Remote input can type in any window of the computer, so it asks for the phone lock first.
+            RemoteTool.Touchpad -> open({ it.inputSupported }, "Use the touchpad of", "touchpad", "Use the touchpad" to "use the touchpad")
+            // The screen of the computer can show private content, so it also asks for the phone lock first.
+            RemoteTool.Desktop -> open({ it.desktopSupported }, "Show the screen of", "desktop", "Show the computer screen" to "show the computer screen")
+            // The computer adds a monitor that this phone or tablet shows. It uses the switch and the phone lock of the remote desktop.
+            RemoteTool.Extend -> open({ it.extendSupported }, "Extend the screen of", EXTEND_PAGE, "Extend the computer screen" to "extend the computer screen")
+            RemoteTool.Commands -> open({ true }, "Run the commands of", "commands")
+            RemoteTool.Media -> open({ true }, "Open the media of", "media")
+            RemoteTool.Mic -> open({ true }, "Stream the mic to", MIC_PAGE)
+            RemoteTool.Webcam -> open({ true }, "Stream the camera to", WEBCAM_PAGE)
+            RemoteTool.Mirror -> if (screen.active) {
+                ScreenSession.stop()
+            } else {
+                picker.run(target(scope, devices), "Mirror this phone to") { d ->
+                    mirrorFor = d.id
+                    askCapture.launch(context.getSystemService(MediaProjectionManager::class.java).createScreenCaptureIntent())
+                }
+            }
+            // A tap while the audio runs or connects stops it.
+            RemoteTool.Speaker -> if (speaker.active) {
+                SpeakerSession.stop(FluxCore, notify = true)
+            } else {
+                picker.run(target(scope, devices) { it.speakerSupported }, "Play the audio of") { d -> SpeakerSession.start(FluxCore, d.id) }
+            }
+        }
+    }
 
     val scoped = devices.filter { it.paired && it.online && (scope == null || it.id == scope) }
     // The dock plays the computer in scope, or the first computer that plays.
     val player = scoped.filter { it.player != null }.let { l -> l.firstOrNull { it.player?.playing == true } ?: l.firstOrNull() }
+    val side = rememberWideWindow() && LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val computer = remoteComputer(devices, scope)
 
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.statusBarsPadding()) {
             ScreenHeader("Remote", onlineText(devices)) { ScopeChip(devices, scope, onScope, compact = true, onUnpair = onUnpair) }
         }
-        DockLayout(
-            Modifier.weight(1f).fillMaxWidth(),
-            thread = { bottom ->
-                Column(
-                    Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                        .padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = maxOf(bottom, 28.dp)),
-                    verticalArrangement = Arrangement.spacedBy(TileGap),
-                ) {
-                    if (none) TargetLine(any, devices, "Acts on", onPair)
-                    ListHeader("Tools")
-                    val tools = buildList {
-                        if (shows { it.shortcutsSupported }) {
-                            val s = one?.shortcuts
-                            val sub = if (s?.loaded == true && s.active > 0) {
-                                val n = s.workspaces.firstOrNull { it.id == s.active }?.windows ?: 0
-                                "Workspace ${s.active} · $n ${if (n == 1) "window" else "windows"}"
-                            } else {
-                                "Workspaces, windows, and key bindings"
-                            }
-                            add(ControlTool(Ic.grid, "Omarchy panel", sub, canRun { it.shortcutsSupported }) {
-                                open({ it.shortcutsSupported }, "Open the Omarchy panel of", OMARCHY_PAGE)
-                            })
-                        }
-                        if (shows { it.inputSupported }) {
-                            // Remote input can type in any window of the computer, so it asks for the phone lock first.
-                            val sub = if (one != null && one.remoteInput != true) "Off on ${one.name}" else "Pointer, keys, and slides"
-                            add(ControlTool(Ic.touchApp, "Touchpad", sub, canRun { it.inputSupported }) {
-                                open({ it.inputSupported }, "Use the touchpad of", "touchpad", "Use the touchpad" to "use the touchpad")
-                            })
-                        }
-                        if (shows { it.desktopSupported }) {
-                            // The screen of the computer can show private content, so it also asks for the phone lock first.
-                            val sub = when {
-                                one == null -> "See and use the screen"
-                                one.remoteDesktop != true -> "Off on ${one.name}"
-                                one.remoteInput != true -> "View only"
-                                else -> "See and use the screen"
-                            }
-                            add(ControlTool(Ic.desktop, "Remote desktop", sub, canRun { it.desktopSupported }) {
-                                open({ it.desktopSupported }, "Show the screen of", "desktop", "Show the computer screen" to "show the computer screen")
-                            })
-                        }
-                        if (shows { it.extendSupported }) {
-                            // The computer adds a monitor that this phone or tablet shows. It uses the switch and the phone lock of the remote desktop.
-                            val can = { d: DeviceUi -> d.extendSupported }
-                            val sub = if (one != null && one.remoteDesktop != true) "Off on ${one.name}" else "Use this $kind as a second monitor"
-                            add(ControlTool(Ic.devices, "Extend screen", sub, canRun(can)) {
-                                open(can, "Extend the screen of", EXTEND_PAGE, "Extend the computer screen" to "extend the computer screen")
-                            })
-                        }
-                        add(ControlTool(Ic.terminal, "Commands", "Run a command", any !is Target.None) { open({ true }, "Run the commands of", "commands") })
-                        // The dock opens the media, so the tool shows only while no player shows there.
-                        if (player == null) {
-                            add(ControlTool(Ic.music, "Media", "Play, pause, and volume", any !is Target.None) { open({ true }, "Open the media of", "media") })
-                        }
+        Column(
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
+                .padding(start = TiledGutter, end = TiledGutter, top = 6.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(TileGap),
+        ) {
+            if (none) {
+                TargetLine(any, devices, "Acts on", onPair)
+            } else {
+                ComputerRow(computer, devices, onClick = onPair)
+            }
+            val columns = if (!side) 1 else 2
+            if (columns == 1) {
+                for (g in RemoteGroup.entries) RemoteGroupCard(g, rows, Modifier.fillMaxWidth(), ::tap)
+            } else {
+                // The columns keep the order See, Use, Share. The last group fills the right column.
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TileGap)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TileGap)) {
+                        RemoteGroupCard(RemoteGroup.See, rows, Modifier.fillMaxWidth(), ::tap)
+                        RemoteGroupCard(RemoteGroup.Use, rows, Modifier.fillMaxWidth(), ::tap)
                     }
-                    GridRows(tools, 2) { k, m -> GridTool(k.icon, k.label, k.sub, k.enabled, m, k.onClick) }
-                    ListHeader("Stream")
-                    val on = any !is Target.None
-                    val mirroring = screen.active
-                    val streams = listOf(
-                        ControlTool(Ic.mic, "Mic", null, on) { open({ true }, "Stream the mic to", MIC_PAGE) },
-                        ControlTool(Ic.videocamOutline, "Webcam", null, on) { open({ true }, "Stream the camera to", WEBCAM_PAGE) },
-                        if (mirroring) {
-                            ControlTool(Ic.stopScreenShare, "Stop mirror", null, true) { ScreenSession.stop() }
-                        } else {
-                            ControlTool(Ic.screenShare, "Mirror", null, on) {
-                                picker.run(target(scope, devices), "Mirror this phone to") { d ->
-                                    mirrorFor = d.id
-                                    askCapture.launch(context.getSystemService(MediaProjectionManager::class.java).createScreenCaptureIntent())
-                                }
-                            }
-                        },
-                    )
-                    GridRows(streams, 3) { k, m -> SmallTool(k.icon, k.label, k.enabled, m, k.onClick) }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TileGap)) {
+                        RemoteGroupCard(RemoteGroup.Share, rows, Modifier.fillMaxWidth(), ::tap)
+                    }
                 }
-            },
-            dock = { shape -> if (player != null) MediaDock(player, shape) { onOpen(Route(player.id, "media")) } },
-        )
+            }
+        }
+        if (player != null) {
+            val shape = if (side) DockShape.Tile else DockShape.Bottom
+            Box(if (side) Modifier.padding(start = TiledGutter, end = TiledGutter, bottom = 8.dp) else Modifier) {
+                MediaDock(player, shape) { onOpen(Route(player.id, "media")) }
+            }
+        }
     }
 }
 
-/** A tool of a grid of Control. */
-private class ControlTool(val icon: Int, val label: String, val sub: String?, val enabled: Boolean, val onClick: () -> Unit)
+/** The icon of a row. */
+private fun remoteIcon(tool: RemoteTool): Int = when (tool) {
+    RemoteTool.Desktop -> Ic.desktop
+    RemoteTool.Extend -> Ic.devices
+    RemoteTool.Panel -> Ic.grid
+    RemoteTool.Touchpad -> Ic.touchApp
+    RemoteTool.Commands -> Ic.terminal
+    RemoteTool.Media -> Ic.music
+    RemoteTool.Webcam -> Ic.videocamOutline
+    RemoteTool.Mic -> Ic.mic
+    RemoteTool.Mirror -> Ic.screenShare
+    RemoteTool.Speaker -> Ic.speakerPhone
+}
+
+/** A group of rows under its title. It draws nothing when the group has no row. */
+@Composable
+private fun RemoteGroupCard(group: RemoteGroup, rows: List<RemoteRow>, modifier: Modifier, onTap: (RemoteTool) -> Unit) {
+    val list = rows.inGroup(group)
+    if (list.isEmpty()) return
+    Column(modifier) {
+        ListHeader(group.title)
+        Column(Modifier.padding(top = 4.dp).fillMaxWidth().clip(TileShape).background(Tn.tile).border(1.dp, Tn.line, TileShape)) {
+            list.forEachIndexed { i, r ->
+                if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Tn.line))
+                RemoteRowView(r) { onTap(r.tool) }
+            }
+        }
+    }
+}
+
+/** A row: the icon, the label, the state line, and a chevron. A row that is not enabled shows dimmed and takes no tap. */
+@Composable
+private fun RemoteRowView(r: RemoteRow, onClick: () -> Unit) {
+    val icon = if (r.label == "Stop mirror") Ic.stopScreenShare else remoteIcon(r.tool)
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).alpha(if (r.enabled) 1f else DimAlpha)
+            .clickable(enabled = r.enabled, role = Role.Button, onClick = onClick)
+            .padding(start = 14.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Sym(icon, tint = Tn.blue, size = 22.dp)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            T(r.label, size = 15, weight = FontWeight.SemiBold)
+            if (!r.line.isNullOrEmpty()) T(r.line, size = 12, color = Tn.sub, lineHeight = 1.3f)
+        }
+        Sym(Ic.chevron, tint = Tn.sub, size = 20.dp)
+    }
+}
+
+/**
+ * The row under the header: the computer and its state. A computer that
+ * is reachable says Connected, and a tap opens Computers. A computer that
+ * is not reachable says `Not reachable since HH:MM`, with Wake when it can
+ * wake. With all computers in scope, the row counts the computers that are
+ * online.
+ */
+@Composable
+private fun ComputerRow(d: DeviceUi?, devices: List<DeviceUi>, onClick: () -> Unit) {
+    val context = LocalContext.current
+    val paired = devices.filter { it.paired }
+    if (paired.isEmpty()) return
+    val shape = TileShape
+    val offline = d != null && !d.online
+    val name = d?.name ?: "All computers"
+    val line = when {
+        d == null -> onlineText(devices)
+        d.online -> "Connected"
+        else -> LinkNote.rowLine(false, d.lastSeen) { timeText(context, it) }.orEmpty()
+    }
+    val up = if (d != null) d.online else paired.any { it.online }
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(shape).background(Tn.tile)
+            .border(if (offline) 2.dp else 1.dp, if (offline) Tn.orange else Tn.line, shape)
+            .clickable(onClickLabel = "Open Computers", role = Role.Button, onClick = onClick)
+            .semantics(mergeDescendants = true) { }
+            .padding(start = 14.dp, end = if (offline && d?.canWake == true) 8.dp else 12.dp, top = 6.dp, bottom = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (up) Dot(Tn.green, 10.dp) else Dot(Tn.orange, 10.dp)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            T(name, size = 15, weight = FontWeight.SemiBold, maxLines = 1)
+            if (line.isNotEmpty()) T(line, size = 13, color = Tn.sub, maxLines = 1)
+        }
+        if (offline && d?.canWake == true) {
+            Box(
+                Modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp))
+                    .clickable(onClickLabel = "Wake ${d.name}", role = Role.Button) { FluxCore.wake(d.id) }
+                    .padding(vertical = 6.dp).heightIn(min = 36.dp).clip(RoundedCornerShape(12.dp)).background(Tn.line)
+                    .padding(horizontal = 16.dp),
+                contentAlignment = Alignment.Center,
+            ) { T("Wake", size = 13, weight = FontWeight.SemiBold, maxLines = 1) }
+        } else {
+            Sym(Ic.chevron, tint = Tn.sub, size = 20.dp)
+        }
+    }
+}
 
 // ───────────────────────── Media ─────────────────────────
 

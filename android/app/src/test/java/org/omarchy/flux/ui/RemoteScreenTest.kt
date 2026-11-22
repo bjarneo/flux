@@ -32,6 +32,15 @@ class RemoteScreenTest {
         assertEquals(Ic.window, windowIcon("org.example.Unknown"))
     }
 
+    @Test
+    fun computerCardHasTheMenuKey() {
+        val card = source("ComputersScreen.kt")
+        assertTrue(card.contains("ComputerMenuKey(d, onUnpair)"))
+        // The long press and the TalkBack actions stay.
+        assertTrue(card.contains("onLongClick = { menu = true }"))
+        assertTrue(card.contains("CustomAccessibilityAction(\"Unpair"))
+    }
+
     private fun source(name: String) = File("src/main/java/org/omarchy/flux/ui/$name").readText()
 
     @Test
@@ -40,8 +49,8 @@ class RemoteScreenTest {
         for (gone in listOf("AgentList", "AgentCard", "SessionStrip", "NEW_PANE_PAGE", "New agent or terminal", "AGENT_PAGE", "HerdrSync")) {
             assertFalse("Remote still holds $gone", control.contains(gone))
         }
-        assertTrue(control.contains("ListHeader(\"Tools\")"))
-        assertTrue(control.contains("ListHeader(\"Stream\")"))
+        assertTrue(control.contains("RemoteGroupCard(RemoteGroup.See"))
+        assertTrue(control.contains("RemoteGroupCard(RemoteGroup.Share"))
     }
 
     @Test
