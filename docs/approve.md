@@ -322,7 +322,9 @@ enrollment is never a valid approval, and the reverse.
     does not use any field that `fluxd` or the phone sends back. It checks
     the signature with the key from the key file, and it checks the time.
 12. The helper exits with 0 only when the signature is valid. Any other
-    result is a non-zero exit, and PAM goes on to the password.
+    result is a non-zero exit, and PAM goes on to the password. Before
+    it exits, the helper prints 1 line with the reason, except for 4
+    failures, see Failure modes.
 
 ## Enrollment flow
 
@@ -408,25 +410,41 @@ the open request of that computer at once.
 
 Every failure gives a non-zero exit, and PAM asks for the password.
 
-| Condition | Result |
-| --- | --- |
-| No key file | The helper stops at once and prints nothing |
-| A key file that fails a check | The helper stops at once |
-| `fluxd` does not run, or the peer is another user | The helper stops at once |
-| The phone is not paired or not connected | The helper stops at once |
-| Another approval waits for the same phone | `fluxd` refuses the request |
-| The user denies on the phone | The helper stops |
-| No answer in time | The helper stops, and `fluxd` cancels the request on the phone |
-| A wrong signature, a wrong key, or a changed field | The helper stops |
-| A stale or future time | The helper stops |
-| The phone has no strong biometric | The phone sends an error |
-| A new fingerprint on the phone | The key is invalid, the phone sends an error, and the user enrolls again |
-| The fingerprint check fails, for example after too many tries | The phone sends the error, and the helper or the command stops |
-| The phone cannot sign, for example after a Keystore error | The phone sends the error with its reason, and the helper or the command stops. The command prints the reason |
-| The service is `sshd` | The helper stops at once |
-| Another user asks, for example with the sudoers option `targetpw` | The helper stops at once |
-| `polkit-1` without a setuid `polkit-agent-helper-1` | The helper stops at once. `flux-cli approve enable polkit-1` refuses this service |
-| The PAM caller stops, for example when the user closes the terminal or kills `sudo` | The helper gets `SIGTERM` and ends the request. `fluxd` also ends a request when the connection of its helper closes, and it closes the request on the phone |
+For most failures, the helper prints 1 line with the reason before the
+password prompt. 4 rows print nothing: no key file, the service `sshd`,
+a request of another user, and a PAM caller that stops. So the helper
+prints nothing on a computer with no key, and nothing for a service that
+the phone never approves. The `polkit-1` row without a setuid agent
+helper counts as a request of another user.
+
+The lines are fixed texts in `internal/approve/reason.go`. A line holds
+no value from `fluxd`, from the phone, from the key file, or from the
+environment. So code that runs as the user cannot put text on the
+terminal of root through the line. The `Reason` function returns the
+line, and a test checks each row.
+
+| Condition | Result | Line that the helper prints |
+| --- | --- | --- |
+| No key file | The helper stops at once | None |
+| A key file that fails a check | The helper stops at once | `The key file of the phone is not safe, so the helper does not use it. Run: flux-cli approve status` |
+| `fluxd` does not run, the peer is another user, or `fluxd` stops answering | The helper stops at once | `fluxd does not answer, so the phone cannot get the request. Run: flux-cli doctor` |
+| The phone is not paired or not connected | The helper stops at once | `The phone is not paired or not connected.` |
+| Another approval waits for the same phone | `fluxd` refuses the request | `Another approval waits for the phone.` |
+| The user denies on the phone | The helper stops | `The request was denied on the phone.` |
+| No answer in time | The helper stops, and `fluxd` cancels the request on the phone | `The phone did not answer in time.` |
+| A wrong signature, a wrong key, or a changed field | The helper stops | `The signature of the phone is not valid.` |
+| A stale or future time | The helper stops | `The time of the signature is out of range. Check the clock of the phone.` |
+| The phone has no strong biometric | The phone sends an error | `The phone could not approve the request. Open Flux on the phone for the reason.` |
+| A new fingerprint on the phone | The key is invalid, the phone sends an error, and the user enrolls again | The same line as the row above |
+| The fingerprint check fails, for example after too many tries | The phone sends the error, and the helper or the command stops | The same line as the row above |
+| The phone cannot sign, for example after a Keystore error | The phone sends the error with its reason, and the helper or the command stops. The command prints the reason | The same line as the row above. The helper does not print the reason of the phone |
+| The service is `sshd` | The helper stops at once | None |
+| Another user asks, for example with the sudoers option `targetpw` | The helper stops at once | None |
+| `polkit-1` without a setuid `polkit-agent-helper-1` | The helper stops at once. `flux-cli approve enable polkit-1` refuses this service | None. This is a request of another user, because the helper cannot see who asks. `flux-cli doctor` shows the `polkit-1` line of `flux-cli approve status` |
+| The PAM caller stops, for example when the user closes the terminal or kills `sudo` | The helper gets `SIGTERM` and ends the request. `fluxd` also ends a request when the connection of its helper closes, and it closes the request on the phone | None |
+
+The line comes after the line of step 7 of the approval flow when the
+helper asked the phone, and before the password prompt.
 
 ## What an attacker can do
 
@@ -437,6 +455,13 @@ Every failure gives a non-zero exit, and PAM asks for the password.
 | A person with the locked phone | See a request on the lock screen, and deny it. See the fingerprint prompt open at once when the switch is on. Cancel that prompt. | Approve a request without the fingerprint. The prompt that opens at once needs the same strong fingerprint as a tap. |
 | A person with the unlocked phone | Deny requests. Remove Flux. | Approve a request without the fingerprint |
 | A person at the unlocked Windows computer who knows its Windows Hello PIN | Approve requests | Approve a request without the PIN or a fingerprint or face that Windows Hello knows |
+
+The reason line gives these attackers nothing new. The line is a fixed
+text, so no attacker chooses its content. A changed `fluxd` can choose
+among the fixed lines. It cannot add text. The line tells only what the
+attacker can already see: the password prompt follows it, and `flux-cli
+approve status` shows the same state to the user. The 4 silent rows
+keep the line away from a computer or a service that has no approval.
 
 The helper runs as root for `sudo`. It reads only the key file, the socket,
 `/etc/passwd`, and its PAM variables. It limits each line from `fluxd` to

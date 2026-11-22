@@ -161,6 +161,13 @@ sudo chmod 755 /etc/flux /etc/flux/approve
 `approve_timeout` in `config.toml` accepts 5 to 120 seconds.
 The default is 20 seconds.
 If the phone is disconnected, the helper stops immediately and PAM asks for the password.
+Before the password prompt, the helper prints 1 line with the reason.
+For example, `The request was denied on the phone.` or `The phone did not answer in time.`
+The helper prints nothing when no key file exists, for the service `sshd`, when another user asks, and when the PAM caller stops.
+The failure table in [the approval design](approve.md) lists the line for each case.
+
+`flux-cli doctor` shows the `polkit-1` line of `flux-cli approve status` when `polkit-1` cannot ask the phone.
+This happens when `polkit-agent-helper-1` does not run with setuid root.
 
 | Path | Purpose |
 | --- | --- |

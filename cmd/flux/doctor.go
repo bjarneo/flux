@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"flux/internal/approve"
 	"flux/internal/config"
 	"flux/internal/herdr"
 	"golang.org/x/sys/unix"
@@ -47,6 +48,13 @@ func doctor() {
 	}
 
 	checkDiscoveryPort(udpHolders, os.Stdout, check)
+
+	// polkit-1 asks the phone only with a setuid polkit-agent-helper-1.
+	// The line is the one of flux-cli approve status.
+	if name, err := approveUser(); err == nil {
+		_, kerr := approve.ReadKey(approve.KeyPath(name), 0)
+		approveDoctor(os.Stdout, kerr == nil, approve.SystemPAM().Uses("polkit-1"), checkServices([]string{"polkit-1"}), check)
+	}
 
 	// Flux needs no open port. fluxd opens every connection, and mDNS
 	// finds the phones. The default ufw rules let mDNS in.
