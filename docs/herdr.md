@@ -317,7 +317,8 @@ To answer, tap an action:
 
 Android 12 and later asks for the unlock of the phone before Flux sends.
 Flux sends nothing until the unlock succeeds.
-When the phone is locked, Flux also sends nothing and opens the thread.
+When the phone is still locked after the action starts, Flux asks Android to dismiss the lock screen and sends only after the dismiss succeeds.
+When you cancel the dismiss or it fails, Flux sends nothing and opens the thread.
 On Android 10 and 11, each action opens the thread after the unlock and sends nothing by itself.
 
 Before Flux sends, it reads the agent again.
@@ -712,6 +713,7 @@ On Android 12 and later, the unlock of Android is the only check for this answer
 The app does not ask for the fingerprint or screen lock again, and the answer does not start the 5-minute unlock of the app.
 In the app, the thread and Live keep their own lock, as in earlier versions.
 A locked phone sends nothing before the unlock.
+A caller that starts the answer without the unlock of Android meets the lock screen of the phone and sends nothing until you unlock.
 To stop answers from notifications, turn off **Agent control** or the **Agent needs input** notifications.
 
 Terminal output can contain secrets.

@@ -32,8 +32,9 @@ import org.omarchy.flux.service.FluxService
 /**
  * Answers an agent from its notification: no UI. A choice action or Reply
  * starts it. From Android 12, Android asks for the unlock before it starts.
- * When the device is locked, it sends nothing and opens the thread. It
- * reads the pane again and sends only when the dialog is still the one
+ * When the device is still locked, it asks Android to dismiss the lock screen
+ * and sends only after the dismiss succeeds. When the dismiss fails or the
+ * user cancels it, it sends nothing and opens the thread. It reads the pane again and sends only when the dialog is still the one
  * of the notification. Else it sends nothing and opens the thread, with the
  * line that says the question changed. It uses Theme.Flux.Invisible, as
  * [ClipboardSendActivity] does.
@@ -57,11 +58,24 @@ class AgentAnswerActivity : ComponentActivity() {
             finish()
             return
         }
-        // Only SystemUI enforces the unlock of the action. This check also stops a caller that skips it.
-        if (getSystemService(KeyguardManager::class.java)?.isDeviceLocked != false) {
-            openThread(device, pane, changed = false)
+        // Only SystemUI enforces the unlock of the action. A caller that skips it meets the lock screen here.
+        val keyguard = getSystemService(KeyguardManager::class.java)
+        if (keyguard == null || keyguard.isDeviceLocked) {
+            if (keyguard == null) {
+                openThread(device, pane, changed = false)
+                return
+            }
+            keyguard.requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
+                override fun onDismissSucceeded() = proceed(device, pane)
+                override fun onDismissCancelled() = openThread(device, pane, changed = false)
+                override fun onDismissError() = openThread(device, pane, changed = false)
+            })
             return
         }
+        proceed(device, pane)
+    }
+
+    private fun proceed(device: String, pane: String) {
         val choice = intent.getStringExtra(EXTRA_CHOICE).orEmpty()
         val dialog = intent.getStringExtra(EXTRA_DIALOG).orEmpty()
         val text = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(KEY_TEXT)?.toString()?.trim()
