@@ -10,11 +10,9 @@ cd "$(dirname "$0")/../.."
 RAW=${RAW:-$HOME/.cache/flux-site-caps/desk}
 OUT=site/img/desk
 mkdir -p "$RAW" "$OUT"
-QT_QPA_PLATFORM=offscreen QT_SCALE_FACTOR=2 gui/app/build/flux-gui --snapshot "$RAW"
-magick "$RAW/47-remote-live.png" -resize 1600x -quality 86 -define webp:method=6 "$OUT/remote-live.webp"
-# The Device access panel of the Overview, at full 2x size. It needs a
-# taller window to show all its switches.
-mkdir -p "$RAW/tall"
-QT_QPA_PLATFORM=offscreen QT_SCALE_FACTOR=2 FLUX_SNAPSHOT_SIZE=1180x1100 gui/app/build/flux-gui --snapshot "$RAW/tall"
-magick "$RAW/tall/01-overview.png" -crop 880x948+560+924 +repage -quality 86 -define webp:method=6 "$OUT/device-access.webp"
+# The device page of Pixel 8, with all 4 parts. It needs a tall window.
+QT_QPA_PLATFORM=offscreen QT_SCALE_FACTOR=2 FLUX_SNAPSHOT_SIZE=1180x1250 gui/app/build/flux-gui --snapshot "$RAW"
+magick "$RAW/10-device.png" -resize 1600x -quality 86 -define webp:method=6 "$OUT/remote-live.webp"
+# The Access card of the device page, at full 2x size.
+magick "$RAW/10-device.png" -crop 1768x758+556+488 +repage -quality 86 -define webp:method=6 "$OUT/device-access.webp"
 ls -l "$OUT"
