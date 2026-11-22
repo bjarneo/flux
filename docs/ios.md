@@ -226,6 +226,7 @@ Flux sends nothing until the unlock succeeds.
 Then Flux reads the agent again.
 When the question changed, Flux sends nothing and opens the chat with the line `The question changed. Pick again.`
 When the link to the computer is closed, Flux also sends nothing and opens the chat.
+When you cancel the check, Flux sends nothing and posts the notification again with its actions, without sound. It does this only while the agent still waits and **Agent needs input** is on. A second tap does nothing while a check runs.
 This is the case after iOS suspended Flux, because the link closes then.
 
 When **Agent control** is off on the computer, the notification has no action, and its text ends with `Read only`.

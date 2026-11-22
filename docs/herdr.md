@@ -6,7 +6,7 @@ Flux for Android and Flux for macOS show the coding agents that [herdr](https://
 You can see the status of each agent, read its recent output in color, and get a notification when an agent needs input or finishes.
 On Android, a [home screen widget](#home-screen-widget) shows the agents that need you.
 When you turn on **Agent control**, you can also answer an agent with taps, send it text, start new agents, and close agents.
-On Android, you can answer a blocked agent from its notification. See [Answer from the notification](#answer-from-the-notification).
+You can answer a blocked agent from its notification in Flux for Android, Flux for iOS, Flux for Windows, and Flux for macOS. See [Answer from the notification](#answer-from-the-notification).
 When you also turn on terminals, Flux for Android opens herdr terminals and types commands in them.
 With control on, Flux for Android can also show the live terminal of an agent, and you can scroll and tap in it.
 
@@ -307,6 +307,16 @@ Android also lists the two types as the **Agents that need input** and **Agents 
 
 ### Answer from the notification
 
+Each app answers from a notification, with these limits:
+
+| App | Limits |
+| --- | --- |
+| Android | The unlock of Android is the check. See below. |
+| iOS | Only while Flux runs. Each action asks for Face ID, Touch ID, or the passcode, and it opens Flux. See [Flux for iOS](ios.md#agent-notifications-and-the-link-state). |
+| Windows | Only while Flux runs. Each button asks for Windows Hello. A dialog with choices has no text path. See [Answer from a notification](windows.md#answer-from-a-notification). |
+| macOS | Only while Flux runs. Each action asks for Touch ID or the Mac password. See [Flux for macOS](macos.md#agent-notifications-and-the-link-state). |
+
+The rest of this section describes Android.
 With **Agent control** on, Flux for Android adds actions to the notification of a blocked agent.
 The notification shows the question line.
 To answer, tap an action:
