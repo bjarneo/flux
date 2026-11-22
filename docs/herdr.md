@@ -317,10 +317,11 @@ To answer, tap an action:
 
 Android 12 and later asks for the unlock of the phone before Flux sends.
 Flux sends nothing until the unlock succeeds.
+When the phone is locked, Flux also sends nothing and opens the thread.
 On Android 10 and 11, each action opens the thread after the unlock and sends nothing by itself.
 
 Before Flux sends, it reads the agent again.
-When the question changed since the notification, Flux sends nothing.
+When the question changed since the notification, Flux sends nothing. This holds for a choice and for **Reply**.
 It opens the thread with the current choices and the line `The question changed. Pick again.`
 When the link is closed or the read takes more than 3 seconds, Flux also sends nothing and opens the thread.
 After a sent answer, Flux removes the notification.

@@ -364,7 +364,7 @@ object Android {
             .setCategory(if (blocked) NotificationCompat.CATEGORY_REMINDER else NotificationCompat.CATEGORY_STATUS)
         if (notice.text.isNotEmpty()) b.setContentText(notice.text)
         if (notice.bigText.isNotEmpty()) b.setStyle(NotificationCompat.BigTextStyle().bigText(notice.bigText))
-        for ((i, a) in notice.actions.withIndex()) b.addAction(agentAction(context, deviceId, agent.pane, a, i))
+        for ((i, a) in notice.actions.withIndex()) b.addAction(agentAction(context, deviceId, agent.pane, a, i, notice.dialogId))
         NotificationManagerCompat.from(context).notify(TAG_AGENT, id, b.build())
     }
 
@@ -376,9 +376,10 @@ object Android {
     /**
      * An action of the agent notification. From [ANSWER_SDK], a choice and
      * Reply start [AgentAnswerActivity], and Android asks for the unlock
-     * before it. Before that, each action opens the thread.
+     * before it. Before that, each action opens the thread. [dialogId] is the
+     * dialog of the notice texts. The activity sends only for this dialog.
      */
-    private fun agentAction(context: Context, deviceId: String, pane: String, a: NoticeAction, index: Int): NotificationCompat.Action {
+    private fun agentAction(context: Context, deviceId: String, pane: String, a: NoticeAction, index: Int, dialogId: String): NotificationCompat.Action {
         val code = agentId(deviceId, pane) * 31 + index + 1
         val pi: PendingIntent
         val builder: NotificationCompat.Action.Builder
@@ -392,7 +393,7 @@ object Android {
                 .putExtra(AgentAnswerActivity.EXTRA_DEVICE, deviceId)
                 .putExtra(AgentAnswerActivity.EXTRA_PANE, pane)
                 .putExtra(AgentAnswerActivity.EXTRA_CHOICE, a.key)
-                .putExtra(AgentAnswerActivity.EXTRA_DIALOG, AgentDialogs.latest(deviceId, pane)?.id.orEmpty())
+                .putExtra(AgentAnswerActivity.EXTRA_DIALOG, dialogId)
             // Reply needs a mutable intent, because RemoteInput writes the text into it.
             val flags = PendingIntent.FLAG_UPDATE_CURRENT or if (a.kind == NoticeKind.Reply) PendingIntent.FLAG_MUTABLE else PendingIntent.FLAG_IMMUTABLE
             pi = PendingIntent.getActivity(context, code, intent, flags)
