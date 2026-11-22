@@ -267,7 +267,7 @@ private fun ComputerRow(d: DeviceUi?, devices: List<DeviceUi>, scope: String?, o
         d.online -> "Connected"
         else -> LinkNote.rowLine(false, d.lastSeen) { timeText(context, it) }.orEmpty()
     }
-    val up = if (d != null) d.online else paired.any { it.online }
+    val shown = (if (d != null) listOf(d) else paired).take(4)
     Box {
         Row(
             Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(shape).background(Tn.tile)
@@ -278,7 +278,10 @@ private fun ComputerRow(d: DeviceUi?, devices: List<DeviceUi>, scope: String?, o
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (up) Dot(Tn.green, 10.dp) else Dot(Tn.orange, 10.dp)
+            // One link dot for each computer in scope, up to 4, as the scope chip draws them.
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                for (c in shown) LinkDot(c.online, 8.dp)
+            }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 T(name, size = 15, weight = FontWeight.SemiBold, maxLines = 1)
                 if (line.isNotEmpty()) T(line, size = 13, color = Tn.sub, maxLines = 1)
