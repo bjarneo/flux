@@ -34,7 +34,15 @@ public static class AgentsFeature
         // An answer from a notification needs the unlock of Windows Hello, as a reply in the thread does.
         if (model.Core.Plugin<HerdrPlugin>() is { } plugin)
         {
-            plugin.Unlock = (reason, action, onError) => ReplyLock.Run(reason, Application.Current?.MainWindow, action, onError);
+            plugin.Unlock = (reason, action, onError, onCancel) =>
+            {
+                // The app can sit hidden in the tray. Show it, so that the prompt of Windows Hello has a visible owner.
+                if (!ReplyLock.IsUnlocked)
+                {
+                    model.ShowMain?.Invoke();
+                }
+                ReplyLock.Run(reason, Application.Current?.MainWindow, action, onError, onCancel);
+            };
         }
     }
 
