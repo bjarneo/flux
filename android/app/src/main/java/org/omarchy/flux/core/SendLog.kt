@@ -82,6 +82,12 @@ fun addSend(list: List<SendEntry>, e: SendEntry, max: Int = MAX_SEND_LOG): List<
     }
 }
 
+/** Removes the entries of the computer [deviceId]. The entries of the other computers stay. */
+fun clearSends(list: List<SendEntry>, deviceId: String): List<SendEntry> = list.filterNot { it.deviceId == deviceId }
+
+/** Removes the entry [id]. */
+fun removeSend(list: List<SendEntry>, id: Long): List<SendEntry> = list.filterNot { it.id == id }
+
 /** Sets the bytes of the running file [id] that went through, and its [size] when it is 0 or more. */
 fun progressSend(list: List<SendEntry>, id: Long, done: Long, size: Long = -1): List<SendEntry> =
     list.map { if (it.id == id && it.state == TransferState.Running) it.copy(done = done, size = if (size >= 0) size else it.size) else it }
@@ -208,6 +214,16 @@ object SendLog {
             resumeSend(list, id, done)
         }
         return found
+    }
+
+    /** Removes the entries of the computer [deviceId], for Clear this chat. The files that the computer saved stay. */
+    fun clear(deviceId: String) {
+        _entries.update { clearSends(it, deviceId) }
+    }
+
+    /** Removes the entry [id], for a send that the user sends again. */
+    fun remove(id: Long) {
+        _entries.update { removeSend(it, id) }
     }
 
     /** Debug builds only: shows [list] in the place of the entries, for the sample computers. */

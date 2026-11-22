@@ -30,6 +30,7 @@ object Ic {
     val chevron = R.drawable.ic_chevron_right
     val more = R.drawable.ic_more_vert
     val close = R.drawable.ic_close
+    val delete = R.drawable.ic_delete
     val check = R.drawable.ic_check
     val checkCircle = R.drawable.ic_check_circle
     val refresh = R.drawable.ic_refresh

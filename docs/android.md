@@ -365,7 +365,7 @@ ANDROID_SERIAL=emulator-5554 FLUX_DEMO=1 tools/shot.sh chat /tmp/chat.png
 The pages are:
 
 - `chat`, `remote`, and `computers` for the 3 destinations of the navigation bar. `control` is the old name of `remote` and opens **Remote**. `chats`, `inbox`, and `send` open **Chats**. `devices` is the same as `computers`.
-- `thread` for the chat of the first paired computer, and `tray` for the same chat with the tray open.
+- `thread` for the chat of the first paired computer, and `tray` for the same chat with More open.
 - `settings` for **Settings**, above **Chats**.
 - `sync`, `ssh`, and `about` for the sync switches, the SSH key, and **About Flux**. They open above **Settings**.
 - `home` for **Remote** with the first paired computer in scope.
