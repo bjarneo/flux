@@ -121,13 +121,32 @@ class WidgetModelTest {
         assertEquals(WidgetQuiet.NoAgents, model(listOf(device("pc", "omarchy-xps"))).quiet)
         assertEquals(WidgetQuiet.Connecting, model(listOf(device("pc", "omarchy-xps", online = false)), connecting = true).quiet)
 
-        // A computer that is not reachable adds no agents, so its old agents do not show.
-        val away = model(listOf(device("pc", "omarchy-xps", online = false, agents = listOf(migrate), lastSeen = 500)))
+        // A computer that is not reachable and has no known agents has no rows.
+        val away = model(listOf(device("pc", "omarchy-xps", online = false, lastSeen = 500)))
         assertEquals(WidgetQuiet.Offline, away.quiet)
         assertTrue(away.rows.isEmpty())
         assertEquals(0, away.needs)
         assertEquals("omarchy-xps", away.name)
         assertEquals(500L, away.lastSeen)
+    }
+
+    @Test
+    fun aComputerThatIsNotReachableKeepsItsAgentRowsWithTheTimeOfTheLastLink() {
+        val m = model(
+            listOf(
+                device("pc", "omarchy-xps", agents = listOf(refactor)),
+                device("desk", "omarchy-desk", online = false, agents = listOf(migrate, flaky), lastSeen = 700_000L),
+            ),
+        )
+        assertNull("a row keeps the widget out of the quiet state", m.quiet)
+        val desk = m.rows.filter { it.computer == "omarchy-desk" }
+        assertEquals(2, desk.size)
+        assertTrue(desk.all { !it.reachable })
+        assertEquals("the line replaces the state word", setOf("Not reachable since 09:12"), desk.map { it.statusText { "09:12" } }.toSet())
+        assertEquals("a blocked agent still needs the user", 1, m.needs)
+        val online = m.rows.single { it.computer == "omarchy-xps" }
+        assertTrue(online.reachable)
+        assertEquals("Working", online.statusText())
     }
 
     @Test

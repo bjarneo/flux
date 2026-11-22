@@ -159,18 +159,20 @@ private fun rowViews(context: Context, r: WidgetRow, fit: WidgetFit, paint: Pain
     v.setImageViewResource(R.id.row_dot, if (r.tone == WidgetTone.Works) R.drawable.widget_ring else R.drawable.widget_dot)
     paint.tint(v, R.id.row_dot) { it.dot(r.tone) }
     v.setTextViewText(R.id.row_title, r.title)
-    paint.text(v, R.id.row_title) { it.text }
+    // A row of a computer that is not reachable is dim.
+    paint.text(v, R.id.row_title) { if (r.reachable) it.text else it.sub }
     v.setTextViewText(R.id.row_computer, r.computer)
     v.setViewVisibility(R.id.row_computer, visible(wide && r.computer.isNotEmpty()))
     paint.text(v, R.id.row_computer) { it.sub }
-    v.setTextViewText(R.id.row_status, r.status)
-    paint.text(v, R.id.row_status) { it.ink(r.tone) }
+    val status = r.statusText { android.text.format.DateFormat.getTimeFormat(context).format(Date(it)) }
+    v.setTextViewText(R.id.row_status, status)
+    paint.text(v, R.id.row_status) { if (r.reachable) it.ink(r.tone) else it.dim }
     val source = if (wide) r.source else listOf(r.source, r.computer).filter { it.isNotBlank() }.joinToString(" · ")
     v.setTextViewText(R.id.row_source, if (source.isEmpty()) "" else " · $source")
     v.setViewVisibility(R.id.row_source, visible(!fit.compact && source.isNotEmpty()))
     paint.text(v, R.id.row_source) { it.sub }
     v.setOnClickPendingIntent(R.id.row_root, open(context, r.target))
-    v.setContentDescription(R.id.row_root, listOf(r.title, r.status, r.source, r.computer).filter { it.isNotBlank() }.joinToString(", "))
+    v.setContentDescription(R.id.row_root, listOf(r.title, status, r.source, r.computer).filter { it.isNotBlank() }.joinToString(", "))
     return v
 }
 

@@ -13,6 +13,7 @@ class ChatListTest {
         agents: List<HerdrAgent> = emptyList(),
         since: Map<String, Long> = emptyMap(),
         pairState: PairState = if (paired) PairState.Paired else PairState.None,
+        lastSeen: Long = 0,
     ) = DeviceUi(
         id = id, name = name, type = "laptop", ip = "", paired = paired, online = online,
         pairState = pairState, pairKey = "", pairOutgoing = false,
@@ -20,6 +21,7 @@ class ChatListTest {
         commands = emptyList(), commandsLoaded = false,
         herdr = if (agents.isEmpty()) null else HerdrState(enabled = true, running = true, agents = agents, control = true),
         agentSince = since,
+        lastSeen = lastSeen,
     )
 
     private val migrate = HerdrAgent("w2:p1", "codex", AgentStatus.Blocked, "Run the database migration", "billing")
@@ -60,8 +62,27 @@ class ChatListTest {
     }
 
     @Test
-    fun aComputerThatIsNotReachableAddsNoAgents() {
-        val desk = device("desk", "omarchy-desk", online = false, agents = listOf(migrate))
+    fun aComputerThatIsNotReachableKeepsItsLastKnownAgentsInTheirGroups() {
+        val desk = device("desk", "omarchy-desk", online = false, agents = listOf(migrate, flaky), lastSeen = 4_000L)
+        val pc = device("pc", "omarchy-xps", agents = listOf(refactor))
+        val list = chatList(listOf(desk, pc), null, emptyList(), SeenClock(), now = 9_000)
+        assertEquals("a blocked agent stays in Needs you", listOf("agent|desk|w2:p1"), list.needs.map { it.key })
+        assertEquals(listOf("w1:p1", "w3:p1"), list.agents.map { it.agent.pane })
+        val blocked = list.needs.single() as AgentRow
+        assertEquals(false, blocked.reachable)
+        assertEquals(4_000L, blocked.since)
+        val done = list.agents.single { it.agent.pane == "w3:p1" }
+        assertEquals("the agent keeps its group", AgentStatus.Done, done.agent.status)
+        assertEquals(false, done.reachable)
+        val works = list.agents.single { it.agent.pane == "w1:p1" }
+        assertEquals(true, works.reachable)
+        assertEquals(0L, works.since)
+        assertEquals(listOf("pc", "desk"), list.computers.map { it.device.id })
+    }
+
+    @Test
+    fun aComputerThatIsNotReachableAndHasNoAgentListAddsNoAgents() {
+        val desk = device("desk", "omarchy-desk", online = false)
         val list = chatList(listOf(desk), null, emptyList(), SeenClock(), now = 1)
         assertTrue(list.needs.isEmpty())
         assertTrue(list.agents.isEmpty())

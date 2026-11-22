@@ -175,6 +175,8 @@ data class HerdrOutput(
     val request: Long? = null,
     val view: String = "ansi",
     val path: String = "",
+    /** The time that the phone parsed the output, in milliseconds since the epoch, or 0 when it is not known. */
+    val at: Long = 0,
 ) {
     val text: String = lines.joinToString("\n") { it.text }
 
@@ -390,7 +392,7 @@ const val HERDR_MAX_LINES = 2 * HERDR_READ_LINES
  * not an output. It keeps the end of a text that is longer than
  * [HERDR_MAX_TEXT] or has more than [HERDR_MAX_LINES] lines.
  */
-fun parseHerdrOutput(body: JsonObject): HerdrOutput? {
+fun parseHerdrOutput(body: JsonObject, now: Long = System.currentTimeMillis()): HerdrOutput? {
     if (body.str("kind") != "output") return null
     val pane = body.str("pane")?.takeIf { it.isNotEmpty() } ?: return null
     val error = body.str("error")?.takeIf { it.isNotEmpty() }
@@ -415,6 +417,7 @@ fun parseHerdrOutput(body: JsonObject): HerdrOutput? {
         request = body.long("request"),
         view = body.str("view") ?: "ansi",
         path = body.str("path").orEmpty(),
+        at = now,
     )
 }
 

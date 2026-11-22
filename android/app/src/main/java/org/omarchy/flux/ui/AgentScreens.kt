@@ -60,6 +60,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
@@ -100,6 +102,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
@@ -112,6 +115,7 @@ import org.omarchy.flux.core.AgentStatus
 import org.omarchy.flux.core.AgentThread
 import org.omarchy.flux.core.ComputerThemes
 import org.omarchy.flux.core.DebugDemo
+import org.omarchy.flux.core.DebugInbox
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.HERDR_BLOCKED
@@ -122,6 +126,9 @@ import org.omarchy.flux.core.HerdrState
 import org.omarchy.flux.core.HerdrSync
 import org.omarchy.flux.core.HerdrTerminal
 import org.omarchy.flux.core.HerdrTerminalSession
+import org.omarchy.flux.core.LinkNote
+import org.omarchy.flux.core.ThreadLink
+import org.omarchy.flux.core.ThreadNote
 import org.omarchy.flux.core.ThreadBlock
 import org.omarchy.flux.core.agentAsk
 import org.omarchy.flux.core.agentThread
@@ -447,6 +454,12 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
         review = true
     }
     val wide = rememberWideWindow()
+    // The link state of the thread: the age of the output, a connect in progress, or a link that is closed.
+    val connecting = FluxCore.state.collectAsStateWithLifecycle().value.connecting && (!demo || DebugInbox.connecting)
+    val clock by rememberTicker(30_000L)
+    val linkNote = if (agent == null) null else LinkNote.threadNote(
+        d.online, connecting, d.name, out?.at ?: 0L, clock,
+    ) { timeText(appContext, it) }
     Column(Modifier.fillMaxSize().imePadding()) {
         ChatTopBar(task, context, onBack, avatar = { AgentAvatar(status) }) {
             // The key stays while Live is on, so that Live can always stop.
@@ -482,7 +495,8 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
         }
         closer.error?.let { T(it, Modifier.padding(horizontal = 16.dp, vertical = 6.dp), size = 12, color = Tn.red) }
         when {
-            !d.online -> Box(Modifier.padding(horizontal = TiledGutter)) { NotReachable(d, "The lines of the agent") }
+            // The thread keeps the last output while the link is closed. Without an output, the screen has nothing to keep.
+            !d.online && (out == null || agent == null) -> Box(Modifier.padding(horizontal = TiledGutter)) { NotReachable(d, "The lines of the agent") }
             agent == null && d.herdr != null -> Column(Modifier.padding(horizontal = TiledGutter, vertical = 8.dp)) {
                 // The line tells why Live ended with the agent. An older
                 // reason does not show here.
@@ -518,15 +532,23 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
             else -> DockLayout(
                 Modifier.weight(1f).fillMaxWidth(),
                 thread = { pad ->
-                    ThreadList(
-                        out, thread, status, sent, pad,
-                        note = liveNote,
-                        onReview = if (canReview && d.online) openReview else null,
-                    )
+                    Column(Modifier.fillMaxSize()) {
+                        // The age line shows while the link is open. A closed link shows the note above the dock.
+                        if (linkNote?.state == ThreadLink.Connected) AgeLine(linkNote)
+                        Box(Modifier.weight(1f)) {
+                            ThreadList(
+                                out, thread, status, sent, pad,
+                                note = liveNote,
+                                onReview = if (canReview && d.online) openReview else null,
+                            )
+                        }
+                    }
                 },
                 dock = { shape ->
+                    val card = linkNote?.takeIf { it.state != ThreadLink.Connected }
                     if (control) {
                         Column {
+                            if (card != null) LinkCard(d, card)
                             if (terminalInput.unsent) LiveNote(LIVE_UNSENT)
                             // The state of the composer stays while Live shows its key row.
                             replyState.SaveableStateProvider("reply") {
@@ -537,10 +559,13 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
                             }
                         }
                     } else if (agent != null) {
-                        T(
-                            "Agent control is off on ${d.name}. To answer from this phone, turn on Agent control in Flux on the computer, on the Access card.",
-                            Modifier.dockFrame(shape).padding(DockPadding).padding(horizontal = 4.dp), size = 12, color = Tn.sub,
-                        )
+                        Column {
+                            if (card != null) LinkCard(d, card)
+                            T(
+                                "Agent control is off on ${d.name}. To answer from this phone, turn on Agent control in Flux on the computer, on the Access card.",
+                                Modifier.dockFrame(shape).padding(DockPadding).padding(horizontal = 4.dp), size = 12, color = Tn.sub,
+                            )
+                        }
                     }
                 },
             )
@@ -1651,7 +1676,10 @@ private fun AgentDock(
             writing = false
         }
     }
+    // A closed link takes no answer. The dock is dim and takes no tap, and this guard stops any other path.
+    val linked = d.online
     fun guarded(action: () -> Unit) {
+        if (!linked) return
         lockError = null
         ReplyLock.run(context, action) { lockError = it }
     }
@@ -1736,7 +1764,10 @@ private fun AgentDock(
         guarded { HerdrSync.sendPrompt(FluxCore, d.id, agent.pane, t) }
     }
     val asking = blocked && choices.isNotEmpty() && !writing
-    Column(Modifier.fillMaxWidth().dockFrame(shape).padding(DockPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(
+        Modifier.fillMaxWidth().then(if (linked) Modifier else Modifier.alpha(DimAlpha).takeNoTaps()).dockFrame(shape).padding(DockPadding),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
         when {
             blocked -> {
                 AskHeader(
@@ -1751,7 +1782,7 @@ private fun AgentDock(
                         Box(Modifier.padding(horizontal = 4.dp)) { AskText(ask, 16, FontWeight.SemiBold, 6.dp) }
                     }
                     // The grid of the choices keeps 6 dp between them, so that a tap does not hit the next choice.
-                    val open = choicesOpen(out, answered, reply?.sending == true)
+                    val open = linked && choicesOpen(out, answered, reply?.sending == true)
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         choices.forEachIndexed { i, c -> AskChoice(c, primary = i == 0, enabled = open, height = 48.dp, size = 14f) { answer(c) } }
                     }
@@ -1845,6 +1876,67 @@ private fun AgentDock(
                 onDownloaded = ::choose,
                 onDismiss = { picking = false },
             )
+        }
+    }
+}
+
+/** Stops each tap and drag in this part of the screen. The children see the events as used. */
+private fun Modifier.takeNoTaps(): Modifier = pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+    }
+}
+
+/**
+ * The line above the thread while the link is open: a green dot and
+ * `Output from 09:41 · now`.
+ */
+@Composable
+private fun AgeLine(note: ThreadNote) {
+    val text = listOf(note.title, note.detail).filter { it.isNotEmpty() }.joinToString(" · ")
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = TiledGutter, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PulseDot(Tn.green, size = 8.dp, pulse = false)
+        T(text, size = 12, color = Tn.sub, maxLines = 1)
+    }
+}
+
+/**
+ * The note above the dock while the link is not open. It says that the
+ * computer connects, or that it is not reachable and when the output is
+ * from. Retry looks for the computer again. Wake shows when the computer
+ * can wake.
+ */
+@Composable
+private fun LinkCard(d: DeviceUi, note: ThreadNote) {
+    val away = note.state == ThreadLink.Unreachable
+    val shape = RoundedCornerShape(16.dp)
+    Column(
+        Modifier.fillMaxWidth().background(Tn.bg).padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Column(
+            Modifier.fillMaxWidth().clip(shape).background(Tn.tile).border(1.dp, if (away) Tn.yellow else Tn.lineHi, shape)
+                .padding(horizontal = 16.dp, vertical = 12.dp).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            if (away) {
+                T(note.title, size = 16, weight = FontWeight.SemiBold)
+                if (note.detail.isNotEmpty()) T(note.detail, size = 14, color = Tn.sub)
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    RingSpinner(22.dp, color = Tn.blue)
+                    T(note.title, size = 16, weight = FontWeight.SemiBold)
+                }
+            }
+            if (away) {
+                Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FluxButton("Retry", { FluxCore.rediscover() }, icon = Ic.refresh)
+                    if (d.canWake) FluxButton("Wake", { FluxCore.wake(d.id) }, kind = ButtonKind.Tonal, icon = Ic.power)
+                }
+            }
         }
     }
 }

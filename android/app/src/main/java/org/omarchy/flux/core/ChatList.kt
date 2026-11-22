@@ -22,7 +22,9 @@ data class PairRow(val deviceId: String, val computer: String, override val at: 
 
 /**
  * A herdr agent: 1 chat. [at] is the start of its status. [control] is
- * true when the computer takes replies.
+ * true when the computer takes replies. [reachable] is false while the
+ * computer is not reachable. The row then shows the last known agent, and
+ * [since] is the time that Flux last saw the computer, or 0.
  */
 data class AgentRow(
     val deviceId: String,
@@ -30,6 +32,8 @@ data class AgentRow(
     val agent: HerdrAgent,
     val control: Boolean,
     override val at: Long,
+    val reachable: Boolean = true,
+    val since: Long = 0,
 ) : ChatRow {
     override val key: String get() = "agent|$deviceId|${agent.pane}"
 }
@@ -71,7 +75,8 @@ private fun matches(query: String, vararg fields: String?): Boolean =
 /**
  * Builds the Chats list: 1 chat for each agent and each paired computer,
  * and the [approval] and the pair requests on top. A computer that is not
- * reachable adds no agents. An agent takes the start time of its status
+ * reachable keeps the last known agents, with [AgentRow.reachable] false and
+ * [AgentRow.since] set. An agent takes the start time of its status
  * from [DeviceUi.agentSince], and an approval the time of its request.
  * Any other row with no time takes the time
  * that [seen] first saw it at [now]. [log] gives each computer its newest
@@ -93,8 +98,10 @@ fun chatList(
     for (d in devices) if (!d.paired && d.pairState == PairState.Incoming) rows += PairRow(d.id, d.name, 0)
     for (d in paired) {
         val herdr = d.herdr ?: continue
-        if (!d.online || !herdr.anyRunning) continue
-        for (a in herdr.agents.distinctBy { it.pane }) rows += AgentRow(d.id, d.name, a, herdr.control, d.agentSince[a.pane] ?: 0L)
+        if (!herdr.anyRunning) continue
+        for (a in herdr.agents.distinctBy { it.pane }) {
+            rows += AgentRow(d.id, d.name, a, herdr.control, d.agentSince[a.pane] ?: 0L, reachable = d.online, since = if (d.online) 0L else d.lastSeen)
+        }
     }
     val times = seen.update(rows.map(::seenKey), now)
     val timed = rows.map { r ->
