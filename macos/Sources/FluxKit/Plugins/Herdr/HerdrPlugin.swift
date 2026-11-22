@@ -826,11 +826,17 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
         }
     }
 
-    /// Opens the thread of `pane`. With `changed`, the thread says that the question changed.
+    /// Opens the thread of `pane`. With `changed`, the thread says that the
+    /// question changed. With `error`, the thread shows why the answer did
+    /// not go out, for example after a failed unlock.
     @MainActor
-    private func openThread(_ deviceId: String, pane: String, changed: Bool) {
+    private func openThread(_ deviceId: String, pane: String, changed: Bool, error: String? = nil) {
         removeNotice(deviceId, pane)
         if changed { model.questionChanged.insert(HerdrModel.promptKey(deviceId, pane: pane)) }
+        if let error {
+            replies += 1
+            model.replies[deviceId] = HerdrReply(pane: pane, action: "keys", seq: replies, sending: false, error: error)
+        }
         model.reveal(deviceId, pane: pane)
         model.open?(deviceId, pane)
     }
@@ -858,8 +864,8 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
         if choice == nil, (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return }
         unlock(computerName(deviceId), { [weak self] in
             self?.verifyAndSend(deviceId, pane: pane, dialog: dialog, choice: choice, text: text)
-        }, { [weak self] _ in
-            self?.openThread(deviceId, pane: pane, changed: false)
+        }, { [weak self] message in
+            self?.openThread(deviceId, pane: pane, changed: false, error: message)
         })
     }
 

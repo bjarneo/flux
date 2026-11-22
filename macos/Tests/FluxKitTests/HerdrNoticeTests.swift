@@ -93,6 +93,7 @@ final class HerdrNoticeTests: XCTestCase {
         XCTAssertTrue(h.packets.isEmpty)
         XCTAssertEqual(h.opened, ["pc|w2:p1"])
         XCTAssertFalse(plugin.model.isQuestionChanged("pc", pane: "w2:p1"))
+        XCTAssertEqual(plugin.model.reply("pc", pane: "w2:p1")?.error, "The check failed", "the thread shows why nothing went out")
     }
 
     @MainActor
