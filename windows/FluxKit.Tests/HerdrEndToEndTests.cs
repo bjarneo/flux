@@ -23,6 +23,7 @@ sealed class FakeHerdr : IAsyncDisposable
     readonly CancellationTokenSource stop = new();
     readonly List<NetworkStream> subscribers = [];
     volatile string status = "idle";
+    volatile string? readText;
     volatile bool closed;
 
     public ConcurrentQueue<(string Method, JsonObject Params)> Calls { get; } = new();
@@ -32,6 +33,14 @@ sealed class FakeHerdr : IAsyncDisposable
     {
         get => status;
         set => status = value;
+    }
+
+    // The text of each read, or null for the default text. A test sets a
+    // dialog here.
+    public string? ReadText
+    {
+        get => readText;
+        set => readText = value;
     }
 
     public FakeHerdr(string path)
@@ -149,7 +158,7 @@ sealed class FakeHerdr : IAsyncDisposable
             case "server.agent_manifests":
                 return Ok(new JsonObject { ["manifests"] = new JsonArray(new JsonObject { ["agent"] = "claude" }) });
             case "agent.read":
-                var text = Json.String(parameters["format"]) == "ansi" ? AnsiText : PlainText;
+                var text = ReadText ?? (Json.String(parameters["format"]) == "ansi" ? AnsiText : PlainText);
                 return Ok(new JsonObject
                 {
                     ["type"] = "pane_read",
@@ -345,6 +354,72 @@ public class HerdrEndToEndTests
         Assert.Null(plugin.Model.Actions[id].Error);
         Assert.True(herdr.Called("pane.close", p => Json.String(p["pane_id"]) == "w1:p1"));
         await fluxd.UntilAsync(() => plugin.Model.States[id].Agents.Count == 0, "the agent list without the agent");
+    }
+}
+
+public class HerdrNotificationEndToEndTests
+{
+    const string Dialog = "Bash command\n\n   bin/migrate --apply\n\n Do you want to proceed?\n ❯ 1. Yes\n   2. Yes, always\n   3. No\n";
+    const string Changed = "Bash command\n\n   bin/migrate --rollback\n\n Do you want to proceed?\n ❯ 1. Yes\n   2. No\n";
+
+    // AC84 to AC88 against a fluxd and the fake herdr: the notification has
+    // 1 button for each choice, a button sends the keys of a new read after
+    // the unlock, and a changed question sends nothing and opens the thread.
+    [FluxdFact]
+    public async Task ANotificationButtonSendsTheChoiceAfterTheUnlockAndANewRead()
+    {
+        var root = CoreTests.TempDir();
+        await using var herdr = new FakeHerdr(Path.Combine(root, "config", "herdr", "herdr.sock")) { ReadText = Dialog };
+        await using var fluxd = await DesktopFluxd.StartAsync(root, 33216, 33220, "herdr = true\nherdr_control = true\ncheck_updates = false\n");
+        var plugin = new HerdrPlugin();
+        using var t = new TestCore(new LanConfig
+        {
+            UdpPort = 33231,
+            PeerUdpPort = fluxd.UdpPort,
+            FirstTcpPort = 33240,
+            LastTcpPort = 33248,
+            LoopbackOnly = true,
+        }, [plugin]);
+        var shown = new ActionNotifications();
+        t.Core.Host.Notifier.Backend = shown;
+        var opened = new System.Collections.Concurrent.ConcurrentQueue<(string, string)>();
+        plugin.Model.Open = (d, p) => opened.Enqueue((d, p));
+        var unlocks = 0;
+        plugin.Unlock = (_, run, _) =>
+        {
+            unlocks++;
+            run();
+        };
+        var computer = await fluxd.PairAsync(t);
+        var id = computer.Id;
+        plugin.Request(id);
+        await fluxd.UntilAsync(() => plugin.Model.States.GetValueOrDefault(id) is { Running: true, Control: true } s && s.Agent("w1:p1") is not null,
+            "the agent list");
+
+        herdr.Status = "blocked";
+        herdr.Emit("pane.agent_status_changed", new JsonObject { ["pane_id"] = "w1:p1", ["agent_status"] = "blocked" });
+        await fluxd.UntilAsync(() => shown.Shown.Any(n => n.Actions.Count == 3), "the notification with 3 buttons");
+        var (notice, actions) = shown.Shown.Last(n => n.Actions.Count == 3);
+        Assert.Equal("claude in flux needs input", notice.Title);
+        Assert.Equal(["Yes", "Yes, always", "No"], actions.Select(a => a.Title));
+        Assert.True(herdr.Called("agent.read", p => Json.String(p["target"]) == "w1:p1" && Json.Int(p["lines"]) == 40));
+        Assert.False(herdr.Called("agent.send_keys", _ => true));
+
+        // A tap on a choice reads the pane again and sends the keys of the new read.
+        var reads = herdr.Calls.Count(c => c.Method == "agent.read");
+        t.Core.Host.Notifier.Activate(notice.Category, actions[1].Id, notice.UserInfo);
+        await fluxd.UntilAsync(() => herdr.Called("agent.send_keys", p => Json.Strings(p["keys"]).SequenceEqual(["2"])), "the keys of the choice");
+        Assert.Equal(1, unlocks);
+        Assert.True(herdr.Calls.Count(c => c.Method == "agent.read") > reads);
+        Assert.Empty(opened);
+
+        // The question changes before the next tap: nothing goes out, and the thread opens.
+        herdr.ReadText = Changed;
+        var sent = herdr.Calls.Count(c => c.Method == "agent.send_keys");
+        t.Core.Host.Notifier.Activate(notice.Category, actions[0].Id, notice.UserInfo);
+        await fluxd.UntilAsync(() => !opened.IsEmpty, "the thread");
+        Assert.Equal((id, "w1:p1"), opened.Single());
+        Assert.Equal(sent, herdr.Calls.Count(c => c.Method == "agent.send_keys"));
     }
 }
 

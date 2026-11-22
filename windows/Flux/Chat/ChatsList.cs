@@ -298,7 +298,7 @@ public sealed class ChatsList : View
         var lastSeen = model.LastSeen(d.Id);
         var battery = Batteries.Of(model, d.Id);
         var text = !d.Online
-            ? lastSeen is { } seen ? $"Offline · last seen {ChatParts.ShortTime(seen)}" : "Offline"
+            ? LinkNote.RowLine(false, lastSeen, Texts.ClockTime)!
             : r.Last is { } last ? last.Preview()
             : ChatParts.Capital(ChatParts.Context(d, battery));
         var at = r.Last?.At ?? (d.Online ? null : lastSeen);

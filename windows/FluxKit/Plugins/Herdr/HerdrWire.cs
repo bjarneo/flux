@@ -336,6 +336,11 @@ public static class HerdrWire
             ["kind"] = "read", ["pane"] = pane, ["format"] = format, ["path"] = path, ["request"] = request, ["lines"] = ReadLines,
         });
 
+    // Asks for the last lines of a pane to find its dialog, with the number
+    // request. The answer has the number again.
+    public static Packet DialogRead(string pane, int request) =>
+        Herdr(new JsonObject { ["kind"] = "read", ["pane"] = pane, ["lines"] = AgentDialogs.ReadLines, ["format"] = "ansi", ["request"] = request });
+
     // Sends key presses to the agent in a pane.
     public static Packet Keys(string pane, IEnumerable<string> keys) =>
         Herdr(new JsonObject { ["kind"] = "keys", ["pane"] = pane, ["keys"] = Strings(keys) });

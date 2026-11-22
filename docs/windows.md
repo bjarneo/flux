@@ -70,7 +70,7 @@ Windows asks once whether Flux may use the network. Allow private networks, or t
 | Commands | Runs the commands of the computer from Control |
 | Media | Plays, pauses, skips, seeks, and sets the volume of the players of the computer, from Control. The [audio outputs](features.md#audio-outputs) and the [phone as speaker](camera.md#phone-as-speaker) are only in Flux for Android. |
 | Ping | Sends a ping from the tray. A ping from the computer shows in the window |
-| herdr agents | Shows each agent as a chat in the list of Chats, and the agents in Control and the tray panel. The chat of an agent shows its thread, the question with its choices, the changes, and the keys. The agents window shows the same thread for each agent of a computer. A click on an agent notification opens the chat of the agent. **Start Agent** starts a coding agent in a folder of the computer |
+| herdr agents | Shows each agent as a chat in the list of Chats, and the agents in Control and the tray panel. The chat of an agent shows its thread, the question with its choices, the changes, and the keys. The agents window shows the same thread for each agent of a computer. An agent that waits shows a notification with its question, and the notification can answer it. See [Answer from a notification](#answer-from-a-notification). A click on the notification opens the chat of the agent. **Start Agent** starts a coding agent in a folder of the computer |
 | Touchpad | Moves the pointer, clicks, scrolls, and types on the computer. A click on the pad holds the pointer, and `Ctrl+Alt` gives it back |
 | Remote desktop | Shows the screen of the computer in a window, with its sound, and takes the pointer and the keys. The Windows key goes to Hyprland while the video has the focus. The video pauses while the window is minimized and while Windows is locked |
 | Omarchy panel | Shows the workspaces, the windows, and the key bindings of Hyprland next to the remote desktop, and runs them |
@@ -99,12 +99,12 @@ The list has 1 chat for each agent and each paired computer, in 3 groups:
 
 - **Needs you**: the approval with **Deny** and **Approve**, the pair requests, and the agents that wait for input. The newest comes first.
 - **Agents**: the agents that work, then the agents that are done, then the idle agents. An agent that works shows how long it works, and an agent that waits shows how long it waits.
-- **Computers**: the paired computers, the online computers first. Each row shows the newest entry of its chat, such as "You: Dinner at 7". A computer that is not reachable shows "Offline" and the time that it went offline while Flux ran.
+- **Computers**: the paired computers, the online computers first. Each row shows the newest entry of its chat, such as "You: Dinner at 7". A computer that is not reachable shows `Not reachable since HH:MM`, or `Not reachable` when Flux did not see it online.
 
 The header of the list counts what needs you and the computers online. The **+** key next to the Flux mark starts an agent. The search keeps the chats that hold its text: an agent by its task, its agent, or its project, and a computer by its name or by an entry of its chat. `Esc` empties the search.
 
 - **The chat of a computer** shows what Windows sent on the right, and on the left the files and the last clip of the computer, its open approval, and the answers. The newest entry is at the bottom. Agents do not show in it, because each agent has its own chat. Under the thread, the clipboard row sends the clipboard of Windows, and the field sends text or a link. The **+** key opens the tray: the 4 newest screenshots, **All screenshots**, and the tools Camera, File, Scan, Text, QR, Signature, Get files, and Agent. Agent shows when the computer lets this computer start agents. A click selects a screenshot, and the send key sends the selected screenshots with the text. `Esc` closes the tray. The menu of the top bar opens Control for the computer, the agents window, and **Start Agent…**.
-- **The chat of an agent** shows its task, its agent, its project, and its computer in the top bar, with **±** for the changes, **Keys**, Copy, and Refresh. The thread and the dock are the same as in the agents window. `Ctrl+R` reads the output again, and `Ctrl+D` shows the changes. While the agents window of a computer is open, an agent of that computer opens in that window, because the computer sends the output of 1 agent at a time.
+- **The chat of an agent** shows its task, its agent, its project, and its computer in the top bar, with **±** for the changes, **Keys**, Copy, and Refresh. The thread and the dock are the same as in the agents window. `Ctrl+R` reads the output again, and `Ctrl+D` shows the changes. While the agents window of a computer is open, an agent of that computer opens in that window, because the computer sends the output of 1 agent at a time. While **Agent control** is off on the computer, the thread says `To answer from this computer, turn on Agent control in Flux on <computer>, on the Access card.` When the computer is not reachable, the thread keeps its last output. A note above the dock says `<computer> is not reachable. This output is from HH:MM.` with **Retry**, and the keys and the field take no click. The note goes away when the computer comes back. While Flux connects, the note says `Connecting to <computer>`.
 - **Control** shows the tools of the computers in scope, and a player dock while a computer plays media.
 - **Computers** shows this computer, the paired computers, and the computers to pair. A click on a paired computer sets the scope.
 
@@ -112,6 +112,26 @@ A chat puts its computer in scope. The scope menu in the header of Control and C
 
 The tray icon is the Flux mark. It is dim while no paired computer is connected, and a red dot shows when an item needs you. A click opens a panel with the items and a menu for each online computer. The right button opens Open Flux, Settings, and Quit Flux.
 Flux keeps running in the tray after the window closes. Settings > Start > **Open at login** starts Flux in the tray when you log in.
+
+## Answer from a notification
+
+When an agent waits for input and **Agent control** is on, Flux posts 1 notification. It names the agent, the project, and the computer, and it has the question. Flux then reads the end of the pane and posts the same notification again with the buttons.
+
+| The dialog of the agent | The notification |
+| --- | --- |
+| 2 or 3 numbered choices | 1 button for each choice. A long label ends with `…`, and the text of the notification lists each choice in full. |
+| 4 numbered choices or more | No button. A click on the notification opens the chat of the agent. |
+| No numbered choices | 1 **Reply** button with a text box. |
+| **Agent control** off, or the agent is done | No button. With **Agent control** off, the text ends with `Read only`. |
+
+A choice or **Reply** asks Windows Hello first, as the answers in the thread do. The check stays valid for 5 minutes. It ends when Windows locks or sleeps, or when the display turns off. Flux sends nothing until the check succeeds.
+After the check, Flux reads the pane again. It sends only when the question is the same as in the notification. Else Flux sends nothing and opens the chat of the agent. Flux does the same when the link to the computer is closed, or when the read takes more than 3 seconds.
+
+These limits come from Windows:
+
+- Flux posts agent notifications and answers them only while Flux runs. When Flux does not run, this computer gets no notification from the agents.
+- A toast button has no unlock of its own, so the check of Flux is the only check. A person at an unlocked Windows session still needs Windows Hello to answer.
+- A dialog with choices has no text path in the toast, because a toast holds either choice buttons or **Reply**. Open the chat of the agent to type an answer.
 
 ## Clipboard
 

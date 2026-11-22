@@ -25,7 +25,7 @@ public static class ShellChecks
         h.Check(Shows(chats, "omarchy-new asks to pair") && Shows(chats, "Compare the key"), "the list shows the pair request as a card");
         h.Check(Shows(chats, "1 need you · 1 of 2 online"), "the context line counts the request and the online computers");
         h.Check(Shows(chats, "Needs you") && Shows(chats, "Computers"), "the list shows its groups");
-        h.Check(Shows(chats, "omarchy-xps") && Shows(chats, "omarchy-desk") && Shows(chats, "Offline"), "the list shows the paired computers");
+        h.Check(Shows(chats, "omarchy-xps") && Shows(chats, "omarchy-desk") && Shows(chats, "Not reachable"), "the list shows the paired computers");
         h.Check(Buttons(window).Any(b => AutomationProperties.GetName(b) == "Control") && Buttons(window).Any(b => AutomationProperties.GetName(b) == "Computers"),
             "the sidebar keeps Control and Computers");
         h.Check(window.CurrentPage is ChatsPage { Computer.DeviceId: var shown } && shown == h.Paired.Id, "Chats shows the chat of the online computer first");

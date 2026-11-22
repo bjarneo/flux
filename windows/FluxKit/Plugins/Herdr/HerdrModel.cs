@@ -16,6 +16,7 @@ public sealed class HerdrModel : Model
     ImmutableDictionary<string, HerdrOutput> prompts = ImmutableDictionary<string, HerdrOutput>.Empty;
     ImmutableDictionary<string, ImmutableDictionary<string, DateTimeOffset>> since =
         ImmutableDictionary<string, ImmutableDictionary<string, DateTimeOffset>>.Empty;
+    ImmutableDictionary<string, DateTimeOffset> outputTimes = ImmutableDictionary<string, DateTimeOffset>.Empty;
     ImmutableDictionary<string, string> sessionChoices = ImmutableDictionary<string, string>.Empty;
     bool inputAlerts = true;
     bool doneAlerts = true;
@@ -45,6 +46,11 @@ public sealed class HerdrModel : Model
 
     // The time that each agent got its status, by device ID and pane. See AgentClock.
     public ImmutableDictionary<string, ImmutableDictionary<string, DateTimeOffset>> Since { get => since; internal set => Set(ref since, value); }
+
+    // The time that the agent screen took the last output of each pane, by
+    // PromptKey. The note of a thread shows it. The time is not part of
+    // HerdrOutput, so that 2 reads with the same lines stay equal.
+    public ImmutableDictionary<string, DateTimeOffset> OutputTimes { get => outputTimes; internal set => Set(ref outputTimes, value); }
 
     // The herdr session that the user picked for the agent list of each
     // computer, by device ID. A computer without an entry shows the default
@@ -168,6 +174,10 @@ public sealed class HerdrModel : Model
     // The output of pane on a computer, or null when the agent screen shows no output of it.
     public HerdrOutput? Output(string deviceId, string pane) =>
         Outputs.TryGetValue(deviceId, out var o) && o.Pane == pane ? o : null;
+
+    // The time of the last output of pane on a computer, or null when this device has none.
+    public DateTimeOffset? OutputAt(string deviceId, string pane) =>
+        OutputTimes.TryGetValue(PromptKey(deviceId, pane), out var at) ? at : null;
 
     // The last reply to pane on a computer.
     public HerdrReply? Reply(string deviceId, string pane) =>

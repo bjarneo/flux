@@ -31,6 +31,11 @@ public static class AgentsFeature
         }
         model.WatchEvents();
         ReplyLock.Watch();
+        // An answer from a notification needs the unlock of Windows Hello, as a reply in the thread does.
+        if (model.Core.Plugin<HerdrPlugin>() is { } plugin)
+        {
+            plugin.Unlock = (reason, action, onError) => ReplyLock.Run(reason, Application.Current?.MainWindow, action, onError);
+        }
     }
 
     // True when the computer lets this computer start an agent: herdr runs
@@ -69,7 +74,7 @@ public static class AgentsFeature
     public static void StartAnywhere(AppModel model)
     {
         var ready = model.ConnectedPaired.Where(d => CanStart(model, d)).ToArray();
-        if (Targets.Among(model, ready, "No computer lets this computer start an agent. Set herdr_control = true on a computer.") is { } id)
+        if (Targets.Among(model, ready, "No computer lets this computer start an agent. Turn on Agent control in Flux on a computer, on the Access card.") is { } id)
         {
             Start(model, id);
         }
