@@ -6,7 +6,7 @@ import java.io.File
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 
-class ControlScreenTest {
+class RemoteScreenTest {
     @Test
     fun agoTexts() {
         val now = 100_000_000L
@@ -36,9 +36,9 @@ class ControlScreenTest {
 
     @Test
     fun controlHoldsNoAgents() {
-        val control = source("ControlScreen.kt")
+        val control = source("RemoteScreen.kt")
         for (gone in listOf("AgentList", "AgentCard", "SessionStrip", "NEW_PANE_PAGE", "New agent or terminal", "AGENT_PAGE", "HerdrSync")) {
-            assertFalse("Control still holds $gone", control.contains(gone))
+            assertFalse("Remote still holds $gone", control.contains(gone))
         }
         assertTrue(control.contains("ListHeader(\"Tools\")"))
         assertTrue(control.contains("ListHeader(\"Stream\")"))

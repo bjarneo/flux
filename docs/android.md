@@ -364,11 +364,11 @@ ANDROID_SERIAL=emulator-5554 FLUX_DEMO=1 tools/shot.sh chat /tmp/chat.png
 
 The pages are:
 
-- `chat`, `control`, and `computers` for the 3 destinations of the navigation bar. `chats`, `inbox`, and `send` open **Chats**. `devices` is the same as `computers`.
+- `chat`, `remote`, and `computers` for the 3 destinations of the navigation bar. `control` is the old name of `remote` and opens **Remote**. `chats`, `inbox`, and `send` open **Chats**. `devices` is the same as `computers`.
 - `thread` for the chat of the first paired computer, and `tray` for the same chat with the tray open.
-- `sync` for the sync switches.
-- `about` for **About Flux**.
-- `home` for **Control** with the first paired computer in scope.
+- `settings` for **Settings**, above **Chats**.
+- `sync`, `ssh`, and `about` for the sync switches, the SSH key, and **About Flux**. They open above **Settings**.
+- `home` for **Remote** with the first paired computer in scope.
 - `media`, `commands`, `browse`, `mic`, `webcam`, `touchpad`, `desktop`, `omarchy`, `agents`, and `camera`. The page `agents` is the **Terminals** screen.
 - `agent:<pane>` for the chat of one herdr agent, above **Chats**. The sample agents are `agent:w2:p1` (blocked), `agent:w1:p1` (working), and `agent:w3:p1` (done).
 - `newpane` for the screen that starts a herdr agent or opens a terminal.

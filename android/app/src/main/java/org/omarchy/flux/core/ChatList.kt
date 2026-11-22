@@ -133,3 +133,22 @@ fun chatList(
 
 /** The number of rows that need the user: the approvals, the pair requests, and the agents that wait for input. */
 val ChatList.needsYou: Int get() = needs.size
+
+/**
+ * The rows of 1 computer. With [scope] null, all rows stay. A pair request
+ * has no paired computer, so it stays in each scope.
+ */
+fun ChatList.inScope(scope: String?): ChatList {
+    if (scope == null) return this
+    return ChatList(
+        needs.filter { r ->
+            when (r) {
+                is ApprovalRow -> r.request.computerId == scope
+                is AgentRow -> r.deviceId == scope
+                is PairRow, is ComputerRow -> true
+            }
+        },
+        agents.filter { it.deviceId == scope },
+        computers.filter { it.device.id == scope },
+    )
+}

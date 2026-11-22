@@ -53,17 +53,18 @@ import org.omarchy.flux.screen.ScreenMirrorService
 import org.omarchy.flux.screen.ScreenSession
 
 /**
- * The Control destination: the tools that act on the computer and the
+ * The Remote destination: the tools that act on the computer and the
  * streams of this phone. It holds no agents. They live in Chats. The dock shows the player of the computer. A tool shows when a
  * computer in scope has the feature, and it is dimmed while no such
  * computer is online. With more than 1 computer online, a tap asks for the
  * computer.
  */
 @Composable
-fun ControlScreen(
+fun RemoteScreen(
     state: UiState,
     scope: String?,
     onScope: (String?) -> Unit,
+    onUnpair: (DeviceUi) -> Unit,
     picker: TargetPicker,
     onOpen: (Route) -> Unit,
     onPair: () -> Unit,
@@ -109,9 +110,8 @@ fun ControlScreen(
 
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.statusBarsPadding()) {
-            ScreenHeader("Control", listOf("on ${scopeName(devices, scope)}", onlineText(devices)).filter { it.isNotEmpty() }.joinToString(" · "))
+            ScreenHeader("Remote", onlineText(devices)) { ScopeChip(devices, scope, onScope, compact = true, onUnpair = onUnpair) }
         }
-        ComputerStrip(devices, scope, onScope)
         DockLayout(
             Modifier.weight(1f).fillMaxWidth(),
             thread = { bottom ->
@@ -165,7 +165,7 @@ fun ControlScreen(
                         add(ControlTool(Ic.terminal, "Commands", "Run a command", any !is Target.None) { open({ true }, "Run the commands of", "commands") })
                         // The dock opens the media, so the tool shows only while no player shows there.
                         if (player == null) {
-                            add(ControlTool(Ic.music, "Media", "Play, pause, and volume", any !is Target.None) { open({ true }, "Control the media of", "media") })
+                            add(ControlTool(Ic.music, "Media", "Play, pause, and volume", any !is Target.None) { open({ true }, "Open the media of", "media") })
                         }
                     }
                     GridRows(tools, 2) { k, m -> GridTool(k.icon, k.label, k.sub, k.enabled, m, k.onClick) }

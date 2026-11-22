@@ -117,7 +117,7 @@ fun FluxShell(
     state: UiState,
     nav: Nav,
     onNav: (Nav) -> Unit,
-    scope: String?,
+    scopeId: String?,
     onScope: (String?) -> Unit,
     onPair: (DeviceUi) -> Unit,
     onUnpair: (DeviceUi) -> Unit,
@@ -128,6 +128,8 @@ fun FluxShell(
     welcome: String? = null,
 ) {
     val context = LocalContext.current
+    // A computer that is gone or no longer paired cannot be the scope.
+    val scope = scopeId?.takeIf { id -> state.devices.any { it.paired && it.id == id } }
     val reduce = rememberReduceMotion()
     val wide = rememberWideWindow()
     val current by rememberUpdatedState(nav)
@@ -187,9 +189,7 @@ fun FluxShell(
         if (split && isChatPage(r) && current.tab == Tab.Chat && (current.stack.isEmpty() || sideChat(current.dest))) Nav(Tab.Chat, listOf(r)) else current.push(r),
     )
     val toComputers = { go(Nav(Tab.Computers)) }
-    val toSync = { open(Route(null, SYNC_PAGE)) }
-    val toAbout = { open(Route(null, ABOUT_PAGE)) }
-    val toSsh = { open(Route(null, SSH_PAGE)) }
+    val toSettings = { open(Route(null, SETTINGS_PAGE)) }
     // The same intent as Approvals.show: the screen opens in its own task, and Android reuses a screen that waits there.
     val approve: (ApproveRequest) -> Unit = { r ->
         if (isDemo(r.computerId)) {
@@ -204,7 +204,7 @@ fun FluxShell(
         go = { t -> go(current.select(t)) },
         control = { id ->
             onScope(id)
-            go(Nav(Tab.Control))
+            go(Nav(Tab.Remote))
         },
     )
     val select = { t: Tab -> go(current.select(t)) }
@@ -251,7 +251,7 @@ fun FluxShell(
                             when (tab) {
                                 Tab.Chat -> if (split) {
                                     val side = (current.dest as? Dest.Detail)?.takeIf(::sideChat)?.route
-                                    ChatsSplit(side, list = { ChatsScreen(state, active, notices(null), actions, picker, selected = side) }) { r ->
+                                    ChatsSplit(side, list = { ChatsScreen(state, active, notices(null), actions, picker, scope, onScope, onUnpair, toSettings, selected = side) }) { r ->
                                         val d = state.devices.firstOrNull { it.id == r.deviceId } ?: return@ChatsSplit
                                         val close = { go(Nav(Tab.Chat)) }
                                         key(r) {
@@ -263,10 +263,10 @@ fun FluxShell(
                                         }
                                     }
                                 } else {
-                                    ChatsScreen(state, active, notices(null), actions, picker)
+                                    ChatsScreen(state, active, notices(null), actions, picker, scope, onScope, onUnpair, toSettings)
                                 }
-                                Tab.Control -> ControlScreen(state, scope, onScope, picker, onOpen = ::open, onPair = toComputers)
-                                Tab.Computers -> ComputersScreen(state, scope, onScope, onPair, onUnpair, onSync = toSync, onSsh = toSsh, onAbout = toAbout)
+                                Tab.Remote -> RemoteScreen(state, scope, onScope, onUnpair, picker, onOpen = ::open, onPair = toComputers)
+                                Tab.Computers -> ComputersScreen(state, scope, onScope, onPair, onUnpair)
                             }
                         }
                     }
@@ -372,7 +372,7 @@ private fun fadeThrough(reduce: Boolean): ContentTransform {
 @DrawableRes
 private fun tabIcon(t: Tab): Int = when (t) {
     Tab.Chat -> Ic.chat
-    Tab.Control -> Ic.tune
+    Tab.Remote -> Ic.desktop
     Tab.Computers -> Ic.laptop
 }
 
@@ -514,6 +514,12 @@ private fun DetailScreen(route: Route, state: UiState, current: () -> Nav, go: (
     val id = route.deviceId
     if (id == null) {
         when (route.page) {
+            SETTINGS_PAGE -> SettingsScreen(
+                state, pop,
+                onSync = { push(Route(null, SYNC_PAGE)) },
+                onSsh = { push(Route(null, SSH_PAGE)) },
+                onAbout = { push(Route(null, ABOUT_PAGE)) },
+            )
             SYNC_PAGE -> SyncScreen(state, pop)
             ABOUT_PAGE -> AboutScreen(pop)
             SSH_PAGE -> SshKeyScreen(pop)

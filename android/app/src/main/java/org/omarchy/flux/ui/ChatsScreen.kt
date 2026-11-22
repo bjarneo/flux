@@ -64,6 +64,7 @@ import org.omarchy.flux.core.Approvals
 import org.omarchy.flux.core.ChatRow
 import org.omarchy.flux.core.ComputerRow
 import org.omarchy.flux.core.DebugInbox
+import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.HerdrSync
 import org.omarchy.flux.core.LinkNote
@@ -75,6 +76,7 @@ import org.omarchy.flux.core.TransferState
 import org.omarchy.flux.core.UiState
 import org.omarchy.flux.core.agentsOfPickedSessions
 import org.omarchy.flux.core.chatList
+import org.omarchy.flux.core.inScope
 import org.omarchy.flux.core.stripComputers
 import org.omarchy.flux.core.target
 
@@ -87,14 +89,27 @@ private val listClock = SeenClock()
  * the pair requests as cards with their buttons, and the agents that wait
  * for input. The other agents and the computers follow. A tap on an agent
  * opens its chat, where the dock holds its question. A tap on a computer
- * opens its chat with the clipboard, the photos, and the tools. The search
- * field keeps only the chats that hold its text. The + key starts an agent
+ * opens its chat with the clipboard, the photos, and the tools. The top bar
+ * has the scope chip, the search key, the Settings key, and the + key. The
+ * scope keeps only the chats of 1 computer. The search key opens a field
+ * that keeps only the chats that hold its text. The + key starts an agent
  * or a terminal. [active] is false while the screen moves, so that it reads
  * nothing new then. [selected] is the chat at the side of the list in a
  * split window, and its row has the accent.
  */
 @Composable
-fun ChatsScreen(state: UiState, active: Boolean, notices: InboxNotices, actions: ChatActions, picker: TargetPicker, selected: Route? = null) {
+fun ChatsScreen(
+    state: UiState,
+    active: Boolean,
+    notices: InboxNotices,
+    actions: ChatActions,
+    picker: TargetPicker,
+    scope: String?,
+    onScope: (String?) -> Unit,
+    onUnpair: (DeviceUi) -> Unit,
+    onSettings: () -> Unit,
+    selected: Route? = null,
+) {
     val devices = state.devices
     // The computers send their changes. A new visit asks again for the agents.
     LaunchedEffect(active) {
@@ -106,16 +121,12 @@ fun ChatsScreen(state: UiState, active: Boolean, notices: InboxNotices, actions:
     val approval by Approvals.current.collectAsStateWithLifecycle()
     val log = rememberChatLog()
     var query by rememberSaveable { mutableStateOf("") }
+    var searching by rememberSaveable { mutableStateOf(false) }
     val shownApproval = approval ?: if (demoShown()) DebugInbox.approval() else null
-    val list = remember(devices, shownApproval, log, query) {
-        chatList(devices, shownApproval, log, listClock, System.currentTimeMillis(), query)
+    val list = remember(devices, shownApproval, log, query, scope) {
+        chatList(devices, shownApproval, log, listClock, System.currentTimeMillis(), query).inScope(scope)
     }
     val paired = devices.any { it.paired }
-    val header = if (!paired) {
-        ""
-    } else {
-        listOf(if (list.needs.isEmpty() || query.isNotBlank()) "nothing needs you" else "${list.needs.size} need you", onlineText(devices)).joinToString(" · ")
-    }
     // The + key starts an agent or a terminal on a computer that lets this phone control herdr.
     val newAgent = {
         val t = target(null, devices) { it.herdr?.anyRunning == true && it.herdr.control }
@@ -127,16 +138,14 @@ fun ChatsScreen(state: UiState, active: Boolean, notices: InboxNotices, actions:
     }
     Column(Modifier.fillMaxSize().imePadding()) {
         Box(Modifier.statusBarsPadding()) {
-            ScreenHeader("Chats", header) {
-                if (paired) {
-                    Box(
-                        Modifier.size(48.dp).clip(CircleShape)
-                            .clickable(onClickLabel = "Start an agent or a terminal", role = Role.Button, onClick = newAgent)
-                            .semantics { contentDescription = "New agent or terminal" },
-                        contentAlignment = Alignment.Center,
-                    ) { Sym(Ic.add, tint = Tn.text, size = 24.dp) }
-                }
-            }
+            ChatsTopBar(
+                devices, scope, onScope, onUnpair, paired, searching,
+                onSearch = {
+                    searching = !searching
+                    if (!searching) query = ""
+                },
+                onSettings = onSettings, onNew = newAgent,
+            )
         }
         if (!paired) {
             Column(
@@ -144,11 +153,11 @@ fun ChatsScreen(state: UiState, active: Boolean, notices: InboxNotices, actions:
             ) { PairGuide(state, actions) }
             return@Column
         }
-        SearchField(query, { query = it }, Modifier.padding(start = 10.dp, end = 10.dp, top = 2.dp, bottom = 8.dp))
+        if (searching) SearchField(query, { query = it }, Modifier.padding(start = 10.dp, end = 10.dp, top = 2.dp, bottom = 8.dp))
         val context = LocalContext.current
         val many = devices.count { it.paired && it.online && it.herdr?.anyRunning == true } > 1
         // A search looks in all sessions, so the strips and the session filter apply only with no search.
-        val strips = if (query.isBlank()) stripComputers(devices) else emptyList()
+        val strips = if (query.isBlank()) stripComputers(devices).filter { scope == null || it.id == scope } else emptyList()
         val agentRows = if (query.isBlank()) agentsOfPickedSessions(list.agents, devices) { HerdrSessionPrefs.picked(context, it) } else list.agents
         LazyColumn(
             Modifier.weight(1f).fillMaxWidth(),
@@ -183,6 +192,55 @@ fun ChatsScreen(state: UiState, active: Boolean, notices: InboxNotices, actions:
                 }
             }
         }
+    }
+}
+
+/** A key of the top bar: 48 dp, with an icon of 24 dp. [fill] gives the accent, as the + key has. */
+@Composable
+private fun BarKey(@androidx.annotation.DrawableRes icon: Int, label: String, fill: Boolean = false, onClick: () -> Unit) {
+    Box(
+        Modifier.size(48.dp).clip(CircleShape).background(if (fill) Tn.blue else Color.Transparent)
+            .clickable(onClickLabel = label, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) { Sym(icon, tint = if (fill) Tn.onAccent else Tn.text, size = 24.dp) }
+}
+
+/**
+ * The top bar of Chats: the title, the scope chip, the search key, the
+ * Settings key, and the + key. Before the first pairing, only the title and
+ * the Settings key show.
+ */
+@Composable
+private fun ChatsTopBar(
+    devices: List<DeviceUi>,
+    scope: String?,
+    onScope: (String?) -> Unit,
+    onUnpair: (DeviceUi) -> Unit,
+    paired: Boolean,
+    searching: Boolean,
+    onSearch: () -> Unit,
+    onSettings: () -> Unit,
+    onNew: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(start = 14.dp, end = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        T(
+            "Chats",
+            Modifier.padding(end = 6.dp).semantics { heading() },
+            size = 20, weight = FontWeight.SemiBold, maxLines = 1,
+        )
+        if (paired) {
+            ScopeChip(devices, scope, onScope, Modifier.weight(1f), compact = true, onUnpair = onUnpair)
+        } else {
+            Box(Modifier.weight(1f))
+        }
+        if (paired) BarKey(if (searching) Ic.close else Ic.search, if (searching) "Close the search" else "Search", onClick = onSearch)
+        BarKey(Ic.settings, "Settings", onClick = onSettings)
+        if (paired) BarKey(Ic.add, "New agent or terminal", fill = true, onClick = onNew)
     }
 }
 
