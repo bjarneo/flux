@@ -245,17 +245,7 @@ func approveStatus() error {
 	}
 	pam := approve.SystemPAM()
 	for _, s := range approve.PAMServices {
-		unsupported := checkServices([]string{s})
-		switch {
-		case unsupported != nil && pam.Uses(s):
-			fmt.Printf("%s runs the helper, but it cannot ask the phone: %v\n", s, unsupported)
-		case unsupported != nil:
-			fmt.Printf("%s cannot ask the phone: %v\n", s, unsupported)
-		case pam.Uses(s):
-			fmt.Printf("%s asks the phone first.\n", s)
-		default:
-			fmt.Printf("%s does not ask the phone. To turn it on, run: sudo flux-cli approve enable %s\n", s, s)
-		}
+		fmt.Println(serviceLine(s, pam.Uses(s), checkServices([]string{s})))
 	}
 	// The helper uses a fixed socket. A fluxd with FLUX_SOCKET or another
 	// XDG_RUNTIME_DIR listens elsewhere, and the helper cannot find it.
@@ -265,6 +255,37 @@ func approveStatus() error {
 		fmt.Printf("fluxd does not answer on %s, so every request goes to the password: %v\n", approve.SocketPath(u.UID), err)
 	}
 	return nil
+}
+
+// serviceLine returns the line of flux-cli approve status for 1 PAM
+// service. uses is true when the PAM file of the service runs the helper.
+// unsupported is the error of checkServices for the service.
+func serviceLine(s string, uses bool, unsupported error) string {
+	switch {
+	case unsupported != nil && uses:
+		return fmt.Sprintf("%s runs the helper, but it cannot ask the phone: %v", s, unsupported)
+	case unsupported != nil:
+		return fmt.Sprintf("%s cannot ask the phone: %v", s, unsupported)
+	case uses:
+		return fmt.Sprintf("%s asks the phone first.", s)
+	}
+	return fmt.Sprintf("%s does not ask the phone. To turn it on, run: sudo flux-cli approve enable %s", s, s)
+}
+
+// approveDoctor prints the polkit-1 line of flux-cli approve status when
+// polkit-1 cannot ask the phone of an enrolled user. A polkit-1 that runs
+// the helper but cannot ask is a problem. Without the helper in its PAM
+// file, the line is a note.
+func approveDoctor(w io.Writer, enrolled, uses bool, unsupported error, check func(ok bool, pass, fix string)) {
+	if !enrolled || unsupported == nil {
+		return
+	}
+	line := serviceLine("polkit-1", uses, unsupported)
+	if uses {
+		check(false, "", line)
+		return
+	}
+	fmt.Fprintln(w, "-", line)
 }
 
 func approveEnroll(device string) error {

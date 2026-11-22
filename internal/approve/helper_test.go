@@ -271,8 +271,11 @@ func TestHelperStopsAtOnce(t *testing.T) {
 	if time.Since(start) > 2*time.Second {
 		t.Fatalf("the helper did not stop at once: %v", time.Since(start))
 	}
-	if out.Len() != 0 {
-		t.Fatalf("the helper printed %q", out.String())
+	// Only a missing key file prints nothing. The other 2 stops print their
+	// reason, see TestHelperPrintsTheReason.
+	want := reasonFluxd + "\n" + reasonPhone + "\n"
+	if out.String() != want {
+		t.Fatalf("the helper printed %q, want %q", out.String(), want)
 	}
 }
 
