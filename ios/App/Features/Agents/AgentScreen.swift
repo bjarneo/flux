@@ -77,6 +77,8 @@ private struct AgentThreadScreen: View {
             let closing = plugin.model.actions[deviceId].map { $0.action == "close" && $0.pane == pane && $0.sending } ?? false
             let control = agent != nil && herdr?.control == true
             let canReview = agent != nil && herdr?.review == true && online
+            // A computer that is not reachable keeps the last output. The thread says so, see `LinkNote`.
+            let link = LinkNote.threadNote(online: online, connecting: model.connecting, name: name, outputAt: out?.at, now: Date())
             let task = agent.map { $0.title.isEmpty ? ($0.project.isEmpty ? pane : $0.project) : $0.title } ?? pane
             let project = agent.map { $0.project.isEmpty ? pane : $0.project } ?? pane
             VStack(spacing: 0) {
@@ -89,7 +91,7 @@ private struct AgentThreadScreen: View {
                 if let closeError {
                     Text(closeError).font(.caption).foregroundStyle(tn.red).padding(.horizontal, 16).padding(.vertical, 6)
                 }
-                if !online {
+                if !online && out == nil {
                     PaneNotReachable(name: name, what: "The agent output").padding(16)
                     Spacer(minLength: 0)
                 } else if agent == nil && herdr != nil {
@@ -101,17 +103,20 @@ private struct AgentThreadScreen: View {
                         .safeAreaInset(edge: .bottom, spacing: 0) {
                             if let agent {
                                 VStack(spacing: 0) {
-                                    FirstTaskNote(deviceId: deviceId, agent: agent)
-                                    if control {
-                                        AgentDock(deviceId: deviceId, agent: agent, output: out, thread: thread, ask: ask,
-                                                  keysOpen: $keysOpen, review: canReview ? { review = true } : nil) { sent = $0 }
+                                    if let link, !online {
+                                        // The choices and the field take no tap while the computer is not reachable.
+                                        ThreadNoteCard(link: link) { model.retry() }
                                     } else {
-                                        Text(.init("To answer from this iPhone, set `herdr_control = true` on \(name)."))
-                                            .font(.caption)
-                                            .foregroundStyle(tn.sub)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .padding(16)
-                                            .background(DockShape().fill(tn.tile).ignoresSafeArea(edges: .bottom))
+                                        FirstTaskNote(deviceId: deviceId, agent: agent)
+                                        if agent.status == .blocked && plugin.model.isQuestionChanged(deviceId, pane: pane) {
+                                            ThreadNoteCard.questionChanged
+                                        }
+                                        if control {
+                                            AgentDock(deviceId: deviceId, agent: agent, output: out, thread: thread, ask: ask,
+                                                      keysOpen: $keysOpen, review: canReview ? { review = true } : nil) { sent = $0 }
+                                        } else {
+                                            ThreadNoteCard.controlOff(name)
+                                        }
                                     }
                                 }
                             }

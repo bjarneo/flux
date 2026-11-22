@@ -146,11 +146,17 @@ final class AgentsWindows: NSObject, NSWindowDelegate {
 
 @MainActor
 enum AgentsFeature {
-    /// A click on an agent notification opens the output of the agent.
+    /// A click on an agent notification opens the output of the agent. A
+    /// choice or a Reply in the notification asks for Touch ID or the
+    /// password first, as the reply controls of the thread do.
     static func didLaunch(model: AppModel) {
-        model.core.plugin(HerdrPlugin.self)?.model.open = { [weak model] id, pane in
+        let herdr = model.core.plugin(HerdrPlugin.self)?.model
+        herdr?.open = { [weak model] id, pane in
             guard let model else { return }
             AgentsWindows.shared.show(id, pane: pane, app: model)
+        }
+        herdr?.unlock = { computer, action, onError in
+            ReplyLock.run(reason: "answer agents on \(computer)", action: action, onError: onError)
         }
     }
 }

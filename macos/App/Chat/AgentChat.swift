@@ -17,10 +17,16 @@ struct AgentChat: View {
             let name = agents.device?.name ?? "the computer"
             let online = agents.device?.online == true
             Group {
-                if !online {
-                    ContentUnavailableView("\(name) is offline", systemImage: "wifi.slash",
-                                           description: Text("The agent shows when \(name) is on the same network."))
-                        .navigationTitle(name)
+                // A computer that is not reachable keeps the last output of the agent. The thread says so, see `LinkNote`.
+                if !online && agents.plugin.model.output(deviceId, pane: pane) == nil {
+                    ContentUnavailableView {
+                        Label("\(name) is not reachable", systemImage: "wifi.slash")
+                    } description: {
+                        Text("The agent shows when \(name) connects again.")
+                    } actions: {
+                        Button("Retry") { model.retry() }
+                    }
+                    .navigationTitle(name)
                 } else if agents.herdr == nil {
                     ProgressView("Loading the agents of \(name)…")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)

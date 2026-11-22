@@ -54,13 +54,13 @@ struct SidebarView: View {
                     if !list.agents.isEmpty {
                         // With 1 computer, the heading names it. With more, each row names its computer.
                         let names = Set(list.agents.compactMap { row -> String? in
-                            if case .agent(_, let name, _, _, _) = row { return name }
+                            if case .agent(_, let name, _, _, _, _) = row { return name }
                             return nil
                         })
                         ChatsSectionHead(title: "Agents", trailing: names.count == 1 ? "on \(names.first ?? "")" : "", color: tn.sub)
                         ForEach(list.agents) { row in
-                            if case .agent(let id, let name, let agent, _, let at) = row {
-                                AgentChatRow(deviceId: id, computer: name, agent: agent, at: at, many: many,
+                            if case .agent(let id, let name, let agent, _, let at, let link) = row {
+                                AgentChatRow(deviceId: id, computer: name, agent: agent, at: at, link: link, many: many,
                                              selected: open == .agent(id, pane: agent.pane))
                             }
                         }
@@ -103,8 +103,8 @@ struct SidebarView: View {
             ApprovalCard(item: InboxItem(.approval(request), computer: request.computerName), request: request, at: at, list: true)
         case .pair(let id, let name, let at):
             PairCard(item: InboxItem(.pair(deviceId: id), computer: name), deviceId: id, at: at, list: true)
-        case .agent(let id, let name, let agent, _, let at):
-            AgentChatRow(deviceId: id, computer: name, agent: agent, at: at, many: many, selected: open == .agent(id, pane: agent.pane))
+        case .agent(let id, let name, let agent, _, let at, let link):
+            AgentChatRow(deviceId: id, computer: name, agent: agent, at: at, link: link, many: many, selected: open == .agent(id, pane: agent.pane))
         case .computer:
             EmptyView()
         }
@@ -194,7 +194,7 @@ private struct ChatsHeader: View {
             return h.running && h.control
         }
         if case .unavailable = target {
-            model.show("No computer lets this Mac start an agent. Set herdr_control = true on a computer.")
+            model.show("No computer lets this Mac start an agent. To turn on Agent control, open Flux on a computer and use the Access card.")
             return
         }
         ToolTarget.run(target, title: "Start an agent on", ask: $ask) { d in model.startAgent = d.id }
@@ -316,12 +316,15 @@ private struct ChatRowFrame<Avatar: View, Line: View, Trailing: View>: View {
 /// and the project in mono, and the time at the end. An agent that waits
 /// shows how long it waits, an agent that works shows how long it works,
 /// and another agent shows the time of its status. With `many` computers
-/// with agents, the line names the computer.
+/// with agents, the line names the computer. A computer that is not
+/// reachable shows `Not reachable since HH:MM` in place of the status word,
+/// dim, and the row has no time.
 private struct AgentChatRow: View {
     let deviceId: String
     let computer: String
     let agent: HerdrAgent
     let at: Date
+    let link: AgentLink
     let many: Bool
     let selected: Bool
     @Environment(AppModel.self) private var model
@@ -335,16 +338,17 @@ private struct AgentChatRow: View {
         let source = [agent.agent, agent.project.isEmpty ? agent.workspace : agent.project, many ? computer : ""]
             .filter { !$0.isEmpty }.joined(separator: " · ")
         let ground = selected ? tn.line : blocked ? tn.tile : tn.bg
-        ChatRowFrame(title: title, label: [title, s.label, source].filter { !$0.isEmpty }.joined(separator: ", "),
-                     selected: selected, ask: blocked, action: { model.open(.agent(deviceId, pane: agent.pane)) }) {
+        let word = LinkNote.rowLine(online: link.reachable, lastSeen: link.since) ?? s.label
+        ChatRowFrame(title: title, label: [title, word, source].filter { !$0.isEmpty }.joined(separator: ", "),
+                     selected: selected, ask: blocked, dim: !link.reachable, action: { model.open(.agent(deviceId, pane: agent.pane)) }) {
             ChatAvatar(symbol: "brain", tint: s == .idle || s == .unknown ? tn.sub : tn.accent,
                        fill: blocked ? tn.accentTile : tn.tile, edge: !blocked,
                        badge: AgentAvatar.badge(s, tn), spinner: s == .working, ground: ground)
         } line: {
             HStack(spacing: 4) {
-                Text(s.label)
+                Text(word)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Self.color(s, tn))
+                    .foregroundStyle(link.reachable ? Self.color(s, tn) : tn.sub)
                     .lineLimit(1)
                     .fixedSize()
                 if !source.isEmpty {
@@ -356,7 +360,8 @@ private struct AgentChatRow: View {
                 }
             }
         } trailing: {
-            AgentRowTime(status: s, at: at)
+            // The waiting time and the working time stop while the computer is not reachable.
+            if link.reachable { AgentRowTime(status: s, at: at) }
         }
     }
 
@@ -402,7 +407,8 @@ private struct AgentRowTime: View {
 }
 
 /// A computer: its name, the newest entry of its chat, and the time of that
-/// entry. A computer that is not reachable shows at 55% with Offline.
+/// entry. A computer that is not reachable shows at 55% with
+/// `Not reachable since HH:MM`.
 /// Without entries, the line shows the link and the battery.
 private struct ComputerChatRow: View {
     let device: DeviceSnapshot
@@ -415,7 +421,7 @@ private struct ComputerChatRow: View {
     var body: some View {
         let battery = model.core.plugin(BatteryPlugin.self)?.model.computers[device.id]
         let line: String = {
-            if !device.online { return "Offline" }
+            if !device.online { return LinkNote.rowLine(online: false, lastSeen: model.lastSeen(device.id)) ?? "" }
             if let last { return last.preview }
             let context = computerContext(device, battery: battery)
             return context.prefix(1).uppercased() + context.dropFirst()

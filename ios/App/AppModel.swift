@@ -225,12 +225,14 @@ final class AppModel {
                                items: [], since: { _, _ in nil }, seen: [:])
         if demo {
             return Chats.list(devices: state.devices, herdr: DemoMode.herdrStates, approval: DemoMode.approval(), log: log,
-                              since: { _, pane in DemoMode.since(pane: pane) }, seen: &listClock, now: Date(), query: query)
+                              since: { _, pane in DemoMode.since(pane: pane) }, lastSeen: { self.lastSeen($0) },
+                              seen: &listClock, now: Date(), query: query)
         }
         let herdr = core.plugin(HerdrPlugin.self)?.model
         let since = herdr?.since ?? [:]
         return Chats.list(devices: state.devices, herdr: herdr?.states ?? [:], approval: core.plugin(ApprovePlugin.self)?.model.current,
-                          log: log, since: { id, pane in since[id]?[pane] }, seen: &listClock, now: Date(), query: query)
+                          log: log, since: { id, pane in since[id]?[pane] }, lastSeen: { self.lastSeen($0) },
+                          seen: &listClock, now: Date(), query: query)
     }
 
     /// The time that the paired computer `id` went offline in this run of

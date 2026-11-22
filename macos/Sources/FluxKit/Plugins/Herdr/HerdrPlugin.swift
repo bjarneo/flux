@@ -233,9 +233,10 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
     @MainActor
     public init() {
         model = HerdrModel()
-        dialogLink = DialogLink()
-        dialogs = DialogBook(io: dialogLink)
-        dialogLink.plugin = self
+        let link = DialogLink()
+        dialogLink = link
+        dialogs = DialogBook(io: link)
+        link.plugin = self
     }
 
     public func attach(core: FluxCore) {
@@ -593,7 +594,7 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
         var a = start
         a.seq = seq
         model.actions[deviceId] = a
-        guard transmit(HerdrWire.numbered(packet, request: seq), to: deviceId) else {
+        guard core?.send(HerdrWire.numbered(packet, request: seq), to: deviceId) == true else {
             a.sending = false
             a.error = "\(computerName(deviceId)) is not reachable"
             model.actions[deviceId] = a
@@ -664,7 +665,7 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
         replies += 1
         let seq = replies
         model.replies[deviceId] = HerdrReply(pane: pane, action: action, seq: seq, text: text)
-        guard core?.send(HerdrWire.numbered(packet, request: seq), to: deviceId) == true else {
+        guard transmit(HerdrWire.numbered(packet, request: seq), to: deviceId) else {
             model.replies[deviceId] = HerdrReply(pane: pane, action: action, seq: seq, sending: false,
                                                  error: "\(computerName(deviceId)) is not reachable", text: text)
             return seq
