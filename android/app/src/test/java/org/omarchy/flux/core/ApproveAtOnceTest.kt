@@ -70,4 +70,24 @@ class ApproveAtOnceTest {
     fun aNewRequestOpensAgain() {
         assertTrue(open(requestId = "b", openedFor = "a"))
     }
+
+    @Test
+    fun theRecordOutlivesTheScreen() {
+        ApproveAtOnce.resetOpened()
+        assertFalse(ApproveAtOnce.wasOpened("a"))
+        ApproveAtOnce.markOpened("a")
+        // A new screen for the same request reads the same record.
+        assertTrue(ApproveAtOnce.wasOpened("a"))
+        assertFalse(ApproveAtOnce.wasOpened("b"))
+        ApproveAtOnce.resetOpened()
+    }
+
+    @Test
+    fun theRecordKeepsTheLast64Ids() {
+        ApproveAtOnce.resetOpened()
+        for (i in 0 until 65) ApproveAtOnce.markOpened("id$i")
+        assertFalse(ApproveAtOnce.wasOpened("id0"))
+        assertTrue(ApproveAtOnce.wasOpened("id64"))
+        ApproveAtOnce.resetOpened()
+    }
 }

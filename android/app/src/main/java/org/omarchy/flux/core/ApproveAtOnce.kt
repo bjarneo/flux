@@ -33,4 +33,25 @@ object ApproveAtOnce {
         openedFor: String?,
     ): Boolean =
         enabled && kind == ApproveRequest.Kind.Approve && supported(sdk) && resumed && focused && openedFor != requestId
+
+    private const val KEEP = 64
+    private val opened = LinkedHashSet<String>()
+
+    /** True when the prompt opened before for this request ID in this process. */
+    @Synchronized
+    fun wasOpened(requestId: String): Boolean = requestId in opened
+
+    /**
+     * Records that the prompt opened for this request ID. The record lives as long as the process,
+     * so a new screen for the same request does not open the prompt again. It keeps the last 64 IDs.
+     */
+    @Synchronized
+    fun markOpened(requestId: String) {
+        opened.add(requestId)
+        while (opened.size > KEEP) opened.remove(opened.first())
+    }
+
+    /** Clears the record. Only tests call this. */
+    @Synchronized
+    internal fun resetOpened() = opened.clear()
 }

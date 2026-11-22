@@ -448,6 +448,13 @@ For a lock screen, the helper runs as the user. Code that runs as the user
 can already end the lock screen, so the approval protects only against a
 person at the keyboard. The password protects against the same person.
 
+## Fingerprint check at once
+
+When the switch is on and the phone has no strong biometric, or the
+sensor is in a lockout, `start()` fails the request on arrival. The
+computer then falls back to the password. The user sees the message on the
+approval screen, and no prompt opens.
+
 ## Open risks
 
 - **Approval fatigue.** Code that runs as the user can start `sudo` and
@@ -456,6 +463,12 @@ person at the keyboard. The password protects against the same person.
   user, the host, the TTY, and the time. Approve a request only right
   after you typed the command. Code that runs as the user can also get the
   password in other ways, for example with a shell alias for `sudo`.
+  The switch **Open the fingerprint check at once** adds a case. The phone
+  wakes and the prompt opens with no tap. A finger that rests on the
+  sensor, or an unlock touch at that moment, approves a request that the
+  user did not read. The prompt shows the service, the user, the host, and
+  the terminal. Keep the switch off if you touch the sensor by habit.
+  Flux adds no delay.
 - **No key attestation.** The computer trusts that the phone made the key
   with the settings above. Android key attestation can prove it, but Flux
   does not check it yet. The computer also cannot check the settings of a
