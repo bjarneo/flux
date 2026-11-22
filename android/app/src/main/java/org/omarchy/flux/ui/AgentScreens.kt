@@ -455,7 +455,8 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
     }
     val wide = rememberWideWindow()
     // The link state of the thread: the age of the output, a connect in progress, or a link that is closed.
-    val connecting = FluxCore.state.collectAsStateWithLifecycle().value.connecting && (!demo || DebugInbox.connecting)
+    // A sample computer of the demo never connects, so only the debug page @connecting shows the connecting state.
+    val connecting = FluxCore.state.collectAsStateWithLifecycle().value.connecting.let { if (demo) DebugInbox.connecting else it }
     val clock by rememberTicker(30_000L)
     val linkNote = if (agent == null) null else LinkNote.threadNote(
         d.online, connecting, d.name, out?.at ?: 0L, clock,
