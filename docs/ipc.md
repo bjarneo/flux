@@ -103,7 +103,7 @@ A client that reads slowly gets only the newest `state` event.
 Next to the newest `state` event, fluxd queues at most 256 messages for each connection: the responses and the `toast` events.
 When a `toast` event does not fit in the queue, the client loses its connection.
 A response waits for a free place.
-The socket buffer of the kernel takes the data first.
+The socket buffer of the kernel takes the data first. fluxd caps this buffer at 128 KiB for each connection, whatever `net.core.wmem_default` is.
 When that buffer is full and a write does not end in 5 seconds, the client loses its connection.
 So read the socket all the time, also while you wait for a response.
 

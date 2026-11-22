@@ -2,6 +2,9 @@ package main
 
 import (
 	"errors"
+	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -140,5 +143,32 @@ func TestCheckLiveTerminal(t *testing.T) {
 				t.Errorf("out %q, want %q", out.String(), c.out)
 			}
 		})
+	}
+}
+
+// A socket file at the herdr-core path and no herdr server gives the
+// note. A running herdr server, or no socket, gives no note.
+func TestDoctorHerdrCore(t *testing.T) {
+	run := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", run)
+	if got := herdrCoreNote(false); got != "" {
+		t.Fatalf("no socket: got %q", got)
+	}
+	dir := filepath.Join(run, "herdr-core")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ln, err := net.Listen("unix", filepath.Join(dir, "default.sock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	got := herdrCoreNote(false)
+	want := "- herdr-core runs, but Flux reads only the herdr server. Agents of the Herdr app do not show on the phone."
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	if got := herdrCoreNote(true); got != "" {
+		t.Fatalf("herdr server runs: got %q", got)
 	}
 }

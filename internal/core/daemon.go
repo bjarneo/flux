@@ -970,7 +970,7 @@ func (d *Daemon) onLink(l *lan.Link) {
 	if old != nil && old != l {
 		old.Close()
 	}
-	d.logf("link up: %s (%s) paired=%v", name, ip, paired)
+	d.logf("%s", linkUpLine(name, dev.ID, ip, paired))
 	if unpair {
 		_ = l.Send(proto.New(proto.TypePair, map[string]any{"pair": false}))
 	}
@@ -1085,7 +1085,7 @@ func (d *Daemon) receive(dev *Device, l *lan.Link) {
 		d.watchDisconnect(dev)
 	}
 	d.closeNotes(note)
-	d.logf("link down: %s: %v", name, err)
+	d.logf("%s", linkDownLine(name, dev.ID, err))
 	if stopped {
 		d.toast("Pairing with %s stopped, because the connection closed", name)
 	}

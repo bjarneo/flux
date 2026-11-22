@@ -87,7 +87,7 @@ flux-cli status
 journalctl --user -u fluxd -n 50 --no-pager | grep "link up"
 ```
 
-The `link up` line shows the address of the link, for example `link up: Pixel 8 (100.101.102.103) paired=true`.
+The `link up` line shows the device ID and the address of the link, for example `link up: Pixel 8 (a1b2c3) 100.101.102.103 paired=true`. The `link down` line gives the error text, if any.
 
 A link through Tailscale stays up when the phone returns to the local network.
 Tailscale then sends the traffic directly over the local network when it can.
