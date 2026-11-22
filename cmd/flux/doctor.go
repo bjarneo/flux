@@ -144,6 +144,7 @@ func doctor() {
 	// herdr is optional. When it runs, the phone shows its agents.
 	// The state error err of fluxd decides below whether checkLiveTerminal
 	// gets the state, so the error of LookPath has its own name.
+	herdrServer := false
 	if _, herr := exec.LookPath("herdr"); herr == nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		path := herdr.SocketPath()
@@ -156,6 +157,7 @@ func doctor() {
 			// For example, the socket belongs to another user.
 			check(false, "", safe(fmt.Sprintf("The herdr socket %s does not work: %v", path, perr)))
 		default:
+			herdrServer = true
 			check(pong.Protocol >= herdr.MinProtocol, fmt.Sprintf("herdr %s runs, so the phone can show its agents", pong.Version),
 				fmt.Sprintf("herdr %s uses API protocol %d, and Flux needs %d or newer. Run: herdr update", pong.Version, pong.Protocol, herdr.MinProtocol))
 			if pong.Protocol >= herdr.MinProtocol {
@@ -166,6 +168,10 @@ func doctor() {
 				checkLiveTerminal(pong.Version, fluxd, os.Stdout, check)
 			}
 		}
+	}
+
+	if note := herdrCoreNote(herdrServer); note != "" {
+		fmt.Println(note)
 	}
 
 	for _, bin := range []string{"wl-copy", "wl-paste", "xdg-open"} {
@@ -363,6 +369,23 @@ func checkLiveTerminal(server string, fluxd *State, out io.Writer, check func(ok
 		check(false, "", safe(fmt.Sprintf("The live terminal on the phone needs %s, and fluxd runs %s %s. Update that herdr, or put a newer herdr first in the PATH of fluxd.service. Then run: %s",
 			need, fluxd.Herdr.CLI.Path, fluxd.Herdr.CLI.Version, restart)))
 	}
+}
+
+// herdrCoreNote returns the doctor line for herdr-core. The Herdr app runs
+// herdr-core with its own socket, and Flux reads only the herdr server. The
+// line is empty when the socket does not exist or the herdr server answers.
+func herdrCoreNote(serverRuns bool) string {
+	if serverRuns {
+		return ""
+	}
+	dir := os.Getenv("XDG_RUNTIME_DIR")
+	if dir == "" {
+		return ""
+	}
+	if _, err := os.Stat(filepath.Join(dir, "herdr-core", "default.sock")); err != nil {
+		return ""
+	}
+	return "- herdr-core runs, but Flux reads only the herdr server. Agents of the Herdr app do not show on the phone."
 }
 
 // herdrDown reports whether err is a plain connection failure to the

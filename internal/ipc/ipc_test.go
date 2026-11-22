@@ -394,3 +394,44 @@ func TestCheckSocketOwner(t *testing.T) {
 		t.Fatalf("a missing socket: %v", err)
 	}
 }
+
+// newWriter caps the send buffer of a Unix connection, also when the
+// kernel default is large.
+func TestWriterCapsSendBuffer(t *testing.T) {
+	ln, err := net.Listen("unix", filepath.Join(t.TempDir(), "s.sock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		if c, err := ln.Accept(); err == nil {
+			defer c.Close()
+			time.Sleep(time.Second)
+		}
+	}()
+	conn, err := net.Dial("unix", ln.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	uc := conn.(*net.UnixConn)
+	if err := uc.SetWriteBuffer(4 << 20); err != nil {
+		t.Fatal(err)
+	}
+	w := newWriter(uc)
+	defer w.close()
+	raw, err := uc.SyscallConn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var size int
+	var gerr error
+	if err := raw.Control(func(fd uintptr) {
+		size, gerr = syscall.GetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF)
+	}); err != nil || gerr != nil {
+		t.Fatal(err, gerr)
+	}
+	if size > 128*1024 {
+		t.Fatalf("send buffer is %d bytes, want 131072 or less", size)
+	}
+}
