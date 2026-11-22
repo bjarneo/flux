@@ -692,18 +692,28 @@ internal fun Modifier.dockFrame(shape: DockShape): Modifier {
  * The thread and the dock. On a phone, the dock sits at the bottom and lies
  * [DockOverlap] over the end of the thread, and it takes at most
  * [DOCK_MAX_PART] of the height. In a wide window, the dock is a tile at
- * the bottom of a column at the right. [thread] gets the space to keep
- * free at its end.
+ * the bottom of a column at the right. With [fullWidth], the thread takes
+ * the full width, and the dock sits at the bottom right under it. [thread]
+ * gets the space to keep free at its end.
  */
 @Composable
 internal fun DockLayout(
     modifier: Modifier,
     thread: @Composable (bottom: Dp) -> Unit,
     dock: @Composable (DockShape) -> Unit,
+    fullWidth: Boolean = false,
 ) {
     if (rememberSplitWindow()) {
         BoxWithConstraints(modifier) {
             val side = maxOf(maxWidth * CONTROLS_PART, minOf(ControlsMinWidth, maxWidth / 2))
+            if (fullWidth) {
+                // The list takes the full width. The dock is a tile at the bottom right, as in the column of the other screens.
+                Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.weight(1f).fillMaxWidth()) { thread(16.dp) }
+                    Box(Modifier.align(Alignment.End).width(side).padding(end = TiledGutter, bottom = ControlsEnd)) { dock(DockShape.Tile) }
+                }
+                return@BoxWithConstraints
+            }
             Row(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).fillMaxHeight()) { thread(16.dp) }
                 // The dock sits at the bottom of its column, at thumb height, and scrolls when it is taller.

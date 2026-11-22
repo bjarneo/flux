@@ -10,6 +10,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -87,6 +88,36 @@ internal fun ScreenHeader(title: String, context: String, onBack: (() -> Unit)? 
             if (context.isNotEmpty()) LineText(context, size = 11f, lineHeight = MONO_LINE, color = Tn.sub, family = Mono, maxLines = 1)
         }
         trailing?.invoke()
+    }
+}
+
+/** The narrowest column of [AdaptiveRows]. */
+private val RowColumnMin = 340.dp
+
+/** The number of columns of [AdaptiveRows] for a [width], in a wide window. A narrow window has 1 column. */
+internal fun adaptiveColumns(width: Dp, wide: Boolean, count: Int, gap: Dp): Int =
+    if (!wide || count <= 1) 1 else ((width + gap) / (RowColumnMin + gap)).toInt().coerceIn(1, count)
+
+/**
+ * The [items] in columns that fill the width of a wide window. Each column
+ * is at least 340 dp wide. A window that is not wide, such as a phone or a
+ * tablet in portrait, has 1 column. The items go from left to right, then
+ * down.
+ */
+@Composable
+internal fun <T> AdaptiveRows(items: List<T>, modifier: Modifier = Modifier, gap: Dp = TileGap, content: @Composable (T) -> Unit) {
+    val wide = rememberWideWindow()
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        val columns = adaptiveColumns(maxWidth, wide, items.size, gap)
+        Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+            for (row in items.chunked(columns)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.Top) {
+                    for (item in row) Box(Modifier.weight(1f)) { content(item) }
+                    // An empty cell keeps the width of the last item.
+                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
     }
 }
 

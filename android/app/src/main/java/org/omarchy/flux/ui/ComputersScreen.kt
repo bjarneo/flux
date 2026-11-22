@@ -112,11 +112,11 @@ fun ComputersScreen(
                         if (paired.isEmpty()) {
                             T("No computer is paired. Pair one below. A paired computer connects by itself.", Modifier.padding(horizontal = 4.dp), size = 14, color = Tn.sub)
                         }
-                        for (d in paired) {
+                        AdaptiveRows(paired) { d ->
                             ComputerCard(d, state.onWifi, inScope = scope == d.id, onScope = { onScope(if (scope == d.id) null else d.id) }, onUnpair = { onUnpair(d) })
                         }
                         ListHeader("Available")
-                        for (d in available) AvailableRow(d) { onPair(d) }
+                        AdaptiveRows(available) { d -> AvailableRow(d) { onPair(d) } }
                         if (available.isEmpty() && !state.scanning) {
                             T(
                                 if (paired.isEmpty()) "No computers found. Open Flux on the computer, and use the same Wi-Fi network as this phone." else "No other computers found.",
@@ -127,6 +127,7 @@ fun ComputersScreen(
                 }
             },
             dock = { shape -> ScanDock(state, available.size, shape) { FluxCore.scan() } },
+            fullWidth = true,
         )
     }
 }

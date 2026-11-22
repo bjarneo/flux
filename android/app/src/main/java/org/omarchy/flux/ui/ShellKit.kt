@@ -28,6 +28,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.mutableStateOf
@@ -229,11 +230,11 @@ fun ScopeChip(
     Box(modifier) {
         // The clickable merges the description of the inner row. The inner row hides the dots from TalkBack.
         // The chip is 40 dp high, or 36 dp when compact, and takes taps on 48 dp.
+        // The ripple and the focus mark stay on the chip, not on the 48 dp area around it.
         val height = if (compact) 36.dp else 40.dp
         Box(
-            Modifier.heightIn(min = 48.dp).clip(shape)
-                .clickable(onClickLabel = "Change the scope", role = Role.DropdownList) { open = true }
-                .padding(vertical = (48.dp - height) / 2).heightIn(min = height).clip(shape).background(Tn.tile).border(1.dp, Tn.line, shape),
+            Modifier.minimumInteractiveComponentSize().heightIn(min = height).clip(shape).background(Tn.tile).border(1.dp, Tn.line, shape)
+                .clickable(onClickLabel = "Change the scope", role = Role.DropdownList) { open = true },
             contentAlignment = Alignment.CenterStart,
         ) {
             Row(
@@ -250,42 +251,60 @@ fun ScopeChip(
                 Sym(Ic.expand, tint = Tn.sub, size = if (compact) 18.dp else 20.dp)
             }
         }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+        ScopeMenu(open, { open = false }, devices, scope, onScope, onUnpair)
+    }
+}
+
+/**
+ * The menu of scopes: All computers and each paired computer with its link
+ * state. [ScopeChip] and the computer row of Remote open it.
+ */
+@Composable
+internal fun ScopeMenu(
+    open: Boolean,
+    onDismiss: () -> Unit,
+    devices: List<DeviceUi>,
+    scope: String?,
+    onScope: (String?) -> Unit,
+    onUnpair: ((DeviceUi) -> Unit)? = null,
+) {
+    val paired = devices.filter { it.paired }
+    val current = paired.firstOrNull { it.id == scope }
+    DropdownMenu(expanded = open, onDismissRequest = onDismiss) {
+        DropdownMenuItem(
+            text = { Text("All computers") },
+            leadingIcon = { Sym(Ic.devices) },
+            trailingIcon = { if (current == null) Sym(Ic.check, "Selected", tint = Tn.blue) },
+            onClick = {
+                onDismiss()
+                onScope(null)
+            },
+        )
+        for (d in paired) {
             DropdownMenuItem(
-                text = { Text("All computers") },
-                leadingIcon = { Sym(Ic.devices) },
-                trailingIcon = { if (current == null) Sym(Ic.check, "Selected", tint = Tn.blue) },
-                onClick = {
-                    open = false
-                    onScope(null)
+                text = {
+                    Column {
+                        Text(d.name)
+                        Text(linkText(d), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 },
-            )
-            for (d in paired) {
-                DropdownMenuItem(
-                    text = {
-                        Column {
-                            Text(d.name)
-                            Text(linkText(d), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    },
-                    leadingIcon = { Sym(deviceIcon(d.type)) },
-                    trailingIcon = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (current?.id == d.id) Sym(Ic.check, "Selected", tint = Tn.blue)
-                            if (onUnpair != null) {
-                                ComputerMenuKey(d) {
-                                    open = false
-                                    onUnpair(d)
-                                }
+                leadingIcon = { Sym(deviceIcon(d.type)) },
+                trailingIcon = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (current?.id == d.id) Sym(Ic.check, "Selected", tint = Tn.blue)
+                        if (onUnpair != null) {
+                            ComputerMenuKey(d) {
+                                onDismiss()
+                                onUnpair(d)
                             }
                         }
-                    },
-                    onClick = {
-                        open = false
-                        onScope(d.id)
-                    },
-                )
-            }
+                    }
+                },
+                onClick = {
+                    onDismiss()
+                    onScope(d.id)
+                },
+            )
         }
     }
 }
