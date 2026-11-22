@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -80,8 +81,8 @@ private val PinFooterHeight = 560.dp
  * The settings of the app, above Chats. They are settings of this phone,
  * and they apply to every computer. 5 groups hold them, and a tap on a
  * group row opens the group in place. Only 1 group is open. Turn off Flux
- * and About Flux stand apart at the end. A wide window shows the groups in
- * 2 columns. The SSH key and About open above Settings.
+ * and About Flux stand apart at the end. A wide window in landscape shows the groups
+ * in 2 columns. The SSH key and About open above Settings.
  */
 @Composable
 fun SettingsScreen(state: UiState, onBack: () -> Unit, onSsh: () -> Unit, onAbout: () -> Unit) {
@@ -89,7 +90,9 @@ fun SettingsScreen(state: UiState, onBack: () -> Unit, onSsh: () -> Unit, onAbou
     var openGroup by rememberSaveable { mutableStateOf<String?>(null) }
     val ssh by SshKeys.info.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { withContext(Dispatchers.IO) { SshKeys.load() } }
-    val wide = rememberWideWindow()
+    // 2 columns need a wide window in landscape. A tablet in portrait has the layout of a phone.
+    val size = LocalWindowInfo.current.containerSize
+    val wide = rememberWideWindow() && size.width > size.height
     val switches = rememberSyncSwitches(state)
     val groups = settingsGroups(state, SettingsContext(atOnceSupported = ApproveAtOnce.supported(Build.VERSION.SDK_INT)))
     val card: @Composable (GroupModel) -> Unit = { m ->
