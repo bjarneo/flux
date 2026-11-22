@@ -79,7 +79,7 @@ See [IPC](ipc.md) for the socket.
 
 The remote desktop also supports [computer audio](workflows.md#remote-desktop-audio), with local mute and volume controls.
 
-On the phone, open **Control** and select **Remote desktop**.
+On the phone, open **Remote** and select **Remote desktop**.
 The phone asks for its screen lock first. The unlock stays valid for 5 minutes.
 A phone without a screen lock cannot open the remote desktop.
 The phone also asks when the switch on the computer is off or not known yet.
@@ -132,7 +132,7 @@ sudo pacman -S wf-recorder
 
 To use the phone or the tablet as a second monitor, follow these steps:
 
-1. On the phone, open **Control** and select **Extend screen**.
+1. On the phone, open **Remote** and select **Extend screen**.
    The tool shows only for a computer whose `fluxd` has the extended screen.
 2. Confirm with the phone lock.
 3. Wait until the video shows. The phone turns to landscape, and the computer adds the monitor `FLUX-1` at the right of its other monitors.
@@ -210,7 +210,7 @@ A rotation of the phone shows the full screen again.
 
 Select the grid button to show the Omarchy panel.
 In landscape, the panel shows at the right of the video. In portrait, it shows under the video.
-To use the panel without the video, select **Omarchy panel** in **Control**.
+To use the panel without the video, select **Omarchy panel** in **Remote**.
 
 | Control | Result |
 | --- | --- |
@@ -225,7 +225,7 @@ To use the panel without the video, select **Omarchy panel** in **Control**.
 The active workspace is blue. A workspace with windows has a dot.
 The panel reads the workspaces again every 3 seconds.
 
-The **Omarchy panel** screen of **Control** in Flux for Android also lists the windows of the active workspace, with the app name and the window title.
+The **Omarchy panel** screen of **Remote** in Flux for Android also lists the windows of the active workspace, with the app name and the window title.
 Tap a window to focus it. The focused window is blue.
 The dock at the bottom has the arrows and the window actions. Hold an arrow to swap the window in that direction.
 The list needs a `fluxd` that sends the windows. While the computer is locked, the list keeps the last windows that it got.

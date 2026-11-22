@@ -1,4 +1,4 @@
 {
-  "prompt": "Origin: capture of the Flux for Android 0.12.0 debug build in demo mode (FLUX_DEMO=1, sample computers and agents) on an Android 16 emulator at 1080x2400, resized to 720 px wide, made by site/tools/capture-phone.sh. Screen: page agent:w2:p1.",
-  "createdAt": "2026-10-04T16:32:16.473Z"
+  "prompt": "Origin: capture of the Flux for Android phase 2 debug build in demo mode (FLUX_DEMO=1, sample computers and agents) on an Android 16 emulator at 1080x2400, resized to 720 px wide, made by site/tools/capture-phone.sh. Screen: The chat of the Codex agent in billing.",
+  "createdAt": "2026-11-22T19:31:52.000Z"
 }

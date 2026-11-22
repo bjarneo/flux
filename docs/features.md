@@ -5,8 +5,9 @@
 This page describes Flux for Android.
 For the Mac app, see [Flux for macOS](macos.md#features). For the iPhone, see [Flux for iOS](ios.md#features).
 
-The switches on the **Sync** screen in **Computers** are settings of the phone.
-Each switch applies to every paired computer, not only to the computer whose page shows it.
+The switches in **Settings** are settings of the phone.
+To open **Settings**, tap the gear key at the top of **Chats**.
+Each switch applies to every paired computer.
 For example, **Text messages** lets each paired computer read your conversations.
 See [sync switches](android-setup.md#sync-switches) and [security](security.md).
 
@@ -163,10 +164,14 @@ The **+** key at the top starts an agent or a terminal on a computer that allows
 The chat of a computer shows what the phone sent in this session: links, text, clips, photos, and files.
 The computer writes in the same chat: received files with their progress, the last clip, and sudo approvals.
 Flux keeps the chat in memory only, with at most 400 characters of each text.
-The dock under the chat shows the phone clipboard with **Send**, and a field for text or a link with a mic key and a send key.
-The **+** key at the left of the field opens the tray: the 4 newest photos of the phone, **All photos**, and the tools **Camera**, **File**, **Scan**, **Text**, **QR**, **Signature**, and **Get files**. **Agent** shows when the computer lets the phone start agents.
-To send photos, tap them in the tray, then tap the send key. The key shows the number of photos.
-A tap on the field closes the tray and hides the **+** key, so the field takes its width and grows to 6 lines. The expand key in the field opens the large editor.
+The dock under the chat shows the phone clipboard with **Send**, the Send bar, and a field for text or a link with a mic key and a send key.
+The Send bar has the keys **Photo**, **File**, **Scan**, and **More**.
+**Photo** opens the 4 newest photos of the phone and **All photos**. **File** opens the file picker. **Scan** scans pages to a PDF.
+**More** opens a list of **Camera**, **Text**, **QR**, and **Signature**.
+To send photos, tap them under **Photo**, then tap the send key. The key shows the number of photos.
+A tap on the field closes the open part of the Send bar. The field grows to 6 lines. The expand key in the field opens the large editor.
+The menu at the top of the chat has **Remote**, **Get files**, **Terminals**, **New agent or terminal**, and **Clear this chat**.
+**Clear this chat** removes the entries of this computer from the chat. It keeps the history of the computer and the files that it saved.
 The chat of an agent shows its output as a thread, and its question and choices in the dock. See [herdr agents](herdr.md#see-your-agents).
 On an Android tablet in landscape, **Chats** shows the list at the side of the selected chat.
 Flux for macOS shows the list of chats in the sidebar of its window and the open chat next to it. See [Flux for macOS](macos.md#chats-and-navigation).
@@ -207,7 +212,7 @@ A restart of `fluxd` after an update does not stop them.
 ## Browse PC
 
 With `share_home = true`, a paired phone can read these folders of the desktop.
-On the phone, open the chat of the computer, select the **+** key at the left of the field, then select **Get files**.
+On the phone, open the chat of the computer, open the menu at the top of the chat, then select **Get files**.
 
 - The home folder.
 - The `download_dir` folder.
@@ -368,7 +373,7 @@ The desktop name identifies the sender.
 
 ## Text messages
 
-Turn on **Text messages** in **Computers > Sync** on the phone.
+Turn on **Text messages** in **Settings > This phone on the computer** on the phone.
 The switch applies to every paired computer: each of them can then read your conversations and send text messages.
 The phone asks for SMS access and contacts access.
 Flux needs SMS access. Contacts access adds names to the conversations.
@@ -402,7 +407,7 @@ Chat messages that an app keeps in its own database, for example RCS chats, do n
 ## Media and desktop commands
 
 The phone controls the media players on the desktop.
-Open **Media** in **Control** on the phone to play, pause, skip, seek, and set the volume.
+Open **Media** in **Remote** on the phone to play, pause, skip, seek, and set the volume.
 The controls show when a desktop player publishes its state over MPRIS.
 The phone selects the player that plays.
 If more than one player runs, select another player at the top of the screen.
@@ -415,7 +420,7 @@ The desktop does not show or control the players on the phone.
 
 ### Audio outputs
 
-To select the output of the computer, such as its speakers, an HDMI monitor, or Bluetooth headphones, open **Media** in **Control** on the phone.
+To select the output of the computer, such as its speakers, an HDMI monitor, or Bluetooth headphones, open **Media** in **Remote** on the phone.
 The dock of **Media** shows the default output and its volume, also while nothing plays.
 Tap it to open **Audio outputs**:
 
@@ -477,7 +482,7 @@ The desktop does not report the end of a command, so the phone does not show **D
 
 ## Calls
 
-Enable **Call alerts** in **Computers > Sync** on the phone.
+Enable **Call alerts** in **Settings > This phone on the computer** on the phone.
 Phone access reports call state.
 Call-log access supplies the number, and contacts access supplies the name.
 Without those optional details, the notification shows **Unknown caller**.
@@ -499,7 +504,7 @@ Reload with `systemctl --user reload fluxd`.
 
 ## Do Not Disturb
 
-Enable **Sync Do Not Disturb** in **Computers > Sync** on the phone.
+Enable **Sync Do Not Disturb** in **Settings > This phone on the computer** on the phone.
 Android requests Do Not Disturb access the first time.
 Each side sends state only after a change, so daemon startup does not change either side.
 
@@ -517,7 +522,7 @@ Reload with `systemctl --user reload fluxd`.
 
 ## Automatic screenshots and photos
 
-Enable **Send new screenshots** or **Send new photos** in **Computers > Sync** on the phone.
+Enable **Send new screenshots** or **Send new photos** in **Settings > Send to the computers** on the phone.
 Both options default to off.
 Allow access to all photos when Android asks.
 Selected-photo access does not expose new captures.
@@ -577,7 +582,7 @@ To allow it, select **Turn on** under **Remote input** in the **Access** card on
 flux-cli input on
 ```
 
-Then select **Touchpad and keyboard** in **Control** on the phone or in Flux for macOS.
+Then select **Touchpad and keyboard** in **Remote** on the phone, or in **Control** in Flux for macOS.
 See [Touchpad and keyboard](remote-input.md) for the gestures, the keys, and the slides.
 
 ## Remote desktop
@@ -590,11 +595,11 @@ flux-cli desktop on
 flux-cli input on
 ```
 
-Then select **Remote desktop** in **Control** on the phone. The phone turns to landscape.
+Then select **Remote desktop** in **Remote** on the phone. The phone turns to landscape.
 In Flux for macOS, select **Remote desktop** in **Control**.
 See [Remote desktop](remote-desktop.md) for the gestures, the monitors, and the stream.
 
-To use an Android phone or tablet as a second monitor, select **Extend screen** in **Control**.
+To use an Android phone or tablet as a second monitor, select **Extend screen** in **Remote**.
 The computer adds a monitor with the size of the phone screen, and it removes that monitor when the stream stops.
 The extended screen uses the same switches and needs `wf-recorder` on the computer.
 Only Flux for Android has it. See [Extend the screen](remote-desktop.md#extend-the-screen).

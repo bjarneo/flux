@@ -162,14 +162,14 @@ flux-cli on
 
 `flux-cli off` stops the daemon and creates the off marker.
 `flux-cli on` removes the marker and starts the daemon.
-On Android, use **Turn off Flux** in **Computers** or **Turn off** in its notification.
+On Android, use **Turn off Flux** in **Settings** or **Turn off** in its notification.
 The phone stays off after a restart until you select **Turn on Flux** in the app.
 
 ## Choose the Android theme
 
 To change the colors of the Android app:
 
-1. Open **Computers**.
+1. Open **Settings**, then **Look and input**.
 2. Under **Theme**, select **Computer**, **System**, **Light**, or **Dark**.
 
 **Computer** is the default and follows the active Omarchy theme of the computer, light or dark.

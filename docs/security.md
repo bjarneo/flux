@@ -94,7 +94,7 @@ So turn on `remote_input`, `remote_desktop`, `herdr_control`, and `herdr_termina
 ## What a device sends to the computer
 
 Flux for Android has 6 switches that share data of the device with the computers.
-They are on the **Sync** screen in **Computers**:
+They are in **Settings** in the groups **Send to the computers** and **This phone on the computer**:
 
 - **Text messages** lets each paired computer read your conversations and send text messages.
 - **Share notifications** sends the notifications of other apps, each with the icon of its app as a PNG of 96 × 96 pixels. `fluxd` accepts an icon of at most 256 × 256 pixels, decodes it, and encodes it again before the notification server reads it. A notification whose visibility, or whose channel lock screen visibility, is `VISIBILITY_SECRET` stays on the phone. The lock screen setting of the whole phone does not change what Flux sends. A button that needs the phone unlock also stays on the phone.
