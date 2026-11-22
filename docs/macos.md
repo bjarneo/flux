@@ -269,7 +269,40 @@ Choices show only for an output that came after that read.
 The question keeps the lines nearest the choices, because they hold the command that a choice approves, and the card never cuts them.
 Each answer asks for Touch ID or the password first, see [Touch ID lock](#touch-id-lock).
 After an answer, the choices stay off until a new output comes.
-When the computer does not allow replies, set `herdr_control = true` on it.
+When the computer does not allow replies, the thread says `Agent control is off on <computer>`.
+To turn it on, open Flux on the computer and use the **Access** card.
+
+## Agent notifications and the link state
+
+Flux for macOS posts the notification of an agent while Flux runs.
+Approvals and agent notifications do not reach a Mac that has no running Flux.
+
+With **Agent control** on, the notification of a blocked agent names the agent, the project, and the computer, and shows the question.
+To answer, select an action:
+
+- A question with 2 or 3 numbered choices gets 1 action for each choice. A click sends the number of the choice. A long label is cut at 24 characters.
+- A question with 4 numbered choices or more has no action. A click on the notification opens the chat of the agent.
+- A question with no numbered choices gets a **Reply** action with a text field. The text goes to the input of the agent, as **Send as answer** does.
+
+Each action asks for Touch ID or the Mac password, see [Touch ID lock](#touch-id-lock).
+The unlock stays valid for 5 minutes.
+Flux sends nothing until the unlock succeeds.
+Then Flux reads the agent again.
+When the question changed, Flux sends nothing and opens the chat with the line `The question changed. Pick again.`
+When the link to the computer is closed, Flux also sends nothing and opens the chat.
+
+When **Agent control** is off on the computer, the notification has no action, and its text ends with `Read only`.
+
+The chat of an agent shows the link state:
+
+- When the computer is not reachable, the chat keeps the last output and shows `<computer> is not reachable. This output is from HH:MM.` with **Retry**. The choices and the field take no click.
+- While the computer connects, the chat shows `Connecting to <computer>`.
+- When the computer is back, the note goes away.
+
+Flux finds a closed link within 90 seconds.
+In the sidebar, the row of an agent of a computer that is not reachable stays in its group, dim, and shows `Not reachable since HH:MM`.
+The row of the computer shows the same line.
+Flux knows the time only for a computer that went offline in this run of Flux.
 
 ## Theme
 
@@ -314,7 +347,7 @@ To sync without a question, choose **Allow** for Flux in **System Settings > Pri
 
 ## Touch ID lock
 
-The touchpad, the remote desktop, and the agent replies ask for Touch ID or the Mac password.
+The touchpad, the remote desktop, the agent replies, and the actions of an agent notification ask for Touch ID or the Mac password.
 The unlock stays valid for 5 minutes.
 It ends earlier when the Mac sleeps, its screens sleep, the screen locks, or another user takes the session.
 

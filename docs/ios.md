@@ -146,7 +146,7 @@ The **Chats** tab has a badge with the number of items that need you on all comp
 **Chats** is the home of the app, as in a messaging app.
 It has 1 chat for each agent and each paired computer.
 The line under the title counts the items that need you and the computers that are online, for example `2 need you · 1 of 2 online`.
-**+** at the end of the navigation bar starts an agent or opens a terminal on a computer that sets `herdr_control = true`.
+**+** at the end of the navigation bar starts an agent or opens a terminal on a computer with **Agent control** on.
 The search field under the title keeps only the chats that hold its text.
 A computer also stays when an entry of its chat holds the text, and the row shows that entry.
 
@@ -207,6 +207,41 @@ With all computers in scope and more than 1 computer online, a tool asks which c
 The dock shows the search with **Scan again**.
 Touch and hold a paired computer to open its page with the address and the approval setup, or to unpair it.
 The **Omarchy panel** lists the windows of the active workspace. Tap a window to focus it. The dock holds the arrows and the window actions. Hold an arrow to move the window.
+
+## Agent notifications and the link state
+
+Flux for iOS posts the notification of an agent only while Flux runs.
+iOS suspends Flux soon after it leaves the screen, so agent notifications and approvals reach the iPhone only while Flux runs.
+
+With **Agent control** on, the notification of a blocked agent names the agent, the project, and the computer, and shows the question.
+To answer, touch and hold the notification, then tap an action:
+
+- A question with 2 or 3 numbered choices gets 1 action for each choice. A tap sends the number of the choice. A long label is cut at 24 characters.
+- A question with 4 numbered choices or more has no action. A tap on the notification opens the chat of the agent.
+- A question with no numbered choices gets a **Reply** action with a text field. The text goes to the input of the agent, as **Send as answer** does.
+
+Each action asks for Face ID, Touch ID, or the passcode of the iPhone, and it opens Flux.
+The unlock stays valid for 5 minutes and ends when the iPhone locks.
+Flux sends nothing until the unlock succeeds.
+Then Flux reads the agent again.
+When the question changed, Flux sends nothing and opens the chat with the line `The question changed. Pick again.`
+When the link to the computer is closed, Flux also sends nothing and opens the chat.
+This is the case after iOS suspended Flux, because the link closes then.
+
+When **Agent control** is off on the computer, the notification has no action, and its text ends with `Read only`.
+The chat of the agent says `Agent control is off on <computer>`.
+To turn it on, open Flux on the computer and use the **Access** card.
+
+While Flux is on the screen, the chat of an agent shows the link state:
+
+- When the computer is not reachable, the chat keeps the last output and shows `<computer> is not reachable. This output is from HH:MM.` with **Retry**. The choices and the field take no tap.
+- While the computer connects, the chat shows `Connecting to <computer>`.
+- When the computer is back, the note goes away.
+
+Flux finds a closed link within 90 seconds.
+In **Chats**, the row of an agent of a computer that is not reachable stays in its group, dim, and shows `Not reachable since HH:MM`.
+The row of the computer shows the same line.
+Flux knows the time only for a computer that went offline in this run of Flux.
 
 ## Theme
 
@@ -298,7 +333,7 @@ The webcam stops when Flux leaves the screen, also after a start from a request.
 
 | Limit | Effect |
 | --- | --- |
-| iOS suspends Flux soon after it leaves the screen | The link closes, and Flux connects again when it opens. Approvals, agent alerts, notifications, stream requests, and clipboard changes reach the iPhone only while Flux runs. The microphone stream keeps running in the background. |
+| iOS suspends Flux soon after it leaves the screen | The link closes, and Flux connects again when it opens. Approvals, agent notifications, other notifications, stream requests, and clipboard changes reach the iPhone only while Flux runs. The microphone stream keeps running in the background. |
 | Other apps' notifications, text messages, and calls | iOS gives apps no access to them. Flux does not advertise `notification.request`, `sms.*`, or `telephony`. |
 | Clipboard | iOS gives apps no event for a new copy, and it asks before each read of text that another app copied. Flux reads the clipboard only while it is on the screen. When Flux opens and when a computer connects, it reads only after the clipboard changed. A shortcut with **Send Text to Computer** sends a copy while Flux stays closed. Text and images from a computer stay on the iPhone and do not go to Universal Clipboard. |
 | Screenshots and photos | They go to the computer when Flux opens, not in the background. |
