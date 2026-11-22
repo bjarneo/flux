@@ -267,6 +267,7 @@ class MainActivity : ComponentActivity() {
             org.omarchy.flux.core.DebugDemo.terminalSample = intent.getStringExtra("flux.debug.terminal")
             org.omarchy.flux.core.DebugDemo.terminalGrid = intent.getStringExtra("flux.debug.terminal_grid")
             org.omarchy.flux.core.DebugDemo.sessions = intent.getBooleanExtra("flux.debug.sessions", false)
+            org.omarchy.flux.core.DebugDemo.control = intent.getBooleanExtra("flux.debug.control", true)
             // flux.debug.session picks a herdr session of the sample computer, such as omarchy.
             intent.getStringExtra("flux.debug.session")?.let { HerdrSessionPrefs.pick(this, org.omarchy.flux.core.DebugDemo.PC, it) }
             FluxCore.publish()

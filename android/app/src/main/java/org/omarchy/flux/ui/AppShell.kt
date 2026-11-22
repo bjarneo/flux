@@ -529,9 +529,7 @@ private fun DetailScreen(route: Route, state: UiState, current: () -> Nav, go: (
         page == "commands" -> TiledCommandsScreen(device, pop)
         page == AGENTS_PAGE -> TiledAgentsScreen(
             device, pop,
-            onOpen = { pane -> push(Route(id, "$AGENT_PAGE$pane")) },
             onOpenTerminal = { pane -> push(Route(id, "$TERMINAL_PAGE$pane")) },
-            onNew = { push(Route(id, NEW_PANE_PAGE)) },
         )
         page.startsWith(AGENT_PAGE) -> key(page) { TiledAgentScreen(device, page.removePrefix(AGENT_PAGE), pop) }
         page.startsWith(TERMINAL_PAGE) -> key(page) { TiledTerminalScreen(device, page.removePrefix(TERMINAL_PAGE), pop) }

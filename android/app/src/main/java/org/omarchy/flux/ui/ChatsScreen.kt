@@ -72,7 +72,9 @@ import org.omarchy.flux.core.SendEntry
 import org.omarchy.flux.core.SendKind
 import org.omarchy.flux.core.TransferState
 import org.omarchy.flux.core.UiState
+import org.omarchy.flux.core.agentsOfPickedSessions
 import org.omarchy.flux.core.chatList
+import org.omarchy.flux.core.stripComputers
 import org.omarchy.flux.core.target
 
 /** The first time that the list showed each row whose start is not known. It lives as long as the app process. */
@@ -117,7 +119,7 @@ fun ChatsScreen(state: UiState, active: Boolean, notices: InboxNotices, actions:
     val newAgent = {
         val t = target(null, devices) { it.herdr?.anyRunning == true && it.herdr.control }
         if (t is org.omarchy.flux.core.Target.None && t.device == null) {
-            FluxCore.toast("No computer lets this phone start an agent. Set herdr_control = true on a computer.")
+            FluxCore.toast("No computer lets this phone start an agent. To turn on Agent control, open Flux on a computer and use the Access card.")
         } else {
             picker.run(t, "Start an agent on") { actions.open(Route(it.id, NEW_PANE_PAGE)) }
         }
@@ -144,6 +146,9 @@ fun ChatsScreen(state: UiState, active: Boolean, notices: InboxNotices, actions:
         SearchField(query, { query = it }, Modifier.padding(start = 10.dp, end = 10.dp, top = 2.dp, bottom = 8.dp))
         val context = LocalContext.current
         val many = devices.count { it.paired && it.online && it.herdr?.anyRunning == true } > 1
+        // A search looks in all sessions, so the strips and the session filter apply only with no search.
+        val strips = if (query.isBlank()) stripComputers(devices) else emptyList()
+        val agentRows = if (query.isBlank()) agentsOfPickedSessions(list.agents, devices) { HerdrSessionPrefs.picked(context, it) } else list.agents
         LazyColumn(
             Modifier.weight(1f).fillMaxWidth(),
             contentPadding = PaddingValues(start = 10.dp, end = 10.dp, bottom = 16.dp),
@@ -157,14 +162,18 @@ fun ChatsScreen(state: UiState, active: Boolean, notices: InboxNotices, actions:
                 item(key = "h-needs") { SectionHead("Needs you", "${list.needs.size}", Tn.red, first = true) }
                 items(list.needs, key = { it.key }) { r -> NeedsRow(r, context, many, actions, selected) }
             }
-            if (list.agents.isNotEmpty()) {
+            if (agentRows.isNotEmpty() || strips.isNotEmpty()) {
                 // With 1 computer, the heading names it. With more, each row names its computer.
-                val on = list.agents.map { it.computer }.distinct().singleOrNull()
+                val on = agentRows.map { it.computer }.distinct().singleOrNull()
                 item(key = "h-agents") { SectionHead("Agents", if (on != null) "on $on" else null, Tn.sub, first = list.needs.isEmpty()) }
-                items(list.agents, key = { it.key }) { r -> AgentChatRow(r, many, context, actions, selected) }
+                // A computer with 2 or more herdr sessions shows the session strip. The strip filters the Agents group of that computer.
+                items(strips, key = { "strip-${it.id}" }) { d ->
+                    SessionStrip(d, Modifier.padding(horizontal = 4.dp, vertical = 2.dp), label = if (strips.size > 1) d.name else null)
+                }
+                items(agentRows, key = { it.key }) { r -> AgentChatRow(r, many, context, actions, selected) }
             }
             if (list.computers.isNotEmpty()) {
-                item(key = "h-computers") { SectionHead("Computers", null, Tn.sub, first = list.needs.isEmpty() && list.agents.isEmpty()) }
+                item(key = "h-computers") { SectionHead("Computers", null, Tn.sub, first = list.needs.isEmpty() && agentRows.isEmpty() && strips.isEmpty()) }
                 items(list.computers, key = { it.key }) { r -> ComputerChatRow(r, context, actions, selected) }
             }
             if (list.isEmpty && query.isNotBlank()) {

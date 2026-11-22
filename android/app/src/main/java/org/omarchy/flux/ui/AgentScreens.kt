@@ -210,86 +210,50 @@ private fun WindowTitle(parts: List<String>, s: AgentStatus, modifier: Modifier 
 // ───────────────────────── Agents ─────────────────────────
 
 /**
- * The herdr agents of a computer. The agents that need input come first.
- * A tap opens the recent output of the agent. When the computer allows
- * terminals, they follow the agents. When the computer allows control,
- * the add button opens a new agent or terminal.
+ * The herdr terminals of a computer, in the picked session. A tap opens the
+ * recent output of a terminal. Agents show in Chats, so this page lists none
+ * and has no add key. It shows when the computer allows terminals.
  */
 @Composable
 fun TiledAgentsScreen(
     d: DeviceUi,
     onBack: () -> Unit,
-    onOpen: (String) -> Unit,
     onOpenTerminal: (String) -> Unit = {},
-    onNew: () -> Unit = {},
 ) {
     LaunchedEffect(d.id, d.online) { if (d.online) HerdrSync.request(FluxCore, d.id) }
     // The list shows the picked herdr session.
     val herdr = HerdrSessionPrefs.herdrOf(LocalContext.current, d)
     // A wide window shows the list in the center, as wide as the other lists.
     CappedScrollColumn(bottom = 96.dp) {
-        TiledTopBar("Agents", onBack, context = d.name) {
-            if (d.online && herdr?.running == true && herdr.control) SquareButton(Ic.add, "New agent or terminal", onNew)
+        TiledTopBar("Terminals", onBack, context = d.name) {
             if (d.online) SquareButton(Ic.refresh, "Refresh", { HerdrSync.request(FluxCore, d.id) })
         }
         if (d.online) SessionStrip(d, Modifier.padding(bottom = 4.dp))
         when {
-            !d.online -> NotReachable(d, "The agents")
-            herdr == null -> LineSkeleton("Loading the agents of ${d.name}", Modifier.padding(4.dp), lines = listOf(0.7f, 0.5f, 0.6f))
+            !d.online -> NotReachable(d, "The terminals")
+            herdr == null -> LineSkeleton("Loading the terminals of ${d.name}", Modifier.padding(4.dp), lines = listOf(0.7f, 0.5f, 0.6f))
             !herdr.enabled -> EmptyState(
-                Ic.agent,
+                Ic.terminal,
                 "Agent status is off",
                 "On ${d.name}, set herdr = true in ~/.config/flux/config.toml. Then run systemctl --user reload fluxd.",
                 Modifier.padding(top = 48.dp),
             )
             !herdr.running -> EmptyState(
-                Ic.agent,
+                Ic.terminal,
                 "herdr is not running",
-                "Start herdr on ${d.name}. Its coding agents show here.",
+                "Start herdr on ${d.name}. Its terminals show here.",
                 Modifier.padding(top = 48.dp),
             )
-            herdr.agents.isEmpty() && herdr.panes.isEmpty() -> EmptyState(
-                Ic.agent,
-                "No agents yet",
-                if (herdr.control) {
-                    "Select New agent or terminal to start an agent on ${d.name}, or start one in a herdr pane there."
-                } else {
-                    "Start a coding agent in a herdr pane on ${d.name}. It shows here."
-                },
+            herdr.panes.isEmpty() -> EmptyState(
+                Ic.terminal,
+                "No terminals yet",
+                "Open a terminal in a herdr pane on ${d.name}. It shows here.",
                 Modifier.padding(top = 48.dp),
             )
             else -> Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
-                for (a in herdr.sorted) AgentTile(a) { onOpen(a.pane) }
-                if (herdr.panes.isNotEmpty()) {
-                    TileLabel("Terminals", Modifier.padding(start = 4.dp, top = 12.dp).semantics { heading() })
-                    for (t in herdr.panes) TerminalTile(t) { onOpenTerminal(t.pane) }
-                }
+                for (t in herdr.panes) TerminalTile(t) { onOpenTerminal(t.pane) }
             }
         }
-    }
-}
-
-/**
- * An agent: the window-title line with the agent, its place, and its
- * status, and the task of the agent under it. Without a task, the project
- * shows in its place.
- */
-@Composable
-private fun AgentTile(a: HerdrAgent, onClick: () -> Unit) {
-    val blocked = a.status == AgentStatus.Blocked
-    val task = a.title.ifEmpty { a.project.ifEmpty { a.pane } }
-    // The window title does not repeat the task.
-    val parts = listOf(a.agent, a.project, a.workspace).filter { it.isNotEmpty() && it != task }.distinct()
-    Tile(
-        Modifier.fillMaxWidth().heightIn(min = 72.dp), onClick,
-        accent = statusColor(a.status),
-        container = if (blocked) Tn.tileHi else Tn.tile,
-        border = BorderStroke(1.dp, if (blocked) Tn.red else Tn.line),
-        padding = PaddingValues(14.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
-    ) {
-        WindowTitle(parts, a.status)
-        T(task, size = 15, weight = FontWeight.SemiBold, maxLines = 2)
     }
 }
 
@@ -574,7 +538,7 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
                         }
                     } else if (agent != null) {
                         T(
-                            "To answer from this phone, set herdr_control = true on ${d.name}.",
+                            "Agent control is off on ${d.name}. To answer from this phone, turn on Agent control in Flux on the computer, on the Access card.",
                             Modifier.dockFrame(shape).padding(DockPadding).padding(horizontal = 4.dp), size = 12, color = Tn.sub,
                         )
                     }
