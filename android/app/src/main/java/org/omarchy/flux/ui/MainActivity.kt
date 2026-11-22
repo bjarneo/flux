@@ -275,6 +275,7 @@ class MainActivity : ComponentActivity() {
             org.omarchy.flux.core.DebugDemo.terminalGrid = intent.getStringExtra("flux.debug.terminal_grid")
             org.omarchy.flux.core.DebugDemo.sessions = intent.getBooleanExtra("flux.debug.sessions", false)
             org.omarchy.flux.core.DebugDemo.control = intent.getBooleanExtra("flux.debug.control", true)
+            org.omarchy.flux.core.DebugDemo.blocked = intent.getBooleanExtra("flux.debug.blocked", true)
             // flux.debug.session picks a herdr session of the sample computer, such as omarchy.
             intent.getStringExtra("flux.debug.session")?.let { HerdrSessionPrefs.pick(this, org.omarchy.flux.core.DebugDemo.PC, it) }
             FluxCore.publish()
@@ -354,8 +355,8 @@ private val NavSaver = listSaver<Nav, String>(save = { it.save() }, restore = { 
 /** A pairing that this phone starts. The dialog shows the key before the request goes out. */
 private data class Outgoing(val deviceId: String, val timestamp: Long, val key: String, val sent: Boolean = false)
 
-/** The debug pages that need no computer: the destinations, Settings, the sync switches, the SSH key, and About Flux. */
-private val DestinationPages = setOf("chat", "inbox", "send", "control", "remote", "computers", "devices", SETTINGS_PAGE, SYNC_PAGE, ABOUT_PAGE, SSH_PAGE)
+/** The debug pages that need no computer: the destinations, Settings, the old sync page, the SSH key, and About Flux. */
+private val DestinationPages = setOf("chat", "inbox", "send", "control", "remote", "computers", "devices", SETTINGS_PAGE, "sync", ABOUT_PAGE, SSH_PAGE)
 
 /** How long the chat shows that a new computer is paired, in milliseconds while the app is in the front. */
 private const val WELCOME_MS = 6_000L

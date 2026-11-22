@@ -92,7 +92,7 @@ fun SettingsScreen(state: UiState, onBack: () -> Unit, onSsh: () -> Unit, onAbou
     LaunchedEffect(Unit) { withContext(Dispatchers.IO) { SshKeys.load() } }
     // 2 columns need a wide window in landscape. A tablet in portrait has the layout of a phone.
     val size = LocalWindowInfo.current.containerSize
-    val wide = rememberWideWindow() && size.width > size.height
+    val wide = rememberWideWindow()
     val switches = rememberSyncSwitches(state)
     val groups = settingsGroups(state, SettingsContext(atOnceSupported = ApproveAtOnce.supported(Build.VERSION.SDK_INT)))
     val card: @Composable (GroupModel) -> Unit = { m ->

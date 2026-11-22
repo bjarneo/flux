@@ -159,7 +159,7 @@ fun FluxShell(
     val picker = rememberTargetPicker()
 
     // A tablet in landscape shows the chat of a computer or an agent at the side of the list of chats.
-    val split = wide && !rememberShortWindow()
+    val split = rememberSplitWindow()
     val dest = nav.dest
     val seek = remember { SeekableTransitionState(dest) }
     val screens = rememberTransition(seek, label = "screens")
@@ -519,7 +519,6 @@ private fun DetailScreen(route: Route, state: UiState, current: () -> Nav, go: (
                 onSsh = { push(Route(null, SSH_PAGE)) },
                 onAbout = { push(Route(null, ABOUT_PAGE)) },
             )
-            SYNC_PAGE -> SyncScreen(state, pop)
             ABOUT_PAGE -> AboutScreen(pop)
             SSH_PAGE -> SshKeyScreen(pop)
         }

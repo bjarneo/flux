@@ -19,7 +19,7 @@ enum class Tab(val key: String, val label: String) {
 
 /**
  * One screen above a destination. [deviceId] is the computer of the screen,
- * or null for a screen of the app, such as [SYNC_PAGE].
+ * or null for a screen of the app, such as [SETTINGS_PAGE].
  */
 data class Route(val deviceId: String?, val page: String)
 
@@ -86,9 +86,6 @@ const val NOTIFY_PAGE = "notify:"
 
 /** The settings of the app. The screen lies above Chats, and the key in the top bar of Chats opens it. It has no computer. */
 const val SETTINGS_PAGE = "settings"
-
-/** The sync switches. They apply to every computer, so the page has no computer. */
-const val SYNC_PAGE = "sync"
 
 /** The version and the project links. They belong to the app, so the page has no computer. */
 const val ABOUT_PAGE = "about"
@@ -164,9 +161,10 @@ data class Nav(val tab: Tab = Tab.Chat, val stack: List<Route> = emptyList()) {
             // Control is the old name of Remote.
             "remote", "control" -> Nav(Tab.Remote) to null
             "computers", "devices", "pair", "unpair" -> Nav(Tab.Computers) to null
-            SETTINGS_PAGE -> Nav(Tab.Chat, listOf(Route(null, SETTINGS_PAGE))) to null
+            // The sync switches are groups of Settings now, so the old page opens Settings.
+            SETTINGS_PAGE, "sync" -> Nav(Tab.Chat, listOf(Route(null, SETTINGS_PAGE))) to null
             // These screens open above Settings, so Back goes to Settings.
-            SYNC_PAGE, ABOUT_PAGE, SSH_PAGE -> Nav(Tab.Chat, listOf(Route(null, SETTINGS_PAGE), Route(null, page))) to null
+            ABOUT_PAGE, SSH_PAGE -> Nav(Tab.Chat, listOf(Route(null, SETTINGS_PAGE), Route(null, page))) to null
             // The old computer page is now the Remote destination of 1 computer.
             "home" -> Nav(Tab.Remote) to deviceId
             // The prompt of a stream request shows over the chat. The notification shows in the shade.

@@ -81,14 +81,33 @@ fun rememberReduceMotion(): Boolean {
 private val WideWindow = 600.dp
 
 /**
- * True for a window of the medium or expanded width class, for example a
- * phone in landscape, a foldable, or a tablet. The shell then shows a
- * navigation rail in the place of the navigation bar.
+ * True for a window of the medium or expanded width class that is wider
+ * than tall, for example a phone in landscape, a foldable, or a tablet in
+ * landscape. The shell then shows a navigation rail in the place of the
+ * navigation bar. A tablet in portrait is also 600 dp wide or more, but it
+ * has the layout of a phone.
  */
 @Composable
 fun rememberWideWindow(): Boolean {
-    val width = LocalWindowInfo.current.containerSize.width
-    return with(LocalDensity.current) { width.toDp() } >= WideWindow
+    val size = LocalWindowInfo.current.containerSize
+    return with(LocalDensity.current) { isWideWindow(size.width.toDp(), size.height.toDp()) }
+}
+
+/** The rule of [rememberWideWindow] for a window of [width] by [height]. */
+internal fun isWideWindow(width: Dp, height: Dp): Boolean = width >= WideWindow && width > height
+
+/** The rule of [rememberSplitWindow] for a window of [width] by [height]. */
+internal fun isSplitWindow(width: Dp, height: Dp): Boolean = isWideWindow(width, height) && height >= TallWindow
+
+/**
+ * True for a wide window that is also tall enough for a second part, such
+ * as the side part of the shell or the controls column of the dock. A phone
+ * in landscape is wide but short, so it has no second part.
+ */
+@Composable
+fun rememberSplitWindow(): Boolean {
+    val size = LocalWindowInfo.current.containerSize
+    return with(LocalDensity.current) { isSplitWindow(size.width.toDp(), size.height.toDp()) }
 }
 
 /** The lowest window height of the medium and expanded height classes. */
