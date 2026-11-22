@@ -41,9 +41,16 @@ final class InboxModelTests: XCTestCase {
         XCTAssertEqual(Inbox.needsYou(items), 3)
     }
 
-    func testAComputerThatIsNotReachableAddsNoAgents() {
+    func testAComputerThatIsNotReachableKeepsOnlyItsAgentsThatWait() {
         let d = device("a", online: false)
-        XCTAssertTrue(inbox([d], herdr: ["a": agents([blocked])]).isEmpty)
+        let items = inbox([d], herdr: ["a": agents([working, blocked, done])])
+        XCTAssertEqual(items.map { $0.kind }, [.agentInput], "a blocked agent still waits, the others add no news")
+        XCTAssertEqual(Inbox.needsYou(items), 1, "the badge counts the blocked agent")
+    }
+
+    func testAnOnlineComputerKeepsAllItsAgents() {
+        let items = inbox([device("a")], herdr: ["a": agents([working, blocked, done])])
+        XCTAssertEqual(items.map { $0.kind }, [.agentWorking, .agentInput, .agentDone])
     }
 
     func testTwoAgentsOnOnePaneMakeOneItem() {
