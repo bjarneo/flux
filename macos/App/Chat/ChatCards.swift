@@ -291,6 +291,9 @@ struct PanelAgentCard: View {
     @State private var answered: HerdrOutput?
     @State private var lockError: String?
 
+    /// True while the link to the computer is open.
+    private var reachable: Bool { model.paired.first { $0.id == deviceId }?.online == true }
+
     var body: some View {
         let since = agent.status == .working ? model.core.plugin(HerdrPlugin.self)?.model.agentSince(device: deviceId, pane: agent.pane) : nil
         Group {
@@ -302,6 +305,8 @@ struct PanelAgentCard: View {
                 card(elapsed: nil)
             }
         }
+        // A computer that is not reachable dims its card, as `ComputerChatRow` does, and the choices take no tap.
+        .opacity(reachable ? 1 : TiledMetrics.disabledAlpha)
         .task(id: PromptRead(item: item.key, front: activeState == .key)) {
             // Only an agent that waits or works reads its output, as on Android. A read of an idle pane makes herdr scroll it.
             guard agent.status == .blocked || agent.status == .working, let plugin = model.core.plugin(HerdrPlugin.self) else { return }
@@ -363,7 +368,7 @@ struct PanelAgentCard: View {
                     if let fresh, !choices.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
                             ForEach(Array(choices.enumerated()), id: \.element.id) { i, choice in
-                                AskChoiceButton(choice: choice, primary: i == 0, enabled: control && !sending && fresh != answered,
+                                AskChoiceButton(choice: choice, primary: i == 0, enabled: control && reachable && !sending && fresh != answered,
                                                 minHeight: 40) {
                                     answer(choice, fresh)
                                 }

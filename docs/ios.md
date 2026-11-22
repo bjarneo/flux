@@ -154,7 +154,7 @@ A computer also stays when an entry of its chat holds the text, and the row show
 
 - **Needs you**: the sudo, polkit, and enrollment request with **Deny** and **Approve**, pair requests with **Compare the key**, and each agent that waits for input. **Deny** acts at once. **Approve** opens the approval sheet, which asks for Face ID or Touch ID. Neither card approves or pairs by itself.
 - **Agents**: the agents that work, then the agents that are done, then the idle agents. A row shows the task, the status, the agent, and the project. An agent that waits shows how long it waits, such as `3m`. An agent that works shows how long it works, such as `2:14`.
-- **Computers**: the paired computers, the online computers first. A row shows the newest entry of the chat, such as `You: Dinner at 7, bring the kids`. A computer that is not reachable shows dimmed with **Offline** and the time that Flux saw it go offline.
+- **Computers**: the paired computers, the online computers first. A row shows the newest entry of the chat, such as `You: Dinner at 7, bring the kids`. A computer that is not reachable shows dimmed with `Not reachable since HH:MM`, the time that Flux saw it go offline.
 
 Tap an agent to open its chat. See [See your agents](herdr.md#see-your-agents).
 Tap a computer to open its chat.

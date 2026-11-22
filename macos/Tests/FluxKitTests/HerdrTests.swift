@@ -165,6 +165,16 @@ final class HerdrTests: XCTestCase {
         XCTAssertFalse(o.loading)
     }
 
+    func testTheSameScreenReadTwiceIsEqual() throws {
+        let packet = body(#"{"kind":"output","pane":"w5:p1","format":"ansi","text":"Proceed?\n 1. Yes\n 2. No"}"#)
+        let first = try XCTUnwrap(HerdrWire.output(packet, now: Date(timeIntervalSince1970: 100)))
+        let second = try XCTUnwrap(HerdrWire.output(packet, now: Date(timeIntervalSince1970: 200)))
+        XCTAssertNotEqual(first.at, second.at)
+        XCTAssertEqual(first, second, "the parse time is not part of the comparison")
+        let changed = try XCTUnwrap(HerdrWire.output(body(#"{"kind":"output","pane":"w5:p1","format":"ansi","text":"Proceed?\n 1. Yes"}"#)))
+        XCTAssertNotEqual(first, changed)
+    }
+
     func testOutputWithAnError() throws {
         let o = try XCTUnwrap(HerdrWire.output(body(#"{"kind":"output","pane":"w5:p1","error":"The agent in w5:p1 is gone","text":"x"}"#)))
         XCTAssertEqual(o.error, "The agent in w5:p1 is gone")

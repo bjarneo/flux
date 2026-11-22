@@ -205,7 +205,7 @@ The list has 3 groups:
 
 - **Needs you**: the approval with **Deny** and **Approve**, a pair request with **Compare the key**, and each agent that waits for input. An agent that waits has a red border and shows how long it waits, such as `3m`.
 - **Agents**: the other agents. The agents that work come first and show how long they work, such as `2:14`. Then come the agents that are done and the idle agents. When the agents are on 1 computer, the heading names it. Otherwise each row names its computer.
-- **Computers**: each paired computer with the newest entry of its chat, such as `You: Dinner at 7`. The online computers come first. A computer that is not reachable shows dimmed with **Offline**.
+- **Computers**: each paired computer with the newest entry of its chat, such as `You: Dinner at 7`. The online computers come first. A computer that is not reachable shows dimmed with `Not reachable since HH:MM`.
 
 **Approve** opens the Touch ID prompt, and the card never approves by itself.
 **Compare the key** opens the pairing page, and the card never pairs by itself.

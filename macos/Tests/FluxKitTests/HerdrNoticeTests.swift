@@ -255,6 +255,16 @@ final class HerdrNoticeTests: XCTestCase {
         XCTAssertEqual(h.opened.count, 1, "a swipe away does nothing")
     }
 
+    @MainActor
+    func testTheOpenActionOpensTheThread() {
+        let (plugin, h) = makePlugin()
+        let actions = HerdrPlugin.notificationActions([NoticeAction(.open, "Open", "")], platform: .mac)
+        XCTAssertEqual(actions.map(\.identifier), [HerdrPlugin.openAction])
+        plugin.noticeAction(HerdrPlugin.openAction, deviceId: "pc", pane: "w2:p1", dialog: "", text: nil)
+        XCTAssertEqual(h.opened, ["pc|w2:p1"])
+        XCTAssertTrue(h.packets.isEmpty)
+    }
+
     // The actions of the category.
 
     func testAnIPhoneAsksForTheUnlockOnEachActionAndComesToTheFront() throws {
@@ -275,9 +285,17 @@ final class HerdrNoticeTests: XCTestCase {
     }
 
     func testTheCategoryOfADialogKeepsTheFamilyOfTheHandler() {
-        let id = HerdrPlugin.categoryId(dialog: "3fa9c0de11223344")
-        XCTAssertEqual(id, "herdr:3fa9c0de11223344")
+        let id = HerdrPlugin.categoryId(dialog: "3fa9c0de11223344", deviceId: "pc", pane: "w2:p1")
+        XCTAssertEqual(id, "herdr:3fa9c0de11223344:herdr-pc-w2:p1")
         XCTAssertEqual(Notifier.family(id), HerdrPlugin.notificationCategory, "an older notification still reaches the handler after a restart")
         XCTAssertEqual(Notifier.family("share.file"), "share.file")
+    }
+
+    func testTwoPanesWithTheSameDialogKeepSeparateCategories() {
+        let a = HerdrPlugin.categoryId(dialog: "3fa9c0de11223344", deviceId: "pc", pane: "w2:p1")
+        let b = HerdrPlugin.categoryId(dialog: "3fa9c0de11223344", deviceId: "pc", pane: "w2:p2")
+        let c = HerdrPlugin.categoryId(dialog: "3fa9c0de11223344", deviceId: "laptop", pane: "w2:p1")
+        XCTAssertEqual(Set([a, b, c]).count, 3, "removing the notification of 1 pane keeps the actions of the others")
+        XCTAssertEqual(a, HerdrPlugin.categoryId(dialog: "3fa9c0de11223344", deviceId: "pc", pane: "w2:p1"))
     }
 }
