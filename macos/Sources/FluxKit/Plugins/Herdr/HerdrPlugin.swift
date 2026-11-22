@@ -158,6 +158,7 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
     static let dialogKey = "dialog"
     /// The identifier of the action that sends the text of a Reply.
     static let replyAction = "reply"
+    static let openAction = "open"
     /// The start of the identifier of a choice action. The key of the choice follows.
     static let choiceAction = "choice."
     /// The request numbers of the dialog reads start here, so that they do not meet the numbers of the window reads.
@@ -698,8 +699,12 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
 
     static func notificationId(_ deviceId: String, _ pane: String) -> String { "herdr-\(deviceId)-\(pane)" }
 
-    /// The category of the notification of a dialog. The ID of the dialog follows the family name.
-    static func categoryId(dialog: String) -> String { "\(notificationCategory):\(dialog)" }
+    /// The category of the notification of a dialog. The ID of the dialog and the ID of the notification
+    /// follow the family name. Each pane has its own category, so the removal of 1 notification
+    /// does not remove the actions of the notification of another pane with the same dialog.
+    static func categoryId(dialog: String, deviceId: String, pane: String) -> String {
+        "\(notificationCategory):\(dialog):\(notificationId(deviceId, pane))"
+    }
 
     /// The actions of a notification. On an iPhone, Flux comes to the front
     /// for Face ID, and iOS asks for the unlock before it runs an action.
@@ -715,7 +720,7 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
                 return UNTextInputNotificationAction(identifier: replyAction, title: a.label, options: options,
                                                      textInputButtonTitle: "Send", textInputPlaceholder: "Answer")
             case .open:
-                return UNNotificationAction(identifier: "open", title: a.label, options: [.foreground])
+                return UNNotificationAction(identifier: openAction, title: a.label, options: [.foreground])
             }
         }
     }
@@ -796,7 +801,7 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
         let id = Self.notificationId(deviceId, agent.pane)
         var category = Self.notificationCategory
         if !notice.actions.isEmpty {
-            category = Self.categoryId(dialog: notice.dialogId)
+            category = Self.categoryId(dialog: notice.dialogId, deviceId: deviceId, pane: agent.pane)
             Notifier.shared.register(category: category, actions: Self.notificationActions(notice.actions, platform: .current),
                                      handler: noticeHandler)
         }
@@ -822,7 +827,7 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
     @MainActor
     func noticeAction(_ action: String, deviceId: String, pane: String, dialog: String, text: String?) {
         switch action {
-        case UNNotificationDefaultActionIdentifier:
+        case UNNotificationDefaultActionIdentifier, Self.openAction:
             openThread(deviceId, pane: pane, changed: false)
         case Self.replyAction:
             answer(deviceId, pane: pane, dialog: dialog, choice: nil, text: text ?? "")

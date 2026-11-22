@@ -198,6 +198,13 @@ public struct HerdrState: Sendable, Equatable {
 /// waits for its answer. The old lines stay on screen until the new lines
 /// come.
 public struct HerdrOutput: Sendable, Equatable {
+    /// Two outputs are equal when they show the same screen. The parse time `at` is not part of the comparison,
+    /// so a new read of an unchanged screen is not a new output.
+    public static func == (a: HerdrOutput, b: HerdrOutput) -> Bool {
+        a.pane == b.pane && a.loading == b.loading && a.lines == b.lines && a.truncated == b.truncated
+            && a.error == b.error && a.request == b.request && a.view == b.view && a.path == b.path
+    }
+
     public var pane: String
     public var loading: Bool
     public var lines: [TermLine] {
