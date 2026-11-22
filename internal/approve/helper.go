@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"regexp"
 	"time"
@@ -167,6 +168,11 @@ func run(ctx context.Context, o Options) error {
 	key, err := ReadKey(o.KeyPath, o.KeyOwner)
 	if errors.Is(err, ErrNoKey) {
 		return err
+	}
+	if errors.Is(err, fs.ErrPermission) {
+		// The lock screen helper runs as the user. A folder that the user cannot read
+		// hides the key file, so the helper treats it like a missing key and prints nothing.
+		return ErrNoKey
 	}
 	if err != nil {
 		return withReason(reasonKeyFile, err)

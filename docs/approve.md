@@ -457,7 +457,8 @@ helper asked the phone, and before the password prompt.
 | A person at the unlocked Windows computer who knows its Windows Hello PIN | Approve requests | Approve a request without the PIN or a fingerprint or face that Windows Hello knows |
 
 The reason line gives these attackers nothing new. The line is a fixed
-text, so no attacker chooses its content. It tells only what the
+text, so no attacker chooses its content. A changed `fluxd` can choose
+among the fixed lines. It cannot add text. The line tells only what the
 attacker can already see: the password prompt follows it, and `flux-cli
 approve status` shows the same state to the user. The 4 silent rows
 keep the line away from a computer or a service that has no approval.

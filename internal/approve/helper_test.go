@@ -243,6 +243,30 @@ func TestHelperTimeoutFromFluxd(t *testing.T) {
 	}
 }
 
+// An unreadable parent folder gives EACCES. The helper treats it like a
+// missing key, so the key file row prints no reason.
+func TestHelperUnreadableFolderIsNoKey(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root reads each folder")
+	}
+	dir := filepath.Join(t.TempDir(), "closed")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o755) })
+	var out bytes.Buffer
+	o := helperOptions(t, filepath.Join(dir, "alice.pub"), "/nonexistent/socket", &out)
+	if err := Run(context.Background(), o); !errors.Is(err, ErrNoKey) {
+		t.Fatalf("got %v", err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("output: %q", out.String())
+	}
+}
+
 func TestHelperStopsAtOnce(t *testing.T) {
 	ph := newPhone(t)
 	key := writeTestKey(t, ph)
