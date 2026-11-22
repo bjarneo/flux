@@ -91,7 +91,8 @@ An image snippet can contain up to 16 MiB.
 
 The page of the device, for example **Phone**, has an **Access** card.
 Each switch controls access for the selected device.
-A global feature switch must also be on. A feature that is off for every device shows `Off on this computer.` under its switch.
+The feature must also be on for this computer. Each entry has a line that starts with `On.` or `Off.` and says what the device can do.
+A feature that this computer turned off shows `Off.` and the switch stays dim.
 Agent control also needs agent output access.
 Agent terminals also need agent control access.
 

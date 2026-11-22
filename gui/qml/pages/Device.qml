@@ -1,11 +1,10 @@
 import QtQuick
-import QtQuick.Layouts
 import ".."
 import "../components"
 
-// The page of a device: the battery and the device facts with Ring, what
-// the device can do on this computer, the streams between them, the
-// commands that the phone can run, and Unpair.
+// The page of a device: 1 card with the battery, the device facts, Ring,
+// and Unpair, the Access card, 1 card with the streams between the device
+// and this computer, and the commands that the phone can run.
 Item {
   id: root
   property var view
@@ -226,6 +225,15 @@ Item {
             text: root.online ? "Connected" + (root.dev && root.dev.ip ? " · " + root.dev.ip : "") : "Offline"
             color: root.online ? Theme.ok : Theme.dim
           }
+          // Unpair removes the device. The view asks to confirm first.
+          TextAction {
+            objectName: "unpairButton"
+            anchors.verticalCenter: parent.verticalCenter
+            leftPadding: 12
+            text: "Unpair"
+            color: Theme.err
+            onClicked: root.view.unpair()
+          }
         }
         // The fingerprint of the certificate of the device, as the pair mode
         // and flux-cli unpair show it. The groups go to the next line as 1
@@ -276,18 +284,26 @@ Item {
 
       SectionLabel { text: "Streams"; font.pixelSize: 14 }
 
-      GridLayout {
-        id: grid
+      // All streams share 1 card. Each stream is a flat row of it.
+      Card {
+        objectName: "streamsCard"
         width: parent.width
-        columns: Math.max(1, Math.floor((width + 18) / (340 + 18)))
-        columnSpacing: 18
-        rowSpacing: 18
-        uniformCellWidths: true
+        implicitHeight: grid.implicitHeight + 2
+        clip: true
+
+      Column {
+        id: grid
+        x: 1
+        y: 1
+        width: parent.width - 2
 
         // Phone camera, with its settings. The card spans the grid while
         // the settings are open.
         CameraCard {
           objectName: "cameraCard"
+          flat: true
+          width: grid.width
+          height: implicitHeight
           visible: !!root.webcam || root.canAsk
           view: root.view
           webcam: root.webcam
@@ -296,19 +312,15 @@ Item {
           idleTitle: root.idleTitle(root.webcamAsked, "the webcam")
           startActive: root.canSend(root.webcamSent)
           onStart: root.askStream("webcam")
-          Layout.fillWidth: true
-          Layout.fillHeight: true
-          Layout.preferredWidth: 340
-          Layout.columnSpan: settingsOpen ? grid.columns : 1
         }
 
         // Phone microphone
         StreamCard {
           objectName: "micCard"
+          flat: true
+          width: grid.width
+          height: implicitHeight
           visible: !!root.mic || root.canAsk
-          Layout.fillWidth: true
-          Layout.fillHeight: true
-          Layout.preferredWidth: 340
           icon: "mic"
           heading: "Phone microphone"
           stream: root.mic || ({})
@@ -326,10 +338,10 @@ Item {
         // The device as a speaker of this computer.
         StreamCard {
           objectName: "speakerCard"
+          flat: true
+          width: grid.width
+          height: implicitHeight
           visible: !!root.speaker || root.canAskSpeaker
-          Layout.fillWidth: true
-          Layout.fillHeight: true
-          Layout.preferredWidth: 340
           icon: "cellphone-sound"
           heading: "Phone speaker"
           readonly property var s: root.speaker || ({})
@@ -349,10 +361,10 @@ Item {
         // The remote desktop of this computer on a device.
         StreamCard {
           objectName: "desktopCard"
+          flat: true
+          width: grid.width
+          height: implicitHeight
           visible: root.desktopShown
-          Layout.fillWidth: true
-          Layout.fillHeight: true
-          Layout.preferredWidth: 340
           icon: "monitor"
           heading: "Remote desktop"
           readonly property var d: root.desktop || ({})
@@ -365,10 +377,10 @@ Item {
         // The devices that browse the files of this computer
         StreamCard {
           objectName: "browseCard"
+          flat: true
+          width: grid.width
+          height: implicitHeight
           visible: root.browse.length > 0
-          Layout.fillWidth: true
-          Layout.fillHeight: true
-          Layout.preferredWidth: 340
           icon: "folder"
           heading: "Browse PC"
           stream: ({ active: true })
@@ -380,10 +392,10 @@ Item {
         // Phone screen mirror
         StreamCard {
           objectName: "screenCard"
+          flat: true
+          width: grid.width
+          height: implicitHeight
           visible: !!root.screen
-          Layout.fillWidth: true
-          Layout.fillHeight: true
-          Layout.preferredWidth: 340
           icon: "screen-share"
           heading: "Phone screen"
           stream: root.screen || ({})
@@ -391,6 +403,7 @@ Item {
           detail: root.screen && root.screen.width ? root.screen.width + "×" + root.screen.height + " · close the window to stop" : ""
           onStop: root.view.call("screen.stop", {})
         }
+      }
       }
     }
 
@@ -417,44 +430,6 @@ Item {
         objectName: "commandList"
         width: parent.width
         view: root.view
-      }
-    }
-
-    // Unpair, the 1 action on this page that ends something.
-    Card {
-      objectName: "unpairCard"
-      width: parent.width
-      implicitHeight: Math.max(unpairText.implicitHeight, unpairButton.implicitHeight) + 36
-
-      Column {
-        id: unpairText
-        x: 18
-        anchors.verticalCenter: parent.verticalCenter
-        width: parent.width - x - 18 - unpairButton.width - 18
-        spacing: 3
-        Txt {
-          width: parent.width
-          text: "Unpair " + root.devName
-          font.weight: Font.DemiBold
-          elide: Text.ElideRight
-        }
-        Txt {
-          width: parent.width
-          text: "This removes the device from Flux on this computer and on the device. You can pair it again later."
-          color: Theme.dim
-          font.pixelSize: 12
-          wrapMode: Text.Wrap
-        }
-      }
-      OutlineButton {
-        id: unpairButton
-        anchors.right: parent.right
-        anchors.rightMargin: 18
-        anchors.verticalCenter: parent.verticalCenter
-        icon: "unlink"
-        text: "Unpair"
-        textColor: Theme.err
-        onClicked: root.view.unpair()
       }
     }
   }
