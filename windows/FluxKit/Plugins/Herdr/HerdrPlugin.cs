@@ -24,6 +24,11 @@ public sealed class HerdrPlugin : IFluxPlugin
     internal const string DialogKey = "dialog";
     internal const string ChoiceAction = "choice:";
     internal const string ReplyAction = "reply";
+
+    // The categories of the notifications of a dialog. The buttons come with
+    // each notification, see SystemNotification.Actions.
+    internal const string ChoiceCategory = "herdr.choice";
+    internal const string ReplyCategory = "herdr.reply";
     internal const string InputAlertsKey = "herdr.inputAlerts";
     internal const string DoneAlertsKey = "herdr.doneAlerts";
     internal const string DictationLanguageKey = "herdr.dictationLanguage";
@@ -105,8 +110,6 @@ public sealed class HerdrPlugin : IFluxPlugin
     // The last dialog that a read found for each blocked pane, by HerdrModel.PromptKey.
     readonly Dictionary<string, AgentDialog> dialogs = [];
 
-    // The categories of notifications that are registered, by dialog ID.
-    readonly HashSet<string> dialogCategories = [];
     int dialogSeq;
 
     sealed class DialogWait
@@ -123,9 +126,10 @@ public sealed class HerdrPlugin : IFluxPlugin
     // Asks the person at this computer to unlock before an answer from a
     // notification goes out. The app sets it to Windows Hello. It calls the
     // first action when the unlock is valid, and the second action with a
-    // message when the check fails. A cancel calls neither. Without it, an
-    // answer from a notification sends nothing and opens the thread.
-    public Action<string, Action, Action<string>>? Unlock { get; set; }
+    // message when the check fails, and the third action after a cancel.
+    // Without it, an answer from a notification sends nothing and opens the
+    // thread.
+    public Action<string, Action, Action<string>, Action>? Unlock { get; set; }
     internal Dictionary<string, int> PromptParses { get; } = [];
     int promptSeq;
 
@@ -168,6 +172,8 @@ public sealed class HerdrPlugin : IFluxPlugin
         this.core = core;
         Model.Load(core.Settings);
         core.Host.Notifier.Register(NotificationCategory, [], OnNotificationAction);
+        core.Host.Notifier.Register(ChoiceCategory, [], OnNotificationAction);
+        core.Host.Notifier.Register(ReplyCategory, [], OnNotificationAction);
     }
 
     // The next agent list sets the start values, so a reconnect posts nothing.
@@ -1066,9 +1072,28 @@ public sealed class HerdrPlugin : IFluxPlugin
                 OpenThread(deviceId, pane);
                 return;
             }
-            unlock($"answer agents on {ComputerName(deviceId)}", () => Locked(() => Answer(deviceId, pane, dialogId, choice, typed)), _ =>
-                Locked(() => OpenThread(deviceId, pane)));
+            unlock($"answer agents on {ComputerName(deviceId)}", () => Locked(() => Answer(deviceId, pane, dialogId, choice, typed)),
+                message => Locked(() => OpenThreadWithError(deviceId, pane, message)),
+                () => Locked(() => Repost(deviceId, pane)));
         }));
+    }
+
+    // Opens the thread and shows the reason that the answer did not go out.
+    void OpenThreadWithError(string deviceId, string pane, string message)
+    {
+        replies++;
+        Model.Replies = Model.Replies.SetItem(deviceId, new HerdrReply(pane, "keys", replies, Sending: false, Error: message));
+        OpenThread(deviceId, pane);
+    }
+
+    // Posts the notification of a blocked agent again after a cancel of the
+    // unlock, because the click removed it.
+    void Repost(string deviceId, string pane)
+    {
+        if (Model.States.GetValueOrDefault(deviceId)?.Agent(pane) is { Status: AgentStatus.Blocked } agent && Model.InputAlerts)
+        {
+            PostNotification(agent, deviceId, ComputerName(deviceId), dialogs.GetValueOrDefault(HerdrModel.PromptKey(deviceId, pane)));
+        }
     }
 
     // The check after the unlock. A new read must show the same dialog.
@@ -1100,20 +1125,11 @@ public sealed class HerdrPlugin : IFluxPlugin
         }, _ => OpenThread(deviceId, pane));
     }
 
-    // The category of the notification of a dialog. It holds the buttons of
-    // that dialog, so that each dialog ID has its own category.
-    string DialogCategory(AgentNotice notice)
-    {
-        var category = $"{NotificationCategory}.{notice.DialogId}";
-        if (dialogCategories.Add(notice.DialogId))
-        {
-            var buttons = notice.Actions.Select(a => a.Kind == NoticeKind.Reply
-                ? new NotificationAction(ReplyAction, a.Label, TextInput: true)
-                : new NotificationAction(ChoiceAction + a.Key, a.Label)).ToArray();
-            core?.Host.Notifier.Register(category, buttons, OnNotificationAction);
-        }
-        return category;
-    }
+    // The buttons of the notification of a dialog: 1 for each choice, or a
+    // Reply button with a text field.
+    static NotificationAction[] DialogButtons(AgentNotice notice) => notice.Actions.Select(a => a.Kind == NoticeKind.Reply
+        ? new NotificationAction(ReplyAction, a.Label, TextInput: true)
+        : new NotificationAction(ChoiceAction + a.Key, a.Label)).ToArray();
 
     // Posts and removes the notifications for alerts.
     void Alert(IReadOnlyList<AgentAlert> alerts, string deviceId, string computer)
@@ -1192,10 +1208,12 @@ public sealed class HerdrPlugin : IFluxPlugin
         var notice = AgentNotice.Build(agent, dialog, ControlOf(deviceId));
         var info = new Dictionary<string, string> { [DeviceKey] = deviceId, [PaneKey] = agent.Pane };
         var category = NotificationCategory;
+        IReadOnlyList<NotificationAction>? buttons = null;
         if (notice.Actions.Count > 0)
         {
             info[DialogKey] = notice.DialogId;
-            category = DialogCategory(notice);
+            buttons = DialogButtons(notice);
+            category = notice.Actions.Any(a => a.Kind == NoticeKind.Reply) ? ReplyCategory : ChoiceCategory;
         }
         var text = dialog is not null ? notice.BigText : notice.Text;
         core.Host.Notifier.Post(new SystemNotification(
@@ -1205,6 +1223,9 @@ public sealed class HerdrPlugin : IFluxPlugin
             string.Join('\n', new[] { computer, text }.Where(s => s.Length > 0)))
         {
             UserInfo = info,
+            Actions = buttons,
+            // The first post of a question had the sound. The post with the buttons replaces it.
+            Sound = dialog is null,
         });
     }
 }

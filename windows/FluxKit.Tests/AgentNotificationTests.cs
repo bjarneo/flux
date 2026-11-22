@@ -64,7 +64,7 @@ public class AgentNotificationTests
         }
 
         // The unlock of the app: it runs the action at once, or it fails.
-        public void UnlockWith(bool valid) => Plugin.Unlock = (_, run, fail) =>
+        public void UnlockWith(bool valid) => Plugin.Unlock = (_, run, fail, _) =>
         {
             Unlocks++;
             if (valid)
@@ -75,6 +75,13 @@ public class AgentNotificationTests
             {
                 fail("The check failed.");
             }
+        };
+
+        // The unlock of the app after the person cancels Windows Hello.
+        public void CancelUnlock() => Plugin.Unlock = (_, _, _, cancel) =>
+        {
+            Unlocks++;
+            cancel();
         };
 
         public void Block(bool control = true)
@@ -218,6 +225,56 @@ public class AgentNotificationTests
         // A failed unlock does not read the pane. The app opens the thread.
         Assert.Equal(reads, rig.Packets("read").Length);
         await Wait.UntilAsync(() => !rig.Opened.IsEmpty, "the thread");
+    }
+
+    [Fact]
+    public async Task AFailedUnlockShowsTheMessageInTheThread()
+    {
+        using var rig = new Rig();
+        rig.UnlockWith(false);
+        rig.Block();
+        await rig.AnswerReadAsync(Three, 2);
+        rig.Activate("choice:1");
+        await Wait.UntilAsync(() => !rig.Opened.IsEmpty, "the thread");
+        var reply = rig.Plugin.Model.Reply("d", "w1:p1");
+        Assert.Equal("The check failed.", reply?.Error);
+    }
+
+    [Fact]
+    public async Task ACancelOfTheUnlockPostsTheNoticeAgainWithTheButtons()
+    {
+        using var rig = new Rig();
+        rig.CancelUnlock();
+        rig.Block();
+        await rig.AnswerReadAsync(Three, 2);
+        rig.Activate("choice:1");
+        await Wait.UntilAsync(() => rig.Shown.Shown.Count == 3, "the new post");
+        Assert.True(rig.Opened.IsEmpty);
+        Assert.Empty(rig.Packets("keys"));
+        var (notice, actions) = rig.Shown.Last;
+        Assert.Equal(["Yes", "Yes, always", "No"], actions.Select(a => a.Title));
+        Assert.False(notice.Sound);
+    }
+
+    [Fact]
+    public async Task OnlyTheFirstPostOfAQuestionHasASound()
+    {
+        using var rig = new Rig();
+        rig.Block();
+        Assert.True(rig.Shown.Shown.First().Notice.Sound);
+        await rig.AnswerReadAsync(Three, 2);
+        Assert.False(rig.Shown.Last.Notice.Sound);
+    }
+
+    [Fact]
+    public async Task EachDialogUsesOneOfTwoFixedCategories()
+    {
+        using var rig = new Rig();
+        rig.Block();
+        await rig.AnswerReadAsync(Three, 2);
+        Assert.Equal(HerdrPlugin.ChoiceCategory, rig.Shown.Last.Notice.Category);
+        await rig.AnswerReadAsync(Three.Replace("migrate --apply", "migrate --other"), 2);
+        Assert.Equal(HerdrPlugin.ChoiceCategory, rig.Shown.Last.Notice.Category);
     }
 
     [Fact]

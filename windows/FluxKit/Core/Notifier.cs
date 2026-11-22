@@ -19,6 +19,11 @@ public sealed record SystemNotification(string Id, string Category, string Title
 
     // An image file that the notification shows, or null.
     public string? Image { get; init; }
+
+    // The buttons of this notification, or null to use the buttons of its
+    // category. A notification with its own buttons needs no category for
+    // each set of labels.
+    public IReadOnlyList<NotificationAction>? Actions { get; init; }
 }
 
 // Shows system notifications. The Windows app shows toasts. Tests record them.
@@ -74,7 +79,7 @@ public sealed class Notifier
         INotificationBackend? b;
         lock (gate)
         {
-            actions = categories.TryGetValue(notification.Category, out var c) ? c.Actions : [];
+            actions = notification.Actions ?? (categories.TryGetValue(notification.Category, out var c) ? c.Actions : []);
             b = backend;
         }
         b?.Show(notification, actions);

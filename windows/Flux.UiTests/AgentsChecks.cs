@@ -232,6 +232,11 @@ public static class AgentsChecks
     {
         ReplyLock.Lock();
         h.Check(!ReplyLock.IsUnlocked, "the reply lock starts locked");
+        h.Check(ReplyLock.TryStart(), "the first check of the reply lock starts");
+        h.Check(!ReplyLock.TryStart(), "a second check waits for the first");
+        ReplyLock.End();
+        h.Check(ReplyLock.TryStart(), "a new check starts after the first ends");
+        ReplyLock.End();
 
         var view = new TermLinesView(TermText.Lines("\u001B[42m ok \u001B[0m plain\n" + new string('x', 300)));
         view.Measure(new Size(400, double.PositiveInfinity));

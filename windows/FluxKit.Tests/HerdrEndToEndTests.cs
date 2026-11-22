@@ -385,7 +385,7 @@ public class HerdrNotificationEndToEndTests
         var opened = new System.Collections.Concurrent.ConcurrentQueue<(string, string)>();
         plugin.Model.Open = (d, p) => opened.Enqueue((d, p));
         var unlocks = 0;
-        plugin.Unlock = (_, run, _) =>
+        plugin.Unlock = (_, run, _, _) =>
         {
             unlocks++;
             run();

@@ -107,20 +107,33 @@ public static class ReplyLock
 
     // Runs action after the check, or at once while an unlock is valid.
     // onError gets a message when this computer cannot check or the check
-    // fails. A cancel calls neither. reason tells what the check is for, for
-    // example "answer agents on omarchy". owner is the window that the
-    // prompt of Windows Hello belongs to.
-    public static void Run(string reason, Window? owner, Action action, Action<string> onError)
+    // fails. onCancel runs after a cancel, and may be null. reason tells what
+    // the check is for, for example "answer agents on omarchy". owner is the
+    // window that the prompt of Windows Hello belongs to. A call while a
+    // check runs does nothing.
+    public static void Run(string reason, Window? owner, Action action, Action<string> onError, Action? onCancel = null)
     {
         if (IsUnlocked)
         {
             action();
             return;
         }
-        _ = CheckAsync(reason, owner, action, onError);
+        if (!TryStart())
+        {
+            return;
+        }
+        _ = CheckAsync(reason, owner, action, onError, onCancel);
     }
 
-    static async Task CheckAsync(string reason, Window? owner, Action action, Action<string> onError)
+    static int checking;
+
+    // True for the caller that starts a check. A check that runs has the flag until it ends.
+    internal static bool TryStart() => Interlocked.CompareExchange(ref checking, 1, 0) == 0;
+
+    // Ends the check that TryStart started.
+    internal static void End() => Volatile.Write(ref checking, 0);
+
+    static async Task CheckAsync(string reason, Window? owner, Action action, Action<string> onError, Action? onCancel)
     {
         try
         {
@@ -143,6 +156,7 @@ public static class ReplyLock
                     action();
                     break;
                 case UserConsentVerificationResult.Canceled:
+                    onCancel?.Invoke();
                     break;
                 default:
                     onError(Failed(result));
@@ -153,6 +167,10 @@ public static class ReplyLock
         {
             FluxLog.Error("app", $"Windows Hello failed: {e.Message}");
             onError("Windows Hello did not answer. Try again.");
+        }
+        finally
+        {
+            End();
         }
     }
 
