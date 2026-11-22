@@ -77,6 +77,8 @@ import org.omarchy.flux.core.UiState
 import org.omarchy.flux.core.agentsOfPickedSessions
 import org.omarchy.flux.core.chatList
 import org.omarchy.flux.core.inScope
+import org.omarchy.flux.core.needsEmptyLine
+import org.omarchy.flux.core.showsWake
 import org.omarchy.flux.core.stripComputers
 import org.omarchy.flux.core.target
 
@@ -155,10 +157,14 @@ fun ChatsScreen(
         }
         if (searching) SearchField(query, { query = it }, Modifier.padding(start = 10.dp, end = 10.dp, top = 2.dp, bottom = 8.dp))
         val context = LocalContext.current
+        // The cards of Needs you name their computer when 2 computers have agents, also when 1 is not reachable.
+        val withAgents = devices.count { it.paired && it.herdr?.anyRunning == true }
         val many = devices.count { it.paired && it.online && it.herdr?.anyRunning == true } > 1
         // A search looks in all sessions, so the strips and the session filter apply only with no search.
         val strips = if (query.isBlank()) stripComputers(devices).filter { scope == null || it.id == scope } else emptyList()
         val agentRows = if (query.isBlank()) agentsOfPickedSessions(list.agents, devices) { HerdrSessionPrefs.picked(context, it) } else list.agents
+        // With no search, a list with nothing that needs the user says so.
+        val showEmpty = query.isBlank() && list.needs.isEmpty()
         LazyColumn(
             Modifier.weight(1f).fillMaxWidth(),
             contentPadding = PaddingValues(start = 10.dp, end = 10.dp, bottom = 16.dp),
@@ -170,12 +176,16 @@ fun ChatsScreen(
             }
             if (list.needs.isNotEmpty()) {
                 item(key = "h-needs") { SectionHead("Needs you", "${list.needs.size}", Tn.red, first = true) }
-                items(list.needs, key = { it.key }) { r -> NeedsRow(r, context, many, actions, selected) }
+                items(list.needs, key = { it.key }) { r -> NeedsRow(r, devices.firstOrNull { it.id == (r as? AgentRow)?.deviceId }, withAgents > 1, actions) }
+            } else if (showEmpty) {
+                item(key = "needs-empty") {
+                    Box(Modifier.padding(top = 8.dp, bottom = 4.dp)) { NeedsEmpty(needsEmptyLine(list.agents.filter { it.reachable && it.agent.status == AgentStatus.Working })) }
+                }
             }
             if (agentRows.isNotEmpty() || strips.isNotEmpty()) {
                 // With 1 computer, the heading names it. With more, each row names its computer.
                 val on = agentRows.map { it.computer }.distinct().singleOrNull()
-                item(key = "h-agents") { SectionHead("Agents", if (on != null) "on $on" else null, Tn.sub, first = list.needs.isEmpty()) }
+                item(key = "h-agents") { SectionHead("Agents", if (on != null) "on $on" else null, Tn.sub, first = list.needs.isEmpty() && !showEmpty) }
                 // A computer with 2 or more herdr sessions shows the session strip. The strip filters the Agents group of that computer.
                 items(strips, key = { "strip-${it.id}" }) { d ->
                     SessionStrip(d, Modifier.padding(horizontal = 4.dp, vertical = 2.dp), label = if (strips.size > 1) d.name else null)
@@ -183,7 +193,7 @@ fun ChatsScreen(
                 items(agentRows, key = { it.key }) { r -> AgentChatRow(r, many, context, actions, selected) }
             }
             if (list.computers.isNotEmpty()) {
-                item(key = "h-computers") { SectionHead("Computers", null, Tn.sub, first = list.needs.isEmpty() && agentRows.isEmpty() && strips.isEmpty()) }
+                item(key = "h-computers") { SectionHead("Computers", null, Tn.sub, first = list.needs.isEmpty() && !showEmpty && agentRows.isEmpty() && strips.isEmpty()) }
                 items(list.computers, key = { it.key }) { r -> ComputerChatRow(r, context, actions, selected) }
             }
             if (list.isEmpty && query.isNotBlank()) {
@@ -297,11 +307,11 @@ private fun SectionHead(title: String, trailing: String?, color: Color, first: B
 
 /** A row of the Needs you group: an approval or a pair request as a card, or an agent that waits for input. */
 @Composable
-private fun NeedsRow(r: ChatRow, context: Context, many: Boolean, actions: ChatActions, selected: Route?) {
+private fun NeedsRow(r: ChatRow, device: DeviceUi?, many: Boolean, actions: ChatActions) {
     when (r) {
         is ApprovalRow -> ApprovalCard(r.request, r.at, actions, list = true)
         is PairRow -> PairCard(r.deviceId, r.computer, r.at, actions, list = true)
-        is AgentRow -> AgentChatRow(r, many, context, actions, selected)
+        is AgentRow -> AgentNeedsCard(r, device, many, actions)
         is ComputerRow -> Unit
     }
 }
@@ -325,26 +335,48 @@ private fun ChatRowFrame(
     dim: Boolean = false,
     selected: Boolean = false,
     timeTicker: (@Composable () -> Unit)? = null,
+    action: (@Composable () -> Unit)? = null,
 ) {
     val shape = RoundedCornerShape(12.dp)
+    // The [action] sits beside the tap area, so that it stays at full strength when the row is dim.
     Row(
-        Modifier.fillMaxWidth().alpha(if (dim) DimAlpha else 1f).clip(shape)
+        Modifier.fillMaxWidth().clip(shape)
             .then(if (selected) Modifier.background(Tn.accentTile) else if (ask) Modifier.background(Tn.tile) else Modifier)
             .then(if (ask) Modifier.border(1.dp, Tn.red, shape) else Modifier)
-            .semantics { this.selected = selected }
-            .clickable(onClickLabel = "Open the chat", role = Role.Button, onClick = onClick)
-            .clearAndSetSemantics { contentDescription = description }
-            .padding(start = 10.dp, end = 8.dp, top = if (ask) 10.dp else 8.dp, bottom = if (ask) 10.dp else 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .semantics { this.selected = selected },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        avatar()
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            T(title, size = 15, weight = FontWeight.SemiBold, maxLines = 1)
-            line()
+        Row(
+            Modifier.weight(1f).alpha(if (dim) DimAlpha else 1f)
+                .clickable(onClickLabel = "Open the chat", role = Role.Button, onClick = onClick)
+                .clearAndSetSemantics { contentDescription = description }
+                .padding(start = 10.dp, end = if (action == null) 8.dp else 4.dp, top = if (ask) 10.dp else 8.dp, bottom = if (ask) 10.dp else 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            avatar()
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                T(title, size = 15, weight = FontWeight.SemiBold, maxLines = 1)
+                line()
+            }
+            if (timeTicker != null) timeTicker() else if (time.isNotEmpty()) T(time, size = 11, color = Tn.sub, family = Mono, maxLines = 1)
         }
-        if (timeTicker != null) timeTicker() else if (time.isNotEmpty()) T(time, size = 11, color = Tn.sub, family = Mono, maxLines = 1)
+        if (action != null) Box(Modifier.padding(end = 8.dp)) { action() }
     }
+}
+
+/** **Wake** at the end of the row of a computer that is not reachable and can wake. It sends the Wake-on-LAN packet of Computers. */
+@Composable
+private fun WakeKey(d: DeviceUi) {
+    val shape = RoundedCornerShape(16.dp)
+    Box(
+        Modifier.heightIn(min = 48.dp).clip(shape)
+            .clickable(onClickLabel = "Wake ${d.name}", role = Role.Button) { FluxCore.wake(d.id) }
+            .padding(vertical = 6.dp).clip(shape).background(Tn.line)
+            .padding(horizontal = 18.dp, vertical = 10.dp)
+            .semantics { contentDescription = "Wake ${d.name}" },
+        contentAlignment = Alignment.Center,
+    ) { T("Wake", size = 14, weight = FontWeight.Medium, maxLines = 1) }
 }
 
 /** The color of the status word and the dot of an agent. Idle and unknown take the second ink. */
@@ -470,6 +502,7 @@ private fun ComputerChatRow(r: ComputerRow, context: Context, actions: ChatActio
         time = if (!d.online && r.last == null) "" else shortTime(context, r.at),
         description = listOf(d.name, linkText(d), line).distinct().joinToString(", "),
         dim = !d.online,
+        action = if (showsWake(d)) ({ WakeKey(d) }) else null,
         selected = selected?.deviceId == d.id && (selected.page == CHAT_PAGE || selected.page == CHAT_TRAY_PAGE),
         onClick = { actions.open(Route(d.id, CHAT_PAGE)) },
     )

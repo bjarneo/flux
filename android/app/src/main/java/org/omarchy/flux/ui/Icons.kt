@@ -51,6 +51,7 @@ object Ic {
     val download = R.drawable.ic_download
     val sync = R.drawable.ic_sync
     val power = R.drawable.ic_power_settings_new
+    val shield = R.drawable.ic_shield
     val lightMode = R.drawable.ic_light_mode
     val darkMode = R.drawable.ic_dark_mode
 
