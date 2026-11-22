@@ -239,7 +239,7 @@ It stops when `ANDROID_SERIAL` is not set or is not an emulator, because it taps
 
 ```sh
 python3 android/tools/timed_answer.py --runs 10 --fake-log "$E/sends.jsonl" \
-  --control "$E/control.json" --action 'yes' --expect send_keys:1 --pin 1234 --out "$E/timed.md"
+  --control "$E/control.json" --action '^Yes, proceed' --expect send_keys:1 --pin 1234 --out "$E/timed.md"
 ```
 
 The script prints 1 Markdown row for each run.
@@ -258,7 +258,7 @@ Answer once by hand before a run that checks the current app.
 | `--no-tap` | Measure only the time to the notification. This works with an app that has no actions in its notification. |
 | `--screen` | Tap a node of the open screen of the app, for example the **Yes, proceed** key of the dock, in place of a notification action. The first time is then the time until that node shows. |
 | `--scenario NAME` | Set a scenario of the fake herdr for each run. |
-| `--action REGEX` | The text of the action to tap. The default is `yes`. |
+| `--action REGEX` | The text of the action to tap. The default is `^yes`. In the notification, the script taps only a button, so the expanded text of the notification never matches. Anchor the pattern with `^` for the screen mode. |
 | `--expect SEND` | The send that herdr must get, for example `send_keys:1`. |
 
 ## Update xterm.js
