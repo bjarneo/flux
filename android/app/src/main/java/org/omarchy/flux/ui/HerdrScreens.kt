@@ -216,7 +216,7 @@ fun TiledNewPaneScreen(d: DeviceUi, onBack: () -> Unit, onOpened: (what: String,
                 !herdr.control -> EmptyState(
                     Ic.agent,
                     "Control is off",
-                    "To start agents from this phone, set herdr_control = true on ${d.name}. Then run systemctl --user reload fluxd.",
+                    "To start agents from this phone, turn on Agent control in Flux on ${d.name}, on the Access card.",
                     Modifier.padding(top = 48.dp),
                 )
                 kinds.isEmpty() && !shell -> EmptyState(

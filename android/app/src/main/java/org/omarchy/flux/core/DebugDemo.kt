@@ -103,6 +103,9 @@ object DebugDemo {
      */
     @Volatile var sessions = false
 
+    /** Debug-only: false turns Agent control off on the sample computer. */
+    @Volatile var control = true
+
     /** The agents, terminals, and workspaces of the named sample sessions, with the qualified IDs of fluxd. */
     private val sessionAgents = listOf(
         HerdrAgent("infra/w1:p1", "claude", AgentStatus.Working, "Move the backups to the new bucket", "ops", "ops", "infra"),
@@ -171,7 +174,7 @@ object DebugDemo {
                 herdr = withSessions(HerdrState(
                     enabled = true,
                     running = true,
-                    control = true,
+                    control = control,
                     review = true,
                     agents = listOf(
                         HerdrAgent("w1:p1", "claude", AgentStatus.Working, "Add rate limiting to /v1/upload", "api", "api"),

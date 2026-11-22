@@ -121,8 +121,7 @@ internal fun ChatTray(d: DeviceUi, photos: SnapshotStateList<Uri>, actions: Chat
         actions.open(Route(d.id, page))
     }
     val sample = { FluxCore.toast("This is a sample computer") }
-    val herdr = d.herdr
-    val tools = listOfNotNull(
+    val tools = listOf(
         TrayTool(Ic.camera, "Camera", "Take a photo for ${d.name}") { go("camera:photo") },
         TrayTool(Ic.sendFiles, "File", "Send files to ${d.name}") {
             if (demo) {
@@ -137,7 +136,6 @@ internal fun ChatTray(d: DeviceUi, photos: SnapshotStateList<Uri>, actions: Chat
         TrayTool(Ic.qr, "QR", "Read a QR code or barcode") { go("camera:qr") },
         TrayTool(Ic.signature, "Signature", "Sign on paper, paste on the computer") { go("camera:signature") },
         TrayTool(Ic.folderOpen, "Get files", "Get files from ${d.name}") { go("browse") },
-        if (herdr?.anyRunning == true && herdr.control) TrayTool(Ic.agent, "Agent", "Start an agent on ${d.name}") { go(NEW_PANE_PAGE) } else null,
     )
     Column(Modifier.fillMaxWidth().padding(top = 2.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {

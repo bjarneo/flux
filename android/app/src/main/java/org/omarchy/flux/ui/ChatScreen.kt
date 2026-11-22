@@ -239,7 +239,7 @@ internal fun computerContext(d: DeviceUi): String = when {
 
 /**
  * The menu of the chat of a computer: Control with the computer in scope,
- * its agents and terminals, and a new agent or terminal.
+ * its terminals when the computer allows them, and a new agent or terminal.
  */
 @Composable
 private fun ComputerMenu(d: DeviceUi, actions: ChatActions) {
@@ -255,7 +255,7 @@ private fun ComputerMenu(d: DeviceUi, actions: ChatActions) {
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             val items = listOfNotNull(
                 Triple("Control", Ic.tune) { actions.control(d.id) },
-                if (d.herdrSupported) Triple("Agents and terminals", Ic.agent) { actions.open(Route(d.id, AGENTS_PAGE)) } else null,
+                if (d.herdrSupported && herdr?.terminals == true) Triple("Terminals", Ic.terminal) { actions.open(Route(d.id, AGENTS_PAGE)) } else null,
                 if (d.online && herdr?.anyRunning == true && herdr.control) Triple("New agent or terminal", Ic.add) { actions.open(Route(d.id, NEW_PANE_PAGE)) } else null,
             )
             for ((label, icon, action) in items) {
