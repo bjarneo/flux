@@ -449,4 +449,28 @@ class HerdrTest {
             plain.keys,
         )
     }
+
+    @Test
+    fun anAnswerToADialogReadDoesNotReplaceTheScreen() {
+        val io = object : DialogIo {
+            override fun screenOpen(deviceId: String, pane: String) = false
+            override fun screenReading(deviceId: String, pane: String) = false
+            override fun readScreen(deviceId: String, pane: String) = true
+            override fun send(deviceId: String, pane: String, register: (Long) -> Unit): Boolean {
+                register(41)
+                return true
+            }
+            override fun now() = 0L
+            override fun later(ms: Long, task: () -> Unit) = Unit
+            override fun post(task: () -> Unit) = task()
+        }
+        val book = DialogBook(io)
+        var got: AgentDialog? = null
+        book.peek("d", "w1:p1") { got = it }
+        val peek = HerdrOutput("w1:p1", loading = false, request = 41, lines = termLines("hi\n"))
+        assertTrue("the book takes the answer, so onOutput stops before the screen", book.onOutput("d", peek))
+        assertNotNull(got)
+        val screen = HerdrOutput("w1:p1", loading = false, request = 40)
+        assertFalse("the answer of a screen read is not taken", book.onOutput("d", screen))
+    }
 }

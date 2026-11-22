@@ -1766,6 +1766,7 @@ private fun AgentDock(
         Modifier.fillMaxWidth().then(if (linked) Modifier else Modifier.alpha(DimAlpha).takeNoTaps()).dockFrame(shape).padding(DockPadding),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        QuestionChangedNote(d.id, agent.pane)
         when {
             blocked -> {
                 AskHeader(

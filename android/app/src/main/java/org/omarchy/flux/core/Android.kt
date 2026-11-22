@@ -23,6 +23,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import org.omarchy.flux.R
 import org.omarchy.flux.protocol.groupKey
+import org.omarchy.flux.ui.AgentAnswerActivity
 import org.omarchy.flux.ui.MainActivity
 import java.io.OutputStream
 import java.util.concurrent.atomic.AtomicInteger
@@ -311,17 +312,17 @@ object Android {
      * Opens the chat of the agent in [pane] on the computer [deviceId]. The
      * agent notification and the agents widget use it. Back goes to Chats.
      */
-    fun openAgent(context: Context, deviceId: String, pane: String): PendingIntent {
+    fun openAgent(context: Context, deviceId: String, pane: String, code: Int = agentId(deviceId, pane), id: String = "$deviceId|$pane"): PendingIntent {
         // The action and the identifier make this PendingIntent differ from
         // each other PendingIntent of Flux, also when the hash of the pane
         // is the same as another request code.
         val open = Intent(context, MainActivity::class.java)
             .setAction(MainActivity.ACTION_OPEN_AGENT)
-            .setIdentifier("$deviceId|$pane")
+            .setIdentifier(id)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             .putExtra(MainActivity.EXTRA_DEVICE, deviceId)
             .putExtra(MainActivity.EXTRA_PANE, pane)
-        return PendingIntent.getActivity(context, agentId(deviceId, pane), open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        return PendingIntent.getActivity(context, code, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 
     /** Opens Chats, the first destination of the app. The header of the agents widget uses it. */
@@ -334,24 +335,74 @@ object Android {
 
     /**
      * Shows that a herdr agent needs input or finished. Each pane has 1
-     * notification, and a tap opens the screen of the agent.
+     * notification, and a tap opens the screen of the agent. The actions
+     * of [notice] answer the agent, see [agentNotice]. A second call for
+     * the same pane updates the notification with no new sound. With
+     * [onlyIfShown], it posts nothing when the user already removed the
+     * notification.
      */
     @Suppress("MissingPermission")
-    fun showAgent(context: Context, deviceId: String, computer: String, agent: HerdrAgent) {
+    fun showAgent(
+        context: Context,
+        deviceId: String,
+        computer: String,
+        agent: HerdrAgent,
+        notice: AgentNotice = agentNotice(agent, null, false, Build.VERSION.SDK_INT),
+        onlyIfShown: Boolean = false,
+    ) {
         if (!canNotify(context)) return
         val id = agentId(deviceId, agent.pane)
+        if (onlyIfShown && !agentShown(context, id)) return
         val blocked = agent.status == AgentStatus.Blocked
-        val where = agent.project.ifEmpty { agent.workspace }.ifEmpty { agent.pane }
-        val pi = openAgent(context, deviceId, agent.pane)
         val b = NotificationCompat.Builder(context, if (blocked) CHANNEL_AGENT_INPUT else CHANNEL_AGENT_DONE)
             .setSmallIcon(R.drawable.ic_stat_flux)
-            .setContentTitle(if (blocked) "${agent.agent} in $where needs input" else "${agent.agent} in $where finished")
+            .setContentTitle(notice.title)
             .setSubText(computer)
-            .setContentIntent(pi)
+            .setContentIntent(openAgent(context, deviceId, agent.pane))
             .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
             .setCategory(if (blocked) NotificationCompat.CATEGORY_REMINDER else NotificationCompat.CATEGORY_STATUS)
-        if (agent.title.isNotEmpty()) b.setContentText(agent.title)
+        if (notice.text.isNotEmpty()) b.setContentText(notice.text)
+        if (notice.bigText.isNotEmpty()) b.setStyle(NotificationCompat.BigTextStyle().bigText(notice.bigText))
+        for ((i, a) in notice.actions.withIndex()) b.addAction(agentAction(context, deviceId, agent.pane, a, i))
         NotificationManagerCompat.from(context).notify(TAG_AGENT, id, b.build())
+    }
+
+    /** True while the notification of the agent with [id] shows. */
+    private fun agentShown(context: Context, id: Int): Boolean = runCatching {
+        context.getSystemService(NotificationManager::class.java).activeNotifications.any { it.tag == TAG_AGENT && it.id == id }
+    }.getOrDefault(true)
+
+    /**
+     * An action of the agent notification. From [ANSWER_SDK], a choice and
+     * Reply start [AgentAnswerActivity], and Android asks for the unlock
+     * before it. Before that, each action opens the thread.
+     */
+    private fun agentAction(context: Context, deviceId: String, pane: String, a: NoticeAction, index: Int): NotificationCompat.Action {
+        val code = agentId(deviceId, pane) * 31 + index + 1
+        val pi: PendingIntent
+        val builder: NotificationCompat.Action.Builder
+        if (a.kind == NoticeKind.Open) {
+            pi = openAgent(context, deviceId, pane, code = code, id = "$deviceId|$pane|${a.label}")
+            builder = NotificationCompat.Action.Builder(0, a.label, pi)
+        } else {
+            val intent = Intent(context, AgentAnswerActivity::class.java)
+                .setIdentifier("$deviceId|$pane|${a.kind}|${a.key}")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_HISTORY)
+                .putExtra(AgentAnswerActivity.EXTRA_DEVICE, deviceId)
+                .putExtra(AgentAnswerActivity.EXTRA_PANE, pane)
+                .putExtra(AgentAnswerActivity.EXTRA_CHOICE, a.key)
+                .putExtra(AgentAnswerActivity.EXTRA_DIALOG, AgentDialogs.latest(deviceId, pane)?.id.orEmpty())
+            // Reply needs a mutable intent, because RemoteInput writes the text into it.
+            val flags = PendingIntent.FLAG_UPDATE_CURRENT or if (a.kind == NoticeKind.Reply) PendingIntent.FLAG_MUTABLE else PendingIntent.FLAG_IMMUTABLE
+            pi = PendingIntent.getActivity(context, code, intent, flags)
+            builder = NotificationCompat.Action.Builder(0, a.label, pi)
+            if (a.kind == NoticeKind.Reply) {
+                builder.addRemoteInput(androidx.core.app.RemoteInput.Builder(AgentAnswerActivity.KEY_TEXT).setLabel("Reply").build())
+            }
+            builder.setAuthenticationRequired(true)
+        }
+        return builder.build()
     }
 
     fun cancelAgent(context: Context, deviceId: String, pane: String) {
