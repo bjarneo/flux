@@ -87,7 +87,7 @@ struct ChatsView: View {
                     if !list.agents.isEmpty {
                         // With 1 computer, the heading names it. With more, each row names its computer.
                         let computers = Set(list.agents.compactMap { r -> String? in
-                            if case .agent(_, let name, _, _, _) = r { return name }
+                            if case .agent(_, let name, _, _, _, _) = r { return name }
                             return nil
                         })
                         GroupHead(title: "Agents", trailing: computers.count == 1 ? "on \(computers.first ?? "")" : "",
@@ -134,8 +134,8 @@ struct ChatsView: View {
                          width: width, list: true)
         case .pair(let deviceId, let computer, let at):
             PairCard(item: InboxItem(.pair(deviceId: deviceId), computer: computer), deviceId: deviceId, at: at, width: width, list: true)
-        case .agent(let deviceId, let computer, let agent, _, let at):
-            AgentChatRow(deviceId: deviceId, computer: computer, agent: agent, at: at, many: many)
+        case .agent(let deviceId, let computer, let agent, _, let at, let link):
+            AgentChatRow(deviceId: deviceId, computer: computer, agent: agent, at: at, link: link, many: many)
         case .computer(let device, let last):
             ComputerChatRow(device: device, last: last, at: r.at)
         }
@@ -147,7 +147,7 @@ struct ChatsView: View {
         let states = SendTools.herdrStates(model)
         let control: (DeviceSnapshot) -> Bool = { $0.accepts(PacketType.fluxHerdr) && states[$0.id]?.control == true }
         guard Inbox.hasFeature(scope: nil, devices: model.state.devices, can: control) else {
-            model.show("No computer lets this iPhone start an agent. Set herdr_control = true on a computer")
+            model.show("No computer lets this iPhone start an agent. To turn on Agent control, open Flux on a computer and use the Access card.")
             return
         }
         TargetRun.run(model, can: SendTools.canCreate(model), title: "Start an agent on", allComputers: true) { d in
@@ -304,12 +304,15 @@ private struct RowTime: View {
 /// shows how long it waits, such as "3m", and an agent that works shows
 /// how long it works, such as "2:14". Another agent shows the time of its
 /// status. `at` is the start of the status. With `many` computers, the
-/// line names the computer.
+/// line names the computer. A computer that is not reachable shows
+/// `Not reachable since HH:MM` in place of the status word, dim, and the
+/// row has no time.
 private struct AgentChatRow: View {
     let deviceId: String
     let computer: String
     let agent: HerdrAgent
     let at: Date
+    let link: AgentLink
     let many: Bool
     @Environment(AppModel.self) private var model
     @Environment(\.tn) private var tn
@@ -322,14 +325,15 @@ private struct AgentChatRow: View {
         let title = a.title.isEmpty ? a.pane : a.title
         let source = [a.agent, a.project.isEmpty ? a.workspace : a.project, many ? computer : ""]
             .filter { !$0.isEmpty }.joined(separator: " · ")
-        ChatRowButton(title: title, description: [title, s.label, source].filter { !$0.isEmpty }.joined(separator: ", "),
-                      ask: blocked, action: { model.chatPath.append(.feature(.agent(deviceId, a.pane))) }) {
+        let word = LinkNote.rowLine(online: link.reachable, lastSeen: link.since) ?? s.label
+        ChatRowButton(title: title, description: [title, word, source].filter { !$0.isEmpty }.joined(separator: ", "),
+                      ask: blocked, dim: !link.reachable, action: { model.chatPath.append(.feature(.agent(deviceId, a.pane))) }) {
             AgentAvatar(status: s, accent: blocked, ground: blocked ? tn.tile : tn.bg)
         } line: {
             HStack(spacing: 0) {
-                Text(s.label)
+                Text(word)
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(color(s))
+                    .foregroundStyle(link.reachable ? color(s) : tn.sub)
                     .lineLimit(1)
                     .fixedSize()
                 if !source.isEmpty {
@@ -340,7 +344,10 @@ private struct AgentChatRow: View {
                 }
             }
         } time: {
-            if blocked || s == .working {
+            if !link.reachable {
+                // The waiting time and the working time stop while the computer is not reachable.
+                EmptyView()
+            } else if blocked || s == .working {
                 // A working agent counts its time each second. A waiting agent shows minutes.
                 TimelineView(.periodic(from: .now, by: s == .working ? 1 : 30)) { context in
                     RowTime(text: AgentTime.when(s, since: at, now: context.date))
@@ -363,8 +370,8 @@ private struct AgentChatRow: View {
 }
 
 /// A computer: its name, the newest entry of its chat, and the time of
-/// that entry. A computer that is not reachable shows at 55% with the time
-/// that Flux last saw it, when Flux knows it. Without entries, the line
+/// that entry. A computer that is not reachable shows at 55% with
+/// `Not reachable since HH:MM`, when Flux knows the time. Without entries, the line
 /// shows the link and the battery. `at` is the time of the row.
 private struct ComputerChatRow: View {
     let device: DeviceSnapshot
@@ -378,7 +385,7 @@ private struct ComputerChatRow: View {
         let seen = model.lastSeen(d.id)
         let preview = last?.preview ?? ""
         let line: String = {
-            if !d.online { return seen.map { "Offline · last seen \(ChatsTime.short($0))" } ?? "Offline" }
+            if !d.online { return LinkNote.rowLine(online: false, lastSeen: seen) ?? "" }
             if !preview.isEmpty { return preview }
             let words = ChatTexts.link(model, d)
             return words.prefix(1).uppercased() + words.dropFirst()

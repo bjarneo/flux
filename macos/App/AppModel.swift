@@ -28,6 +28,8 @@ final class AppModel {
     var scope: String?
     /// The first time that this Mac saw each Inbox item of all computers, by key. See `watchEvents`.
     private(set) var seen: [String: Date] = [:]
+    /// The time that each paired computer went offline in this run of Flux, by device ID.
+    private var wentOffline: [String: Date] = [:]
     /// True for 3 seconds after a connection attempt starts. A computer
     /// that is not online then counts as connecting.
     private(set) var connecting = false
@@ -186,8 +188,13 @@ final class AppModel {
         return Chats.list(devices: state.devices, herdr: herdr?.model.states ?? [:],
                           approval: core.plugin(ApprovePlugin.self)?.model.current, log: log,
                           since: { herdr?.model.agentSince(device: $0, pane: $1) },
+                          lastSeen: { wentOffline[$0] },
                           seen: &listClock, now: Date(), query: query)
     }
+
+    /// The time that the paired computer `id` went offline in this run of
+    /// Flux, or nil when Flux does not know it.
+    func lastSeen(_ id: String) -> Date? { wentOffline[id] }
 
     /// The state of the agent chats of a computer in the window, or nil
     /// without herdr. It keeps the drafts of each agent while the user opens
@@ -274,6 +281,9 @@ final class AppModel {
             notePaired(id)
         }
         for d in s.devices where d.pairState != .incoming { Notifier.shared.remove(id: "pair-\(d.id)") }
+        for d in s.devices where d.paired && !d.online && old.devices.contains(where: { $0.id == d.id && $0.online }) {
+            wentOffline[d.id] = Date()
+        }
         FeatureHooks.stateChanged(s, model: self)
     }
 

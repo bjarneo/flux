@@ -378,7 +378,7 @@ struct PanelAgentCard: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     if !control {
-                        Text("To answer from this Mac, set herdr_control = true on \(item.computer).")
+                        Text("Agent control is off on \(item.computer). To answer from this Mac, turn on Agent control in Flux on the computer, on the Access card.")
                             .font(.system(size: 12))
                             .foregroundStyle(tn.sub)
                             .fixedSize(horizontal: false, vertical: true)

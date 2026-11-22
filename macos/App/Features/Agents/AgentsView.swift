@@ -15,10 +15,8 @@ struct AgentsView: View {
         let online = device?.online == true
         let name = device?.name ?? "the computer"
         Group {
-            if !online {
-                ContentUnavailableView("\(name) is offline", systemImage: "wifi.slash",
-                                       description: Text("The agents show when \(name) is on the same network."))
-            } else if let herdr = model.shown {
+            // A computer that is not reachable keeps its last known agents. The thread says so, see `LinkNote`.
+            if let herdr = model.shown {
                 VStack(spacing: 0) {
                     if let all = model.herdr, all.sessions.count > 1, let shown = model.plugin.model.session(model.deviceId) {
                         SessionPills(state: all, selected: shown) { session in
@@ -30,6 +28,14 @@ struct AgentsView: View {
                         Divider()
                     }
                     content(herdr, name: name)
+                }
+            } else if !online {
+                ContentUnavailableView {
+                    Label("\(name) is not reachable", systemImage: "wifi.slash")
+                } description: {
+                    Text("The agents show when \(name) connects again.")
+                } actions: {
+                    Button("Retry") { model.app.retry() }
                 }
             } else {
                 ProgressView("Loading the agents of \(name)…")
@@ -205,6 +211,8 @@ struct AgentDetail: View {
         let thread = texts.map(AgentThread.parse)
         let ask = texts.flatMap { AgentAsk.find($0, maxLines: 6) }
         let control = agent != nil && model.herdr?.control == true
+        let online = model.device?.online == true
+        let link = LinkNote.threadNote(online: online, connecting: model.app.connecting, name: name, outputAt: out?.at, now: Date())
         let canReview = agent != nil && model.herdr?.review == true && model.device?.online == true
         let loading = out?.loading == true && !(out?.lines.isEmpty ?? true)
         VStack(spacing: 0) {
@@ -224,17 +232,20 @@ struct AgentDetail: View {
                 }
                 .frame(height: 2)
                 ThreadList(output: out, thread: thread, status: agent.status, sent: sent, review: canReview ? { review = true } : nil)
-                FirstTaskNote(model: model, agent: agent)
-                if control {
-                    ReplyControls(model: model, agent: agent, output: out, thread: thread, ask: ask, name: name,
-                                  keysOpen: $keysOpen, review: canReview ? { review = true } : nil) { sent = $0 }
+                if let link, !online {
+                    // The choices and the field take no tap while the computer is not reachable.
+                    ThreadNoteCard(link: link) { model.app.retry() }
                 } else {
-                    Text("To answer from this Mac, set herdr_control = true on \(name).")
-                        .font(.system(size: 12))
-                        .foregroundStyle(tn.sub)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(16)
-                        .background(DockShape().fill(tn.tile))
+                    FirstTaskNote(model: model, agent: agent)
+                    if agent.status == .blocked && model.plugin.model.isQuestionChanged(model.deviceId, pane: pane) {
+                        ThreadNoteCard.questionChanged
+                    }
+                    if control {
+                        ReplyControls(model: model, agent: agent, output: out, thread: thread, ask: ask, name: name,
+                                      keysOpen: $keysOpen, review: canReview ? { review = true } : nil) { sent = $0 }
+                    } else {
+                        ThreadNoteCard.controlOff(name)
+                    }
                 }
             } else {
                 ContentUnavailableView("The agent is gone", systemImage: "brain",

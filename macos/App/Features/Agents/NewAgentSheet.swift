@@ -74,8 +74,8 @@ struct NewAgentSheet: View {
             } else if herdr?.running != true {
                 unavailable("herdr is not running", "Start herdr on \(name). Then start agents from here.")
             } else if herdr?.control != true {
-                unavailable("Control is off",
-                            "To start agents from this Mac, set herdr_control = true on \(name). Then run systemctl --user reload fluxd.")
+                unavailable("Agent control is off on \(name)",
+                            "To start agents from this Mac, turn on Agent control in Flux on \(name), on the Access card.")
             } else {
                 unavailable("No coding agent on \(name)",
                             "Install a coding agent that herdr supports, such as Claude Code or Codex, on \(name). It shows here within a minute.")

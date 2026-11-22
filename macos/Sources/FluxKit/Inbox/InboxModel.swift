@@ -1,8 +1,8 @@
 import Foundation
 
 /// The link state of the paired computers in a scope: the number that are
-/// online, and the computers that are not reachable. The Inbox cannot show
-/// the agents of a computer that is not reachable.
+/// online, and the computers that are not reachable. The Inbox keeps only
+/// the agents that wait of a computer that is not reachable.
 public struct InboxReach: Sendable, Equatable {
     public var online: Int
     public var offline: [DeviceSnapshot]
@@ -35,7 +35,8 @@ public enum Inbox {
 
     /// Collects the Inbox items of all computers: the agents that wait, are
     /// done, or work, the open `approval`, and the pair requests. A computer
-    /// that is not reachable adds no agents. Each key shows once, because a
+    /// that is not reachable adds only its last known agents that wait,
+    /// because they still wait for the user. Each key shows once, because a
     /// computer can report 2 agents on 1 pane.
     public static func items(devices: [DeviceSnapshot], herdr: [String: HerdrState], approval: ApproveRequest?) -> [InboxItem] {
         var out: [InboxItem] = []
@@ -44,8 +45,8 @@ public enum Inbox {
                 if d.pairState == .incoming { out.append(InboxItem(.pair(deviceId: d.id), computer: d.name)) }
                 continue
             }
-            guard d.online, let h = herdr[d.id], h.running else { continue }
-            for a in h.agents where a.status == .blocked || a.status == .done || a.status == .working {
+            guard let h = herdr[d.id], h.running else { continue }
+            for a in h.agents where a.status == .blocked || (d.online && (a.status == .done || a.status == .working)) {
                 out.append(InboxItem(.agent(deviceId: d.id, agent: a, control: h.control), computer: d.name))
             }
         }

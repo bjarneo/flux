@@ -43,6 +43,24 @@ public final class Notifier: NSObject, UNUserNotificationCenterDelegate, @unchec
         center?.setNotificationCategories(all)
     }
 
+    /// Removes a category that `register` added, for example the category of
+    /// an old dialog. Notifications that still show it lose their actions.
+    public func unregister(category id: String) {
+        let all = categories.withLockedValue { c -> Set<UNNotificationCategory> in
+            c[id] = nil
+            return Set(c.values.map(\.category))
+        }
+        center?.setNotificationCategories(all)
+    }
+
+    /// The family of a category ID: the part before the first colon. A
+    /// category such as `herdr:3fa9` has the family `herdr`. After a restart
+    /// of the app, only the base category is registered, and a response from
+    /// an older notification of its family still reaches the handler.
+    static func family(_ category: String) -> String {
+        String(category.prefix { $0 != ":" })
+    }
+
     /// Shows a notification. A later post with the same id replaces it. A
     /// time-sensitive level shows it through a Focus that allows
     /// time-sensitive notifications, when the app has the time-sensitive
@@ -110,7 +128,8 @@ public final class Notifier: NSObject, UNUserNotificationCenterDelegate, @unchec
 
     public func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let request = response.notification.request
-        let handler = categories.withLockedValue { $0[request.content.categoryIdentifier]?.handler }
+        let id = request.content.categoryIdentifier
+        let handler = categories.withLockedValue { $0[id]?.handler ?? $0[Self.family(id)]?.handler }
         let text = (response as? UNTextInputNotificationResponse)?.userText
         handler?(response.actionIdentifier, request.content.userInfo, text)
     }

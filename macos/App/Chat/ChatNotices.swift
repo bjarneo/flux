@@ -16,12 +16,12 @@ struct ChatStatus: Equatable {
     /// The computer that paired in the last 6 seconds, in its own chat.
     let pairedName: String?
 
-    /// "omarchy is not reachable. Its agents do not show here." or the form for more computers.
+    /// "omarchy is not reachable." or the form for more computers.
     var offlineLine: String? {
         switch offline.count {
         case 0: return nil
-        case 1: return inList ? "\(offline[0]) is not reachable. Its agents do not show here." : "\(offline[0]) is not reachable."
-        default: return "\(offline.count) computers are not reachable. Their agents do not show here."
+        case 1: return "\(offline[0]) is not reachable."
+        default: return "\(offline.count) computers are not reachable."
         }
     }
 

@@ -27,9 +27,9 @@ enum ChatTexts {
     /// The line for the computers of a chat that are not reachable.
     nonisolated static func offlineLine(_ reach: InboxReach) -> String {
         if reach.offline.count == 1, let d = reach.offline.first {
-            return "\(d.name) is not reachable. Its agents do not show here."
+            return "\(d.name) is not reachable."
         }
-        return "\(reach.offline.count) computers are not reachable. Their agents do not show here."
+        return "\(reach.offline.count) computers are not reachable."
     }
 
     /// True when a chat tells that its computers are not reachable. While
