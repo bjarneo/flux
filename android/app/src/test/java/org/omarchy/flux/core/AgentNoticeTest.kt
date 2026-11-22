@@ -98,4 +98,23 @@ class AgentNoticeTest {
         assertEquals("Yes, and do not ask…", n.actions[1].label)
         assertTrue("the expanded text keeps the full label", n.bigText.contains("2. Yes, and do not ask again for bin/migrate commands"))
     }
+
+    @Test
+    fun noticeCarriesTheIdOfItsDialog() {
+        val d = dialog("Yes", "No")
+        assertEquals(d.id, agentNotice(blocked, d, control = true, sdk = 34).dialogId)
+        assertEquals("", agentNotice(blocked, null, control = true, sdk = 34).dialogId)
+    }
+
+    @Test
+    fun replySendsOnlyForTheDialogOfTheNotice() {
+        val a = dialog(question = "Which name?", lines = listOf("Name the file."))
+        val b = dialog(question = "Which folder?", lines = listOf("Name the folder."))
+        assertTrue(replyMatches(a, a.id))
+        assertTrue(!replyMatches(b, a.id))
+        assertTrue(!replyMatches(null, a.id))
+        assertTrue(!replyMatches(a, ""))
+        val withChoices = dialog("Yes", "No")
+        assertTrue(!replyMatches(withChoices, withChoices.id))
+    }
 }

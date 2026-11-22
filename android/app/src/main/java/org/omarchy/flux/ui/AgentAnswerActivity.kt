@@ -1,5 +1,6 @@
 package org.omarchy.flux.ui
 
+import android.app.KeyguardManager
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -25,12 +26,14 @@ import org.omarchy.flux.core.Android
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.HerdrSync
 import org.omarchy.flux.core.QuestionChanged
+import org.omarchy.flux.core.replyMatches
 import org.omarchy.flux.service.FluxService
 
 /**
  * Answers an agent from its notification: no UI. A choice action or Reply
  * starts it. From Android 12, Android asks for the unlock before it starts.
- * It reads the pane again and sends only when the dialog is still the one
+ * When the device is locked, it sends nothing and opens the thread. It
+ * reads the pane again and sends only when the dialog is still the one
  * of the notification. Else it sends nothing and opens the thread, with the
  * line that says the question changed. It uses Theme.Flux.Invisible, as
  * [ClipboardSendActivity] does.
@@ -52,6 +55,11 @@ class AgentAnswerActivity : ComponentActivity() {
         val pane = intent.getStringExtra(EXTRA_PANE).orEmpty()
         if (device.isEmpty() || !PANE_ID.matches(pane)) {
             finish()
+            return
+        }
+        // Only SystemUI enforces the unlock of the action. This check also stops a caller that skips it.
+        if (getSystemService(KeyguardManager::class.java)?.isDeviceLocked != false) {
+            openThread(device, pane, changed = false)
             return
         }
         val choice = intent.getStringExtra(EXTRA_CHOICE).orEmpty()
@@ -85,8 +93,8 @@ class AgentAnswerActivity : ComponentActivity() {
             )
         } else if (text != null) {
             AgentDialogs.peek(FluxCore, device, pane) { d ->
-                // Reply sends only while the question still has no choices.
-                if (d != null && d.choices.isEmpty() && ready(device, pane)) {
+                // Reply sends only while the dialog is the one of the notification.
+                if (replyMatches(d, dialogId) && ready(device, pane)) {
                     HerdrSync.sendPrompt(FluxCore, device, pane, text, answer = true)
                     done(app, device, pane)
                 } else {

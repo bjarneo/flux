@@ -200,6 +200,13 @@ class DialogBook(private val io: DialogIo) {
     }
 }
 
+/**
+ * True when a Reply may send its text: the new read [d] has no choices and
+ * its ID is [dialogId], the dialog of the notification.
+ */
+fun replyMatches(d: AgentDialog?, dialogId: String): Boolean =
+    d != null && dialogId.isNotEmpty() && d.choices.isEmpty() && d.id == dialogId
+
 /** The dialogs of the app. The notification and the answer activity use it. */
 object AgentDialogs {
     private val io = object : DialogIo {
