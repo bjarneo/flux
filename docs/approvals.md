@@ -18,6 +18,19 @@ A Mac without one has no Touch ID, so **Approve** fails with an error.
 A Windows computer without Windows Hello refuses each request.
 On Windows, the Windows Hello PIN can approve. Anyone who knows the PIN can approve at that computer. See the [security design](approve.md#windows).
 
+## Open the fingerprint check at once
+
+On Android, the switch **Open the fingerprint check at once** is off by default.
+Find it in Computers, in the Settings group.
+When it is on, the fingerprint prompt opens over the approval screen as soon as a `sudo` request arrives.
+The approval screen stays the same.
+Touch the sensor to approve.
+Tap **Cancel** to keep the screen with **Approve** and **Deny**.
+The prompt does not open again for that request.
+
+The switch needs Android 12 or later. On Android 10 and 11, it stays off.
+An enrollment never opens the prompt at once.
+
 Read the [security design](approve.md) before you change the implementation.
 
 ## Enable sudo approval
