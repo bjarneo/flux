@@ -125,4 +125,23 @@ class ChatListTest {
         val byName = chatList(listOf(pc, desk), null, log, SeenClock(), now = 100, query = "desk")
         assertEquals("a computer that matches by name shows its newest entry", "notes", byName.computers.single().last?.text)
     }
+
+    @Test
+    fun aScopeKeepsOnlyTheRowsOfOneComputer() {
+        val pc = device("pc", "omarchy-xps", agents = listOf(migrate, refactor))
+        val desk = device("desk", "omarchy-desk", agents = listOf(flaky))
+        val ask = device("new", "framework-13", paired = false, pairState = PairState.Incoming)
+        val list = chatList(listOf(pc, desk, ask), approval("desk"), emptyList(), SeenClock(), now = 9_000)
+        assertEquals("no scope keeps all rows", list, list.inScope(null))
+
+        val xps = list.inScope("pc")
+        assertEquals(setOf("agent|pc|w2:p1", "pair|new"), xps.needs.map { it.key }.toSet())
+        assertEquals(listOf("w1:p1"), xps.agents.map { it.agent.pane })
+        assertEquals(listOf("pc"), xps.computers.map { it.device.id })
+
+        val other = list.inScope("desk")
+        assertEquals("the approval of the computer and the pair request stay", setOf("approve|desk|r1", "pair|new"), other.needs.map { it.key }.toSet())
+        assertEquals(listOf("w3:p1"), other.agents.map { it.agent.pane })
+        assertTrue(list.inScope("gone").agents.isEmpty())
+    }
 }

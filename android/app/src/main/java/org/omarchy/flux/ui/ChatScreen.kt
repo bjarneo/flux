@@ -154,7 +154,7 @@ internal fun rememberChatLog(): List<SendEntry> {
  * What the chats and their notices do: open screens, the approval screen,
  * and the pair sheet, pair a computer, show all computers, and ask for the
  * notifications. [pair] starts the pairing that this phone sends, as in
- * Computers. [control] opens Control with the computer in scope.
+ * Computers. [control] opens Remote with the computer in scope.
  */
 class ChatActions(
     val open: (Route) -> Unit,
@@ -238,7 +238,7 @@ internal fun computerContext(d: DeviceUi): String = when {
 }
 
 /**
- * The menu of the chat of a computer: Control with the computer in scope,
+ * The menu of the chat of a computer: Remote with the computer in scope,
  * its terminals when the computer allows them, and a new agent or terminal.
  */
 @Composable
@@ -254,7 +254,7 @@ private fun ComputerMenu(d: DeviceUi, actions: ChatActions) {
         ) { Sym(Ic.more, tint = Tn.text, size = 24.dp) }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             val items = listOfNotNull(
-                Triple("Control", Ic.tune) { actions.control(d.id) },
+                Triple("Remote", Ic.desktop) { actions.control(d.id) },
                 if (d.herdrSupported && herdr?.terminals == true) Triple("Terminals", Ic.terminal) { actions.open(Route(d.id, AGENTS_PAGE)) } else null,
                 if (d.online && herdr?.anyRunning == true && herdr.control) Triple("New agent or terminal", Ic.add) { actions.open(Route(d.id, NEW_PANE_PAGE)) } else null,
             )

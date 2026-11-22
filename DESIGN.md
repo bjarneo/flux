@@ -336,7 +336,7 @@ Each app shows **Chats** as its first destination.
 - **Tablet in landscape:** A wide window that is not short splits **Chats**: the list is 380 dp wide at the start, a 1 dp `line` rule follows, and the chat of the selected computer or agent takes the rest. The row of that chat takes `accent-tile`. Without a selection, the side tells the user to select a chat. A screen that a chat opens, such as the camera, covers the full window.
 - **Short window:** The dock of a chat takes at most 70% of the height, and it scrolls inside that part.
 - **Content width:** Screens other than the chats scroll in `CappedScrollColumn`. The content is at most 840 dp wide and stays in the center.
-- **Destinations:** Chats, Control, and Computers. Control opens with 1 master tool, then groups of tool rows under section labels. In Control, the agent rows come right after the master tool, because the user needs them most often.
+- **Destinations:** Chats, Remote, and Computers. Remote opens with 1 master tool, then groups of tool rows under section labels. The agent rows live in Chats.
 - **Order:** **Chats** puts what needs the user first, the newest first, then the agents that work, are done, and are idle, then the computers, online first. See `chatList` in `core/ChatList.kt`. The chat of a computer puts its entries in time order, see `chatItems` in `core/ChatFeed.kt`.
 - **Targets:** Every control takes taps on at least 48 by 48 dp.
 
@@ -391,7 +391,7 @@ A pressed tile changes its border to the accent. A selected choice changes its b
 
 ### Navigation
 
-- **Bar:** A 66 dp bar on `bg` in a compact window, with 3 destinations: Chats, Control, and Computers. Each has a 22 dp icon in a 56 by 30 dp pill, and a 12 sp label. The pill of the open destination takes `line`, and its label is 600 in `text`. The Chats pill shows a red badge with the number of items that need the user, up to "9+". The bar shows on each destination. A swipe to the side also moves between the 3 destinations. The chat of a computer or an agent is a feature screen above Chats, so it has no bar.
+- **Bar:** A 66 dp bar on `bg` in a compact window, with 3 destinations: Chats, Remote, and Computers. Each has a 22 dp icon in a 56 by 30 dp pill, and a 12 sp label. The pill of the open destination takes `line`, and its label is 600 in `text`. The Chats pill shows a red badge with the number of items that need the user, up to "9+". The bar shows on each destination. A swipe to the side also moves between the 3 destinations. The chat of a computer or an agent is a feature screen above Chats, so it has no bar.
 - **Rail:** The Material 3 navigation rail in a window of 600 dp and more, with the same destinations.
 - **Top bar:** A destination shows the Flux mark, its title, and a mono context line. **Chats** ends the row with the 48 dp **+** key. A feature screen shows a 40 dp back button, the title, and an optional mono context line. When the actions leave the title too little width, they move to a second row. A chat has its own top bar, see Chat.
 - **Motion:** Destinations fade through in 240 ms. A feature screen moves on the horizontal axis in 220 ms. Predictive back follows the gesture.
@@ -424,7 +424,7 @@ The home screen widget of Android: the Needs you and Agents groups of Chats, wit
 
 The chat of 1 computer: 1 thread of the computer and the device.
 
-- **Top bar:** A 48 dp back icon, a 36 dp picture with 10 dp corners and an 11 dp state dot, the name in 16 sp 600, the link and battery in mono 11 sp, and the menu: Control, Terminals when the computer allows terminals, and New agent or terminal.
+- **Top bar:** A 48 dp back icon, a 36 dp picture with 10 dp corners and an 11 dp state dot, the name in 16 sp 600, the link and battery in mono 11 sp, and the menu: Remote, Terminals when the computer allows terminals, and New agent or terminal.
 - **Progress:** A 2 dp `line` rule under the top bar. A file that comes in or goes out fills it in the accent.
 - **Card of a computer:** `tile` with 14 dp corners and a 4 dp corner at the bottom left. The top row holds the state mark and word, the source in mono, and the time. A 14 sp 600 title, a mono 12 sp body in `sub`, and a 13 sp accent text action follow.
 - **Card that needs the user:** An approval takes the full width and a 2 dp red border. It shows Deny and Approve, 48 dp high. Approve opens the approval screen.

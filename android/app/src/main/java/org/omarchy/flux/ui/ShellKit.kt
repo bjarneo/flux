@@ -45,6 +45,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -186,10 +187,19 @@ fun linkText(d: DeviceUi): String = when {
 /**
  * The scope chip: "All computers" or 1 computer, with a link dot for each
  * computer in scope. A tap opens the menu of scopes. A [compact] chip is
- * 36 dp high, for the end of a header.
+ * 36 dp high, for the end of a header. With [onUnpair], each computer in
+ * the menu has a menu key with Unpair, and Retry and Wake while the
+ * computer is not reachable.
  */
 @Composable
-fun ScopeChip(devices: List<DeviceUi>, scope: String?, onScope: (String?) -> Unit, modifier: Modifier = Modifier, compact: Boolean = false) {
+fun ScopeChip(
+    devices: List<DeviceUi>,
+    scope: String?,
+    onScope: (String?) -> Unit,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
+    onUnpair: ((DeviceUi) -> Unit)? = null,
+) {
     val paired = devices.filter { it.paired }
     val current = paired.firstOrNull { it.id == scope }
     var open by remember { mutableStateOf(false) }
@@ -240,13 +250,59 @@ fun ScopeChip(devices: List<DeviceUi>, scope: String?, onScope: (String?) -> Uni
                         }
                     },
                     leadingIcon = { Sym(deviceIcon(d.type)) },
-                    trailingIcon = { if (current?.id == d.id) Sym(Ic.check, "Selected", tint = Tn.blue) },
+                    trailingIcon = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (current?.id == d.id) Sym(Ic.check, "Selected", tint = Tn.blue)
+                            if (onUnpair != null) {
+                                ComputerMenuKey(d) {
+                                    open = false
+                                    onUnpair(d)
+                                }
+                            }
+                        }
+                    },
                     onClick = {
                         open = false
                         onScope(d.id)
                     },
                 )
             }
+        }
+    }
+}
+
+/**
+ * The menu key of a computer: a 48 dp key that opens the menu with
+ * Unpair. A computer that is not reachable also has Retry, and Wake when it
+ * can wake. [onUnpair] runs after Unpair.
+ */
+@Composable
+fun ComputerMenuKey(d: DeviceUi, onUnpair: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    Box {
+        Box(
+            Modifier.size(48.dp).clip(CircleShape)
+                .clickable(onClickLabel = "Show the actions of ${d.name}", role = Role.Button) { menu = true }
+                .semantics { contentDescription = "Actions of ${d.name}" },
+            contentAlignment = Alignment.Center,
+        ) { Sym(Ic.more, tint = Tn.sub, size = 20.dp) }
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            if (!d.online) {
+                DropdownMenuItem(text = { Text("Retry") }, leadingIcon = { Sym(Ic.refresh) }, onClick = {
+                    menu = false
+                    FluxCore.rediscover()
+                })
+                if (d.canWake) {
+                    DropdownMenuItem(text = { Text("Wake") }, leadingIcon = { Sym(Ic.power) }, onClick = {
+                        menu = false
+                        FluxCore.wake(d.id)
+                    })
+                }
+            }
+            DropdownMenuItem(text = { Text("Unpair") }, leadingIcon = { Sym(Ic.unlink) }, onClick = {
+                menu = false
+                onUnpair()
+            })
         }
     }
 }
