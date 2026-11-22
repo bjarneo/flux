@@ -31,37 +31,20 @@ demo battery -e level 86 -e plugged false
 demo notifications -e visible false
 wifi
 
-# The Inbox of omarchy-xps from a new start, so that no earlier swipe stays.
-xps() {
-    adb shell am force-stop org.omarchy.flux
-    page inbox "$1"
-    for _ in 1 2 3; do
-        adb shell input tap 377 207 # the scope chip
-        sleep 1.5
-        adb shell input tap 365 443 # omarchy-xps
-        sleep 1.5
-        adb shell uiautomator dump /sdcard/ui.xml >/dev/null
-        adb exec-out cat /sdcard/ui.xml | grep -q 'Scope: omarchy-xps' && break
-    done
-    snap 1 "$1"
-}
-
-# 14:07. The agent that waits is in the master tile.
+# 14:07. Chats shows the agent that waits, and the sudo request, under Needs you.
 at 1407
-xps inbox-agent
+page chat chats-agent
 at 1409
 page agent:w2:p1 agent-output
 
-# 14:22. Later on the agent moves the approval into the master tile.
+# 14:22. The chat of omarchy-xps holds the sudo request, above the Send bar.
 at 1422
-xps inbox-approval
-adb shell input tap 936 501 # Later
-snap 2 inbox-approval
+page thread chat-approval
 
-# Away from the desk, on mobile data through Tailscale.
+# Away from the desk, on mobile data through Tailscale. The More list of the Send bar is open.
 mobile
 at 1540
-page send send
+page tray send-bar
 at 1612
 page browse browse
 wifi
@@ -72,16 +55,16 @@ page media media
 at 1802
 page omarchy omarchy
 at 1834
-page touchpad touchpad
+page remote remote
 at 1851
 page ring ring
 at 0941
 page pair pair
 
-# The same Inbox in other Omarchy themes.
+# The same Chats in other Omarchy themes.
 at 1407
 for t in catppuccin-latte neon futurism cotton-candy; do
-    THEME=$t xps "theme-$t"
+    THEME=$t page chat "theme-$t"
 done
 adb shell am force-stop org.omarchy.flux
 

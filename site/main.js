@@ -131,7 +131,7 @@ window.addEventListener('load', queue)
 queue()
 
 // The theme section takes the colors of the picked theme, and the phone
-// shows the Inbox in that theme.
+// shows Chats in that theme.
 const themes = document.querySelector('.themes')
 if (themes) {
   const chips = [...themes.querySelectorAll('[data-pick]')]
