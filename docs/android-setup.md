@@ -96,7 +96,7 @@ To give Flux these permissions:
 2. Open the menu in the top corner and select **Allow restricted settings**.
    The menu item shows only after Android has shown **Restricted setting** for Flux once.
 3. Confirm with the PIN or the fingerprint of the phone.
-4. Return to Flux and open **Computers > Sync**.
+4. Return to Flux and open **Settings > This phone on the computer**.
    Turn on **Share notifications** or **Text messages** again.
 
 If the menu item does not show, allow restricted settings from the computer with `adb`:
@@ -139,7 +139,7 @@ It keeps the links to the computers open while the app is in the background.
 Android requires a visible notification for this service, so Flux shows **Waiting for a computer on this network** or the number of connected computers.
 
 The service starts again after a restart of the phone and after an app update.
-**Turn off Flux** in **Computers** or **Turn off** in the notification stops the service.
+**Turn off Flux** in **Settings** or **Turn off** in the notification stops the service.
 Flux then stays off after a restart, until you turn it on again.
 
 While the webcam or the mic streams, `StreamService` also runs.
@@ -205,11 +205,11 @@ The source of truth is `android/app/src/main/AndroidManifest.xml`.
 
 ### Sync switches
 
-The switches on the **Sync** screen in **Computers** are settings of the phone.
-Each switch applies to every paired computer, not only to the computer whose page shows it.
+The switches in **Settings** are settings of the phone.
+Each switch applies to every paired computer.
+**Settings** has 5 groups that open in place: **Send to the computers**, **Alerts on this phone**, **This phone on the computer**, **Security**, and **Look and input**.
 For example, **Text messages** lets each paired computer read your conversations and send text messages.
 **Send new photos** sends each new photo to each connected computer.
-The page lists the computers that get the data.
 
 ### Shared notifications
 

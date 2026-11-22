@@ -227,6 +227,7 @@ The `herdr` field of the state has `enabled`, `running`, `control`, `terminals`,
 `HERDR_SOCKET_PATH` selects a herdr session other than the default.
 
 Replies, new agents, and closes from the phone need `herdr_control = true`.
+The **Turn on** key next to **Agent control** on the Access card sets it. The card asks for a confirmation before it turns the setting on.
 A reply can make an agent run any command as the desktop user, also with `herdr_terminals = false`.
 The setting applies to every paired device.
 Do not turn on `herdr_control` unless the user asks for replies from the phone.
@@ -307,7 +308,7 @@ The `hyprlock` service applies only when `hyprlock` is the lock screen.
 
 Read `docs/ssh.md`.
 Flux for Android can keep an SSH key in the Android Keystore. `fluxd` offers it on the ssh-agent socket `$XDG_RUNTIME_DIR/flux/ssh-agent.sock`.
-Each signature needs the fingerprint or the screen lock on the phone. The user turns the key on in Flux on the phone: **Computers**, then **SSH key**.
+Each signature needs the fingerprint or the screen lock on the phone. The user turns the key on in Flux on the phone: **Settings**, then **Security**, then **SSH key**.
 Do not change the SSH configuration or the Git configuration of the user unless the user asks.
 
 ```sh

@@ -332,11 +332,11 @@ Each app shows **Chats** as its first destination.
 
 - **Gaps and gutter:** Tiles keep an 8 dp gap. The screen gutter is 10 dp. The shell top bar starts 5 dp further in, to align the Flux mark.
 - **Phone in portrait:** **Chats** is a list. The chat of a computer is 1 thread with the newest entry at the bottom, and the dock under it. Cards of a computer sit on the left at 88% of the width. A card that needs the user takes the full width. What the phone sent sits on the right.
-- **Wide window, 600 dp and more:** A navigation rail replaces the navigation bar. The dock of each screen becomes a tile at the bottom of a column on the right, at thumb height. The tray of a chat opens in the dock tile. **Live** keeps the dock in that column, and the terminal takes the full height. The arrow of **Waiting for you** points to the dock at the side.
+- **Wide window, 600 dp and more:** A navigation rail replaces the navigation bar. The dock of each screen becomes a tile at the bottom of a column on the right, at thumb height. The Send bar of a chat sits in the dock tile. **Live** keeps the dock in that column, and the terminal takes the full height. The arrow of **Waiting for you** points to the dock at the side.
 - **Tablet in landscape:** A wide window that is not short splits **Chats**: the list is 380 dp wide at the start, a 1 dp `line` rule follows, and the chat of the selected computer or agent takes the rest. The row of that chat takes `accent-tile`. Without a selection, the side tells the user to select a chat. A screen that a chat opens, such as the camera, covers the full window.
 - **Short window:** The dock of a chat takes at most 70% of the height, and it scrolls inside that part.
 - **Content width:** Screens other than the chats scroll in `CappedScrollColumn`. The content is at most 840 dp wide and stays in the center.
-- **Destinations:** Chats, Remote, and Computers. Remote opens with 1 master tool, then groups of tool rows under section labels. The agent rows live in Chats.
+- **Destinations:** Chats, Remote, and Computers. Remote opens with a row for the computer, then 3 groups of rows under the section labels See, Use, and Share. Settings opens from the gear key of Chats and holds 5 groups that open in place. The agent rows live in Chats.
 - **Order:** **Chats** puts what needs the user first, the newest first, then the agents that work, are done, and are idle, then the computers, online first. See `chatList` in `core/ChatList.kt`. The chat of a computer puts its entries in time order, see `chatItems` in `core/ChatFeed.kt`.
 - **Targets:** Every control takes taps on at least 48 by 48 dp.
 
@@ -372,7 +372,7 @@ A pressed tile changes its border to the accent. A selected choice changes its b
 
 ### Chips
 
-- **Scope chip:** A `tile` chip with a 10 dp corner and a `line` border, 40 dp high, that takes taps on 48 dp. It shows "All computers" or 1 computer, then a 7 dp link dot for each computer, then an expand icon. A tap opens the scope menu.
+- **Scope chip:** A `tile` chip with a 10 dp corner and a `line` border, 40 dp high, or 36 dp in a header, that takes taps on 48 dp. It shows "All computers" or 1 computer, then a 7 dp link dot for each computer, then an expand icon. A tap opens the scope menu. The chip sits in the top bar of Chats, Remote, and Computers.
 - **Choice chip:** A choice of a small group, such as a player or a camera mode. It is at least 40 dp high and takes taps on 48 dp. The label is 13 sp, 600, in `sub`. A selected chip takes `accent-tile`, a 2 dp accent border, and `text`.
 
 ### Cards / Containers
@@ -393,7 +393,7 @@ A pressed tile changes its border to the accent. A selected choice changes its b
 
 - **Bar:** A 66 dp bar on `bg` in a compact window, with 3 destinations: Chats, Remote, and Computers. Each has a 22 dp icon in a 56 by 30 dp pill, and a 12 sp label. The pill of the open destination takes `line`, and its label is 600 in `text`. The Chats pill shows a red badge with the number of items that need the user, up to "9+". The bar shows on each destination. A swipe to the side also moves between the 3 destinations. The chat of a computer or an agent is a feature screen above Chats, so it has no bar.
 - **Rail:** The Material 3 navigation rail in a window of 600 dp and more, with the same destinations.
-- **Top bar:** A destination shows the Flux mark, its title, and a mono context line. **Chats** ends the row with the 48 dp **+** key. A feature screen shows a 40 dp back button, the title, and an optional mono context line. When the actions leave the title too little width, they move to a second row. A chat has its own top bar, see Chat.
+- **Top bar:** A destination shows the Flux mark, its title, and a mono context line. **Chats** shows the scope chip, the search key, the **Settings** key, and the 48 dp **+** key after its title. A feature screen shows a 40 dp back button, the title, and an optional mono context line. When the actions leave the title too little width, they move to a second row. A chat has its own top bar, see Chat.
 - **Motion:** Destinations fade through in 240 ms. A feature screen moves on the horizontal axis in 220 ms. Predictive back follows the gesture.
 
 ### Chats
@@ -424,14 +424,14 @@ The home screen widget of Android: the Needs you and Agents groups of Chats, wit
 
 The chat of 1 computer: 1 thread of the computer and the device.
 
-- **Top bar:** A 48 dp back icon, a 36 dp picture with 10 dp corners and an 11 dp state dot, the name in 16 sp 600, the link and battery in mono 11 sp, and the menu: Remote, Terminals when the computer allows terminals, and New agent or terminal.
+- **Top bar:** A 48 dp back icon, a 36 dp picture with 10 dp corners and an 11 dp state dot, the name in 16 sp 600, the link and battery in mono 11 sp, and the menu: Remote, Get files, Terminals when the computer allows terminals, New agent or terminal, and Clear this chat.
 - **Progress:** A 2 dp `line` rule under the top bar. A file that comes in or goes out fills it in the accent.
 - **Card of a computer:** `tile` with 14 dp corners and a 4 dp corner at the bottom left. The top row holds the state mark and word, the source in mono, and the time. A 14 sp 600 title, a mono 12 sp body in `sub`, and a 13 sp accent text action follow.
 - **Card that needs the user:** An approval takes the full width and a 2 dp red border. It shows Deny and Approve, 48 dp high. Approve opens the approval screen.
 - **What the phone sent:** A bubble on `accent-tile` with a `line-hi` border, 16 dp corners, and a 4 dp corner at the bottom right, at most 82% of the width. Text is in 14 sp. A link or a clip is in mono 12.5 sp. A photo is a 220 by 132 dp picture with the same corners. Another file is a 236 dp card.
-- **Dock:** The phone clipboard in a 40 dp row on `bg` with 10 dp corners: an 18 dp cyan clipboard icon, the source in 10 sp cyan, the clip in mono 12 sp, and Send as a 13 sp accent text action. Then the composer: a 48 dp round **+** key in `line`, the field, the 48 dp mic key, and the 48 dp send key. The send key shows the number of selected photos in an 18 dp `text` circle.
-- **Tray:** **+** opens the tray under the composer, and turns into an accent key with a cross. The tray holds Recent photos with All photos, the 4 newest photos as 80 dp cells with 10 dp corners, and the tools as 64 dp cells on `bg` with a `line` border, 4 in a row. A selected photo takes a 2 dp accent border and its number in a 20 dp accent circle. The tray and the keyboard take the same place, so 1 closes the other. Back closes the tray.
-- **Field:** While the field has the focus, **+** hides and the field grows to 6 lines with an accent border. While the phone listens, the panel of the dictation takes the full width.
+- **Dock:** The phone clipboard in a 40 dp row on `bg` with 10 dp corners: an 18 dp cyan clipboard icon, the source in 10 sp cyan, the clip in mono 12 sp, and Send as a 13 sp accent text action. Then the Send bar, then the composer: the field, the 48 dp mic key, and the 48 dp send key. The send key shows the number of selected photos in an 18 dp `text` circle.
+- **Send bar:** 4 keys in a row above the field: Photo, File, Scan, and More. A key is 48 dp high, on `bg` with a `line` border and 12 dp corners, with an 18 dp accent icon and a 13 sp label. The key of an open part takes an accent border. Photo opens Recent photos with All photos, and the 4 newest photos as 80 dp cells with 10 dp corners. A selected photo takes a 2 dp accent border and its number in a 20 dp accent circle. More opens a list of Camera, Text, QR, and Signature, as 48 dp rows with a 20 dp accent icon. The open part and the keyboard take the same place, so 1 closes the other. Back closes the open part.
+- **Field:** While the field has the focus, the open part of the Send bar closes and the field grows to 6 lines with an accent border. While the phone listens, the panel of the dictation takes the full width.
 
 ### Agent screen
 
@@ -452,7 +452,8 @@ A status dot and a state word in the state color, then " · " and the source in 
 ### Tools
 
 - **Master tool:** The tool that a destination uses most, such as Send clipboard. It is at least 128 dp high, on `tile-hi` with a `line-hi` border. A 28 dp accent icon sits at the top, and a 20 sp label sits at the bottom.
-- **Tool row:** A row of at least 56 dp with a 22 dp accent icon, a 15 sp label, and a 13 sp `sub` line. A tool that is off has a `sub` icon and shows at 55% alpha.
+- **Tool row:** A row of at least 56 dp with a 22 dp accent icon, a 15 sp label, and a 13 sp `sub` line. A tool that is off has a `sub` icon and shows at 55% alpha. Remote stacks its rows in 1 tile for each group, with a chevron at the end and a 1 dp `line` rule between the rows.
+- **Settings group:** A group row is at least 64 dp high with a 22 dp accent icon, a 15 sp title, a 13 sp `sub` summary, and a chevron. Only 1 group is open. A wide window in landscape shows the groups in 2 columns. Turn off Flux and About Flux stand apart at the end.
 
 ### Preserved surfaces
 

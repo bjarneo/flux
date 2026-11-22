@@ -5,8 +5,9 @@
 ## Camera modes
 
 The Android Camera screen has text, QR, photo, document, and signature modes.
+In the chat of a computer, **Scan** opens the document mode. **More** opens the other modes.
 Select a mode in the mode strip above the shutter.
-The webcam has its own screen: open **Control**, then **Webcam** in the **Stream** band.
+The webcam has its own screen: open **Remote**, then **Webcam** in the **Share** group.
 Text recognition and barcode recognition use models bundled in the app.
 Document capture uses the Google Play services document scanner.
 The iPhone has the same modes with Apple's Vision and VisionKit. See [Flux for iOS](ios.md#features).
@@ -57,7 +58,7 @@ sudo sh /usr/share/flux/post-install.sh
 For another kernel, select its matching headers package.
 The setup preserves existing `v4l2loopback` camera settings.
 
-On the phone, open **Control**, select **Webcam** in the **Stream** band, and press **Start webcam**.
+On the phone, open **Remote**, select **Webcam** in the **Share** group, and press **Start webcam**.
 Desktop video apps see **Flux Camera**.
 On Android, the webcam keeps streaming when you leave the screen or lock the phone. See [streams in the background](#streams-in-the-background).
 
@@ -104,7 +105,7 @@ A headless `fluxd` does not start the webcam.
 
 ## Phone as microphone
 
-On the phone, open **Control**, select **Mic** in the **Stream** band, and press **Start the mic**.
+On the phone, open **Remote**, select **Mic** in the **Share** group, and press **Start the mic**.
 Desktop apps see **Flux Microphone**.
 On Android, the mic keeps streaming when you leave the screen or lock the phone. See [streams in the background](#streams-in-the-background).
 The daemon uses `pw-cat` from PipeWire, so this feature needs no additional package on Omarchy.
@@ -127,7 +128,7 @@ The phone can play the audio of the computer.
 Use it to hear the computer on the phone speaker, or on Bluetooth earbuds that you paired with the phone.
 The stream does not need the [remote desktop](remote-desktop.md).
 
-1. On the phone, open **Control**, then **Media**, and select the computer.
+1. On the phone, open **Remote**, then **Media**, and select the computer.
 2. Tap **Play on phone** in the dock.
 
 The key then shows **Plays on phone** and `Live`.

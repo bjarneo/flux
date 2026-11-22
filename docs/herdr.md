@@ -73,7 +73,7 @@ See [Agent diff review](workflows.md#agent-diff-review).
 3. Select an agent to open its chat.
 
 On Android, agents show in 2 places only: **Chats** and the **Agents** widget.
-**Control** shows no agent list.
+**Remote** shows no agent list.
 When a computer has 2 or more herdr sessions, the **Agents** section of **Chats** shows a session strip.
 See [Use herdr sessions](#use-herdr-sessions).
 To see the herdr terminals of 1 computer, open the menu of its chat and select **Terminals**. The entry shows when the computer allows terminals.
@@ -301,7 +301,7 @@ A notification names the agent, the project, and the computer.
 A tap on a notification opens the thread of the agent.
 A notification of a finished agent has no action.
 
-To turn off a notification type, use the **Agent needs input** or **Agent finished** switch in **Computers > Sync** on the phone.
+To turn off a notification type, use the **Agent needs input** or **Agent finished** switch in **Settings > Alerts on this phone** on the phone.
 The switches apply to all computers.
 Android also lists the two types as the **Agents that need input** and **Agents that finish** channels.
 

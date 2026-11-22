@@ -309,7 +309,7 @@ Missing icons usually indicate a missing Nerd Font or Qt SVG package.
 
 If the Messages page is missing, the phone does not offer its text messages.
 
-1. Open **Computers > Sync** in Flux for Android.
+1. Open **Settings > This phone on the computer** in Flux for Android.
 2. Turn on **Text messages**.
 3. Allow SMS access when the phone asks.
 
@@ -331,7 +331,7 @@ If a message is on the phone but not on the desktop, check these causes:
 
 Flux shows the numbers of the conversations when it cannot read the contacts of the phone.
 
-1. Open **Computers > Sync** in Flux for Android.
+1. Open **Settings > This phone on the computer** in Flux for Android.
 2. Under **Text messages**, select **Allow contacts**, and allow the access.
 3. Open the **Messages** page on the desktop again.
 
@@ -350,7 +350,7 @@ For a copy in another app, use one of these paths:
 
 See [send a copy from another app](features.md#send-a-copy-from-another-app).
 
-If a tap on **Send clipboard** shows the message **Turn on Sync clipboard first**, open **Computers > Sync**.
+If a tap on **Send clipboard** shows the message **Turn on Sync clipboard first**, open **Settings > Send to the computers**.
 Then turn on **Sync clipboard**.
 
 A copy that its app marks as sensitive, for example a password, does not sync by itself.

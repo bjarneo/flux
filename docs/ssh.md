@@ -21,7 +21,7 @@ Flux for iOS, Flux for macOS, and Flux for Windows do not have it.
 ## Turn on the key
 
 1. On the phone, open Flux.
-2. Open **Computers**, then **SSH key**.
+2. Open **Settings**, open **Security**, then select **SSH key**.
 3. Turn on **SSH key**. The phone makes the key, and shows the public key and its fingerprint.
 4. On the computer, show the key:
 
@@ -224,7 +224,7 @@ journalctl --user -u fluxd | grep 'ssh agent'
 
 ## Turn off the key
 
-1. On the phone, open **Computers**, then **SSH key**.
+1. On the phone, open **Settings**, open **Security**, then select **SSH key**.
 2. Turn off **SSH key**.
 3. Confirm **Delete key**.
 
