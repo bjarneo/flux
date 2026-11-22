@@ -83,9 +83,6 @@ class ApproveActivity : FragmentActivity() {
     // True when a window of another app covered this window during the last touch.
     private var touchObscured = false
 
-    // The ID of the request for which the screen opened the prompt at once. It never opens again for that ID.
-    private var openedFor: String? = null
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         FluxCore.init(this)
@@ -159,10 +156,11 @@ class ApproveActivity : FragmentActivity() {
             resumed = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED),
             focused = hasWindowFocus(),
             requestId = r.id,
-            openedFor = openedFor,
+            openedFor = r.id.takeIf { ApproveAtOnce.wasOpened(it) },
         )
         if (!open) return
-        openedFor = r.id
+        // The record lives as long as the process, so a new screen for the same request does not open the prompt again.
+        ApproveAtOnce.markOpened(r.id)
         start(r)
     }
 

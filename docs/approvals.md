@@ -27,6 +27,8 @@ The approval screen stays the same.
 Touch the sensor to approve.
 Tap **Cancel** to keep the screen with **Approve** and **Deny**.
 The prompt does not open again for that request.
+A touch on the sensor approves at once. Keep this switch off if you touch the sensor by habit.
+If the phone has no strong fingerprint, or the sensor is locked, the request fails and the computer asks for the password.
 
 The switch needs Android 12 or later. On Android 10 and 11, it stays off.
 An enrollment never opens the prompt at once.
