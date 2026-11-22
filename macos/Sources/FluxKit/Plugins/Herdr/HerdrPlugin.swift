@@ -55,11 +55,13 @@ public final class HerdrModel {
     /// Asks for the unlock of the app, then calls `action`. `computer` is
     /// the name of the computer that the answer goes to. The app sets it
     /// with its Touch ID, Face ID, or password check, which stays valid for
-    /// 5 minutes. `onError` gets a message when the check fails. A cancel
-    /// calls neither. Without it, an answer from a notification sends
-    /// nothing and opens the thread.
+    /// 5 minutes. `onError` gets a message when the check fails.
+    /// `onCancel` runs when the user cancels the check. Without this
+    /// closure, an answer from a notification sends nothing and opens the
+    /// thread.
     @ObservationIgnored public var unlock: (@MainActor (_ computer: String, _ action: @escaping @MainActor () -> Void,
-                                                         _ onError: @escaping @MainActor (String) -> Void) -> Void)?
+                                                         _ onError: @escaping @MainActor (String) -> Void,
+                                                         _ onCancel: @escaping @MainActor () -> Void) -> Void)?
 
     @ObservationIgnored private var defaults: UserDefaults?
 
@@ -225,8 +227,12 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
     @MainActor private var dialogSeq = 0
     /// The category of each notification that has actions, by notification ID.
     @MainActor private var noticeCategories: [String: String] = [:]
+    /// The notification IDs whose unlock check runs now.
+    @MainActor private var checking: Set<String> = []
     /// Tests set these to replace the link: it sends a packet and says whether the link took it.
     @MainActor var sender: ((Packet, String) -> Bool)?
+    /// Tests set this to see each notification that the plugin posts: its ID and whether it is quiet.
+    @MainActor var posted: ((_ id: String, _ quiet: Bool) -> Void)?
     /// Tests set this to say whether the link to a computer is open.
     @MainActor var linkProbe: ((String) -> Bool)?
 
@@ -770,9 +776,9 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
     /// agent posts at once. Then 1 read of its pane finds the dialog, and the
     /// same notification gets the question and the actions.
     @MainActor
-    private func post(_ agent: HerdrAgent, deviceId: String, computer: String) {
+    private func post(_ agent: HerdrAgent, deviceId: String, computer: String, quiet: Bool = false) {
         let control = model.states[deviceId]?.control == true
-        postNotice(agent, agentNotice(agent, dialog: nil, control: control), deviceId: deviceId, computer: computer, quiet: false)
+        postNotice(agent, agentNotice(agent, dialog: nil, control: control), deviceId: deviceId, computer: computer, quiet: quiet)
         guard agent.status == .blocked else { return }
         dialogs.peek(deviceId, agent.pane) { [weak self] dialog in
             guard let self, let dialog, self.model.inputAlerts,
@@ -796,6 +802,7 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
         }
         let old = noticeCategories[id]
         noticeCategories[id] = category == Self.notificationCategory ? nil : category
+        posted?(id, quiet)
         Notifier.shared.post(
             id: id,
             category: category,
@@ -862,11 +869,29 @@ public final class HerdrPlugin: FluxPlugin, @unchecked Sendable {
         }
         // A Reply with an empty field sends nothing.
         if choice == nil, (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return }
+        // A second tap does nothing while a check runs for the same pane.
+        let key = Self.notificationId(deviceId, pane)
+        guard checking.insert(key).inserted else { return }
         unlock(computerName(deviceId), { [weak self] in
+            self?.checking.remove(key)
             self?.verifyAndSend(deviceId, pane: pane, dialog: dialog, choice: choice, text: text)
         }, { [weak self] message in
+            self?.checking.remove(key)
             self?.openThread(deviceId, pane: pane, changed: false, error: message)
+        }, { [weak self] in
+            self?.checking.remove(key)
+            self?.repostAfterCancel(deviceId, pane: pane)
         })
+    }
+
+    /// Posts the notification of a pane again after the user cancelled the
+    /// check. The system removed it with the tap. It comes back with its
+    /// actions, only while the agent still waits and the alerts are on, and
+    /// it makes no sound.
+    @MainActor
+    private func repostAfterCancel(_ deviceId: String, pane: String) {
+        guard model.inputAlerts, let agent = model.states[deviceId]?.agent(pane), agent.status == .blocked else { return }
+        post(agent, deviceId: deviceId, computer: computerName(deviceId), quiet: true)
     }
 
     @MainActor

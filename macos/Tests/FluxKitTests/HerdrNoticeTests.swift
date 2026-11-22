@@ -17,6 +17,8 @@ final class HerdrNoticeTests: XCTestCase {
         var packets: [Packet] = []
         var unlocks: [@MainActor () -> Void] = []
         var errors: [@MainActor (String) -> Void] = []
+        var cancels: [@MainActor () -> Void] = []
+        var posts: [String] = []
         var opened: [String] = []
         var computers: [String] = []
     }
@@ -31,11 +33,13 @@ final class HerdrNoticeTests: XCTestCase {
             h.packets.append(packet)
             return true
         }
-        plugin.model.unlock = { computer, action, onError in
+        plugin.model.unlock = { computer, action, onError, onCancel in
             h.computers.append(computer)
             h.unlocks.append(action)
             h.errors.append(onError)
+            h.cancels.append(onCancel)
         }
+        plugin.posted = { id, quiet in h.posts.append(quiet ? "\(id) quiet" : id) }
         plugin.model.open = { device, pane in h.opened.append("\(device)|\(pane)") }
         return (plugin, h)
     }
@@ -94,6 +98,46 @@ final class HerdrNoticeTests: XCTestCase {
         XCTAssertEqual(h.opened, ["pc|w2:p1"])
         XCTAssertFalse(plugin.model.isQuestionChanged("pc", pane: "w2:p1"))
         XCTAssertEqual(plugin.model.reply("pc", pane: "w2:p1")?.error, "The check failed", "the thread shows why nothing went out")
+    }
+
+    @MainActor
+    func testACancelledUnlockPostsTheNotificationAgainWithoutSound() throws {
+        let (plugin, h) = makePlugin()
+        plugin.noticeAction("choice.1", deviceId: "pc", pane: "w2:p1", dialog: try dialogId(three), text: nil)
+        h.cancels[0]()
+        XCTAssertEqual(kinds(h), ["read"], "only the read for the dialog goes out, no key")
+        XCTAssertTrue(h.opened.isEmpty, "a cancel does not open the thread")
+        XCTAssertEqual(h.posts.first, "herdr-pc-w2:p1 quiet", "the notification comes back and makes no sound")
+    }
+
+    @MainActor
+    func testACancelledUnlockPostsNothingWhenTheAgentNoLongerWaits() throws {
+        let (plugin, h) = makePlugin()
+        plugin.noticeAction("choice.1", deviceId: "pc", pane: "w2:p1", dialog: try dialogId(three), text: nil)
+        plugin.model.states["pc"] = HerdrState(enabled: true, running: true, agents: [HerdrAgent(pane: "w2:p1", agent: "codex", status: .working)], control: true)
+        h.cancels[0]()
+        XCTAssertTrue(h.posts.isEmpty)
+    }
+
+    @MainActor
+    func testACancelledUnlockPostsNothingWhenAgentAlertsAreOff() throws {
+        let (plugin, h) = makePlugin()
+        plugin.noticeAction("choice.1", deviceId: "pc", pane: "w2:p1", dialog: try dialogId(three), text: nil)
+        plugin.model.inputAlerts = false
+        h.cancels[0]()
+        XCTAssertTrue(h.posts.isEmpty)
+    }
+
+    @MainActor
+    func testASecondTapIsIgnoredWhileTheCheckRuns() throws {
+        let (plugin, h) = makePlugin()
+        let id = try dialogId(three)
+        plugin.noticeAction("choice.1", deviceId: "pc", pane: "w2:p1", dialog: id, text: nil)
+        plugin.noticeAction("choice.2", deviceId: "pc", pane: "w2:p1", dialog: id, text: nil)
+        XCTAssertEqual(h.unlocks.count, 1, "the second tap starts no second check")
+        h.cancels[0]()
+        plugin.noticeAction("choice.2", deviceId: "pc", pane: "w2:p1", dialog: id, text: nil)
+        XCTAssertEqual(h.unlocks.count, 2, "a tap works again after the check ends")
     }
 
     @MainActor

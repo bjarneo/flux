@@ -155,8 +155,8 @@ enum AgentsFeature {
             guard let model else { return }
             AgentsWindows.shared.show(id, pane: pane, app: model)
         }
-        herdr?.unlock = { computer, action, onError in
-            ReplyLock.run(reason: "answer agents on \(computer)", action: action, onError: onError)
+        herdr?.unlock = { computer, action, onError, onCancel in
+            ReplyLock.run(reason: "answer agents on \(computer)", action: action, onError: onError, onCancel: onCancel)
         }
     }
 }

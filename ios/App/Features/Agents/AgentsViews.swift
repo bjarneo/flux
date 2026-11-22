@@ -12,8 +12,8 @@ enum AgentsFeature {
             model?.tab = .chat
             model?.chatPath = [.feature(.agent(id, pane))]
         }
-        herdr?.unlock = { computer, action, onError in
-            ReplyLock.run(reason: "Answer agents on \(computer).", action: action, onError: onError)
+        herdr?.unlock = { computer, action, onError, onCancel in
+            ReplyLock.run(reason: "Answer agents on \(computer).", action: action, onError: onError, onCancel: onCancel)
         }
     }
 
