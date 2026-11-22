@@ -203,7 +203,7 @@ The call log and the contacts are optional for **Call alerts**. They add the num
 When you allow the call log later, the next call shows the number without a restart of Flux.
 The source of truth is `android/app/src/main/AndroidManifest.xml`.
 
-### Sync switches
+### Settings
 
 The switches in **Settings** are settings of the phone.
 Each switch applies to every paired computer.

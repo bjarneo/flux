@@ -9,7 +9,7 @@ The switches in **Settings** are settings of the phone.
 To open **Settings**, tap the gear key at the top of **Chats**.
 Each switch applies to every paired computer.
 For example, **Text messages** lets each paired computer read your conversations.
-See [sync switches](android-setup.md#sync-switches) and [security](security.md).
+See [the Settings switches](android-setup.md#settings) and [security](security.md).
 
 ## Pair a phone
 

@@ -103,7 +103,7 @@ They are in **Settings** in the groups **Send to the computers** and **This phon
 - **Call alerts** sends the state of calls, and with more permissions the number and the name of the caller.
 
 Each switch applies to every paired computer, not only to the computer whose page shows it.
-See [sync switches](android-setup.md#sync-switches).
+See [the Settings switches](android-setup.md#settings).
 Flux for iOS and Flux for macOS send less, because their systems give apps less access.
 See [Flux for iOS](ios.md#features) and [Flux for macOS](macos.md#features).
 
