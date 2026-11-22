@@ -516,7 +516,6 @@ private fun DetailScreen(route: Route, state: UiState, current: () -> Nav, go: (
         when (route.page) {
             SETTINGS_PAGE -> SettingsScreen(
                 state, pop,
-                onSync = { push(Route(null, SYNC_PAGE)) },
                 onSsh = { push(Route(null, SSH_PAGE)) },
                 onAbout = { push(Route(null, ABOUT_PAGE)) },
             )
