@@ -9,9 +9,16 @@ data class NoticeAction(val kind: NoticeKind, val label: String, val key: String
 /**
  * The text of the notification of an agent. [text] is the line of the
  * collapsed notification, and [bigText] is the expanded text with each
- * choice in full.
+ * choice in full. [dialogId] is the ID of the dialog that the texts came
+ * from, or empty. The actions carry it, so that the ID and the labels match.
  */
-data class AgentNotice(val title: String, val text: String, val bigText: String, val actions: List<NoticeAction>)
+data class AgentNotice(
+    val title: String,
+    val text: String,
+    val bigText: String,
+    val actions: List<NoticeAction>,
+    val dialogId: String = "",
+)
 
 /** The first Android version that asks for the unlock before an action, and that starts an activity from the action. */
 const val ANSWER_SDK = 31
@@ -84,5 +91,5 @@ fun agentNotice(agent: HerdrAgent, dialog: AgentDialog?, control: Boolean, sdk: 
         }
     }
     val title = if (reply) "${agent.agent} in $where asks a question" else "${agent.agent} in $where needs input"
-    return AgentNotice(title, text, big, actions)
+    return AgentNotice(title, text, big, actions, dialog?.id.orEmpty())
 }
