@@ -6,6 +6,17 @@ import ".."
 // also shows Start while no stream runs.
 Card {
   id: root
+  // flat drops the fill and the border, and adds a line above the card
+  // when another card is above it. The page puts flat cards in 1 card.
+  property bool flat: false
+  color: flat ? "transparent" : Theme.bg2
+  border.width: flat ? 0 : 1
+  Rectangle {
+    visible: root.flat && root.y > 0
+    width: parent.width
+    height: 1
+    color: Theme.bg3
+  }
   property string icon: ""
   property string heading: ""
   // The stream state from fluxd, for example state.mic. Null hides nothing:

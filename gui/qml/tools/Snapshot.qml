@@ -281,16 +281,16 @@ Window {
       view.selectedId = pixel
       view.tab = "device"
     }, function () {
-      access().setGlobal("remoteDesktop", true)
-      access().setGlobal("remoteInput", true)
+      access().setComputer("remoteDesktop", true)
+      access().setComputer("remoteInput", true)
     }],
     ["53-remote-live", function () {
       mock.setState(function (s) { s.desktop = { active: true, to: pixel, toName: "Pixel 8", monitor: "DP-1", width: 2560, height: 1440 } })
     }, function () { scrollTo(findBy(pageItem(), "objectName", "desktopCard")) }],
     ["54-remote-off", function () {
       mock.call("desktop.stop", {}, null)
-      access().setGlobal("remoteDesktop", false)
-      access().setGlobal("remoteInput", false)
+      access().setComputer("remoteDesktop", false)
+      access().setComputer("remoteInput", false)
     }, function () { scrollTo(access()) }],
     // A device on the network with the name of a paired phone.
     ["55-pair-twin", function () {
