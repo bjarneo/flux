@@ -453,7 +453,7 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
         live = false
         review = true
     }
-    val wide = rememberWideWindow()
+    val wide = rememberSplitWindow()
     // The link state of the thread: the age of the output, a connect in progress, or a link that is closed.
     // A sample computer of the demo never connects, so only the debug page @connecting shows the connecting state.
     val connecting = FluxCore.state.collectAsStateWithLifecycle().value.connecting.let { if (demo) DebugInbox.connecting else it }
@@ -701,7 +701,7 @@ internal fun DockLayout(
     thread: @Composable (bottom: Dp) -> Unit,
     dock: @Composable (DockShape) -> Unit,
 ) {
-    if (rememberWideWindow()) {
+    if (rememberSplitWindow()) {
         BoxWithConstraints(modifier) {
             val side = maxOf(maxWidth * CONTROLS_PART, minOf(ControlsMinWidth, maxWidth / 2))
             Row(Modifier.fillMaxSize()) {
@@ -906,7 +906,7 @@ internal fun PaneLayout(
     output: @Composable (Modifier) -> Unit,
     controls: @Composable () -> Unit,
 ) {
-    if (rememberWideWindow()) {
+    if (rememberSplitWindow()) {
         BoxWithConstraints(modifier.fillMaxWidth()) {
             val side = maxOf(maxWidth * CONTROLS_PART, minOf(ControlsMinWidth, maxWidth / 2))
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(TileGap)) {

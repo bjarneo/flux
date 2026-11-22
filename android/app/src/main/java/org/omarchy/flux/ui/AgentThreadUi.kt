@@ -541,7 +541,7 @@ internal fun ThreadYou(text: String, meta: String?) {
 @Composable
 internal fun ThreadWaiting() {
     val turn = when {
-        !rememberWideWindow() -> 0f
+        !rememberSplitWindow() -> 0f
         LocalLayoutDirection.current == LayoutDirection.Ltr -> -90f
         else -> 90f
     }

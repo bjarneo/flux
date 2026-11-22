@@ -226,19 +226,6 @@ internal fun rememberSyncSwitches(state: UiState): SyncSwitches {
     return SyncSwitches(sync, state, refused, refusedKey) { askContacts.launch(Manifest.permission.READ_CONTACTS) }
 }
 
-/** The page of all sync switches. Settings shows the same switches in groups. */
-@Composable
-fun SyncScreen(state: UiState, onBack: () -> Unit) {
-    val switches = rememberSyncSwitches(state)
-    CappedScrollColumn(bottom = 48.dp) {
-        TiledTopBar("Sync", onBack, context = "All computers")
-        T("These switches apply to every paired computer.", Modifier.padding(start = 4.dp, bottom = 12.dp), size = 14, color = Tn.sub)
-        Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
-            for (s in switches.items) switches.Row(s.key)
-        }
-    }
-}
-
 /**
  * Shows under Text messages while Flux cannot read the contacts. The
  * computers then show the numbers of the conversations. [onAllow] asks

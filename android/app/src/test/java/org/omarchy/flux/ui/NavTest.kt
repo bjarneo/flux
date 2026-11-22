@@ -37,7 +37,7 @@ class NavTest {
 
     @Test
     fun theStateSurvivesARecreation() {
-        val nav = Nav(Tab.Computers, listOf(Route(null, SYNC_PAGE), Route("pc", "media")))
+        val nav = Nav(Tab.Computers, listOf(Route(null, ABOUT_PAGE), Route("pc", "media")))
         assertEquals(nav, Nav.restore(nav.save()))
         assertEquals(Nav(), Nav.restore(emptyList()))
         assertEquals(Nav(), Nav.restore(listOf("unknown")))
@@ -49,8 +49,8 @@ class NavTest {
         val nav = Nav(Tab.Remote, listOf(Route("pc", AGENTS_PAGE), Route("pc", "${AGENT_PAGE}w1:p1")))
         assertEquals(Nav(Tab.Remote), nav.without { it == "pc" })
         assertEquals(nav, nav.without { it == "other" })
-        val sync = Nav(Tab.Computers, listOf(Route(null, SYNC_PAGE)))
-        assertEquals(sync, sync.without { true })
+        val about = Nav(Tab.Computers, listOf(Route(null, ABOUT_PAGE)))
+        assertEquals(about, about.without { true })
     }
 
     @Test
@@ -74,7 +74,7 @@ class NavTest {
         assertEquals(Nav(Tab.Chat) to null, Nav.debug("send", "pc"))
         assertEquals(Nav(Tab.Remote) to null, Nav.debug("control", "pc"))
         assertEquals(Nav(Tab.Computers) to null, Nav.debug("devices", "pc"))
-        assertEquals(Nav(Tab.Chat, listOf(Route(null, SETTINGS_PAGE), Route(null, SYNC_PAGE))) to null, Nav.debug("sync", "pc"))
+        assertEquals(Nav(Tab.Chat, listOf(Route(null, SETTINGS_PAGE))) to null, Nav.debug("sync", "pc"))
         assertEquals(Nav(Tab.Chat, listOf(Route(null, SETTINGS_PAGE), Route(null, ABOUT_PAGE))) to null, Nav.debug("about", "pc"))
         assertEquals("the old computer page is Remote with the computer in scope", Nav(Tab.Remote) to "pc", Nav.debug("home", "pc"))
         assertEquals(Nav(Tab.Chat, listOf(Route("pc", "camera:photo"))) to null, Nav.debug("camera:photo", "pc"))
@@ -129,7 +129,7 @@ class NavTest {
         assertEquals(Nav(Tab.Chat, listOf(settings)), nav)
         assertNull(scope)
         assertEquals(Dest.Detail(settings, 1, Tab.Chat), nav.dest)
-        for (page in listOf(SYNC_PAGE, SSH_PAGE, ABOUT_PAGE)) {
+        for (page in listOf(SSH_PAGE, ABOUT_PAGE)) {
             val above = Nav.debug(page, "pc").first
             assertEquals(listOf(settings, Route(null, page)), above.stack)
             assertEquals("Back goes to Settings, then to Chats", Nav(Tab.Chat, listOf(settings)), above.back())

@@ -153,43 +153,6 @@ internal fun RingMark(size: Dp = 10.dp) {
     Box(Modifier.size(size).border(2.dp, Tn.lineHi, CircleShape))
 }
 
-/**
- * The paired computers as pills. The pill of the computer in [scope] has
- * the accent, and a tap on it shows all computers again. A tap on another
- * pill makes that computer the scope. A computer that is offline shows
- * dimmed and does not take the scope.
- */
-@Composable
-internal fun ComputerStrip(devices: List<DeviceUi>, scope: String?, onScope: (String?) -> Unit) {
-    val paired = devices.filter { it.paired }
-    if (paired.isEmpty()) return
-    PillStrip {
-        for (d in paired) {
-            val on = d.id == scope
-            Pill(
-                d.name, on,
-                onClick = {
-                    when {
-                        on -> onScope(null)
-                        d.online -> onScope(d.id)
-                        else -> FluxCore.toast("${d.name} is not reachable")
-                    }
-                },
-                meta = when {
-                    !d.online -> "offline"
-                    d.battery != null -> "${d.battery}%"
-                    else -> ""
-                },
-                dim = !d.online,
-                clickLabel = if (on) "Show all computers" else "Show only ${d.name}",
-                state = listOfNotNull(if (on) "In scope" else null, linkText(d)).joinToString(", "),
-            ) {
-                if (d.online) Dot(Tn.green, 8.dp) else RingMark()
-            }
-        }
-    }
-}
-
 // ───────────────────────── Lines ─────────────────────────
 
 /** The line of 2 dp under the pills. [content] draws the progress on it. */

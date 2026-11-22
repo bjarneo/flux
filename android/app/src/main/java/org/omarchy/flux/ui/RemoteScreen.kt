@@ -154,7 +154,7 @@ fun RemoteScreen(
     val scoped = devices.filter { it.paired && it.online && (scope == null || it.id == scope) }
     // The dock plays the computer in scope, or the first computer that plays.
     val player = scoped.filter { it.player != null }.let { l -> l.firstOrNull { it.player?.playing == true } ?: l.firstOrNull() }
-    val side = rememberWideWindow() && LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val side = rememberWideWindow()
     val computer = remoteComputer(devices, scope)
 
     Column(Modifier.fillMaxSize()) {

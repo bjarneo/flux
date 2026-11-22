@@ -138,8 +138,21 @@ object DebugDemo {
 
     fun isDemo(id: String?) = id != null && id.startsWith("demo-")
 
+    /** Debug-only: false gives the sample computers no blocked agent, so that Chats shows the empty state. */
+    @Volatile var blocked = true
+
     fun devices(): List<DeviceUi> {
         if (!on) return emptyList()
+        val all = sampleDevices()
+        if (blocked) return all
+        // A blocked agent shows as working, so that the agent stays in the lists.
+        return all.map { d ->
+            val h = d.herdr ?: return@map d
+            d.copy(herdr = h.copy(agents = h.agents.map { if (it.status == AgentStatus.Blocked) it.copy(status = AgentStatus.Working) else it }))
+        }
+    }
+
+    private fun sampleDevices(): List<DeviceUi> {
         return listOf(
             device(PC, "omarchy-xps", "laptop", "192.168.2.122", paired = true, online = true).copy(
                 battery = 82,
