@@ -562,10 +562,7 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
                     } else if (agent != null) {
                         Column {
                             if (card != null) LinkCard(d, card)
-                            T(
-                                "Agent control is off on ${d.name}. To answer from this phone, turn on Agent control in Flux on the computer, on the Access card.",
-                                Modifier.dockFrame(shape).padding(DockPadding).padding(horizontal = 4.dp), size = 12, color = Tn.sub,
-                            )
+                            ControlOffCard(d)
                         }
                     }
                 },
@@ -1938,6 +1935,26 @@ private fun LinkCard(d: DeviceUi, note: ThreadNote) {
                     if (d.canWake) FluxButton("Wake", { FluxCore.wake(d.id) }, kind = ButtonKind.Tonal, icon = Ic.power)
                 }
             }
+        }
+    }
+}
+
+/**
+ * The note in the place of the dock while Agent control is off on the
+ * computer. It uses the style of [LinkCard]: a bold title and the way to
+ * turn the control on.
+ */
+@Composable
+private fun ControlOffCard(d: DeviceUi) {
+    val shape = RoundedCornerShape(16.dp)
+    Column(Modifier.fillMaxWidth().background(Tn.bg).padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Column(
+            Modifier.fillMaxWidth().clip(shape).background(Tn.tile).border(1.dp, Tn.lineHi, shape)
+                .padding(horizontal = 16.dp, vertical = 12.dp).semantics(mergeDescendants = true) {},
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            T("Agent control is off on ${d.name}", size = 16, weight = FontWeight.SemiBold)
+            T("To answer from this phone, turn on Agent control in Flux on the computer, on the Access card.", size = 14, color = Tn.sub)
         }
     }
 }
