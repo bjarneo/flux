@@ -73,6 +73,7 @@ systemctl --user edit fluxd
 
 `flux-cli doctor` shows which unit file systemd loads for `fluxd.service`, and whether its program exists.
 It also checks that no other program uses UDP port 12100, the discovery port of `fluxd`.
+When the Herdr app runs herdr-core and the herdr server does not run, it says that Flux reads only the herdr server and that agents of the Herdr app do not show on the phone.
 
 When `fluxd` does not answer, `flux-cli` tells you the cause:
 

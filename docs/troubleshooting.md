@@ -99,6 +99,38 @@ Remove such a unit yourself, then reload systemd:
 systemctl --user daemon-reload
 ```
 
+## Count the link events
+
+`fluxd` writes 1 line to the journal each time the link to a paired device opens or closes.
+A phone that loses its link often shows many lines in a short time.
+
+To list the events of the last hour, run:
+
+```sh
+journalctl --user -u fluxd --since "1 hour ago" --no-pager | grep -E 'link (up|down):'
+```
+
+A line for an open link looks like this:
+
+```text
+link up: Pixel 8 (a1b2c3) 192.168.1.20 paired=true
+```
+
+A line for a closed link names the device and the error, if there is one:
+
+```text
+link down: Pixel 8 (a1b2c3): ERROR TEXT
+```
+
+To count the events of 1 device, use its ID in the pattern:
+
+```sh
+journalctl --user -u fluxd --since today --no-pager | grep -c 'link .*(a1b2c3)'
+```
+
+Many `link down` lines with the same error point to the network or to the phone.
+Many `link up` lines with `paired=false` point to a device that is not paired.
+
 ## The release check fails
 
 Flux works without the internet.

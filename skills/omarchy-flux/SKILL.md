@@ -50,6 +50,9 @@ If no remote exists, ask for the repository URL before a remote operation.
 `flux-cli setup` returns 1 when the service step or the plugin step fails.
 A missing system part does not change the exit code.
 Inspect its output and confirm the result with `flux-cli doctor` and `flux-cli status --json`.
+`flux-cli doctor` also reports when herdr-core runs and the herdr server does not. Flux reads only the herdr server.
+`fluxd` writes a `link up` or `link down` line to the journal of `fluxd.service` for each link event of a paired device.
+`herdr_control` has a key on the **Access** card of the Flux window. The key asks before it turns on.
 
 ## Operate Flux
 

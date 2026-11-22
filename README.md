@@ -33,7 +33,7 @@ https://github.com/user-attachments/assets/4b8445fe-6734-4100-b200-92f57e1b353a
 | Pair a phone by its IP address when discovery finds nothing | [Pair by address](docs/cli.md#pair-by-address) |
 | Wake a sleeping computer from the Android phone with Wake-on-LAN | [Wake the computer](docs/features.md#wake-the-computer) |
 | Reach your phone away from home through Tailscale | [Connect through Tailscale](docs/tailscale.md) |
-| See herdr coding agents on the phone or the Mac, read their output, and answer them. On Android, also see them in a home screen widget | [herdr agents](docs/herdr.md) |
+| See herdr coding agents on the phone or the Mac, read their output, and answer them. On Android, answer a blocked agent from its notification, and see the agents in a home screen widget | [herdr agents](docs/herdr.md) |
 | Update Flux on the computer and send the new app to the phone | [Update](docs/install.md#update) |
 
 Flux for Android requires Android 10 or later.

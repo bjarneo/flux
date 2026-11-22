@@ -405,7 +405,7 @@ The signature component: 1 chat for each agent and each computer, as in a messag
 - **Groups:** Needs you, Agents, and Computers, each with a 14 sp 500 heading and a mono 11 sp line at the end: the count in red, or the computer of the agents.
 - **Row:** A 44 dp picture with 12 dp corners, the title in 15 sp 600 on 1 line, the line under it in 12 or 13 sp, and the time in mono 11 sp `sub` at the end. The picture is `tile` with a `line` border and a 22 dp icon. A 12 dp dot at its bottom right, with a 2 dp ring of the ground, shows the state: green for online or done, red for needs input, and `dim` for idle. An agent that works shows a turning ring in the place of the dot.
 - **Agent row:** The task as the title, then the window title: the state word in the state color and " · agent · project" in mono `sub`. An agent that waits takes `tile`, a 1 dp red border, and an `accent-tile` picture, and shows how long it waits, such as "3m". An agent that works shows how long it works, such as "2:14".
-- **Computer row:** The name, and the newest entry of its chat, such as "You: Dinner at 7". A computer that is not reachable shows at 55% with "Offline · last seen 09:12".
+- **Computer row:** The name, and the newest entry of its chat, such as "You: Dinner at 7". A computer that is not reachable shows at 55% with "Not reachable since 09:12". Each agent row of that computer shows the same line, and its waiting time and working time stop.
 - **Approval and pair request:** A card on `tile` with 12 dp corners and a 2 dp red border, with Deny and Approve, 44 dp high. Approve opens the approval screen.
 
 ### Agents widget
@@ -424,7 +424,7 @@ The home screen widget of Android: the Needs you and Agents groups of Chats, wit
 
 The chat of 1 computer: 1 thread of the computer and the device.
 
-- **Top bar:** A 48 dp back icon, a 36 dp picture with 10 dp corners and an 11 dp state dot, the name in 16 sp 600, the link and battery in mono 11 sp, and the menu: Control, Agents and terminals, and New agent or terminal.
+- **Top bar:** A 48 dp back icon, a 36 dp picture with 10 dp corners and an 11 dp state dot, the name in 16 sp 600, the link and battery in mono 11 sp, and the menu: Control, Terminals when the computer allows terminals, and New agent or terminal.
 - **Progress:** A 2 dp `line` rule under the top bar. A file that comes in or goes out fills it in the accent.
 - **Card of a computer:** `tile` with 14 dp corners and a 4 dp corner at the bottom left. The top row holds the state mark and word, the source in mono, and the time. A 14 sp 600 title, a mono 12 sp body in `sub`, and a 13 sp accent text action follow.
 - **Card that needs the user:** An approval takes the full width and a 2 dp red border. It shows Deny and Approve, 48 dp high. Approve opens the approval screen.
@@ -441,6 +441,8 @@ The agent screen shows 1 herdr agent as a thread. `agentThread` in `core/AgentTh
 - **Progress:** A 2 dp `line` rule under the top bar. While the agent works, a bar of 40% of the width slides over it in the accent.
 - **Thread:** Messages, tool calls on `off-tile` with a 12 dp corner, a changes card on `tile`, and prompts as bubbles on `accent-tile`. A tap on a tool call shows its result.
 - **Dock:** `tile` with 20 dp top corners and a `line` rule at the top. It lies 14 dp over the end of the thread. It shows the question with 48 dp choices, the step of a working agent with Interrupt, or the end of a turn. The composer is a 48 dp pill on `bg` with a `line-hi` border, a round mic key on `line`, and a round accent send key.
+- **Link note:** A line above the thread shows "Output from 09:12" and the age while the link is open. While the link is not open, a `tile` card above the dock shows "Connecting to COMPUTER" with a spinner, or "COMPUTER is not reachable." with the time of the output, a yellow border, and the keys Retry and Wake.
+- **Dock with Agent control off:** The dock says that Agent control is off and names the Access card in Flux on the computer.
 - **Changes sheet:** `tile` with 20 dp top corners. Each file is a card on `bg` with its diff lines in mono 11 sp: hunks in cyan, added lines in green, and removed lines in red.
 
 ### Window title

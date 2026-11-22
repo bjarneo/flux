@@ -207,7 +207,7 @@ A restart of `fluxd` after an update does not stop them.
 ## Browse PC
 
 With `share_home = true`, a paired phone can read these folders of the desktop.
-On the phone, open **Send > Get files**.
+On the phone, open the chat of the computer, select the **+** key at the left of the field, then select **Get files**.
 
 - The home folder.
 - The `download_dir` folder.
@@ -547,17 +547,22 @@ See [camera and streams](camera.md) for direct capture and live media.
 
 ## herdr agents
 
-When [herdr](https://herdr.dev) runs on the computer, each agent has a chat in **Chats**. An agent that waits for input is on top, under **Needs you**. Open its chat to answer. To see the agents and terminals of 1 computer, open **Control**.
+When [herdr](https://herdr.dev) runs on the computer, each agent has a chat in **Chats**. An agent that waits for input is on top, under **Needs you**. Open its chat to answer. With **Agent control** on, an agent that is blocked also shows its question and choices in its notification. To see the herdr terminals of 1 computer, open **Terminals** in the menu of its chat.
 The phone shows the status and the colored output of each coding agent, and posts a notification when an agent needs input or finishes.
 
-To answer agents from the phone, set:
+To answer agents from the phone, turn on **Agent control**.
+In the Flux window, open the **Phone** page, find the **Access** card, and select **Turn on** under **Agent control**.
+Confirm the question that follows.
+The phone then shows the choices of a blocked agent within 5 seconds.
+You can also set this key and reload with `systemctl --user reload fluxd`:
 
 ```toml
 herdr_control = true
 ```
 
-Reload with `systemctl --user reload fluxd`.
-The same key lets the phone start new agents and close agents.
+The same setting lets the phone start new agents and close agents.
+On Android, the notification of a blocked agent then has 1 action for each choice, or **Reply**.
+If **Agent control** is off, the notification ends with `Read only`.
 With herdr 0.9.3 or newer, it also adds **Live** to the agent screen of Flux for Android. **Live** shows the live terminal of the agent.
 To talk to an agent, use the mic key next to **Send**. The phone changes your speech to text on the device.
 To also open herdr terminals and type commands in them, set `herdr_terminals = true`.

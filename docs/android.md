@@ -279,7 +279,7 @@ Flux saves the theme of each computer, so the next start draws it at once.
 
 To change the theme, open **Computers** and select a choice under **Theme**. The choices are:
 
-- **Computer**, the default: the theme of the computer in scope. The scope chip at the top of the app sets the scope. In the scope of all computers, Flux uses the theme that changed most recently. A reconnect does not change the theme. Without a theme from the computer in scope, Flux uses Tokyo Night on a dark phone and Tokyo Night Day on a light phone. The choice shows the theme name and the computer that sent it.
+- **Computer**, the default: the theme that a computer sent. When more than 1 computer sends a theme, Flux uses the theme that changed most recently. A reconnect does not change the theme. Without a theme from the computer in scope, Flux uses Tokyo Night on a dark phone and Tokyo Night Day on a light phone. The choice shows the theme name and the computer that sent it.
 - **System**: Tokyo Night on a dark phone and Tokyo Night Day on a light phone.
 - **Light**: Tokyo Night Day.
 - **Dark**: Tokyo Night.
@@ -369,7 +369,7 @@ The pages are:
 - `sync` for the sync switches.
 - `about` for **About Flux**.
 - `home` for **Control** with the first paired computer in scope.
-- `media`, `commands`, `browse`, `mic`, `webcam`, `touchpad`, `desktop`, `omarchy`, `agents`, and `camera`.
+- `media`, `commands`, `browse`, `mic`, `webcam`, `touchpad`, `desktop`, `omarchy`, `agents`, and `camera`. The page `agents` is the **Terminals** screen.
 - `agent:<pane>` for the chat of one herdr agent, above **Chats**. The sample agents are `agent:w2:p1` (blocked), `agent:w1:p1` (working), and `agent:w3:p1` (done).
 - `newpane` for the screen that starts a herdr agent or opens a terminal.
 - `terminal:<pane>` for one herdr terminal. The sample terminals are `terminal:w1:p2` and `terminal:w3:p3`.
@@ -399,7 +399,9 @@ To draw the sample computer in a sample theme, set `FLUX_THEME` to `neon`, `toky
 ANDROID_SERIAL=emulator-5554 FLUX_DEMO=1 FLUX_THEME=catppuccin-latte tools/shot.sh chat /tmp/chat-latte.png
 ```
 
-To give the sample computer the named herdr sessions `infra` and `omarchy`, so the session picker shows, set `FLUX_SESSIONS=1`. `FLUX_SESSION` picks the session that **Control** shows, `default`, `infra`, or `omarchy`. The sample agent `agent:omarchy/w2:p1` has sample output:
+To turn off Agent control on the sample computer, set `FLUX_CONTROL=0`. The dock of a sample agent then names the Access card. The sample computer has Agent control on by default.
+
+To give the sample computer the named herdr sessions `infra` and `omarchy`, so the session picker shows, set `FLUX_SESSIONS=1`. `FLUX_SESSION` picks the session that the session strip in **Chats** shows, `default`, `infra`, or `omarchy`. The sample agent `agent:omarchy/w2:p1` has sample output:
 
 ```bash
 ANDROID_SERIAL=emulator-5554 FLUX_DEMO=1 FLUX_SESSIONS=1 FLUX_SESSION=omarchy tools/shot.sh control /tmp/control-sessions.png

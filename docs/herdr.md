@@ -5,7 +5,8 @@
 Flux for Android and Flux for macOS show the coding agents that [herdr](https://herdr.dev) runs on your Omarchy computer.
 You can see the status of each agent, read its recent output in color, and get a notification when an agent needs input or finishes.
 On Android, a [home screen widget](#home-screen-widget) shows the agents that need you.
-When you turn on control, you can also answer an agent with taps, send it text, start new agents, and close agents.
+When you turn on **Agent control**, you can also answer an agent with taps, send it text, start new agents, and close agents.
+On Android, you can answer a blocked agent from its notification. See [Answer from the notification](#answer-from-the-notification).
 When you also turn on terminals, Flux for Android opens herdr terminals and types commands in them.
 With control on, Flux for Android can also show the live terminal of an agent, and you can scroll and tap in it.
 
@@ -27,6 +28,7 @@ The phone never connects to the herdr socket.
 - herdr with API protocol 22 or newer. herdr 0.9.1 uses protocol 22.
 - herdr and `fluxd` run as the same desktop user. `fluxd` refuses a herdr socket that belongs to another user.
 - A `fluxd` and a Flux for Android or Flux for macOS that both include this feature.
+- For answers, new agents, and the [live terminal on Android](#live-terminal-on-android): **Agent control** on. See [Answer an agent](#answer-an-agent).
 - For the [live terminal on Android](#live-terminal-on-android): herdr 0.9.3 or newer, `herdr_control = true`, and a screen lock on the phone. The herdr server and the `herdr` CLI in the `PATH` of `fluxd.service` both need herdr 0.9.3 or newer.
 
 To check the desktop side, run:
@@ -44,6 +46,15 @@ When herdr runs and `herdr_control = true`, `flux-cli doctor` prints these lines
 
 With herdr 0.9.1 or 0.9.2, the phone shows the agents, and the second line names the problem and the fix.
 
+When the Herdr app runs herdr-core and the herdr server does not run, `flux-cli doctor` prints this line:
+
+```text
+- herdr-core runs, but Flux reads only the herdr server. Agents of the Herdr app do not show on the phone.
+```
+
+Flux reads only the herdr server.
+To show the agents on the phone, run them in the herdr server.
+
 The live terminal is optional.
 With `herdr_control = false`, the second line is a note and not a problem:
 
@@ -60,7 +71,12 @@ See [Agent diff review](workflows.md#agent-diff-review).
 1. Start herdr on the computer.
 2. Open Flux for Android or Flux for iOS. Each agent has a chat in **Chats**. An agent that waits for input is on top, under **Needs you**.
 3. Select an agent to open its chat.
-4. To see the agents and the terminals of 1 computer, open **Control** and select **Agents and terminals**.
+
+On Android, agents show in 2 places only: **Chats** and the **Agents** widget.
+**Control** shows no agent list.
+When a computer has 2 or more herdr sessions, the **Agents** section of **Chats** shows a session strip.
+See [Use herdr sessions](#use-herdr-sessions).
+To see the herdr terminals of 1 computer, open the menu of its chat and select **Terminals**. The entry shows when the computer allows terminals.
 
 The agent screen of Flux for Android and Flux for iOS has these parts:
 
@@ -68,6 +84,7 @@ The agent screen of Flux for Android and Flux for iOS has these parts:
 - A thin bar moves under the top bar while the agent works.
 - The thread shows the messages of the agent, its tool calls, the files that it changed, and your prompts. Select a tool call to show its result. Flux reads the transcripts of Claude Code, Codex, and opencode. Lines that it cannot read show as terminal lines.
 - The dock at the bottom shows the question and the choices of a blocked agent, the step of a working agent with **Interrupt**, or the end of a finished turn. The text field and the mic key are under it.
+- When **Agent control** is off on the computer, the dock of Flux for Android says so and names the Access card in Flux on the computer. See [Answer an agent](#answer-an-agent).
 
 Each app also reads these parts of the transcripts:
 
@@ -82,7 +99,20 @@ Flux for macOS opens the chat of an agent in the detail column of its window, ne
 The list puts blocked agents first, then done, working, idle, and unknown agents.
 A blocked agent waits for an approval or for the answer to a question.
 Idle and done agents are ready for new input.
-The **Agents and terminals** tile shows the number of blocked agents.
+
+### The link note
+
+When Flux for Android shows an agent thread, a note above the dock tells the state of the link to the computer:
+
+- While the computer is connected and the phone has output, a line above the thread shows `Output from HH:MM` and the age of the output, for example `now` or `3m`.
+- While the phone connects to the computer, a card above the dock shows `Connecting to COMPUTER`.
+- When the computer is not reachable, the card shows `COMPUTER is not reachable.` and `This output is from HH:MM.` The choices take no tap. The card has a **Retry** key.
+
+When the computer comes back, the card goes away and the output updates with no tap.
+The phone detects a lost computer within 90 seconds.
+
+In **Chats** and in the **Agents** widget, each row of a computer that is not reachable shows `Not reachable since HH:MM`.
+The row is dim, and its waiting time and working time stop.
 
 On Android, the **Live** key in the top bar shows the live terminal of the agent in the place of the thread.
 See [Live terminal on Android](#live-terminal-on-android).
@@ -267,9 +297,37 @@ The phone does not post notifications for the first agent list after it connects
 It waits 2 seconds before a finished notification, because the status can change between tool calls.
 When the agent works again, the phone removes its notification.
 
+A notification names the agent, the project, and the computer.
+A tap on a notification opens the thread of the agent.
+A notification of a finished agent has no action.
+
 To turn off a notification type, use the **Agent needs input** or **Agent finished** switch in **Computers > Sync** on the phone.
 The switches apply to all computers.
 Android also lists the two types as the **Agents that need input** and **Agents that finish** channels.
+
+### Answer from the notification
+
+With **Agent control** on, Flux for Android adds actions to the notification of a blocked agent.
+The notification shows the question line.
+To answer, tap an action:
+
+- A question with 2 or 3 numbered choices gets 1 action for each choice. A tap sends the number of the choice. A long label is cut at 24 characters.
+- A question with 4 numbered choices or more has no action. A tap on the notification opens the thread.
+- A question with no numbered choices gets a **Reply** action. A tap opens a text field in the notification. The text goes to the input of the agent, as **Send** in the dock does.
+
+Android 12 and later asks for the unlock of the phone before Flux sends.
+Flux sends nothing until the unlock succeeds.
+On Android 10 and 11, each action opens the thread after the unlock and sends nothing by itself.
+
+Before Flux sends, it reads the agent again.
+When the question changed since the notification, Flux sends nothing.
+It opens the thread with the current choices and the line `The question changed. Pick again.`
+When the link is closed or the read takes more than 3 seconds, Flux also sends nothing and opens the thread.
+After a sent answer, Flux removes the notification.
+
+When **Agent control** is off on the computer, the notification has no action.
+Its text ends with `Read only`.
+See [Access and privacy](#access-and-privacy) for who can answer from a notification.
 
 ## Home screen widget
 
@@ -334,24 +392,31 @@ Open Flux to update it.
 
 ## Answer an agent
 
-Replies are off by default, because an agent runs commands on the computer.
-With replies on, a paired device can make an agent run any command as your user, also when `herdr_terminals` is `false`.
+**Agent control** is off by default, because an agent runs commands on the computer.
+With **Agent control** on, a paired device can make an agent run any command as your user, also when `herdr_terminals` is `false`.
 For example, Claude Code runs a prompt that starts with `!` as a shell command, and a reply can approve each command that an agent asks to run.
 The setting applies to every paired device.
 Turn it on only when you trust each paired device.
 See [Access and privacy](#access-and-privacy).
 
-To let the phone send keys and text to the agents, set this key in `~/.config/flux/config.toml`:
+To let the phone send keys and text to the agents, turn on **Agent control** in Flux on the computer:
 
-```toml
-herdr_control = true
-```
+1. Open Flux on the computer.
+2. In the Flux window, open the **Phone** page and find the **Access** card.
+3. Select **Turn on** next to **Agent control**.
+4. Read the question. It says that each paired device can then run any command as your user through an agent.
+5. Select **Turn on** to confirm. Select **Cancel** to keep **Agent control** off.
 
-Reload the daemon:
+The key `herdr_control = true` in `~/.config/flux/config.toml` does the same.
+Reload the daemon after you edit the file:
 
 ```sh
 systemctl --user reload fluxd
 ```
+
+`fluxd` applies the change with no restart.
+Within 5 seconds, the phone shows the choices of a blocked agent and the reply controls.
+When **Agent control** is off, the dock of an agent on the phone says so and names the Access card.
 
 The output screen then shows the reply controls:
 
@@ -364,8 +429,9 @@ The output screen then shows the reply controls:
 With herdr 0.9.3 or newer, the same setting also turns on the **Live** key of Flux for Android.
 See [Live terminal on Android](#live-terminal-on-android).
 
-Before the first reply, the phone asks for its fingerprint or screen lock.
+Before the first reply from the app, the phone asks for its fingerprint or screen lock.
 The unlock stays valid for 5 minutes.
+A reply from a notification uses the unlock of Android. See [Answer from the notification](#answer-from-the-notification).
 
 `fluxd` accepts these keys only: `enter`, `esc`, `tab`, `shift+tab`, `up`, `down`, `left`, `right`, `backspace`, `space`, `0` to `9`, `y`, and `n`.
 It does not accept `ctrl+c`, because that key can end the agent.
@@ -374,10 +440,10 @@ A prompt can have up to 16 KB of text.
 
 ## Start an agent
 
-With `herdr_control = true`, the phone can start a coding agent on the computer.
+With **Agent control** on, the phone can start a coding agent on the computer.
 
-1. Open **Agents**.
-2. Select the add button in the top bar.
+1. In Flux for Android, select the **+** key at the top of **Chats**. Or open a computer chat and select **New agent or terminal** in its menu.
+2. When more than 1 computer lets the phone start an agent, select the computer.
 3. Under **Run**, select the agent, for example `claude` or `codex`.
 4. Under **Folder**, select a folder. To find a folder, type or speak a part of its name. To use another folder, type its path, for example `~/Code/app`. The folder must exist on the computer.
 5. When the folder has a herdr workspace, select **New tab in** that workspace or **New workspace**. A folder without a workspace opens in a new workspace.
@@ -388,6 +454,7 @@ Each folder shows the number of agents in its workspace.
 The phone keeps the last agent and folder of each computer for the next start.
 
 Before the first start, the phone asks for its fingerprint or screen lock.
+When **Agent control** is off on all computers, the **+** key shows a message that names the Access card.
 herdr opens a shell in the folder, runs the agent command there, and waits until it finds the agent.
 The start can take 30 seconds.
 The phone then opens the screen of the new agent.
@@ -406,7 +473,7 @@ The agent is then blocked, and the phone shows the choices.
 
 ## Close an agent
 
-With `herdr_control = true`, select **Close** on the screen of an agent, then confirm.
+With **Agent control** on, select **Close** on the screen of an agent, then confirm.
 herdr closes the pane, and the agent in it stops.
 When the pane is the last one of its tab, herdr also closes the tab.
 When the tab is the last one of its workspace, herdr also closes the workspace.
@@ -428,7 +495,7 @@ Reload the daemon:
 systemctl --user reload fluxd
 ```
 
-The **Agents** screen then lists each herdr pane that has no agent under **Terminals**.
+The menu of a computer chat then has **Terminals**, and the **Terminals** screen lists each herdr pane that has no agent.
 The list includes the panes that you opened on the computer, for example a `sudo -i` shell or an SSH session.
 The phone can read and type in each of them.
 Select a terminal to see its output and to type in it:
@@ -440,7 +507,8 @@ Select a terminal to see its output and to type in it:
 - The screen reads the output again every 3 seconds. A read waits while the last read still loads.
 - To close the terminal, select **Close**, then confirm.
 
-To open a new terminal, select the add button on the **Agents** screen, then select **terminal** under **Run**.
+To open a new terminal, select **New agent or terminal** in the menu of the computer chat, then select **terminal** under **Run**.
+Agents show only in **Chats**, so the **Terminals** screen lists no agent.
 
 Before the first input, the phone asks for its fingerprint or screen lock.
 The unlock stays valid for 5 minutes.
@@ -566,8 +634,8 @@ The phone then shows that the feature is off on the computer.
 
 `fluxd` follows the default herdr session and each named session at the same time.
 A named session is a session that you start with `herdr session attach NAME`.
-When a computer has more than one session, the agent list of the app shows a session picker.
-Pick a session to see its agents and terminals and to start agents in it.
+When a computer has more than one session, the **Agents** section of **Chats** shows a session strip on Android, and the agent list shows a session picker in the other apps.
+Pick a session to see its agents and to start agents in it.
 The app keeps the choice for each computer.
 Each session shows the number of its agents that wait for you.
 Notifications come from the agents of all sessions.
@@ -623,6 +691,7 @@ Without this setting, `fluxd` answers the open as for a pane that it does not kn
 `herdr_control` and `herdr_terminals` apply to every paired device, for example a second phone, a tablet, or a Mac.
 A [device restriction](workflows.md#per-device-access) can turn them off for one device.
 The app asks you to unlock it before the first reply and before Live, but `fluxd` cannot check that the app did.
+The Access card in Flux on the computer turns **Agent control** on and off for the paired phones, and it asks before it turns the setting on.
 Turn the settings on only when you trust each paired device.
 Unpair the devices that you do not use.
 
@@ -634,6 +703,15 @@ It also logs each Enter with the number of characters typed before it, each Esc,
 While the agent waits for a choice, it logs each typed text with its number of characters, because a digit can select a choice.
 It does not log the typed text, the release of a button, a drag, a move, a scroll, or a resize.
 When the input to a live terminal fails, it logs only the first error of the stream.
+
+#### Who can answer from a notification
+
+A person who holds the unlocked phone can answer an agent from its notification with 1 tap.
+On Android 12 and later, the unlock of Android is the only check for this answer.
+The app does not ask for the fingerprint or screen lock again, and the answer does not start the 5-minute unlock of the app.
+In the app, the thread and Live keep their own lock, as in earlier versions.
+A locked phone sends nothing before the unlock.
+To stop answers from notifications, turn off **Agent control** or the **Agent needs input** notifications.
 
 Terminal output can contain secrets.
 The output and the live terminal go only to paired devices over the Flux TLS link.
@@ -958,13 +1036,19 @@ It also has `cli` with the `path`, the `version`, and the `error` of the version
 
 | Problem | Next step |
 | --- | --- |
-| The **Agents and terminals** tile is missing | Update `fluxd` and Flux for Android. The tile shows in **Control** only when the computer sends `flux.herdr`. |
+| The **Terminals** entry is missing in the menu of a computer chat | Set `herdr_control = true` and `herdr_terminals = true`, and update `fluxd` and Flux for Android. The entry shows only when the computer sends `flux.herdr` and allows terminals. |
+| An agent shows in the Herdr app and not on the phone | Run `flux-cli doctor`. When it says that herdr-core runs, Flux reads only the herdr server. Run the agent in the herdr server. |
+| A notification has no action and ends with `Read only` | **Agent control** is off on that computer. Turn it on with the Access card in Flux on the computer. |
+| A notification has no choice actions | The question has 4 numbered choices or more, or the notification is for a finished agent. Open the thread to answer. |
+| An action of a notification opens the thread and sends nothing | The question changed, the link is closed, or the phone runs Android 10 or 11. Read the thread and pick again. |
+| A thread says that the computer is not reachable | See [The link note](#the-link-note). Select **Retry**, or check that the computer is on and on the same network. |
 | The home screen widget shows old agents | Android stopped Flux, so the widget keeps its last state. Open Flux. The widget updates when the computer connects. |
 | The phone says that herdr is not running | Run `herdr status` and `flux-cli doctor` on the computer. |
 | The list is empty | Run `herdr agent list`. herdr must detect the agent in its pane. |
 | The phone says that the feature is off | Set `herdr = true` and reload `fluxd`. |
-| The phone says that replies are off | Set `herdr_control = true` and reload `fluxd`. |
-| The add button is missing on the **Agents** screen | Set `herdr_control = true` and reload `fluxd`. herdr must run. |
+| The phone says that replies are off | Turn on **Agent control** with the Access card, or set `herdr_control = true` and reload `fluxd`. |
+| The dock says that **Agent control** is off | Turn on **Agent control** with the Access card in Flux on the computer, or set `herdr_control = true` and reload `fluxd`. |
+| **New agent or terminal** is missing in the menu of a computer chat | Turn on **Agent control**. herdr must run. |
 | The phone says that terminals are off | Set `herdr_control = true` and `herdr_terminals = true`, then reload `fluxd`. |
 | An agent kind is missing from the list | Run the agent once in a terminal, so that mise installs it. Then wait 1 minute. The command must also be in the `PATH` of `fluxd`. Run `systemctl --user show-environment` to see that `PATH`. |
 | A new agent says that it did not start | Read the last line in the error. Run the agent command in a terminal on the computer to see the problem. |
@@ -980,7 +1064,7 @@ It also has `cli` with the `path`, the `version`, and the `error` of the version
 | A reply says that the agent waits for a choice | The agent shows a dialog. Pick a choice with the choice buttons or the key bar, then send the text again. |
 | The log says that the herdr socket belongs to another user | Another user listens on the herdr socket path. Set `HERDR_SOCKET_PATH` to a socket in a folder that only you can write to. |
 | The mic key is missing | The phone has no speech recognizer. Install Speech Recognition and Synthesis from Google, or another voice input app. |
-| The **Agents and terminals** tool is missing on the Mac | Update `fluxd` and Flux for macOS. The tool shows in **Control** only when a computer in the scope accepts `flux.herdr`. |
+| **Agents Window** is missing in **Control** on the Mac | Update `fluxd` and Flux for macOS. The tool shows in **Control** only when a computer in the scope accepts `flux.herdr`. |
 | Dictation on the Mac says to allow Speech Recognition or the microphone | Select **Open Privacy Settings**, allow Flux, then start the dictation again. |
 | Dictation on the Mac sends the audio to Apple | The Mac has no speech model for the language. Add the language under **Dictation** in **System Settings > Keyboard**, or choose a language under **On this Mac**. |
 | Dictation says that Android downloads the speech model | Wait until the download is done, then start the dictation again. |
