@@ -2,6 +2,7 @@ package org.omarchy.flux.core
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -469,6 +470,7 @@ object FluxCore {
                 computerTheme = ComputerThemes.current(),
                 themeScope = ComputerThemes.scope,
                 computerThemes = ComputerThemes.names(),
+                approveAtOnce = settings.approveAtOnce,
             )
         }
         _state.value = snapshot
@@ -622,6 +624,11 @@ object FluxCore {
 
     fun setAgentInputAlerts(on: Boolean) {
         settings.agentInputAlerts = on
+        publish()
+    }
+
+    fun setApproveAtOnce(on: Boolean) {
+        settings.approveAtOnce = on && ApproveAtOnce.supported(Build.VERSION.SDK_INT)
         publish()
     }
 

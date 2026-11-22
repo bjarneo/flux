@@ -128,6 +128,24 @@ Windows Hello also accepts its PIN, see the section Windows.
 - On Android 12 and later, the approval screen hides the windows of other
   apps. The phone refuses **Approve** when the window of another app
   covered the screen during the tap.
+- The switch **Open the fingerprint check at once** is off by default. It
+  is in the Settings group of Computers. When it is on, the approval
+  screen opens the same `BiometricPrompt` as **Approve**, with no tap.
+  The screen opens the prompt only when all of these are true:
+  - The request is an approval. An enrollment keeps its tap.
+  - The phone runs Android 12 or later. On Android 10 and 11, the switch
+    stays off and cannot change.
+  - The screen is resumed and has the window focus.
+  - The screen did not open the prompt for this request ID before.
+- The prompt keeps `BIOMETRIC_STRONG`, the `CryptoObject`, and the
+  confirmation step. The key and the signature do not change. **Cancel**
+  keeps the screen with **Approve** and **Deny**. The prompt does not
+  open again for that request.
+- With no tap, there is no touch to check. The screen calls
+  `setHideOverlayWindows(true)` when it starts, so the windows of other
+  apps stay hidden while the prompt opens. This is why Android 10 and 11
+  are excluded: there, no setting hides those windows, and only the check
+  of a covered tap protects the screen.
 
 ### iPhone and Mac
 
@@ -293,6 +311,8 @@ enrollment is never a valid approval, and the reverse.
    wait for the password prompt.` Without a TTY, the line has no terminal.
 8. The phone shows `Approve <service> for user <user> on host <host>?`
    with the TTY, the remote host, and the time. It shows Approve and Deny.
+   On Android with the switch **Open the fingerprint check at once** on,
+   the phone also opens the biometric check of step 9 with no tap.
 9. Approve asks for the biometric check: `BiometricPrompt` on Android,
    Face ID or Touch ID on the iPhone and the Mac. After the check, the
    phone signs the approval message and sends it. Deny sends a denial.
@@ -414,7 +434,7 @@ Every failure gives a non-zero exit, and PAM asks for the password.
 | --- | --- | --- |
 | Network | Block or delay the link, so that PAM asks for the password | Read or change the messages, because the link uses TLS with pinned certificates. Make a valid signature. |
 | Code that runs as the user | Stop the approval, so that PAM asks for the password. Send requests to the phone. Start `sudo` and wait for the user to approve it. Enroll its own key during `sudo flux-cli approve enroll`, because it can type the key code into the terminal, see the open risks. | Make a valid signature. Change the key file without an enrollment or a `sudo` that the user starts. Point the helper to another key. Use an old signature again. |
-| A person with the locked phone | See a request on the lock screen, and deny it | Approve a request without the fingerprint |
+| A person with the locked phone | See a request on the lock screen, and deny it. See the fingerprint prompt open at once when the switch is on. Cancel that prompt. | Approve a request without the fingerprint. The prompt that opens at once needs the same strong fingerprint as a tap. |
 | A person with the unlocked phone | Deny requests. Remove Flux. | Approve a request without the fingerprint |
 | A person at the unlocked Windows computer who knows its Windows Hello PIN | Approve requests | Approve a request without the PIN or a fingerprint or face that Windows Hello knows |
 

@@ -1,5 +1,6 @@
 package org.omarchy.flux.ui
 
+import android.os.Build
 import android.os.Bundle
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.util.Log
@@ -40,8 +41,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.omarchy.flux.R
+import org.omarchy.flux.core.ApproveAtOnce
 import org.omarchy.flux.core.ApproveKeys
 import org.omarchy.flux.core.ApproveMessage
 import org.omarchy.flux.core.ApproveRequest
@@ -79,6 +82,9 @@ class ApproveActivity : FragmentActivity() {
 
     // True when a window of another app covered this window during the last touch.
     private var touchObscured = false
+
+    // The ID of the request for which the screen opened the prompt at once. It never opens again for that ID.
+    private var openedFor: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -128,6 +134,38 @@ class ApproveActivity : FragmentActivity() {
         super.onDestroy()
     }
 
+    override fun onResume() {
+        super.onResume()
+        openAtOnce()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) openAtOnce()
+    }
+
+    /**
+     * Opens the fingerprint prompt with no tap when [ApproveAtOnce] allows it.
+     * The prompt is the one that Approve opens. A cancel keeps the screen,
+     * and the prompt does not open again for the same request.
+     */
+    private fun openAtOnce() {
+        val r = Approvals.current.value ?: return
+        if (phase.value != Phase.Ask || signing != null) return
+        val open = ApproveAtOnce.shouldOpen(
+            enabled = FluxCore.state.value.approveAtOnce,
+            kind = r.kind,
+            sdk = Build.VERSION.SDK_INT,
+            resumed = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED),
+            focused = hasWindowFocus(),
+            requestId = r.id,
+            openedFor = openedFor,
+        )
+        if (!open) return
+        openedFor = r.id
+        start(r)
+    }
+
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> touchObscured = Overlays.obscured(ev)
@@ -152,6 +190,8 @@ class ApproveActivity : FragmentActivity() {
         LaunchedEffect(current, p) {
             if (current == null && p !is Phase.Enrolled && p !is Phase.Failed) finish()
         }
+        // A new request can arrive while the screen is already in front.
+        LaunchedEffect(current?.id) { openAtOnce() }
         Box(Modifier.fillMaxSize().systemBarsPadding().padding(24.dp), contentAlignment = Alignment.Center) {
             when (val ph = p) {
                 is Phase.Enrolled -> EnrolledView(ph.code)

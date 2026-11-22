@@ -82,6 +82,11 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("sendPhotos", false)
         set(v) = prefs.edit().putBoolean("sendPhotos", v).apply()
 
+    /** Opens the fingerprint prompt at once when an approval arrives. It needs Android 12 or later. */
+    var approveAtOnce: Boolean
+        get() = prefs.getBoolean("approveAtOnce", false)
+        set(v) = prefs.edit().putBoolean("approveAtOnce", v).apply()
+
     /** The time of the last local clipboard change, in milliseconds. */
     var clipboardTimestamp: Long
         get() = prefs.getLong("clipboardTimestamp", 0)

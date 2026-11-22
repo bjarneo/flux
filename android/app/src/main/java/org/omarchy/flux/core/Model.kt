@@ -217,4 +217,6 @@ data class UiState(
     val themeScope: String? = null,
     /** The name of the theme of each computer that sent one, by device ID. */
     val computerThemes: Map<String, String> = emptyMap(),
+    /** Opens the fingerprint prompt at once when an approval arrives. */
+    val approveAtOnce: Boolean = false,
 )

@@ -1,5 +1,6 @@
 package org.omarchy.flux.ui
 
+import android.os.Build
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -21,12 +22,14 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -53,6 +56,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.omarchy.flux.BuildConfig
+import org.omarchy.flux.R
+import org.omarchy.flux.core.ApproveAtOnce
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.ScrollMode
@@ -131,6 +136,7 @@ fun ComputersScreen(
                         SettingRow(Ic.key, "SSH key", sshSummary(ssh), onClick = onSsh)
                         ThemeRow(state)
                         ScrollRow(state)
+                        AtOnceRow(state)
                         // The row runs an action and opens no screen, so it has no chevron. A dialog asks first.
                         SettingRow(Ic.power, "Turn off Flux", "This phone stops all connections until you turn Flux on again.", chevron = false) { turningOff = true }
                         SettingRow(Ic.info, "About Flux", aboutVersion(BuildConfig.VERSION_NAME, BuildConfig.DEBUG), onClick = onAbout)
@@ -472,4 +478,30 @@ private fun ScrollRow(state: UiState) {
             choice(ScrollMode.Traditional, "Traditional", Ic.south, "Fingers down scroll down, like a scroll wheel."),
         ),
     )
+}
+
+/** The switch that opens the fingerprint prompt at once. It stays off on Android 10 and 11. */
+@Composable
+private fun AtOnceRow(state: UiState) {
+    val supported = ApproveAtOnce.supported(Build.VERSION.SDK_INT)
+    val on = supported && state.approveAtOnce
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(TileShape).background(Tn.tile).border(1.dp, Tn.line, TileShape)
+            .alpha(if (supported) 1f else DimAlpha)
+            .toggleable(value = on, enabled = supported, role = Role.Switch, onValueChange = { FluxCore.setApproveAtOnce(it) })
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Sym(R.drawable.ic_fingerprint, tint = if (on) Tn.blue else Tn.sub, size = 22.dp)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            T("Open the fingerprint check at once", size = 15, weight = FontWeight.SemiBold)
+            T(
+                if (supported) "Opens the fingerprint prompt over the approval screen when a sudo request arrives." else "Needs Android 12 or later.",
+                size = 13, color = Tn.sub, lineHeight = 1.3f,
+            )
+        }
+        // The row takes the tap and gives the state to TalkBack, so the switch only shows it.
+        Switch(checked = on, onCheckedChange = null, enabled = supported)
+    }
 }
