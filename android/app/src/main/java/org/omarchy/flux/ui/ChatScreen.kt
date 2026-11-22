@@ -90,6 +90,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.util.Calendar
@@ -177,10 +178,10 @@ private val seenClock = SeenClock()
  * left: approvals, received files, and clips. What this phone sent shows on
  * the right. An approval shows Approve and Deny in the thread. The dock
  * under it shows the clipboard of this phone with Send, and the composer.
- * The + key of the composer opens the tray with the recent photos and the
- * tools. [active] is false while the screen moves, so that it reads
+ * The Send bar above the composer has Photo, File, Scan, and More.
+ * [active] is false while the screen moves, so that it reads
  * nothing new then. [notices] tell what the thread cannot show. With
- * [tray], the tray is open at the start.
+ * [tray], the list of More is open at the start.
  */
 @Composable
 fun ComputerChatScreen(
@@ -200,8 +201,8 @@ fun ComputerChatScreen(
     val seen = remember(all) { seenClock.update(all.map { it.key }, System.currentTimeMillis()) }
     val chat = remember(entries, events, seen) { chatItems(entries, events, { _, _ -> null }, seen) }
     val running = entries.filter { it.kind == SendKind.File && it.state == TransferState.Running }
-    var trayOpen by rememberSaveable(d.id) { mutableStateOf(tray) }
-    BackHandler(enabled = trayOpen) { trayOpen = false }
+    var panel by rememberSaveable(d.id) { mutableStateOf(if (tray) BarPanel.More else BarPanel.None) }
+    BackHandler(enabled = panel != BarPanel.None) { panel = BarPanel.None }
 
     Column(Modifier.fillMaxSize().imePadding()) {
         ChatTopBar(
@@ -222,8 +223,8 @@ fun ComputerChatScreen(
             dock = { shape ->
                 ChatDock(
                     shape, d, entries, actions,
-                    trayOpen = trayOpen,
-                    onTray = { trayOpen = it },
+                    panel = panel,
+                    onPanel = { panel = it },
                 )
             },
         )
@@ -239,7 +240,10 @@ internal fun computerContext(d: DeviceUi): String = when {
 
 /**
  * The menu of the chat of a computer: Remote with the computer in scope,
- * its terminals when the computer allows them, and a new agent or terminal.
+ * Get files, its terminals when the computer allows them, a new agent or
+ * terminal, and Clear this chat. Clear this chat removes the entries of
+ * this computer from the chat log. The history of the computer and the
+ * files that it saved stay.
  */
 @Composable
 private fun ComputerMenu(d: DeviceUi, actions: ChatActions) {
@@ -255,8 +259,10 @@ private fun ComputerMenu(d: DeviceUi, actions: ChatActions) {
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             val items = listOfNotNull(
                 Triple("Remote", Ic.desktop) { actions.control(d.id) },
+                Triple("Get files", Ic.folderOpen) { actions.open(Route(d.id, "browse")) },
                 if (d.herdrSupported && herdr?.terminals == true) Triple("Terminals", Ic.terminal) { actions.open(Route(d.id, AGENTS_PAGE)) } else null,
                 if (d.online && herdr?.anyRunning == true && herdr.control) Triple("New agent or terminal", Ic.add) { actions.open(Route(d.id, NEW_PANE_PAGE)) } else null,
+                Triple("Clear this chat", Ic.delete) { SendLog.clear(d.id) },
             )
             for ((label, icon, action) in items) {
                 DropdownMenuItem(text = { Text(label) }, leadingIcon = { Sym(icon) }, onClick = {
@@ -581,6 +587,30 @@ internal fun PairCard(deviceId: String, computer: String, at: Long, actions: Cha
 /** An entry of the chat log: a card from the computer, or a bubble, a photo, or a file card of this phone. */
 @Composable
 private fun LogEntry(e: SendEntry, context: Context) {
+    val failed = !e.incoming && e.kind == SendKind.File && e.state == TransferState.Failed
+    if (failed && e.uri.isNotEmpty()) {
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            SentEntry(e, context)
+            CardButton("Retry", Modifier.width(120.dp), primary = true, height = 40.dp) { retrySend(e) }
+        }
+    } else {
+        SentEntry(e, context)
+    }
+}
+
+/** Sends the file of the failed entry [e] again and takes the failed entry out of the chat. */
+private fun retrySend(e: SendEntry) {
+    if (isDemo(e.deviceId)) {
+        FluxCore.toast("This is a sample computer")
+        return
+    }
+    SendLog.remove(e.id)
+    Share.sendFiles(FluxCore, e.deviceId, listOf(e.uri.toUri()))
+}
+
+/** The card, bubble, or photo of [e], without the Retry key. */
+@Composable
+private fun SentEntry(e: SendEntry, context: Context) {
     when {
         e.kind == SendKind.Approved || e.kind == SendKind.Denied -> ApprovalResult(e, context)
         e.incoming && e.kind == SendKind.File -> ReceivedFile(e, context)
@@ -798,7 +828,7 @@ private fun sendMeta(context: Context, e: SendEntry): String {
         SendKind.File -> when (e.state) {
             TransferState.Running -> (if (photo) "Photo · sending" else "Sending") + " · $pct"
             TransferState.Done -> (if (photo) "Photo · sent" else "Sent") + " · $time"
-            TransferState.Failed -> "Not sent · $time"
+            TransferState.Failed -> "Not sent. ${e.computer} is not reachable."
         }
         SendKind.Approved, SendKind.Denied -> time
     }
@@ -841,9 +871,8 @@ internal fun breakAll(text: String): String {
 
 /**
  * The dock of the chat of a computer: the clipboard of this phone with
- * Send, the composer, and the tray under it while [trayOpen]. The + key of
- * the composer opens and closes the tray. The photos that the tray selects
- * go out with the send key. [entries] tell whether the clip went out
+ * Send, the Send bar, and the composer. The photos that Photo selects go
+ * out with the send key. [entries] tell whether the clip went out
  * already.
  */
 @Composable
@@ -852,8 +881,8 @@ private fun ChatDock(
     d: DeviceUi,
     entries: List<SendEntry>,
     actions: ChatActions,
-    trayOpen: Boolean,
-    onTray: (Boolean) -> Unit,
+    panel: BarPanel,
+    onPanel: (BarPanel) -> Unit,
 ) {
     val clip = rememberPhoneClip()
     val photos = remember(d.id) { mutableStateListOf<Uri>() }
@@ -863,30 +892,24 @@ private fun ChatDock(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         ClipRow(clip, entries, enabled = on) { Plugins.sendClipboard(FluxCore, d.id) }
+        SendBar(d, photos, actions, panel, onPanel)
         ChatComposer(
             enabled = on,
             placeholder = "Message ${d.name}",
-            trayOpen = trayOpen,
-            onTray = onTray,
+            panelOpen = panel != BarPanel.None,
+            onPanelClose = { onPanel(BarPanel.None) },
             selected = photos.size,
             onSend = { text ->
                 if (photos.isNotEmpty()) {
                     if (isDemo(d.id)) FluxCore.toast("This is a sample computer") else Share.sendFiles(FluxCore, d.id, photos.toList())
                     photos.clear()
-                    onTray(false)
+                    onPanel(BarPanel.None)
                 }
                 if (text.isNotEmpty()) {
                     if (isDemo(d.id)) FluxCore.toast("This is a sample computer") else Share.sendText(FluxCore, d.id, text)
                 }
             },
         )
-        AnimatedVisibility(
-            trayOpen,
-            enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
-            exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
-        ) {
-            ChatTray(d, photos, actions, onClose = { onTray(false) })
-        }
     }
 }
 
@@ -946,10 +969,8 @@ private fun ClipRow(clip: PhoneClip, entries: List<SendEntry>, enabled: Boolean,
 /**
  * The composer: the + key, the field, the mic key, and the send key. A web
  * link opens in the browser of the computer, and other text goes to its
- * clipboard. The + key opens the tray, and while the tray is open it is an
- * accent key with a cross that closes it. When the field takes the focus,
- * the tray closes and the + key hides, so the field takes its width, and
- * the field grows to 6 lines. With text, the field shows the key of the
+ * clipboard. When the field takes the focus, the open part of the Send bar
+ * closes, and the field grows to 6 lines. With text, the field shows the key of the
  * large editor. The send key shows the number of [selected] photos. The
  * words of a dictation go in at the cursor.
  */
@@ -958,8 +979,8 @@ private fun ClipRow(clip: PhoneClip, entries: List<SendEntry>, enabled: Boolean,
 private fun ChatComposer(
     enabled: Boolean,
     placeholder: String,
-    trayOpen: Boolean,
-    onTray: (Boolean) -> Unit,
+    panelOpen: Boolean,
+    onPanelClose: () -> Unit,
     selected: Int,
     onSend: (String) -> Unit,
 ) {
@@ -979,9 +1000,9 @@ private fun ChatComposer(
             focusManager.clearFocus()
         }
     }
-    // The tray and the keyboard take the same place, so 1 closes the other.
-    LaunchedEffect(focused) { if (focused) onTray(false) }
-    LaunchedEffect(trayOpen) { if (trayOpen) focusManager.clearFocus() }
+    // The open part of the Send bar and the keyboard take the same place, so 1 closes the other.
+    LaunchedEffect(focused) { if (focused) onPanelClose() }
+    LaunchedEffect(panelOpen) { if (panelOpen) focusManager.clearFocus() }
     val voice = rememberVoiceTyping { spoken ->
         val e = DictationText.insert(field.text, field.selection.start, field.selection.end, spoken)
         field = TextFieldValue(e.text, TextRange(e.cursor))
@@ -996,20 +1017,6 @@ private fun ChatComposer(
     }
     val shape = RoundedCornerShape(24.dp)
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-        // The + key also hides while the phone listens, so the panel of the dictation takes the width.
-        AnimatedVisibility(
-            !focused && voice.dictation.phase == Dictation.Phase.Idle,
-            enter = fadeIn() + expandHorizontally(expandFrom = Alignment.Start),
-            exit = fadeOut() + shrinkHorizontally(shrinkTowards = Alignment.Start),
-        ) {
-            val label = if (trayOpen) "Close the photos and tools" else "Photos, files, and tools"
-            Box(
-                Modifier.padding(end = 8.dp).size(48.dp).clip(CircleShape).background(if (trayOpen) Tn.blue else Tn.line)
-                    .clickable(onClickLabel = label, role = Role.Button) { onTray(!trayOpen) }
-                    .semantics { contentDescription = label },
-                contentAlignment = Alignment.Center,
-            ) { Sym(if (trayOpen) Ic.close else Ic.add, tint = if (trayOpen) Tn.onAccent else Tn.text, size = 24.dp) }
-        }
         VoiceField(
             voice, Modifier.weight(1f), enabled = enabled, round = true,
             send = {

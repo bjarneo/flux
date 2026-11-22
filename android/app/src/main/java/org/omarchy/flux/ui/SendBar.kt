@@ -13,6 +13,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -70,22 +75,36 @@ import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.Share
 
-/** The number of recent photos in the tray. */
+/** The number of recent photos under Photo. */
 private const val RECENT_PHOTOS = 4
 
-/** A tool of the tray: an icon over a label. [description] is the label for TalkBack. */
-private class TrayTool(@param:DrawableRes val icon: Int, val label: String, val description: String, val onClick: () -> Unit)
+/** The part of the Send bar that is open above the keys. */
+internal enum class BarPanel { None, Photos, More }
+
+/** The labels of the Send bar, in the order that the chat shows them. */
+internal object SendBarEntries {
+    /** The keys that stay open above the field. */
+    val bar = listOf("Photo", "File", "Scan", "More")
+
+    /** The tools in the list of More. */
+    val more = listOf("Camera", "Text", "QR", "Signature")
+}
+
+/** A key of the Send bar or a row of More. [description] is the label for TalkBack. */
+private class BarTool(@param:DrawableRes val icon: Int, val label: String, val description: String, val onClick: () -> Unit)
 
 /**
- * The tray of the chat of a computer, under the composer: the 4 newest
- * photos of this phone, and the tools in rows of 4. A tap on a photo
- * selects it or takes it out, and the send key sends the [photos] in the
- * order of the taps. All photos opens the photo picker of Android, which
- * sends the photos at once. A tool opens its screen for the computer [d].
- * Without access to the photos, a line asks for it.
+ * The Send bar of the chat of a computer, above the field: the keys Photo,
+ * File, Scan, and More. Photo opens the 4 newest photos of this phone and
+ * All photos above the keys. A tap on a photo selects it or takes it out,
+ * and the send key sends the [photos] in the order of the taps. More opens
+ * a list of Camera, Text, QR, and Signature. File opens the file picker,
+ * and Scan opens the scan of pages to a PDF. [panel] tells which part is
+ * open. A tool opens its screen for the computer [d]. Without access to
+ * the photos, a line asks for it.
  */
 @Composable
-internal fun ChatTray(d: DeviceUi, photos: SnapshotStateList<Uri>, actions: ChatActions, onClose: () -> Unit) {
+internal fun SendBar(d: DeviceUi, photos: SnapshotStateList<Uri>, actions: ChatActions, panel: BarPanel, onPanel: (BarPanel) -> Unit) {
     val context = LocalContext.current
     val on = d.online
     val demo = isDemo(d.id)
@@ -95,35 +114,38 @@ internal fun ChatTray(d: DeviceUi, photos: SnapshotStateList<Uri>, actions: Chat
         onPauseOrDispose { }
     }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { access = hasPhotoAccess(context) }
-    // The tray reads the newest photos each time it opens and after a new access.
+    // The photos load each time Photo opens and after a new access.
     var reload by remember { mutableIntStateOf(0) }
     val recent by produceState(emptyList<Uri>(), access, reload) {
         value = if (access) withContext(Dispatchers.IO) { recentPhotos(context, RECENT_PHOTOS) } else emptyList()
     }
-    LaunchedEffect(Unit) { reload++ }
+    LaunchedEffect(panel) { if (panel == BarPanel.Photos) reload++ }
     val pickPhotos = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
         if (uris.isNotEmpty()) {
             Share.sendFiles(FluxCore, d.id, uris)
-            onClose()
+            onPanel(BarPanel.None)
         }
     }
-    // The file picker is another activity, so the tray sends to the computer of this chat when it comes back.
+    // The file picker is another activity, so the bar sends to the computer of this chat when it comes back.
     var picking by rememberSaveable { mutableStateOf(false) }
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (picking && uris.isNotEmpty()) {
             Share.sendFiles(FluxCore, d.id, uris)
-            onClose()
+            onPanel(BarPanel.None)
         }
         picking = false
     }
     fun go(page: String) {
-        onClose()
+        onPanel(BarPanel.None)
         actions.open(Route(d.id, page))
     }
     val sample = { FluxCore.toast("This is a sample computer") }
-    val tools = listOf(
-        TrayTool(Ic.camera, "Camera", "Take a photo for ${d.name}") { go("camera:photo") },
-        TrayTool(Ic.sendFiles, "File", "Send files to ${d.name}") {
+    val keys = listOf(
+        BarTool(Ic.gallery, "Photo", "Show the newest photos to send to ${d.name}") {
+            onPanel(if (panel == BarPanel.Photos) BarPanel.None else BarPanel.Photos)
+        },
+        BarTool(Ic.sendFiles, "File", "Send files to ${d.name}") {
+            onPanel(BarPanel.None)
             if (demo) {
                 sample()
             } else {
@@ -131,68 +153,115 @@ internal fun ChatTray(d: DeviceUi, photos: SnapshotStateList<Uri>, actions: Chat
                 pickFiles.launch(arrayOf("*/*"))
             }
         },
-        TrayTool(Ic.document, "Scan", "Scan pages to a PDF") { go("camera:document") },
-        TrayTool(Ic.text, "Text", "Scan text and send it") { go("camera:text") },
-        TrayTool(Ic.qr, "QR", "Read a QR code or barcode") { go("camera:qr") },
-        TrayTool(Ic.signature, "Signature", "Sign on paper, paste on the computer") { go("camera:signature") },
-        TrayTool(Ic.folderOpen, "Get files", "Get files from ${d.name}") { go("browse") },
+        BarTool(Ic.document, "Scan", "Scan pages to a PDF") { go("camera:document") },
+        BarTool(Ic.more, "More", "Show more tools") { onPanel(if (panel == BarPanel.More) BarPanel.None else BarPanel.More) },
     )
-    Column(Modifier.fillMaxWidth().padding(top = 2.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            T("Recent photos", Modifier.weight(1f).semantics { heading() }, size = 12, color = Tn.sub, weight = FontWeight.Medium)
-            TextAction(
-                "All photos",
-                {
-                    if (demo) sample() else pickPhotos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
-                },
-                enabled = on, size = 12, height = 32.dp, pad = 4.dp,
-            )
+    val more = listOf(
+        BarTool(Ic.camera, "Camera", "Take a photo for ${d.name}") { go("camera:photo") },
+        BarTool(Ic.text, "Text", "Scan text and send it") { go("camera:text") },
+        BarTool(Ic.qr, "QR", "Read a QR code or barcode") { go("camera:qr") },
+        BarTool(Ic.signature, "Signature", "Sign on paper, paste on the computer") { go("camera:signature") },
+    )
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        AnimatedVisibility(
+            panel == BarPanel.More,
+            enter = expandVertically(expandFrom = Alignment.Bottom) + fadeIn(),
+            exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut(),
+        ) {
+            val shape = RoundedCornerShape(14.dp)
+            Column(Modifier.fillMaxWidth().clip(shape).background(Tn.bg).border(1.dp, Tn.lineHi, shape)) {
+                more.forEachIndexed { i, t ->
+                    if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Tn.line))
+                    MoreRow(t, enabled = on)
+                }
+            }
         }
-        if (access && recent.isNotEmpty()) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                for (uri in recent) {
-                    val n = photos.indexOf(uri) + 1
-                    PhotoCell(uri, n, enabled = on, modifier = Modifier.weight(1f)) {
-                        if (n > 0) photos.remove(uri) else photos.add(uri)
+        AnimatedVisibility(
+            panel == BarPanel.Photos,
+            enter = expandVertically(expandFrom = Alignment.Bottom) + fadeIn(),
+            exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut(),
+        ) {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    T("Recent photos", Modifier.weight(1f).semantics { heading() }, size = 12, color = Tn.sub, weight = FontWeight.Medium)
+                    TextAction(
+                        "All photos",
+                        {
+                            if (demo) sample() else pickPhotos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+                        },
+                        enabled = on, size = 12, height = 32.dp, pad = 4.dp,
+                    )
+                }
+                if (access && recent.isNotEmpty()) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        for (uri in recent) {
+                            val n = photos.indexOf(uri) + 1
+                            PhotoCell(uri, n, enabled = on, modifier = Modifier.weight(1f)) {
+                                if (n > 0) photos.remove(uri) else photos.add(uri)
+                            }
+                        }
+                        repeat(RECENT_PHOTOS - recent.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                } else if (access) {
+                    T("No photos on this phone yet.", Modifier.padding(horizontal = 4.dp), size = 12, color = Tn.sub)
+                } else {
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(10.dp)).background(Tn.bg).padding(start = 12.dp, end = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Sym(Ic.gallery, tint = Tn.blue, size = 20.dp)
+                        T("Allow access to show your newest photos here.", Modifier.weight(1f), size = 12, color = Tn.sub, lineHeight = 1.3f)
+                        TextAction("Allow", { ask.launch(CaptureWatch.permissions()) }, size = 13, height = 40.dp, pad = 8.dp)
                     }
                 }
-                repeat(RECENT_PHOTOS - recent.size) { Spacer(Modifier.weight(1f)) }
-            }
-        } else if (access) {
-            T("No photos on this phone yet.", Modifier.padding(horizontal = 4.dp), size = 12, color = Tn.sub)
-        } else {
-            Row(
-                Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(10.dp)).background(Tn.bg).padding(start = 12.dp, end = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Sym(Ic.gallery, tint = Tn.blue, size = 20.dp)
-                T("Allow access to show your newest photos here.", Modifier.weight(1f), size = 12, color = Tn.sub, lineHeight = 1.3f)
-                TextAction("Allow", { ask.launch(CaptureWatch.permissions()) }, size = 13, height = 40.dp, pad = 8.dp)
             }
         }
-        GridRows(tools, 4, gap = 6.dp) { t, m -> TrayCell(t, enabled = on, modifier = m) }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (k in keys) {
+                val open = (k.label == "Photo" && panel == BarPanel.Photos) || (k.label == "More" && panel == BarPanel.More)
+                BarKey(k, enabled = on, open = open, modifier = Modifier.weight(1f))
+            }
+        }
     }
 }
 
-/** A tool of the tray: a 22 dp accent icon over a 12 sp label, on `bg` with a `line` border, 64 dp high. */
+/** A key of the Send bar: an accent icon beside a 13 sp label, 48 dp high, on `bg` with a `line` border. It has an accent border while its part is open. */
 @Composable
-private fun TrayCell(t: TrayTool, enabled: Boolean, modifier: Modifier) {
+private fun BarKey(t: BarTool, enabled: Boolean, open: Boolean, modifier: Modifier) {
     val shape = RoundedCornerShape(12.dp)
-    Column(
-        modifier.heightIn(min = 64.dp).alpha(if (enabled) 1f else DimAlpha).clip(shape).background(Tn.bg).border(1.dp, Tn.line, shape)
+    Row(
+        modifier.heightIn(min = 48.dp).alpha(if (enabled) 1f else DimAlpha).clip(shape).background(Tn.bg)
+            .border(1.dp, if (open) Tn.blue else Tn.line, shape)
             .clickable(enabled = enabled, onClickLabel = t.description, role = Role.Button, onClick = t.onClick)
-            .clearAndSetSemantics { contentDescription = t.label },
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+            .clearAndSetSemantics { contentDescription = t.label }
+            .padding(horizontal = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Sym(t.icon, tint = Tn.blue, size = 22.dp)
-        T(t.label, size = 12, weight = FontWeight.Medium, align = TextAlign.Center, maxLines = 1, fit = true)
+        Sym(t.icon, tint = Tn.blue, size = 18.dp)
+        T(t.label, size = 13, weight = FontWeight.Medium, align = TextAlign.Center, maxLines = 1, fit = true)
+    }
+}
+
+/** A row of the list of More, 48 dp high: an accent icon and the label. */
+@Composable
+private fun MoreRow(t: BarTool, enabled: Boolean) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).alpha(if (enabled) 1f else DimAlpha)
+            .clickable(enabled = enabled, onClickLabel = t.description, role = Role.Button, onClick = t.onClick)
+            .clearAndSetSemantics { contentDescription = t.label }
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Sym(t.icon, tint = Tn.blue, size = 20.dp)
+        T(t.label, size = 15, maxLines = 1)
     }
 }
 
 /**
- * A recent photo of the tray, 80 dp high. A selected photo has a 2 dp
+ * A recent photo under Photo, 80 dp high. A selected photo has a 2 dp
  * accent border and its number in an accent circle at the top right.
  */
 @Composable

@@ -45,8 +45,8 @@ class RemoteScreenTest {
     }
 
     @Test
-    fun trayHasNoAgentKey() {
-        val tray = source("ChatTray.kt")
+    fun sendBarHasNoAgentKey() {
+        val tray = source("SendBar.kt")
         assertFalse(tray.contains("NEW_PANE_PAGE"))
         assertFalse(tray.contains("\"Agent\""))
     }
