@@ -4,7 +4,7 @@ import ".."
 
 // What the device can do on this computer. Each switch is the rule of the
 // device. A feature that is off on this computer is off for every device,
-// and the line under the switch says "Off on this computer". Remote desktop and remote input
+// and the line under the switch says "Off on this computer". Remote desktop, remote input, and Agent control
 // also turn on and off for every device here. fluxd saves each change in
 // config.toml.
 Card {
@@ -24,7 +24,7 @@ Card {
     { key: "remoteDesktop", label: "Remote desktop", global: "remoteDesktop", computer: true },
     { key: "remoteInput", label: "Remote input", global: "remoteInput", computer: true },
     { key: "herdr", label: "Agent output", global: "herdr" },
-    { key: "herdrControl", label: "Agent control", global: "herdrControl" },
+    { key: "herdrControl", label: "Agent control", global: "herdrControl", computer: true, confirmOn: true },
     { key: "herdrTerminals", label: "Agent terminals", global: "herdrTerminals" }
   ]
 
@@ -32,6 +32,19 @@ Card {
 
   function setGlobal(key, on) {
     if (view) view.call("settings.set", { key: key, value: on })
+  }
+
+  // Agent control lets each paired device run any command, so Turn on asks
+  // first. Turn off asks nothing.
+  function toggleGlobal(feature) {
+    var on = root.settings[feature.global] !== true
+    if (on && feature.confirmOn && view && view.confirm) {
+      view.confirm("Turn on Agent control?",
+        "Each paired device can then run any command as your user through an agent.",
+        "Turn on", function () { root.setGlobal(feature.global, true) })
+      return
+    }
+    root.setGlobal(feature.global, on)
   }
 
   Column {
@@ -106,7 +119,7 @@ Card {
               visible: !!feature.modelData.computer
               text: feature.setOn ? "Turn off" : "Turn on"
               font.pixelSize: 11
-              onClicked: root.setGlobal(feature.modelData.global, !feature.setOn)
+              onClicked: root.toggleGlobal(feature.modelData)
             }
           }
         }

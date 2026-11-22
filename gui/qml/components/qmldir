@@ -27,3 +27,4 @@ CommandList 1.0 CommandList.qml
 Composer 1.0 Composer.qml
 IconAction 1.0 IconAction.qml
 TextAction 1.0 TextAction.qml
+ConfirmSheet 1.0 ConfirmSheet.qml

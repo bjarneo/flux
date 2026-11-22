@@ -397,7 +397,15 @@ Window {
       })
       view.selectedId = pixel
       view.tab = "device"
-    }, function () { scrollTo(findBy(pageItem(), "objectName", "speakerCard")) }]
+    }, function () { scrollTo(findBy(pageItem(), "objectName", "speakerCard")) }],
+    // Agent control off, the question before it turns on, and it on.
+    ["66-access-agent-off", function () {
+      mock.setState(function (s) { s.settings.herdrControl = false })
+      view.selectedId = pixel
+      view.tab = "device"
+    }, function () { scrollTo(access()) }],
+    ["67-access-agent-confirm", function () { findBy(access(), "objectName", "computer-herdrControl").clicked() }, function () { scrollTo(access()) }],
+    ["68-access-agent-on", function () { findBy(view, "objectName", "confirmOk").clicked() }, function () { scrollTo(access()) }]
   ]
 
   function pageItem() {

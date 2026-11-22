@@ -1181,5 +1181,66 @@ Item {
       compare(rule[0].params.key, "remoteDesktop")
       compare(rule[0].params.value, false)
     }
+
+    function openCard() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "device"
+      var card = null
+      tryVerify(function () { card = findBy(page(view), "objectName", "accessCard"); return !!card })
+      return { view: view, card: card }
+    }
+
+    // Turn on for Agent control asks first. Cancel sends nothing. Turn on in
+    // the sheet sends 1 settings.set.
+    function test_agentControlAsksFirst() {
+      var o = openCard()
+      var sheet = findBy(o.view, "objectName", "confirmSheet")
+      var turn = findBy(o.card, "objectName", "computer-herdrControl")
+      compare(turn.text, "Turn on")
+      verify(!sheet.visible)
+      turn.clicked()
+      verify(sheet.visible)
+      compare(findBy(sheet, "objectName", "confirmTitle").text, "Turn on Agent control?")
+      verify(findBy(sheet, "objectName", "confirmText").text.indexOf("any command as your user through an agent") >= 0)
+      compare(requestsOf("settings.set").length, 0)
+      verify(findBy(sheet, "objectName", "confirmCancel").focus)
+      findBy(sheet, "objectName", "confirmCancel").clicked()
+      verify(!sheet.visible)
+      compare(requestsOf("settings.set").length, 0)
+      turn.clicked()
+      keyClick(Qt.Key_Escape)
+      verify(!sheet.visible)
+      compare(requestsOf("settings.set").length, 0)
+      turn.clicked()
+      findBy(sheet, "objectName", "confirmOk").clicked()
+      verify(!sheet.visible)
+      var sent = requestsOf("settings.set")
+      compare(sent.length, 1)
+      compare(sent[0].params.key, "herdrControl")
+      compare(sent[0].params.value, true)
+      tryCompare(turn, "text", "Turn off")
+    }
+
+    function test_agentControlTurnOff() {
+      mock.setState(function (s) { s.settings.herdrControl = true })
+      var o = openCard()
+      var sheet = findBy(o.view, "objectName", "confirmSheet")
+      var turn = findBy(o.card, "objectName", "computer-herdrControl")
+      compare(turn.text, "Turn off")
+      turn.clicked()
+      verify(!sheet.visible)
+      var sent = requestsOf("settings.set")
+      compare(sent.length, 1)
+      compare(sent[0].params.key, "herdrControl")
+      compare(sent[0].params.value, false)
+    }
+
+    function test_agentTerminalsHasNoKey() {
+      var o = openCard()
+      verify(!!findBy(o.card, "objectName", "access-herdrTerminals"))
+      var key = findBy(o.card, "objectName", "computer-herdrTerminals")
+      verify(!key || !key.visible)
+    }
   }
 }
