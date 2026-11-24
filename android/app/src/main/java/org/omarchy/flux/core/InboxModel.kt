@@ -160,6 +160,14 @@ fun target(scope: String?, devices: List<DeviceUi>, can: (DeviceUi) -> Boolean =
     }
 }
 
+/**
+ * The computer for the + key of Chats. A computer in [scope] is the target
+ * when it is online. With all computers in scope, the user picks from the
+ * online computers. The page of the computer shows when herdr is not
+ * running or Agent control is off.
+ */
+fun newAgentTarget(scope: String?, devices: List<DeviceUi>): Target = target(scope, devices)
+
 /** True when a paired computer in [scope] has a feature, even while it is not reachable. */
 fun hasFeature(scope: String?, devices: List<DeviceUi>, can: (DeviceUi) -> Boolean): Boolean =
     devices.any { it.paired && (scope == null || it.id == scope) && can(it) }

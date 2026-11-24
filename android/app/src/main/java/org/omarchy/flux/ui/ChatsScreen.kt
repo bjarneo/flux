@@ -77,10 +77,10 @@ import org.omarchy.flux.core.UiState
 import org.omarchy.flux.core.agentsOfPickedSessions
 import org.omarchy.flux.core.chatList
 import org.omarchy.flux.core.inScope
+import org.omarchy.flux.core.newAgentTarget
 import org.omarchy.flux.core.needsEmptyLine
 import org.omarchy.flux.core.showsWake
 import org.omarchy.flux.core.stripComputers
-import org.omarchy.flux.core.target
 
 /** The first time that the list showed each row whose start is not known. It lives as long as the app process. */
 private val listClock = SeenClock()
@@ -129,14 +129,9 @@ fun ChatsScreen(
         chatList(devices, shownApproval, log, listClock, System.currentTimeMillis(), query).inScope(scope)
     }
     val paired = devices.any { it.paired }
-    // The + key starts an agent or a terminal on a computer that lets this phone control herdr.
+    // The + key starts an agent or a terminal on the computer in scope. The page of the computer shows why it cannot start one.
     val newAgent = {
-        val t = target(null, devices) { it.herdr?.anyRunning == true && it.herdr.control }
-        if (t is org.omarchy.flux.core.Target.None && t.device == null) {
-            FluxCore.toast("No computer lets this phone start an agent. To turn on Agent control, open Flux on a computer and use the Access card.")
-        } else {
-            picker.run(t, "Start an agent on") { actions.open(Route(it.id, NEW_PANE_PAGE)) }
-        }
+        picker.run(newAgentTarget(scope, devices), "Start an agent on") { actions.open(Route(it.id, NEW_PANE_PAGE)) }
     }
     Column(Modifier.fillMaxSize().imePadding()) {
         Box(Modifier.statusBarsPadding()) {

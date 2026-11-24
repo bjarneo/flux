@@ -112,6 +112,20 @@ class InboxModelTest {
     }
 
     @Test
+    fun thePlusKeyStartsOnTheSelectedComputer() {
+        val a = device("a", agents = listOf(working))
+        val b = device("b")
+        val off = device("off", online = false)
+        // The selected computer is the target, also when it has no Agent control. Its page shows the reason.
+        assertEquals(Target.One(b), newAgentTarget("b", listOf(a, b)))
+        assertEquals(Target.One(a), newAgentTarget("a", listOf(a, b)))
+        assertEquals(Target.None(off), newAgentTarget("off", listOf(a, off)))
+        // With all computers in scope, the user picks from each online computer.
+        assertEquals(Target.Ask(listOf(a, b)), newAgentTarget(null, listOf(a, b, off)))
+        assertEquals(Target.None(null), newAgentTarget(null, listOf(off)))
+    }
+
+    @Test
     fun thePromptIsTheTextAboveTheChoices() {
         val lines = listOf(
             "● I added the migration.",
