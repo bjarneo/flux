@@ -26,8 +26,9 @@ type DND struct {
 	kind      string
 	statePath string
 
-	// The state file of the Omarchy shell changes only when Do Not Disturb
-	// changes. Get reads the file again only when its time or size changes.
+	// Older Omarchy shells have no isDnd call. They write Do Not Disturb to
+	// statePath only when it changes. getLegacy reads the file again only
+	// when its time or size changes.
 	mu       sync.Mutex
 	cached   bool
 	modTime  time.Time
@@ -83,16 +84,32 @@ func (d *DND) Get() (on, ok bool) {
 	return false, false
 }
 
-// getOmarchy reads the state file of the Omarchy shell. The shell writes
-// the file atomically 200 ms after a change.
+// getOmarchy asks the running Omarchy shell. The shell keeps the state in
+// its notification service and in files that change between versions, so
+// the IPC call is the stable source. The call takes about 10 ms. When the
+// call fails, getOmarchy reads the state file of an older shell.
 func (d *DND) getOmarchy() (on, ok bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), dndTimeout)
+	defer cancel()
+	out, err := dndCommand(ctx, "omarchy-shell", "notifications", "isDnd").Output()
+	if err == nil {
+		if on, ok = omarchyDND(string(out)); ok {
+			return on, true
+		}
+	}
+	return d.getLegacy()
+}
+
+// getLegacy reads the state file of an older Omarchy shell. The shell
+// writes the file atomically 200 ms after a change.
+func (d *DND) getLegacy() (on, ok bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	st, err := os.Stat(d.statePath)
 	if errors.Is(err, os.ErrNotExist) {
-		// The shell writes the file at the first change. With no file,
-		// Do Not Disturb is off.
-		return false, true
+		// The shell does not answer and no older shell wrote a file.
+		// The state is unknown.
+		return false, false
 	}
 	if err != nil {
 		return false, false
@@ -140,6 +157,18 @@ func (d *DND) Set(on bool) error {
 		return nil
 	}
 	return errors.New("no supported notification service")
+}
+
+// omarchyDND reads the output of `omarchy-shell notifications isDnd`. The
+// shell prints "on" or "off".
+func omarchyDND(out string) (on, ok bool) {
+	switch strings.TrimSpace(out) {
+	case "on":
+		return true, true
+	case "off":
+		return false, true
+	}
+	return false, false
 }
 
 // parseOmarchyDND reads the "dnd" key of notifications.json. A file with
