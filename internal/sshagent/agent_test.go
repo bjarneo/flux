@@ -135,6 +135,26 @@ func need(t *testing.T, tools ...string) {
 	}
 }
 
+// systemTool returns the path of a tool from the system folders, and skips
+// the test when the tool is not installed. A wrapper of the tool earlier on
+// the PATH must not change what the test checks. For example, a wrapper
+// that logs in twice makes the phone sign twice. Without a system copy, it
+// uses the PATH.
+func systemTool(t *testing.T, name string) string {
+	t.Helper()
+	for _, dir := range []string{"/usr/bin", "/bin"} {
+		path := filepath.Join(dir, name)
+		if st, err := os.Stat(path); err == nil && !st.IsDir() && st.Mode()&0o111 != 0 {
+			return path
+		}
+	}
+	path, err := exec.LookPath(name)
+	if err != nil {
+		t.Skipf("%s is not installed", name)
+	}
+	return path
+}
+
 // run runs a program with the agent socket and returns its output.
 func run(t *testing.T, sock, dir string, stdin []byte, name string, args ...string) (string, error) {
 	t.Helper()
@@ -290,11 +310,11 @@ func TestGitCommitSignature(t *testing.T) {
 // TestSSHLogin logs in with the real ssh client to a Go SSH server that
 // accepts only the key of the phone.
 func TestSSHLogin(t *testing.T) {
-	need(t, "ssh")
+	ssh := systemTool(t, "ssh")
 	phone := newFakePhone(t)
 	sock := serveAgent(t, phone)
 	port := sshServer(t, phone.pub)
-	out, err := run(t, sock, t.TempDir(), nil, "ssh", "-F", "/dev/null",
+	out, err := run(t, sock, t.TempDir(), nil, ssh, "-F", "/dev/null",
 		"-o", "IdentityFile=none", "-o", "BatchMode=yes", "-o", "UserKnownHostsFile=/dev/null",
 		"-o", "GlobalKnownHostsFile=/dev/null", "-o", "StrictHostKeyChecking=no", "-o", "ControlPath=none",
 		"-o", "PreferredAuthentications=publickey", "-o", "IdentityAgent="+sock, "-o", "LogLevel=ERROR",
@@ -621,7 +641,7 @@ func TestProgramReadsProc(t *testing.T) {
 // OpenSSH server offers the host-bound login, so the phone signs that
 // form. The test skips when sshd does not start without root.
 func TestSSHLoginToOpenSSH(t *testing.T) {
-	need(t, "ssh", "ssh-keygen")
+	ssh, keygen := systemTool(t, "ssh"), systemTool(t, "ssh-keygen")
 	sshd, err := exec.LookPath("sshd")
 	if err != nil {
 		t.Skip("sshd is not installed")
@@ -630,7 +650,7 @@ func TestSSHLoginToOpenSSH(t *testing.T) {
 	sock := serveAgent(t, phone)
 	dir := t.TempDir()
 	hostKey := filepath.Join(dir, "host_key")
-	if out, err := exec.Command("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", hostKey).CombinedOutput(); err != nil {
+	if out, err := exec.Command(keygen, "-q", "-t", "ed25519", "-N", "", "-f", hostKey).CombinedOutput(); err != nil {
 		t.Fatalf("ssh-keygen: %v\n%s", err, out)
 	}
 	authorized := filepath.Join(dir, "authorized_keys")
@@ -677,7 +697,7 @@ func TestSSHLoginToOpenSSH(t *testing.T) {
 	if user == "" {
 		t.Skip("USER is not set")
 	}
-	out, err := run(t, sock, dir, nil, "ssh", "-F", "/dev/null",
+	out, err := run(t, sock, dir, nil, ssh, "-F", "/dev/null",
 		"-o", "IdentityFile=none", "-o", "BatchMode=yes", "-o", "UserKnownHostsFile=/dev/null",
 		"-o", "GlobalKnownHostsFile=/dev/null", "-o", "StrictHostKeyChecking=no", "-o", "ControlPath=none",
 		"-o", "PreferredAuthentications=publickey", "-o", "IdentityAgent="+sock, "-o", "LogLevel=ERROR",
