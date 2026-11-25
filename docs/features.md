@@ -508,7 +508,9 @@ Enable **Sync Do Not Disturb** in **Settings > This phone on the computer** on t
 Android requests Do Not Disturb access the first time.
 Each side sends state only after a change, so daemon startup does not change either side.
 
-The desktop reads the Omarchy shell notification state every two seconds.
+The desktop asks the Omarchy shell for the notification state every two seconds.
+It runs `omarchy-shell notifications isDnd`.
+For an older shell without this call, it reads `~/.local/state/omarchy/notifications.json`.
 Without the Omarchy shell, it uses mako's `do-not-disturb` mode.
 The daemon log identifies the selected service.
 

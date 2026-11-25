@@ -2,10 +2,14 @@ package desktop
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -19,13 +23,24 @@ const dndTimeout = 5 * time.Second
 // DND reads and sets Do Not Disturb of the desktop notification service.
 // It supports the notification service of the Omarchy shell, and mako.
 type DND struct {
-	kind string
+	kind      string
+	statePath string
+
+	// Older Omarchy shells have no isDnd call. They write Do Not Disturb to
+	// statePath only when it changes. getLegacy reads the file again only
+	// when its time or size changes.
+	mu       sync.Mutex
+	cached   bool
+	modTime  time.Time
+	size     int64
+	cachedOn bool
 }
 
 // NewDND picks the notification service of this desktop. Kind returns an
 // empty string when Flux supports none of the services on this desktop.
 func NewDND() *DND {
-	d := &DND{}
+	home, _ := os.UserHomeDir()
+	d := &DND{statePath: filepath.Join(home, ".local", "state", "omarchy", "notifications.json")}
 	switch {
 	case onPath("omarchy-shell"):
 		d.kind = "omarchy-shell"
@@ -56,13 +71,7 @@ func (d *DND) Kind() string { return d.kind }
 func (d *DND) Get() (on, ok bool) {
 	switch d.kind {
 	case "omarchy-shell":
-		ctx, cancel := context.WithTimeout(context.Background(), dndTimeout)
-		defer cancel()
-		out, err := dndCommand(ctx, "omarchy-shell", "notifications", "dndState").Output()
-		if err != nil {
-			return false, false
-		}
-		return omarchyDND(string(out))
+		return d.getOmarchy()
 	case "mako":
 		ctx, cancel := context.WithTimeout(context.Background(), dndTimeout)
 		defer cancel()
@@ -73,6 +82,51 @@ func (d *DND) Get() (on, ok bool) {
 		return makoDND(string(out)), true
 	}
 	return false, false
+}
+
+// getOmarchy asks the running Omarchy shell. The shell keeps the state in
+// its notification service and in files that change between versions, so
+// the IPC call is the stable source. The call takes about 10 ms. When the
+// call fails, getOmarchy reads the state file of an older shell.
+func (d *DND) getOmarchy() (on, ok bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), dndTimeout)
+	defer cancel()
+	out, err := dndCommand(ctx, "omarchy-shell", "notifications", "isDnd").Output()
+	if err == nil {
+		if on, ok = omarchyDND(string(out)); ok {
+			return on, true
+		}
+	}
+	return d.getLegacy()
+}
+
+// getLegacy reads the state file of an older Omarchy shell. The shell
+// writes the file atomically 200 ms after a change.
+func (d *DND) getLegacy() (on, ok bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	st, err := os.Stat(d.statePath)
+	if errors.Is(err, os.ErrNotExist) {
+		// The shell does not answer and no older shell wrote a file.
+		// The state is unknown.
+		return false, false
+	}
+	if err != nil {
+		return false, false
+	}
+	if d.cached && st.ModTime().Equal(d.modTime) && st.Size() == d.size {
+		return d.cachedOn, true
+	}
+	b, err := os.ReadFile(d.statePath)
+	if err != nil {
+		return false, false
+	}
+	on, err = parseOmarchyDND(b)
+	if err != nil {
+		return false, false
+	}
+	d.cached, d.modTime, d.size, d.cachedOn = true, st.ModTime(), st.Size(), on
+	return on, true
 }
 
 // Set turns Do Not Disturb on or off.
@@ -105,9 +159,8 @@ func (d *DND) Set(on bool) error {
 	return errors.New("no supported notification service")
 }
 
-// omarchyDND reads the output of `omarchy-shell notifications dndState`.
-// The shell answers through the notification service that is running, so it
-// also works when a plugin replaces the built-in one.
+// omarchyDND reads the output of `omarchy-shell notifications isDnd`. The
+// shell prints "on" or "off".
 func omarchyDND(out string) (on, ok bool) {
 	switch strings.TrimSpace(out) {
 	case "on":
@@ -116,6 +169,18 @@ func omarchyDND(out string) (on, ok bool) {
 		return false, true
 	}
 	return false, false
+}
+
+// parseOmarchyDND reads the "dnd" key of notifications.json. A file with
+// no key means off.
+func parseOmarchyDND(b []byte) (bool, error) {
+	var s struct {
+		DND *bool `json:"dnd"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return false, err
+	}
+	return s.DND != nil && *s.DND, nil
 }
 
 // makoDND reports whether the output of `makoctl mode` has the Do Not
