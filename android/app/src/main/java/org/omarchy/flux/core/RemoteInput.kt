@@ -39,6 +39,25 @@ object RemoteInput {
     /** A positive [dy] scrolls down, and a positive [dx] scrolls right. */
     fun scroll(dx: Float, dy: Float) = Packet(Types.MOUSEPAD_REQUEST, bodyOf("scroll" to true, "dx" to round(dx), "dy" to round(dy)))
 
+    /**
+     * True when the touchpad scrolls the natural way, so the content moves
+     * with the fingers. [mode] is the setting of this phone. [computer] is
+     * the naturalScroll of flux.input, or null when the computer does not
+     * tell it.
+     */
+    fun naturalScroll(mode: ScrollMode, computer: Boolean?): Boolean = when (mode) {
+        ScrollMode.Natural -> true
+        ScrollMode.Traditional -> false
+        ScrollMode.Computer -> computer ?: true
+    }
+
+    /**
+     * The scroll for a motion of 2 fingers on the touchpad. A positive [dy]
+     * is a motion down. With [natural], the content moves with the fingers,
+     * so a motion down scrolls up.
+     */
+    fun touchpadScroll(dx: Float, dy: Float, natural: Boolean): Packet = if (natural) scroll(-dx, -dy) else scroll(dx, dy)
+
     fun click(c: Click) = Packet(Types.MOUSEPAD_REQUEST, bodyOf(c.field to true))
 
     /** Presses the left button for a drag, or releases it. */

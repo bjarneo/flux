@@ -73,6 +73,7 @@ systemctl --user edit fluxd
 
 `flux-cli doctor` shows which unit file systemd loads for `fluxd.service`, and whether its program exists.
 It also checks that no other program uses UDP port 12100, the discovery port of `fluxd`.
+When the Herdr app runs herdr-core and the herdr server does not run, it says that Flux reads only the herdr server and that agents of the Herdr app do not show on the phone.
 
 When `fluxd` does not answer, `flux-cli` tells you the cause:
 
@@ -120,6 +121,10 @@ flux-cli accept DEVICE_ID 5EE6 825F 974E D59A
 flux-cli reject "Pixel 8"
 flux-cli unpair "Pixel 8"
 ```
+
+`flux-cli discover` sends the identity of the computer over UDP and asks Avahi for the address of each Flux device again.
+`fluxd` then connects to each device that it can reach.
+Use it when a phone that is on the network does not show.
 
 The verification key has 16 uppercase hex digits in 4 groups of 4, for example `5EE6 825F 974E D59A`.
 Compare all 16 characters on both devices before you accept.
@@ -207,6 +212,27 @@ flux-cli pair 9f1c0e5b7a2d4c3e8b6a1f0d2c4e6a8b
 ```
 
 See [phone pairing](features.md#pair-a-phone) and [security](security.md).
+
+### Pair by address
+
+On a network that blocks mDNS and broadcasts, for example eduroam or a guest Wi-Fi with client isolation, discovery finds no device.
+To pair, open Flux on the phone, then give the IP address or the host name of the phone:
+
+```sh
+flux-cli pair --address 192.168.1.20
+flux-cli pair --address 100.101.102.103
+flux-cli pair --address pixel-8.tailnet.ts.net:12100
+```
+
+`fluxd` connects to the address and gets the device ID from the TLS certificate of the device.
+Without a port, it tries each port from 12100 to 12108.
+Then `flux-cli pair --address` shows the 16-character key and asks you to confirm it, as `flux-cli pair` does.
+The key comparison authenticates the device, also when you typed a wrong address.
+
+The phone takes a link from a new computer only while Flux is on the screen.
+The 2 devices must reach each other over TCP.
+A network that also blocks unicast traffic between its clients needs a VPN, such as [Tailscale](tailscale.md).
+To find the IP address of an Android phone, open **Settings > About phone > Status information**, or the details of the Wi-Fi network.
 
 ## Reach a device away from the local network
 
@@ -316,6 +342,9 @@ flux-cli webcam stop
 flux-cli mic
 flux-cli mic start
 flux-cli mic stop
+flux-cli speaker
+flux-cli speaker start
+flux-cli speaker stop
 flux-cli screen
 flux-cli screen stop
 flux-cli desktop
@@ -323,19 +352,24 @@ flux-cli desktop stop
 flux-cli browse
 flux-cli browse stop
 flux-cli approve
+flux-cli ssh
+flux-cli ssh key
+flux-cli ssh socket
 ```
 
 Start camera, microphone, and screen capture on the phone.
 `flux-cli webcam start` and `flux-cli mic start` ask the phone to start its camera or its microphone.
+`flux-cli speaker start` asks the phone to play the audio of this computer.
 The phone asks you first, and the stream starts only after you tap start on the phone.
 On success, the command prints the device:
 
 ```text
 Asked Pixel 8 to start the webcam. Confirm on Pixel 8.
+Asked Pixel 8 to play the audio of this computer. Confirm on Pixel 8.
 ```
 
 Without `--device`, the command selects the only paired, connected device that can take the request.
-For these 2 commands, `--device NAME` can also come after `start`:
+For these 3 commands, `--device NAME` can also come after `start`:
 
 ```sh
 flux-cli webcam start --device "Pixel 8"
@@ -343,11 +377,29 @@ flux-cli webcam start --device "Pixel 8"
 
 See [start from the computer](camera.md#start-from-the-computer) for what the phone shows and for the errors.
 
+`flux-cli speaker` shows whether a phone plays the audio of this computer, and which output `fluxd` muted for it.
+`flux-cli speaker stop` ends the stream and turns the sound of that output on again:
+
+```text
+Pixel 8 plays the audio of this computer, 48000 Hz, stereo
+Laptop Speakers is muted until the stream stops.
+Stop it with: flux-cli speaker stop
+```
+
+See [phone as speaker](camera.md#phone-as-speaker).
+
 `flux-cli desktop` shows whether a phone shows the screen of this computer, and `flux-cli desktop stop` ends it.
+The same commands show and stop the [extended screen](remote-desktop.md#extend-the-screen) of a phone or a tablet.
 `flux-cli browse` shows the devices that browse this computer with [Browse PC](features.md#browse-pc).
 `flux-cli browse stop` ends each session, or only the session of the device that `--device` names.
 See [remote desktop](remote-desktop.md).
 See [camera and streams](camera.md) for settings and [fingerprint approval](approvals.md) for root setup commands.
+
+`flux-cli ssh` prints the SSH key of each connected Android phone with SSH key on, and the ssh-agent socket of `fluxd`.
+`flux-cli ssh key` prints only the lines for `authorized_keys`, and `flux-cli ssh socket` prints only the socket path.
+Add `--json` for the socket and the keys with their device IDs and fingerprints.
+When no connected phone has a key, the command exits with 1.
+See [SSH key on the phone](ssh.md).
 
 ## Remote access
 

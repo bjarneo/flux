@@ -198,6 +198,13 @@ public struct HerdrState: Sendable, Equatable {
 /// waits for its answer. The old lines stay on screen until the new lines
 /// come.
 public struct HerdrOutput: Sendable, Equatable {
+    /// Two outputs are equal when they show the same screen. The parse time `at` is not part of the comparison,
+    /// so a new read of an unchanged screen is not a new output.
+    public static func == (a: HerdrOutput, b: HerdrOutput) -> Bool {
+        a.pane == b.pane && a.loading == b.loading && a.lines == b.lines && a.truncated == b.truncated
+            && a.error == b.error && a.request == b.request && a.view == b.view && a.path == b.path
+    }
+
     public var pane: String
     public var loading: Bool
     public var lines: [TermLine] {
@@ -208,13 +215,15 @@ public struct HerdrOutput: Sendable, Equatable {
     public var request: Int?
     public var view: String
     public var path: String
+    /// The time that this device parsed the output, or nil when it is not known.
+    public var at: Date?
     public private(set) var text = ""
     /// The choices of the dialog at the end of the output: a numbered
     /// dialog, or a menu row, see `AgentChoice.findMenu`.
     public private(set) var choices: [AgentChoice] = []
 
     public init(pane: String, loading: Bool = true, lines: [TermLine] = [], truncated: Bool = false, error: String? = nil,
-                request: Int? = nil, view: String = "ansi", path: String = "") {
+                request: Int? = nil, view: String = "ansi", path: String = "", at: Date? = nil) {
         self.pane = pane
         self.loading = loading
         self.lines = lines
@@ -223,6 +232,7 @@ public struct HerdrOutput: Sendable, Equatable {
         self.request = request
         self.view = view
         self.path = path
+        self.at = at
         derive()
     }
 
@@ -345,6 +355,13 @@ public enum HerdrWire {
     /// Asks for the recent output of a pane, with its colors.
     public static func read(pane: String) -> Packet {
         Packet(PacketType.fluxHerdr, ["kind": "read", "pane": pane, "lines": readLines, "format": "ansi"])
+    }
+
+    /// Asks for the last `lines` lines of a pane, with its colors and the
+    /// number `request`. A newer fluxd sends the number back, so that this
+    /// answer is not taken for the answer to another read.
+    public static func read(pane: String, lines: Int, request: Int) -> Packet {
+        Packet(PacketType.fluxHerdr, ["kind": "read", "pane": pane, "lines": lines, "format": "ansi", "request": request])
     }
 
     /// Sends key presses to the agent in a pane.
@@ -488,7 +505,7 @@ public enum HerdrWire {
     public static let maxText = 1 << 20
 
     /// Parses the body of an output packet. It returns nil for a body that is not an output.
-    public static func output(_ body: [String: JSONValue]) -> HerdrOutput? {
+    public static func output(_ body: [String: JSONValue], now: Date = Date()) -> HerdrOutput? {
         guard body["kind"]?.string == "output", let pane = body["pane"]?.string, !pane.isEmpty else { return nil }
         let error = body["error"]?.string.flatMap { $0.isEmpty ? nil : $0 }
         let (text, cut) = tail(body["text"]?.string ?? "", max: maxText)
@@ -502,7 +519,8 @@ public enum HerdrWire {
             error: error,
             request: body["request"]?.int,
             view: body["view"]?.string ?? "ansi",
-            path: body["path"]?.string ?? ""
+            path: body["path"]?.string ?? "",
+            at: now
         )
     }
 

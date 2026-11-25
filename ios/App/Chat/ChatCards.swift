@@ -1,10 +1,10 @@
 import FluxKit
-import Observation
 import SwiftUI
 
-// The cards of the chat: the cards of the computers on the leading side,
-// and the bubbles and file cards of this iPhone on the trailing side. They
-// follow the Inbox Send 3b design and the Chat of Flux for Android.
+// The cards of the chat of a computer: the cards of the computer on the
+// leading side, and the bubbles and file cards of this iPhone on the
+// trailing side. The list of chats shows the approval and the pair request
+// with the same cards. They follow the Chat of Flux for Android.
 
 // MARK: Card of a computer
 
@@ -20,7 +20,8 @@ struct ChatCardAction {
 /// detail follow, then the progress bar, `extra`, and the action. A card
 /// that needs the user (`ask`) takes the full `width` and a red border of
 /// 2 pt. The other cards take 88% of it. `mono` sets the title in mono,
-/// for a file name or a clip. VoiceOver reads the top row as 1 line.
+/// for a file name or a clip. `tile` gives the card the tile corners, for
+/// the list of chats. VoiceOver reads the top row as 1 line.
 struct ChatCard<Mark: View, Extra: View>: View {
     let state: String
     let color: Color
@@ -34,13 +35,14 @@ struct ChatCard<Mark: View, Extra: View>: View {
     let action: ChatCardAction?
     let titleLines: Int?
     let width: CGFloat
+    let tile: Bool
     let mark: Mark
     let extra: Extra
     @Environment(\.tn) private var tn
 
     init(state: String, color: Color, source: String, time: Date, title: String, mono: Bool = false, detail: String = "",
          ask: Bool = false, progress: Double? = nil, action: ChatCardAction? = nil, titleLines: Int? = nil, width: CGFloat,
-         @ViewBuilder mark: () -> Mark, @ViewBuilder extra: () -> Extra) {
+         tile: Bool = false, @ViewBuilder mark: () -> Mark, @ViewBuilder extra: () -> Extra) {
         self.state = state
         self.color = color
         self.source = source
@@ -53,12 +55,15 @@ struct ChatCard<Mark: View, Extra: View>: View {
         self.action = action
         self.titleLines = titleLines
         self.width = width
+        self.tile = tile
         self.mark = mark()
         self.extra = extra()
     }
 
     var body: some View {
-        let shape = UnevenRoundedRectangle(topLeadingRadius: 14, bottomLeadingRadius: 4, bottomTrailingRadius: 14, topTrailingRadius: 14, style: .continuous)
+        let corner: CGFloat = tile ? TiledMetrics.tileCorner : 14
+        let shape = UnevenRoundedRectangle(topLeadingRadius: corner, bottomLeadingRadius: tile ? corner : 4, bottomTrailingRadius: corner,
+                                           topTrailingRadius: corner, style: .continuous)
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
@@ -139,16 +144,17 @@ extension ChatCard where Extra == EmptyView {
          ask: Bool = false, progress: Double? = nil, action: ChatCardAction? = nil, titleLines: Int? = nil, width: CGFloat,
          @ViewBuilder mark: () -> Mark) {
         self.init(state: state, color: color, source: source, time: time, title: title, mono: mono, detail: detail, ask: ask,
-                  progress: progress, action: action, titleLines: titleLines, width: width, mark: mark) { EmptyView() }
+                  progress: progress, action: action, titleLines: titleLines, width: width, tile: false, mark: mark) { EmptyView() }
     }
 }
 
-/// A button of a card that needs the user, 48 pt high: `primary` has the
-/// accent fill, the other the tonal fill.
+/// A button of a card that needs the user, `height` high: `primary` has
+/// the accent fill, the other the tonal fill.
 private struct CardButton: View {
     let label: String
     var icon: String?
     let primary: Bool
+    var height: CGFloat = 48
     let action: () -> Void
     @Environment(\.tn) private var tn
 
@@ -165,283 +171,11 @@ private struct CardButton: View {
                     .lineLimit(1)
             }
             .foregroundStyle(primary ? tn.onAccent : tn.text)
-            .frame(maxWidth: .infinity, minHeight: 48)
+            .frame(maxWidth: .infinity, minHeight: height)
             .background(tileShape(12).fill(primary ? tn.accent : tn.line))
             .contentShape(tileShape(12))
         }
         .buttonStyle(.plain)
-    }
-}
-
-// MARK: Agent
-
-/// An agent: what it waits for, what it works on, or that it is done.
-///
-/// The one-tap rule: a choice never answers a question that the user did
-/// not see. The card reads the output when it shows, and only an output
-/// that came after that read shows choices. The question keeps the lines
-/// nearest the choices, because they hold the command that a choice
-/// approves, and the card never cuts them. Each answer asks for Face ID or
-/// the passcode first. After an answer, the choices stay off until a new
-/// output comes, so that a second tap does not answer the next question. A
-/// choice that rejects the action opens a reply in the dock. `at` is the
-/// start of the status.
-struct ChatAgentCard: View {
-    let item: InboxItem
-    let deviceId: String
-    let agent: HerdrAgent
-    let control: Bool
-    let at: Date
-    let width: CGFloat
-    let many: Bool
-    @Environment(AppModel.self) private var model
-    @Environment(\.tn) private var tn
-    @Environment(\.scenePhase) private var scenePhase
-    /// True after this card asked the computer for the output.
-    @State private var didRead = false
-    /// The output that the last answer answered.
-    @State private var answered: HerdrOutput?
-    @State private var lockError: String?
-    /// The number of the last reply before this card answered. The card
-    /// shows only the replies that it sent.
-    @State private var sentAfter: Int?
-    /// True after Flux left the screen, until it comes back. The Face ID
-    /// prompt makes Flux inactive, so only the background counts.
-    @State private var wasAway = false
-    /// Counts the returns of Flux to the screen.
-    @State private var visit = 0
-
-    private struct ReadKey: Equatable {
-        var key: String
-        var visit: Int
-    }
-
-    var body: some View {
-        let plugin = model.core.plugin(HerdrPlugin.self)
-        let out: HerdrOutput? = model.demo ? DemoMode.output(pane: agent.pane, review: false) : plugin?.model.prompt(deviceId, pane: agent.pane)
-        let blocked = agent.status == .blocked
-        let working = agent.status == .working
-        let fresh = model.demo || (didRead && out?.loading == false && out?.error == nil)
-        let replying = model.chatReply.map { $0.deviceId == deviceId && $0.pane == agent.pane } ?? false
-        let choices: [AgentChoice] = blocked && fresh && !replying ? out?.choices ?? [] : []
-        let texts = out?.lines.map(\.text)
-        let ask = texts.flatMap { AgentAsk.find($0, maxLines: 4) }
-        let prompt = ask == nil ? texts.map { Inbox.agentPrompt($0, maxLines: 4) } ?? "" : ""
-        let thread = !blocked && fresh ? texts.map(AgentThread.parse) : nil
-        let reply = ownReply(plugin)
-        let sending = reply?.sending == true
-        let since = model.demo ? DemoMode.since(pane: agent.pane) : plugin?.model.agentSince(device: deviceId, pane: agent.pane)
-        let source = (item.sourceParts + (many ? [item.computer] : [])).joined(separator: " · ")
-        let openThread = ChatCardAction(label: "Open thread", run: { model.chatPath.append(.feature(.agent(deviceId, agent.pane))) })
-        let action: ChatCardAction? = replying ? ChatCardAction(label: "Writing a reply below") : (choices.isEmpty ? openThread : nil)
-        // A working agent shows its time, so its card draws again each second.
-        TimelineView(.periodic(from: .now, by: working ? 1 : 3600)) { context in
-            ChatCard(state: item.stateWord, color: tn.tone(item.tone), source: source, time: at, title: item.title,
-                     detail: detail(thread: thread, since: since, now: context.date), ask: blocked, action: action, width: width) {
-                StatusMark(status: agent.status)
-            } extra: {
-                if blocked {
-                    question(out: out, fresh: fresh, ask: ask, prompt: prompt)
-                    actions(out: out, choices: choices, problem: lockError ?? reply?.error, sending: sending)
-                }
-            }
-        }
-        // The card reads the output when it shows, and again when Flux comes
-        // back from the background, because the question can change. A
-        // working agent shows its step from the output.
-        .task(id: ReadKey(key: item.key, visit: visit)) {
-            guard blocked || working, !model.demo else { return }
-            model.core.plugin(HerdrPlugin.self)?.readPrompt(deviceId, pane: agent.pane)
-            didRead = true
-        }
-        .onChange(of: agent.status, initial: true) { _, status in
-            ChatAnswers.shared.status(status, deviceId, pane: agent.pane)
-        }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .background { wasAway = true }
-            if phase == .active, wasAway {
-                wasAway = false
-                visit += 1
-            }
-        }
-    }
-
-    /// The question of a waiting agent: an error, lines while the output
-    /// loads, or the question and the command. The command has no line
-    /// limit, because a choice approves it.
-    @ViewBuilder
-    private func question(out: HerdrOutput?, fresh: Bool, ask: AgentAsk?, prompt: String) -> some View {
-        if let error = out?.error, out?.loading == false {
-            Text(error)
-                .font(.caption)
-                .foregroundStyle(tn.red)
-                .fixedSize(horizontal: false, vertical: true)
-        } else if !fresh {
-            LineSkeleton(widths: [0.8, 0.55], label: "Reading the question")
-                .padding(.vertical, 3)
-        } else if let ask {
-            if !ask.command && !ask.question.isEmpty {
-                Text(ask.question)
-                    .font(.footnote)
-                    .foregroundStyle(tn.text)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if !ask.lines.isEmpty {
-                Text(ask.lines.joined(separator: "\n"))
-                    .font(.caption.monospaced())
-                    .foregroundStyle(tn.sub)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        } else if !prompt.isEmpty {
-            Text(prompt)
-                .font(.caption.monospaced())
-                .foregroundStyle(tn.sub)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    /// The choices of a waiting agent, a problem, the note about
-    /// herdr_control, and the state of a reply that goes out.
-    @ViewBuilder
-    private func actions(out: HerdrOutput?, choices: [AgentChoice], problem: String?, sending: Bool) -> some View {
-        if !choices.isEmpty {
-            VStack(spacing: 6) {
-                ForEach(Array(choices.enumerated()), id: \.element.id) { i, c in
-                    AskChoiceButton(choice: c, primary: i == 0, enabled: control && !sending && out != answered && out?.lines != ChatAnswers.shared.told(deviceId, pane: agent.pane), minHeight: 44) {
-                        answer(c, out: out)
-                    }
-                }
-            }
-            .padding(.top, 6)
-        }
-        if let problem {
-            Text(problem)
-                .font(.caption)
-                .foregroundStyle(tn.red)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        if !control {
-            Text("To answer from this iPhone, set herdr_control = true on \(item.computer).")
-                .font(.caption)
-                .foregroundStyle(tn.sub)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        if sending {
-            HStack(spacing: 8) {
-                RingSpinner(size: 14)
-                Text("Sending")
-                    .font(.caption)
-                    .foregroundStyle(tn.sub)
-            }
-        }
-    }
-
-    /// The line under the title: the answer that the chat sent, the step,
-    /// and the time of a working agent. A finished agent reads no output, so
-    /// it shows its work time only in the demo.
-    private func detail(thread: AgentThread?, since: Date?, now: Date) -> String {
-        switch agent.status {
-        case .blocked:
-            return ""
-        case .working:
-            let answer = ChatAnswers.shared.answer(deviceId, pane: agent.pane).map { "You answered: \($0)" } ?? ""
-            let elapsed = since.map { AgentTime.when(.working, since: $0, now: now) } ?? thread?.elapsed ?? ""
-            let line = [answer, thread?.step ?? "", elapsed].filter { !$0.isEmpty }.joined(separator: " · ")
-            return line.isEmpty ? "Working" : line
-        default:
-            let done = doneText(thread?.worked ?? "")
-            return done == "Done" ? "Waits for the next prompt" : done
-        }
-    }
-
-    /// The last reply to the agent, when this card sent it.
-    private func ownReply(_ plugin: HerdrPlugin?) -> HerdrReply? {
-        guard let after = sentAfter, let r = plugin?.model.reply(deviceId, pane: agent.pane), r.seq > after else { return nil }
-        return r
-    }
-
-    /// Sends the keys of the choice, after Face ID or the passcode. A choice
-    /// that rejects the action opens a reply in the dock in its place.
-    private func answer(_ choice: AgentChoice, out: HerdrOutput?) {
-        if Chat.isTellChoice(choice) {
-            model.chatReply = ChatReply(deviceId: deviceId, pane: agent.pane, agent: agent.agent,
-                                        project: agent.project.isEmpty ? agent.workspace : agent.project,
-                                        computer: item.computer, choice: choice, lines: out?.lines ?? [])
-            return
-        }
-        if model.demo {
-            model.show(DemoMode.sendsNothing)
-            return
-        }
-        lockError = nil
-        let pane = agent.pane
-        let id = deviceId
-        ReplyLock.run(reason: "Answer agents on \(item.computer).", action: {
-            guard let plugin = model.core.plugin(HerdrPlugin.self) else { return }
-            // The check can take some seconds. A new question in that time
-            // takes no answer that the user gave to the old one.
-            guard let shown = out, plugin.model.prompt(id, pane: pane)?.lines == shown.lines else {
-                lockError = "The question changed. Read it, then answer again."
-                return
-            }
-            answered = out
-            sentAfter = plugin.model.replies[id]?.seq ?? 0
-            ChatAnswers.shared.sent(choice.label, id, pane: pane)
-            plugin.sendKeys(id, pane: pane, choice.keys)
-        }, onError: { lockError = $0 })
-    }
-}
-
-/// The answers that the chat sent to the agents, by computer and pane. An
-/// answer shows on the card of the agent while the agent works on it, for
-/// 10 minutes at most. The card of an agent changes when its status
-/// changes, so the answers live here and not in the card.
-@MainActor
-@Observable
-final class ChatAnswers {
-    static let shared = ChatAnswers()
-
-    private struct Entry {
-        var text: String
-        var lines: [TermLine] = []
-        var working = false
-        var at = Date()
-    }
-
-    private var entries: [String: Entry] = [:]
-
-    /// Keeps the answer `text` to the agent in `pane`. `lines` are the lines
-    /// of the question that a reply answered.
-    func sent(_ text: String, _ deviceId: String, pane: String, lines: [TermLine] = []) {
-        entries[deviceId + "|" + pane] = Entry(text: text, lines: lines)
-    }
-
-    /// The lines of the question that a reply of the chat answered, or nil.
-    /// The choices of that question stay off until the agent shows another
-    /// question, so that 1 tap does not answer it again.
-    func told(_ deviceId: String, pane: String) -> [TermLine]? {
-        guard let e = entries[deviceId + "|" + pane], !e.lines.isEmpty else { return nil }
-        return e.lines
-    }
-
-    /// The answer to show for the agent in `pane`, or nil.
-    func answer(_ deviceId: String, pane: String) -> String? {
-        guard let e = entries[deviceId + "|" + pane], e.working, Date().timeIntervalSince(e.at) < 600 else { return nil }
-        return e.text
-    }
-
-    /// The agent in `pane` has a new status. The answer shows while the
-    /// agent works, and goes when the agent stops working.
-    func status(_ status: AgentStatus, _ deviceId: String, pane: String) {
-        let key = deviceId + "|" + pane
-        guard let e = entries[key] else { return }
-        if status == .working {
-            if !e.working { entries[key]?.working = true }
-        } else if e.working {
-            entries[key] = nil
-        }
     }
 }
 
@@ -452,26 +186,30 @@ private func approvalLine(_ r: ApproveRequest) -> String {
     ["user \(r.user)", r.tty].filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.joined(separator: " · ")
 }
 
-/// A sudo, polkit, or enrollment request, with Deny and Approve. Approve
-/// opens the approval sheet, which asks for Face ID or Touch ID. It never
-/// approves by itself.
+/// A sudo, polkit, or enrollment request, with Deny and Approve. Deny acts
+/// in place. Approve opens the approval sheet, which asks for Face ID or
+/// Touch ID. It never approves by itself. `list` shows the card in the
+/// list of chats: the computer follows the service, the corners are the
+/// tile corners, and the buttons are 44 pt high.
 struct ApprovalCard: View {
     let item: InboxItem
     let request: ApproveRequest
     let at: Date
     let width: CGFloat
+    var list = false
     @Environment(AppModel.self) private var model
     @Environment(\.tn) private var tn
 
     var body: some View {
         // Deny and Approve share the width 1 to 1.6, as in the design.
         let inner = max(0, width - 24 - 8)
-        ChatCard(state: item.stateWord, color: tn.red, source: request.service, time: at, title: item.title,
-                 detail: approvalLine(request), ask: true, width: width) {
+        let height: CGFloat = list ? 44 : 48
+        ChatCard(state: item.stateWord, color: tn.red, source: list ? "\(request.service) · \(request.computerName)" : request.service,
+                 time: at, title: item.title, detail: approvalLine(request), ask: true, width: width, tile: list) {
             PulseDot(color: tn.red, size: 8)
         } extra: {
             HStack(spacing: 8) {
-                CardButton(label: "Deny", primary: false) {
+                CardButton(label: "Deny", primary: false, height: height) {
                     if model.demo {
                         model.show(DemoMode.sendsNothing)
                     } else if let plugin = model.core.plugin(ApprovePlugin.self), plugin.model.current?.id == request.id {
@@ -481,7 +219,7 @@ struct ApprovalCard: View {
                 }
                 .frame(width: inner / 2.6)
                 .accessibilityHint("Denies the request")
-                CardButton(label: request.kind == .approve ? "Approve" : "Enroll", icon: ApproveTexts.current.symbol, primary: true) {
+                CardButton(label: request.kind == .approve ? "Approve" : "Enroll", icon: ApproveTexts.current.symbol, primary: true, height: height) {
                     if model.demo {
                         model.show(DemoMode.sendsNothing)
                     } else {
@@ -496,21 +234,23 @@ struct ApprovalCard: View {
 }
 
 /// A computer that asks to pair. Compare the key opens the pairing sheet
-/// with the full key. It never pairs by itself.
+/// with the full key. It never pairs by itself. `list` shows the card in
+/// the list of chats, with the tile corners and a 44 pt button.
 struct PairCard: View {
     let item: InboxItem
     let deviceId: String
     let at: Date
     let width: CGFloat
+    var list = false
     @Environment(AppModel.self) private var model
     @Environment(\.tn) private var tn
 
     var body: some View {
         ChatCard(state: item.stateWord, color: tn.red, source: "", time: at, title: item.title,
-                 detail: "Compare the key on both screens.", ask: true, width: width) {
+                 detail: "Compare the key on both screens.", ask: true, width: width, tile: list) {
             PulseDot(color: tn.red, size: 8)
         } extra: {
-            CardButton(label: "Compare the key", primary: true) { model.pairingSheet = deviceId }
+            CardButton(label: "Compare the key", primary: true, height: list ? 44 : 48) { model.pairingSheet = deviceId }
                 .padding(.top, 6)
         }
     }
@@ -594,12 +334,14 @@ struct ClipCard: View {
 
 // MARK: What this iPhone sent
 
-/// Text, a link, or a clip that went out: a bubble at the trailing side in
-/// mono, at most 82% of `width`, with the meta line under it.
+/// Text, a link, or a clip that went out: a bubble at the trailing side,
+/// at most 82% of `width`, with the meta line under it. Text is in the body
+/// face, and a link or a clip with `mono` in mono.
 struct SentBubble: View {
     let text: String
     let meta: String
     let width: CGFloat
+    var mono = true
     @Environment(\.tn) private var tn
 
     var body: some View {
@@ -608,7 +350,7 @@ struct SentBubble: View {
             Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: 4) {
                 Text(text)
-                    .font(.footnote.monospaced())
+                    .font(mono ? .footnote.monospaced() : .subheadline)
                     .foregroundStyle(tn.text)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)

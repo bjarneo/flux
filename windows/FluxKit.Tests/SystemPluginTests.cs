@@ -222,7 +222,7 @@ public class SystemPluginTests
         dnd.Error = "no access";
         b.Send(Dnd(false));
         await Wait.UntilAsync(() => plugin.Model.LastError == "no access", "the error");
-        Assert.Contains("Flux cannot turn Do Not Disturb off: no access", t.Toasts);
+        await Wait.UntilAsync(() => t.Toasts.Contains("Flux cannot turn Do Not Disturb off: no access"), "the toast");
         Assert.Equal([true, false], dnd.Applied);
     }
 

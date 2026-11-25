@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.toggleable
@@ -39,10 +40,11 @@ import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.NotificationSync
 import org.omarchy.flux.core.SmsSync
 import org.omarchy.flux.core.UiState
+import org.omarchy.flux.core.hasAgents
 import org.omarchy.flux.service.FluxNotificationListener
 
 /** 1 sync switch: what it does, and its state. [key] names the switch, so that a refused permission shows under it. */
-private class SyncItem(
+internal class SyncItem(
     val key: String,
     @DrawableRes val icon: Int,
     val title: String,
@@ -55,28 +57,31 @@ private class SyncItem(
 private const val CALLS = "calls"
 private const val SMS = "sms"
 
-/** True when a paired computer sends herdr agents. Only then do the agent alerts show. */
-private fun hasAgents(state: UiState) = state.devices.any { it.paired && it.herdrSupported }
-
 /**
- * The number of sync switches that are on, and the number of switches. A
- * switch that needs an Android permission counts as on only with it.
+ * The sync switches of this phone, with the permission requests and the
+ * notices. [rows] draws the switches of [SyncSwitches.items] that it is
+ * given the keys of.
  */
-fun syncSummary(state: UiState): Pair<Int, Int> {
-    val on = buildList {
-        add(state.shareNotifications && state.notificationAccess)
-        add(state.syncClipboard)
-        add(state.callAlerts && state.callAccess)
-        if (state.smsSupported) add(state.smsSync && state.smsAccess)
-        add(state.syncDnd && state.dndAccess)
-        add(state.sendScreenshots && state.mediaAccess)
-        add(state.sendPhotos && state.mediaAccess)
-        if (hasAgents(state)) {
-            add(state.agentInputAlerts)
-            add(state.agentDoneAlerts)
+internal class SyncSwitches(
+    val items: List<SyncItem>,
+    private val state: UiState,
+    private val refused: String?,
+    private val refusedKey: String?,
+    private val askContacts: () -> Unit,
+) {
+    /** The switch [key] with its notice under it, or nothing when the switch is hidden. [flat] draws it with no tile. */
+    @Composable
+    fun Row(key: String, flat: Boolean = false) {
+        val s = items.firstOrNull { it.key == key } ?: return
+        SyncRow(s, flat)
+        // The notice shows under the switch that asked, where the user looks after the tap.
+        val text = refused
+        if (text != null && refusedKey == s.key) {
+            PermissionNotice(text)
+        } else if (s.key == SMS && state.smsSync && state.smsAccess && !state.contactsAccess) {
+            ContactsNotice(askContacts)
         }
     }
-    return on.count { it } to on.size
 }
 
 /**
@@ -85,7 +90,7 @@ fun syncSummary(state: UiState): Pair<Int, Int> {
  * needs an Android permission asks for it first.
  */
 @Composable
-fun SyncScreen(state: UiState, onBack: () -> Unit) {
+internal fun rememberSyncSwitches(state: UiState): SyncSwitches {
     val context = LocalContext.current
     // A permission that the user refused, and the switch that asked for it. The notice under
     // that switch tells what the permission is for and opens the app settings.
@@ -118,6 +123,13 @@ fun SyncScreen(state: UiState, onBack: () -> Unit) {
         } else {
             refuse(SMS, "Text messages need SMS access. Allow it in the app settings.")
         }
+    }
+    // Without the contacts, the computers show the numbers of the
+    // conversations. Android does not ask again after the user refused
+    // twice, so the notice then opens the app settings.
+    val askContacts = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        FluxCore.refresh()
+        if (granted) clearRefused() else refuse(SMS, "Names need access to the contacts. Allow Contacts in the app settings.")
     }
     // The first capture switch that turns on asks for access to photos.
     var asking by remember { mutableStateOf<CaptureKind?>(null) }
@@ -178,7 +190,12 @@ fun SyncScreen(state: UiState, onBack: () -> Unit) {
         // A tablet without a SIM slot has no text messages.
         if (state.smsSupported) {
             add(SyncItem(SMS, Ic.sms, "Text messages", "Shows text messages on the computers, and sends the replies from them.", state.smsSync && state.smsAccess) {
-                if (!state.smsAccess) askSms.launch(SmsSync.permissions()) else FluxCore.setSyncSms(!state.smsSync)
+                when {
+                    !state.smsAccess -> askSms.launch(SmsSync.permissions())
+                    // Access to SMS can come from the app settings. The switch then asks for the contacts.
+                    !state.smsSync && !state.contactsAccess -> askSms.launch(arrayOf(Manifest.permission.READ_CONTACTS))
+                    else -> FluxCore.setSyncSms(!state.smsSync)
+                }
             })
         }
         add(
@@ -206,26 +223,27 @@ fun SyncScreen(state: UiState, onBack: () -> Unit) {
             })
         }
     }
+    return SyncSwitches(sync, state, refused, refusedKey) { askContacts.launch(Manifest.permission.READ_CONTACTS) }
+}
 
-    CappedScrollColumn(bottom = 48.dp) {
-        TiledTopBar("Sync", onBack, context = "All computers")
-        T("These switches apply to every paired computer.", Modifier.padding(start = 4.dp, bottom = 12.dp), size = 14, color = Tn.sub)
-        Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
-            for (s in sync) {
-                SyncRow(s)
-                // The notice shows under the switch that asked, where the user looks after the tap.
-                val text = refused
-                if (text != null && refusedKey == s.key) PermissionNotice(text)
-            }
-        }
+/**
+ * Shows under Text messages while Flux cannot read the contacts. The
+ * computers then show the numbers of the conversations. [onAllow] asks
+ * for the contacts.
+ */
+@Composable
+private fun ContactsNotice(onAllow: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        T("The computers show numbers in place of names. Allow access to the contacts to show the names.", size = 13, color = Tn.sub, lineHeight = 1.3f)
+        FluxButton("Allow contacts", onAllow, Modifier.offset(x = (-12).dp), kind = ButtonKind.Text)
     }
 }
 
 /** A sync switch. TalkBack reads it as a switch with its state. */
 @Composable
-private fun SyncRow(s: SyncItem) {
+private fun SyncRow(s: SyncItem, flat: Boolean = false) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(TileShape).background(Tn.tile).border(1.dp, Tn.line, TileShape)
+        Modifier.fillMaxWidth().heightIn(min = 64.dp).tile(!flat)
             .toggleable(value = s.on, role = Role.Switch, onValueChange = { s.onToggle() })
             .padding(horizontal = 14.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),

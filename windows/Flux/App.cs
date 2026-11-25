@@ -53,7 +53,7 @@ public sealed class App : Application
         };
         try
         {
-            core = new FluxCore(paths, host, LanConfig.FromEnvironment(), Features.Plugins());
+            core = new FluxCore(paths, host, LanConfig.FromEnvironment(), Features.Plugins(notifier));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException or InvalidDataException)
         {
@@ -126,6 +126,18 @@ public sealed class App : Application
 
     // Brings the window of the running Flux to the front, for a second start.
     public static void Activate() => current?.Dispatcher.BeginInvoke(() => current.ShowMain());
+
+    // Sends files that the user gave to Flux, from Send to or Open with, to
+    // the computer. It runs on the UI thread after the start.
+    public static void OpenFiles(IReadOnlyList<string> files) => current?.Dispatcher.BeginInvoke(() =>
+    {
+        if (current.model is not { } model)
+        {
+            return;
+        }
+        current.ShowMain();
+        Features.Open(model, files);
+    });
 
     public void Quit()
     {

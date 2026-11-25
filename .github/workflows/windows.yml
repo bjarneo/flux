@@ -1,4 +1,4 @@
-name: Windows prototype checks
+name: Windows
 
 # Pull requests run no build, to save GitHub minutes. Pushes to master
 # that change the Windows client, and manual runs, run it.
@@ -20,26 +20,25 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-dotnet@9a946fdbd5fb07b82b2f5a4466058b876ab72bb2 # v5.3.0
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: '10.0.x'
       - name: Restore locked dependencies
         run: |
           dotnet restore windows/FluxKit.Tests --locked-mode
           dotnet restore windows/Flux.UiTests --locked-mode
-          dotnet restore windows/Flux.Protocol.Tests --locked-mode
-          dotnet restore windows/Flux.Windows.Ui.Tests --locked-mode
       # The fluxd tests skip here. The fluxd job runs them on Linux.
       - name: FluxKit tests
         run: dotnet test windows/FluxKit.Tests -c Release --no-restore
       - name: Flux UI checks
         run: dotnet run --project windows/Flux.UiTests -c Release --no-restore
-      - name: Protocol checks
-        run: dotnet run --project windows/Flux.Protocol.Tests -c Release --no-restore
-      - name: WPF UI checks
-        run: dotnet run --project windows/Flux.Windows.Ui.Tests -c Release --no-restore
-      - name: Build self-contained Windows executable
-        run: dotnet publish windows/Flux.Windows -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o windows/artifacts/win-x64
+      - name: Build the self-contained Windows app
+        run: dotnet publish windows/Flux -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o windows/artifacts/win-x64
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: Flux-win-x64
+          path: windows/artifacts/win-x64/Flux.exe
+          if-no-files-found: error
 
   # FluxKit against a headless fluxd from the same commit.
   fluxd:

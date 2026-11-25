@@ -6,7 +6,7 @@ namespace Flux;
 // The UI state of the app. It mirrors the core and holds the destination,
 // the scope, the pages on top of each destination, and the theme setting.
 // AppModel.swift of the Mac app has the same job.
-public sealed class AppModel : Model
+public sealed partial class AppModel : Model
 {
     public const string PairCategory = "pair";
 
@@ -167,12 +167,19 @@ public sealed class AppModel : Model
         {
             Scope = null;
         }
+        // A computer that goes offline keeps the time, for "last seen" in Chats.
+        var now = DateTimeOffset.Now;
+        foreach (var d in old.Devices.Where(d => d.Paired && d.Online && !s.Devices.Any(n => n.Id == d.Id && n.Online)))
+        {
+            lastSeen[d.Id] = now;
+        }
         // A new pairing shows the chat of the new computer.
         var before = old.Devices.ToDictionary(d => d.Id, d => d.Paired);
         if (s.Devices.FirstOrDefault(d => d.Paired && before.TryGetValue(d.Id, out var was) && !was) is { } paired)
         {
             PairingSheet = null;
             Scope = paired.Id;
+            Chat = new ChatKey.Computer(paired.Id);
             paths[Destination.Chat].Clear();
             paths[Destination.Computers].Clear();
             Destination = Destination.Chat;
@@ -206,10 +213,27 @@ public sealed class AppModel : Model
         pairedTimer = Later(TimeSpan.FromSeconds(6), pairedTimer, () => NewlyPairedId = null);
     }
 
-    // Unpairs the computer.
-    public void Unpair(string id) => Core.Unpair(id);
+    // Unpairs the computer. This computer also deletes its approval key for
+    // the computer, so that a new pairing needs a new enrollment.
+    public void Unpair(string id)
+    {
+        if (Core.Plugin<ApprovePlugin>() is { } approve)
+        {
+            approve.Unpair(id);
+        }
+        else
+        {
+            Core.Unpair(id);
+        }
+    }
 
-    public string UnpairMessage(DeviceSnapshot d) => $"{d.Name} and this computer forget each other. Pair again to use it.";
+    // The text of the unpair dialog. It names the approval key when this
+    // computer has one for the computer.
+    public string UnpairMessage(DeviceSnapshot d)
+    {
+        var text = $"{d.Name} and this computer forget each other. Pair again to use it.";
+        return Core.Plugin<ApprovePlugin>()?.Model.KeyFor(d.Id) is null ? text : text + " " + ApproveTexts.UnpairNote(d.Name);
+    }
 
     public void Show(string message)
     {

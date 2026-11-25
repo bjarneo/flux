@@ -38,10 +38,13 @@ final class TouchpadController {
     @ObservationIgnored private var gesture = TouchpadGesture()
     @ObservationIgnored private let hold = Deadline()
     @ObservationIgnored private var spoken = SpokenSpacing()
+    /// The plugin that knows the scroll direction of the computer.
+    @ObservationIgnored private weak var input: RemoteInputPlugin?
 
     init(deviceId: String, app: AppModel, input: RemoteInputPlugin) {
         self.deviceId = deviceId
         self.app = app
+        self.input = input
         send = RemoteInputSender.make(deviceId: deviceId, app: app, input: input)
         keys = RemoteKeys(workspaceKeys: app.device(deviceId).map(DesktopPlugin.shortcutsSupported) ?? false, send: send,
                           canRepeat: { [weak input] in input?.model.canRepeat(deviceId) ?? false })
@@ -109,7 +112,11 @@ final class TouchpadController {
         for a in actions {
             switch a {
             case .move(let dx, let dy): send(RemoteInput.move(dx: dx, dy: dy))
-            case .scroll(let dx, let dy): send(RemoteInput.scroll(dx: dx, dy: dy))
+            case .scroll(let dx, let dy):
+                // The gesture moves the content with the fingers. A computer
+                // with traditional scrolling gets the other direction.
+                let natural = input?.model.scrollsNaturally(deviceId) ?? true
+                send(RemoteInput.scroll(dx: natural ? dx : -dx, dy: natural ? dy : -dy))
             case .click(let c):
                 // A click can move the cursor of the computer, so the type field ends.
                 spoken.moved()

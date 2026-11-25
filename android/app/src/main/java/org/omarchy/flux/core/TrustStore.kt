@@ -16,6 +16,8 @@ data class TrustedDevice(
     val type: String,
     val certificate: String,
     val lastIp: String = "",
+    /** The network cards that can wake the computer, from its flux.wake packet. */
+    val wake: List<WakeTarget> = emptyList(),
 ) {
     fun cert(): X509Certificate = parseCertificate(Base64.decode(certificate, Base64.NO_WRAP))
 }

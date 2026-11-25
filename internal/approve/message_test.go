@@ -1,9 +1,11 @@
 package approve
 
 import (
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
 	"errors"
@@ -218,5 +220,110 @@ func TestSameCode(t *testing.T) {
 		if got := SameCode(typed, code); got != want {
 			t.Errorf("%q: got %v, want %v", typed, got, want)
 		}
+	}
+}
+
+// windowsKey is a Windows Hello key: RSA 2048, which signs the SHA-256 of
+// a message with RSASSA-PKCS1-v1_5.
+type windowsKey struct {
+	priv *rsa.PrivateKey
+	spki []byte
+}
+
+func newWindowsKey(t *testing.T, bits int) windowsKey {
+	t.Helper()
+	priv, err := rsa.GenerateKey(rand.Reader, bits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spki, err := x509.MarshalPKIXPublicKey(&priv.PublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return windowsKey{priv, spki}
+}
+
+func (w windowsKey) sign(t *testing.T, msg []byte) []byte {
+	t.Helper()
+	sum := sha256.Sum256(msg)
+	sig, err := rsa.SignPKCS1v15(rand.Reader, w.priv, crypto.SHA256, sum[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sig
+}
+
+func TestWindowsHelloKeySignsApprovalsAndEnrollments(t *testing.T) {
+	w := newWindowsKey(t, 2048)
+	pub, err := ParsePublicKey(w.spki)
+	if err != nil {
+		t.Fatalf("an RSA 2048 key: %v", err)
+	}
+	now := time.Unix(testRequest.Time+4, 0)
+	msg, err := testRequest.Message()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sig := w.sign(t, msg)
+	if err := Verify(testRequest, sig, pub, now, 30*time.Second); err != nil {
+		t.Fatalf("a valid signature: %v", err)
+	}
+	changed := testRequest
+	changed.User = "bob"
+	if err := Verify(changed, sig, pub, now, 30*time.Second); !errors.Is(err, ErrBadSignature) {
+		t.Fatalf("a changed field: %v", err)
+	}
+	if err := Verify(testRequest, sig[:len(sig)-1], pub, now, 30*time.Second); !errors.Is(err, ErrBadSignature) {
+		t.Fatalf("a short signature: %v", err)
+	}
+	if err := Verify(testRequest, nil, pub, now, 30*time.Second); !errors.Is(err, ErrBadSignature) {
+		t.Fatalf("an empty signature: %v", err)
+	}
+	// A PSS signature of the same key is not the scheme of Windows Hello.
+	sum := sha256.Sum256(msg)
+	pss, err := rsa.SignPSS(rand.Reader, w.priv, crypto.SHA256, sum[:], nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Verify(testRequest, pss, pub, now, 30*time.Second); !errors.Is(err, ErrBadSignature) {
+		t.Fatalf("a PSS signature: %v", err)
+	}
+	// An ECDSA signature does not pass for the RSA key.
+	if err := Verify(testRequest, newPhone(t).signRequest(t, testRequest), pub, now, 30*time.Second); !errors.Is(err, ErrBadSignature) {
+		t.Fatalf("an ECDSA signature for an RSA key: %v", err)
+	}
+
+	e := Enrollment{Host: testRequest.Host, User: testRequest.User, Time: testRequest.Time, Nonce: testNonce}
+	proof, err := e.Message(w.spki)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := VerifyEnrollment(e, w.spki, w.sign(t, proof), now, time.Minute)
+	if err != nil {
+		t.Fatalf("a valid enrollment: %v", err)
+	}
+	if !w.priv.PublicKey.Equal(got) {
+		t.Fatal("the enrollment gave another key")
+	}
+	if _, err := VerifyEnrollment(e, w.spki, sig, now, time.Minute); !errors.Is(err, ErrBadSignature) {
+		t.Fatalf("an approval passed as an enrollment proof: %v", err)
+	}
+}
+
+func TestParsePublicKeyRefusesOtherRSAKeys(t *testing.T) {
+	for _, bits := range []int{1024, 3072} {
+		if _, err := ParsePublicKey(newWindowsKey(t, bits).spki); err == nil {
+			t.Fatalf("an RSA %d key must fail", bits)
+		}
+	}
+	w := newWindowsKey(t, 2048)
+	odd := w.priv.PublicKey
+	odd.E = 3
+	spki, err := x509.MarshalPKIXPublicKey(&odd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ParsePublicKey(spki); err == nil {
+		t.Fatal("an RSA key with the exponent 3 must fail")
 	}
 }

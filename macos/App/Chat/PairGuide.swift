@@ -2,8 +2,8 @@ import AppKit
 import FluxKit
 import SwiftUI
 
-/// The chat before the first pairing: the pairing guide in a large tile
-/// with the active border.
+/// The detail column of Chats before the first pairing: the pairing guide
+/// in a large tile with the active border.
 struct ChatPairGuide: View {
     @Environment(\.tn) private var tn
 

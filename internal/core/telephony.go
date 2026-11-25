@@ -65,6 +65,10 @@ type callState struct {
 	// link is the link that reported the call. When it drops, the call
 	// state ends.
 	link *lan.Link
+
+	// ringing is true from the first ringing packet of a call to its end,
+	// so that a call.ringing rule runs once for each call.
+	ringing bool
 }
 
 // callBody is the body of a flux.telephony packet.
@@ -141,6 +145,7 @@ func (d *Daemon) callEvent(dev *Device, l *lan.Link, b callBody) {
 	switch {
 	case b.IsCancel.bool():
 		// The call ended, or the phone stopped ringing.
+		c.ringing = false
 		if m != nil {
 			c.pause.resume(m)
 		}
@@ -158,6 +163,10 @@ func (d *Daemon) callEvent(dev *Device, l *lan.Link, b callBody) {
 			c.notice = 0
 		}
 		if b.Event == "ringing" {
+			if !c.ringing {
+				c.ringing = true
+				d.emitAutomation(callAutomation("call.ringing", dev, b))
+			}
 			// A second ringing packet, with the number or the name, replaces
 			// the first notification.
 			c.notice = d.notify(desktop.Notification{
@@ -166,6 +175,7 @@ func (d *Daemon) callEvent(dev *Device, l *lan.Link, b callBody) {
 			})
 		}
 	case b.Event == "missedCall":
+		d.emitAutomation(callAutomation("call.missed", dev, b))
 		d.notify(desktop.Notification{
 			AppName: name, Title: "Missed call from " + b.caller(), Body: callDetail(b, name),
 			Category: "call.unanswered", Timeout: -1,
@@ -229,4 +239,12 @@ func (d *Daemon) SendNotification(dev *Device, title, body string) error {
 		"isClearable": true,
 		"time":        strconv.FormatInt(now.UnixMilli(), 10),
 	}))
+}
+
+// callAutomation returns the automation event of kind for the call b of
+// the phone dev.
+func callAutomation(kind string, dev *Device, b callBody) automationEvent {
+	return automationEvent{Kind: kind, Device: dev.ID, Env: map[string]string{
+		"FLUX_CALLER": b.caller(), "FLUX_CALLER_NUMBER": b.PhoneNumber,
+	}}
 }

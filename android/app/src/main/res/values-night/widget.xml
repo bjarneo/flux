@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The Tokyo Night colors of the agents widget. See values/widget.xml. -->
+    <color name="widget_ground">#FF16161E</color>
+    <color name="widget_tile">#FF1F2335</color>
+    <color name="widget_text">#FFC0CAF5</color>
+    <color name="widget_sub">#FF8B94BE</color>
+    <color name="widget_red">#FFF7768E</color>
+    <color name="widget_accent">#FF7AA2F7</color>
+</resources>

@@ -297,6 +297,7 @@ class FluxService : Service() {
         when (intent?.action) {
             ACTION_STOP_RING -> Ringer.stop(this)
             ACTION_APPROVE_DENY -> org.omarchy.flux.core.Approvals.deny(FluxCore)
+            ACTION_SSH_DENY -> org.omarchy.flux.core.SshAgent.deny(FluxCore)
             ACTION_TURN_OFF -> {
                 FluxCore.setEnabled(false)
                 return START_NOT_STICKY
@@ -376,6 +377,7 @@ class FluxService : Service() {
     companion object {
         const val ACTION_STOP_RING = "org.omarchy.flux.STOP_RING"
         const val ACTION_APPROVE_DENY = "org.omarchy.flux.APPROVE_DENY"
+        const val ACTION_SSH_DENY = "org.omarchy.flux.SSH_DENY"
         const val ACTION_REFRESH = "org.omarchy.flux.REFRESH"
         const val ACTION_TURN_OFF = "org.omarchy.flux.TURN_OFF"
         const val ACTION_SCAN = "org.omarchy.flux.SCAN"

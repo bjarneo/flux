@@ -54,7 +54,7 @@ object DebugInbox {
             return mapOf("w3:p1" to now - 17 * 60_000, "w1:p1" to now - 8 * 60_000, "w2:p1" to now - 4 * 60_000)
         }
 
-    /** The sample entries of the chat log: a link, a photo, a clip from the computer, and a file that comes in. */
+    /** The sample entries of the chat log: a link, a photo, a clip from the computer, a file that comes in, and text. */
     fun sends(): List<SendEntry> {
         if (!DebugDemo.on) return emptyList()
         val now = System.currentTimeMillis()
@@ -68,12 +68,13 @@ object DebugInbox {
                 -14, pc, "omarchy-xps", SendKind.File, "invoice-2026-09.pdf", incoming = true, at = ago(6),
                 size = 3_200_000, done = 1_856_000, state = TransferState.Running,
             ),
+            SendEntry(-15, pc, "omarchy-xps", SendKind.Text, "Dinner at 7, bring the kids", at = ago(1)),
         )
     }
 
-    /** A sample sudo request from the sample computer. */
+    /** A sample sudo request from the sample computer. It is off when the demo has no blocked agent. */
     fun approval(): ApproveRequest? {
-        if (!DebugDemo.on) return null
+        if (!DebugDemo.on || !DebugDemo.blocked) return null
         return ApproveRequest(
             computerId = DebugDemo.PC,
             computerName = "omarchy-xps",

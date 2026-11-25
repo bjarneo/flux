@@ -39,6 +39,14 @@ public sealed class Tray : IDisposable
         };
         icon.Visible = true;
         model.PropertyChanged += (_, _) => Draw();
+        if (model.Core.Plugin<HerdrPlugin>() is { } herdr)
+        {
+            herdr.Model.PropertyChanged += (_, _) => Draw();
+        }
+        if (model.Core.Plugin<ApprovePlugin>() is { } approve)
+        {
+            approve.Model.PropertyChanged += (_, _) => Draw();
+        }
         Tn.Changed += Draw;
         Draw();
     }
@@ -113,9 +121,13 @@ public sealed class Tray : IDisposable
     }
 }
 
-// The panel of the tray: the count of the items that need the user, the
-// items, a menu for each online computer, and the app actions. It shows near
-// the tray and hides when it loses the focus.
+// The panel of the tray: the count of the items that need the user, the 2
+// newest items that need the user as chat cards with their choices or with
+// Deny and Approve, the next 3 items as rows, a menu for each online
+// computer, and the app actions. It shows near the tray and hides when it
+// loses the focus. A card reads a fresh output each time that the panel
+// opens. MenuBarView.swift of the Mac app has the same parts. The panel does
+// not use the scope.
 public sealed class TrayPanel : Window
 {
     readonly AppModel model;
@@ -175,29 +187,49 @@ public sealed class TrayPanel : Window
     sealed class PanelView : View
     {
         readonly TrayPanel panel;
+        readonly EventCards cards;
 
         public PanelView(TrayPanel panel)
         {
             this.panel = panel;
-            Watch(panel.model);
+            cards = new EventCards(panel.model);
+            foreach (var m in panel.model.InboxModels())
+            {
+                Watch(m);
+            }
+            Watch(ChatAnswers.Shared);
         }
 
         protected override UIElement Build()
         {
             var tn = Tn.Current;
             var model = panel.model;
-            var count = Inbox.NeedsYou(model);
+            var all = model.InboxItems();
+            var seen = model.ChatSeen(all);
+            var herdr = model.Core.Plugin<HerdrPlugin>()?.Model;
+            // The newest first, by the time that each item got its state.
+            var times = all.ToDictionary(i => i.Key, i => i.Content is InboxContent.Agent a && herdr?.AgentSince(a.DeviceId, a.Value.Pane) is { } since
+                ? since
+                : seen.TryGetValue(i.Key, out var at) ? at : DateTimeOffset.Now);
+            var newest = all.OrderByDescending(i => times[i.Key]).ToArray();
+            var urgent = newest.Where(i => i.Kind.NeedsYou()).ToArray();
+            var rest = urgent.Skip(2).Concat(newest.Where(i => !i.Kind.NeedsYou())).Take(3).ToArray();
+            cards.Keep(all.Select(i => i.Key));
             var items = new List<UIElement?>
             {
-                Ui.H(8, count > 0 ? Ui.Dot(tn.Red) : null, Ui.Text(Texts.NeedsText(count), 13, FontWeights.SemiBold)),
+                Ui.H(8, urgent.Length > 0 ? Ui.Dot(tn.Red) : null, Ui.Text(Texts.NeedsText(urgent.Length), 13, FontWeights.SemiBold)),
             };
             if (model.Paired.Count == 0)
             {
                 items.Add(Ui.Text("No computer is paired. Open Flux to pair your Omarchy computer.", 12, color: tn.Sub, wrap: true));
             }
-            foreach (var d in model.State.Devices.Where(d => d.PairState == PairState.Incoming))
+            foreach (var item in urgent.Take(2))
             {
-                items.Add(Cards.PairCard(model, d, DateTimeOffset.Now));
+                items.Add(cards.Card(item, times[item.Key]));
+            }
+            foreach (var item in rest)
+            {
+                items.Add(Row(item));
             }
             var online = model.ConnectedPaired;
             if (online.Count > 0)
@@ -228,6 +260,45 @@ public sealed class TrayPanel : Window
         {
             panel.Hide();
             action();
+        }
+
+        // A next item: the state, the source, and the title. A click opens
+        // the chat of the item in the main window: the chat of an agent, or
+        // the chat of the computer of an approval. A pair request opens its
+        // pairing page.
+        UIElement Row(InboxItem item)
+        {
+            var tn = Tn.Current;
+            var model = panel.model;
+            var source = string.Join(" · ", item.SourceParts);
+            UIElement mark = item.Content is InboxContent.Agent a ? AgentParts.StatusMark(a.Value.Status, 7, 10) : Ui.Dot(item.Tone.Brush(), 7);
+            var body = Ui.V(2,
+                Ui.H(6, mark, Ui.Text(item.StateWord, 11, FontWeights.Medium, item.Tone.Brush()),
+                    source.Length > 0 ? Ui.Text("· " + source, 11, color: tn.Sub, mono: true).Fill() : null),
+                Ui.Text(item.Title, 13, FontWeights.SemiBold));
+            var tile = Ui.Tile(body, tn.Tile, item.Kind.NeedsYou() ? tn.Red : tn.Line, 0, Metrics.SmallCorner);
+            tile.Padding = new Thickness(10, 6, 10, 6);
+            tile.MinHeight = Metrics.RowHeight;
+            var name = string.Join(", ", new[] { item.Title }.Concat(item.SourceParts).Append(item.Computer).Where(p => p.Length > 0));
+            var button = new PlainButton(tile, () => Run(() =>
+            {
+                switch (item.Content)
+                {
+                    case InboxContent.Agent a:
+                        model.OpenChat(new ChatKey.Agent(a.DeviceId, a.Value.Pane));
+                        break;
+                    case InboxContent.Approval r:
+                        model.OpenChat(new ChatKey.Computer(r.Request.ComputerId));
+                        break;
+                    case InboxContent.Pair p:
+                        model.Go(Destination.Computers);
+                        model.Push(new Route.Pairing(p.DeviceId));
+                        break;
+                }
+                panel.showMain();
+            })).Named(name).Help("Open the chat in Flux");
+            System.Windows.Automation.AutomationProperties.SetItemStatus(button, item.StateWord);
+            return button;
         }
 
         // A row for an online computer. Its menu holds the actions of the features.

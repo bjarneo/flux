@@ -870,6 +870,14 @@ private val choiceHints = listOf("↑↓", "enter submit", "Enter to select", "e
 /** A line without the panel bar of opencode. */
 private fun barless(line: String): String = line.trimStart().let { if (it.startsWith("┃")) it.removePrefix("┃") else line }
 
+/** The input prompt of an agent, for example "❯" of Claude Code or "› Ask Codex to do anything" of Codex. */
+private val inputPrompt = Regex("""^[❯›>](?:\s.*)?$""")
+
+/** True when [line] is the input prompt of an agent, also inside a box, and not a choice. */
+private fun isInputPrompt(line: String): Boolean =
+    choiceLine.matchEntire(line) == null &&
+        inputPrompt.matches(line.trim().removePrefix("│").removeSuffix("│").trim())
+
 /** The count of spaces at the start of [s]. */
 private fun lead(s: String): Int = s.indexOfFirst { it != ' ' }.let { if (it < 0) s.length else it }
 
@@ -886,7 +894,10 @@ private const val CHOICE_TAIL_LINES = 15
  * counts up by 1. Other lines can come between the choices, for example
  * descriptions or a rule. The first line under a choice that is indented
  * more than the choice is its description. It returns an empty list when it
- * finds fewer than 2 choices, or when the choices are not near the end.
+ * finds fewer than 2 choices, or when the choices are not near the end. A
+ * dialog takes the place of the input, so it also returns an empty list when
+ * an input prompt comes after the choices. Then the lines are a numbered list
+ * in a message of the agent.
  */
 fun findChoices(lines: List<String>): List<AgentChoice> {
     val from = maxOf(0, lines.size - CHOICE_SCAN_LINES)
@@ -906,6 +917,7 @@ fun findChoices(lines: List<String>): List<AgentChoice> {
         run += h
     }
     if (run.size < 2 || run.last().index < lines.size - CHOICE_TAIL_LINES) return emptyList()
+    if ((run.last().index + 1 until lines.size).any { isInputPrompt(lines[it]) }) return emptyList()
     val described = run.mapIndexed { k, h ->
         val next = if (k + 1 < run.size) run[k + 1].index else minOf(lines.size, h.index + 3)
         val col = lead(barless(lines[h.index]))

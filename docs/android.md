@@ -74,7 +74,7 @@ An earlier Flux for Android uses other ports and cannot connect to a `fluxd` wit
 Install the new APK from the GitHub releases once, as in [Install a release APK](#install-a-release-apk).
 The new app also cannot connect to an earlier `fluxd`, so update Flux on the computer too.
 
-To open the latest release on the phone, select **About Flux** in **Computers**, then **Latest release**.
+To open the latest release on the phone, select **About Flux** in **Settings**, then **Latest release**.
 
 When a newer Flux for Android exists, the Flux window on the computer shows **Flux for Android 0.7.0 is available**.
 The device card also shows the app version of the phone.
@@ -106,7 +106,8 @@ A debug build gets no offer, because a release APK has another signing key and c
 
 ## About Flux
 
-**Computers** has an **About Flux** row under **Settings**.
+**Settings** has an **About Flux** row at the end.
+To open **Settings**, tap the gear key at the top of **Chats**.
 The row shows the version of the app, and it says when the app is a debug build.
 The row opens a page with links to the latest release, the website, the source code, the documentation, the issues, the X account, and the license.
 Each link opens the browser. The page makes no network request.
@@ -116,7 +117,7 @@ Each link opens the browser. The page makes no network request.
 On Android 12 and later, the system splash screen shows the Flux mark until the first screen is ready.
 Flux shows no permission dialog before the first pairing.
 
-Before the first pairing, **Chat** shows a pairing guide:
+Before the first pairing, **Chats** shows a pairing guide:
 
 - 1 line that tells what Flux does.
 - **Set up Flux on the computer**: the setup command and **Read the install guide**, which opens [Install Flux](install.md) on GitHub.
@@ -131,15 +132,28 @@ To start `fluxd` on the computer, run this command as your desktop user after yo
 flux-cli setup
 ```
 
-When the pairing ends, Flux opens **Chat** of the new computer.
-For 6 seconds, **Chat** shows **COMPUTER is paired**.
+When the pairing ends, Flux opens the chat of the new computer.
+For 6 seconds, the chat shows **COMPUTER is paired**.
 After the first pairing, the success state also tells why Flux needs notifications.
 1 second later, Android asks once for the permission.
 See [permissions](android-setup.md#permissions).
 
-After a start, **Chat** shows **Connecting to COMPUTER** for up to 3 seconds while the links connect.
-If no computer in scope connects in this time, **Chat** shows **COMPUTER is not reachable** with **Retry**.
+After a start, **Chats** shows **Connecting to COMPUTER** for up to 3 seconds while the links connect.
+If no computer connects in this time, **Chats** shows **COMPUTER is not reachable** with **Retry**.
 **Retry** shows **Connecting to COMPUTER** again while Flux looks for the computer.
+
+## Screens
+
+The navigation bar has 3 destinations: **Chats**, **Remote**, and **Computers**.
+
+- **Chats** lists what needs you, the agents, and the computers. The chat of a computer has the Send bar. See [chat of a computer](features.md#files-clipboard-and-links).
+- **Remote** has 3 groups. **See** has **Remote desktop** and **Extend screen**. **Use** has **Omarchy panel**, **Touchpad and keyboard**, **Commands**, and **Media**. **Share** has **Webcam**, **Mic**, **Mirror**, and **Play on phone**. A row shows when a paired computer in scope has the feature.
+- **Computers** lists the paired computers, the available computers, and this phone.
+- **Settings** opens from the gear key at the top of **Chats**. It has 5 groups that open in place: **Send to the computers**, **Alerts on this phone**, **This phone on the computer**, **Security**, and **Look and input**. **Turn off Flux** and **About Flux** are at the end.
+
+The scope chip is in the top bar of **Chats**, **Remote**, and **Computers**.
+It shows **All computers** or 1 computer, with a link dot for each computer.
+Tap it to select the computers that the screen acts on.
 
 ## Pairing and connections
 
@@ -151,6 +165,8 @@ Open Flux on the phone before you pair.
 The phone takes a connection from a new computer only while the app is on screen or while it scans.
 When the app comes to the front, the phone sends its identity, so a computer on the network connects at once.
 A paired computer connects at any time, also through Tailscale.
+When the computer cannot find the phone, pair by the IP address of the phone. See [pair by address](cli.md#pair-by-address).
+When a paired computer sleeps, its card in **Computers** shows **Wake**. See [wake the computer](features.md#wake-the-computer).
 
 Flux for Android applies these limits to the network:
 
@@ -181,11 +197,12 @@ See [send a copy from another app](features.md#send-a-copy-from-another-app).
 
 ## Webcam and mic requests
 
-The computer can ask the phone to start the webcam or the mic:
+The computer can ask the phone to start the webcam or the mic, or to play the audio of the computer:
 
 ```sh
 flux-cli --device "Pixel 8" webcam start
 flux-cli --device "Pixel 8" mic start
+flux-cli --device "Pixel 8" speaker start
 ```
 
 The request only asks.
@@ -201,6 +218,7 @@ The phone turns on the camera or the microphone only after you tap Start on the 
 - Without the notification permission, the phone shows a request only in the prompt. The prompt shows while Flux is on the screen, or when Flux comes on the screen within 60 seconds.
 - The prompt and the notification go away after 60 seconds.
 - A tap on Start opens the **Webcam** or **Mic** page of that computer, and the page starts the stream with the saved settings. On a locked phone, Android asks you to unlock it first.
+- A speaker request shows `omarchy asks to play its audio on this phone` with **Play on phone**. A tap opens **Media** of that computer, and the audio starts there with the saved mute choice. See [phone as speaker](camera.md#phone-as-speaker).
 - When the page cannot start the stream in 60 seconds, for example while the computer is not reachable, it does not start it. Then press Start on the page.
 - While a stream of that kind runs to that computer, a request does nothing.
 - The phone ignores a request of the same kind from the same computer that comes less than 3 seconds after the last request. An ignored request also counts as the last request.
@@ -219,6 +237,7 @@ When the Flux process starts again, it removes the notifications of the stream r
 
 The phone lists `flux.stream.request` in its incoming packet types.
 An earlier Flux for Android does not list it, so the computer sends no request to it.
+The phone lists `flux.speaker` too, so the computer can send it a speaker request.
 
 ## Build and install
 
@@ -272,9 +291,9 @@ Flux follows the active Omarchy theme of the computer.
 `fluxd` sends the theme in a `flux.theme` packet when the phone connects and when the theme changes.
 Flux saves the theme of each computer, so the next start draws it at once.
 
-To change the theme, open **Computers** and select a choice under **Theme**. The choices are:
+To change the theme, open **Settings**, open **Look and input**, and select a choice under **Theme**. The choices are:
 
-- **Computer**, the default: the theme of the computer in scope. The scope chip at the top of the app sets the scope. In the scope of all computers, Flux uses the theme that changed most recently. A reconnect does not change the theme. Without a theme from the computer in scope, Flux uses Tokyo Night on a dark phone and Tokyo Night Day on a light phone. The choice shows the theme name and the computer that sent it.
+- **Computer**, the default: the theme that a computer sent. When more than 1 computer sends a theme, Flux uses the theme that changed most recently. A reconnect does not change the theme. Without a theme from the computer in scope, Flux uses Tokyo Night on a dark phone and Tokyo Night Day on a light phone. The choice shows the theme name and the computer that sent it.
 - **System**: Tokyo Night on a dark phone and Tokyo Night Day on a light phone.
 - **Light**: Tokyo Night Day.
 - **Dark**: Tokyo Night.
@@ -288,9 +307,33 @@ A contrast guard maps the theme to the colors of the app. It moves only the ligh
 - The selected tile `accentTile` takes the hue of the accent at the luminance of `tileHi`, so it does not change a contrast.
 - Red means "needs you" or an error. When the theme accent looks like red, the theme blue, cyan, or magenta takes its place as the primary color. The border gradient keeps the theme accent.
 - ANSI blue in the agent output uses the theme blue, as in the terminal on the computer.
-- The pairing guide takes the gradient of `hyprland_active_border`, at 3:1 or more. A card of **Chat** that needs you has a red border.
+- The pairing guide takes the gradient of `hyprland_active_border`, at 3:1 or more. A card in **Chats** that needs you has a red border.
 
 The theme engine is in `app/src/main/java/org/omarchy/flux/theme`.
+
+## Home screen widget
+
+The **Agents** widget shows the approvals, the pair requests, and the herdr agents of all paired computers on the home screen.
+[Home screen widget](herdr.md#home-screen-widget) describes what it shows and how to add it.
+The code is in `app/src/main/java/org/omarchy/flux/widget`.
+
+The widget uses `RemoteViews` and needs no other library:
+
+- Jetpack Glance 1.1.1 adds WorkManager, DataStore, and a protobuf library to the APK. It also runs each update in a WorkManager job. `RemoteViews` adds only the layouts and the code of the widget, about 29 KB to the release APK.
+- `AgentsWidgets` watches the state of the app only while the home screen has a widget. It draws the widget when what the widget shows changes, at most once each second. The widget has `updatePeriodMillis="0"`, no alarm, and no WorkManager job, so it never wakes the phone. An update comes only from a packet that the link of a computer already received.
+- `widgetModel` builds the rows with `chatList`, so the widget has the order of **Chats**. `widgetFit` gives the number of rows for the size of the widget and the real size of its text. Both are plain Kotlin with JVM tests in `WidgetModelTest`.
+- Android 12 and later get 1 layout for each size of the widget, for example in portrait and in landscape. An earlier Android gets the layout of the portrait size.
+- An agent row uses `Android.openAgent`, the same `PendingIntent` as the agent notification. An approval row uses `Approvals.openScreen`, the same `PendingIntent` as the approval notification. The header uses `Android.openChats`. Each `PendingIntent` is immutable.
+- The colors come from `resolvePalette` with the theme of all computers, `ComputerThemes.latest`. Android 12 and later get the color of the light and of the dark mode, and the launcher picks the color of its mode. `WidgetModelTest` checks that each color pair of the widget reaches WCAG 2.2 AA in each sample theme.
+
+To add the widget on an emulator without a drag, open the debug page `widget`.
+The launcher then asks to add the widget:
+
+```bash
+ANDROID_SERIAL=emulator-5554 FLUX_DEMO=1 tools/shot.sh widget /tmp/widget-ask.png
+```
+
+Select **Add to home screen**, then press Home.
 
 ## Test
 
@@ -335,26 +378,28 @@ ANDROID_SERIAL=emulator-5554 FLUX_DEMO=1 tools/shot.sh chat /tmp/chat.png
 
 The pages are:
 
-- `chat`, `control`, and `computers` for the 3 destinations of the navigation bar. `inbox` and `send` open **Chat**. `devices` is the same as `computers`.
-- `sync` for the sync switches.
-- `about` for **About Flux**.
-- `home` for **Control** with the first paired computer in scope.
-- `media`, `commands`, `browse`, `mic`, `webcam`, `touchpad`, `desktop`, `omarchy`, `agents`, and `camera`.
-- `agent:<pane>` for the thread of one herdr agent. The sample agents are `agent:w2:p1` (blocked), `agent:w1:p1` (working), and `agent:w3:p1` (done).
+- `chat`, `remote`, and `computers` for the 3 destinations of the navigation bar. `control` is the old name of `remote` and opens **Remote**. In an earlier version, **Control** was the name of **Remote**. `chats`, `inbox`, and `send` open **Chats**. `devices` is the same as `computers`.
+- `thread` for the chat of the first paired computer, and `tray` for the same chat with the **More** list of the Send bar open. An earlier version called this list the tray.
+- `settings` for **Settings**, above **Chats**. The **Settings** key at the top of **Chats** opens it.
+- `sync`, `ssh`, and `about` for the earlier Sync screen, the SSH key, and **About Flux**. They open above **Settings**. The earlier Sync screen is only a debug page. The switches are in **Settings** now.
+- `home` for **Remote** with the first paired computer in scope.
+- `media`, `commands`, `browse`, `mic`, `webcam`, `touchpad`, `desktop`, `omarchy`, `agents`, and `camera`. The page `agents` is the **Terminals** screen.
+- `agent:<pane>` for the chat of one herdr agent, above **Chats**. The sample agents are `agent:w2:p1` (blocked), `agent:w1:p1` (working), and `agent:w3:p1` (done).
 - `newpane` for the screen that starts a herdr agent or opens a terminal.
 - `terminal:<pane>` for one herdr terminal. The sample terminals are `terminal:w1:p2` and `terminal:w3:p3`.
 - `camera:<mode>` for a camera mode: `text`, `qr`, `photo`, `document`, or `signature`. `camera:webcam` opens the `webcam` page.
 - `ring`, `pair`, and `unpair` for the ring overlay, the pairing sheet, and the unpair dialog.
-- `ask:webcam` and `ask:mic` for the prompt of a stream request from the first paired computer, over **Chat**. With `FLUX_DEMO=1`, Start on the prompt of the sample computer opens the page and does not start the stream.
+- `ask:webcam` and `ask:mic` for the prompt of a stream request from the first paired computer, over **Chats**. With `FLUX_DEMO=1`, Start on the prompt of the sample computer opens the page and does not start the stream.
 - `notify:webcam` and `notify:mic` for the notification of a stream request from the first paired computer. The notification shows also while Flux is on the screen, so open the notification shade to see it.
 - `<page>@offline` for the page of a paired computer that is not reachable. A destination with `@offline` shows that computer as the scope.
-- `<page>@connecting` for the same page while that computer still connects. For example, `chat@connecting` shows **Chat** in the connecting state.
+- `<page>@connecting` for the same page while that computer still connects. For example, `chat@connecting` shows **Chats** in the connecting state.
 - `empty` for the app with no computers.
-- `firstrun` for the pairing guide of **Chat** before the first pairing, with the sample computer to pair. It needs `FLUX_DEMO=1`.
+- `firstrun` for the pairing guide of **Chats** before the first pairing, with the sample computer to pair. It needs `FLUX_DEMO=1`.
 - `paired` for the success state of a new pairing on the sample computer to pair. It needs `FLUX_DEMO=1`. The success state shows for 6 seconds.
 - `icon` for the launcher and notification icons.
+- `widget` for the dialog of the launcher that adds the agents widget to the home screen. See [Home screen widget](#home-screen-widget).
 
-With `FLUX_DEMO=1`, **Chat** shows a sample thread: a link, a photo, a done agent, a clip from the computer, a working agent, a file that comes in, a blocked agent, and a sample approval. The sample computer shows the Omarchy panel with windows. **Approve** and **Deny** on the sample approval send nothing.
+With `FLUX_DEMO=1`, **Chats** shows a sample approval, a blocked agent, a working agent, a done agent, an idle agent, the sample computer, and a sample computer that is not reachable. The chat of the sample computer shows a link, a photo, a clip from the computer, a file that comes in, a text, and the sample approval. The sample computer shows the Omarchy panel with windows. **Approve** and **Deny** on the sample approval send nothing.
 
 To show the prompt of a webcam request on an emulator, run:
 
@@ -368,7 +413,9 @@ To draw the sample computer in a sample theme, set `FLUX_THEME` to `neon`, `toky
 ANDROID_SERIAL=emulator-5554 FLUX_DEMO=1 FLUX_THEME=catppuccin-latte tools/shot.sh chat /tmp/chat-latte.png
 ```
 
-To give the sample computer the named herdr sessions `infra` and `omarchy`, so the session picker shows, set `FLUX_SESSIONS=1`. `FLUX_SESSION` picks the session that **Control** shows, `default`, `infra`, or `omarchy`. The sample agent `agent:omarchy/w2:p1` has sample output:
+To turn off Agent control on the sample computer, set `FLUX_CONTROL=0`. The dock of a sample agent then names the Access card. The sample computer has Agent control on by default.
+
+To give the sample computer the named herdr sessions `infra` and `omarchy`, so the session picker shows, set `FLUX_SESSIONS=1`. `FLUX_SESSION` picks the session that the session strip in **Chats** shows, `default`, `infra`, or `omarchy`. The sample agent `agent:omarchy/w2:p1` has sample output:
 
 ```bash
 ANDROID_SERIAL=emulator-5554 FLUX_DEMO=1 FLUX_SESSIONS=1 FLUX_SESSION=omarchy tools/shot.sh control /tmp/control-sessions.png
@@ -446,9 +493,11 @@ python3 tools/fetch_icons.py
 | `app/src/main/java/org/omarchy/flux/net` | UDP discovery, TCP links, TLS, and payload transfers |
 | `app/src/main/java/org/omarchy/flux/core` | Devices, pairing, trust store, and the plugins |
 | `app/src/main/java/org/omarchy/flux/service` | The foreground service and the notification listener |
-| `app/src/main/java/org/omarchy/flux/stream` | The stream connection, and the foreground service that keeps the webcam and the mic running in the background |
+| `app/src/main/java/org/omarchy/flux/stream` | The stream connection, and the foreground service that keeps the webcam, the mic, and the audio of the computer running in the background |
+| `app/src/main/java/org/omarchy/flux/speaker` | The audio of the computer on the phone: the packets, the session, and the player |
 | `app/src/main/java/org/omarchy/flux/theme` | The computer theme, the contrast guard, and the palettes. Plain Kotlin with JVM tests. |
 | `app/src/main/java/org/omarchy/flux/ui` | The Compose screens |
+| `app/src/main/java/org/omarchy/flux/widget` | The agents widget on the home screen. The model is plain Kotlin with JVM tests. |
 | `app/src/main/assets/terminal` | The page of the live terminal, with xterm.js and its license. See [Update xterm.js](development.md#update-xtermjs). |
 | `tools` | The test peer, the screenshot helper, and the icon script |
 

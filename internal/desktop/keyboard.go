@@ -26,10 +26,22 @@ type Keyboard struct{}
 var wtypeMods = map[string]bool{"shift": true, "ctrl": true, "alt": true, "logo": true}
 
 // Type types text while it holds the modifiers mods, such as "ctrl". It
-// stops when ctx ends.
+// stops when ctx ends. Text without modifiers goes through the virtual
+// keyboard of fluxd, see typeText. A shortcut with modifiers, or a
+// compositor without that protocol, uses wtype.
 func (Keyboard) Type(ctx context.Context, text string, mods []string) error {
 	if text == "" {
 		return nil
+	}
+	if len(mods) == 0 {
+		ctx, cancel := context.WithTimeout(ctx, wtypeTimeout(utf8.RuneCountInString(text)))
+		defer cancel()
+		if err := typeText(ctx, text); !errors.Is(err, errNoVirtualKeyboard) {
+			if errors.Is(err, context.DeadlineExceeded) {
+				return fmt.Errorf("the text did not finish in %s", wtypeTimeout(utf8.RuneCountInString(text)))
+			}
+			return err
+		}
 	}
 	// wtype reads the text from stdin, so the text is not in the process list.
 	return runWtype(ctx, withMods(mods, "-"), text, utf8.RuneCountInString(text))

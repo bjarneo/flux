@@ -105,8 +105,11 @@ QtObject {
       })
       result = { dismissed: n }
     }
+    // Like fluxd, a connect by address returns the device that answered.
+    else if (method === "pair.address") result = { device: "c0ffee00000000000000000000000add", name: "Pixel by address" }
     else if (method === "webcam.stop") setState(function (s) { s.webcam = null })
     else if (method === "mic.stop") setState(function (s) { s.mic = null })
+    else if (method === "speaker.stop") setState(function (s) { s.speaker = null })
     else if (method === "screen.stop") setState(function (s) { s.screen = null })
     else if (method === "desktop.stop") setState(function (s) { s.desktop = null })
     else if (method === "browse.stop") setState(function (s) { s.browse = [] })

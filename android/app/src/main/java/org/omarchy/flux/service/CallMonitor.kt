@@ -31,7 +31,9 @@ private const val TAG = "FluxCalls"
  * from PhoneStateListener before that. The number needs READ_CALL_LOG. On
  * Android 12 and later, it comes from the PHONE_STATE broadcast, which can
  * arrive after the state. Then the phone sends ringing again with the
- * number, and the computer replaces its notification. The receiver listens
+ * number, and the computer replaces its notification. [CallTracker] keeps
+ * the number only for the current call, so a call never shows the number
+ * of the call before it. The receiver listens
  * also without READ_CALL_LOG, because Android checks the permission for
  * each broadcast, and the user can allow the call log later. The contact
  * name needs READ_CONTACTS.
@@ -39,7 +41,6 @@ private const val TAG = "FluxCalls"
 class CallMonitor(private val context: Context) {
     private val tm = context.getSystemService(TelephonyManager::class.java)
     private val tracker = CallTracker()
-    private var number: String? = null
     private var listener: Any? = null
     private var receiver: BroadcastReceiver? = null
 
@@ -56,9 +57,16 @@ class CallMonitor(private val context: Context) {
                 listener = cb
                 val r = object : BroadcastReceiver() {
                     override fun onReceive(c: Context, i: Intent) {
+                        val line = when (i.getStringExtra(TelephonyManager.EXTRA_STATE)) {
+                            TelephonyManager.EXTRA_STATE_RINGING -> LineState.Ringing
+                            TelephonyManager.EXTRA_STATE_OFFHOOK -> LineState.OffHook
+                            TelephonyManager.EXTRA_STATE_IDLE -> LineState.Idle
+                            else -> return
+                        }
                         // Without READ_CALL_LOG, the broadcast has no number.
                         @Suppress("DEPRECATION")
-                        i.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER)?.let(::onNumber)
+                        val n = i.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER)
+                        for (e in tracker.onNumber(n, line)) send(e)
                     }
                 }
                 ContextCompat.registerReceiver(context, r, IntentFilter(TelephonyManager.ACTION_PHONE_STATE_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
@@ -92,26 +100,16 @@ class CallMonitor(private val context: Context) {
     }
 
     private fun onState(state: Int, phoneNumber: String?) {
-        if (!phoneNumber.isNullOrBlank()) number = phoneNumber
         val next = when (state) {
             TelephonyManager.CALL_STATE_RINGING -> LineState.Ringing
             TelephonyManager.CALL_STATE_OFFHOOK -> LineState.OffHook
             else -> LineState.Idle
         }
-        for (e in tracker.onState(next)) send(e)
-        if (next == LineState.Idle) number = null
-    }
-
-    /** The number from the PHONE_STATE broadcast. */
-    private fun onNumber(n: String) {
-        if (n.isBlank() || n == number) return
-        val late = number == null && tracker.state == LineState.Ringing
-        number = n
-        if (late) send(CallEvent("ringing"))
+        for (e in tracker.onState(next, phoneNumber)) send(e)
     }
 
     private fun send(e: CallEvent) {
-        val n = number
+        val n = e.number
         FluxCore.io.execute {
             val packet = CallPackets.packet(e, n, n?.let { Android.contactName(context, it) })
             FluxCore.connectedPaired().filter { Types.TELEPHONY in it.identity.incoming }.forEach { it.send(packet) }

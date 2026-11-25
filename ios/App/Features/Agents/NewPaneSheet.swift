@@ -66,8 +66,8 @@ struct NewPaneSheet: View {
                     ContentUnavailableView("herdr is not running", systemImage: "brain",
                                            description: Text("Start herdr on \(name). Then start agents from here."))
                 } else if herdr?.control != true {
-                    ContentUnavailableView("Control is off", systemImage: "brain", description: Text(.init(
-                        "To start agents from this iPhone, set `herdr_control = true` on \(name). Then run `systemctl --user reload fluxd`.")))
+                    ContentUnavailableView("Agent control is off on \(name)", systemImage: "brain", description: Text(
+                        "To start agents from this iPhone, turn on Agent control in Flux on \(name), on the Access card."))
                 } else {
                     ContentUnavailableView("No coding agent on \(name)", systemImage: "brain", description: Text(
                         "Install a coding agent that herdr supports, such as Claude Code or Codex, on \(name). It shows here within a minute."))

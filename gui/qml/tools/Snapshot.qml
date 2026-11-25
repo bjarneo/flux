@@ -281,16 +281,16 @@ Window {
       view.selectedId = pixel
       view.tab = "device"
     }, function () {
-      access().setGlobal("remoteDesktop", true)
-      access().setGlobal("remoteInput", true)
+      access().setComputer("remoteDesktop", true)
+      access().setComputer("remoteInput", true)
     }],
     ["53-remote-live", function () {
       mock.setState(function (s) { s.desktop = { active: true, to: pixel, toName: "Pixel 8", monitor: "DP-1", width: 2560, height: 1440 } })
     }, function () { scrollTo(findBy(pageItem(), "objectName", "desktopCard")) }],
     ["54-remote-off", function () {
       mock.call("desktop.stop", {}, null)
-      access().setGlobal("remoteDesktop", false)
-      access().setGlobal("remoteInput", false)
+      access().setComputer("remoteDesktop", false)
+      access().setComputer("remoteInput", false)
     }, function () { scrollTo(access()) }],
     // A device on the network with the name of a paired phone.
     ["55-pair-twin", function () {
@@ -386,7 +386,26 @@ Window {
       view.selectedId = pixel
       view.tab = "device"
       view.openLink()
-    }]
+    }],
+    // The phone plays the audio of this computer, and fluxd muted the
+    // speakers of this computer for it.
+    ["65-speaker-live", function () {
+      mock.setState(function (s) {
+        s.speaker = { active: true, to: pixel, toName: "Pixel 8", rate: 48000, channels: 2, mute: true, muted: "Laptop Speakers" }
+        for (var i = 0; i < s.devices.length; i++)
+          if (s.devices[i].id === pixel) s.devices[i].plugins = s.devices[i].plugins.concat(["speaker"])
+      })
+      view.selectedId = pixel
+      view.tab = "device"
+    }, function () { scrollTo(findBy(pageItem(), "objectName", "speakerCard")) }],
+    // Agent control off, the question before it turns on, and it on.
+    ["66-access-agent-off", function () {
+      mock.setState(function (s) { s.settings.herdrControl = false })
+      view.selectedId = pixel
+      view.tab = "device"
+    }, function () { scrollTo(access()) }],
+    ["67-access-agent-confirm", function () { findBy(access(), "objectName", "computer-herdrControl").clicked() }, function () { scrollTo(access()) }],
+    ["68-access-agent-on", function () { findBy(view, "objectName", "confirmOk").clicked() }, function () { scrollTo(access()) }]
   ]
 
   function pageItem() {

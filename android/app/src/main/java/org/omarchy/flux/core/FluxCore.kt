@@ -2,6 +2,7 @@ package org.omarchy.flux.core
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -85,6 +86,7 @@ object FluxCore {
     @Volatile private var notificationAccess = false
     @Volatile private var callAccess = false
     @Volatile private var smsAccess = false
+    @Volatile private var contactsAccess = false
     @Volatile private var smsSupported = false
 
     private val _state = MutableStateFlow(UiState())
@@ -131,6 +133,7 @@ object FluxCore {
             val d = Device(this, identity)
             d.pairState = PairState.Paired
             d.lastIp = t.lastIp
+            d.wake = t.wake
             d.certificate = trust.certificate(t.id)
             devices[t.id] = d
         }
@@ -176,6 +179,7 @@ object FluxCore {
         notificationAccess = Android.hasNotificationAccess(app)
         callAccess = Android.hasPhoneState(app)
         smsAccess = SmsSync.hasAccess(app)
+        contactsAccess = Android.hasContacts(app)
     }
 
     /** Reads all system flags again and publishes the state. */
@@ -385,6 +389,7 @@ object FluxCore {
             // no longer arrive, so a reconnect could never open a stream.
             if (!terminalSurvivesLinkChange(link, null)) d.herdrTerminal = null
             d.link = null
+            d.lastSeen = System.currentTimeMillis()
             d.dropPairing()
             if (!d.paired) devices.remove(d.id)
         }
@@ -414,9 +419,11 @@ object FluxCore {
             org.omarchy.flux.screen.ScreenSession.stopFor(id, message)
             org.omarchy.flux.webcam.WebcamSession.stopFor(this, id, message)
             org.omarchy.flux.mic.MicSession.stopFor(this, id, message)
+            org.omarchy.flux.speaker.SpeakerSession.stopFor(this, id, message)
             org.omarchy.flux.desktop.DesktopSession.stopFor(id, message)
             if (browsing) Browse.close()
             Approvals.current.value?.takeIf { it.computerId == id }?.let { Approvals.clear(app, it.id) }
+            SshAgent.forget(app, id)
             Android.cancelFromComputer(app, id)
             StreamRequests.forget(app, id)
         }
@@ -447,6 +454,7 @@ object FluxCore {
                 callAccess = callAccess,
                 smsSync = settings.syncSms,
                 smsAccess = smsAccess,
+                contactsAccess = contactsAccess,
                 smsSupported = smsSupported,
                 agentInputAlerts = settings.agentInputAlerts,
                 agentDoneAlerts = settings.agentDoneAlerts,
@@ -458,12 +466,19 @@ object FluxCore {
                 connecting = inConnectGrace(connectFrom, SystemClock.elapsedRealtime()),
                 enabled = settings.enabled,
                 theme = settings.theme,
+                touchpadScroll = settings.touchpadScroll,
                 computerTheme = ComputerThemes.current(),
                 themeScope = ComputerThemes.scope,
                 computerThemes = ComputerThemes.names(),
+                approveAtOnce = settings.approveAtOnce,
             )
         }
         _state.value = snapshot
+    }
+
+    /** Sends a Wake-on-LAN magic packet to the paired computer [id]. */
+    fun wake(id: String) {
+        device(id)?.let { Wake.send(this, it) }
     }
 
     fun toast(message: String) {
@@ -578,6 +593,11 @@ object FluxCore {
         publish()
     }
 
+    fun setTouchpadScroll(mode: ScrollMode) {
+        settings.touchpadScroll = mode
+        publish()
+    }
+
     fun setSyncClipboard(on: Boolean) {
         settings.syncClipboard = on
         sendIdentity()
@@ -604,6 +624,11 @@ object FluxCore {
 
     fun setAgentInputAlerts(on: Boolean) {
         settings.agentInputAlerts = on
+        publish()
+    }
+
+    fun setApproveAtOnce(on: Boolean) {
+        settings.approveAtOnce = on && ApproveAtOnce.supported(Build.VERSION.SDK_INT)
         publish()
     }
 

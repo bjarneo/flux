@@ -140,7 +140,15 @@ type writer struct {
 	flushOnce sync.Once
 }
 
+// sendBuffer caps the kernel send buffer of a connection. The kernel
+// doubles the value. Without the cap, a stuck client can hold the default
+// buffer of the kernel, which net.core.wmem_default can raise to 32 MiB.
+const sendBuffer = 64 * 1024
+
 func newWriter(conn net.Conn) *writer {
+	if uc, ok := conn.(*net.UnixConn); ok {
+		_ = uc.SetWriteBuffer(sendBuffer)
+	}
 	w := &writer{
 		conn:  conn,
 		queue: make(chan []byte, maxQueued),

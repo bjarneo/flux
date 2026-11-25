@@ -16,7 +16,7 @@
 <meta property="og:image" content="https://bjarneo.github.io/flux/img/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="The Flux logo, the time 14:07, and the Flux Inbox on a phone with an agent that waits for an answer.">
+<meta property="og:image:alt" content="The Flux logo, the time 14:07, and Flux Chats on a phone with an agent that waits for an answer.">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preload" href="fonts/mona-sans.woff2" as="font" type="font/woff2" crossorigin>
@@ -57,7 +57,7 @@
   </div>
   <div class="tile hero-phone">
     <figure class="phone">
-      <img src="img/phone/inbox-agent.webp" width="720" height="1600" alt="The Flux Inbox on an Android phone at 14:07. The master tile shows the question of a Codex agent: run bin/migrate --apply. It has 3 numbered choices and a Reply button.">
+      <img src="img/phone/chats-agent.webp" width="720" height="1600" alt="Flux Chats on an Android phone at 14:07. Under Needs you, a sudo request has Deny and Approve, and the question of a Codex agent has 3 numbered choices.">
     </figure>
   </div>
   <nav class="tile times" aria-label="The afternoon">
@@ -102,11 +102,11 @@
 
   <div class="story-cols">
   <div class="moments">
-    <article class="tile moment" data-focus id="m-1407" data-time="14:07" data-label="Agent" data-shot="inbox-agent">
+    <article class="tile moment" data-focus id="m-1407" data-time="14:07" data-label="Agent" data-shot="chats-agent">
       <h3><time>14:07</time> Codex waits for an answer.</h3>
-      <p>The Inbox shows the agent that waits first. It shows the question, and the command that each choice approves. Tap 1, and Flux types the answer into the herdr pane on the computer.</p>
+      <p>Chats shows what needs you first, under <b>Needs you</b>. The card of the agent shows the question and each choice. Tap 1, and Flux types the answer into the herdr pane on the computer. You can also answer from the notification.</p>
       <p class="note">Agent replies need agent control on the computer, and the phone unlock.</p>
-      <figure class="phone phone-inline"><img src="img/phone/inbox-agent.webp" width="720" height="1600" loading="lazy" alt="The Inbox with the question of the Codex agent in the master tile."></figure>
+      <figure class="phone phone-inline"><img src="img/phone/chats-agent.webp" width="720" height="1600" loading="lazy" alt="Chats with the question of the Codex agent under Needs you."></figure>
     </article>
 
     <article class="tile moment" data-focus id="m-1409" data-time="14:09" data-label="Output" data-shot="agent-output">
@@ -115,42 +115,43 @@
       <figure class="phone phone-inline"><img src="img/phone/agent-output.webp" width="720" height="1600" loading="lazy" alt="The output of the Codex agent on the phone, with Output and Changes tabs, the 3 choices, and a text field."></figure>
     </article>
 
-    <article class="tile moment" data-focus id="m-1422" data-time="14:22" data-label="sudo" data-shot="inbox-approval">
+    <article class="tile moment" data-focus id="m-1422" data-time="14:22" data-label="sudo" data-shot="chat-approval">
       <h3><time>14:22</time> sudo asks for your fingerprint.</h3>
       <p>A <code>sudo</code> prompt on the computer shows on the phone. Touch the fingerprint sensor to approve it. The iPhone uses Face ID or Touch ID, and the Mac uses Touch ID.</p>
       <p>Only root on the computer can change the key that checks the approval. If the approval fails or times out, <code>sudo</code> asks for the password.</p>
       <div class="cmd cmd-inline"><code><span class="prompt" aria-hidden="true">~</span>sudo flux-cli approve setup</code><button class="btn btn-tonal btn-s" type="button" data-copy="sudo flux-cli approve setup">Copy</button></div>
-      <figure class="phone phone-inline"><img src="img/phone/inbox-approval.webp" width="720" height="1600" loading="lazy" alt="The Inbox at 14:22 with the request Approve sudo on omarchy-xps in the master tile, and a Review button."></figure>
+      <figure class="phone phone-inline"><img src="img/phone/chat-approval.webp" width="720" height="1600" loading="lazy" alt="The chat of omarchy-xps at 14:22 with the request Approve sudo on omarchy-xps, the buttons Deny and Approve, and the Send bar with Photo, File, Scan, and More."></figure>
     </article>
 
-    <article class="tile moment" data-focus id="m-1540" data-time="15:40" data-label="Clipboard" data-shot="send">
+    <article class="tile moment" data-focus id="m-1540" data-time="15:40" data-label="Clipboard" data-shot="send-bar">
       <h3><time>15:40</time> Copy on the phone, paste on the computer.</h3>
-      <p>Flux sends clipboard text and images in both directions. Send files, photos, and links from the Share menu of any app. Away from home, Flux connects through Tailscale.</p>
-      <figure class="phone phone-inline"><img src="img/phone/send.webp" width="720" height="1600" loading="lazy" alt="The Send screen on mobile data, with Send clipboard, Send files, Get files, and the camera tools."></figure>
+      <p>Flux sends clipboard text and images in both directions. The chat of a computer has a Send bar with <b>Photo</b>, <b>File</b>, <b>Scan</b>, and <b>More</b>. Send files, photos, and links from the Share menu of any app. Away from home, Flux connects through Tailscale.</p>
+      <p class="note">The sync switches are in <b>Settings</b>, from the gear key at the top of Chats.</p>
+      <figure class="phone phone-inline"><img src="img/phone/send-bar.webp" width="720" height="1600" loading="lazy" alt="The chat of omarchy-xps on mobile data, with the clipboard row and the Send bar. The More list shows Camera, Text, QR, and Signature."></figure>
     </article>
 
     <article class="tile moment" data-focus id="m-1612" data-time="16:12" data-label="Files" data-shot="browse">
       <h3><time>16:12</time> Get a file from the computer at home.</h3>
-      <p><b>Get files</b> opens the shared folders of the computer, read-only. Search all of them by name, then save the file on the phone.</p>
+      <p><b>Get files</b> is in the menu of the chat of a computer. It opens the shared folders of the computer, read-only. Search all of them by name, then save the file on the phone.</p>
       <figure class="phone phone-inline"><img src="img/phone/browse.webp" width="720" height="1600" loading="lazy" alt="Get files shows the home folder of the computer, with a search field, folders, and files to download."></figure>
     </article>
 
     <article class="tile moment" data-focus id="m-1730" data-time="17:30" data-label="Media" data-shot="media">
       <h3><time>17:30</time> Pause the music at home.</h3>
-      <p><b>Media</b> shows what plays on the computer. Play, pause, skip, seek, and set the volume. The Inbox also shows what plays now, with play and pause.</p>
+      <p><b>Media</b> shows what plays on the computer. Play, pause, skip, seek, and set the volume. <b>Remote</b> also shows what plays now, with play and pause.</p>
       <figure class="phone phone-inline"><img src="img/phone/media.webp" width="720" height="1600" loading="lazy" alt="The Media screen with the song Weightless, a seek bar, and the previous, pause, and next buttons."></figure>
     </article>
 
     <article class="tile moment" data-focus id="m-1802" data-time="18:02" data-label="Windows" data-shot="omarchy">
       <h3><time>18:02</time> Move a window to another workspace.</h3>
-      <p>The Omarchy panel shows your workspaces and the focused window. Move, close, or float a window. Open the Omarchy menu, a terminal, or a browser with their key bindings.</p>
+      <p>The <b>Omarchy panel</b> in <b>Remote</b> shows your workspaces and the focused window. Move, close, or float a window. Open the Omarchy menu, a terminal, or a browser with their key bindings.</p>
       <figure class="phone phone-inline"><img src="img/phone/omarchy.webp" width="720" height="1600" loading="lazy" alt="The Omarchy panel with workspaces 1 to 10, the window controls, and the launch shortcuts with their key bindings."></figure>
     </article>
 
-    <article class="tile moment" data-focus id="m-1834" data-time="18:34" data-label="Desk" data-shot="touchpad">
+    <article class="tile moment" data-focus id="m-1834" data-time="18:34" data-label="Desk" data-shot="remote">
       <h3><time>18:34</time> At the desk, the phone is a touchpad.</h3>
-      <p>Use the phone as a touchpad and keyboard, a webcam, or a microphone. Show the computer screen on the phone, with its audio. The Flux window on the computer shows what is live, with <b>Stop</b>.</p>
-      <figure class="phone phone-inline"><img src="img/phone/touchpad.webp" width="720" height="1600" loading="lazy" alt="The touchpad and keyboard screen, with a large touch area and keys for esc, tab, arrows, ctrl, alt, shift, and super."></figure>
+      <p><b>Remote</b> has 3 groups. <b>See</b> shows the computer screen on the phone, or adds a second monitor. <b>Use</b> makes the phone a touchpad and keyboard. <b>Share</b> makes the phone a webcam or a microphone, or plays the audio of the computer. The Flux window on the computer shows what is live, with <b>Stop</b>.</p>
+      <figure class="phone phone-inline"><img src="img/phone/remote.webp" width="720" height="1600" loading="lazy" alt="The Remote screen with the groups See, Use, and Share. The rows include Remote desktop, Omarchy panel, Touchpad and keyboard, Webcam, and Mic."></figure>
     </article>
 
     <article class="tile moment" data-focus id="m-1851" data-time="18:51" data-label="Ring" data-shot="ring">
@@ -163,21 +164,21 @@
 
   <div class="stage" aria-hidden="true">
     <figure class="phone" data-stage>
-      <img class="is-on" src="img/phone/inbox-agent.webp" data-shot="inbox-agent" width="720" height="1600" alt="">
+      <img class="is-on" src="img/phone/chats-agent.webp" data-shot="chats-agent" width="720" height="1600" alt="">
       <img src="img/phone/agent-output.webp" data-shot="agent-output" width="720" height="1600" loading="lazy" alt="">
-      <img src="img/phone/inbox-approval.webp" data-shot="inbox-approval" width="720" height="1600" loading="lazy" alt="">
-      <img src="img/phone/send.webp" data-shot="send" width="720" height="1600" loading="lazy" alt="">
+      <img src="img/phone/chat-approval.webp" data-shot="chat-approval" width="720" height="1600" loading="lazy" alt="">
+      <img src="img/phone/send-bar.webp" data-shot="send-bar" width="720" height="1600" loading="lazy" alt="">
       <img src="img/phone/browse.webp" data-shot="browse" width="720" height="1600" loading="lazy" alt="">
       <img src="img/phone/media.webp" data-shot="media" width="720" height="1600" loading="lazy" alt="">
       <img src="img/phone/omarchy.webp" data-shot="omarchy" width="720" height="1600" loading="lazy" alt="">
-      <img src="img/phone/touchpad.webp" data-shot="touchpad" width="720" height="1600" loading="lazy" alt="">
+      <img src="img/phone/remote.webp" data-shot="remote" width="720" height="1600" loading="lazy" alt="">
       <img src="img/phone/ring.webp" data-shot="ring" width="720" height="1600" loading="lazy" alt="">
     </figure>
   </div>
   </div>
   </div>
 
-  <p class="story-foot">The screens show Flux for Android 0.12.0 in demo mode, with sample computers and agents.</p>
+  <p class="story-foot">The screens show Flux for Android in demo mode, with sample computers and agents.</p>
 </section>
 
 <section class="tile computer" id="computer" data-focus aria-labelledby="computer-title">
@@ -187,8 +188,8 @@
     <div class="cmd cmd-inline"><code><span class="prompt" aria-hidden="true">~</span>flux-cli open</code><button class="btn btn-tonal btn-s" type="button" data-copy="flux-cli open">Copy</button></div>
   </div>
   <figure class="desk">
-    <img src="img/desk/remote-live.webp" width="1600" height="1031" loading="lazy" alt="The Flux window on the computer. The Overview of Pixel 8 shows the battery, the latest notifications, the remote desktop and the phone camera as live with Stop buttons, and the device access switches.">
-    <figcaption>The Overview of a Pixel 8. The remote desktop and the phone camera are live.</figcaption>
+    <img src="img/desk/remote-live.webp" width="1600" height="1695" loading="lazy" alt="The Flux window on the computer. The Phone page of Pixel 8 shows the battery, the Access card, the Streams card with the phone camera, the microphone, and the screen as live with Stop buttons, and 3 saved commands.">
+    <figcaption>The Phone page of a Pixel 8. The phone camera, the microphone, and the screen are live.</figcaption>
   </figure>
 </section>
 
@@ -206,11 +207,11 @@
     <p class="note">Tokyo Night is the default when the computer sends no theme.</p>
   </div>
   <figure class="phone" data-theme-phone>
-    <img class="is-on" src="img/phone/inbox-agent.webp" data-shot="tokyo-night" width="720" height="1600" loading="lazy" alt="The Flux Inbox in the Tokyo Night theme.">
-    <img src="img/phone/theme-catppuccin-latte.webp" data-shot="catppuccin-latte" width="720" height="1600" loading="lazy" alt="The Flux Inbox in the light Catppuccin Latte theme.">
-    <img src="img/phone/theme-neon.webp" data-shot="neon" width="720" height="1600" loading="lazy" alt="The Flux Inbox in the Neon theme.">
-    <img src="img/phone/theme-futurism.webp" data-shot="futurism" width="720" height="1600" loading="lazy" alt="The Flux Inbox in the Futurism theme.">
-    <img src="img/phone/theme-cotton-candy.webp" data-shot="cotton-candy" width="720" height="1600" loading="lazy" alt="The Flux Inbox in the Cotton Candy theme.">
+    <img class="is-on" src="img/phone/chats-agent.webp" data-shot="tokyo-night" width="720" height="1600" loading="lazy" alt="Flux Chats in the Tokyo Night theme.">
+    <img src="img/phone/theme-catppuccin-latte.webp" data-shot="catppuccin-latte" width="720" height="1600" loading="lazy" alt="Flux Chats in the light Catppuccin Latte theme.">
+    <img src="img/phone/theme-neon.webp" data-shot="neon" width="720" height="1600" loading="lazy" alt="Flux Chats in the Neon theme.">
+    <img src="img/phone/theme-futurism.webp" data-shot="futurism" width="720" height="1600" loading="lazy" alt="Flux Chats in the Futurism theme.">
+    <img src="img/phone/theme-cotton-candy.webp" data-shot="cotton-candy" width="720" height="1600" loading="lazy" alt="Flux Chats in the Cotton Candy theme.">
   </figure>
 </section>
 
@@ -241,8 +242,8 @@
     <figure class="phone"><img src="img/phone/pair.webp" width="720" height="1600" loading="lazy" alt="The pairing sheet on the phone for framework-13, with the key 5EE6 825F 974E D59A in 4 blocks, and the buttons Cancel and Pair."></figure>
   </div>
   <figure class="tile trust-desk desk">
-    <img src="img/desk/device-access.webp" width="880" height="948" loading="lazy" alt="The Device access switches of a Pixel 8 in the Flux window: Clipboard sync, Notifications, Shared folders, Remote input, Remote desktop, Agent output, Agent control, and Agent terminals. All switches except Clipboard sync and Notifications show Off globally.">
-    <figcaption>The <b>Device access</b> switches in the Flux window.</figcaption>
+    <img src="img/desk/device-access.webp" width="1768" height="758" loading="lazy" alt="The Access card of a Pixel 8 in the Flux window: Clipboard sync, Notifications, and Agent output are on. Shared folders, Remote desktop, Remote input, Agent control, and Agent terminals are off, because this computer turned them off.">
+    <figcaption>The <b>Access</b> card in the Flux window.</figcaption>
   </figure>
 </section>
 
@@ -282,7 +283,7 @@
       <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/features.md#automatic-screenshots-and-photos">New screenshots and photos to the computer</a></dd>
     </div>
     <div>
-      <dt>Control</dt>
+      <dt>Remote</dt>
       <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/remote-input.md">Touchpad and keyboard</a></dd>
       <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/remote-desktop.md">Remote desktop with audio</a></dd>
       <dd><a href="https://github.com/bjarneo/flux/blob/master/docs/features.md#dictation-in-text-fields">Dictation in text fields</a></dd>
@@ -315,7 +316,7 @@
     <div class="tile app">
       <h4>Android</h4>
       <p class="req">Android 10 or later</p>
-      <a class="btn btn-fill" data-asset="android" href="https://github.com/bjarneo/flux/releases/download/v0.12.0/flux-android-0.12.0.apk">Download the APK</a>
+      <a class="btn btn-fill" data-asset="android" href="https://github.com/bjarneo/flux/releases/download/v0.20.1/flux-android-0.20.1.apk">Download the APK</a>
       <p class="note">The computer sends later versions to the phone.</p>
     </div>
     <div class="tile app">
@@ -327,7 +328,7 @@
     <div class="tile app">
       <h4>Mac</h4>
       <p class="req">macOS 14 or later</p>
-      <a class="btn btn-fill" data-asset="mac" href="https://github.com/bjarneo/flux/releases/download/v0.12.0/flux-macos-0.12.0.zip">Download for Mac</a>
+      <a class="btn btn-fill" data-asset="mac" href="https://github.com/bjarneo/flux/releases/download/v0.20.1/flux-macos-0.20.1.zip">Download for Mac</a>
       <p class="note">The app is not notarized. Before the first start, run <code>xattr -dr com.apple.quarantine Flux.app</code>.</p>
     </div>
   </div>
@@ -335,7 +336,7 @@
   <div class="tile install-pair" data-focus>
     <h3><span class="step">3</span> Pair them</h3>
     <p>Open Flux on both sides. Select <b>+ Pair new device</b> in the Flux window, and compare the key on both screens.</p>
-    <p class="note">Version <a data-version href="https://github.com/bjarneo/flux/releases/tag/v0.12.0">0.12.0</a>. <a href="https://github.com/bjarneo/flux/releases">All releases</a>.</p>
+    <p class="note">Version <a data-version href="https://github.com/bjarneo/flux/releases/tag/v0.20.1">0.20.1</a>. <a href="https://github.com/bjarneo/flux/releases">All releases</a>.</p>
   </div>
 </section>
 

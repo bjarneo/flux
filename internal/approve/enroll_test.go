@@ -63,7 +63,7 @@ func TestEnroll(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !read.Public.Equal(&ph.priv.PublicKey) || read.DeviceID != k.DeviceID || read.DeviceName != "Pixel 8" {
+	if !ph.priv.PublicKey.Equal(read.Public) || read.DeviceID != k.DeviceID || read.DeviceName != "Pixel 8" {
 		t.Fatalf("key file %+v", read)
 	}
 }

@@ -592,54 +592,6 @@ struct ThreadEarlier: View {
     }
 }
 
-// MARK: Strip
-
-/// The agents of the computer as pills that scroll to the side. The pill of
-/// the agent on screen has the accent. A tap opens another agent.
-/// `elapsed` is the time of the step of the agent on screen, or empty.
-struct AgentStrip: View {
-    let agents: [HerdrAgent]
-    let pane: String
-    let elapsed: String
-    let pick: (String) -> Void
-    @Environment(\.tn) private var tn
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(agents) { a in
-                    let on = a.pane == pane
-                    Button { if !on { pick(a.pane) } } label: {
-                        HStack(spacing: 8) {
-                            StatusMark(status: a.status)
-                            Text(a.project.isEmpty ? (a.title.isEmpty ? a.pane : a.title) : a.project)
-                                .font(.footnote.weight(.medium))
-                                .foregroundStyle(tn.text)
-                                .lineLimit(1)
-                            Text(a.status == .done ? "done" : on && !elapsed.isEmpty ? elapsed : a.agent)
-                                .font(.caption2.monospaced())
-                                .foregroundStyle(tn.sub)
-                                .lineLimit(1)
-                        }
-                        .padding(.leading, 11)
-                        .padding(.trailing, 12)
-                        .frame(minHeight: 36)
-                        .background(Capsule().fill(on ? tn.accentTile : tn.tile))
-                        .overlay(Capsule().strokeBorder(on ? tn.accent : tn.line))
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(a.project.isEmpty ? a.agent : a.project), \(a.agent)")
-                    .accessibilityValue(on ? "Shown, \(a.status.label)" : a.status.label)
-                    .accessibilityAddTraits(on ? .isSelected : [])
-                }
-            }
-            .padding(.horizontal, 10)
-        }
-    }
-}
-
 // MARK: Changes
 
 /// The changes of the repository of an agent: each file with its counts

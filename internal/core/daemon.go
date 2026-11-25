@@ -200,6 +200,27 @@ type Daemon struct {
 	// herdrCLI is the herdr CLI that fluxd runs for the live terminal,
 	// with the result of its last version check.
 	herdrCLI herdrCLI
+
+	// extended is true while Hyprland can have the virtual monitor of the
+	// extended screen, see extend.go. fluxd removes it at its stop.
+	extended bool
+
+	// outputs reads and changes the audio outputs of this computer. It is
+	// nil in a headless daemon.
+	outputs audioOutputs
+
+	// speaker plays the audio of this computer on a phone. speakerMute is
+	// the output that fluxd muted for it.
+	speaker     *speakerSession
+	speakerErr  string
+	speakerMute outputMute
+
+	// sshSigns holds the SSH sign requests that wait for a phone.
+	// sshSocket is the path of the ssh-agent socket, or "" when fluxd
+	// could not make it. sshSocketErr then tells why.
+	sshSigns     sshBook
+	sshSocket    string
+	sshSocketErr string
 }
 
 // Options change how the daemon runs. The zero value is the normal mode.
@@ -334,6 +355,7 @@ func New(ctx context.Context, logger *log.Logger, opts Options) (*Daemon, error)
 		} else {
 			d.logf("media control off: %v", err)
 		}
+		d.outputs = desktop.NewOutputs()
 		// The first link can come before the theme watch starts, so the
 		// theme loads now.
 		d.themePath = desktop.ThemePath()
@@ -384,6 +406,8 @@ func (d *Daemon) Busy() string {
 		what = "the screen mirror"
 	case d.desktop != nil:
 		what = "the remote desktop"
+	case d.speaker != nil:
+		what = "the phone speaker"
 	case len(d.sessions.browse) > 0:
 		what = "Browse PC"
 	case d.appSending != "":
@@ -397,6 +421,9 @@ func (d *Daemon) Busy() string {
 	d.mu.Unlock()
 	if what == "" && d.approvals.pending() > 0 {
 		what = "a fingerprint approval"
+	}
+	if what == "" && d.sshSigns.pending() > 0 {
+		what = "an SSH signature"
 	}
 	return what
 }
@@ -422,6 +449,11 @@ func (d *Daemon) nameLocked() string {
 // context of New ends.
 func (d *Daemon) Run() error {
 	ctx := d.ctx
+	// A virtual monitor that a crashed fluxd left goes away before a
+	// phone can start a session.
+	if !d.opts.Headless {
+		d.removeLeftoverOutput(ctx)
+	}
 	p := lan.New(lan.Config{
 		Cert: d.cert,
 		Identity: func() proto.Identity {
@@ -457,6 +489,7 @@ func (d *Daemon) Run() error {
 	go d.outboxLoop(ctx)
 	go d.snippetLoop(ctx)
 	go d.automationLoop(ctx)
+	go d.restoreCrashedMute(ctx, speakerMuteFile(), 5, 2*time.Second)
 	if d.opts.Headless {
 		go d.publishLoop(ctx)
 		go d.discoveryLoop(ctx)
@@ -508,6 +541,16 @@ func (d *Daemon) Run() error {
 
 	<-ctx.Done()
 	d.closeLinks()
+	// The session also removes the virtual monitor, but fluxd can exit
+	// before its goroutine ends.
+	d.removeExtendOutput()
+	// The session of the phone speaker can still run, so the output that
+	// it muted gets its sound back now.
+	if d.outputs != nil {
+		stop, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		_ = d.speakerMute.restore(stop, d.outputs, speakerMuteFile())
+		cancel()
+	}
 	removeClipImages(d.clipDir)
 	_ = os.Remove(d.clipDir)
 	if in, ok := d.input.(*desktop.Input); ok {
@@ -927,7 +970,7 @@ func (d *Daemon) onLink(l *lan.Link) {
 	if old != nil && old != l {
 		old.Close()
 	}
-	d.logf("link up: %s (%s) paired=%v", name, ip, paired)
+	d.logf("%s", linkUpLine(name, dev.ID, ip, paired))
 	if unpair {
 		_ = l.Send(proto.New(proto.TypePair, map[string]any{"pair": false}))
 	}
@@ -1036,10 +1079,13 @@ func (d *Daemon) receive(dev *Device, l *lan.Link) {
 		stopped = state == "requested" || state == "confirm"
 		note = dev.pairLinkEndedLocked()
 	}
-	name := dev.Name
+	name, paired := dev.Name, dev.Paired
 	d.mu.Unlock()
+	if current && paired && d.ctx.Err() == nil {
+		d.watchDisconnect(dev)
+	}
 	d.closeNotes(note)
-	d.logf("link down: %s: %v", name, err)
+	d.logf("%s", linkDownLine(name, dev.ID, err))
 	if stopped {
 		d.toast("Pairing with %s stopped, because the connection closed", name)
 	}
@@ -1122,7 +1168,11 @@ func (d *Daemon) onPairedLink(dev *Device, l *lan.Link) {
 	notifications := dev.supports(proto.TypeNotification)
 	dnd, input := dev.accepts(proto.TypeFluxDnd), dev.accepts(proto.TypeFluxInput)
 	players, herdr := dev.supports(proto.TypeMprisRequest), dev.accepts(proto.TypeFluxHerdr)
+	wake := dev.accepts(proto.TypeFluxWake) && !d.opts.Headless
 	d.mu.Unlock()
+	if wake {
+		d.sendWakeTargets(l)
+	}
 	d.sendBattery(l)
 	d.sendCommandList(l)
 	d.sendConnectClipboard(l)
@@ -1146,6 +1196,7 @@ func (d *Daemon) onPairedLink(dev *Device, l *lan.Link) {
 		_ = l.Send(state)
 	}
 	d.sendThemeTo(dev, l)
+	d.requestSSHKey(dev, l)
 }
 
 // markDirty schedules a state event for all subscribers.

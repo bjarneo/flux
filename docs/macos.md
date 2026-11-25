@@ -95,8 +95,8 @@ Earlier versions of Flux show only 8 characters, so update Flux on all devices b
 
 You can also start from the computer with `flux-cli pair` and accept on the Mac.
 A request from the computer does not change the page that the window shows.
-**Chat** shows the request, and a notification shows the key.
-To see the key, select **Compare the key** in **Chat**, or select the notification.
+**Chats** shows the request under **Needs you**, and a notification shows the key.
+To see the key, select **Compare the key** in **Chats**, or select the notification.
 Compare the key, then select **Accept**.
 Return does not accept a request.
 After the Mac accepts, the computer asks you to confirm the key.
@@ -129,10 +129,10 @@ A computer that is not paired finds the Mac through Bonjour, and `fluxd` then co
 
 | Feature | Mac behavior |
 | --- | --- |
-| Files, text, and links | Send from **Chat**, a drop on **Chat** or the Dock icon, **Open With**, or **Services > Send to Flux**. Received files go to `~/Downloads` or the folder in Settings, with the quarantine mark of a download, so Gatekeeper checks them when you open them. Flux refuses a file that leaves less than 256 MB free. A received file or link shows in a notification, and it opens only after a click. Flux never opens a received file by itself. |
+| Files, text, and links | Send from the chat of a computer in **Chats**, a drop on that chat or the Dock icon, **Open With**, or **Services > Send to Flux**. Received files go to `~/Downloads` or the folder in Settings, with the quarantine mark of a download, so Gatekeeper checks them when you open them. Flux refuses a file that leaves less than 256 MB free. A received file or link shows in a notification, and it opens only after a click. Flux never opens a received file by itself. |
 | Clipboard | Syncs text both ways by itself, also while the window is closed. A copy while no computer is connected goes out when a computer connects. Password manager entries are not synced automatically. Images do not sync to or from the Mac. See [Clipboard](#clipboard). |
-| Screenshots and photos | **Send new screenshots** watches the macOS screenshot folder. **Send new photos** sends new photos from the Photos library and needs full Photos access. 1 scan sends at most 50 images. The rest go with the next scan, for example after the next new image or the next connect. |
-| Media | Controls the computer's players. The computer does not control the players on the Mac. |
+| Screenshots and photos | **Send new screenshots** watches the macOS screenshot folder. **Send new photos** sends new photos from the Photos library and needs full Photos access. 1 scan sends at most 50 images. The rest go with the next scan, for example after the next new image or the next connect. While **Send new screenshots** is on, the tray of a computer chat shows the 4 newest screenshots. |
+| Media | Controls the computer's players. The computer does not control the players on the Mac. The [audio outputs](features.md#audio-outputs) and the [phone as speaker](camera.md#phone-as-speaker) are only in Flux for Android. |
 | Commands | Lists and runs the commands configured on the computer. |
 | Browse | Opens the computer's shared folders read-only through SSH inside a `flux.tunnel`, and downloads files. |
 | Webcam | Streams a Mac camera, including Continuity Camera, to the computer as a virtual webcam in H.264. Zoom is digital, and exposure is a software gain, because macOS gives apps no camera zoom or exposure control. **Also send the microphone** starts the microphone with the webcam. `flux-cli webcam start` asks the Mac to start it. See [Start a stream from the computer](#start-a-stream-from-the-computer). |
@@ -142,7 +142,7 @@ A computer that is not paired finds the Mac through Bonjour, and `fluxd` then co
 | Notifications | Shows notifications from `flux-cli notify`. Each computer can show 10 notifications at once, then 1 more each second. Only the first notification of a burst makes a sound. Each computer keeps at most 20 notifications in Notification Center, and a new one removes the oldest. Received links count toward these limits. |
 | Battery | A Mac with a battery reports it. The scope menu and **Computers** show the battery of each computer. |
 | Do Not Disturb | See [Focus](#focus). |
-| Fingerprint approval | Approves `sudo` and polkit with Touch ID. **Chat** shows each request with **Deny** and **Approve**, and **Approve** opens the prompt. The setup is on the page of each computer in **Computers**. See [approval](#approval). |
+| Fingerprint approval | Approves `sudo` and polkit with Touch ID. **Chats** shows each request under **Needs you** with **Deny** and **Approve**, and the chat of the computer shows it too. **Approve** opens the prompt. The setup is on the page of each computer in **Computers**. See [approval](#approval). |
 | Touchpad and keyboard | The trackpad, the mouse, and the keyboard of the Mac control the pointer and the keys of the Omarchy computer. The computer does not control the Mac. The computer needs `remote_input = true`. The Mac asks for Touch ID or its password before the touchpad opens. Control and Option together give the pointer back to the Mac. See [Touchpad and keyboard](remote-input.md#use-a-mac). |
 | Remote desktop | Shows the screen of the Omarchy computer in a window. The mouse over the video, the keys, the Omarchy panel, and dictation control the computer. The computer does not control the Mac. The computer needs `remote_desktop = true`, and `remote_input = true` for control. The Mac asks for Touch ID or its password before the window opens. See [Remote desktop](remote-desktop.md#use-a-mac). |
 | herdr agents | Shows the coding agents that herdr runs on the computer, their output in color, and notifications. Answers them and starts new agents after Touch ID or the password when the computer allows replies, with dictation on the Mac. See [herdr agents](herdr.md#use-a-mac). |
@@ -189,60 +189,67 @@ Each request follows these rules:
 - The Mac ignores a request of the same kind from the same computer that comes less than 3 seconds after the last request. An ignored request also counts as the last request.
 - An unpair ends the requests of the computer. A link that only drops keeps them.
 
-## Chat and navigation
+## Chats and navigation
 
-The window has a sidebar with 3 destinations: **Chat**, **Control**, and **Computers**.
-The Chat row counts the items of all computers that need you.
-To open a destination from the keyboard, press Command-1 to Command-3, or use the **Go** menu.
+The window shows the list of chats in the sidebar and the open chat in the detail column.
+The list holds 1 chat for each herdr agent and 1 chat for each paired computer, as in a messaging app.
+Under the list are the rows of **Control** and **Computers**, and this Mac is at the bottom.
+Press Command-1 for **Chats**, Command-2 for **Control**, and Command-3 for **Computers**. The **Go** menu has the same items.
+**Chats** shows the chat that was open last.
 
-The scope menu in the toolbar shows **All computers** or 1 paired computer, with a link dot and a battery dot for each computer.
-The scope filters **Chat** and **Control**, and it picks the theme of the **Computer** setting.
-A click on a paired computer in **Computers** also sets the scope, and a second click sets **All computers** again.
-A new pairing sets the scope to the new computer and opens **Chat**.
-Each start of Flux begins with **All computers**.
+The top of the sidebar shows **Chats**, the number of items that need you, and the number of computers online.
+The **+** key starts an agent on a computer that lets this Mac control herdr. When more than 1 computer can start one, Flux asks which one.
+The search field keeps only the chats that hold its text, for example the name of an agent, a project, a computer, or a received file. Escape empties the field.
 
-**Chat** shows what happens between this Mac and the computers in scope as 1 thread, with the newest entry at the bottom:
+The list has 3 groups:
 
-- The computers write on the left: agents that wait, work, or are done, approvals, pair requests, received files, the last clip from a computer, and your answers to approvals.
-- What this Mac sent shows on the right: links, text, clips, scans, and files.
-- An agent, an approval, and a pair request show at the time that they got their state. An agent with a new status shows again at the end.
-- A card that needs you takes the full width of the column and has a red border.
-- The toolbar subtitle shows the computer in scope and the number of items that need you.
-- The thread keeps the sent items and the transfers in memory only.
+- **Needs you**: the approval with **Deny** and **Approve**, a pair request with **Compare the key**, and each agent that waits for input. An agent that waits has a red border and shows how long it waits, such as `3m`.
+- **Agents**: the other agents. The agents that work come first and show how long they work, such as `2:14`. Then come the agents that are done and the idle agents. When the agents are on 1 computer, the heading names it. Otherwise each row names its computer.
+- **Computers**: each paired computer with the newest entry of its chat, such as `You: Dinner at 7`. The online computers come first. A computer that is not reachable shows dimmed with `Not reachable since HH:MM`.
 
-The card of an agent that waits shows its command in mono and the numbered choices. The first choice has the accent fill.
-The card reads the output of the agent when it shows and when its window comes to the front.
-Choices show only for an output that came after that read.
-The question keeps the lines nearest the choices, because they hold the command that a choice approves, and the card never cuts them.
-Each answer asks for Touch ID or the password first, see [Touch ID lock](#touch-id-lock).
-After an answer, the choices stay off until a new output comes.
-When the computer does not allow replies, set `herdr_control = true` on it.
-
-A choice such as **No, and tell Codex what to do differently** opens a reply in the dock.
-The dock then shows **Reply to AGENT** with **Cancel**, and the field has the accent border.
-**Send** selects the choice, waits until the agent leaves its dialog, and sends your text as the next prompt.
-**Cancel** or Escape closes the reply.
-
-An agent that works shows your last answer, its step, and the time of its status.
-An agent that is done shows the time of its last turn.
-**Open thread** opens the agent in the agents window. The window shows the output of the agent as a thread, with a dock for the question, the step, and your prompts. See [Use a Mac](herdr.md#use-a-mac).
-
-The card of an approval shows **Deny** and **Approve**.
 **Approve** opens the Touch ID prompt, and the card never approves by itself.
-The card of a pair request opens the pairing page with **Compare the key**.
-It never pairs by itself.
+**Compare the key** opens the pairing page, and the card never pairs by itself.
+When no computer is online, the list shows that Flux connects, or a notice with **Retry**.
+
+A click on a computer opens its chat. The chat shows what happens between this Mac and that computer, with the newest entry at the bottom:
+
+- The computer writes on the left: approvals, received files, the last clip from the computer, and your answers to approvals.
+- What this Mac sent shows on the right: links, text, clips, scans, and files.
+- The chat of a computer shows no agents. Each agent has its own chat.
+- The toolbar shows the picture of the computer with a green dot while it is online, its name, and its link and battery, such as `connected · 82%, charging`.
+- The menu of the toolbar has **Control**, **Agents Window**, **Start an Agent…**, and **Computer Page**. **Control** opens Control with the computer in scope.
+- The chat keeps the sent items and the transfers in memory only.
 
 A received file shows its progress, then **Open**.
 Its context menu has **Open**, **Show in Finder**, and **Clear Finished Transfers**.
 
-The dock under the thread shows the clipboard of this Mac with **Send**. Under it are the **+** key, a field for text or a link, the mic key, and **Send**.
-The **+** key opens a menu with **Send files**, **Get files**, **Photo**, **Scan**, **Text**, and **QR**, and under **Go to**, **Control** and **Computers**.
-Click **+** and select an item, or press **+**, move the pointer to an item, and release the button.
+The dock under the chat shows the clipboard of this Mac in a row with **Send**. Under it are the **+** key, the field **Message COMPUTER**, the mic key, and the send key.
 A link that starts with `http://` or `https://` opens in the browser of the computer. Other text goes to the clipboard of the computer.
-To send files from Finder, drop them on **Chat** or on the Dock icon, or select **Services > Send to Flux**.
+To send files from Finder, drop them on the chat of the computer or on the Dock icon, or select **Services > Send to Flux**.
+A drop on the Dock icon goes to the computer of the open chat when it is online.
+
+The **+** key opens the tray under the composer and turns into an accent key with a cross.
+The tray holds the tools **Camera**, **File**, **Scan**, **Text**, **QR**, **Signature**, and **Get files**. **Agent** shows when the computer lets this Mac start agents.
+The camera tools open the camera window in that mode. **File** opens the file picker, and **Get files** opens the home folder of the computer.
+While **Send new screenshots** is on in **Settings > Features**, the tray also shows the 4 newest screenshots of this Mac, and **All screenshots**.
+Flux reads the screenshot folder only while that setting is on.
+To send screenshots, click them in the tray, then click the send key. The key shows the number of screenshots, and each screenshot shows its number in the order of the clicks.
+A click in the field closes the tray. Escape also closes it.
+
+A click on an agent opens its chat. The chat shows the output of the agent as a thread, with the dock for the question, the step, and your prompts.
+The toolbar shows the picture of the agent with a dot for its status, the task, and the agent, the project, and the computer.
+The toolbar also has **Changes**, Command-D, **Keys**, the copy button, and the refresh button, Command-R.
+See [Use a Mac](herdr.md#use-a-mac).
 
 **Control** holds the tools that act on the computer in scope: the remote desktop with the Omarchy panel, the touchpad and keyboard, the commands, the media, the microphone, the webcam and screen mirror, and the agents.
+The scope menu in the toolbar shows **All computers** or 1 paired computer, with a link dot and a battery dot for each computer.
+The scope filters **Control**, and it picks the theme of the **Computer** setting. **Chats** has no scope, because each chat belongs to 1 computer.
+A click on a paired computer in **Computers** also sets the scope, and a second click sets **All computers** again.
+A new pairing sets the scope to the new computer and opens its chat.
+Each start of Flux begins with **All computers**.
 When more than 1 computer can take a tool, Flux asks which one.
+A click on an agent in **Control** opens its chat. **Agents Window** opens the agents of a computer in their own window.
+While the agents window of a computer is open, an agent of that computer opens in that window, because the computer sends the output of 1 agent at a time.
 The cards of the features open on a page of their own from **Control**.
 The agents, browse, camera, remote desktop, and touchpad windows stay separate windows.
 
@@ -251,8 +258,52 @@ The arrow on a paired computer opens its page, with the Touch ID approval and **
 
 The menu bar extra shows the Flux mark and the count of the items that need you.
 Its panel shows the 2 newest items that need you as chat cards, with the one-tap choices of an agent and **Deny** and **Approve** of an approval.
+A choice such as **No, and tell Codex what to do differently** opens the chat of the agent in the window. Select the choice there, then write what the agent must do.
+**Open chat** on the card of an agent opens its chat in the window.
 Then come the next 3 items, a menu for each online computer, **Open Flux**, **Settings…**, and **Quit Flux**.
-A click on a next item opens **Chat** in the window.
+A click on a next item opens its chat in the window: the chat of an agent, or the chat of the computer of an approval.
+
+The card of an agent in the panel shows its command in mono and the numbered choices. The first choice has the accent fill.
+The card reads the output of the agent when it shows and when the panel opens.
+Choices show only for an output that came after that read.
+The question keeps the lines nearest the choices, because they hold the command that a choice approves, and the card never cuts them.
+Each answer asks for Touch ID or the password first, see [Touch ID lock](#touch-id-lock).
+After an answer, the choices stay off until a new output comes.
+When the computer does not allow replies, the thread says `Agent control is off on <computer>`.
+To turn it on, open Flux on the computer and use the **Access** card.
+
+## Agent notifications and the link state
+
+Flux for macOS posts the notification of an agent while Flux runs.
+Approvals and agent notifications do not reach a Mac that has no running Flux.
+
+With **Agent control** on, the notification of a blocked agent names the agent, the project, and the computer, and shows the question.
+To answer, select an action:
+
+- A question with 2 or 3 numbered choices gets 1 action for each choice. A click sends the number of the choice. A long label is cut at 24 characters.
+- A question with 4 numbered choices or more has no action. A click on the notification opens the chat of the agent.
+- A question with no numbered choices gets a **Reply** action with a text field. The text goes to the input of the agent, as **Send as answer** does.
+
+Each action asks for Touch ID or the Mac password, see [Touch ID lock](#touch-id-lock).
+The unlock stays valid for 5 minutes.
+Flux sends nothing until the unlock succeeds.
+Then Flux reads the agent again.
+When the question changed, Flux sends nothing and opens the chat with the line `The question changed. Pick again.`
+When the link to the computer is closed, Flux also sends nothing and opens the chat.
+When you cancel the check, Flux sends nothing and posts the notification again with its actions, without sound. It does this only while the agent still waits and **Agent needs input** is on. A second tap does nothing while a check runs.
+
+When **Agent control** is off on the computer, the notification has no action, and its text ends with `Read only`.
+
+The chat of an agent shows the link state:
+
+- When the computer is not reachable, the chat keeps the last output and shows `<computer> is not reachable. This output is from HH:MM.` with **Retry**. The choices and the field take no click.
+- While the computer connects, the chat shows `Connecting to <computer>`.
+- When the computer is back, the note goes away.
+
+Flux finds a closed link within 90 seconds.
+In the sidebar, the row of an agent of a computer that is not reachable stays in its group, dim, and shows `Not reachable since HH:MM`.
+The row of the computer shows the same line.
+Flux knows the time only for a computer that went offline in this run of Flux.
 
 ## Theme
 
@@ -297,7 +348,7 @@ To sync without a question, choose **Allow** for Flux in **System Settings > Pri
 
 ## Touch ID lock
 
-The touchpad, the remote desktop, and the agent replies ask for Touch ID or the Mac password.
+The touchpad, the remote desktop, the agent replies, and the actions of an agent notification ask for Touch ID or the Mac password.
 The unlock stays valid for 5 minutes.
 It ends earlier when the Mac sleeps, its screens sleep, the screen locks, or another user takes the session.
 
@@ -390,11 +441,11 @@ log stream --predicate 'subsystem == "org.omarchy.flux"'
 | `macos/Sources/FluxKit/Core` | Devices, pairing, trust store, the plugin protocol, and notifications |
 | `macos/Sources/FluxKit/Plugins` | One folder per feature |
 | `macos/Sources/FluxKit/Theme` | The theme packet, the contrast guard, and the palettes |
-| `macos/Sources/FluxKit/Inbox` | The items of the Inbox, the order of the chat, and their texts |
+| `macos/Sources/FluxKit/Inbox` | The items of the Inbox, the list of chats, the order of a chat, and their texts |
 | `macos/App` | The SwiftUI app; `App/Features/Features.swift` lists the plugins and their views |
 | `macos/App/Theme` | The colors of the theme in SwiftUI and the shared components |
-| `macos/App/Shell` | The destinations, the sidebar, the Go menu, the scope menu, and the pages of the features |
-| `macos/App/Chat` | Chat: the thread, the cards, the dock, the notices, and the pairing guide |
+| `macos/App/Shell` | The destinations, the Go menu, the scope menu, and the pages of the features |
+| `macos/App/Chat` | Chats: the sidebar list, the chat of a computer with its dock and tray, the agent chat, the cards, the notices, and the pairing guide |
 | `macos/App/Destinations` | Control and Computers |
 | `macos/Tests/FluxKitTests` | Protocol and feature tests |
 | `macos/project.yml` | XcodeGen project with the Info.plist keys |

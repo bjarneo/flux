@@ -107,6 +107,8 @@ func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.handleRunCommand(dev, l, p)
 	case proto.TypeMprisRequest:
 		d.handleDesktopMediaRequest(l, p)
+	case proto.TypeFluxAudioRequest:
+		d.handleAudioRequest(l, p)
 	case proto.TypeSftpRequest:
 		d.handleBrowseRequest(dev, l, p)
 	case proto.TypeFluxWebcam:
@@ -115,6 +117,8 @@ func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.handleDnd(dev, p)
 	case proto.TypeFluxMic:
 		d.handleMic(dev, l, p)
+	case proto.TypeFluxSpeaker:
+		d.handleSpeaker(dev, l, p)
 	case proto.TypeFluxScreen:
 		d.handleScreen(dev, l, p)
 	case proto.TypeFluxDesktop:
@@ -123,6 +127,8 @@ func (d *Daemon) handlePacket(dev *Device, l *lan.Link, p *proto.Packet) {
 		d.handleShortcuts(dev, l, p)
 	case proto.TypeFluxApprove:
 		d.handleApprove(dev, p)
+	case proto.TypeFluxSSH:
+		d.handleSSH(dev, p)
 	case proto.TypeFluxHerdr:
 		d.handleHerdr(dev, l, p)
 	case proto.TypeMousepadRequest:

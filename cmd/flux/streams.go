@@ -8,9 +8,10 @@ import (
 )
 
 // streamStart asks a device to start its camera or its microphone for this
-// computer. kind is "webcam" or "mic", and args starts with "start". The
-// device flag can also come after start. The device starts the stream only
-// after its user taps start, so streamStart tells the user to confirm.
+// computer, or to play the audio of this computer. kind is "webcam", "mic",
+// or "speaker", and args starts with "start". The device flag can also
+// come after start. The device starts the stream only after its user taps
+// start, so streamStart tells the user to confirm.
 func streamStart(kind string, args []string, device string, out io.Writer) error {
 	rest, named := splitDevice(args)
 	if len(rest) > 1 {
@@ -26,12 +27,69 @@ func streamStart(kind string, args []string, device string, out io.Writer) error
 	if err := callInto(kind+".start", map[string]any{"device": device}, &res); err != nil {
 		return err
 	}
-	what := "the webcam"
-	if kind == "mic" {
-		what = "the mic"
+	what := "start the webcam"
+	switch kind {
+	case "mic":
+		what = "start the mic"
+	case "speaker":
+		what = "play the audio of this computer"
 	}
-	fmt.Fprintf(out, "Asked %s to start %s. Confirm on %s.\n", res.Name, what, res.Name)
+	fmt.Fprintf(out, "Asked %s to %s. Confirm on %s.\n", res.Name, what, res.Name)
 	return nil
+}
+
+// speakerState is the phone speaker in the state of fluxd.
+type speakerState struct {
+	Active    bool   `json:"active"`
+	ToName    string `json:"toName"`
+	Rate      int    `json:"rate"`
+	Channels  int    `json:"channels"`
+	Muted     string `json:"muted"`
+	MuteError string `json:"muteError"`
+	Error     string `json:"error"`
+}
+
+// speaker shows whether a phone plays the audio of this computer, asks the
+// phone to start, or stops it.
+func speaker(args []string, device string, out io.Writer) error {
+	switch first(args) {
+	case "start":
+		return streamStart("speaker", args, device, out)
+	case "stop":
+		return call("speaker.stop", nil)
+	case "":
+	default:
+		return fmt.Errorf("unknown argument %q. Usage: flux-cli speaker [start|stop]", first(args))
+	}
+	var s struct {
+		Speaker *speakerState `json:"speaker"`
+	}
+	if err := callInto("state", nil, &s); err != nil {
+		return err
+	}
+	printSpeaker(out, s.Speaker)
+	return nil
+}
+
+func printSpeaker(out io.Writer, v *speakerState) {
+	switch {
+	case v == nil:
+		fmt.Fprintln(out, "No phone plays the audio of this computer. Start it in Flux for Android: Media, then Play on phone.")
+		fmt.Fprintln(out, "To ask the phone from this computer, run: flux-cli speaker start")
+	case v.Error != "":
+		fmt.Fprintln(out, "The phone speaker failed:", safe(v.Error))
+	case v.Active:
+		fmt.Fprintf(out, "%s plays the audio of this computer, %d Hz, %s\n", safe(v.ToName), v.Rate, channelsName(v.Channels))
+		if v.Muted != "" {
+			fmt.Fprintf(out, "%s is muted until the stream stops.\n", safe(v.Muted))
+		}
+		if v.MuteError != "" {
+			fmt.Fprintln(out, "The output of this computer is not muted:", safe(v.MuteError))
+		}
+		fmt.Fprintln(out, "Stop it with: flux-cli speaker stop")
+	default:
+		fmt.Fprintf(out, "%s starts to play the audio of this computer\n", safe(v.ToName))
+	}
 }
 
 // mic shows the phone microphone state, asks the phone to start it, or
@@ -166,6 +224,7 @@ func remoteDesktop(args []string) error {
 			Width   int    `json:"width"`
 			Height  int    `json:"height"`
 			Error   string `json:"error"`
+			Extend  bool   `json:"extend"`
 		} `json:"desktop"`
 	}
 	if err := callInto("state", nil, &s); err != nil {
@@ -175,14 +234,18 @@ func remoteDesktop(args []string) error {
 	switch {
 	case v != nil && v.Error != "":
 		fmt.Println("The remote desktop failed:", v.Error)
+	case v != nil && v.Active && v.Extend:
+		fmt.Printf("%s extends this screen as the monitor %s, %dx%d. Stop it with: flux-cli desktop stop\n", v.ToName, v.Monitor, v.Width, v.Height)
 	case v != nil && v.Active:
 		fmt.Printf("%s shows %s, %dx%d. Stop it with: flux-cli desktop stop\n", v.ToName, v.Monitor, v.Width, v.Height)
+	case v != nil && v.Extend:
+		fmt.Printf("%s is starting the extended screen %s\n", v.ToName, v.Monitor)
 	case v != nil:
 		fmt.Printf("%s is starting the remote desktop of %s\n", v.ToName, v.Monitor)
 	case !s.Settings.RemoteDesktop:
 		fmt.Println("The remote desktop is off. Turn it on with: flux-cli desktop on")
 	default:
-		fmt.Println("No phone shows this screen. Start it in Flux for Android: Remote desktop.")
+		fmt.Println("No phone shows this screen. Start it in Flux for Android: Remote desktop or Extend screen.")
 	}
 	return nil
 }

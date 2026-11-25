@@ -2,29 +2,18 @@ import FluxKit
 import SwiftUI
 import UIKit
 
-/// A tool of the dock of the chat. `name` is the label for VoiceOver.
-struct ChatDockTool: Identifiable {
-    let icon: String
-    let label: String
-    let name: String
-    var enabled = true
-    let action: () -> Void
-
-    var id: String { label }
-}
-
-/// The dock of the chat: the clipboard of this iPhone with Send, and the field for text or a link with the + key, the mic
-/// key, and the send key. The + key opens the thumb `menu`. iOS asks before
-/// an app reads the clipboard, so the dock shows only the kind of the copy,
-/// and the text of a copy that went out from here. While a reply to an
-/// agent is open, a row with Cancel takes the place of the clipboard, the +
-/// key hides, and the field writes to the agent. `sent` tells whether the
-/// copy went out already.
+/// The dock of the chat of a computer: the clipboard of this iPhone with
+/// Send, the composer, and the tray under the composer while it is open.
+/// The + key of the composer opens and closes the tray, see `ChatTray`.
+/// The photos that the tray selects go out with the send key. iOS asks
+/// before an app reads the clipboard, so the dock shows only the kind of
+/// the copy, and the text of a copy that went out from here. `sent` tells
+/// whether the copy went out already. `onNewAgent` opens the new pane
+/// sheet for the computer.
 struct ChatDock: View {
+    let device: DeviceSnapshot
     let sent: [SentItem]
-    let menu: ThumbMenu
-    let onText: (String) -> Void
-    let onReply: (String) -> Void
+    let onNewAgent: () -> Void
     @Environment(AppModel.self) private var model
     @Environment(\.tn) private var tn
     @Environment(\.scenePhase) private var scenePhase
@@ -33,55 +22,35 @@ struct ChatDock: View {
     @State private var clip = PhoneClip(count: 0, kind: .empty)
     @State private var voice = VoiceTyping()
     @State private var editing = false
+    @State private var trayOpen = false
+    /// The local IDs of the photos that the tray selected, in the order of the taps.
+    @State private var picked: [String] = []
     @FocusState private var focused: Bool
 
     var body: some View {
-        let reply = model.chatReply
         VStack(spacing: 10) {
-            if let reply {
-                HStack(spacing: 8) {
-                    Image(systemName: "arrowshape.turn.up.left")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(tn.accent)
-                        .accessibilityHidden(true)
-                    Text("Reply to \(reply.agent)")
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(tn.text)
-                        .lineLimit(1)
-                    if !reply.project.isEmpty {
-                        Text("· \(reply.project)")
-                            .font(.caption2.monospaced())
-                            .foregroundStyle(tn.sub)
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 0)
-                    Button("Cancel") { model.chatReply = nil }
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(tn.accent)
-                        .buttonStyle(.borderless)
-                        .frame(minHeight: 44)
-                        .accessibilityHint("Closes the reply to the agent")
-                }
-                .padding(.horizontal, 4)
-                .frame(minHeight: 32)
-            } else {
-                clipRow
-            }
-            composer(reply)
+            clipRow
+            composer
             VoiceStatus(voice: voice)
+            if trayOpen {
+                ChatTray(device: device, picked: $picked, onClose: { trayOpen = false }, onNewAgent: onNewAgent)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
         .padding(.horizontal, 12)
-        .padding(.top, 12)
-        .padding(.bottom, 10)
+        .padding(.top, 10)
+        .padding(.bottom, 12)
         .dockFrame()
+        .animation(.snappy(duration: 0.2), value: trayOpen)
         .onAppear { clip = PhoneClip.now() }
         .task { await voice.load() }
         // The field is gone, so the words of a dictation have no place.
         .onDisappear { voice.cancel() }
         .sheet(isPresented: $editing) {
-            FieldEditor(title: reply.map { "Reply to \($0.agent)" } ?? "Text or a link", text: $text, actionLabel: "Send",
-                        actionEnabled: !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, onAction: send)
+            FieldEditor(title: "Message \(device.name)", text: $text, actionLabel: "Send", actionEnabled: canSend, onAction: send)
         }
+        // The tray and the keyboard take the same place, so 1 closes the other.
+        .onChange(of: focused) { _, on in if on { trayOpen = false } }
         .onChange(of: scenePhase) { _, phase in if phase == .active { clip = PhoneClip.now() } }
         .onReceive(NotificationCenter.default.publisher(for: UIPasteboard.changedNotification)) { _ in clip = PhoneClip.now() }
         .task {
@@ -92,22 +61,27 @@ struct ChatDock: View {
                 if next != clip { clip = next }
             }
         }
-        // A new reply starts with an empty field that has the focus.
-        .onChange(of: reply) { _, r in
-            text = ""
-            focused = r != nil
-        }
     }
 
-    /// The clipboard of this iPhone and its Send key, 44 pt high. The box
-    /// tells where the copy is, and shows its text on 1 line. After a send,
-    /// the key shows Sent.
+    /// True when the send key can send: the computer is online, and the
+    /// field holds text or the tray selected photos.
+    private var canSend: Bool {
+        device.online && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !picked.isEmpty)
+    }
+
+    /// The clipboard of this iPhone and its Send action, on `bg` with 10 pt
+    /// corners: the icon, where the copy is, its text on 1 line, and Send.
+    /// After a send, the action shows Sent.
     private var clipRow: some View {
         let last = sent.last { clip.count != 0 && $0.clipStamp == clip.count && ($0.kind == .clip || $0.kind == .clipImage) }
-        let canClip = TargetRun.enabled(model, can: SendTools.canClipboard(model)) && clip.kind != .empty
+        let can = device.online && SendTools.canClipboard(model)(device) && clip.kind != .empty
         let shown = last.map { !$0.text.isEmpty } ?? false
-        return HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
+        return HStack(spacing: 10) {
+            Image(systemName: "doc.on.clipboard")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(tn.cyan)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
                 Text(clipMeta(last))
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(tn.cyan)
@@ -117,62 +91,67 @@ struct ChatDock: View {
                     .foregroundStyle(shown ? tn.text : tn.sub)
                     .lineLimit(1)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-            .padding(.horizontal, 11)
-            .padding(.vertical, 4)
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(tn.bg))
+            .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
             Button {
                 if let last {
                     model.show("The clip is on \(model.device(last.deviceId)?.name ?? "the computer") already")
+                } else if model.demo {
+                    model.show(DemoMode.sendsNothing)
                 } else {
-                    SendTools.sendClipboard(model)
+                    model.core.plugin(ClipboardPlugin.self)?.sendClipboard(to: device.id)
                 }
             } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: last != nil ? "checkmark" : "doc.on.clipboard")
-                        .font(.system(size: 15, weight: .medium))
-                    Text(last != nil ? "Sent" : "Send")
-                        .font(.footnote.weight(.semibold))
-                }
-                .foregroundStyle(last != nil ? tn.text : tn.onAccent)
-                .padding(.horizontal, 14)
-                .frame(maxHeight: .infinity)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(last != nil ? tn.line : tn.accent))
+                Text(last != nil ? "Sent" : "Send")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(last != nil ? tn.sub : tn.accent)
+                    .padding(.horizontal, 10)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .disabled(!canClip)
-            .opacity(canClip ? 1 : TiledMetrics.disabledAlpha)
-            .accessibilityLabel("Send the clipboard")
+            .disabled(!can)
+            .opacity(can ? 1 : TiledMetrics.disabledAlpha)
+            .accessibilityLabel(last != nil ? "Sent" : "Send the clipboard")
         }
-        .frame(height: 44)
+        .padding(.leading, 10)
+        .padding(.trailing, 2)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(tn.bg))
     }
 
-    /// The + key, the field, the mic key, and the send key. While the field
-    /// has the focus, the + key hides, so the field takes its width and
-    /// grows to 6 lines. With text, the field shows the key of the large
-    /// editor. While a reply is open, the field has the accent border and
-    /// writes to the agent. The words of a dictation go at the end of the
-    /// text.
-    private func composer(_ reply: ChatReply?) -> some View {
-        let can = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let placeholder: String = {
-            if let reply { return "Tell \(reply.agent) what to do differently" }
-            if let d = TargetRun.single(model) { return "Text or a link for \(d.name)" }
-            return "Text or a link"
-        }()
+    /// The + key, the field, the mic key, and the send key. The + key opens
+    /// the tray, and while the tray is open it is an accent key with a
+    /// cross that closes it. While the field has the focus, the + key
+    /// hides, so the field takes its width and grows to 6 lines. With text,
+    /// the field shows the key of the large editor. The words of a
+    /// dictation go at the end of the text. The send key shows the number of
+    /// the selected photos.
+    private var composer: some View {
+        let can = canSend
+        let count = picked.count
         return HStack(alignment: .bottom, spacing: 8) {
-            if reply == nil && !focused && !voice.active {
-                ThumbKey(menu: menu)
-                    .transition(.move(edge: .leading).combined(with: .opacity))
+            if !focused && !voice.active {
+                Button {
+                    if !trayOpen { focused = false }
+                    trayOpen.toggle()
+                } label: {
+                    Image(systemName: trayOpen ? "xmark" : "plus")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(trayOpen ? tn.onAccent : tn.text)
+                        .frame(width: 48, height: 48)
+                        .background(Circle().fill(trayOpen ? tn.accent : tn.line))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(trayOpen ? "Close the photos and tools" : "Photos, files, and tools")
+                .transition(.move(edge: .leading).combined(with: .opacity))
             }
             HStack(alignment: .bottom, spacing: 0) {
-                TextField(placeholder, text: $text, axis: .vertical)
+                TextField("Message \(device.name)", text: $text, axis: .vertical)
                     .lineLimit(focused ? 1...6 : 1...4)
                     .font(.subheadline)
                     .foregroundStyle(tn.text)
-                    .textInputAutocapitalization(reply != nil ? TextInputAutocapitalization.sentences : TextInputAutocapitalization.never)
-                    .autocorrectionDisabled(reply == nil)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
                     .submitLabel(.send)
                     .onSubmit(send)
                     .focused($focused)
@@ -184,7 +163,7 @@ struct ChatDock: View {
             .padding(.trailing, text.isEmpty ? 16 : 4)
             .frame(minHeight: 48)
             .background(Capsule().fill(tn.bg))
-            .overlay(Capsule().strokeBorder(reply != nil || focused ? tn.accent : tn.lineHi, lineWidth: 1))
+            .overlay(Capsule().strokeBorder(focused ? tn.accent : tn.lineHi, lineWidth: 1))
             if voice.available {
                 Button {
                     voice.toggle(model.core) { spoken in text = DictationText.append(text, spoken) }
@@ -204,26 +183,55 @@ struct ChatDock: View {
                     .foregroundStyle(can ? tn.onAccent : tn.sub)
                     .frame(width: 48, height: 48)
                     .background(Circle().fill(can ? tn.accent : tn.line))
+                    .overlay(alignment: .topTrailing) {
+                        if count > 0 {
+                            Text("\(count)")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(tn.bg)
+                                .frame(width: 18, height: 18)
+                                .background(Circle().fill(tn.text))
+                                .offset(x: 2, y: -2)
+                        }
+                    }
             }
             .buttonStyle(.plain)
             .disabled(!can)
-            .accessibilityLabel("Send")
+            .accessibilityLabel(count == 0 ? "Send" : count == 1 ? "Send 1 photo" : "Send \(count) photos")
         }
         .animation(.snappy(duration: 0.2), value: focused)
         .animation(.snappy(duration: 0.2), value: voice.active)
     }
 
+    /// Sends the selected photos, then the text of the field. A web link
+    /// opens in the browser of the computer, and other text goes to its
+    /// clipboard.
     private func send() {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty else { return }
+        guard canSend else { return }
         editing = false
-        // A reply keeps its text until it goes out, because Face ID can stop it. The end of the reply clears the field.
-        if model.chatReply != nil {
-            onReply(t)
-        } else {
-            onText(t)
-            text = ""
+        guard SendTools.canShare(model)(device) else {
+            model.show(TargetRun.noTarget(device))
+            return
         }
+        if model.demo {
+            model.show(DemoMode.sendsNothing)
+            picked = []
+            text = ""
+            trayOpen = false
+            return
+        }
+        if !picked.isEmpty {
+            ShareFeature.send(assets: picked, to: device, model: model)
+            picked = []
+            trayOpen = false
+        }
+        guard !t.isEmpty else { return }
+        guard t.utf8.count <= ShareQueue.maxTextBytes else {
+            model.show("The text is larger than 1 MB. Send it as a file")
+            return
+        }
+        model.core.plugin(SharePlugin.self)?.send(text: t, to: device.id)
+        text = ""
     }
 
     private func clipMeta(_ last: SentItem?) -> String {

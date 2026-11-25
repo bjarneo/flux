@@ -5,10 +5,11 @@
 This page describes Flux for Android.
 For the Mac app, see [Flux for macOS](macos.md#features). For the iPhone, see [Flux for iOS](ios.md#features).
 
-The switches on the **Sync** screen in **Computers** are settings of the phone.
-Each switch applies to every paired computer, not only to the computer whose page shows it.
+The switches in **Settings** are settings of the phone.
+To open **Settings**, tap the gear key at the top of **Chats**.
+Each switch applies to every paired computer.
 For example, **Text messages** lets each paired computer read your conversations.
-See [sync switches](android-setup.md#sync-switches) and [security](security.md).
+See [the Settings switches](android-setup.md#settings) and [security](security.md).
 
 ## Pair a phone
 
@@ -38,6 +39,10 @@ flux-cli discover
 flux-cli pair "Pixel 8"
 flux-cli status
 ```
+
+When the computer and the phone cannot find each other, for example on a guest Wi-Fi with client isolation, pair by the IP address of the phone.
+Type the address in the pair mode of the Flux window, or run `flux-cli pair --address 192.168.1.20`.
+See [pair by address](cli.md#pair-by-address).
 
 After the phone accepts, `flux-cli pair` asks `Does Pixel 8 show 5EE6 825F 974E D59A? [y/N]`.
 Type `y` only when the phone shows the same key.
@@ -86,6 +91,39 @@ If `devices.json` does not parse, `fluxd` moves it to `devices.json.broken-<Unix
 The journal and a desktop notification name the moved file.
 Pair your devices again.
 
+## Wake the computer
+
+Flux for Android can wake a paired computer that sleeps, with Wake-on-LAN.
+The computer sends its network cards to the phone each time the phone connects.
+When the computer is offline, its card in **Computers** shows **Wake**.
+The long-press menu and TalkBack also offer **Wake**.
+
+The phone sends a magic packet to UDP ports 9 and 7 on these addresses:
+
+- The broadcast address of each network card of the computer.
+- The broadcast address of each network of the phone, and `255.255.255.255`.
+- The last address of the computer.
+
+The phone and the computer must be on the same local network.
+A magic packet does not go through Tailscale.
+
+The computer must allow Wake-on-LAN in its firmware and on its network card.
+Most computers wake only through a wired card.
+To turn on Wake-on-LAN for the card `eno1` until the next start, run:
+
+```sh
+sudo ethtool -s eno1 wol g
+```
+
+To keep the setting with NetworkManager, set it on the connection of the card:
+
+```sh
+nmcli connection modify "Wired connection 1" 802-3-ethernet.wake-on-lan magic
+```
+
+A computer whose `fluxd` does not send its network cards shows no **Wake**.
+Update Flux on the computer, then connect the phone to it 1 time.
+
 ## Files, clipboard, and links
 
 The [workflow controls](workflows.md) add an offline desktop outbox, folder archives, and saved clipboard snippets.
@@ -114,19 +152,30 @@ Press `o` to open **Chat** with the newest clipboard entry in the field, when th
 The phone shows the link in a notification. A tap on the notification opens the link in the browser.
 Other text goes to the clipboard of the phone.
 
-To show a web page on the desktop, type the link in the field at the bottom of **Chat** in Flux for Android, then tap the send key.
+To show a web page on the desktop, open the chat of the computer in **Chats** in Flux for Android, type the link in the field at the bottom, then tap the send key.
 The desktop opens a link that starts with `http://` or `https://` in its browser. Other text goes to the clipboard of the desktop.
 The field of the desktop window adds `https://` to a host name without a scheme, for example `omarchy.org/flux`.
 
-**Chat** shows what the phone sent in this session as a thread: links, text, clips, and files.
-The desktop writes in the same thread: received files with their progress, the last clip, herdr agents, sudo approvals, and pair requests.
-An agent that waits shows its choices in the thread, and an approval shows **Approve** and **Deny**.
-Flux keeps the thread in memory only, with at most 400 characters of each text.
-The dock under the thread shows the phone clipboard with **Send**, and a field for text or a link with a mic key and **Send**.
-On Android, the **+** key at the left of the field opens a menu over the chat: **Send files**, **Get files**, **Photo**, **Scan**, **Text**, and **QR**, and under them **Control** and **Computers**.
-Chat has no navigation bar, so this menu and a swipe to the side lead to the other screens. 3 dots under the status bar show the screen on Chat, Control, and Computers, and they follow a swipe, and the phone ticks at each new screen. The first time Chat opens, it moves a little to the side and back to show the swipe.
-Tap **+**, then tap an item. Or hold **+**, slide the thumb to an item, and release it there. A release on no item keeps the menu open.
-A tap on the field hides the **+** key, so the field takes its width and grows to 6 lines. The expand key in the field opens the large editor.
+**Chats** is the home of the app. It holds 1 chat for each herdr agent and 1 chat for each paired computer.
+What needs you is on top, under **Needs you**: a sudo approval with **Deny** and **Approve**, a pair request, and each agent that waits for input.
+The other agents and the computers follow. The search field keeps only the chats that hold its text, for example the name of a received file.
+The **+** key at the top starts an agent or a terminal on a computer that allows it.
+
+The chat of a computer shows what the phone sent in this session: links, text, clips, photos, and files.
+The computer writes in the same chat: received files with their progress, the last clip, and sudo approvals.
+Flux keeps the chat in memory only, with at most 400 characters of each text.
+The dock under the chat shows the phone clipboard with **Send**, the Send bar, and a field for text or a link with a mic key and a send key.
+The Send bar has the keys **Photo**, **File**, **Scan**, and **More**.
+**Photo** opens the 4 newest photos of the phone and **All photos**. **File** opens the file picker. **Scan** scans pages to a PDF.
+**More** opens a list of **Camera**, **Text**, **QR**, and **Signature**.
+To send photos, tap them under **Photo**, then tap the send key. The key shows the number of photos.
+A tap on the field closes the open part of the Send bar. The field grows to 6 lines. The expand key in the field opens the large editor.
+The menu at the top of the chat has **Remote**, **Get files**, **Terminals**, **New agent or terminal**, and **Clear this chat**.
+**Clear this chat** removes the entries of this computer from the chat. It keeps the history of the computer and the files that it saved.
+The chat of an agent shows its output as a thread, and its question and choices in the dock. See [herdr agents](herdr.md#see-your-agents).
+On an Android tablet in landscape, **Chats** shows the list at the side of the selected chat.
+Flux for macOS shows the list of chats in the sidebar of its window and the open chat next to it. See [Flux for macOS](macos.md#chats-and-navigation).
+Flux for Windows does the same. See [Flux for Windows](windows.md#chats-and-navigation).
 The phone can read folders of the desktop when `share_home` is enabled. See [Browse PC](#browse-pc).
 The tunnel carries SSH traffic without an inbound SSH firewall rule.
 
@@ -163,7 +212,7 @@ A restart of `fluxd` after an update does not stop them.
 ## Browse PC
 
 With `share_home = true`, a paired phone can read these folders of the desktop.
-On the phone, open **Send > Get files**.
+On the phone, open the chat of the computer, open the menu at the top of the chat, then select **Get files**.
 
 - The home folder.
 - The `download_dir` folder.
@@ -324,10 +373,11 @@ The desktop name identifies the sender.
 
 ## Text messages
 
-Turn on **Text messages** in **Computers > Sync** on the phone.
+Turn on **Text messages** in **Settings > This phone on the computer** on the phone.
 The switch applies to every paired computer: each of them can then read your conversations and send text messages.
 The phone asks for SMS access and contacts access.
 Flux needs SMS access. Contacts access adds names to the conversations.
+Without contacts access, the conversations show numbers, and **Allow contacts** shows under the switch.
 A tablet without a SIM slot does not show the switch.
 
 The desktop then shows the **Messages** page for that phone:
@@ -336,6 +386,7 @@ The desktop then shows the **Messages** page for that phone:
 - Select a conversation to read its last 100 messages and to reply.
 - Select **New message** to send a text message to a phone number.
 - A new message on the phone appears on the desktop in about 1 second.
+- A sent message shows **Sending…** until the phone reports it. When the phone does not report it in 60 seconds, it shows **Not sent** at the time that you sent it.
 - A reply goes out on the SIM of the conversation. A new message uses the default SMS SIM of the phone.
 - The list keeps the 500 newest conversations and shows the first 1 KiB of each latest message.
 - A conversation keeps up to 20 addresses and the first 256 bytes of its name. `fluxd` ignores an address that is longer than 64 bytes.
@@ -356,7 +407,7 @@ Chat messages that an app keeps in its own database, for example RCS chats, do n
 ## Media and desktop commands
 
 The phone controls the media players on the desktop.
-Open **Media** in **Control** on the phone to play, pause, skip, seek, and set the volume.
+Open **Media** in **Remote** on the phone to play, pause, skip, seek, and set the volume.
 The controls show when a desktop player publishes its state over MPRIS.
 The phone selects the player that plays.
 If more than one player runs, select another player at the top of the screen.
@@ -366,6 +417,56 @@ Chromium does not accept one, so the phone shows no volume control for it.
 When a player reports album art at an `https` address, the phone loads the image from that address and shows it above the controls.
 Without album art, the controls move up.
 The desktop does not show or control the players on the phone.
+
+### Audio outputs
+
+To select the output of the computer, such as its speakers, an HDMI monitor, or Bluetooth headphones, open **Media** in **Remote** on the phone.
+The dock of **Media** shows the default output and its volume, also while nothing plays.
+Tap it to open **Audio outputs**:
+
+- To make an output the default, select it. Apps on the computer then play to that output.
+- To set the volume of an output, tap or drag its volume line.
+- To mute an output or to turn its sound on again, tap the speaker key next to its volume line.
+
+The list uses the rules of the Omarchy output switch, `omarchy-audio-output-switch`.
+It leaves out an output whose ports are all not available, such as headphones that are not plugged in.
+On a laptop with an Omarchy speaker tuning, it leaves out the speakers behind the tuning, because the tuning is the output to select.
+The default output always shows.
+On Omarchy, `fluxd` selects the default output with `omarchy-audio-output-set-default`, which also moves the apps that play now to that output.
+Without Omarchy, `fluxd` runs `pactl set-default-sink`.
+
+The volume line sets the loudest channel, and the other channels keep their balance.
+`fluxd` reads and changes the outputs with `pactl` from `libpulse`, which talks to the PulseAudio server of PipeWire.
+Omarchy installs both.
+To list the outputs that the phone shows, run:
+
+```sh
+pactl --format=json list sinks
+pactl get-default-sink
+```
+
+The phone asks for the outputs when **Media** opens and each 10 seconds while it shows.
+A change on the computer shows on the phone at the next request.
+Each paired device that can control the media can also change the outputs.
+To hear the computer on the phone, tap **Play on phone** next to the output key. See [phone as speaker](camera.md#phone-as-speaker).
+Only Flux for Android has **Audio outputs**.
+Flux for iOS, Flux for macOS, and Flux for Windows do not have this feature.
+
+The phone sends `flux.audio.request`, and `fluxd` answers each request with `flux.audio`:
+
+```json
+{"type":"flux.audio.request","body":{"request":true}}
+{"type":"flux.audio.request","body":{"output":"alsa_output.pci-0000_00_1f.3.hdmi-stereo","default":true}}
+{"type":"flux.audio.request","body":{"output":"alsa_output.pci-0000_00_1f.3.hdmi-stereo","volume":60}}
+{"type":"flux.audio.request","body":{"output":"alsa_output.pci-0000_00_1f.3.hdmi-stereo","mute":true}}
+{"type":"flux.audio","body":{"outputs":[{"name":"alsa_output.pci-0000_00_1f.3.hdmi-stereo","description":"HDMI Monitor","volume":60,"muted":false,"default":true}]}}
+```
+
+`volume` is a percent of the loudest channel.
+The phone sends 0 to 100, and `fluxd` accepts at most 150.
+`fluxd` changes only an output that is in the list of `flux.audio`.
+When `fluxd` cannot read or change the outputs, the answer has an `error` field, for example when `pactl` is not installed.
+A headless `fluxd` has no outputs.
 
 Add desktop commands in the **Commands** section of the **Phone** page or through the CLI:
 
@@ -381,7 +482,7 @@ The desktop does not report the end of a command, so the phone does not show **D
 
 ## Calls
 
-Enable **Call alerts** in **Computers > Sync** on the phone.
+Enable **Call alerts** in **Settings > This phone on the computer** on the phone.
 Phone access reports call state.
 Call-log access supplies the number, and contacts access supplies the name.
 Without those optional details, the notification shows **Unknown caller**.
@@ -403,7 +504,7 @@ Reload with `systemctl --user reload fluxd`.
 
 ## Do Not Disturb
 
-Enable **Sync Do Not Disturb** in **Computers > Sync** on the phone.
+Enable **Sync Do Not Disturb** in **Settings > This phone on the computer** on the phone.
 Android requests Do Not Disturb access the first time.
 Each side sends state only after a change, so daemon startup does not change either side.
 
@@ -421,7 +522,7 @@ Reload with `systemctl --user reload fluxd`.
 
 ## Automatic screenshots and photos
 
-Enable **Send new screenshots** or **Send new photos** in **Computers > Sync** on the phone.
+Enable **Send new screenshots** or **Send new photos** in **Settings > Send to the computers** on the phone.
 Both options default to off.
 Allow access to all photos when Android asks.
 Selected-photo access does not expose new captures.
@@ -451,17 +552,22 @@ See [camera and streams](camera.md) for direct capture and live media.
 
 ## herdr agents
 
-When [herdr](https://herdr.dev) runs on the computer, an agent that waits for input shows its choices in **Chat**. To see all agents and terminals, open **Control**.
+When [herdr](https://herdr.dev) runs on the computer, each agent has a chat in **Chats**. An agent that waits for input is on top, under **Needs you**. Open its chat to answer. With **Agent control** on, an agent that is blocked also shows its question and choices in its notification. To see the herdr terminals of 1 computer, open **Terminals** in the menu of its chat.
 The phone shows the status and the colored output of each coding agent, and posts a notification when an agent needs input or finishes.
 
-To answer agents from the phone, set:
+To answer agents from the phone, turn on **Agent control**.
+In the Flux window, open the **Phone** page, find the **Access** card, and select **Turn on** under **Agent control**.
+Confirm the question that follows.
+The phone then shows the choices of a blocked agent within 5 seconds.
+You can also set this key and reload with `systemctl --user reload fluxd`:
 
 ```toml
 herdr_control = true
 ```
 
-Reload with `systemctl --user reload fluxd`.
-The same key lets the phone start new agents and close agents.
+The same setting lets the phone start new agents and close agents.
+On Android, the notification of a blocked agent then has 1 action for each choice, or **Reply**.
+If **Agent control** is off, the notification ends with `Read only`.
 With herdr 0.9.3 or newer, it also adds **Live** to the agent screen of Flux for Android. **Live** shows the live terminal of the agent.
 To talk to an agent, use the mic key next to **Send**. The phone changes your speech to text on the device.
 To also open herdr terminals and type commands in them, set `herdr_terminals = true`.
@@ -476,7 +582,7 @@ To allow it, select **Turn on** under **Remote input** in the **Access** card on
 flux-cli input on
 ```
 
-Then select **Touchpad and keyboard** in **Control** on the phone or in Flux for macOS.
+Then select **Touchpad and keyboard** in **Remote** on the phone, or in **Control** in Flux for macOS.
 See [Touchpad and keyboard](remote-input.md) for the gestures, the keys, and the slides.
 
 ## Remote desktop
@@ -489,9 +595,14 @@ flux-cli desktop on
 flux-cli input on
 ```
 
-Then select **Remote desktop** in **Control** on the phone. The phone turns to landscape.
+Then select **Remote desktop** in **Remote** on the phone. The phone turns to landscape.
 In Flux for macOS, select **Remote desktop** in **Control**.
 See [Remote desktop](remote-desktop.md) for the gestures, the monitors, and the stream.
+
+To use an Android phone or tablet as a second monitor, select **Extend screen** in **Remote**.
+The computer adds a monitor with the size of the phone screen, and it removes that monitor when the stream stops.
+The extended screen uses the same switches and needs `wf-recorder` on the computer.
+Only Flux for Android has it. See [Extend the screen](remote-desktop.md#extend-the-screen).
 
 ## Dictation in text fields
 

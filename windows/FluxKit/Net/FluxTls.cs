@@ -10,7 +10,11 @@ namespace FluxKit;
 // the handshake.
 public sealed class FluxTls(LocalCertificate local)
 {
-    const SslProtocols Protocols = SslProtocols.Tls12 | SslProtocols.Tls13;
+    // Only TLS 1.2, like the Mac and Android apps. A TLS 1.3 server sends
+    // session tickets after the handshake. fluxd does not read a tunnel that
+    // it writes a payload to, so its close with the unread tickets resets the
+    // connection and drops the end of the payload.
+    const SslProtocols Protocols = SslProtocols.Tls12;
 
     public LocalCertificate Local { get; } = local;
 

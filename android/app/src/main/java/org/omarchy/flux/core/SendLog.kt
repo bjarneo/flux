@@ -37,7 +37,8 @@ enum class SendKind {
  * [deviceId], or what came from it ([incoming]): a file, a clip, or the
  * answer of this phone to an [approval]. [text] is the link, the text, the
  * file name, or the service of the approval. [size] and [done] are the
- * bytes of a file. [uri] is the received file in Downloads, or empty.
+ * bytes of a file. [uri] is the received file in Downloads, the source of
+ * a file that went out, or empty.
  * [clipStamp] is the time that Android set on a clip that went out, see
  * Android.clipTimestamp. [at] is the time in milliseconds since the epoch.
  */
@@ -81,6 +82,12 @@ fun addSend(list: List<SendEntry>, e: SendEntry, max: Int = MAX_SEND_LOG): List<
     }
 }
 
+/** Removes the entries of the computer [deviceId]. The entries of the other computers stay. */
+fun clearSends(list: List<SendEntry>, deviceId: String): List<SendEntry> = list.filterNot { it.deviceId == deviceId }
+
+/** Removes the entry [id]. */
+fun removeSend(list: List<SendEntry>, id: Long): List<SendEntry> = list.filterNot { it.id == id }
+
 /** Sets the bytes of the running file [id] that went through, and its [size] when it is 0 or more. */
 fun progressSend(list: List<SendEntry>, id: Long, done: Long, size: Long = -1): List<SendEntry> =
     list.map { if (it.id == id && it.state == TransferState.Running) it.copy(done = done, size = if (size >= 0) size else it.size) else it }
@@ -89,11 +96,16 @@ fun progressSend(list: List<SendEntry>, id: Long, done: Long, size: Long = -1): 
 fun addClipIn(list: List<SendEntry>, e: SendEntry, max: Int = MAX_SEND_LOG): List<SendEntry> =
     addSend(list.filterNot { it.incoming && (it.kind == SendKind.Clip || it.kind == SendKind.ClipImage) }, e, max)
 
-/** Marks the running file [id] as done or failed. A file that is done has all its bytes, and [uri] names it when it came in. */
+/**
+ * Marks the running file [id] as done or failed. A file that is done has
+ * all its bytes, and [uri] names it when it came in. A file that went out
+ * keeps its source.
+ */
 fun endSend(list: List<SendEntry>, id: Long, ok: Boolean, uri: String = ""): List<SendEntry> =
     list.map {
         if (it.id == id && it.state == TransferState.Running) {
-            it.copy(state = if (ok) TransferState.Done else TransferState.Failed, done = if (ok) it.size else it.done, uri = if (ok) uri else "")
+            val name = if (!it.incoming) it.uri else if (ok) uri else ""
+            it.copy(state = if (ok) TransferState.Done else TransferState.Failed, done = if (ok) it.size else it.done, uri = name)
         } else {
             it
         }
@@ -176,9 +188,13 @@ object SendLog {
         add(e.copy(incoming = true, approval = r))
     }
 
-    /** Reports a new file of [size] bytes and returns its ID for [fileProgress] and [fileEnded]. */
-    fun fileStarted(deviceId: String, computer: String, name: String, size: Long, incoming: Boolean): Long =
-        add(entry(deviceId, computer, SendKind.File, name).copy(incoming = incoming, size = maxOf(size, 0), state = TransferState.Running))
+    /**
+     * Reports a new file of [size] bytes and returns its ID for [fileProgress]
+     * and [fileEnded]. [uri] is the source of a file that goes out, so that
+     * the chat can show a photo, or empty.
+     */
+    fun fileStarted(deviceId: String, computer: String, name: String, size: Long, incoming: Boolean, uri: String = ""): Long =
+        add(entry(deviceId, computer, SendKind.File, name).copy(incoming = incoming, size = maxOf(size, 0), state = TransferState.Running, uri = uri))
 
     /** Reports the bytes of the file [id] that went through, and its [size] when the size was not known at the start. */
     fun fileProgress(id: Long, done: Long, size: Long = -1) {
@@ -198,6 +214,16 @@ object SendLog {
             resumeSend(list, id, done)
         }
         return found
+    }
+
+    /** Removes the entries of the computer [deviceId], for Clear this chat. The files that the computer saved stay. */
+    fun clear(deviceId: String) {
+        _entries.update { clearSends(it, deviceId) }
+    }
+
+    /** Removes the entry [id], for a send that the user sends again. */
+    fun remove(id: Long) {
+        _entries.update { removeSend(it, id) }
     }
 
     /** Debug builds only: shows [list] in the place of the entries, for the sample computers. */

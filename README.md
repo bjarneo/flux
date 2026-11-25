@@ -20,16 +20,20 @@ https://github.com/user-attachments/assets/4b8445fe-6734-4100-b200-92f57e1b353a
 | --- | --- |
 | Send files, clipboard text and images, and links between devices | [Everyday use](docs/features.md) |
 | Queue files offline, send folder archives, and save clipboard snippets | [Workflow controls](docs/workflows.md) |
-| Set device access, notification rules, and local automation | [Workflow controls](docs/workflows.md#per-device-access) |
+| Set device access, notification rules, and local automation for device, call, notification, and agent events | [Workflow controls](docs/workflows.md#per-device-access) |
 | Read notifications, send SMS, control media, and run desktop commands from your phone | [CLI reference](docs/cli.md) |
 | Sync Do Not Disturb and pause media during calls | [Phone integration](docs/features.md#calls) |
-| Scan text, send photos, and use the phone as a webcam or microphone | [Camera and streams](docs/camera.md) |
+| Scan text, send photos, and use the phone as a webcam, a microphone, or a speaker of the computer | [Camera and streams](docs/camera.md) |
 | Show the phone screen in a desktop window | [Screen mirror](docs/camera.md#screen-mirror) |
 | Use the phone or the Mac as a touchpad and keyboard | [Touchpad and keyboard](docs/remote-input.md) |
 | Show and control the computer screen on the phone or the Mac | [Remote desktop](docs/remote-desktop.md) |
+| Use an Android phone or tablet as a second monitor | [Extend the screen](docs/remote-desktop.md#extend-the-screen) |
 | Approve sudo with the phone's fingerprint sensor | [Fingerprint approval](docs/approvals.md) |
+| Log in with SSH and sign Git commits with a key on the Android phone | [SSH key on the phone](docs/ssh.md) |
+| Pair a phone by its IP address when discovery finds nothing | [Pair by address](docs/cli.md#pair-by-address) |
+| Wake a sleeping computer from the Android phone with Wake-on-LAN | [Wake the computer](docs/features.md#wake-the-computer) |
 | Reach your phone away from home through Tailscale | [Connect through Tailscale](docs/tailscale.md) |
-| See herdr coding agents on the phone or the Mac, read their output, and answer them | [herdr agents](docs/herdr.md) |
+| See herdr coding agents on the phone or the Mac, read their output, and answer them. On Android, answer a blocked agent from its notification, and see the agents in a home screen widget | [herdr agents](docs/herdr.md) |
 | Update Flux on the computer and send the new app to the phone | [Update](docs/install.md#update) |
 
 Flux for Android requires Android 10 or later.
@@ -42,6 +46,10 @@ Install it with Xcode. See [Flux for iOS](docs/ios.md) for the feature list and 
 Flux for macOS requires macOS 14 or later.
 It connects a Mac in the place of a phone and offers the features that macOS allows.
 See [Flux for macOS](docs/macos.md) for the feature list.
+
+Flux for Windows requires Windows 10 version 2004 or later.
+It connects a Windows computer in the place of a phone, as the Mac app does. It is new and has a part of the Mac features.
+See [Flux for Windows](docs/windows.md) for the feature list.
 
 ## Clone and install
 
@@ -94,6 +102,7 @@ Type `y` to confirm.
 
 To connect an iPhone, install the app with Xcode and follow [Pair an iPhone](docs/ios.md#pair-an-iphone).
 To connect a Mac, build the app and follow [Pair a Mac](docs/macos.md#pair-a-mac).
+To connect a Windows computer, build the app and follow [Pair a Windows computer](docs/windows.md#pair-a-windows-computer).
 
 ## Use it from your terminal
 
@@ -149,6 +158,7 @@ See [development](docs/development.md) for local checks and [releases](docs/rele
 - [Android build and setup](docs/android.md)
 - [iOS build and setup](docs/ios.md)
 - [macOS build and setup](docs/macos.md)
+- [Windows build and setup](docs/windows.md)
 - [CLI reference](docs/cli.md)
 - [Configuration and data paths](docs/configuration.md)
 - [Security and paired devices](docs/security.md)

@@ -5,6 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.omarchy.flux.core.StreamKind
 import org.omarchy.flux.mic.MicSession
+import org.omarchy.flux.speaker.SpeakerSession
 import org.omarchy.flux.webcam.WebcamSession
 
 class LiveStreamsTest {
@@ -47,6 +48,36 @@ class LiveStreamsTest {
         val n = streamNotice(listOf(LiveStream(StreamKind.Webcam, "a", true), LiveStream(StreamKind.Mic, "b", true)), ::name)
         assertEquals("The webcam and the mic stream to 2 computers", n.first)
         assertEquals("The webcam streams to omarchy. The mic streams to laptop.", n.second)
+    }
+
+    @Test
+    fun theSpeakerCountsAsAStream() {
+        val streams = liveStreams(
+            WebcamSession.Status(),
+            MicSession.Status(MicSession.Phase.Live, "", "a"),
+            SpeakerSession.Status(SpeakerSession.Phase.Live, "", "a", muted = "Laptop Speakers"),
+        )
+        assertEquals(listOf(LiveStream(StreamKind.Mic, "a", true), LiveStream(StreamKind.Speaker, "a", true)), streams)
+        assertTrue(liveStreams(WebcamSession.Status(), MicSession.Status(), SpeakerSession.Status(SpeakerSession.Phase.Error, "", "a")).isEmpty())
+        assertEquals(
+            listOf(LiveStream(StreamKind.Speaker, "b", false)),
+            liveStreams(WebcamSession.Status(), MicSession.Status(), SpeakerSession.Status(SpeakerSession.Phase.Connecting, "", "b")),
+        )
+    }
+
+    @Test
+    fun theSpeakerSentenceTellsWhereTheAudioPlays() {
+        assertEquals("The audio of omarchy plays on this phone", streamSentence(listOf(StreamKind.Speaker), "omarchy", live = true))
+        assertEquals("The audio of omarchy connects", streamSentence(listOf(StreamKind.Speaker), "omarchy", live = false))
+        assertEquals(
+            "The mic streams to omarchy. The audio of omarchy plays on this phone",
+            streamSentence(listOf(StreamKind.Speaker, StreamKind.Mic), "omarchy", live = true),
+        )
+        val one = streamNotice(listOf(LiveStream(StreamKind.Speaker, "a", true)), ::name)
+        assertEquals("The audio of omarchy plays on this phone", one.first)
+        val two = streamNotice(listOf(LiveStream(StreamKind.Mic, "a", true), LiveStream(StreamKind.Speaker, "b", true)), ::name)
+        assertEquals("Flux streams with 2 computers", two.first)
+        assertEquals("The mic streams to omarchy. The audio of laptop plays on this phone.", two.second)
     }
 
     @Test

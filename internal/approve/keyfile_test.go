@@ -37,7 +37,7 @@ func TestReadKey(t *testing.T) {
 	if k.DeviceID != "3f8e2a1c9b7d4e6fa0c5b8d2e1f47a93" || k.DeviceName != "Pixel 8" || k.Enrolled != "2026-09-21T14:13:20Z" {
 		t.Fatalf("headers: %+v", k)
 	}
-	if !k.Public.Equal(&ph.priv.PublicKey) {
+	if !ph.priv.PublicKey.Equal(k.Public) {
 		t.Fatal("the key is not the enrolled key")
 	}
 	st, _ := os.Stat(path)

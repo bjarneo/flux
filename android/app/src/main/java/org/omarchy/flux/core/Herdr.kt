@@ -140,11 +140,30 @@ object HerdrSync {
      * is held. The core parses the output before it takes the lock.
      */
     fun onOutput(d: Device, out: HerdrOutput) {
+        // The answer to a dialog read goes to AgentDialogs and never replaces the output of a screen.
+        if (AgentDialogs.book.onOutput(d.id, out)) return
         // Only the pane on screen keeps its output.
         if (d.herdrOutput?.pane != out.pane) return
         val expected = readRequests[key(d.id, out.pane)]
         if (expected != null && !expected.accepts(out, d.herdr?.review == true)) return
         d.herdrOutput = out
+        AgentDialogs.book.onScreenOutput(d.id, out)
+    }
+
+    /**
+     * Sends a read of [pane] for a dialog, with its own request number. The
+     * screen of the pane does not see the answer. [register] gets the number
+     * while the core lock is held. It returns false when the computer is not
+     * reachable.
+     */
+    fun readDialog(core: FluxCore, id: String, pane: String, register: (Long) -> Unit): Boolean = core.locked {
+        val d = core.device(id) ?: return@locked false
+        val request = ++reads
+        register(request)
+        d.send(
+            Packet(Types.FLUX_HERDR, bodyOf("kind" to "read", "pane" to pane, "lines" to DIALOG_READ_LINES,
+                "format" to "ansi", "path" to "", "request" to request)),
+        )
     }
 
     /** Asks the computer for its agent list now. */
@@ -678,9 +697,12 @@ object HerdrSync {
             val k = key(id, a.pane)
             pending.remove(k)?.cancel(false)
             when (a) {
-                is AgentAlert.Clear -> Android.cancelAgent(core.app, id, a.pane)
+                is AgentAlert.Clear -> {
+                    AgentDialogs.forget(id, a.pane)
+                    Android.cancelAgent(core.app, id, a.pane)
+                }
                 is AgentAlert.NeedsInput -> {
-                    if (core.settings.agentInputAlerts) Android.showAgent(core.app, id, computer, a.agent)
+                    if (core.settings.agentInputAlerts) showBlocked(core, id, computer, a.agent)
                 }
                 is AgentAlert.Finished -> {
                     if (!core.settings.agentDoneAlerts) {
@@ -691,6 +713,26 @@ object HerdrSync {
                     pending[k] = job
                 }
             }
+        }
+    }
+
+    /**
+     * Posts the notification of a blocked agent at once, as before. Then it
+     * reads the dialog of the pane and posts the notification again with
+     * the question and the actions. A read that fails leaves the first
+     * notification. It runs on the scheduler thread.
+     */
+    private fun showBlocked(core: FluxCore, id: String, computer: String, agent: HerdrAgent) {
+        val sdk = android.os.Build.VERSION.SDK_INT
+        val control = core.locked { core.device(id)?.herdr?.control == true }
+        Android.showAgent(core.app, id, computer, agent, agentNotice(agent, null, control, sdk))
+        AgentDialogs.peek(core, id, agent.pane) { dialog ->
+            if (dialog == null) return@peek
+            // The agent may have left the dialog while the read waited.
+            val now = core.locked { core.device(id)?.herdr?.agent(agent.pane) } ?: return@peek
+            if (now.status != AgentStatus.Blocked) return@peek
+            val allowed = core.locked { core.device(id)?.herdr?.control == true }
+            Android.showAgent(core.app, id, computer, now, agentNotice(now, dialog, allowed, sdk), onlyIfShown = true)
         }
     }
 

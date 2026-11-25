@@ -17,6 +17,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.omarchy.flux.BuildConfig
 import org.omarchy.flux.R
 import org.omarchy.flux.mic.MicSession
+import org.omarchy.flux.speaker.SpeakerSession
 import org.omarchy.flux.protocol.Packet
 import org.omarchy.flux.protocol.Types
 import org.omarchy.flux.ui.MainActivity
@@ -26,23 +27,41 @@ import java.security.SecureRandom
 /** A stream that a computer can ask this phone to start. [key] is the value of "kind" on the wire. */
 enum class StreamKind(val key: String) {
     Webcam("webcam"),
-    Mic("mic");
+    Mic("mic"),
+
+    /** The computer plays its audio on this phone. */
+    Speaker("speaker");
 
     /** The title of the prompt and of the notification, for example "omarchy-xps asks for the webcam". */
-    fun title(computer: String): String = "$computer asks for ${what()}"
+    fun title(computer: String): String = when (this) {
+        Speaker -> "$computer asks to play its audio on this phone"
+        else -> "$computer asks for ${what()}"
+    }
 
     /** The label of the button and of the notification action that start the stream. */
     fun startLabel(): String = when (this) {
         Webcam -> "Start webcam"
         Mic -> "Start the mic"
+        Speaker -> "Play on phone"
+    }
+
+    /** The label of the button and of the notification action that stop the stream. */
+    fun stopLabel(): String = when (this) {
+        Webcam -> "Stop webcam"
+        Mic -> "Stop the mic"
+        Speaker -> "Stop the audio"
     }
 
     /** The text of the notification. */
-    fun tapText(): String = "Tap to start ${what()}."
+    fun tapText(): String = when (this) {
+        Speaker -> "Tap to play the audio on this phone."
+        else -> "Tap to start ${what()}."
+    }
 
     private fun what(): String = when (this) {
         Webcam -> "the webcam"
         Mic -> "the mic"
+        Speaker -> "the audio"
     }
 
     companion object {
@@ -315,6 +334,7 @@ object StreamRequests {
     fun running(deviceId: String, kind: StreamKind): Boolean = when (kind) {
         StreamKind.Webcam -> WebcamSession.runsTo(deviceId)
         StreamKind.Mic -> MicSession.runsTo(deviceId)
+        StreamKind.Speaker -> SpeakerSession.runsTo(deviceId)
     }
 
     private fun receive(context: Context, deviceId: String, computer: String, kind: StreamKind) {

@@ -5,8 +5,10 @@ import Foundation
 /// `-FLUX_DEMO 1`, the app shows them in place of the real computers and
 /// starts no discovery, listener, or link, see `AppModel`. The core does not
 /// know the sample computers, so the actions on their screens reach no
-/// computer. The chat shows sample entries. With `-FLUX_THEME neon`, the
-/// laptop has the sample theme of that name, see `SampleThemes`.
+/// computer. Chats lists the sample agents, the sample approval, and the 2
+/// computers, and the chat of the laptop shows sample entries. With
+/// `-FLUX_THEME neon`, the laptop has the sample theme of that name, see
+/// `SampleThemes`.
 enum DemoMode {
     /// The defaults key that the launch argument sets.
     static let key = "FLUX_DEMO"
@@ -58,13 +60,17 @@ enum DemoMode {
     ]
 
     /// The sample agents of the laptop: codex in billing waits for a
-    /// choice, claude in api works, and claude in web is done. They match
-    /// the sample agents of the Android app.
+    /// choice, claude in api works, claude in web is done, and pi in web is
+    /// idle. They match the sample agents of the Android app.
     static let herdr = HerdrState(enabled: true, running: true, agents: [
         HerdrAgent(pane: "w2:p1", agent: "codex", status: .blocked, title: "Run the database migration", project: "billing", workspace: "billing"),
         HerdrAgent(pane: "w1:p1", agent: "claude", status: .working, title: "Add rate limiting to /v1/upload", project: "api", workspace: "api"),
         HerdrAgent(pane: "w3:p1", agent: "claude", status: .done, title: "Fix the flaky login test", project: "web", workspace: "web"),
+        HerdrAgent(pane: "w3:p2", agent: "pi", status: .idle, project: "web", workspace: "web"),
     ], control: true, review: true)
+
+    /// The sample agents by device ID: only the laptop has agents.
+    static var herdrStates: [String: HerdrState] { [computers[0].id: herdr] }
 
     /// The sample output of a demo agent in `pane`, or with `review` its
     /// sample diff in the format of fluxd.
@@ -100,6 +106,8 @@ enum DemoMode {
             "● Bash(npm test -- login --repeat 20)\n  ⎿  20 passed\n\n",
             "● Done. The test passed 20 times in a row.\n\n✻ Worked for 6m 12s\n\n" + input,
         ].joined(),
+        // The idle agent did not start a task yet.
+        "w3:p2": input,
     ]
 
     private static let diffs: [String: String] = [
@@ -142,11 +150,25 @@ enum DemoMode {
     private static let linkId = UUID(uuidString: "6F1D5E0A-0D7C-4C1B-9E55-0000000000B1") ?? UUID()
     private static let photoId = UUID(uuidString: "6F1D5E0A-0D7C-4C1B-9E55-0000000000B2") ?? UUID()
     private static let fileId = UUID(uuidString: "6F1D5E0A-0D7C-4C1B-9E55-0000000000B3") ?? UUID()
+    private static let textId = UUID(uuidString: "6F1D5E0A-0D7C-4C1B-9E55-0000000000B4") ?? UUID()
 
-    /// The sample link that this iPhone sent, 49 minutes ago.
+    /// The sample link that this iPhone sent 49 minutes ago, and the sample
+    /// text that it sent 1 minute ago.
     static var sent: [SentItem] {
-        [SentItem(id: linkId, deviceId: computers[0].id, kind: .link, text: "https://omarchy.org/manual",
-                  at: Date().addingTimeInterval(-49 * 60))]
+        let now = Date()
+        return [
+            SentItem(id: linkId, deviceId: computers[0].id, kind: .link, text: "https://omarchy.org/manual",
+                     at: now.addingTimeInterval(-49 * 60)),
+            SentItem(id: textId, deviceId: computers[0].id, kind: .text, text: "Dinner at 7, bring the kids",
+                     at: now.addingTimeInterval(-60)),
+        ]
+    }
+
+    /// The time that the sample desktop went offline: the last 09:12, today
+    /// or yesterday. The laptop is online, so it has none.
+    static func lastSeen(_ id: String, now: Date = Date()) -> Date? {
+        guard id == computers[1].id, let today = Calendar.current.date(bySettingHour: 9, minute: 12, second: 0, of: now) else { return nil }
+        return today > now ? Calendar.current.date(byAdding: .day, value: -1, to: today) : today
     }
 
     /// The sample files of the chat: a photo that went out 28 minutes ago,
@@ -169,17 +191,21 @@ enum DemoMode {
                            at: Date().addingTimeInterval(-11 * 60))
     }
 
-    /// The sample Inbox items: the 3 sample agents and a sudo request. They
-    /// go through `Inbox.items`, so that they are what a computer gives.
-    static func inboxItems(now: Date = Date()) -> [InboxItem] {
-        let laptop = computers[0].id
-        let approval = ApproveMessage.parse(
+    /// The sample sudo request of the laptop, asked at `now`.
+    static func approval(now: Date = Date()) -> ApproveRequest? {
+        ApproveMessage.parse(
             Packet(PacketType.fluxApprove, [
                 "kind": "request", "id": "demo1", "host": "omarchy", "user": "dev", "service": "sudo", "tty": "pts/3",
                 "time": Int64(now.timeIntervalSince1970), "nonce": String(repeating: "0", count: 64),
             ]),
-            computerId: laptop, computerName: "omarchy")
-        return Inbox.items(devices: computers, herdr: [laptop: herdr], approval: approval)
+            computerId: computers[0].id, computerName: "omarchy")
+    }
+
+    /// The sample Inbox items: the sample agents that wait, work, or are
+    /// done, and a sudo request. They go through `Inbox.items`, so that
+    /// they are what a computer gives.
+    static func inboxItems(now: Date = Date()) -> [InboxItem] {
+        Inbox.items(devices: computers, herdr: herdrStates, approval: approval(now: now))
     }
 
     /// The state of the core with the sample computers in place of the real

@@ -20,11 +20,18 @@ The steps are the same for a Mac that runs Flux for macOS.
 ## Requirements
 
 - Tailscale runs on the desktop and on the phone, in the same tailnet.
-- The phone is paired with the desktop. Pair it on the local network first.
+- The phone is paired with the desktop. Pair it on the local network, or pair it by its Tailscale address with `flux-cli pair --address`.
 - Flux for Android runs on the phone.
 
 Tailscale does not carry the mDNS and UDP broadcasts that Flux uses for discovery.
-So Flux cannot find or pair a device through Tailscale.
+So Flux cannot find a device through Tailscale.
+To pair through Tailscale, open Flux on the phone, then give the Tailscale address of the phone:
+
+```sh
+flux-cli pair --address 100.101.102.103
+```
+
+See [pair by address](cli.md#pair-by-address).
 
 ## Add the phone
 
@@ -80,7 +87,7 @@ flux-cli status
 journalctl --user -u fluxd -n 50 --no-pager | grep "link up"
 ```
 
-The `link up` line shows the address of the link, for example `link up: Pixel 8 (100.101.102.103) paired=true`.
+The `link up` line shows the device ID and the address of the link, for example `link up: Pixel 8 (a1b2c3) 100.101.102.103 paired=true`. The `link down` line gives the error text, if any.
 
 A link through Tailscale stays up when the phone returns to the local network.
 Tailscale then sends the traffic directly over the local network when it can.

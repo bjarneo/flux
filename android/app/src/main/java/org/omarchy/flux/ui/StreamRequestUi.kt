@@ -76,10 +76,12 @@ fun StreamRequestSheet(r: StreamRequest, onStart: () -> Unit, onDismiss: () -> U
     val icon = when (r.kind) {
         StreamKind.Webcam -> Ic.videocam
         StreamKind.Mic -> Ic.micFill
+        StreamKind.Speaker -> Ic.speakerPhone
     }
     val body = when (r.kind) {
         StreamKind.Webcam -> "The camera stays off until you tap Start webcam. Flux then opens the Webcam page and streams to ${r.computer}."
         StreamKind.Mic -> "The microphone stays off until you tap Start the mic. Flux then opens the Mic page and streams to ${r.computer}."
+        StreamKind.Speaker -> "Nothing plays until you tap Play on phone. Flux then opens Media and plays the audio of ${r.computer} on this phone."
     }
     FluxSheet(onDismiss, onFullyOpen = { fullyOpen = it }) {
         Column(

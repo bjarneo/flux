@@ -66,6 +66,7 @@ func TestStreamStart(t *testing.T) {
 		},
 		errs: map[string]error{},
 	}
+	h.results["speaker.start"] = map[string]any{"device": "p1", "name": "Pixel 8"}
 	serveRecord(t, h)
 
 	cases := []struct {
@@ -78,6 +79,7 @@ func TestStreamStart(t *testing.T) {
 		{"webcam", "", []string{"start", "--device", "Pixel 8"}, `{"device":"Pixel 8"}`},
 		{"mic", "", []string{"start", "-d", "p1"}, `{"device":"p1"}`},
 		{"mic", "other", []string{"start", "--device=Pixel 8"}, `{"device":"Pixel 8"}`},
+		{"speaker", "", []string{"start", "--device", "Pixel 8"}, `{"device":"Pixel 8"}`},
 	}
 	for _, c := range cases {
 		h.mu.Lock()
@@ -87,11 +89,8 @@ func TestStreamStart(t *testing.T) {
 		if err := streamStart(c.kind, c.args, c.device, &out); err != nil {
 			t.Fatalf("%s %q: %v", c.kind, c.args, err)
 		}
-		what := "the webcam"
-		if c.kind == "mic" {
-			what = "the mic"
-		}
-		if want := "Asked Pixel 8 to start " + what + ". Confirm on Pixel 8.\n"; out.String() != want {
+		what := map[string]string{"webcam": "start the webcam", "mic": "start the mic", "speaker": "play the audio of this computer"}[c.kind]
+		if want := "Asked Pixel 8 to " + what + ". Confirm on Pixel 8.\n"; out.String() != want {
 			t.Errorf("%s %q: printed %q, want %q", c.kind, c.args, out.String(), want)
 		}
 		h.mu.Lock()
@@ -153,5 +152,52 @@ func TestBrowse(t *testing.T) {
 	defer h.mu.Unlock()
 	if len(h.calls) != 2 || h.calls[0] != `browse.stop {"device":"Pixel 8"}` || !strings.HasPrefix(h.calls[1], "state ") {
 		t.Fatalf("calls %q", h.calls)
+	}
+}
+
+// TestSpeaker checks flux-cli speaker: the state lines, stop, and the
+// usage error.
+func TestSpeaker(t *testing.T) {
+	h := &recordHandler{state: map[string]any{"speaker": map[string]any{
+		"active": true, "toName": "Pixel 8", "rate": 48000, "channels": 2, "muted": "Laptop Speakers",
+	}}}
+	serveRecord(t, h)
+	var out bytes.Buffer
+	if err := speaker(nil, "", &out); err != nil {
+		t.Fatal(err)
+	}
+	want := "Pixel 8 plays the audio of this computer, 48000 Hz, stereo\n" +
+		"Laptop Speakers is muted until the stream stops.\n" +
+		"Stop it with: flux-cli speaker stop\n"
+	if out.String() != want {
+		t.Fatalf("printed %q, want %q", out.String(), want)
+	}
+	if err := speaker([]string{"stop"}, "", &out); err != nil {
+		t.Fatal(err)
+	}
+	if err := speaker([]string{"louder"}, "", &out); err == nil || !strings.Contains(err.Error(), "flux-cli speaker [start|stop]") {
+		t.Fatalf("an unknown argument: %v", err)
+	}
+	h.mu.Lock()
+	calls := h.calls
+	h.mu.Unlock()
+	if len(calls) != 2 || calls[1] != "speaker.stop " {
+		t.Fatalf("calls %q", calls)
+	}
+
+	for _, c := range []struct {
+		v    *speakerState
+		want string
+	}{
+		{nil, "No phone plays the audio of this computer"},
+		{&speakerState{Error: "pw-record is not installed"}, "The phone speaker failed: pw-record is not installed"},
+		{&speakerState{ToName: "Pixel 8"}, "Pixel 8 starts to play the audio of this computer"},
+		{&speakerState{Active: true, ToName: "Pixel 8", Rate: 48000, Channels: 2, MuteError: "no pactl"}, "The output of this computer is not muted: no pactl"},
+	} {
+		var b bytes.Buffer
+		printSpeaker(&b, c.v)
+		if !strings.Contains(b.String(), c.want) {
+			t.Errorf("printed %q, want %q in it", b.String(), c.want)
+		}
 	}
 }

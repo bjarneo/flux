@@ -42,10 +42,12 @@ private const val GRACE_MS = 2_000L
 private const val WAKE_MS = 6 * 60 * 60_000L
 
 /**
- * Keeps the webcam and the mic running while Flux is not on the screen.
- * Android gives the camera and the microphone to an app in the background
- * only through a foreground service of type camera or microphone, and only
- * when the service gets the type while the app is visible. [LiveStreams]
+ * Keeps the webcam, the mic, and the audio of a computer running while
+ * Flux is not on the screen. Android gives the camera and the microphone
+ * to an app in the background only through a foreground service of type
+ * camera or microphone, and only when the service gets the type while the
+ * app is visible. The audio of a computer plays through the media
+ * playback type. [LiveStreams]
  * starts the service when a stream starts on its screen. The service stops
  * [GRACE_MS] after the last stream ends. Its notification names each
  * stream and has a Stop action for each one. Only the main thread uses
@@ -148,12 +150,17 @@ class StreamService : Service() {
         foreground = true
     }
 
-    /** The foreground service types for [streams]. Android 10 has no camera and microphone types. */
+    /**
+     * The foreground service types for [streams]. Android 10 has no camera
+     * and microphone types. The audio of a computer takes the media
+     * playback type, which needs no permission of the user.
+     */
     private fun typesFor(streams: List<LiveStream>, withMic: Boolean): Int {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+        val speaker = if (streams.any { it.kind == StreamKind.Speaker }) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK else 0
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or speaker
         val webcam = streams.any { it.kind == StreamKind.Webcam }
         val mic = streams.any { it.kind == StreamKind.Mic } || (webcam && withMic)
-        var t = 0
+        var t = speaker
         if (webcam && granted(Manifest.permission.CAMERA)) t = t or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
         if (mic && granted(Manifest.permission.RECORD_AUDIO)) t = t or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
         return if (t == 0) ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE else t
@@ -174,7 +181,7 @@ class StreamService : Service() {
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
         for (s in streams) {
-            val label = if (s.kind == StreamKind.Webcam) "Stop webcam" else "Stop the mic"
+            val label = s.kind.stopLabel()
             val stop = PendingIntent.getService(
                 this, s.kind.ordinal + 1,
                 Intent(this, StreamService::class.java).setAction(ACTION_STOP).putExtra(EXTRA_KIND, s.kind.key),

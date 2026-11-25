@@ -1,6 +1,6 @@
 ---
 name: omarchy-flux
-description: Use, install, diagnose, develop, and release Omarchy Flux. Use this skill for the flux-cli command, fluxd, Flux for Android, Flux for iOS, Flux for macOS, phone, iPhone, and Mac pairing, connections through Tailscale, file or clipboard transfers, phone notifications, webcam or microphone streams, screen mirror, fingerprint approval, herdr agents on the phone, the Flux Qt app, the Flux Omarchy plugin, AUR packages, and Flux APK workflows. Scope this skill to Flux tasks, not general Android or Omarchy configuration.
+description: Use, install, diagnose, develop, and release Omarchy Flux. Use this skill for the flux-cli command, fluxd, Flux for Android, Flux for iOS, Flux for macOS, phone, iPhone, and Mac pairing, connections through Tailscale, file or clipboard transfers, phone notifications, webcam or microphone streams, screen mirror, fingerprint approval, the SSH key on the phone, herdr agents on the phone, the Flux Qt app, the Flux Omarchy plugin, AUR packages, and Flux APK workflows. Scope this skill to Flux tasks, not general Android or Omarchy configuration.
 ---
 
 # Omarchy Flux
@@ -19,6 +19,7 @@ The `fluxcd` package also installs a `flux` command, so always run `flux-cli`.
 | Build, install, test, package, or release Flux | [Build and release reference](references/build-release.md) |
 | Change the source | Read the relevant files in the repository and the topic in `docs/README.md`. |
 | Change fingerprint approval | Read `docs/approve.md` before you edit the approval code. |
+| Use or change the SSH key on the phone | Read `docs/ssh.md`. |
 | Answer what a paired device can do, or limit it | Read `docs/security.md`. |
 
 Find the repository from the working directory or ask for its path.
@@ -49,6 +50,9 @@ If no remote exists, ask for the repository URL before a remote operation.
 `flux-cli setup` returns 1 when the service step or the plugin step fails.
 A missing system part does not change the exit code.
 Inspect its output and confirm the result with `flux-cli doctor` and `flux-cli status --json`.
+`flux-cli doctor` also reports when herdr-core runs and the herdr server does not. Flux reads only the herdr server.
+`fluxd` writes a `link up` or `link down` line to the journal of `fluxd.service` for each link event of a paired device.
+`herdr_control` has a key on the **Access** card of the Flux window. The key asks before it turns on.
 
 ## Operate Flux
 
@@ -100,7 +104,14 @@ Do not open the Flux ports in the firewall, because each host that reaches them 
 Flux for Android takes a new computer only while Flux is on the screen or while it scans.
 Check the daemon, Avahi, Wi-Fi isolation, and phone state first.
 
-Discovery and pairing need the local network.
+Discovery needs the local network.
+When discovery finds nothing, for example on a network with client isolation or through Tailscale, pair by the address of the phone:
+
+```sh
+flux-cli pair --address 192.168.1.20
+```
+
+The phone must show Flux, and the key comparison stays the same.
 To reach a paired phone away from that network, add its Tailscale name as an extra address:
 
 ```sh

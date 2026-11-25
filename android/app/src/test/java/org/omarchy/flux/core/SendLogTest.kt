@@ -44,6 +44,14 @@ class SendLogTest {
     }
 
     @Test
+    fun aFileThatWentOutKeepsItsSource() {
+        val list = listOf(file(1, TransferState.Running).copy(uri = "content://media/1"), file(2, TransferState.Running).copy(uri = "content://media/2"))
+        val done = endSend(endSend(list, 1, ok = true), 2, ok = false)
+        assertEquals("content://media/1", done[0].uri)
+        assertEquals("a failed photo still shows", "content://media/2", done[1].uri)
+    }
+
+    @Test
     fun aClipFromAComputerTakesThePlaceOfTheLastOne() {
         val sent = SendEntry(1, "pc", "omarchy-xps", SendKind.Clip, "out")
         val first = SendEntry(2, "pc", "omarchy-xps", SendKind.Clip, "a", incoming = true)
@@ -96,6 +104,28 @@ class SendLogTest {
         assertEquals("sudo", yes.text)
         assertTrue("the answer shows on the side of the computer", yes.incoming)
         assertEquals(r, yes.approval)
+        SendLog.replace(emptyList())
+    }
+
+    @Test
+    fun clearRemovesOnlyTheEntriesOfOneComputer() {
+        val list = listOf(file(1), file(2).copy(deviceId = "laptop"), file(3, TransferState.Running), file(4).copy(deviceId = "laptop"))
+        val cleared = clearSends(list, "pc")
+        assertEquals(listOf(2L, 4L), cleared.map { it.id })
+        assertTrue(clearSends(cleared, "laptop").isEmpty())
+        assertEquals("a computer without entries changes nothing", cleared, clearSends(cleared, "other"))
+    }
+
+    @Test
+    fun removeTakesOutOneEntry() {
+        assertEquals(listOf(1L, 3L), removeSend(listOf(file(1), file(2), file(3)), 2).map { it.id })
+    }
+
+    @Test
+    fun theLogClearsOneComputer() {
+        SendLog.replace(listOf(file(1), file(2).copy(deviceId = "laptop")))
+        SendLog.clear("pc")
+        assertEquals(listOf(2L), SendLog.entries.value.map { it.id })
         SendLog.replace(emptyList())
     }
 }

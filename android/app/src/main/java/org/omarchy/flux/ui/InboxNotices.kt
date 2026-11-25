@@ -53,6 +53,13 @@ class InboxNotices(
 internal fun streamLine(s: StreamNotice): String =
     streamSentence(listOf(s.stream.kind), s.name, s.stream.live) + ". It keeps running when you leave Flux."
 
+/** The icon of a stream of [kind]. */
+internal fun streamIcon(kind: StreamKind): Int = when (kind) {
+    StreamKind.Webcam -> Ic.videocam
+    StreamKind.Mic -> Ic.micFill
+    StreamKind.Speaker -> Ic.speakerPhone
+}
+
 /** The title of an Inbox with nothing to do. In a scope, it names the computer. */
 internal fun nothingText(n: InboxNotices): String = n.scopeName?.let { "Nothing on $it needs you" } ?: "Nothing needs you"
 
@@ -106,13 +113,13 @@ internal fun InboxNoticeList(n: InboxNotices, actions: ChatActions, offline: Boo
     for (s in n.streams) {
         val kind = s.stream.kind
         Notice(
-            { Sym(if (kind == StreamKind.Webcam) Ic.videocam else Ic.micFill, tint = Tn.green, size = 18.dp) },
+            { Sym(streamIcon(kind), tint = Tn.green, size = 18.dp) },
             streamLine(s),
             Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             color = Tn.text,
         ) {
             FluxButton("Open", { actions.open(Route(s.stream.deviceId, streamPage(kind))) }, kind = ButtonKind.Text)
-            FluxButton(if (kind == StreamKind.Webcam) "Stop webcam" else "Stop the mic", { LiveStreams.stop(kind) }, kind = ButtonKind.Text)
+            FluxButton(kind.stopLabel(), { LiveStreams.stop(kind) }, kind = ButtonKind.Text)
         }
     }
     if (paired && n.paired != null) {

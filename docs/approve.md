@@ -1,9 +1,10 @@
 # Approve with fingerprint: security design
 
 Flux can approve `sudo`, polkit, and the `hyprlock` lock screen on a
-paired device: an Android phone, an iPhone, or a Mac. The device signs
-each request with a private key that never leaves its secure hardware,
-and only after a fingerprint, Face ID, or Touch ID. A small helper on the
+paired device: an Android phone, an iPhone, a Mac, or a Windows computer.
+The device signs each request with a private key that never leaves its
+secure hardware, and only after a fingerprint, Face ID, Touch ID, or
+Windows Hello. A small helper on the
 computer checks the signature with a public key that only root can
 change. If anything fails, PAM asks for the password as usual.
 
@@ -14,8 +15,8 @@ screen. The `hyprlock` service applies only when `hyprlock` is the lock
 screen.
 
 In this document, "the phone" means the device that signs: Flux for
-Android, Flux for iOS, or Flux for macOS. A section that names 1 app
-applies only to that app.
+Android, Flux for iOS, Flux for macOS, or Flux for Windows. A section that
+names 1 app applies only to that app.
 
 This document is the design. The code must follow it. Read it before you
 change one of these parts:
@@ -26,6 +27,8 @@ change one of these parts:
 - The approve code of the iPhone and the Mac:
   `macos/Sources/FluxKit/Plugins/Approve/`, `macos/App/Features/Approve/`,
   and `ios/App/Features/Approve/`.
+- The approve code of Windows: `windows/FluxKit/Plugins/Approve/`, and the
+  approve files in `windows/Flux/Platform/` and `windows/Flux/Features/`.
 
 ## Parts
 
@@ -36,6 +39,7 @@ change one of these parts:
 | `fluxd` | The user | Carries the messages between the helper and the phone |
 | Flux for Android | The phone user | Shows the request, asks for the fingerprint, and signs with a key in the Android Keystore |
 | Flux for iOS and Flux for macOS | The user of the iPhone or the Mac | Show the request, ask for Face ID or Touch ID, and sign with a key in the Secure Enclave. The code is in `FluxKit`. |
+| Flux for Windows | The Windows user | Shows the request, and signs with a Windows Hello key. Windows Hello asks for the fingerprint, the face, or the Windows Hello PIN for each signature. |
 | `flux-cli approve enroll` | root, through `sudo` | Gets the public key from the phone and writes the key file |
 
 ## Threat model
@@ -90,9 +94,11 @@ not change what a valid signature is.
 
 ## Keys on the device
 
-Each app makes 1 key for each paired computer. The key is EC P-256, for
-signing with SHA-256 only. A signature is not possible without a new
-biometric check, even for code that runs in the Flux app.
+Each app makes 1 key for each paired computer. The key is EC P-256 on
+Android, iOS, and macOS, and RSA 2048 on Windows, for signing with
+SHA-256 only. A signature is not possible without a new biometric check,
+even for code that runs in the Flux app. Windows is the 1 exception:
+Windows Hello also accepts its PIN, see the section Windows.
 
 ### Android
 
@@ -122,6 +128,24 @@ biometric check, even for code that runs in the Flux app.
 - On Android 12 and later, the approval screen hides the windows of other
   apps. The phone refuses **Approve** when the window of another app
   covered the screen during the tap.
+- The switch **Open the fingerprint check at once** is off by default. It
+  is in the Settings group of Computers. When it is on, the approval
+  screen opens the same `BiometricPrompt` as **Approve**, with no tap.
+  The screen opens the prompt only when all of these are true:
+  - The request is an approval. An enrollment keeps its tap.
+  - The phone runs Android 12 or later. On Android 10 and 11, the switch
+    stays off and cannot change.
+  - The screen is resumed and has the window focus.
+  - The screen did not open the prompt for this request ID before.
+- The prompt keeps `BIOMETRIC_STRONG`, the `CryptoObject`, and the
+  confirmation step. The key and the signature do not change. **Cancel**
+  keeps the screen with **Approve** and **Deny**. The prompt does not
+  open again for that request.
+- With no tap, there is no touch to check. The screen calls
+  `setHideOverlayWindows(true)` when it starts, so the windows of other
+  apps stay hidden while the prompt opens. This is why Android 10 and 11
+  are excluded: there, no setting hides those windows, and only the check
+  of a covered tap protects the screen.
 
 ### iPhone and Mac
 
@@ -171,11 +195,53 @@ biometric check, even for code that runs in the Flux app.
   on the lock screen. On the Mac, **Approve** in the notification asks for
   Touch ID at once.
 
+### Windows
+
+- Flux for Windows keeps the key in Windows Hello. It makes the key with
+  `KeyCredentialManager.RequestCreateAsync` under the name
+  `flux-approve-<computer device ID>`. Windows Hello makes an RSA 2048
+  key, in the TPM when the computer has one. Flux reads the public key as
+  a SubjectPublicKeyInfo in DER.
+- Each signature calls `KeyCredential.RequestSignAsync`. Windows Hello
+  then asks for the fingerprint, the face, or the Windows Hello PIN. So 1
+  check does not sign 2 requests. The result is an RSASSA-PKCS1-v1_5
+  signature over the SHA-256 of the message.
+- Windows Hello always accepts its PIN, and Windows has no setting that
+  lets an app take only biometrics. So on Windows, the PIN can sign. The
+  PIN works only on that computer, and the TPM limits the guesses. It is
+  not the password of the Windows account. The user chose this exception
+  on 2026-10-15, so that Windows has the approval of the other apps.
+- Another program of the Windows user can open the key by its name, but
+  each signature still needs the check of Windows Hello.
+- A computer without Windows Hello refuses each request. Flux never makes
+  a key outside Windows Hello.
+- Windows Hello keeps a key when the enrolled fingers or faces change. So
+  Windows has no rule like `evaluatedPolicyDomainState`. When Windows
+  Hello reports that the key is gone or not valid, Flux deletes its record
+  and the user enrolls again.
+- Flux stores the key name, the public key, the host, the user, and the
+  time of the enrollment in
+  `%LOCALAPPDATA%\Flux\approve\<computer device ID>.json`. The folder
+  belongs to the Windows user.
+- An enrollment keeps the current key until the new key goes out to the
+  computer, as on the Mac. Flux makes the new key under a second name,
+  and records it in `<computer device ID>.pending`. When the send works,
+  the new key takes the place of the old key, and Flux deletes the old
+  key. When the send fails, Flux deletes the new key. At the start, Flux
+  deletes each new key that no enrollment finished.
+- An unpair on Windows deletes the key of that computer. **Remove Key**
+  on the page of the computer also deletes it. The key file on the
+  computer stays until `sudo flux-cli approve remove`.
+- **Approve** in the notification asks Windows Hello at once.
+
 ## Messages
 
 The phone signs the exact bytes below with `SHA256withECDSA`. The result
 is an ASN.1 DER signature. The helper checks it with `ecdsa.VerifyASN1`
-over the SHA-256 hash of the same bytes.
+over the SHA-256 hash of the same bytes. Flux for Windows signs the same
+bytes with RSASSA-PKCS1-v1_5 and SHA-256, the scheme of Windows Hello.
+The helper checks that signature with `rsa.VerifyPKCS1v15`. The helper
+accepts only EC P-256 keys and RSA 2048 keys with the exponent 65537.
 
 An approval message has 8 lines. Each line ends with 1 newline character:
 
@@ -210,9 +276,10 @@ check them, and a request that breaks a rule fails:
 - `host`, `user`, and `service` are not empty.
 - `nonce` is exactly 64 lowercase hex digits.
 
-The Go, Kotlin, and Swift code build the same bytes. The tests
-`internal/approve/message_test.go`, `ApproveMessageTest.kt`, and
-`ApproveMessageTests.swift` check them with the same vectors.
+The Go, Kotlin, Swift, and C# code build the same bytes. The tests
+`internal/approve/message_test.go`, `ApproveMessageTest.kt`,
+`ApproveMessageTests.swift`, and `ApproveMessageTests.cs` check them with
+the same vectors.
 
 The first line names the version and the purpose. So a signature for an
 enrollment is never a valid approval, and the reverse.
@@ -244,6 +311,8 @@ enrollment is never a valid approval, and the reverse.
    wait for the password prompt.` Without a TTY, the line has no terminal.
 8. The phone shows `Approve <service> for user <user> on host <host>?`
    with the TTY, the remote host, and the time. It shows Approve and Deny.
+   On Android with the switch **Open the fingerprint check at once** on,
+   the phone also opens the biometric check of step 9 with no tap.
 9. Approve asks for the biometric check: `BiometricPrompt` on Android,
    Face ID or Touch ID on the iPhone and the Mac. After the check, the
    phone signs the approval message and sends it. Deny sends a denial.
@@ -253,7 +322,9 @@ enrollment is never a valid approval, and the reverse.
     does not use any field that `fluxd` or the phone sends back. It checks
     the signature with the key from the key file, and it checks the time.
 12. The helper exits with 0 only when the signature is valid. Any other
-    result is a non-zero exit, and PAM goes on to the password.
+    result is a non-zero exit, and PAM goes on to the password. Before
+    it exits, the helper prints 1 line with the reason, except for 4
+    failures, see Failure modes.
 
 ## Enrollment flow
 
@@ -339,25 +410,41 @@ the open request of that computer at once.
 
 Every failure gives a non-zero exit, and PAM asks for the password.
 
-| Condition | Result |
-| --- | --- |
-| No key file | The helper stops at once and prints nothing |
-| A key file that fails a check | The helper stops at once |
-| `fluxd` does not run, or the peer is another user | The helper stops at once |
-| The phone is not paired or not connected | The helper stops at once |
-| Another approval waits for the same phone | `fluxd` refuses the request |
-| The user denies on the phone | The helper stops |
-| No answer in time | The helper stops, and `fluxd` cancels the request on the phone |
-| A wrong signature, a wrong key, or a changed field | The helper stops |
-| A stale or future time | The helper stops |
-| The phone has no strong biometric | The phone sends an error |
-| A new fingerprint on the phone | The key is invalid, the phone sends an error, and the user enrolls again |
-| The fingerprint check fails, for example after too many tries | The phone sends the error, and the helper or the command stops |
-| The phone cannot sign, for example after a Keystore error | The phone sends the error with its reason, and the helper or the command stops. The command prints the reason |
-| The service is `sshd` | The helper stops at once |
-| Another user asks, for example with the sudoers option `targetpw` | The helper stops at once |
-| `polkit-1` without a setuid `polkit-agent-helper-1` | The helper stops at once. `flux-cli approve enable polkit-1` refuses this service |
-| The PAM caller stops, for example when the user closes the terminal or kills `sudo` | The helper gets `SIGTERM` and ends the request. `fluxd` also ends a request when the connection of its helper closes, and it closes the request on the phone |
+For most failures, the helper prints 1 line with the reason before the
+password prompt. 4 rows print nothing: no key file, the service `sshd`,
+a request of another user, and a PAM caller that stops. So the helper
+prints nothing on a computer with no key, and nothing for a service that
+the phone never approves. The `polkit-1` row without a setuid agent
+helper counts as a request of another user.
+
+The lines are fixed texts in `internal/approve/reason.go`. A line holds
+no value from `fluxd`, from the phone, from the key file, or from the
+environment. So code that runs as the user cannot put text on the
+terminal of root through the line. The `Reason` function returns the
+line, and a test checks each row.
+
+| Condition | Result | Line that the helper prints |
+| --- | --- | --- |
+| No key file | The helper stops at once | None |
+| A key file that fails a check | The helper stops at once | `The key file of the phone is not safe, so the helper does not use it. Run: flux-cli approve status` |
+| `fluxd` does not run, the peer is another user, or `fluxd` stops answering | The helper stops at once | `fluxd does not answer, so the phone cannot get the request. Run: flux-cli doctor` |
+| The phone is not paired or not connected | The helper stops at once | `The phone is not paired or not connected.` |
+| Another approval waits for the same phone | `fluxd` refuses the request | `Another approval waits for the phone.` |
+| The user denies on the phone | The helper stops | `The request was denied on the phone.` |
+| No answer in time | The helper stops, and `fluxd` cancels the request on the phone | `The phone did not answer in time.` |
+| A wrong signature, a wrong key, or a changed field | The helper stops | `The signature of the phone is not valid.` |
+| A stale or future time | The helper stops | `The time of the signature is out of range. Check the clock of the phone.` |
+| The phone has no strong biometric | The phone sends an error | `The phone could not approve the request. Open Flux on the phone for the reason.` |
+| A new fingerprint on the phone | The key is invalid, the phone sends an error, and the user enrolls again | The same line as the row above |
+| The fingerprint check fails, for example after too many tries | The phone sends the error, and the helper or the command stops | The same line as the row above |
+| The phone cannot sign, for example after a Keystore error | The phone sends the error with its reason, and the helper or the command stops. The command prints the reason | The same line as the row above. The helper does not print the reason of the phone |
+| The service is `sshd` | The helper stops at once | None |
+| Another user asks, for example with the sudoers option `targetpw` | The helper stops at once | None |
+| `polkit-1` without a setuid `polkit-agent-helper-1` | The helper stops at once. `flux-cli approve enable polkit-1` refuses this service | None. This is a request of another user, because the helper cannot see who asks. `flux-cli doctor` shows the `polkit-1` line of `flux-cli approve status` |
+| The PAM caller stops, for example when the user closes the terminal or kills `sudo` | The helper gets `SIGTERM` and ends the request. `fluxd` also ends a request when the connection of its helper closes, and it closes the request on the phone | None |
+
+The line comes after the line of step 7 of the approval flow when the
+helper asked the phone, and before the password prompt.
 
 ## What an attacker can do
 
@@ -365,8 +452,16 @@ Every failure gives a non-zero exit, and PAM asks for the password.
 | --- | --- | --- |
 | Network | Block or delay the link, so that PAM asks for the password | Read or change the messages, because the link uses TLS with pinned certificates. Make a valid signature. |
 | Code that runs as the user | Stop the approval, so that PAM asks for the password. Send requests to the phone. Start `sudo` and wait for the user to approve it. Enroll its own key during `sudo flux-cli approve enroll`, because it can type the key code into the terminal, see the open risks. | Make a valid signature. Change the key file without an enrollment or a `sudo` that the user starts. Point the helper to another key. Use an old signature again. |
-| A person with the locked phone | See a request on the lock screen, and deny it | Approve a request without the fingerprint |
+| A person with the locked phone | See a request on the lock screen, and deny it. See the fingerprint prompt open at once when the switch is on. Cancel that prompt. | Approve a request without the fingerprint. The prompt that opens at once needs the same strong fingerprint as a tap. |
 | A person with the unlocked phone | Deny requests. Remove Flux. | Approve a request without the fingerprint |
+| A person at the unlocked Windows computer who knows its Windows Hello PIN | Approve requests | Approve a request without the PIN or a fingerprint or face that Windows Hello knows |
+
+The reason line gives these attackers nothing new. The line is a fixed
+text, so no attacker chooses its content. A changed `fluxd` can choose
+among the fixed lines. It cannot add text. The line tells only what the
+attacker can already see: the password prompt follows it, and `flux-cli
+approve status` shows the same state to the user. The 4 silent rows
+keep the line away from a computer or a service that has no approval.
 
 The helper runs as root for `sudo`. It reads only the key file, the socket,
 `/etc/passwd`, and its PAM variables. It limits each line from `fluxd` to
@@ -378,6 +473,13 @@ For a lock screen, the helper runs as the user. Code that runs as the user
 can already end the lock screen, so the approval protects only against a
 person at the keyboard. The password protects against the same person.
 
+## Fingerprint check at once
+
+When the switch is on and the phone has no strong biometric, or the
+sensor is in a lockout, `start()` fails the request on arrival. The
+computer then falls back to the password. The user sees the message on the
+approval screen, and no prompt opens.
+
 ## Open risks
 
 - **Approval fatigue.** Code that runs as the user can start `sudo` and
@@ -386,6 +488,12 @@ person at the keyboard. The password protects against the same person.
   user, the host, the TTY, and the time. Approve a request only right
   after you typed the command. Code that runs as the user can also get the
   password in other ways, for example with a shell alias for `sudo`.
+  The switch **Open the fingerprint check at once** adds a case. The phone
+  wakes and the prompt opens with no tap. A finger that rests on the
+  sensor, or an unlock touch at that moment, approves a request that the
+  user did not read. The prompt shows the service, the user, the host, and
+  the terminal. Keep the switch off if you touch the sensor by habit.
+  Flux adds no delay.
 - **No key attestation.** The computer trusts that the phone made the key
   with the settings above. Android key attestation can prove it, but Flux
   does not check it yet. The computer also cannot check the settings of a
@@ -413,5 +521,9 @@ person at the keyboard. The password protects against the same person.
   terminal. The command cannot tell these keys from the keys of the user.
   The typed code stops only a changed `fluxd` that cannot send keys. Run
   `sudo flux-cli approve enroll` only in a session that you trust.
+- **The Windows Hello PIN.** On Windows, the Windows Hello PIN can sign
+  an approval. A person who knows the PIN and sits at the Windows
+  computer can approve a request. Use a PIN that other people do not
+  know, or approve only from an Android phone, an iPhone, or a Mac.
 - **Only local users.** The helper finds the user in `/etc/passwd`. Users
   from a network directory do not work.

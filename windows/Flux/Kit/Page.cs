@@ -118,7 +118,8 @@ public abstract class View : ContentControl
 }
 
 // A page of a destination or a route. The window shows its title, its
-// context line, and the scope menu on a destination root.
+// context line, and the scope menu on a destination root, unless the page
+// draws its own top bar.
 public abstract class Page : View
 {
     protected AppModel Model { get; }
@@ -131,6 +132,10 @@ public abstract class Page : View
 
     public abstract string Title { get; }
     public virtual string Subtitle => "";
+
+    // True when the page draws its own top bar, as a chat does. The window
+    // then shows no header over the page.
+    public virtual bool OwnHeader => false;
 
     // Called when the title or the context line changed after a drawing.
     public event Action? HeaderChanged;

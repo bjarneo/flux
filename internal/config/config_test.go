@@ -231,3 +231,40 @@ func TestLoadTrustMovesABrokenFile(t *testing.T) {
 		t.Fatalf("second load: %v, broken %q, %d devices", err, ts.Broken, len(ts.All()))
 	}
 }
+
+// TestRemoteDesktopEncoder checks the values of remote_desktop_encoder.
+func TestRemoteDesktopEncoder(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	write := func(line string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Join(dir, "flux"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "flux", "config.toml"), []byte(line+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for line, want := range map[string]string{
+		``:                                EncoderAuto,
+		`remote_desktop_encoder = "auto"`: EncoderAuto,
+		`remote_desktop_encoder = "gpu"`:  EncoderGPU,
+		`remote_desktop_encoder = "cpu"`:  EncoderCPU,
+	} {
+		write(line)
+		c, err := Load()
+		if err != nil || c.Encoder() != want {
+			t.Fatalf("%q: got %q, %v; want %q", line, c.Encoder(), err, want)
+		}
+		if err := Check(); err != nil {
+			t.Fatalf("%q: Check: %v", line, err)
+		}
+	}
+	write(`remote_desktop_encoder = "vaapi"`)
+	if _, err := Load(); err == nil {
+		t.Fatal("Load took an unknown encoder")
+	}
+	if err := Check(); err == nil {
+		t.Fatal("Check took an unknown encoder")
+	}
+}

@@ -7,6 +7,8 @@ import (
 	"slices"
 	"testing"
 	"time"
+
+	"flux/internal/config"
 )
 
 func TestParseMonitors(t *testing.T) {
@@ -209,26 +211,53 @@ func TestPickRecorder(t *testing.T) {
 			return "", missing
 		}
 	}
+	onCPU := desktopRecorder + " on the CPU"
 	cases := []struct {
-		name, gpu, cpu, want string
+		name, encoder, gpu, cpu, want string
 	}{
-		{"supported GPU", supported, cpu, desktopRecorder},
-		{"displays off", displaysOff, cpu, desktopRecorder},
-		{"unsupported GPU", unsupported, cpu, desktopCPURecorder},
-		{"unsupported GPU without wf-recorder", unsupported, "", desktopRecorder},
-		{"only wf-recorder", "", cpu, desktopCPURecorder},
+		{"supported GPU", config.EncoderAuto, supported, cpu, desktopRecorder},
+		{"displays off", config.EncoderAuto, displaysOff, cpu, desktopRecorder},
+		{"unsupported GPU", config.EncoderAuto, unsupported, cpu, desktopCPURecorder},
+		{"unsupported GPU without wf-recorder", config.EncoderAuto, unsupported, "", desktopRecorder},
+		{"only wf-recorder", config.EncoderAuto, "", cpu, desktopCPURecorder},
+		{"gpu on an unsupported GPU", config.EncoderGPU, unsupported, cpu, desktopRecorder},
+		{"cpu with both", config.EncoderCPU, supported, cpu, onCPU},
+		{"cpu without wf-recorder", config.EncoderCPU, supported, "", onCPU},
+		{"cpu with only wf-recorder", config.EncoderCPU, "", cpu, desktopCPURecorder},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			rec, err := pickRecorder(t.Context(), paths(c.gpu, c.cpu))
+			rec, err := pickRecorder(t.Context(), paths(c.gpu, c.cpu), c.encoder)
 			if err != nil || rec.name != c.want {
 				t.Fatalf("got %q, %v; want %q", rec.name, err, c.want)
 			}
 		})
 	}
-	t.Run("none", func(t *testing.T) {
-		if _, err := pickRecorder(t.Context(), paths("", "")); err == nil {
-			t.Fatal("got no error without a recorder")
+	for _, encoder := range []string{config.EncoderAuto, config.EncoderGPU, config.EncoderCPU} {
+		t.Run("none "+encoder, func(t *testing.T) {
+			if _, err := pickRecorder(t.Context(), paths("", ""), encoder); err == nil {
+				t.Fatal("got no error without a recorder")
+			}
+		})
+	}
+	t.Run("gpu without gpu-screen-recorder", func(t *testing.T) {
+		if _, err := pickRecorder(t.Context(), paths("", cpu), config.EncoderGPU); err == nil {
+			t.Fatal("gpu picked wf-recorder")
 		}
 	})
+}
+
+// TestDesktopCPUArgs checks that the CPU encoder keeps the stream format
+// of the GPU encoder and asks for the CPU.
+func TestDesktopCPUArgs(t *testing.T) {
+	gpu := desktopArgs("DP-2", 1920, 1080)
+	cpu := desktopCPUArgs("DP-2", 1920, 1080)
+	if len(cpu) != len(gpu)+2 || cpu[len(cpu)-2] != "-encoder" || cpu[len(cpu)-1] != "cpu" {
+		t.Fatalf("CPU args %q", cpu)
+	}
+	for i := range gpu {
+		if gpu[i] != cpu[i] {
+			t.Fatalf("CPU args %q change the GPU args %q", cpu, gpu)
+		}
+	}
 }

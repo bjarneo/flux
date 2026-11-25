@@ -14,10 +14,11 @@ struct TargetRequest: Identifiable {
 @MainActor
 enum TargetRun {
     /// Runs `action` on the only computer that can take it. With more than
-    /// 1, the app asks which one first. With none, a toast tells why.
-    static func run(_ model: AppModel, can: (DeviceSnapshot) -> Bool, title: String,
+    /// 1, the app asks which one first. With none, a toast tells why. With
+    /// `allComputers`, the scope does not count, as in the list of chats.
+    static func run(_ model: AppModel, can: (DeviceSnapshot) -> Bool, title: String, allComputers: Bool = false,
                     action: @escaping @MainActor (DeviceSnapshot) -> Void) {
-        switch Inbox.target(scope: model.scope, devices: model.state.devices, can: can) {
+        switch Inbox.target(scope: allComputers ? nil : model.scope, devices: model.state.devices, can: can) {
         case .one(let d): action(d)
         case .ask(let list): model.targetRequest = TargetRequest(title: title, devices: list, action: action)
         case .unavailable(let d): model.show(noTarget(d))
@@ -52,7 +53,7 @@ enum TargetRun {
     }
 }
 
-/// The tools that send to the computer in scope, for the chat.
+/// The features that the chat of a computer uses.
 @MainActor
 enum SendTools {
     /// The computers that take the clipboard, see `SendClipboardQuickAction`.
@@ -61,20 +62,31 @@ enum SendTools {
         return { has && $0.accepts(PacketType.clipboard) }
     }
 
-    /// The computers that take files, see `SendFilesQuickAction`.
+    /// The computers that take files, see `SendFilesQuickAction`. The camera modes send with the same feature.
     static func canShare(_ model: AppModel) -> (DeviceSnapshot) -> Bool {
         let has = model.core.plugin(SharePlugin.self) != nil
         return { has && $0.accepts(PacketType.share) }
     }
 
-    /// Sends the clipboard: an image, or else its text.
-    static func sendClipboard(_ model: AppModel) {
-        TargetRun.run(model, can: canClipboard(model), title: "Send the clipboard to") { d in
-            if model.demo {
-                model.show(DemoMode.sendsNothing)
-                return
-            }
-            model.core.plugin(ClipboardPlugin.self)?.sendClipboard(to: d.id)
+    /// The computers that open their files, see `BrowseTile`.
+    static func canBrowse(_ model: AppModel) -> (DeviceSnapshot) -> Bool {
+        let has = model.core.plugin(BrowsePlugin.self) != nil
+        return { has && $0.accepts(PacketType.sftpRequest) }
+    }
+
+    /// The agent list of each computer by device ID. The demo shows its sample agents.
+    static func herdrStates(_ model: AppModel) -> [String: HerdrState] {
+        if model.demo { return DemoMode.herdrStates }
+        return model.core.plugin(HerdrPlugin.self)?.model.states ?? [:]
+    }
+
+    /// The computers that can start a new agent or terminal now: herdr runs,
+    /// and the computer lets this iPhone control it.
+    static func canCreate(_ model: AppModel) -> (DeviceSnapshot) -> Bool {
+        let states = herdrStates(model)
+        return { d in
+            guard d.accepts(PacketType.fluxHerdr), let h = states[d.id] else { return false }
+            return h.running && h.control
         }
     }
 }

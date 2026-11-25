@@ -186,6 +186,7 @@ func (d *Daemon) Snapshot() json.RawMessage {
 		"mic":     d.micViewLocked(),
 		"screen":  d.screenViewLocked(),
 		"desktop": d.desktopViewLocked(),
+		"speaker": d.speakerViewLocked(),
 		"browse":  d.browseViewLocked(),
 		"herdr":   d.herdrViewLocked(),
 	}
@@ -250,10 +251,18 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 	switch method {
 	case "state":
 		return d.Snapshot(), nil
+	case "pair.address":
+		return d.linkAddress(ctx, p.Address)
 	case "discover":
 		d.announce()
+		// Avahi reports a device only when it appears. Resolve each device
+		// again, so a phone whose link closed connects again.
+		d.mu.Lock()
+		m := d.mdns
+		d.mu.Unlock()
+		m.Rescan()
 		return ok, nil
-	case "webcam.start", "mic.start":
+	case "webcam.start", "mic.start", "speaker.start":
 		// The request picks its own device: only a device that accepts
 		// flux.stream.request counts.
 		id, name, err := d.requestStream(strings.TrimSuffix(method, ".start"), p.Device)
@@ -267,6 +276,8 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		return ok, d.ConfigureWebcam(p.Config, p.Reset)
 	case "mic.stop":
 		return ok, d.StopMic()
+	case "speaker.stop":
+		return ok, d.StopSpeaker()
 	case "screen.stop":
 		return ok, d.StopScreen()
 	case "desktop.stop":
@@ -279,6 +290,8 @@ func (d *Daemon) Call(ctx context.Context, method string, raw json.RawMessage) (
 		return d.ApproveWait(ctx, p.ID)
 	case "approve.cancel":
 		return ok, d.ApproveCancel(p.ID)
+	case "ssh.keys":
+		return d.sshView(), nil
 	case "clipboard.copy":
 		if p.ID != "" {
 			return ok, d.CopyClip(p.ID)

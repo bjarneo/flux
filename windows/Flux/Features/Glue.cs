@@ -16,11 +16,10 @@ public static class Batteries
         model.Core.Plugin<BatteryPlugin>()?.Model.Of(deviceId) is { } b ? new BatteryLevel(b.Charge, b.Charging) : null;
 }
 
-// The items of all computers that need the user or have a state now: the
-// pair requests, and later the agents and the approvals. Inbox.swift of the
-// Mac app has the same rules.
+// The Inbox of the app: the items of all computers from FluxKit.Inbox, with
+// the computers of the app model. Inbox.swift of the Mac app has the rules.
 public static class Inbox
 {
     // The number of items that need the user, on all computers.
-    public static int NeedsYou(AppModel model) => model.State.Devices.Count(d => !d.Paired && d.PairState == PairState.Incoming);
+    public static int NeedsYou(AppModel model) => FluxKit.Inbox.NeedsYou(model.InboxItems());
 }

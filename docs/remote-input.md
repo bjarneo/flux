@@ -40,7 +40,7 @@ See [IPC](ipc.md) for the socket.
 
 ## Use the touchpad on the phone
 
-On the phone, open **Control** and select **Touchpad and keyboard**.
+On the phone, open **Remote** and select **Touchpad and keyboard**.
 The phone asks for its screen lock first. The unlock stays valid for 5 minutes.
 A phone without a screen lock cannot open the touchpad.
 The phone also asks when the switch on the computer is off or not known yet.
@@ -68,7 +68,7 @@ On the lock screen, the touchpad and the remote desktop keep working, but the [O
 | Tap with 1 finger | Click |
 | Tap with 2 fingers | Right-click |
 | Tap with 3 fingers | Middle-click |
-| Move 2 fingers | Scroll. The content follows the fingers. |
+| Move 2 fingers | Scroll in the direction of **Touchpad scrolling**. |
 | Hold 1 finger still, then move it | Drag. The drag ends when the finger lifts. |
 
 Hold **left** with 1 thumb and move a finger on the touchpad to drag with 2 hands.
@@ -76,6 +76,32 @@ Hold **left** with 1 thumb and move a finger on the touchpad to drag with 2 hand
 
 A fast finger moves the pointer further than a slow finger.
 The screen stays on while the touchpad shows.
+In landscape, the touchpad takes the full height at the right, and the buttons and the keys show in a column at the left.
+
+### Scroll direction
+
+To change the scroll direction of the touchpad, open **Settings** on the phone, open **Look and input**, and select 1 choice under **Touchpad scrolling**:
+
+| Choice | Result |
+| --- | --- |
+| **Computer** | The touchpad scrolls like the touchpads of the computer. This is the default. |
+| **Natural** | The content moves with the fingers. |
+| **Traditional** | 2 fingers down scroll down, like a scroll wheel. |
+
+**Computer** follows the `input:touchpad:natural_scroll` option of Hyprland.
+Omarchy turns this option off, so the touchpad scrolls the traditional way.
+`fluxd` reads the option when the phone connects and when a remote input setting changes.
+After a change of the option, connect the phone again.
+Without Hyprland, **Computer** scrolls the natural way.
+
+The setting applies only to the touchpad.
+On the [remote desktop](remote-desktop.md), 2 fingers move the content with the fingers, because the fingers touch the image of the screen.
+
+To see the option on the computer:
+
+```sh
+hyprctl getoption -j input:touchpad:natural_scroll
+```
 
 ## Type on the phone
 
@@ -108,8 +134,9 @@ While the field has text, Backspace deletes the last character of the field and 
 For example, select **ctrl**, then type `c` to send Ctrl+C.
 Select **super**, then type a space to open the Omarchy launcher.
 
-`wtype` sends each character as its own key symbol.
+`fluxd` sends each character as its own key symbol.
 The keyboard layout of the computer does not change the text.
+Each character goes on a key of the letter, digit, or space rows, so a browser address bar keeps the spaces.
 
 ## Change slides on the phone
 
@@ -207,8 +234,9 @@ A presenter remote that sends Page Up and Page Down works the same way.
 
 The phone and the Mac send `flux.mousepad.request` packets.
 `fluxd` runs them only while `remote_input` is on.
-After the link starts and after the setting changes, `fluxd` sends `flux.input` with `{"enabled": true, "keyRepeat": true}` or `{"enabled": false, "keyRepeat": true}`.
+After the link starts and after the setting changes, `fluxd` sends `flux.input` with `{"enabled": true, "keyRepeat": true, "naturalScroll": false}` or `{"enabled": false, "keyRepeat": true, "naturalScroll": false}`.
 `keyRepeat` tells the phone and the Mac that `fluxd` reads `repeat`.
+`naturalScroll` is the `input:touchpad:natural_scroll` option of Hyprland. Without Hyprland, the packet has no `naturalScroll`.
 
 The actions wait in 1 queue of at most 256 actions, and of at most 16384 characters of text and repeated key presses.
 A packet goes into the queue with all of its actions, or `fluxd` drops it.
@@ -217,14 +245,17 @@ Before each action, `fluxd` checks again that `remote_input` is on, that the dev
 When 1 of these checks fails, `fluxd` does these steps:
 
 - It drops the actions that wait.
-- It stops the text that `wtype` still types.
+- It stops the text that `fluxd` or `wtype` still types.
 - It releases a button that the device holds, for example after a drag.
 
-A `wtype` run stops after 5 seconds plus 5 milliseconds for each character, so a compositor that does not answer does not stop the next keys.
+A text stops after 5 seconds plus 5 milliseconds for each character, so a compositor that does not answer does not stop the next keys.
 
 `fluxd` moves the pointer through the `zwlr_virtual_pointer_v1` Wayland protocol.
-It types with `wtype`, which uses the `zwp_virtual_keyboard_v1` Wayland protocol.
-Neither needs access to `/dev/uinput` or root.
+It types text through a `zwp_virtual_keyboard_v1` Wayland keyboard of its own.
+The keymap of that keyboard puts each character on a key of the letter, digit, or space rows, and Enter and Tab on their own keys.
+`fluxd` presses keys with names, such as Escape and the arrow keys, and keys with modifiers, such as Ctrl+C, with `wtype`.
+When the compositor does not offer `zwp_virtual_keyboard_v1`, `fluxd` also types the text with `wtype`.
+None of these needs access to `/dev/uinput` or root.
 
 A packet holds 1 action:
 

@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"strings"
 	"time"
@@ -452,13 +453,56 @@ func (d *Daemon) runInput(ctx context.Context, a inputAction) error {
 
 // sendInputState tells a phone whether this computer accepts remote input,
 // and whether it shows its screen on the phone. keyRepeat tells the phone
-// that it can send repeat with a special key.
+// that it can send repeat with a special key. naturalScroll is the scroll
+// direction of the touchpads of Hyprland. The phone uses it for its
+// touchpad. Without Hyprland, the packet has no naturalScroll. extend
+// tells the phone that this fluxd can extend its screen to the phone,
+// see extend.go.
 func (d *Daemon) sendInputState(l *lan.Link) {
 	d.mu.Lock()
 	on := d.cfg.RemoteInput && d.input != nil && d.permittedLocked(l.DeviceID(), "remoteInput")
 	desktop := d.cfg.RemoteDesktop && !d.opts.Headless && d.permittedLocked(l.DeviceID(), "remoteDesktop")
+	headless := d.opts.Headless
 	d.mu.Unlock()
-	_ = l.Send(proto.New(proto.TypeFluxInput, map[string]any{"enabled": on, "desktop": desktop, "keyRepeat": true}))
+	body := map[string]any{"enabled": on, "desktop": desktop, "keyRepeat": true, "extend": !headless}
+	if !headless {
+		if natural, ok := touchpadNaturalScroll(context.Background()); ok {
+			body["naturalScroll"] = natural
+		}
+	}
+	_ = l.Send(proto.New(proto.TypeFluxInput, body))
+}
+
+// touchpadNaturalScroll returns the input:touchpad:natural_scroll option
+// of Hyprland. ok is false when hyprctl does not answer. Tests replace it.
+var touchpadNaturalScroll = func(ctx context.Context) (natural, ok bool) {
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	out, err := hyprctl(ctx, "getoption", "-j", "input:touchpad:natural_scroll")
+	if err != nil {
+		return false, false
+	}
+	return parseNaturalScroll(out)
+}
+
+// parseNaturalScroll reads the output of hyprctl getoption -j for a
+// boolean option. A new Hyprland gives the value as "bool", and an older
+// Hyprland gives it as "int".
+func parseNaturalScroll(out []byte) (natural, ok bool) {
+	var o struct {
+		Bool *bool  `json:"bool"`
+		Int  *int64 `json:"int"`
+	}
+	if json.Unmarshal(out, &o) != nil {
+		return false, false
+	}
+	switch {
+	case o.Bool != nil:
+		return *o.Bool, true
+	case o.Int != nil:
+		return *o.Int != 0, true
+	}
+	return false, false
 }
 
 // inputChanged sends the remote input state to each connected phone that

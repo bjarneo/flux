@@ -124,23 +124,29 @@ object Plugins {
                 d.commandsLoaded = true
             }
             Types.MPRIS -> receiveMpris(d, p)
+            Types.FLUX_AUDIO -> AudioOutputsSync.onPacket(d, p)
             Types.SFTP -> Browse.onCredentials(core, d, p)
             Types.FLUX_WEBCAM -> org.omarchy.flux.webcam.WebcamSession.onPacket(core, d, p)
             Types.FLUX_DND -> DndSync.onPacket(core, d, p)
             Types.FLUX_MIC -> org.omarchy.flux.mic.MicSession.onPacket(core, d, p)
+            Types.FLUX_SPEAKER -> org.omarchy.flux.speaker.SpeakerSession.onPacket(core, d, p)
             Types.FLUX_SCREEN -> org.omarchy.flux.screen.ScreenSession.onPacket(core, d, p)
             Types.FLUX_APPROVE -> Approvals.onPacket(core, d, p)
+            Types.FLUX_SSH -> SshAgent.onPacket(core, d, p)
             Types.FLUX_HERDR -> HerdrSync.onPacket(core, d, p)
             Types.FLUX_CLIPBOARD_IMAGE -> ClipImage.receive(core, d, p)
             Types.FLUX_INPUT -> {
                 d.remoteInput = p.bool("enabled")
                 d.remoteDesktop = p.bool("desktop")
                 d.keyRepeat = p.bool("keyRepeat") == true
+                d.naturalScroll = p.bool("naturalScroll")
+                d.extendSupported = p.bool("extend") == true
             }
             Types.FLUX_DESKTOP -> org.omarchy.flux.desktop.DesktopSession.onPacket(core, d, p)
             Types.FLUX_SHORTCUTS -> d.shortcuts = Shortcuts.merge(d.shortcuts, p)
             Types.FLUX_THEME -> ComputerThemes.onPacket(core, d, p)
             Types.FLUX_STREAM_REQUEST -> StreamRequests.onPacket(core, d, p)
+            Types.FLUX_WAKE -> Wake.onPacket(core, d, p)
             Types.SMS_REQUEST, Types.SMS_REQUEST_CONVERSATIONS, Types.SMS_REQUEST_CONVERSATION -> SmsSync.onPacket(core, d, p)
         }
     }

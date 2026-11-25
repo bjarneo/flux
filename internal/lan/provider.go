@@ -446,6 +446,70 @@ func (p *Provider) connect(ctx context.Context, addrs []string, target proto.Ide
 	}
 }
 
+// DialAddress opens a link to the device at addr without discovery, for a
+// pairing on a network that blocks mDNS and broadcasts. addr is a host
+// name or an IP address, with or without a port. Without a port,
+// DialAddress tries each Flux port from MinTCPPort to MaxTCPPort. The
+// device ID comes from the certificate of the device, and the pairing
+// key authenticates the device later. It returns the identity of the
+// device when the link is up.
+func (p *Provider) DialAddress(ctx context.Context, addr string) (proto.Identity, error) {
+	host, port, err := net.SplitHostPort(addr)
+	var ports []int
+	if err != nil {
+		host = strings.TrimSuffix(strings.TrimPrefix(addr, "["), "]")
+		for n := MinTCPPort; n <= MaxTCPPort; n++ {
+			ports = append(ports, n)
+		}
+	} else {
+		n, err := strconv.Atoi(port)
+		if err != nil || !p.PeerPort(n) {
+			return proto.Identity{}, fmt.Errorf("the port of %s must be from %d to %d", addr, MinTCPPort, MaxTCPPort)
+		}
+		ports = []int{n}
+	}
+	if host == "" || strings.ContainsAny(host, " /") {
+		return proto.Identity{}, fmt.Errorf("%q is not a host name or an IP address", addr)
+	}
+	select {
+	case p.dials <- struct{}{}:
+	default:
+		return proto.Identity{}, errors.New("fluxd connects to many devices now. Try again in a moment")
+	}
+	defer func() { <-p.dials }()
+	d := net.Dialer{Timeout: 3 * time.Second, KeepAliveConfig: keepAlive}
+	refused := 0
+	for _, n := range ports {
+		conn, err := d.DialContext(ctx, "tcp", net.JoinHostPort(host, strconv.Itoa(n)))
+		switch {
+		case ctx.Err() != nil:
+			return proto.Identity{}, ctx.Err()
+		case errors.Is(err, syscall.ECONNREFUSED):
+			refused++
+			continue
+		case err != nil:
+			// A timeout or a missing route is the same on each port.
+			return proto.Identity{}, fmt.Errorf("cannot reach %s: %w", host, err)
+		}
+		setUserTimeout(conn)
+		target := proto.Identity{ProtocolVersion: proto.ProtocolVersion, TCPPort: n}
+		line, _ := p.plainIdentity(target).Marshal()
+		_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
+		if _, err := conn.Write(line); err != nil {
+			conn.Close()
+			continue
+		}
+		if id, ok := p.finishID(tls.Server(conn, serverConfig(p.cfg.Cert)), target, true); ok {
+			return id, nil
+		}
+		return proto.Identity{}, fmt.Errorf("the device at %s did not open a link. Open Flux on the device, then try again", net.JoinHostPort(host, strconv.Itoa(n)))
+	}
+	if refused == len(ports) {
+		return proto.Identity{}, fmt.Errorf("no Flux device listens at %s. Open Flux on the device, then try again", host)
+	}
+	return proto.Identity{}, fmt.Errorf("no Flux device answered at %s", host)
+}
+
 // open writes the plain identity on a new outgoing connection and runs the
 // TLS handshake as the server. It reports whether the link is up.
 func (p *Provider) open(conn net.Conn, udpID proto.Identity) bool {
@@ -558,57 +622,76 @@ const maxAppText = 32
 // identity again over TLS for protocol version 8. It reports whether it
 // passed a new link to OnLink.
 func (p *Provider) finish(tc *tls.Conn, plainID proto.Identity, outgoing bool) bool {
+	_, ok := p.finishID(tc, plainID, outgoing)
+	return ok
+}
+
+// finishID is finish, and it also returns the identity of the link. On an
+// outgoing connection to an address with no known device, plainID has no
+// device ID, and the certificate of the peer gives it.
+func (p *Provider) finishID(tc *tls.Conn, plainID proto.Identity, outgoing bool) (proto.Identity, bool) {
 	fail := func(format string, args ...any) {
-		p.logf("%s: "+format, append([]any{proto.CleanName(plainID.DeviceName)}, args...)...)
+		name := proto.CleanName(plainID.DeviceName)
+		if name == "" {
+			name = remoteHost(tc)
+		}
+		p.logf("%s: "+format, append([]any{name}, args...)...)
 		tc.Close()
 	}
 	if plainID.ProtocolVersion < proto.ProtocolVersion {
 		fail("protocol version %d is too old", plainID.ProtocolVersion)
-		return false
+		return proto.Identity{}, false
 	}
 	if err := tc.Handshake(); err != nil {
 		fail("TLS handshake: %v", err)
-		return false
+		return proto.Identity{}, false
 	}
 	cert, err := peerCert(tc)
 	if err != nil {
 		fail("%v", err)
-		return false
+		return proto.Identity{}, false
+	}
+	if outgoing && plainID.DeviceID == "" {
+		plainID.DeviceID = cert.Subject.CommonName
+		if !proto.ValidDeviceID(plainID.DeviceID) || plainID.DeviceID == p.selfID() {
+			fail("the certificate has no valid device ID")
+			return proto.Identity{}, false
+		}
 	}
 	if cert.Subject.CommonName != plainID.DeviceID {
 		fail("certificate CN %q does not match device ID", cert.Subject.CommonName)
-		return false
+		return proto.Identity{}, false
 	}
 	if pinned, ok := p.cfg.Trusted(plainID.DeviceID); ok {
 		switch {
 		case pinned == nil:
 			fail("no valid pinned certificate, link refused")
-			return false
+			return proto.Identity{}, false
 		case !bytes.Equal(pinned.Raw, cert.Raw):
 			fail("certificate differs from the pinned certificate, link refused")
-			return false
+			return proto.Identity{}, false
 		}
 	}
 	reader := bufio.NewReaderSize(tc, 64<<10)
 	line, _ := p.secureIdentity().Marshal()
 	if _, err := tc.Write(line); err != nil {
 		fail("send identity: %v", err)
-		return false
+		return proto.Identity{}, false
 	}
 	raw, err := readLine(reader, maxIdentitySize)
 	if err != nil {
 		fail("read identity: %v", err)
-		return false
+		return proto.Identity{}, false
 	}
 	pkt, err := proto.Unmarshal(raw)
 	if err != nil || pkt.Type != proto.TypeIdentity {
 		fail("expected identity after TLS")
-		return false
+		return proto.Identity{}, false
 	}
 	var id proto.Identity
 	if err := json.Unmarshal(pkt.Body, &id); err != nil || id.DeviceID != plainID.DeviceID || id.ProtocolVersion != plainID.ProtocolVersion {
 		fail("identity after TLS does not match")
-		return false
+		return proto.Identity{}, false
 	}
 	_ = tc.SetDeadline(time.Time{})
 	id.DeviceName = proto.CleanName(id.DeviceName)
@@ -619,5 +702,5 @@ func (p *Provider) finish(tc *tls.Conn, plainID proto.Identity, outgoing bool) b
 	// port that the peer put in its plain identity.
 	link.PeerPort = plainID.TCPPort
 	p.cfg.OnLink(link)
-	return true
+	return id, true
 }

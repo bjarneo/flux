@@ -242,6 +242,17 @@ func TestStreamRequestGoesOneWay(t *testing.T) {
 	}
 }
 
+func TestAudioOutputsGoOneWay(t *testing.T) {
+	// The phone selects the audio output of the computer and sets the
+	// volume. The computer does not control the audio of the phone.
+	if !slices.Contains(Incoming, TypeFluxAudioRequest) || !slices.Contains(Outgoing, TypeFluxAudio) {
+		t.Error("the computer must take output requests and send the outputs")
+	}
+	if slices.Contains(Incoming, TypeFluxAudio) || slices.Contains(Outgoing, TypeFluxAudioRequest) {
+		t.Error("the computer must not take outputs or send output requests")
+	}
+}
+
 // TestIdentityApp checks the optional app fields. An earlier app sends
 // neither, and the JSON of an identity without them has no such keys.
 func TestIdentityApp(t *testing.T) {

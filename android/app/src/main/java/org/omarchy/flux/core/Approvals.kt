@@ -115,12 +115,19 @@ object Approvals {
         NotificationManagerCompat.from(context).cancel(Android.ID_APPROVE)
     }
 
+    /**
+     * Opens the Approve screen of the open request. The approval
+     * notification and the agents widget use it. The screen asks for the
+     * fingerprint before it signs.
+     */
+    fun openScreen(context: Context): PendingIntent = PendingIntent.getActivity(
+        context, 10, Intent(context, ApproveActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
+
     @SuppressLint("MissingPermission")
     private fun show(context: Context, r: ApproveRequest) {
-        val open = PendingIntent.getActivity(
-            context, 10, Intent(context, ApproveActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
+        val open = openScreen(context)
         val deny = PendingIntent.getService(
             context, 11, Intent(context, FluxService::class.java).setAction(FluxService.ACTION_APPROVE_DENY),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,

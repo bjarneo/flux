@@ -286,10 +286,21 @@ public sealed class StreamRequestPlugin : IFluxPlugin
         var token = timer.Token;
         _ = Task.Delay(delay < TimeSpan.Zero ? TimeSpan.Zero : delay, token).ContinueWith(t =>
         {
-            if (!t.IsCanceled)
+            if (t.IsCanceled)
             {
-                core?.Host.Post(() => Expire());
+                return;
             }
+            core?.Host.Post(() =>
+            {
+                Expire();
+                // The clock of Windows moves in steps of about 16 ms, so the
+                // timer can end a moment before the request counts as old.
+                // A request that is still open gets its timer again.
+                if (expiries.TryGetValue(r.Id, out var current) && current == timer && book.Requests.Any(x => x.Id == r.Id))
+                {
+                    Arm(r);
+                }
+            });
         }, TaskScheduler.Default);
     }
 

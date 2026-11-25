@@ -62,6 +62,16 @@ class StreamRequestTest {
     }
 
     @Test
+    fun theSpeakerHasItsOwnText() {
+        assertEquals(StreamKind.Speaker, StreamRequestPacket.parse(request("kind" to "speaker")))
+        assertEquals("omarchy-xps asks to play its audio on this phone", StreamKind.Speaker.title("omarchy-xps"))
+        assertEquals("Play on phone", StreamKind.Speaker.startLabel())
+        assertEquals("Stop the audio", StreamKind.Speaker.stopLabel())
+        assertEquals("Stop the mic", StreamKind.Mic.stopLabel())
+        assertEquals("Tap to play the audio on this phone.", StreamKind.Speaker.tapText())
+    }
+
+    @Test
     fun theLimitDropsARepeatInThreeSeconds() {
         val limit = StreamRequestLimit()
         assertTrue(limit.admit("pc", StreamKind.Webcam, 10_000))

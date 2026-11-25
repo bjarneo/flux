@@ -215,8 +215,8 @@ QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software QML_XHR_ALLOW_FILE_READ=1 \
 the device switch in Messages, the outbox of sent messages, the pair
 requests, the key format, the errors from fluxd, the list limits, the text
 from a phone, the contrast rules of the theme, the **Start** buttons of the
-camera and the mic, the thread and the sends of **Chat**, and the **Access**
-card. To run the tests from the repository root:
+camera, the mic, and the phone speaker, the thread and the sends of **Chat**,
+and the **Access** card. To run the tests from the repository root:
 
 ```sh
 make test-gui

@@ -1,6 +1,7 @@
 namespace Flux;
 
-// The 3 destinations of the sidebar, in order.
+// The 3 destinations of the sidebar, in order. Chats holds the list of chats
+// in the sidebar and the open chat in the detail column.
 public enum Destination
 {
     Chat,
@@ -12,7 +13,7 @@ public static class DestinationInfo
 {
     public static string Title(this Destination d) => d switch
     {
-        Destination.Chat => "Chat",
+        Destination.Chat => "Chats",
         Destination.Control => "Control",
         _ => "Computers",
     };
@@ -60,4 +61,13 @@ public abstract record Route
 
     // The page of a paired computer, with its approval.
     public sealed record Computer(string DeviceId) : Route;
+}
+
+// A chat in the detail column of Chats: the chat of a paired computer, or
+// the chat of a herdr agent on a paired computer.
+public abstract record ChatKey(string DeviceId)
+{
+    public sealed record Computer(string DeviceId) : ChatKey(DeviceId);
+
+    public sealed record Agent(string DeviceId, string Pane) : ChatKey(DeviceId);
 }

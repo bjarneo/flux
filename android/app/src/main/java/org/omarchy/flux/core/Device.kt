@@ -36,6 +36,12 @@ class Device(private val core: FluxCore, var identity: Identity) {
     var certificate: X509Certificate? = null
     var lastIp: String = ""
 
+    /** The network cards that can wake the computer. See [Wake]. */
+    var wake: List<WakeTarget> = emptyList()
+
+    /** The time that the last link ended, in milliseconds since the epoch, or 0. */
+    var lastSeen: Long = 0
+
     /** The pair state. The link reads long lines only while the device is paired. */
     var pairState = PairState.None
         set(value) {
@@ -79,11 +85,20 @@ class Device(private val core: FluxCore, var identity: Identity) {
     /** True when the computer reads repeat with a special key. */
     var keyRepeat = false
 
+    /** The scroll direction of the touchpads of the computer, or null when the computer does not tell it. */
+    var naturalScroll: Boolean? = null
+
     /** True when the computer shows its screen on this phone, or null before it tells. */
     var remoteDesktop: Boolean? = null
 
+    /** True when the computer can add a monitor that this phone shows, see DesktopSession. */
+    var extendSupported = false
+
     /** The key bindings and workspaces of the computer, or null before the first answer. */
     var shortcuts: ShortcutsState? = null
+
+    /** The audio outputs of the computer, or null before the first answer. */
+    var outputs: AudioOutputs? = null
 
     /**
      * The certificate from which [pairKey] came, while a pairing is open. A
@@ -140,10 +155,17 @@ class Device(private val core: FluxCore, var identity: Identity) {
         inputSupported = Types.MOUSEPAD_REQUEST in identity.incoming,
         remoteInput = remoteInput,
         keyRepeat = keyRepeat,
+        naturalScroll = naturalScroll,
         desktopSupported = Types.FLUX_DESKTOP in identity.incoming,
         remoteDesktop = remoteDesktop,
+        extendSupported = extendSupported,
         shortcutsSupported = Types.FLUX_SHORTCUTS in identity.incoming,
         shortcuts = shortcuts,
+        lastSeen = lastSeen,
+        canWake = wake.isNotEmpty(),
+        outputsSupported = Types.FLUX_AUDIO_REQUEST in identity.incoming,
+        outputs = outputs,
+        speakerSupported = Types.FLUX_SPEAKER in identity.incoming,
     )
 
     // ---------------------------------------------------------------- pairing

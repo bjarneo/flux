@@ -119,3 +119,63 @@ func TestTypedCode(t *testing.T) {
 		t.Error("the code on the last try must match")
 	}
 }
+
+// flux-cli doctor prints the polkit-1 line of flux-cli approve status when
+// polkit-1 cannot ask the phone of an enrolled user.
+func TestApproveDoctorPrintsThePolkitLine(t *testing.T) {
+	unsupported := errors.New("polkit-agent-helper-1 is not installed, so polkit-1 cannot use approvals")
+	cases := []struct {
+		name           string
+		enrolled, uses bool
+		unsupported    error
+		want           string
+		wantProblem    bool
+	}{
+		{"not enrolled", false, true, unsupported, "", false},
+		{"polkit-1 can ask", true, true, nil, "", false},
+		{"cannot ask, no helper in the PAM file", true, false, unsupported, "- polkit-1 cannot ask the phone: " + unsupported.Error() + "\n", false},
+		{"cannot ask, helper in the PAM file", true, true, unsupported, "", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var out strings.Builder
+			var fixes []string
+			check := func(ok bool, pass, fix string) {
+				if !ok {
+					fixes = append(fixes, fix)
+				}
+			}
+			approveDoctor(&out, c.enrolled, c.uses, c.unsupported, check)
+			if out.String() != c.want {
+				t.Errorf("output %q, want %q", out.String(), c.want)
+			}
+			switch {
+			case c.wantProblem:
+				want := serviceLine("polkit-1", true, c.unsupported)
+				if len(fixes) != 1 || fixes[0] != want {
+					t.Errorf("problems %q, want %q", fixes, want)
+				}
+			case len(fixes) != 0:
+				t.Errorf("problems %q", fixes)
+			}
+		})
+	}
+}
+
+func TestServiceLine(t *testing.T) {
+	bad := errors.New("no")
+	for _, c := range []struct {
+		uses bool
+		err  error
+		want string
+	}{
+		{true, bad, "polkit-1 runs the helper, but it cannot ask the phone: no"},
+		{false, bad, "polkit-1 cannot ask the phone: no"},
+		{true, nil, "polkit-1 asks the phone first."},
+		{false, nil, "polkit-1 does not ask the phone. To turn it on, run: sudo flux-cli approve enable polkit-1"},
+	} {
+		if got := serviceLine("polkit-1", c.uses, c.err); got != c.want {
+			t.Errorf("got %q, want %q", got, c.want)
+		}
+	}
+}

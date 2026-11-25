@@ -6,7 +6,8 @@ import SwiftUI
 /// user, the 2 newest items that need the user as chat cards with their
 /// one-tap choices or their buttons, the next 3 items, a menu for each
 /// online computer, and the app actions. The panel is a window, so a card
-/// reads a fresh output when it opens.
+/// reads a fresh output when it opens. A click on a next item opens its
+/// chat in the window.
 struct MenuBarView: View {
     var body: some View {
         MenuBarPanel()
@@ -53,7 +54,7 @@ private struct MenuBarPanel: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             ForEach(Array(urgent.prefix(2))) { item in
-                EventCard(item: item, at: times[item.key] ?? Date(), inPanel: true)
+                EventCard(item: item, at: times[item.key] ?? Date())
                     .id(item.key)
             }
             ForEach(Array(rest.prefix(3))) { item in
@@ -100,17 +101,25 @@ private struct MenuBarPanel: View {
         openSettings()
     }
 
-    /// Opens the chat of the main window. An item out of scope makes the
-    /// scope all computers.
+    /// Opens the chat of the item in the main window: the chat of an agent,
+    /// the chat of the computer of an approval, or the pairing page of a
+    /// computer that asks to pair.
     private func showChat(_ item: InboxItem) {
-        if Inbox.inScope([item], scope: model.scope).isEmpty { model.setScope(nil) }
-        model.go(.chat)
+        switch item.content {
+        case .agent(let deviceId, let agent, _):
+            model.open(.agent(deviceId, pane: agent.pane))
+        case .approval(let request):
+            if model.pairedDevice(request.computerId) != nil { model.open(.computer(request.computerId)) } else { model.go(.chats) }
+        case .pair(let deviceId):
+            model.destination = .computers
+            model.computersPath = [.pairing(deviceId)]
+        }
         showMain()
     }
 }
 
 /// A next item in the panel: the state, the source, and the title. A
-/// click opens the chat of the main window.
+/// click opens its chat in the main window.
 private struct PanelRow: View {
     let item: InboxItem
     let action: () -> Void
@@ -153,6 +162,6 @@ private struct PanelRow: View {
         .buttonStyle(TilePressStyle())
         .accessibilityLabel(([item.title] + item.sourceParts + [item.computer]).filter { !$0.isEmpty }.joined(separator: ", "))
         .accessibilityValue(item.stateWord)
-        .accessibilityHint("Opens the chat in Flux")
+        .accessibilityHint("Opens its chat in Flux")
     }
 }

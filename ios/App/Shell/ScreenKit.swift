@@ -1,11 +1,11 @@
 import FluxKit
 import SwiftUI
 
-// The parts of Send, Control, Computers, Media, and the Omarchy panel in
+// The parts of Chats, Control, Computers, Media, and the Omarchy panel in
 // the app design, like the Android screens: the title with the context
-// line, the computer pills, the progress line, the list headings, the
-// tools of the grids, and the dock. The agent thread parts are in
-// AgentThreadViews.swift.
+// line, the picture and the top bar of a chat, the computer pills, the
+// progress line, the list headings, the tools of the grids, and the dock.
+// The agent thread parts are in AgentThreadViews.swift.
 
 // MARK: Header
 
@@ -51,7 +51,7 @@ struct ScreenTitle: View {
     }
 }
 
-/// The root of Send, Control, and Computers: the Flux mark, the title, and
+/// The root of Chats, Control, and Computers: the Flux mark, the title, and
 /// the context line at the leading side of the navigation bar, on the
 /// theme background.
 struct DestinationRoot: ViewModifier {
@@ -123,6 +123,142 @@ struct DockFrame: ViewModifier {
             .overlay(alignment: .top) {
                 DockShape().stroke(tn.line, lineWidth: 1).frame(height: 40).mask(alignment: .top) { Rectangle().frame(height: 20) }
             }
+    }
+}
+
+// MARK: Chats
+
+/// The picture of a chat: an `icon` in `tint` on a square with round
+/// corners, 44 pt in the list of chats and 36 pt in a top bar. `fill` is
+/// the color of the square, `tile` by default, and `edge` gives it a `line`
+/// border. `badge` is the color of the dot at the bottom trailing corner,
+/// or nil. `spinner` draws a ring that turns in the place of the dot, for
+/// an agent that works. `ground` is the color around the dot, `bg` by
+/// default.
+struct ChatAvatar: View {
+    let icon: String
+    let tint: Color
+    var size: CGFloat = 44
+    var fill: Color?
+    var edge = true
+    var badge: Color?
+    var spinner = false
+    var ground: Color?
+    @Environment(\.tn) private var tn
+
+    var body: some View {
+        let big = size >= 44
+        let shape = RoundedRectangle(cornerRadius: big ? 12 : 10, style: .continuous)
+        let dot: CGFloat = big ? 12 : 11
+        let ring = ground ?? tn.bg
+        shape.fill(fill ?? tn.tile)
+            .overlay(shape.strokeBorder(edge ? tn.line : Color.clear, lineWidth: 1))
+            .overlay {
+                Image(systemName: icon)
+                    .font(.system(size: big ? 20 : 18, weight: .medium))
+                    .foregroundStyle(tint)
+            }
+            .frame(width: size, height: size)
+            .overlay(alignment: .bottomTrailing) {
+                if spinner {
+                    Circle().fill(ring)
+                        .frame(width: 14, height: 14)
+                        .overlay(RingSpinner(size: 10, color: tn.accent))
+                        .offset(x: 4, y: 4)
+                } else if let badge {
+                    Circle().fill(badge)
+                        .padding(2)
+                        .background(Circle().fill(ring))
+                        .frame(width: dot, height: dot)
+                        .offset(x: 3, y: 3)
+                }
+            }
+            .accessibilityHidden(true)
+    }
+}
+
+/// The picture of an agent: the agent icon with the dot of its status: red
+/// while it waits, green when it is done, and `dim` while it is idle. While
+/// it works, a ring turns in the place of the dot. `accent` puts it on
+/// `accent-tile` with no border, for the top bar and for an agent that
+/// waits. `ground` is the color around the dot.
+struct AgentAvatar: View {
+    let status: AgentStatus?
+    var size: CGFloat = 44
+    var accent = false
+    var ground: Color?
+    @Environment(\.tn) private var tn
+
+    var body: some View {
+        let s = status
+        let active = s == .working || s == .blocked || s == .done
+        let badge: Color? = switch s {
+        case .blocked: tn.red
+        case .done: tn.green
+        case .working: nil
+        default: tn.dim
+        }
+        ChatAvatar(icon: "brain", tint: active ? tn.accent : tn.sub, size: size, fill: accent ? tn.accentTile : tn.tile,
+                   edge: !accent, badge: badge, spinner: s == .working, ground: ground)
+    }
+}
+
+/// The title of a chat in its top bar: the picture, the `title`, and the
+/// `context` line in mono, such as "connected · 82%, charging". It takes the
+/// width between the back key and the actions. VoiceOver reads it as 1
+/// heading.
+struct ChatTitle<Avatar: View>: View {
+    let title: String
+    let context: String
+    @ViewBuilder let avatar: Avatar
+    @Environment(\.tn) private var tn
+
+    var body: some View {
+        HStack(spacing: 10) {
+            avatar
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(tn.text)
+                    .lineLimit(1)
+                if !context.isEmpty {
+                    Text(context)
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(tn.sub)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// The frame of a chat above Chats, such as the chat of a computer or an
+/// agent: the theme background, an inline `title` for VoiceOver and the
+/// back key, a back key without a label, and no tab bar, so that the
+/// thread and the dock take the height.
+struct ChatScreenFrame: ViewModifier {
+    let title: String
+    @Environment(\.tn) private var tn
+
+    func body(content: Content) -> some View {
+        content
+            .background(tn.bg.ignoresSafeArea())
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarRole(.editor)
+            .toolbar(.hidden, for: .tabBar)
+            .toolbarBackground(tn.bg, for: .navigationBar)
+            .toolbarColorScheme(tn.dark ? .dark : .light, for: .navigationBar)
+    }
+}
+
+extension View {
+    /// See `ChatScreenFrame`.
+    func chatScreen(_ title: String) -> some View {
+        modifier(ChatScreenFrame(title: title))
     }
 }
 

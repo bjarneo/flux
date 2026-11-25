@@ -3,11 +3,17 @@ import SwiftUI
 
 @MainActor
 enum AgentsFeature {
-    /// A tap on an agent notification opens the agent in the Chat tab.
+    /// A tap on an agent notification opens the chat of the agent above
+    /// Chats. A choice or a Reply in the notification asks for Face ID,
+    /// Touch ID, or the passcode first, as the reply controls of the thread do.
     static func didLaunch(model: AppModel) {
-        model.core.plugin(HerdrPlugin.self)?.model.open = { [weak model] id, pane in
+        let herdr = model.core.plugin(HerdrPlugin.self)?.model
+        herdr?.open = { [weak model] id, pane in
             model?.tab = .chat
             model?.chatPath = [.feature(.agent(id, pane))]
+        }
+        herdr?.unlock = { computer, action, onError, onCancel in
+            ReplyLock.run(reason: "Answer agents on \(computer).", action: action, onError: onError, onCancel: onCancel)
         }
     }
 
@@ -120,7 +126,7 @@ struct AgentsScreen: View {
                     }
                 } footer: {
                     if !herdr.control {
-                        Text(.init("To answer and start agents from this iPhone, set `herdr_control = true` on \(name)."))
+                        Text("Agent control is off on \(name). To answer and start agents from this iPhone, turn on Agent control in Flux on the computer, on the Access card.")
                     }
                 }
                 if !herdr.panes.isEmpty {

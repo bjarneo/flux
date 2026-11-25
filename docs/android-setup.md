@@ -96,7 +96,7 @@ To give Flux these permissions:
 2. Open the menu in the top corner and select **Allow restricted settings**.
    The menu item shows only after Android has shown **Restricted setting** for Flux once.
 3. Confirm with the PIN or the fingerprint of the phone.
-4. Return to Flux and open **Computers > Sync**.
+4. Return to Flux and open **Settings > This phone on the computer**.
    Turn on **Share notifications** or **Text messages** again.
 
 If the menu item does not show, allow restricted settings from the computer with `adb`:
@@ -139,7 +139,7 @@ It keeps the links to the computers open while the app is in the background.
 Android requires a visible notification for this service, so Flux shows **Waiting for a computer on this network** or the number of connected computers.
 
 The service starts again after a restart of the phone and after an app update.
-**Turn off Flux** in **Computers** or **Turn off** in the notification stops the service.
+**Turn off Flux** in **Settings** or **Turn off** in the notification stops the service.
 Flux then stays off after a restart, until you turn it on again.
 
 While the webcam or the mic streams, `StreamService` also runs.
@@ -185,8 +185,9 @@ The other permissions need no prompt.
 | `READ_MEDIA_IMAGES`, `READ_MEDIA_VISUAL_USER_SELECTED`, `READ_EXTERNAL_STORAGE` | **Send new screenshots** and **Send new photos** | When you turn on the switch |
 | `CAMERA` | The camera modes and the webcam | When a camera page opens |
 | `RECORD_AUDIO`, `FOREGROUND_SERVICE_MEDIA_PROJECTION` | The microphone, dictation, and the screen mirror | When the feature starts |
-| `USE_BIOMETRIC` | [Fingerprint approval](approvals.md) of `sudo` and polkit | No prompt |
-| `HIDE_OVERLAY_WINDOWS` | The pair sheet and the approval screen hide the windows of other apps on Android 12 and later | No prompt |
+| `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | [Play on phone](camera.md#phone-as-speaker) keeps the audio of the computer playing in the background | No prompt |
+| `USE_BIOMETRIC` | [Fingerprint approval](approvals.md) of `sudo` and polkit, and the [SSH key](ssh.md) | No prompt |
+| `HIDE_OVERLAY_WINDOWS` | The pair sheet, the approval screen, and the SSH key screen hide the windows of other apps on Android 12 and later | No prompt |
 | `REQUEST_INSTALL_PACKAGES` | [Updates that the computer sends](android.md#update-the-app) | Android asks to allow **Install unknown apps** at the first update |
 
 Flux shows no permission dialog before the first pairing.
@@ -202,13 +203,13 @@ The call log and the contacts are optional for **Call alerts**. They add the num
 When you allow the call log later, the next call shows the number without a restart of Flux.
 The source of truth is `android/app/src/main/AndroidManifest.xml`.
 
-### Sync switches
+### Settings
 
-The switches on the **Sync** screen in **Computers** are settings of the phone.
-Each switch applies to every paired computer, not only to the computer whose page shows it.
+The switches in **Settings** are settings of the phone.
+Each switch applies to every paired computer.
+**Settings** has 5 groups that open in place: **Send to the computers**, **Alerts on this phone**, **This phone on the computer**, **Security**, and **Look and input**.
 For example, **Text messages** lets each paired computer read your conversations and send text messages.
 **Send new photos** sends each new photo to each connected computer.
-The page lists the computers that get the data.
 
 ### Shared notifications
 
@@ -262,7 +263,7 @@ Only a try with a connected computer counts.
 
 ### Remote control and the phone lock
 
-**Touchpad and keyboard** and **Remote desktop** ask for the phone lock before they open.
+**Touchpad and keyboard**, **Remote desktop**, and **Extend screen** ask for the phone lock before they open.
 They ask also when the switch on the computer is off, because the computer can turn it on while the page shows.
 An unlock stays valid for 5 minutes.
 After this time, the page asks for the phone lock again in these cases:
@@ -281,6 +282,9 @@ Then enroll [fingerprint approval](approvals.md) again with `sudo flux-cli appro
 
 When you unpair a computer on the phone, the phone deletes its fingerprint approval key for that computer.
 The key file on the computer stays until you run `sudo flux-cli approve remove`.
+
+The [SSH key](ssh.md) stays in the Android Keystore of the phone, and no backup or transfer copies it.
+A new phone has no SSH key. Turn on **SSH key** there, and add the new public key to your servers.
 
 ## Developer verification
 

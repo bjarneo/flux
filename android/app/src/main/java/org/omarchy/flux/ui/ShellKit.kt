@@ -2,8 +2,6 @@ package org.omarchy.flux.ui
 
 import android.content.Context
 import android.provider.Settings
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
@@ -14,7 +12,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -31,13 +28,12 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,7 +46,6 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -58,10 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
-import org.omarchy.flux.core.Plugins
-import org.omarchy.flux.core.Share
 import org.omarchy.flux.core.Target
-import org.omarchy.flux.core.target
 
 // ───────────────────────── Motion ─────────────────────────
 
@@ -90,14 +82,33 @@ fun rememberReduceMotion(): Boolean {
 private val WideWindow = 600.dp
 
 /**
- * True for a window of the medium or expanded width class, for example a
- * phone in landscape, a foldable, or a tablet. The shell then shows a
- * navigation rail in the place of the navigation bar.
+ * True for a window of the medium or expanded width class that is wider
+ * than tall, for example a phone in landscape, a foldable, or a tablet in
+ * landscape. The shell then shows a navigation rail in the place of the
+ * navigation bar. A tablet in portrait is also 600 dp wide or more, but it
+ * has the layout of a phone.
  */
 @Composable
 fun rememberWideWindow(): Boolean {
-    val width = LocalWindowInfo.current.containerSize.width
-    return with(LocalDensity.current) { width.toDp() } >= WideWindow
+    val size = LocalWindowInfo.current.containerSize
+    return with(LocalDensity.current) { isWideWindow(size.width.toDp(), size.height.toDp()) }
+}
+
+/** The rule of [rememberWideWindow] for a window of [width] by [height]. */
+internal fun isWideWindow(width: Dp, height: Dp): Boolean = width >= WideWindow && width > height
+
+/** The rule of [rememberSplitWindow] for a window of [width] by [height]. */
+internal fun isSplitWindow(width: Dp, height: Dp): Boolean = isWideWindow(width, height) && height >= TallWindow
+
+/**
+ * True for a wide window that is also tall enough for a second part, such
+ * as the side part of the shell or the controls column of the dock. A phone
+ * in landscape is wide but short, so it has no second part.
+ */
+@Composable
+fun rememberSplitWindow(): Boolean {
+    val size = LocalWindowInfo.current.containerSize
+    return with(LocalDensity.current) { isSplitWindow(size.width.toDp(), size.height.toDp()) }
 }
 
 /** The lowest window height of the medium and expanded height classes. */
@@ -196,10 +207,19 @@ fun linkText(d: DeviceUi): String = when {
 /**
  * The scope chip: "All computers" or 1 computer, with a link dot for each
  * computer in scope. A tap opens the menu of scopes. A [compact] chip is
- * 36 dp high, for the end of a header.
+ * 36 dp high, for the end of a header. With [onUnpair], each computer in
+ * the menu has a menu key with Unpair, and Retry and Wake while the
+ * computer is not reachable.
  */
 @Composable
-fun ScopeChip(devices: List<DeviceUi>, scope: String?, onScope: (String?) -> Unit, modifier: Modifier = Modifier, compact: Boolean = false) {
+fun ScopeChip(
+    devices: List<DeviceUi>,
+    scope: String?,
+    onScope: (String?) -> Unit,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
+    onUnpair: ((DeviceUi) -> Unit)? = null,
+) {
     val paired = devices.filter { it.paired }
     val current = paired.firstOrNull { it.id == scope }
     var open by remember { mutableStateOf(false) }
@@ -210,11 +230,11 @@ fun ScopeChip(devices: List<DeviceUi>, scope: String?, onScope: (String?) -> Uni
     Box(modifier) {
         // The clickable merges the description of the inner row. The inner row hides the dots from TalkBack.
         // The chip is 40 dp high, or 36 dp when compact, and takes taps on 48 dp.
+        // The ripple and the focus mark stay on the chip, not on the 48 dp area around it.
         val height = if (compact) 36.dp else 40.dp
         Box(
-            Modifier.heightIn(min = 48.dp).clip(shape)
-                .clickable(onClickLabel = "Change the scope", role = Role.DropdownList) { open = true }
-                .padding(vertical = (48.dp - height) / 2).heightIn(min = height).clip(shape).background(Tn.tile).border(1.dp, Tn.line, shape),
+            Modifier.minimumInteractiveComponentSize().heightIn(min = height).clip(shape).background(Tn.tile).border(1.dp, Tn.line, shape)
+                .clickable(onClickLabel = "Change the scope", role = Role.DropdownList) { open = true },
             contentAlignment = Alignment.CenterStart,
         ) {
             Row(
@@ -231,32 +251,96 @@ fun ScopeChip(devices: List<DeviceUi>, scope: String?, onScope: (String?) -> Uni
                 Sym(Ic.expand, tint = Tn.sub, size = if (compact) 18.dp else 20.dp)
             }
         }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+        ScopeMenu(open, { open = false }, devices, scope, onScope, onUnpair)
+    }
+}
+
+/**
+ * The menu of scopes: All computers and each paired computer with its link
+ * state. [ScopeChip] and the computer row of Remote open it.
+ */
+@Composable
+internal fun ScopeMenu(
+    open: Boolean,
+    onDismiss: () -> Unit,
+    devices: List<DeviceUi>,
+    scope: String?,
+    onScope: (String?) -> Unit,
+    onUnpair: ((DeviceUi) -> Unit)? = null,
+) {
+    val paired = devices.filter { it.paired }
+    val current = paired.firstOrNull { it.id == scope }
+    DropdownMenu(expanded = open, onDismissRequest = onDismiss) {
+        DropdownMenuItem(
+            text = { Text("All computers") },
+            leadingIcon = { Sym(Ic.devices) },
+            trailingIcon = { if (current == null) Sym(Ic.check, "Selected", tint = Tn.blue) },
+            onClick = {
+                onDismiss()
+                onScope(null)
+            },
+        )
+        for (d in paired) {
             DropdownMenuItem(
-                text = { Text("All computers") },
-                leadingIcon = { Sym(Ic.devices) },
-                trailingIcon = { if (current == null) Sym(Ic.check, "Selected", tint = Tn.blue) },
+                text = {
+                    Column {
+                        Text(d.name)
+                        Text(linkText(d), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                },
+                leadingIcon = { Sym(deviceIcon(d.type)) },
+                trailingIcon = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (current?.id == d.id) Sym(Ic.check, "Selected", tint = Tn.blue)
+                        if (onUnpair != null) {
+                            ComputerMenuKey(d) {
+                                onDismiss()
+                                onUnpair(d)
+                            }
+                        }
+                    }
+                },
                 onClick = {
-                    open = false
-                    onScope(null)
+                    onDismiss()
+                    onScope(d.id)
                 },
             )
-            for (d in paired) {
-                DropdownMenuItem(
-                    text = {
-                        Column {
-                            Text(d.name)
-                            Text(linkText(d), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    },
-                    leadingIcon = { Sym(deviceIcon(d.type)) },
-                    trailingIcon = { if (current?.id == d.id) Sym(Ic.check, "Selected", tint = Tn.blue) },
-                    onClick = {
-                        open = false
-                        onScope(d.id)
-                    },
-                )
+        }
+    }
+}
+
+/**
+ * The menu key of a computer: a 48 dp key that opens the menu with
+ * Unpair. A computer that is not reachable also has Retry, and Wake when it
+ * can wake. [onUnpair] runs after Unpair.
+ */
+@Composable
+fun ComputerMenuKey(d: DeviceUi, onUnpair: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    Box {
+        Box(
+            Modifier.size(48.dp).clip(CircleShape)
+                .clickable(onClickLabel = "Show the actions of ${d.name}", role = Role.Button) { menu = true }
+                .semantics { contentDescription = "Actions of ${d.name}" },
+            contentAlignment = Alignment.Center,
+        ) { Sym(Ic.more, tint = Tn.sub, size = 20.dp) }
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            if (!d.online) {
+                DropdownMenuItem(text = { Text("Retry") }, leadingIcon = { Sym(Ic.refresh) }, onClick = {
+                    menu = false
+                    FluxCore.rediscover()
+                })
+                if (d.canWake) {
+                    DropdownMenuItem(text = { Text("Wake") }, leadingIcon = { Sym(Ic.power) }, onClick = {
+                        menu = false
+                        FluxCore.wake(d.id)
+                    })
+                }
             }
+            DropdownMenuItem(text = { Text("Unpair") }, leadingIcon = { Sym(Ic.unlink) }, onClick = {
+                menu = false
+                onUnpair()
+            })
         }
     }
 }
@@ -329,36 +413,6 @@ fun TargetPickerDialog(picker: TargetPicker) {
         confirmButton = {},
         dismissButton = { FluxButton("Cancel", picker::dismiss, kind = ButtonKind.Text) },
     )
-}
-
-/** The most used actions on the computer in scope: send the clipboard, and send files. */
-class SendTools(
-    val sendClipboard: () -> Unit,
-    val sendFiles: () -> Unit,
-)
-
-@Composable
-fun rememberSendTools(devices: List<DeviceUi>, scope: String?, picker: TargetPicker): SendTools {
-    // The file picker is another activity, so the computer waits in the saved state.
-    var filesFor by rememberSaveable { mutableStateOf<String?>(null) }
-    val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        val id = filesFor
-        filesFor = null
-        if (id != null && uris.isNotEmpty()) Share.sendFiles(FluxCore, id, uris)
-    }
-    val all by rememberUpdatedState(devices)
-    val inScope by rememberUpdatedState(scope)
-    return remember(picker, pick) {
-        SendTools(
-            sendClipboard = { picker.run(target(inScope, all), "Send the clipboard to") { Plugins.sendClipboard(FluxCore, it.id) } },
-            sendFiles = {
-                picker.run(target(inScope, all), "Send files to") {
-                    filesFor = it.id
-                    pick.launch(arrayOf("*/*"))
-                }
-            },
-        )
-    }
 }
 
 /**

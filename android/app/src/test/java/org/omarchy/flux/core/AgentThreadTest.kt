@@ -121,6 +121,40 @@ class AgentThreadTest {
     }
 
     @Test
+    fun aNumberedListAtTheEndStaysInTheThread() {
+        val rule = "─".repeat(40)
+        val lines = listOf(
+            "● Here is what I would add.",
+            "",
+            "  Highest value",
+            "     ",
+            "  1. Notify when an agent needs you. Send a desktop notification when an agent",
+            "     asks a question.",
+            "  2. Hide finished agents.",
+            "",
+            "  Small fixes",
+            "",
+            "  3. Show the full command.",
+            "",
+            "  I would start with 1 and 2.",
+            "",
+            "✻ Cogitated for 24s · done 10:00 AM",
+            "",
+            rule,
+            "❯ ",
+            rule,
+            "  ⏵⏵ auto mode on (shift+tab to cycle)",
+        )
+        assertNull(dialogStart(lines))
+        val t = agentThread(lines)
+        assertEquals("24s", t.worked)
+        val text = (t.blocks.single() as ThreadBlock.Message).text
+        assertTrue(text, text.startsWith("Here is what I would add."))
+        assertTrue(text, text.contains("3. Show the full command."))
+        assertTrue(text, text.endsWith("I would start with 1 and 2."))
+    }
+
+    @Test
     fun codexWorkingLineGivesTheTime() {
         val t = agentThread(listOf("• I will run it.", "", "• Working (12s • esc to interrupt)", "", "› Ask Codex to do anything"))
         assertEquals("Working", t.step)

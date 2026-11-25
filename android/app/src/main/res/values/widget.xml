@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The agents widget on the home screen. See widget/AgentsWidget.kt. -->
+    <string name="widget_label">Agents</string>
+    <string name="widget_description">The agents and the approvals that need you, then the agents that work or finish</string>
+
+    <!--
+        The Tokyo Night Day colors of the widget, for the picker preview and
+        for the time before the first update. values-night has the Tokyo
+        Night colors. The widget sets the colors of the computer theme at run time.
+    -->
+    <color name="widget_ground">#FFE1E2E7</color>
+    <color name="widget_tile">#FFD9DBE1</color>
+    <color name="widget_text">#FF343B58</color>
+    <color name="widget_sub">#FF44518A</color>
+    <color name="widget_red">#FFBA0046</color>
+    <color name="widget_accent">#FF2457B8</color>
+
+    <!-- The corner of the widget. Android 12 and later use the corner of the launcher. -->
+    <dimen name="widget_radius">16dp</dimen>
+</resources>

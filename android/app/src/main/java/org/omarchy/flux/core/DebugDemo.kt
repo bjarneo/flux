@@ -103,6 +103,9 @@ object DebugDemo {
      */
     @Volatile var sessions = false
 
+    /** Debug-only: false turns Agent control off on the sample computer. */
+    @Volatile var control = true
+
     /** The agents, terminals, and workspaces of the named sample sessions, with the qualified IDs of fluxd. */
     private val sessionAgents = listOf(
         HerdrAgent("infra/w1:p1", "claude", AgentStatus.Working, "Move the backups to the new bucket", "ops", "ops", "infra"),
@@ -135,8 +138,21 @@ object DebugDemo {
 
     fun isDemo(id: String?) = id != null && id.startsWith("demo-")
 
+    /** Debug-only: false gives the sample computers no blocked agent, so that Chats shows the empty state. */
+    @Volatile var blocked = true
+
     fun devices(): List<DeviceUi> {
         if (!on) return emptyList()
+        val all = sampleDevices()
+        if (blocked) return all
+        // A blocked agent shows as working, so that the agent stays in the lists.
+        return all.map { d ->
+            val h = d.herdr ?: return@map d
+            d.copy(herdr = h.copy(agents = h.agents.map { if (it.status == AgentStatus.Blocked) it.copy(status = AgentStatus.Working) else it }))
+        }
+    }
+
+    private fun sampleDevices(): List<DeviceUi> {
         return listOf(
             device(PC, "omarchy-xps", "laptop", "192.168.2.122", paired = true, online = true).copy(
                 battery = 82,
@@ -158,10 +174,20 @@ object DebugDemo {
                 remoteInput = true,
                 desktopSupported = true,
                 remoteDesktop = true,
+                extendSupported = true,
+                outputsSupported = true,
+                speakerSupported = true,
+                outputs = AudioOutputs(
+                    listOf(
+                        AudioOutput("alsa_output.speakers", "Laptop Speakers", 72, muted = false, isDefault = true),
+                        AudioOutput("alsa_output.hdmi", "HDMI Monitor", 100, muted = false, isDefault = false),
+                        AudioOutput("bluez_output.headphones", "Bluetooth Headphones", 45, muted = true, isDefault = false),
+                    ),
+                ),
                 herdr = withSessions(HerdrState(
                     enabled = true,
                     running = true,
-                    control = true,
+                    control = control,
                     review = true,
                     agents = listOf(
                         HerdrAgent("w1:p1", "claude", AgentStatus.Working, "Add rate limiting to /v1/upload", "api", "api"),
@@ -186,9 +212,23 @@ object DebugDemo {
                     pane = "w2:p1",
                     loading = false,
                     lines = termLines(agentOutput ?: demoOutput),
+                    at = System.currentTimeMillis(),
                 ),
             ),
-            device(OFFLINE, "omarchy-desk", "desktop", "192.168.2.40", paired = true, online = false),
+            // The sample desk computer was last seen at the last 09:12, today or yesterday.
+            // It keeps 1 agent and its output from 09:10, as a computer keeps them after a link closes.
+            device(OFFLINE, "omarchy-desk", "desktop", "192.168.2.40", paired = true, online = false).copy(
+                lastSeen = lastAt(9, 12),
+                canWake = true,
+                herdrSupported = true,
+                herdr = HerdrState(
+                    enabled = true,
+                    running = true,
+                    control = true,
+                    agents = listOf(HerdrAgent("w2:p1", "codex", AgentStatus.Blocked, "Run the database migration", "billing", "billing")),
+                ),
+                herdrOutput = HerdrOutput(pane = "w2:p1", loading = false, lines = termLines(demoOutput), at = lastAt(9, 10)),
+            ),
             device(NEW, "framework-13", "laptop", "192.168.2.77", paired = false, online = true),
         )
     }
@@ -228,6 +268,18 @@ object DebugDemo {
             .filter { Browse.matches(it.name, query) }
             .sortedBy { it.path.count { c -> c == '/' } }
         return BrowseSearch(0, query.trim(), path, loading = false, results = results)
+    }
+
+    /** The last time [hour]:[minute], today or yesterday, in milliseconds since the epoch. */
+    private fun lastAt(hour: Int, minute: Int): Long {
+        val c = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, hour)
+            set(java.util.Calendar.MINUTE, minute)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        if (c.timeInMillis > System.currentTimeMillis()) c.add(java.util.Calendar.DAY_OF_YEAR, -1)
+        return c.timeInMillis
     }
 
     private fun device(id: String, name: String, type: String, ip: String, paired: Boolean, online: Boolean) = DeviceUi(

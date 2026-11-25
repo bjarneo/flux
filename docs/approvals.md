@@ -2,8 +2,9 @@
 
 [Documentation index](README.md)
 
-Flux for Android, Flux for iOS, and Flux for macOS can approve `sudo` requests.
+Flux for Android, Flux for iOS, Flux for macOS, and Flux for Windows can approve `sudo` requests.
 The Android phone asks for a fingerprint. The iPhone asks for Face ID or Touch ID, and the Mac asks for Touch ID.
+Windows asks for Windows Hello: a fingerprint, a face, or the Windows Hello PIN.
 The same device can approve the `hyprlock` lock screen, but not the Omarchy lock screen. See [lock screens](#lock-screens).
 It can approve polkit requests only on a system with a setuid `polkit-agent-helper-1`. See [polkit](#polkit).
 The device signs the request with its hardware-backed key.
@@ -14,16 +15,33 @@ The iPhone gets requests only while Flux is open on it.
 The Mac and the iPhone need a Secure Enclave.
 An iPhone without one, such as the iOS simulator, refuses each request.
 A Mac without one has no Touch ID, so **Approve** fails with an error.
+A Windows computer without Windows Hello refuses each request.
+On Windows, the Windows Hello PIN can approve. Anyone who knows the PIN can approve at that computer. See the [security design](approve.md#windows).
+
+## Open the fingerprint check at once
+
+On Android, the switch **Open the fingerprint check at once** is off by default.
+Find it in Computers, in the Settings group.
+When it is on, the fingerprint prompt opens over the approval screen as soon as a `sudo` request arrives.
+The approval screen stays the same.
+Touch the sensor to approve.
+Tap **Cancel** to keep the screen with **Approve** and **Deny**.
+The prompt does not open again for that request.
+A touch on the sensor approves at once. Keep this switch off if you touch the sensor by habit.
+If the phone has no strong fingerprint, or the sensor is locked, the request fails and the computer asks for the password.
+
+The switch needs Android 12 or later. On Android 10 and 11, it stays off.
+An enrollment never opens the prompt at once.
 
 Read the [security design](approve.md) before you change the implementation.
 
 ## Enable sudo approval
 
 The complete desktop install provides `/usr/lib/flux/flux-approve`.
-The device needs a configured fingerprint, Face ID, or Touch ID, and an active Flux connection.
+The device needs a configured fingerprint, Face ID, Touch ID, or Windows Hello, and an active Flux connection.
 Installation alone does not enable approval.
 
-1. Open Flux on the phone, the iPhone, or the Mac.
+1. Open Flux on the phone, the iPhone, the Mac, or the Windows computer.
 2. Check that the desktop is connected.
 3. Start setup from your desktop account:
 
@@ -31,8 +49,8 @@ Installation alone does not enable approval.
    sudo flux-cli approve setup
    ```
 
-4. Select Enroll on the phone, the iPhone, or the Mac.
-5. Touch the fingerprint sensor, or confirm with Face ID or Touch ID.
+4. Select Enroll on the phone, the iPhone, the Mac, or the Windows computer.
+5. Touch the fingerprint sensor, or confirm with Face ID, Touch ID, or Windows Hello.
 6. Type the key code that the device shows, all 16 characters. Spaces, hyphens, and case do not matter. You have 3 tries.
 7. Test in a new terminal:
 
@@ -143,6 +161,13 @@ sudo chmod 755 /etc/flux /etc/flux/approve
 `approve_timeout` in `config.toml` accepts 5 to 120 seconds.
 The default is 20 seconds.
 If the phone is disconnected, the helper stops immediately and PAM asks for the password.
+Before the password prompt, the helper prints 1 line with the reason.
+For example, `The request was denied on the phone.` or `The phone did not answer in time.`
+The helper prints nothing when no key file exists, for the service `sshd`, when another user asks, and when the PAM caller stops.
+The failure table in [the approval design](approve.md) lists the line for each case.
+
+`flux-cli doctor` shows the `polkit-1` line of `flux-cli approve status` when `polkit-1` cannot ask the phone.
+This happens when `polkit-agent-helper-1` does not run with setuid root.
 
 | Path | Purpose |
 | --- | --- |

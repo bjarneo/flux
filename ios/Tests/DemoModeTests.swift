@@ -35,22 +35,52 @@ final class DemoModeTests: XCTestCase {
 
     func testRendersTheDemoScreens() throws {
         let app = try TestApp.model(demo: true, plugins: PluginRegistry.make())
-        try ScreenRender.render(NavigationStack { ChatView() }.modifier(ThemeRoot()).environment(app), name: "demo-01-chat")
+        let laptop = DemoMode.computers[0].id
+        try ScreenRender.render(NavigationStack { ChatsView() }.modifier(ThemeRoot()).environment(app), name: "demo-01-chats")
         try ScreenRender.render(NavigationStack { ControlView() }.modifier(ThemeRoot()).environment(app), name: "demo-02-control")
         try ScreenRender.render(NavigationStack { ComputersView() }.modifier(ThemeRoot()).environment(app), name: "demo-03-computers")
+        try ScreenRender.render(NavigationStack { ComputerChatView(deviceId: laptop) }.modifier(ThemeRoot()).environment(app),
+                                name: "demo-04-chat")
+        try ScreenRender.render(NavigationStack { AgentScreen(deviceId: laptop, pane: "w2:p1") }.modifier(ThemeRoot()).environment(app),
+                                name: "demo-05-agent")
         XCTAssertFalse(app.core.isRunning)
+    }
+
+    func testTheDemoListHasTheSampleChats() throws {
+        let app = try TestApp.model(demo: true)
+        let laptop = DemoMode.computers[0].id
+        let desktop = DemoMode.computers[1].id
+        let list = app.chatList(query: "")
+        XCTAssertEqual(list.needs.map(\.id), ["approve|\(laptop)|demo1", "agent|\(laptop)|w2:p1"],
+                       "the approval is newer than the agent that waits")
+        XCTAssertEqual(list.agents.map(\.id), ["agent|\(laptop)|w1:p1", "agent|\(laptop)|w3:p1", "agent|\(laptop)|w3:p2"],
+                       "the agent that works, the agent that is done, then the idle agent")
+        XCTAssertEqual(list.computers.map(\.id), ["computer|\(laptop)", "computer|\(desktop)"], "the online computer first")
+        guard case .computer(_, let last)? = list.computers.first else { return XCTFail("the first computer row is not a computer") }
+        XCTAssertEqual(last?.preview, "You: Dinner at 7, bring the kids")
+        XCTAssertNotNil(app.lastSeen(desktop), "the desktop shows when it went offline")
+        XCTAssertNil(app.lastSeen(laptop))
+        XCTAssertEqual(app.chatList(query: "").needs.map(\.id), list.needs.map(\.id), "each row keeps its place")
+
+        let found = app.chatList(query: "invoice")
+        XCTAssertTrue(found.needs.isEmpty && found.agents.isEmpty)
+        XCTAssertEqual(found.computers.map(\.id), ["computer|\(laptop)"], "a computer stays when an entry of its chat holds the text")
+        guard case .computer(_, let match)? = found.computers.first else { return XCTFail("the row is not a computer") }
+        XCTAssertEqual(match?.preview, "Receiving invoice-2026-09.pdf")
     }
 
     func testTheDemoChatHasTheSampleEntries() throws {
         let app = try TestApp.model(demo: true)
+        let laptop = DemoMode.computers[0].id
         let items = DemoMode.inboxItems()
         XCTAssertEqual(items.map(\.kind), [.agentInput, .agentWorking, .agentDone, .approval])
         XCTAssertEqual(Inbox.needsYou(items), 2)
         XCTAssertEqual(DemoMode.inboxItems().map(\.key), items.map(\.key), "the keys stay the same")
-        let entries = app.chatEntries(all: items)
-        XCTAssertEqual(entries.map(Self.entryName), ["link", "photo", "done", "clip", "working", "file", "blocked", "approval"],
-                       "the order of the chat design")
-        XCTAssertEqual(app.chatEntries(all: items).map(\.id), entries.map(\.id), "each entry keeps its place")
+        let entries = app.chatEntries(of: laptop, all: items)
+        XCTAssertEqual(entries.map(Self.entryName), ["link", "photo", "clip", "file", "text", "approval"],
+                       "the order of the chat design, without agents")
+        XCTAssertEqual(app.chatEntries(of: laptop, all: items).map(\.id), entries.map(\.id), "each entry keeps its place")
+        XCTAssertTrue(app.chatEntries(of: DemoMode.computers[1].id, all: items).isEmpty, "the desktop has no entries")
         XCTAssertEqual(DemoMode.output(pane: "w2:p1", review: false)?.choices.last.map(Chat.isTellChoice), true,
                        "the last choice of the sample agent opens a reply")
         XCTAssertEqual(DemoMode.output.choices.map(\.key), ["1", "2", "3"])
@@ -65,7 +95,7 @@ final class DemoModeTests: XCTestCase {
     /// A short name of a chat entry of the demo.
     private static func entryName(_ e: ChatEntry) -> String {
         switch e {
-        case .sent: return "link"
+        case .sent(let s): return s.kind == .text ? "text" : "link"
         case .file(let t): return t.incoming ? "file" : "photo"
         case .clip: return "clip"
         case .answer: return "answer"

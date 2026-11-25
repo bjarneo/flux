@@ -10,26 +10,36 @@ import (
 	"flux/internal/proto"
 )
 
-// This computer can ask a device to start its camera or its microphone.
-// The flux.stream.request packet only asks. The device shows a prompt or a
-// notification, and it starts the stream with flux.webcam or flux.mic only
-// after its user taps start on the device. fluxd then handles that start
-// as each other start from the device.
+// This computer can ask a device to start its camera or its microphone,
+// or to play the audio of this computer. The flux.stream.request packet
+// only asks. The device shows a prompt or a notification, and it starts
+// the stream with flux.webcam, flux.mic, or flux.speaker only after its
+// user taps start on the device. fluxd then handles that start as each
+// other start from the device.
 
 // streamRequestGap is the shortest time between 2 requests of 1 kind to 1
 // device. The device ignores a request in the same time too.
 const streamRequestGap = 3 * time.Second
 
-// streamAsk names a request: the kind, "webcam" or "mic", and the device
-// ID.
+// streamAsk names a request: the kind, "webcam", "mic", or "speaker", and
+// the device ID.
 type streamAsk struct{ kind, device string }
 
 // streamWhat returns the name of a kind for the messages.
 func streamWhat(kind string) string {
-	if kind == "mic" {
+	switch kind {
+	case "mic":
 		return "the mic"
+	case "speaker":
+		return "the speaker"
 	}
 	return "the webcam"
+}
+
+// takesRequest reports whether the device can take a request for kind. A
+// device takes a speaker request only when it can also play the audio.
+func takesRequest(dev *Device, kind string) bool {
+	return dev.accepts(proto.TypeFluxStreamRequest) && (kind != "speaker" || dev.accepts(proto.TypeFluxSpeaker))
 }
 
 // RequestWebcam asks a device to start its camera as the webcam of this
@@ -97,6 +107,8 @@ func (d *Daemon) streamTargetLocked(kind string, named *Device) (*Device, error)
 		from = d.webcam.dev
 	case kind == "mic" && d.mic != nil:
 		from = d.mic.dev
+	case kind == "speaker" && d.speaker != nil:
+		return nil, apiErr("already_active", "%s already plays the audio of this computer. To stop it, run: flux-cli speaker stop", d.speaker.dev.Name)
 	}
 	if from != nil {
 		return nil, apiErr("already_active", "%s already streams %s to this computer. To stop it, run: flux-cli %s stop", from.Name, what, kind)
@@ -107,14 +119,14 @@ func (d *Daemon) streamTargetLocked(kind string, named *Device) (*Device, error)
 			return nil, apiErr("not_paired", "%s is not paired", named.Name)
 		case named.link == nil:
 			return nil, offline(named)
-		case !named.accepts(proto.TypeFluxStreamRequest):
+		case !takesRequest(named, kind):
 			return nil, apiErr("not_supported", "%s cannot start %s from this computer. Update Flux on %s", named.Name, what, named.Name)
 		}
 		return named, nil
 	}
 	var found []*Device
 	for _, dev := range d.devices {
-		if dev.Paired && dev.link != nil && dev.accepts(proto.TypeFluxStreamRequest) {
+		if dev.Paired && dev.link != nil && takesRequest(dev, kind) {
 			found = append(found, dev)
 		}
 	}

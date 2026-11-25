@@ -42,6 +42,11 @@ class Settings(context: Context) {
         get() = prefs.getString("computerThemes", null)
         set(v) = prefs.edit().putString("computerThemes", v).apply()
 
+    /** The scroll direction of the touchpad screen. Without a choice, it is [ScrollMode.Computer]. */
+    var touchpadScroll: ScrollMode
+        get() = ScrollMode.fromKey(prefs.getString("touchpadScroll", null))
+        set(v) = prefs.edit().putString("touchpadScroll", v.key).apply()
+
     /** Sends the calls of this phone to the computers. It needs the phone permission. */
     var callAlerts: Boolean
         get() = prefs.getBoolean("callAlerts", false)
@@ -72,15 +77,15 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("sendScreenshots", false)
         set(v) = prefs.edit().putBoolean("sendScreenshots", v).apply()
 
-    /** True after the chat showed once that a swipe leads to the other screens. */
-    var swipeHinted: Boolean
-        get() = prefs.getBoolean("swipeHinted", false)
-        set(v) = prefs.edit().putBoolean("swipeHinted", v).apply()
-
     /** Sends each new camera photo to the computers. */
     var sendPhotos: Boolean
         get() = prefs.getBoolean("sendPhotos", false)
         set(v) = prefs.edit().putBoolean("sendPhotos", v).apply()
+
+    /** Opens the fingerprint prompt at once when an approval arrives. It needs Android 12 or later. */
+    var approveAtOnce: Boolean
+        get() = prefs.getBoolean("approveAtOnce", false)
+        set(v) = prefs.edit().putBoolean("approveAtOnce", v).apply()
 
     /** The time of the last local clipboard change, in milliseconds. */
     var clipboardTimestamp: Long

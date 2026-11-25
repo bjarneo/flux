@@ -2,15 +2,16 @@ import AppKit
 import FluxKit
 import SwiftUI
 
-/// The 3 destinations of the sidebar, in order.
+/// The 3 destinations of the window, in order. Chats is the list in the
+/// sidebar, and Control and Computers are the 2 rows under it.
 enum MacDestination: String, CaseIterable, Identifiable, Hashable {
-    case chat, control, computers
+    case chats, control, computers
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .chat: return "Chat"
+        case .chats: return "Chats"
         case .control: return "Control"
         case .computers: return "Computers"
         }
@@ -18,7 +19,7 @@ enum MacDestination: String, CaseIterable, Identifiable, Hashable {
 
     var systemImage: String {
         switch self {
-        case .chat: return "text.bubble"
+        case .chats: return "text.bubble"
         case .control: return "slider.horizontal.3"
         case .computers: return "laptopcomputer"
         }
@@ -27,11 +28,30 @@ enum MacDestination: String, CaseIterable, Identifiable, Hashable {
     /// The key of the destination in the Go menu, with Command.
     var shortcut: KeyEquivalent {
         switch self {
-        case .chat: return KeyEquivalent("1")
+        case .chats: return KeyEquivalent("1")
         case .control: return KeyEquivalent("2")
         case .computers: return KeyEquivalent("3")
         }
     }
+}
+
+/// 1 chat of the Chats list: the chat of a paired computer, or the chat of
+/// 1 herdr agent in `pane` of a computer.
+enum ChatOpen: Hashable {
+    case computer(String)
+    case agent(String, pane: String)
+
+    /// The computer of the chat.
+    var deviceId: String {
+        switch self {
+        case .computer(let id), .agent(let id, _): return id
+        }
+    }
+}
+
+/// The computer of the sheet that starts an agent from the window.
+struct AgentStart: Identifiable {
+    let id: String
 }
 
 /// A feature card that opens on a page of its own from Control.
@@ -58,50 +78,6 @@ enum MacRoute: Hashable {
     case card(MacCard, String)
     /// The page of a paired computer, with its Touch ID approval.
     case computer(String)
-}
-
-/// The sidebar: the 3 destinations, and this Mac at the bottom. The Chat
-/// row counts the items of all computers that need the user.
-struct SidebarView: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.tn) private var tn
-
-    var body: some View {
-        let count = Inbox.needsYou(model.inboxItems())
-        let needs = needsText(count)
-        List(selection: Binding<MacDestination?>(
-            get: { model.destination },
-            set: { if let d = $0 { model.destination = d } }
-        )) {
-            ForEach(MacDestination.allCases) { d in
-                Label(d.title, systemImage: d.systemImage)
-                    .badge(d == .chat ? count : 0)
-                    .accessibilityValue(d == .chat ? needs : "")
-                    .tag(d)
-            }
-        }
-        .background(tn.bg)
-        .safeAreaInset(edge: .bottom) {
-            HStack {
-                Image(systemName: FluxCore.deviceType == "laptop" ? "laptopcomputer" : "desktopcomputer")
-                Text(model.state.deviceName).lineLimit(1)
-                Spacer()
-                if !model.state.enabled { Text("Off").foregroundStyle(tn.sub) }
-            }
-            .font(.caption)
-            .foregroundStyle(tn.text)
-            .padding(10)
-        }
-    }
-}
-
-/// "1 item needs you", "<n> items need you", or "Nothing needs you".
-func needsText(_ count: Int) -> String {
-    switch count {
-    case 0: return "Nothing needs you"
-    case 1: return "1 item needs you"
-    default: return "\(count) items need you"
-    }
 }
 
 /// The page of a route in the stack of a destination.
@@ -160,8 +136,9 @@ extension View {
     }
 }
 
-/// The Go menu: Command-1 to Command-3 open the destinations. Command-R
-/// stays with the agents window.
+/// The Go menu: Command-1 to Command-3 open the destinations. Command-1
+/// shows the chat that was open last. Command-R and Command-D stay with the
+/// agent chat and the agents window.
 struct GoMenu: View {
     let launch: Launch
     @Environment(\.openWindow) private var openWindow

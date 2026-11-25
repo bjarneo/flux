@@ -58,7 +58,7 @@ Method names and parameter handling live in `internal/core/api.go`.
 ## State and events
 
 Call `state` for a snapshot.
-The snapshot includes `self`, `devices`, `clipboard`, `transfers`, `commands`, `settings`, `webcam`, `mic`, `screen`, `desktop`, `browse`, and `herdr`.
+The snapshot includes `self`, `devices`, `clipboard`, `transfers`, `commands`, `settings`, `webcam`, `mic`, `screen`, `desktop`, `speaker`, `browse`, and `herdr`.
 `browse` lists the [Browse PC](features.md#browse-pc) sessions, the oldest first: the `device` ID, the `name`, and `since`, the Unix time of the start.
 
 `self` describes this computer:
@@ -103,7 +103,7 @@ A client that reads slowly gets only the newest `state` event.
 Next to the newest `state` event, fluxd queues at most 256 messages for each connection: the responses and the `toast` events.
 When a `toast` event does not fit in the queue, the client loses its connection.
 A response waits for a free place.
-The socket buffer of the kernel takes the data first.
+The socket buffer of the kernel takes the data first. fluxd caps this buffer at 128 KiB for each connection, whatever `net.core.wmem_default` is.
 When that buffer is full and a write does not end in 5 seconds, the client loses its connection.
 So read the socket all the time, also while you wait for a response.
 
@@ -128,7 +128,7 @@ Each device in `devices` has these fields:
 | `ip`, `addresses`, `lastSeen` | The address of the last link, the [extra addresses](#extra-addresses), and the Unix time of the last packet. |
 | `battery`, `notifications`, `conversations` | The phone data. A device that is not paired has none. |
 | `outbox` | The text messages that `sms.send` sent through the device and that the device did not report yet. See [the outbox](#outbox). A device that is not paired has an empty list. |
-| `plugins` | The features that the device offers. `streamrequest` means that the device can start its camera and its microphone when this computer asks. |
+| `plugins` | The features that the device offers. `streamrequest` means that the device can start its camera and its microphone when this computer asks. `speaker` means that the device can also play the audio of this computer when this computer asks. |
 | `app` | The Flux program of the device: `android`, `android-debug`, `ios`, `macos`, or `fluxd`. An earlier app sends none. |
 | `appVersion` | The version of that program, such as `0.7.0`. |
 | `appUpdate` | The version of a newer Android app in the latest release, or an empty string. |
@@ -140,15 +140,16 @@ A device that is not paired shows only while it has a link.
 | Group | Methods |
 | --- | --- |
 | State | `state`, `subscribe`, `discover` |
-| Pairing | `pair.request`, `pair.accept`, `pair.reject`, `pair.unpair` |
+| Pairing | `pair.address`, `pair.request`, `pair.accept`, `pair.reject`, `pair.unpair` |
 | Addresses | `addresses.add`, `addresses.remove` |
 | Device | `ring`, `ping` |
 | Sharing | `clipboard.send`, `clipboard.copy`, `share.files`, `share.text`, `share.url`, `transfer.cancel` |
 | Commands | `commands.add`, `commands.remove`, `commands.run` |
 | Notifications | `notification.dismiss`, `notification.dismissAll`, `notification.reply`, `notification.action`, `notify.send` |
 | Text messages | `sms.refresh`, `sms.thread`, `sms.send` |
-| Streams | `webcam.start`, `webcam.config`, `webcam.stop`, `mic.start`, `mic.stop`, `screen.stop`, `desktop.stop`, `browse.stop` |
+| Streams | `webcam.start`, `webcam.config`, `webcam.stop`, `mic.start`, `mic.stop`, `speaker.start`, `speaker.stop`, `screen.stop`, `desktop.stop`, `browse.stop` |
 | Approval | `approve.request`, `approve.wait`, `approve.enroll`, `approve.cancel` |
+| SSH key | `ssh.keys` |
 | Settings and updates | `settings.set`, `update.install`, `update.sendApp` |
 
 `share.files` takes `paths`, a list of absolute file paths. A relative path returns the error code `bad_params`.
@@ -167,6 +168,7 @@ Without `device`, a method uses the only connected paired device.
 | Method | Parameters |
 | --- | --- |
 | `state`, `subscribe`, `discover` | None |
+| `pair.address` | `address`: an IP address or a host name, with an optional port |
 | `pair.request`, `pair.unpair` | `device` |
 | `pair.accept`, `pair.reject` | `device`, and an optional `key`. See [pairing](#pairing). |
 | `addresses.add`, `addresses.remove` | `device`, `address` |
@@ -185,11 +187,12 @@ Without `device`, a method uses the only connected paired device.
 | `notification.action` | `device`, `id`, `action` |
 | `notify.send` | `device`, `title`, `body`. It shows a notification on the device. |
 | `sms.refresh`, `sms.thread`, `sms.send` | See [text messages](#text-messages). |
-| `webcam.start`, `mic.start` | An optional `device`. See [start a stream](#start-a-stream). |
+| `webcam.start`, `mic.start`, `speaker.start` | An optional `device`. See [start a stream](#start-a-stream). |
 | `webcam.config` | `config`, or `reset` set to `true` |
-| `webcam.stop`, `mic.stop`, `screen.stop`, `desktop.stop` | None |
+| `webcam.stop`, `mic.stop`, `speaker.stop`, `screen.stop`, `desktop.stop` | None |
 | `browse.stop` | An optional `device`. Without `device`, it ends every Browse PC session. It returns `not_active` when no session ends. |
 | `approve.request`, `approve.enroll`, `approve.wait`, `approve.cancel` | For the approval helper and `flux-cli approve`. See [approval](#approval). |
+| `ssh.keys` | None. The result has the ssh-agent `socket`, an `error` when `fluxd` has no socket, and the `keys` of the connected phones. Each key has `device`, `name`, `key` for `authorized_keys`, and `fingerprint`. See [SSH key on the phone](ssh.md). |
 | `settings.set` | `key`, `value` |
 | `update.install` | None |
 | `update.sendApp` | `device` |
@@ -220,6 +223,11 @@ To turn the release check off or on over IPC, send:
 | `device`, `name` | The device ID and the name. |
 | `key` | The verification key of the request: 16 uppercase hex digits, without spaces. Empty for `pair.unpair` when no pair request is open. |
 | `fingerprint` | The `fingerprint` of the device, as in the state. |
+
+`pair.address` connects to a device without discovery and returns its `device` ID and its `name`.
+It waits up to 40 seconds. Then send `pair.request` with that ID.
+The device must show Flux, because a phone takes a link from a new computer only then.
+A failed connection returns the code `unreachable` with the cause.
 
 `pair.request` finds a name only among the devices that are connected and not paired.
 `pair.accept` and `pair.reject` find a name only among the devices with `pairState` `incoming` or `confirm`.
@@ -255,11 +263,12 @@ These codes need a step from the client:
 | `ambiguous` | The name matches more than 1 device. The message lists the device IDs. Send the ID. Without `device`, more than 1 paired device is connected. |
 | `unknown_method` | fluxd does not know the method, for example an earlier `fluxd`. |
 | `not_found` | No device, command, transfer, clipboard entry, or request has the name or the ID. |
-| `no_device` | No paired device is connected, and the request has no `device`. For `webcam.start` and `mic.start`, no connected device can take the request. |
+| `no_device` | No paired device is connected, and the request has no `device`. For `webcam.start`, `mic.start`, and `speaker.start`, no connected device can take the request. |
 | `not_supported` | The device cannot do the request, for example an earlier app. |
 | `already_active` | A stream of that kind runs. Stop it first. |
 | `too_soon` | The same request went to the same device less than 3 seconds ago. Wait, then send it again. |
 | `not_paired`, `offline` | The device is not paired, or it has no link now. |
+| `unreachable` | `pair.address` cannot open a link to the address. The message gives the cause. |
 | `no_request` | No device with the name has an open pair request, or the open pairing has another `key`. |
 | `not_saved` | `pair.unpair` could not save `devices.json`. The device is unpaired only until fluxd restarts. |
 | `too_large` | The text has more than 256 KiB, the most that fluxd sends to a device. |
@@ -271,6 +280,7 @@ That code comes in a `flux.herdr` packet on the link of the device, not on this 
 ## Start a stream
 
 `webcam.start` and `mic.start` ask a device to start its camera or its microphone for this computer.
+`speaker.start` asks a device to play the audio of this computer.
 The device asks its user first. The stream starts only after a tap on the device.
 
 ```json
@@ -280,9 +290,10 @@ The device asks its user first. The stream starts only after a tap on the device
 
 The result names the device that got the request: the `device` ID and the `name`.
 It does not mean that the stream started.
-The stream shows in `webcam` or `mic` of a later state event.
+The stream shows in `webcam`, `mic`, or `speaker` of a later state event.
 
 Without `device`, fluxd selects the only paired, connected device with `streamrequest` in its `plugins`.
+For `speaker.start`, the device must also have `speaker` in its `plugins`.
 With no such device, the method returns `no_device`.
 With more than 1, it returns `ambiguous` with their names.
 
@@ -291,6 +302,16 @@ A `device` that is not paired returns `not_paired`, and a `device` with no link 
 A `fluxd` in headless mode returns `not_supported` for each request.
 While a stream of that kind runs, the method returns `already_active`.
 A second request of the same kind to the same device in 3 seconds returns `too_soon`.
+
+`speaker` in the state is null while no phone plays the audio of this computer:
+
+```json
+{"active":true,"to":"DEVICE_ID","toName":"Pixel 8","rate":48000,"channels":2,"mute":true,"muted":"Laptop Speakers"}
+```
+
+`mute` is true when the phone asks `fluxd` to mute the default output.
+`muted` is the description of the output that `fluxd` muted, and `muteError` tells why it could not.
+After a failed start, the object has only `error`.
 See [start from the computer](camera.md#start-from-the-computer).
 
 ## herdr

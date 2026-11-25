@@ -4,7 +4,7 @@ import Observation
 import UserNotifications
 
 /// The UI state of the app. It mirrors the core and holds the destination,
-/// the scope, the times of the chat, and the theme setting.
+/// the open chat, the scope, the times of the chats, and the theme setting.
 @MainActor
 @Observable
 final class AppModel {
@@ -14,17 +14,22 @@ final class AppModel {
     /// The device that the pairing sheet shows.
     var pairingSheet: String?
     /// The destination that the sidebar selects.
-    var destination: MacDestination = .chat
+    var destination: MacDestination = .chats
+    /// The chat that the detail column shows while Chats is open, or nil.
+    var chat: ChatOpen?
+    /// The computer of the sheet that starts an agent, or nil.
+    var startAgent: String?
     /// The pages on top of each destination.
     var chatPath: [MacRoute] = []
     var controlPath: [MacRoute] = []
     var computersPath: [MacRoute] = []
-    /// The computer in scope, or nil for all computers. A new start begins with all computers.
+    /// The computer in scope of Control and Computers, or nil for all
+    /// computers. A new start begins with all computers.
     var scope: String?
     /// The first time that this Mac saw each Inbox item of all computers, by key. See `watchEvents`.
     private(set) var seen: [String: Date] = [:]
-    /// The reply that the dock of the chat writes to an agent in the place of a choice, or nil.
-    var chatReply: ChatReply?
+    /// The time that each paired computer went offline in this run of Flux, by device ID.
+    private var wentOffline: [String: Date] = [:]
     /// True for 3 seconds after a connection attempt starts. A computer
     /// that is not online then counts as connecting.
     private(set) var connecting = false
@@ -38,6 +43,10 @@ final class AppModel {
     @ObservationIgnored private var graceTask: Task<Void, Never>?
     @ObservationIgnored private var pairedTask: Task<Void, Never>?
     @ObservationIgnored private var seenClock = SeenClock()
+    /// The first time that the list of chats showed each row whose start is not known.
+    @ObservationIgnored private var listClock = SeenClock()
+    /// The state of the agent chats of each computer in the window: the drafts and the dictation.
+    @ObservationIgnored private var agentModels: [String: AgentsWindowModel] = [:]
 
     init(core: FluxCore) {
         self.core = core
@@ -87,14 +96,14 @@ final class AppModel {
     var path: [MacRoute] {
         get {
             switch destination {
-            case .chat: return chatPath
+            case .chats: return chatPath
             case .control: return controlPath
             case .computers: return computersPath
             }
         }
         set {
             switch destination {
-            case .chat: chatPath = newValue
+            case .chats: chatPath = newValue
             case .control: controlPath = newValue
             case .computers: computersPath = newValue
             }
@@ -106,10 +115,22 @@ final class AppModel {
         path.append(route)
     }
 
-    /// Opens the root of a destination.
+    /// Opens the root of a destination. Chats keeps the chat that was open.
     func go(_ destination: MacDestination) {
         self.destination = destination
         path = []
+    }
+
+    /// Opens a chat in the detail column.
+    func open(_ chat: ChatOpen) {
+        // herdr keeps 1 output of each computer. While the agents window of the computer is open, its agents show there.
+        if case .agent(let id, let pane) = chat, AgentsWindows.shared.isOpen(id) {
+            AgentsWindows.shared.show(id, pane: pane, app: self)
+            return
+        }
+        destination = .chats
+        self.chat = chat
+        chatPath = []
     }
 
     // MARK: Theme
@@ -142,11 +163,48 @@ final class AppModel {
         AppearanceController.shared.apply(night)
     }
 
-    // MARK: Chat
+    // MARK: Chats
 
     /// The Inbox items of all computers: the agents, the approval, and the pair requests.
     func inboxItems() -> [InboxItem] {
         Inbox.items(core: core, devices: state.devices)
+    }
+
+    /// The list of chats: what needs the user, the agents, and the paired
+    /// computers with the newest entry of each chat. `query` keeps only the
+    /// rows that hold it. SwiftUI tracks each model that it reads.
+    func chatList(query: String = "") -> ChatList {
+        let share = core.plugin(SharePlugin.self)
+        let herdr = core.plugin(HerdrPlugin.self)
+        let log = Chat.entries(
+            sent: share?.model.sent ?? [],
+            transfers: share?.model.transfers ?? [],
+            clip: core.plugin(ClipboardPlugin.self)?.model.last,
+            answers: core.plugin(ApprovePlugin.self)?.model.history ?? [],
+            items: [],
+            since: { _, _ in nil },
+            seen: [:]
+        )
+        return Chats.list(devices: state.devices, herdr: herdr?.model.states ?? [:],
+                          approval: core.plugin(ApprovePlugin.self)?.model.current, log: log,
+                          since: { herdr?.model.agentSince(device: $0, pane: $1) },
+                          lastSeen: { wentOffline[$0] },
+                          seen: &listClock, now: Date(), query: query)
+    }
+
+    /// The time that the paired computer `id` went offline in this run of
+    /// Flux, or nil when Flux does not know it.
+    func lastSeen(_ id: String) -> Date? { wentOffline[id] }
+
+    /// The state of the agent chats of a computer in the window, or nil
+    /// without herdr. It keeps the drafts of each agent while the user opens
+    /// other chats.
+    func agentModel(_ deviceId: String) -> AgentsWindowModel? {
+        if let m = agentModels[deviceId] { return m }
+        guard let plugin = core.plugin(HerdrPlugin.self) else { return nil }
+        let m = AgentsWindowModel(deviceId: deviceId, app: self, plugin: plugin, selection: nil)
+        agentModels[deviceId] = m
+        return m
     }
 
     /// Sets the computer in scope.
@@ -169,8 +227,7 @@ final class AppModel {
     }
 
     /// Records the first time of each new item, and keeps the prompt of each
-    /// agent that waits or works. A reply to an agent ends when the agent no
-    /// longer waits.
+    /// agent that waits or works.
     private func eventsChanged(_ items: [InboxItem]) {
         let next = seenClock.update(items.map(\.key), now: Date())
         if next != seen { seen = next }
@@ -181,19 +238,9 @@ final class AppModel {
             }
         }
         core.plugin(HerdrPlugin.self)?.keepPrompts(keys)
-        // A reply ends when its agent no longer waits for the choice.
-        if let r = chatReply, !items.contains(where: { Self.waits($0, deviceId: r.deviceId, pane: r.pane) }) {
-            chatReply = nil
-        }
     }
 
-    /// True when `item` is the agent in `pane` of the computer and waits for input.
-    private static func waits(_ item: InboxItem, deviceId: String, pane: String) -> Bool {
-        if case .agent(let id, let agent, _) = item.content { return id == deviceId && agent.pane == pane && agent.status == .blocked }
-        return false
-    }
-
-    /// The times of the chat for `items`: the first time of each item, or
+    /// The times of the chats for `items`: the first time of each item, or
     /// `now` for an item that `watchEvents` did not record yet.
     func chatSeen(_ items: [InboxItem], now: Date = Date()) -> [String: Date] {
         var out = seen
@@ -222,18 +269,21 @@ final class AppModel {
     private func apply(_ s: CoreState) {
         let old = state
         if s != state { state = s }
-        // A computer that is no longer paired leaves the scope.
+        // A computer that is no longer paired leaves the scope, and its chats close.
         if let scope, !s.devices.contains(where: { $0.id == scope && $0.paired }) { self.scope = nil }
+        if let id = chat?.deviceId, !s.devices.contains(where: { $0.id == id && $0.paired }) { chat = nil }
         // A new pairing shows the chat of the new computer.
         if let id = Self.newlyPaired(old: old.devices.map { ($0.id, $0.paired) }, new: s.devices.map { ($0.id, $0.paired) }).first {
             pairingSheet = nil
             scope = id
-            destination = .chat
-            chatPath = []
+            open(.computer(id))
             computersPath = []
             notePaired(id)
         }
         for d in s.devices where d.pairState != .incoming { Notifier.shared.remove(id: "pair-\(d.id)") }
+        for d in s.devices where d.paired && !d.online && old.devices.contains(where: { $0.id == d.id && $0.online }) {
+            wentOffline[d.id] = Date()
+        }
         FeatureHooks.stateChanged(s, model: self)
     }
 
@@ -277,8 +327,8 @@ final class AppModel {
     }
 
     /// A request from a computer does not take the window, so that a key
-    /// press meant for the open page cannot accept it. The chat shows the
-    /// request, and a notification shows the key. A click on the
+    /// press meant for the open page cannot accept it. The list of chats
+    /// shows the request, and a notification shows the key. A click on the
     /// notification opens the pairing page of the computer.
     private func pairRequested(_ d: DeviceSnapshot) {
         if NSApp.isActive { show("\(d.name) wants to pair") }

@@ -179,4 +179,7 @@ type sessionState struct {
 	// the webcam or the microphone of a device, by the kind and the
 	// device ID.
 	streamAsked map[streamAsk]time.Time
+
+	// speakerTurn is the turn of the phone speaker sessions.
+	speakerTurn sessionTurn
 }

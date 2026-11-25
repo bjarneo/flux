@@ -2,63 +2,66 @@ import FluxKit
 import SwiftUI
 import UserNotifications
 
-/// The texts of the chat about the computers in scope.
+/// The texts of the chats about the computers.
 @MainActor
 enum ChatTexts {
-    /// The name of the computer in scope, or nil for all computers.
-    static func scopeName(_ model: AppModel) -> String? {
-        model.scope.flatMap { model.device($0)?.name }
-    }
-
-    /// The context line of the chat, such as "omarchy · 2 need you". With
-    /// all computers in scope, the scope chip names the scope, so the line
-    /// gives only the count.
+    /// The context line of Chats, such as "2 need you · 1 of 2 online".
+    /// `needs` counts the items of all computers that need the user.
     static func context(_ model: AppModel, needs: Int) -> String {
-        let count = needs > 0 ? "\(needs) need you" : "nothing needs you"
-        return scopeName(model).map { "\($0) · \(count)" } ?? count
+        ScreenWords.join(needs > 0 ? "\(needs) need you" : "nothing needs you", ScreenWords.online(model))
     }
 
-    /// The title of the computers in scope while the links connect.
+    /// The line under the name of a computer in its chat: the link and the
+    /// battery, such as "connected · 82%, charging", or "not reachable".
+    static func link(_ model: AppModel, _ d: DeviceSnapshot) -> String {
+        guard d.online else { return "not reachable" }
+        guard let b = model.core.plugin(BatteryPlugin.self)?.model.computers[d.id] else { return "connected" }
+        return "connected · \(b.charge)%" + (b.charging ? ", charging" : "")
+    }
+
+    /// The title of the computers of a chat while the links connect.
     nonisolated static func connecting(_ reach: InboxReach) -> String {
         reach.offline.count == 1 ? "Connecting to \(reach.offline[0].name)" : "Connecting to your computers"
     }
 
-    /// The line for the computers in scope that are not reachable.
+    /// The line for the computers of a chat that are not reachable.
     nonisolated static func offlineLine(_ reach: InboxReach) -> String {
         if reach.offline.count == 1, let d = reach.offline.first {
-            return "\(d.name) is not reachable. Its agents do not show here."
+            return "\(d.name) is not reachable."
         }
-        return "\(reach.offline.count) computers are not reachable. Their agents do not show here."
+        return "\(reach.offline.count) computers are not reachable."
     }
 
-    /// True when the chat tells that computers in scope are not reachable.
-    /// While the links connect after a start, the chat does not say it.
-    static func offlineShows(_ model: AppModel) -> Bool {
-        !model.connecting && !Inbox.reach(scope: model.scope, devices: model.state.devices).offline.isEmpty
+    /// True when a chat tells that its computers are not reachable. While
+    /// the links connect after a start, the chat does not say it.
+    static func offlineShows(_ model: AppModel, computer: String?) -> Bool {
+        !model.connecting && !Inbox.reach(scope: computer, devices: model.state.devices).offline.isEmpty
     }
 
-    /// The name of the computer that paired last, while the chat shows it.
-    static func newlyPaired(_ model: AppModel) -> String? {
-        guard let id = model.newlyPairedId, model.scope == nil || model.scope == id else { return nil }
+    /// The name of the computer that paired last, while the chat of
+    /// `computer` or the list of chats with nil shows it.
+    static func newlyPaired(_ model: AppModel, computer: String?) -> String? {
+        guard let id = model.newlyPairedId, computer == nil || computer == id else { return nil }
         return model.device(id)?.name
     }
 }
 
-/// What the chat tells under its entries: that the links connect, a new
-/// pairing, the items on other computers that need the user, the computers
-/// in scope that are not reachable, and the notifications.
+/// What a chat tells under its entries, or the list of chats on top: that
+/// the links connect, a new pairing, the computers that are not reachable,
+/// and in the list the notifications. `computer` is the computer of the
+/// chat, or nil for the list. The rows of the list show which computers
+/// are not reachable, so the list tells it only with `offline`.
 struct ChatNotices: View {
-    let scoped: [InboxItem]
-    let all: [InboxItem]
+    let computer: String?
+    var offline = true
     @Environment(AppModel.self) private var model
     @Environment(\.tn) private var tn
     @AppStorage("inbox.notificationsHidden") private var notificationsHidden = false
 
     var body: some View {
-        let elsewhere = Inbox.needsYou(all) - Inbox.needsYou(scoped)
-        let reach = Inbox.reach(scope: model.scope, devices: model.state.devices)
+        let reach = Inbox.reach(scope: computer, devices: model.state.devices)
         let status = NotificationAccess.shared.status
-        let asks = !model.demo && !notificationsHidden && model.state.devices.contains { $0.paired }
+        let asks = computer == nil && !model.demo && !notificationsHidden && model.state.devices.contains { $0.paired }
         VStack(alignment: .leading, spacing: 4) {
             if model.connecting && reach.noneOnline {
                 HStack(spacing: 10) {
@@ -70,19 +73,12 @@ struct ChatNotices: View {
                 .padding(.horizontal, 4)
                 .accessibilityElement(children: .combine)
             }
-            if let name = ChatTexts.newlyPaired(model) {
+            if let name = ChatTexts.newlyPaired(model, computer: computer) {
                 Notice(mark: .paired, text: "\(name) is paired. What waits for you on \(name) shows here first.", strong: true) {
                     EmptyView()
                 }
             }
-            if elsewhere > 0 {
-                Notice(mark: .needs, text: elsewhere == 1 ? "1 item on another computer needs you"
-                    : "\(elsewhere) items on other computers need you", strong: true) {
-                    Button("Show all computers") { model.setScope(nil) }
-                        .buttonStyle(FluxButtonStyle(kind: .text))
-                }
-            }
-            if ChatTexts.offlineShows(model) {
+            if offline && ChatTexts.offlineShows(model, computer: computer) {
                 Notice(mark: .offline, text: ChatTexts.offlineLine(reach), strong: false) {
                     Button("Retry") { model.retry() }
                         .buttonStyle(FluxButtonStyle(kind: .text))
@@ -109,7 +105,7 @@ struct ChatNotices: View {
 
 /// The mark of a notice.
 enum NoticeMark {
-    case paired, needs, offline, bell
+    case paired, offline, bell
 }
 
 /// 1 notice: a mark, the text, and the actions under the text. The actions
@@ -150,8 +146,6 @@ struct Notice<Actions: View>: View {
         switch mark {
         case .paired:
             Image(systemName: "checkmark.circle.fill").foregroundStyle(tn.green).accessibilityHidden(true)
-        case .needs:
-            Circle().fill(tn.red).frame(width: 8, height: 8).accessibilityHidden(true)
         case .offline:
             LinkDot(online: false)
         case .bell:

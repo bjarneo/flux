@@ -40,6 +40,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
@@ -84,11 +85,13 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.RemoteInput
 import org.omarchy.flux.desktop.DesktopSession
 import org.omarchy.flux.desktop.DesktopViewport
+import org.omarchy.flux.desktop.ExtendSize
 import org.omarchy.flux.protocol.Packet
 import org.omarchy.flux.voice.Dictation
 import org.omarchy.flux.voice.rememberVoiceTyping
@@ -103,25 +106,37 @@ private val DoubleTapDistance = 24.dp
 /** The controls under the video, or next to it in landscape. */
 private enum class Panel { Omarchy, Keys }
 
+/** The time that the layout of the video must stay the same before the extended screen takes its size. */
+private const val EXTEND_SETTLE_MS = 300L
+
 /**
  * The screen of the computer on the phone. The computer streams the
  * screen while remote_desktop is on. The touches click, drag, and scroll
  * on the computer while remote_input is on. The phone turns to landscape
  * while the stream shows. The Omarchy panel moves between workspaces and
  * windows, and the keys and the mic type on the computer.
+ *
+ * With [extend], the computer adds a monitor with the size of the video on
+ * this phone and streams it, so that the phone or the tablet is a second
+ * monitor. The monitor goes away when the stream stops.
  */
 @Composable
-fun DesktopScreen(d: DeviceUi, onBack: () -> Unit) {
+fun DesktopScreen(d: DeviceUi, onBack: () -> Unit, extend: Boolean = false) {
     val audio by DesktopSession.audio.collectAsState()
     val volume by DesktopSession.volume.collectAsState()
     val audioText = Tn.text
     val status by DesktopSession.status.collectAsState()
+    val supported = d.desktopSupported && (!extend || d.extendSupported)
     // The screen shows and takes input only after the phone lock, see rememberRemoteUnlock.
     val unlocked = rememberRemoteUnlock(
-        d.online && d.desktopSupported && d.remoteDesktop == true,
-        "Show the computer screen", "show the computer screen", onBack, sample = isDemo(d.id),
+        d.online && supported && d.remoteDesktop == true,
+        if (extend) "Extend the computer screen" else "Show the computer screen",
+        if (extend) "extend the computer screen" else "show the computer screen",
+        onBack, sample = isDemo(d.id),
     )
-    val ready = d.online && d.desktopSupported && d.remoteDesktop == true && unlocked
+    val ready = d.online && supported && d.remoteDesktop == true && unlocked
+    // The size of the added monitor, after the video has its place in landscape.
+    val extendSize = remember(d.id) { mutableStateOf<ExtendSize?>(null) }
     val control = d.remoteInput == true
     var panel by rememberSaveable { mutableStateOf<Panel?>(null) }
     // The monitor that the user selected. A restart of the stream keeps it.
@@ -152,9 +167,13 @@ fun DesktopScreen(d: DeviceUi, onBack: () -> Unit) {
     }
     val buttons: @Composable () -> Unit = {
         if (ready) {
-            TextButton(onClick = { DesktopSession.setAudio(FluxCore, d.id, !audio) }) { Text(if (audio) "Audio off" else "Audio on", color = audioText) }
+            // The button shows from the start, so that the rail keeps its width when the extended screen takes its size.
+            // Before that size, the button does nothing, because a start without the size shows a monitor that exists.
+            TextButton(onClick = {
+                if (!extend || extendSize.value != null) DesktopSession.setAudio(FluxCore, d.id, !audio, extendSize.value)
+            }) { Text(if (audio) "Audio off" else "Audio on", color = audioText) }
         }
-        if (ready && status.deviceId == d.id && status.monitors.size > 1) {
+        if (ready && !extend && status.deviceId == d.id && status.monitors.size > 1) {
             val next = status.monitors[(status.monitors.indexOf(status.monitor) + 1) % status.monitors.size]
             // The key shows the monitor on screen. A tap shows the next monitor.
             MonitorKey(status.monitor, next) {
@@ -177,7 +196,7 @@ fun DesktopScreen(d: DeviceUi, onBack: () -> Unit) {
     val gutter = Modifier.padding(horizontal = TiledGutter)
     Column(Modifier.fillMaxSize().then(if (wide) Modifier.displayCutoutPadding() else Modifier).imePadding()) {
         if (!wide) {
-            Box(gutter) { TiledTopBar("Remote desktop", onBack, context = d.name) { buttons() } }
+            Box(gutter) { TiledTopBar(if (extend) "Extend screen" else "Remote desktop", onBack, context = d.name) { buttons() } }
         }
         if (audio && ready) {
             Row(gutter.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -192,12 +211,22 @@ fun DesktopScreen(d: DeviceUi, onBack: () -> Unit) {
                 "This version of Flux on ${d.name} does not stream its screen.",
                 gutter.padding(top = 48.dp),
             )
-            d.remoteDesktop != true -> EmptyState(
-                Ic.desktop, "Remote desktop is off",
-                "On ${d.name}, set remote_desktop = true in ~/.config/flux/config.toml, then run systemctl --user reload fluxd.",
+            !supported -> EmptyState(
+                Ic.devices, "Update Flux on ${d.name}",
+                "This version of Flux on ${d.name} cannot add a monitor for this device.",
                 gutter.padding(top = 48.dp),
             )
-            !unlocked -> EmptyState(Ic.desktop, "Unlock to continue", "Confirm with the phone lock to show ${d.name}.", gutter.padding(top = 48.dp))
+            d.remoteDesktop != true -> EmptyState(
+                Ic.desktop, "Remote desktop is off",
+                "On ${d.name}, set remote_desktop = true in ~/.config/flux/config.toml, then run systemctl --user reload fluxd." +
+                    if (extend) " The extended screen uses the same setting." else "",
+                gutter.padding(top = 48.dp),
+            )
+            !unlocked -> EmptyState(
+                Ic.desktop, "Unlock to continue",
+                if (extend) "Confirm with the phone lock to extend the screen of ${d.name}." else "Confirm with the phone lock to show ${d.name}.",
+                gutter.padding(top = 48.dp),
+            )
             else -> {
                 // The video keeps its place in both layouts, so a rotation does not restart the stream.
                 Row(Modifier.weight(1f).fillMaxWidth()) {
@@ -213,7 +242,7 @@ fun DesktopScreen(d: DeviceUi, onBack: () -> Unit) {
                         }
                     }
                     Column(Modifier.weight(1f).fillMaxHeight()) {
-                        RemoteDesktop(d, monitor, hint = shown == null && !wide, onClick = typing::end)
+                        RemoteDesktop(d, monitor, extend, extendSize, wide, hint = shown == null && !wide, onClick = typing::end)
                     }
                     if (wide) {
                         when (shown) {
@@ -300,17 +329,37 @@ private fun sendInput(d: DeviceUi, p: Packet) {
 /**
  * The video of the computer screen, with its gestures. The stream runs
  * while the app shows. [hint] shows the gestures under the video.
- * [onClick] runs for each click and each drag on the computer.
+ * [onClick] runs for each click and each drag on the computer. With
+ * [extend], the stream starts after the video has its size in landscape,
+ * see [wide], and [extendSize] keeps that size.
  */
 @Composable
-private fun ColumnScope.RemoteDesktop(d: DeviceUi, monitor: String?, hint: Boolean, onClick: () -> Unit) {
+private fun ColumnScope.RemoteDesktop(
+    d: DeviceUi,
+    monitor: String?,
+    extend: Boolean,
+    extendSize: MutableState<ExtendSize?>,
+    wide: Boolean,
+    hint: Boolean,
+    onClick: () -> Unit,
+) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val selected by rememberUpdatedState(monitor)
+    val startStream by rememberUpdatedState {
+        // After the unlock ends, the page asks for the phone lock again before the stream starts.
+        // The size comes from the state itself, so a start right after the size is set has it.
+        if (ReplyLock.valid() || isDemo(d.id)) {
+            if (!extend) {
+                DesktopSession.start(FluxCore, d.id, selected)
+            } else {
+                extendSize.value?.let { DesktopSession.start(FluxCore, d.id, extend = it) }
+            }
+        }
+    }
     DisposableEffect(d.id, lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                // After the unlock ends, the page asks for the phone lock again before the stream starts.
-                Lifecycle.Event.ON_START -> if (ReplyLock.valid() || isDemo(d.id)) DesktopSession.start(FluxCore, d.id, selected)
+                Lifecycle.Event.ON_START -> startStream()
                 Lifecycle.Event.ON_STOP -> DesktopSession.stop()
                 else -> Unit
             }
@@ -319,6 +368,18 @@ private fun ColumnScope.RemoteDesktop(d: DeviceUi, monitor: String?, hint: Boole
         onDispose {
             lifecycle.removeObserver(observer)
             DesktopSession.stop()
+        }
+    }
+    var box by remember { mutableStateOf(IntSize.Zero) }
+    val density = LocalDensity.current
+    if (extend) {
+        // The added monitor gets the size of the video once the turn to landscape is over. A panel that opens later
+        // makes the video smaller, and the monitor keeps its size. Even sides keep each pixel of the monitor on 1 pixel.
+        LaunchedEffect(box, wide) {
+            if (extendSize.value != null || !wide || box.width <= box.height) return@LaunchedEffect
+            delay(EXTEND_SETTLE_MS)
+            extendSize.value = ExtendSize(box.width / 2 * 2, box.height / 2 * 2, density.density)
+            if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) startStream()
         }
     }
     val status by DesktopSession.status.collectAsState()
@@ -341,7 +402,6 @@ private fun ColumnScope.RemoteDesktop(d: DeviceUi, monitor: String?, hint: Boole
         }
     }
 
-    var box by remember { mutableStateOf(IntSize.Zero) }
     // The video keeps its place before the size is known, so that its surface is ready for the first frame.
     val videoW = status.width.takeIf { it > 0 } ?: 16
     val videoH = status.height.takeIf { it > 0 } ?: 10
@@ -351,7 +411,6 @@ private fun ColumnScope.RemoteDesktop(d: DeviceUi, monitor: String?, hint: Boole
     // A new view size keeps the zoom, and a new video size starts at scale 1, see DesktopViewport.resized.
     val vp = viewport.value.resized(box.width.toFloat(), box.height.toFloat(), videoW, videoH, focus)
     SideEffect { viewport.value = vp }
-    val density = LocalDensity.current
     val clicked by rememberUpdatedState { p: Pair<Float, Float> ->
         focus = p
         if (control) onClick()
@@ -380,7 +439,13 @@ private fun ColumnScope.RemoteDesktop(d: DeviceUi, monitor: String?, hint: Boole
                 )
             }
         }
-        StreamState(d, status, Modifier.fillMaxSize())
+        StreamState(d, status, Modifier.fillMaxSize()) {
+            if (!extend) {
+                DesktopSession.start(FluxCore, d.id, status.monitor.ifEmpty { null })
+            } else {
+                extendSize.value?.let { DesktopSession.start(FluxCore, d.id, extend = it) }
+            }
+        }
     }
     if (hint) {
         T(
@@ -392,9 +457,9 @@ private fun ColumnScope.RemoteDesktop(d: DeviceUi, monitor: String?, hint: Boole
     }
 }
 
-/** The state of the stream over the video: a wait, an error, or a stop. */
+/** The state of the stream over the video: a wait, an error, or a stop. [onRestart] starts the stream again. */
 @Composable
-private fun StreamState(d: DeviceUi, status: DesktopSession.Status, modifier: Modifier) {
+private fun StreamState(d: DeviceUi, status: DesktopSession.Status, modifier: Modifier, onRestart: () -> Unit) {
     val mine = status.deviceId == d.id
     val waiting = !mine || status.phase == DesktopSession.Phase.Connecting ||
         (status.phase == DesktopSession.Phase.Live && status.width == 0)
@@ -417,7 +482,7 @@ private fun StreamState(d: DeviceUi, status: DesktopSession.Status, modifier: Mo
                 problem?.title ?: "The stream stopped",
                 problem?.let { "${it.cause} ${it.step}" } ?: "${status.message.ifEmpty { "The stream stopped" }}. Start the stream again.",
                 action = {
-                    FluxButton("Start again", { DesktopSession.start(FluxCore, d.id, status.monitor.ifEmpty { null }) }, kind = ButtonKind.Tonal, icon = Ic.refresh)
+                    FluxButton("Start again", onRestart, kind = ButtonKind.Tonal, icon = Ic.refresh)
                 },
             )
         }

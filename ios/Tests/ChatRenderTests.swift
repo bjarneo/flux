@@ -3,8 +3,8 @@ import SwiftUI
 import XCTest
 @testable import Flux
 
-/// Renders the demo chat in each sample theme. The renders go to
-/// TEST_RUNNER_FLUX_SCREENS, see `ScreenRender`.
+/// Renders the demo list of chats and the demo chat of the laptop in each
+/// sample theme. The renders go to TEST_RUNNER_FLUX_SCREENS, see `ScreenRender`.
 @MainActor
 final class ChatRenderTests: XCTestCase {
     func testEachSampleTheme() throws {
@@ -15,7 +15,9 @@ final class ChatRenderTests: XCTestCase {
             DemoMode.themeName = theme.name
             XCTAssertEqual(app.computerTheme?.name, theme.name)
             let scheme: ColorScheme = app.computerTheme?.palette.dark == false ? .light : .dark
-            try ScreenRender.render(NavigationStack { ChatView() }.modifier(ThemeRoot()).environment(app),
+            try ScreenRender.render(NavigationStack { ChatsView() }.modifier(ThemeRoot()).environment(app),
+                                    name: "demo-chats-\(theme.name)", scheme: scheme)
+            try ScreenRender.render(NavigationStack { ComputerChatView(deviceId: DemoMode.computers[0].id) }.modifier(ThemeRoot()).environment(app),
                                     name: "demo-chat-\(theme.name)", scheme: scheme)
         }
         XCTAssertFalse(app.core.isRunning)

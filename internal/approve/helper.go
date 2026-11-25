@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"regexp"
 	"time"
@@ -60,7 +61,8 @@ type Options struct {
 	// MaxWait limits the wait for the phone. Zero means MaxWait.
 	MaxWait time.Duration
 
-	// Out gets the 1 line that tells the user to look at the phone.
+	// Out gets the 1 line that tells the user to look at the phone, and the
+	// 1 line with the reason of a fallback to the password.
 	Out  io.Writer
 	Now  func() time.Time
 	Rand io.Reader
@@ -144,6 +146,16 @@ type waitResult struct {
 // Any other result is an error, and PAM then asks for the password.
 func Run(ctx context.Context, o Options) error {
 	o.defaults()
+	err := run(ctx, o)
+	// Reason gives a line for a fallback to the password, and nothing for
+	// the 4 silent rows of the failure table in docs/approve.md.
+	if line := Reason(err); line != "" {
+		fmt.Fprintln(o.Out, line)
+	}
+	return err
+}
+
+func run(ctx context.Context, o Options) error {
 	if o.Service == "sshd" {
 		return ErrService
 	}
@@ -154,8 +166,16 @@ func Run(ctx context.Context, o Options) error {
 		return err
 	}
 	key, err := ReadKey(o.KeyPath, o.KeyOwner)
-	if err != nil {
+	if errors.Is(err, ErrNoKey) {
 		return err
+	}
+	if errors.Is(err, fs.ErrPermission) {
+		// The lock screen helper runs as the user. A folder that the user cannot read
+		// hides the key file, so the helper treats it like a missing key and prints nothing.
+		return ErrNoKey
+	}
+	if err != nil {
+		return withReason(reasonKeyFile, err)
 	}
 	nonce, err := newNonce(o.Rand)
 	if err != nil {
@@ -169,7 +189,7 @@ func Run(ctx context.Context, o Options) error {
 
 	c, err := dial(o.Socket, o.PeerUID, dialTimeout)
 	if err != nil {
-		return err
+		return withReason(reasonFluxd, err)
 	}
 	defer c.Close()
 	stop := context.AfterFunc(ctx, func() { c.Close() })
@@ -181,10 +201,10 @@ func Run(ctx context.Context, o Options) error {
 		"tty": req.TTY, "rhost": req.RHost, "time": req.Time, "nonce": req.Nonce,
 	}
 	if err := c.call("approve.request", params, &started, start.Add(requestTimeout)); err != nil {
-		return err
+		return startReason(err)
 	}
 	if started.ID == "" {
-		return errors.New("fluxd did not start the request")
+		return withReason(reasonFluxd, errors.New("fluxd did not start the request"))
 	}
 	wait := time.Duration(started.Timeout) * time.Second
 	wait = min(max(wait, minWait), o.MaxWait)
@@ -208,6 +228,9 @@ func Run(ctx context.Context, o Options) error {
 				// The PAM caller stopped, or the time of the helper ended.
 				// fluxd also ends the request when the connection closes.
 				cancelRequest(o.Socket, o.PeerUID, started.ID)
+				if errors.Is(ctx.Err(), context.Canceled) {
+					return quiet(ErrTimeout)
+				}
 				return ErrTimeout
 			}
 			var ne net.Error
@@ -215,7 +238,7 @@ func Run(ctx context.Context, o Options) error {
 			if errors.As(err, &ne) && ne.Timeout() || errors.As(err, &re) && re.Code == "timeout" {
 				return ErrTimeout
 			}
-			return err
+			return withReason(reasonFluxd, err)
 		}
 		switch res.State {
 		case "approved":
@@ -229,13 +252,13 @@ func Run(ctx context.Context, o Options) error {
 		case "denied":
 			return ErrDenied
 		case "failed":
-			return fmt.Errorf("the phone could not approve: %s", res.Message)
+			return phoneFailed(res.Message)
 		case "pending":
 			if !o.Now().Before(deadline) {
 				return ErrTimeout
 			}
 		default:
-			return fmt.Errorf("fluxd sent the state %q", res.State)
+			return withReason(reasonFluxd, fmt.Errorf("fluxd sent the state %q", res.State))
 		}
 	}
 }

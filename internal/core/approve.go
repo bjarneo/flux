@@ -27,6 +27,16 @@ const (
 	enrollTimeout         = 120
 )
 
+// The longest signature and public key in an answer of a phone, in bytes.
+// An RSA 2048 key of Windows Hello signs with 256 bytes, and its
+// SubjectPublicKeyInfo has 294 bytes. An EC P-256 key needs at most 72 and 91
+// bytes. The helper checks the key and the signature, so these limits only
+// keep the answers small.
+const (
+	approveMaxSignature = 256
+	approveMaxPublicKey = 512
+)
+
 // waitSlice is the longest time 1 approve.wait call blocks. A longer wait
 // returns the state "pending", and the client calls again. The flux CLI
 // gives up on a call after 60 seconds.
@@ -344,9 +354,9 @@ func (d *Daemon) handleApprove(dev *Device, p *proto.Packet) {
 		r = approvalResult{State: "denied"}
 	case b.Kind == "response" && b.Error != "":
 		r = approvalResult{State: "failed", Message: cleanMessage(b.Error)}
-	case b.Kind == "response" && validBase64(b.Signature, 128):
+	case b.Kind == "response" && validBase64(b.Signature, approveMaxSignature):
 		r = approvalResult{State: "approved", Signature: b.Signature}
-	case b.Kind == "enrolled" && validBase64(b.Signature, 128) && validBase64(b.PublicKey, 256):
+	case b.Kind == "enrolled" && validBase64(b.Signature, approveMaxSignature) && validBase64(b.PublicKey, approveMaxPublicKey):
 		r = approvalResult{State: "enrolled", Signature: b.Signature, PublicKey: b.PublicKey}
 	default:
 		d.logf("approval: %s sent an answer that fluxd does not know", dev.Name)

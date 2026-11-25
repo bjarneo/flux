@@ -317,7 +317,9 @@
   "settings": {
    "autoClipboard": true,
    "clipboardLimit": 50,
-   "notifications": true
+   "notifications": true,
+   "herdr": true,
+   "herdrControl": false
   },
   "commands": [
    {

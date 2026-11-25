@@ -1,7 +1,7 @@
 package approve
 
 import (
-	"crypto/ecdsa"
+	"crypto"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
@@ -26,9 +26,9 @@ const maxKeyFile = 16 << 10
 // ErrNoKey means that no key is enrolled for the user.
 var ErrNoKey = errors.New("no key is enrolled")
 
-// Key is an enrolled phone key.
+// Key is an enrolled phone key: EC P-256, or RSA 2048 from Windows Hello.
 type Key struct {
-	Public     *ecdsa.PublicKey
+	Public     crypto.PublicKey
 	DER        []byte
 	DeviceID   string
 	DeviceName string

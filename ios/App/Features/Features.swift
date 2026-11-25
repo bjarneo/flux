@@ -55,6 +55,8 @@ struct FeatureTiles: View {
 /// A screen of a feature that the app opens by code, for example after
 /// Face ID.
 enum FeatureRoute: Hashable {
+    /// The chat of 1 computer, above Chats.
+    case chat(String)
     case touchpad(String)
     case desktop(String)
     case agents(String)
@@ -79,6 +81,7 @@ struct FeatureDestination: View {
 
     var body: some View {
         switch route {
+        case .chat(let id): ComputerChatView(deviceId: id)
         case .touchpad(let id): TouchpadScreen(deviceId: id)
         case .desktop(let id): DesktopScreen(deviceId: id)
         case .agents(let id): AgentsScreen(deviceId: id)

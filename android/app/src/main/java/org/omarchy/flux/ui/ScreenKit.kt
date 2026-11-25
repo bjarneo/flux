@@ -10,6 +10,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -90,6 +91,36 @@ internal fun ScreenHeader(title: String, context: String, onBack: (() -> Unit)? 
     }
 }
 
+/** The narrowest column of [AdaptiveRows]. */
+private val RowColumnMin = 340.dp
+
+/** The number of columns of [AdaptiveRows] for a [width], in a wide window. A narrow window has 1 column. */
+internal fun adaptiveColumns(width: Dp, wide: Boolean, count: Int, gap: Dp): Int =
+    if (!wide || count <= 1) 1 else ((width + gap) / (RowColumnMin + gap)).toInt().coerceIn(1, count)
+
+/**
+ * The [items] in columns that fill the width of a wide window. Each column
+ * is at least 340 dp wide. A window that is not wide, such as a phone or a
+ * tablet in portrait, has 1 column. The items go from left to right, then
+ * down.
+ */
+@Composable
+internal fun <T> AdaptiveRows(items: List<T>, modifier: Modifier = Modifier, gap: Dp = TileGap, content: @Composable (T) -> Unit) {
+    val wide = rememberWideWindow()
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        val columns = adaptiveColumns(maxWidth, wide, items.size, gap)
+        Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+            for (row in items.chunked(columns)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.Top) {
+                    for (item in row) Box(Modifier.weight(1f)) { content(item) }
+                    // An empty cell keeps the width of the last item.
+                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
+    }
+}
+
 /** "2 of 3 online" for the paired computers, or empty when none is paired. */
 internal fun onlineText(devices: List<DeviceUi>): String {
     val paired = devices.filter { it.paired }
@@ -151,43 +182,6 @@ internal fun Pill(
 @Composable
 internal fun RingMark(size: Dp = 10.dp) {
     Box(Modifier.size(size).border(2.dp, Tn.lineHi, CircleShape))
-}
-
-/**
- * The paired computers as pills. The pill of the computer in [scope] has
- * the accent, and a tap on it shows all computers again. A tap on another
- * pill makes that computer the scope. A computer that is offline shows
- * dimmed and does not take the scope.
- */
-@Composable
-internal fun ComputerStrip(devices: List<DeviceUi>, scope: String?, onScope: (String?) -> Unit) {
-    val paired = devices.filter { it.paired }
-    if (paired.isEmpty()) return
-    PillStrip {
-        for (d in paired) {
-            val on = d.id == scope
-            Pill(
-                d.name, on,
-                onClick = {
-                    when {
-                        on -> onScope(null)
-                        d.online -> onScope(d.id)
-                        else -> FluxCore.toast("${d.name} is not reachable")
-                    }
-                },
-                meta = when {
-                    !d.online -> "offline"
-                    d.battery != null -> "${d.battery}%"
-                    else -> ""
-                },
-                dim = !d.online,
-                clickLabel = if (on) "Show all computers" else "Show only ${d.name}",
-                state = listOfNotNull(if (on) "In scope" else null, linkText(d)).joinToString(", "),
-            ) {
-                if (d.online) Dot(Tn.green, 8.dp) else RingMark()
-            }
-        }
-    }
 }
 
 // ───────────────────────── Lines ─────────────────────────

@@ -3,41 +3,84 @@ import FluxKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Chat: 1 thread of what happens between this Mac and the computers in
-/// scope, with the newest entry at the bottom. The computers write on the
-/// left: agents, approvals, pair requests, received files, the last clip,
-/// and the answers to approvals. What this Mac sent shows on the right. An
-/// agent that waits shows its choices in the thread, and an approval shows
-/// Deny and Approve. The dock under the thread shows the clipboard of this
-/// Mac with Send, the tools, and a field for text or a link. Files, text,
-/// and links that you drop on the page go to the computer too. Before the
-/// first pairing, the page shows the pairing guide.
-struct ChatView: View {
+/// The detail column of Chats: the chat that the sidebar selects. A
+/// computer opens its own chat, and an agent opens its agent chat. Before
+/// the first pairing, the column shows the pairing guide. Without a
+/// selected chat, it tells the user to select one.
+struct ChatDetail: View {
     @Environment(AppModel.self) private var model
     @Environment(\.tn) private var tn
-    @State private var ask: TargetAsk?
+
+    var body: some View {
+        Group {
+            switch model.chat {
+            case .computer(let id):
+                if let device = model.pairedDevice(id) {
+                    ComputerChat(device: device)
+                        .id(id)
+                } else {
+                    ContentUnavailableView("The computer is gone", systemImage: "desktopcomputer",
+                                           description: Text("The computer is no longer paired."))
+                        .navigationTitle("Chats")
+                }
+            case .agent(let id, let pane):
+                AgentChat(deviceId: id, pane: pane)
+                    .id("\(id)|\(pane)")
+            case nil:
+                if model.paired.isEmpty {
+                    ScrollView {
+                        ChatPairGuide()
+                            .pageColumn(top: 12, bottom: 16)
+                    }
+                    .navigationTitle("Chats")
+                } else {
+                    ContentUnavailableView("Select a chat", systemImage: "text.bubble",
+                                           description: Text("Each agent and each paired computer has a chat in the sidebar."))
+                        .navigationTitle("Chats")
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(tn.bg)
+        .navigationDestination(for: MacRoute.self) { MacRouteView(route: $0) }
+    }
+}
+
+/// The chat of 1 computer: what happens between this Mac and the computer,
+/// with the newest entry at the bottom. The computer writes on the left:
+/// approvals, received files, the last clip, and the answers to approvals.
+/// What this Mac sent shows on the right. An approval shows Deny and
+/// Approve. The dock under the thread shows the clipboard of this Mac with
+/// Send, and the composer, with the tray under it. Files, text, and links
+/// that you drop on the page go to the computer. The toolbar shows the
+/// picture of the computer, its name, its link and battery, and a menu.
+struct ComputerChat: View {
+    let device: DeviceSnapshot
+    @Environment(AppModel.self) private var model
+    @Environment(\.tn) private var tn
     @State private var dropping = false
 
     var body: some View {
+        let id = device.id
         let share = model.core.plugin(SharePlugin.self)
-        let herdr = model.core.plugin(HerdrPlugin.self)
-        let scope = model.scope
-        let all = model.inboxItems()
-        let scoped = Inbox.inScope(all, scope: scope)
-        let status = ChatStatus.make(model, all: all, scoped: scoped)
+        let battery = model.core.plugin(BatteryPlugin.self)?.model.computers[id]
+        // The thread shows the approvals of this computer, and no agents.
+        let approvals = model.inboxItems().filter { item in
+            if case .approval = item.content { return item.deviceIds.contains(id) }
+            return false
+        }
         let transfers = share?.model.transfers ?? []
-        let running = transfers.filter { $0.state == .running && $0.size > 0 && (scope == nil || $0.deviceId == scope) }
+        let running = transfers.filter { $0.state == .running && $0.size > 0 && $0.deviceId == id }
         let entries = Chat.entries(
             sent: share?.model.sent ?? [],
             transfers: transfers,
             clip: model.core.plugin(ClipboardPlugin.self)?.model.last,
             answers: model.core.plugin(ApprovePlugin.self)?.model.history ?? [],
-            items: all,
-            since: { herdr?.model.agentSince(device: $0, pane: $1) },
-            seen: model.chatSeen(all),
-            scope: scope
+            items: approvals,
+            since: { _, _ in nil },
+            seen: model.chatSeen(approvals),
+            scope: id
         )
-        let online = model.connectedPaired.map(\.id)
         VStack(spacing: 0) {
             ProgressLine {
                 if !running.isEmpty {
@@ -46,15 +89,8 @@ struct ChatView: View {
                     LineFill(fraction: size > 0 ? Double(done) / Double(size) : 0, color: tn.accent)
                 }
             }
-            if model.paired.isEmpty {
-                ScrollView {
-                    ChatPairGuide()
-                        .pageColumn(top: 12, bottom: 16)
-                }
-            } else {
-                ChatThread(entries: entries, status: status) { share?.model.clearFinished() }
-                ChatDock(ask: $ask)
-            }
+            ChatThread(device: device, entries: entries, status: ChatStatus.computer(model, device)) { share?.model.clearFinished() }
+            ChatDock(device: device)
         }
         .overlay {
             if dropping {
@@ -65,17 +101,68 @@ struct ChatView: View {
             }
         }
         .onDrop(of: [.fileURL, .url, .plainText], isTargeted: $dropping) { providers in
-            guard let share, let id = ShareActions.target(model) else { return false }
+            guard let share else { return false }
+            guard device.online else {
+                model.show("\(device.name) is not reachable")
+                return false
+            }
             ShareActions.drop(providers, to: id, share: share)
             return true
         }
-        .targetPicker($ask)
-        .navigationSubtitle(model.paired.isEmpty ? "" : status.context)
-        .destinationRoot(.chat)
-        // The chat asks each computer that comes online for its agents.
-        .task(id: online) {
-            for id in online { herdr?.request(id) }
+        .navigationTitle(device.name)
+        .navigationSubtitle(computerContext(device, battery: battery))
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                ComputerAvatar(device: device, size: 28)
+            }
+            ToolbarItem(placement: .primaryAction) {
+                ComputerMenu(device: device)
+            }
         }
+    }
+}
+
+/// The menu of the chat of a computer: Control with the computer in scope,
+/// the agents window, a new agent, and the page of the computer.
+private struct ComputerMenu: View {
+    let device: DeviceSnapshot
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let herdr = model.core.plugin(HerdrPlugin.self)?.model.states[device.id]
+        let canStart = device.online && herdr?.running == true && herdr?.control == true
+        Menu {
+            Button {
+                model.setScope(device.id)
+                model.go(.control)
+            } label: {
+                Label("Control", systemImage: MacDestination.control.systemImage)
+            }
+            if device.accepts(PacketType.fluxHerdr) {
+                Button {
+                    AgentsWindows.shared.show(device.id, app: model)
+                } label: {
+                    Label("Agents Window", systemImage: "macwindow")
+                }
+                .disabled(!device.online)
+                Button {
+                    model.startAgent = device.id
+                } label: {
+                    Label("Start an Agent…", systemImage: "plus")
+                }
+                .disabled(!canStart)
+            }
+            Divider()
+            Button {
+                model.destination = .computers
+                model.computersPath = [.computer(device.id)]
+            } label: {
+                Label("Computer Page", systemImage: device.symbol)
+            }
+        } label: {
+            Label("More", systemImage: "ellipsis.circle")
+        }
+        .help("Control, the agents, and the page of \(device.name)")
     }
 }
 
@@ -85,6 +172,7 @@ struct ChatView: View {
 /// the new entry. The column is at most the content width, so that the
 /// cards stay easy to read in a wide window.
 private struct ChatThread: View {
+    let device: DeviceSnapshot
     let entries: [ChatEntry]
     let status: ChatStatus
     let clearFinished: () -> Void
@@ -100,7 +188,7 @@ private struct ChatThread: View {
                     VStack(spacing: 10) {
                         Spacer(minLength: 0)
                         if entries.isEmpty {
-                            Text("Agents that need you, approvals, and files from your computers show here. So do the links, text, and files that you send. To send files from Finder, drop them on this page or on the Dock icon, or select Services > Send to Flux.")
+                            Text("Approvals and the files and clips from \(device.name) show here. So do the links, text, and files that you send. To send files from Finder, drop them on this page.")
                                 .font(.system(size: 12))
                                 .foregroundStyle(tn.sub)
                                 .multilineTextAlignment(.center)
@@ -115,7 +203,7 @@ private struct ChatThread: View {
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 2)
                             }
-                            ChatEntryView(entry: e, clearFinished: clearFinished)
+                            ChatEntryView(entry: e, computer: device.name, clearFinished: clearFinished)
                         }
                         ChatNotices(status: status)
                         Color.clear.frame(height: 1).id("end")
@@ -149,26 +237,26 @@ private struct ChatEndKey: PreferenceKey {
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
-/// 1 entry of the chat.
+/// 1 entry of the chat of `computer`. The thread holds no agents and no
+/// pair requests, so an event is an approval.
 private struct ChatEntryView: View {
     let entry: ChatEntry
+    let computer: String
     let clearFinished: () -> Void
-    @Environment(AppModel.self) private var model
 
     var body: some View {
-        let many = model.scope == nil && model.paired.count > 1
         switch entry {
         case .sent(let s):
             if s.kind == .clipImage {
-                SentFileCard(icon: "photo", name: "Image", meta: sentMeta(s, many: many), state: .done)
+                SentFileCard(icon: "photo", name: "Image", meta: sentMeta(s), state: .done)
             } else {
-                SentBubble(text: s.text.isEmpty ? "A private clip" : s.text, meta: sentMeta(s, many: many))
+                SentBubble(text: s.text.isEmpty ? "A private clip" : s.text, meta: sentMeta(s))
             }
         case .file(let f):
             if f.incoming {
-                ReceivedFileCard(transfer: f, computer: name(f.deviceId), clearFinished: clearFinished)
+                ReceivedFileCard(transfer: f, computer: computer, clearFinished: clearFinished)
             } else {
-                SentFileCard(icon: fileSymbol(f.name), name: f.name, meta: fileMeta(f, many: many), state: f.state,
+                SentFileCard(icon: fileSymbol(f.name), name: f.name, meta: fileMeta(f), state: f.state,
                              fraction: f.fraction, file: f.file, clearFinished: clearFinished)
             }
         case .clip(let c):
@@ -176,34 +264,30 @@ private struct ChatEntryView: View {
         case .answer(let r):
             AnswerCard(record: r)
         case .event(let item, let at):
-            EventCard(item: item, at: at)
+            if case .approval(let request) = item.content {
+                ApprovalCard(item: item, request: request, at: at)
+            }
         }
     }
 
-    private func name(_ deviceId: String) -> String {
-        model.state.devices.first { $0.id == deviceId }?.name ?? "the computer"
-    }
-
     /// The line under a link, a text, or a clip, such as "Link · opened in the browser · 13:20".
-    /// With `many` computers in scope, it names the computer.
-    private func sentMeta(_ s: SentItem, many: Bool) -> String {
+    private func sentMeta(_ s: SentItem) -> String {
         let time = clockTime(s.at)
         switch s.kind {
-        case .link: return many ? "Link · opened on \(name(s.deviceId)) · \(time)" : "Link · opened in the browser · \(time)"
-        case .text: return many ? "Text · on the clipboard of \(name(s.deviceId)) · \(time)" : "Text · on the clipboard · \(time)"
-        case .scan: return many ? "Scan · saved on \(name(s.deviceId)) · \(time)" : "Scan · saved as a text file · \(time)"
-        case .clip, .clipImage: return many ? "Clipboard · to \(name(s.deviceId)) · \(time)" : "Clipboard · \(time)"
+        case .link: return "Link · opened in the browser · \(time)"
+        case .text: return "Text · on the clipboard · \(time)"
+        case .scan: return "Scan · saved as a text file · \(time)"
+        case .clip, .clipImage: return "Clipboard · \(time)"
         }
     }
 
     /// The line under a file that went out, such as "Sending · 22% of 18 KB" or "Sent · 13:41".
-    private func fileMeta(_ f: FileTransfer, many: Bool) -> String {
-        let to = name(f.deviceId)
+    private func fileMeta(_ f: FileTransfer) -> String {
         let pct = f.fraction.map { "\(Int($0 * 100))% of \(byteText(f.size))" } ?? "\(byteText(f.bytes)) so far"
         let time = clockTime(f.ended ?? f.started)
         switch f.state {
-        case .running: return (many ? "Sending to \(to)" : "Sending") + " · \(pct)"
-        case .done: return (many ? "Sent to \(to)" : "Sent") + " · \(time)"
+        case .running: return "Sending · \(pct)"
+        case .done: return "Sent · \(time)"
         case .failed: return "Not sent · \(time)"
         }
     }

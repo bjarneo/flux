@@ -1,9 +1,9 @@
 import FluxKit
 import SwiftUI
 
-/// The chat before it can show entries: "Flux is off" while Flux is off,
-/// and the pairing guide before the first pairing. A large tile with the
-/// active border holds it.
+/// Chats before it can show chats: "Flux is off" while Flux is off, and
+/// the pairing guide before the first pairing. A large tile with the active
+/// border holds it.
 struct ChatEmpty: View {
     @Environment(AppModel.self) private var model
     @Environment(\.tn) private var tn
@@ -36,7 +36,7 @@ struct ChatEmpty: View {
     }
 }
 
-/// The large tile of the chat before it can show entries, with the active border.
+/// The large tile of Chats before it can show chats, with the active border.
 private struct EmptyTile<Content: View>: View {
     @ViewBuilder let content: Content
     @Environment(\.tn) private var tn
@@ -76,7 +76,7 @@ private struct EmptyLine: View {
     }
 }
 
-/// The chat before the first pairing: what Flux does, how to set up Flux
+/// Chats before the first pairing: what Flux does, how to set up Flux
 /// on the computer, and the computers on the network with their pair
 /// action. When this iPhone already found a computer, the pair step comes
 /// first.

@@ -186,6 +186,15 @@ class HerdrTest {
     }
 
     @Test
+    fun anOutputKeepsTheTimeOfItsParse() {
+        val o = parseHerdrOutput(body("""{"kind":"output","pane":"w5:p1","text":"a"}"""), now = 42_000L)!!
+        assertEquals(42_000L, o.at)
+        assertEquals("a read that waits has no time", 0L, HerdrOutput("w5:p1").at)
+        val e = parseHerdrOutput(body("""{"kind":"output","pane":"w5:p1","error":"gone"}"""), now = 7L)!!
+        assertEquals(7L, e.at)
+    }
+
+    @Test
     fun tidiesRules() {
         val rule = "─".repeat(120)
         val lines = termLines("$rule\n❯ 1. Yes  \n  \n")
@@ -439,5 +448,29 @@ class HerdrTest {
             setOf("kind", "what", "agent", "cwd", "workspace", "request"),
             plain.keys,
         )
+    }
+
+    @Test
+    fun anAnswerToADialogReadDoesNotReplaceTheScreen() {
+        val io = object : DialogIo {
+            override fun screenOpen(deviceId: String, pane: String) = false
+            override fun screenReading(deviceId: String, pane: String) = false
+            override fun readScreen(deviceId: String, pane: String) = true
+            override fun send(deviceId: String, pane: String, register: (Long) -> Unit): Boolean {
+                register(41)
+                return true
+            }
+            override fun now() = 0L
+            override fun later(ms: Long, task: () -> Unit) = Unit
+            override fun post(task: () -> Unit) = task()
+        }
+        val book = DialogBook(io)
+        var got: AgentDialog? = null
+        book.peek("d", "w1:p1") { got = it }
+        val peek = HerdrOutput("w1:p1", loading = false, request = 41, lines = termLines("hi\n"))
+        assertTrue("the book takes the answer, so onOutput stops before the screen", book.onOutput("d", peek))
+        assertNotNull(got)
+        val screen = HerdrOutput("w1:p1", loading = false, request = 40)
+        assertFalse("the answer of a screen read is not taken", book.onOutput("d", screen))
     }
 }

@@ -30,6 +30,7 @@ object Ic {
     val chevron = R.drawable.ic_chevron_right
     val more = R.drawable.ic_more_vert
     val close = R.drawable.ic_close
+    val delete = R.drawable.ic_delete
     val check = R.drawable.ic_check
     val checkCircle = R.drawable.ic_check_circle
     val refresh = R.drawable.ic_refresh
@@ -50,6 +51,7 @@ object Ic {
     val download = R.drawable.ic_download
     val sync = R.drawable.ic_sync
     val power = R.drawable.ic_power_settings_new
+    val shield = R.drawable.ic_shield
     val lightMode = R.drawable.ic_light_mode
     val darkMode = R.drawable.ic_dark_mode
 
@@ -144,6 +146,9 @@ object Ic {
     val chat = R.drawable.ic_chat
     val window = R.drawable.ic_web_asset
     val down = R.drawable.ic_arrow_downward
+    val volumeOff = R.drawable.ic_volume_off
+    val speaker = R.drawable.ic_speaker
+    val speakerPhone = R.drawable.ic_speaker_phone
 }
 
 /** An icon from [Ic]. It takes the content color unless [tint] is set. */

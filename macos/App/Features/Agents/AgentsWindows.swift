@@ -83,22 +83,25 @@ final class AgentsWindows: NSObject, NSWindowDelegate {
     }
     private var open: [String: Entry] = [:]
 
+    /// True while the agents window of the computer `deviceId` is open.
+    func isOpen(_ deviceId: String) -> Bool { open[deviceId] != nil }
+
     /// Shows the agents window of a computer, and opens it when it is not
-    /// open. `pane` selects that agent. `startAgent` shows the sheet that
-    /// starts an agent.
-    func show(_ deviceId: String, pane: String? = nil, startAgent: Bool = false, app: AppModel) {
+    /// open. `pane` selects that agent. herdr keeps 1 output of each
+    /// computer, so an agent chat of the same computer in the main window
+    /// gives its place to the chat of the computer.
+    func show(_ deviceId: String, pane: String? = nil, app: AppModel) {
+        if case .agent(deviceId, _) = app.chat { app.chat = .computer(deviceId) }
         // The list shows the session of the agent.
         if let pane { app.core.plugin(HerdrPlugin.self)?.model.reveal(deviceId, pane: pane) }
         if let entry = open[deviceId] {
             if let pane { entry.model.selection = pane }
-            if startAgent { entry.model.newAgent = true }
             entry.window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
         guard let plugin = app.core.plugin(HerdrPlugin.self) else { return }
         let model = AgentsWindowModel(deviceId: deviceId, app: app, plugin: plugin, selection: pane)
-        model.newAgent = startAgent
         let hosting = NSHostingController(rootView: AgentsView(model: model).themeWindow(app))
         hosting.sizingOptions = [.minSize]
         let window = NSWindow(contentViewController: hosting)
@@ -143,11 +146,17 @@ final class AgentsWindows: NSObject, NSWindowDelegate {
 
 @MainActor
 enum AgentsFeature {
-    /// A click on an agent notification opens the output of the agent.
+    /// A click on an agent notification opens the output of the agent. A
+    /// choice or a Reply in the notification asks for Touch ID or the
+    /// password first, as the reply controls of the thread do.
     static func didLaunch(model: AppModel) {
-        model.core.plugin(HerdrPlugin.self)?.model.open = { [weak model] id, pane in
+        let herdr = model.core.plugin(HerdrPlugin.self)?.model
+        herdr?.open = { [weak model] id, pane in
             guard let model else { return }
             AgentsWindows.shared.show(id, pane: pane, app: model)
+        }
+        herdr?.unlock = { computer, action, onError, onCancel in
+            ReplyLock.run(reason: "answer agents on \(computer)", action: action, onError: onError, onCancel: onCancel)
         }
     }
 }

@@ -4,9 +4,9 @@ import SwiftUI
 
 /// Control: the agents and the terminals of the computers in scope, the
 /// tools that act on the computer, and the streams of this Mac. The dock
-/// plays the media of the computer. A click on an agent opens it in the
-/// agents window. The touchpad and the remote desktop ask for Touch ID
-/// first.
+/// plays the media of the computer. A click on an agent opens its chat.
+/// Agents Window opens the agents of a computer in their own window. The
+/// touchpad and the remote desktop ask for Touch ID first.
 struct ControlView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.tn) private var tn
@@ -37,9 +37,7 @@ struct ControlView: View {
                         AgentList(herdr: herdr, devices: herdrDevices, canOpen: ToolTarget.ready(agents)) {
                             ToolTarget.run(agents, title: "Open the agents of", ask: $ask) { d in AgentsWindows.shared.show(d.id, app: model) }
                         } startAgent: {
-                            ToolTarget.run(agents, title: "Start an agent on", ask: $ask) { d in
-                                AgentsWindows.shared.show(d.id, startAgent: true, app: model)
-                            }
+                            ToolTarget.run(agents, title: "Start an agent on", ask: $ask) { d in model.startAgent = d.id }
                         }
                     }
                     ListHeading("Tools")
@@ -183,7 +181,7 @@ private struct AgentList: View {
     let canOpen: Bool
     /// Opens the agents window, which also reads the agents again.
     let openWindow: () -> Void
-    /// Opens the agents window with the sheet that starts an agent.
+    /// Opens the sheet that starts an agent.
     let startAgent: () -> Void
     @Environment(AppModel.self) private var model
     @Environment(\.tn) private var tn
@@ -230,7 +228,7 @@ private struct AgentList: View {
             VStack(spacing: TiledMetrics.gap) {
                 ForEach(rows) { r in
                     AgentCard(agent: r.agent, since: herdr.model.agentSince(device: r.device.id, pane: r.agent.pane), now: context.date) {
-                        AgentsWindows.shared.show(r.device.id, pane: r.agent.pane, app: model)
+                        model.open(.agent(r.device.id, pane: r.agent.pane))
                     }
                 }
             }

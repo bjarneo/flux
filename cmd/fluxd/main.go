@@ -17,6 +17,7 @@ import (
 	"flux/internal/desktop"
 	"flux/internal/ipc"
 	"flux/internal/lan"
+	"flux/internal/sshagent"
 )
 
 var version = "dev"
@@ -76,6 +77,14 @@ func main() {
 	if err != nil {
 		logger.Fatalf("fluxd: %v", err)
 	}
+	// The ssh-agent of the phone keys. fluxd runs without it when the
+	// socket fails, for example under a second headless fluxd.
+	agentPath := config.SSHAgentPath()
+	agentLn, agentErr := sshagent.Listen(agentPath)
+	if agentErr != nil {
+		logger.Printf("ssh agent: %v", agentErr)
+	}
+	d.SetSSHAgent(agentPath, agentErr)
 	if !*headless {
 		go refreshPlugin(logger)
 	}
@@ -108,6 +117,9 @@ func main() {
 		// started it. Until then, the clients wait in the socket backlog.
 		select {
 		case <-d.Ready():
+			if agentLn != nil {
+				go func() { _ = sshagent.Serve(ctx, agentLn, d, logger.Printf) }()
+			}
 			errs <- ipc.Serve(ctx, ln, d)
 		case <-ctx.Done():
 			ln.Close()
@@ -122,8 +134,12 @@ func main() {
 	case <-ctx.Done():
 	}
 	// Stop both parts and wait, so the socket file and the mDNS record
-	// are gone before the process exits.
+	// are gone before the process exits. A close of the agent socket
+	// also removes its file.
 	stop()
+	if agentLn != nil {
+		agentLn.Close()
+	}
 	deadline := time.After(2 * time.Second)
 	for ; running > 0; running-- {
 		select {

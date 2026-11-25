@@ -277,4 +277,11 @@ extension DeviceSnapshot {
         case .none: return online ? "Not paired" : "Not reachable"
         }
     }
+
+    /// The link and the battery of a computer in words, for VoiceOver and the computer pills.
+    func linkText(battery: BatteryState?) -> String {
+        guard online else { return "Not reachable" }
+        guard let battery else { return "Connected" }
+        return "Connected, battery \(battery.charge)%" + (battery.charging ? ", charging" : "")
+    }
 }

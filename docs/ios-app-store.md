@@ -136,7 +136,7 @@ The `ios` job in `build.yml` checks that the built app has each of them.
 | `NSCameraUsageDescription` | Camera modes and the webcam |
 | `NSMicrophoneUsageDescription` | The microphone stream and dictation |
 | `NSSpeechRecognitionUsageDescription` | Dictation |
-| `NSPhotoLibraryUsageDescription` | New screenshots and photos, the photo picker |
+| `NSPhotoLibraryUsageDescription` | New screenshots and photos, the recent photos in the chat of a computer, the photo picker |
 | `NSFaceIDUsageDescription` | The Face ID lock and sudo approval |
 
 ### Risks for App Review

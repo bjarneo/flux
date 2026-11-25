@@ -3,8 +3,9 @@ import SwiftUI
 
 /// The scope in the window toolbar: the name of the computer in scope or
 /// "All computers", with a link dot and a battery dot for each computer, at
-/// most 4. A click opens the choices. The scope filters the chat and
-/// Control, and it picks the theme of the Computer setting.
+/// most 4. A click opens the choices. The scope filters Control, and it
+/// picks the theme of the Computer setting. Chats has no scope, because
+/// each chat belongs to 1 computer.
 struct ScopeMenu: View {
     @Environment(AppModel.self) private var model
     @Environment(\.tn) private var tn

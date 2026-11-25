@@ -48,11 +48,12 @@ command = "omarchy-system-lock"
 | `pause_media_on_call` | Pause desktop media during calls. Defaults to `true`. |
 | `sync_dnd` | Sync Do Not Disturb. Defaults to `true`. |
 | `herdr` | Show the [herdr agents](herdr.md) of this computer on the phone. Defaults to `true`. |
-| `herdr_control` | Let each paired device send keys and prompts to the herdr agents, start agents, and close them. It also lets a device click, scroll, and resize in the live terminal of an agent. An agent runs commands, so a paired device can then run any command as your user through an agent, also with `herdr_terminals = false`. Defaults to `false`. See [Answer an agent](herdr.md#answer-an-agent). |
+| `herdr_control` | Let each paired device send keys and prompts to the herdr agents, start agents, and close them. It also lets a device click, scroll, and resize in the live terminal of an agent. An agent runs commands, so a paired device can then run any command as your user through an agent, also with `herdr_terminals = false`. Defaults to `false`. The **Agent control** key on the **Access** card of the Flux window sets it, and asks first when it turns on. See [Answer an agent](herdr.md#answer-an-agent). |
 | `herdr_terminals` | Let each paired device open herdr terminals, read them, and type commands in them. The terminals include the herdr panes that you opened, for example a `sudo -i` shell. Needs `herdr_control`. Defaults to `false`. See [Use terminals](herdr.md#use-terminals). |
 | `remote_input` | Let the phone or the Mac move the pointer and type on this computer. Defaults to `false`. `flux-cli input on` and `flux-cli input off` change it. Turning it off drops the input that waits and releases a held button. See [Touchpad and keyboard](remote-input.md). |
 | `remote_desktop` | Let the phone or the Mac show the screen of this computer. Defaults to `false`. The touches and the mouse on the screen also need `remote_input`. `flux-cli desktop on` and `flux-cli desktop off` change it. Turning it off stops each stream, also a stream that still starts. See [Remote desktop](remote-desktop.md). |
 | `check_updates` | Ask GitHub once a day for the latest release. Defaults to `true`. See [release check](#release-check). |
+| `remote_desktop_encoder` | Select the video encoder of the remote desktop: `auto`, `gpu`, or `cpu`. An omitted value is `auto`. Use `cpu` when the GPU encoder hangs the computer. See [choose the encoder](remote-desktop.md#choose-the-encoder). |
 | `gui` | Use `app`, `plugin`, or an empty value for automatic host selection. |
 | `approve_timeout` | Wait 5 to 120 seconds for approval. Zero or an omitted value uses 20 seconds. |
 | `commands` | Desktop commands available to the phone. A new configuration has no commands. |
@@ -93,6 +94,7 @@ The [workflow controls](workflows.md) describe `[devices]`, `[[notification_rule
 | `~/.cache/flux/update/` | The package that `flux-cli update` downloads, until pacman installs it |
 | `~/.cache/flux/icons/` | The app icons of the phone notifications |
 | `$XDG_RUNTIME_DIR/flux/fluxd.sock` | Local IPC socket. Without `XDG_RUNTIME_DIR`, `/run/user/<uid>/flux/fluxd.sock` |
+| `$XDG_RUNTIME_DIR/flux/ssh-agent.sock` | The ssh-agent socket of the [phone SSH keys](ssh.md). `FLUX_SOCKET` does not move it. |
 | `/etc/flux/approve/<user>.pub` | Root-owned phone approval public key |
 | `/etc/flux/approve/pam-backup/` | Original PAM files from approval setup |
 
@@ -160,14 +162,14 @@ flux-cli on
 
 `flux-cli off` stops the daemon and creates the off marker.
 `flux-cli on` removes the marker and starts the daemon.
-On Android, use **Turn off Flux** in **Computers** or **Turn off** in its notification.
+On Android, use **Turn off Flux** in **Settings** or **Turn off** in its notification.
 The phone stays off after a restart until you select **Turn on Flux** in the app.
 
 ## Choose the Android theme
 
 To change the colors of the Android app:
 
-1. Open **Computers**.
+1. Open **Settings**, then **Look and input**.
 2. Under **Theme**, select **Computer**, **System**, **Light**, or **Dark**.
 
 **Computer** is the default and follows the active Omarchy theme of the computer, light or dark.

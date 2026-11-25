@@ -479,3 +479,98 @@ func TestSmsOutboxLimits(t *testing.T) {
 		t.Fatalf("%d entries, first %q", len(dev.outbox), dev.outbox[0].Body)
 	}
 }
+
+// TestSmsOutboxOtherThread checks that a report of the phone in another
+// thread with the same number removes the entry.
+func TestSmsOutboxOtherThread(t *testing.T) {
+	d, dev, _ := smsDaemon(t)
+	now := time.Now()
+	d.handleSms(dev, smsPacket(map[string]any{"messages": []any{
+		wireMessage(1, 12, now.Add(-time.Hour).UnixMilli(), 1, 1, addr("+4791234567", "Kari")),
+	}}))
+	if err := d.SendSms(dev, []string{"+4791234567"}, "On my way"); err != nil {
+		t.Fatal(err)
+	}
+	if got := outboxOf(t, d); len(got) != 1 || got[0].Thread != 12 {
+		t.Fatalf("outbox %+v", got)
+	}
+	sent := wireMessage(2, 13, now.UnixMilli(), 2, 1, addr("91234567", ""))
+	sent["body"] = "On my way"
+	d.handleSms(dev, smsPacket(map[string]any{"messages": []any{sent}}))
+	if got := outboxOf(t, d); len(got) != 0 {
+		t.Fatalf("the reported message stays in the outbox: %+v", got)
+	}
+}
+
+func TestSameSmsText(t *testing.T) {
+	cases := []struct {
+		phone, sent string
+		want        bool
+	}{
+		{"On my way", "On my way", true},
+		{"Line 1\r\nLine 2", "Line 1\nLine 2", true},
+		{" On my way\n", "On my way", true},
+		// Some phones replace special characters in the parts of a long message.
+		{"Ca va? A demain, cafe a 8h", "Ça va? À demain, café à 8h", true},
+		{"On my way", "On my day", false},
+		{"On my way", "On my way!", false},
+		{"Cafe", "Café!", false},
+		{"Cafe", "Cafe", true},
+		{"x", "é", true},
+		{"é", "e", false},
+	}
+	for _, c := range cases {
+		if got := sameSmsText(c.phone, c.sent); got != c.want {
+			t.Errorf("sameSmsText(%q, %q) = %v, want %v", c.phone, c.sent, got, c.want)
+		}
+	}
+}
+
+// TestSmsChanges checks that each reported message counts as a change of
+// its thread, also when it is older than the latest message. A thread
+// answer does not count, and a new list of conversations starts again.
+func TestSmsChanges(t *testing.T) {
+	d, dev, _ := smsDaemon(t)
+	now := time.Now()
+	changes := func() int64 {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		return dev.conversations[12].Changes
+	}
+	d.handleSms(dev, smsPacket(map[string]any{"conversations": true, "messages": []any{
+		wireMessage(5, 12, now.UnixMilli(), 1, 1, addr("+4791234567", "Kari")),
+	}}))
+	if n := changes(); n != 0 {
+		t.Fatalf("changes after the list: %d", n)
+	}
+	// An MMS that the phone got late has the time that the sender sent it.
+	late := wireMessage(6, 12, now.Add(-time.Hour).UnixMilli(), 1, 0, addr("+4791234567", "Kari"))
+	d.handleSms(dev, smsPacket(map[string]any{"messages": []any{late}}))
+	if n := changes(); n != 1 {
+		t.Fatalf("changes after an older message: %d", n)
+	}
+	d.mu.Lock()
+	id := dev.conversations[12].id
+	d.mu.Unlock()
+	if id != 5 {
+		t.Fatalf("the older message replaced the latest message %d", id)
+	}
+	d.handleSms(dev, smsPacket(map[string]any{"messages": []any{
+		wireMessage(7, 12, now.Add(time.Second).UnixMilli(), 1, 0, addr("+4791234567", "Kari")),
+	}}))
+	if n := changes(); n != 2 {
+		t.Fatalf("changes after a new message: %d", n)
+	}
+	d.handleSms(dev, smsPacket(map[string]any{"threadID": 12, "messages": []any{
+		wireMessage(8, 12, now.Add(2*time.Second).UnixMilli(), 1, 0, addr("+4791234567", "Kari")),
+	}}))
+	if n := changes(); n != 2 {
+		t.Fatalf("changes after a thread answer: %d", n)
+	}
+	d.handleSms(dev, smsPacket(map[string]any{"conversations": true, "messages": []any{
+		wireMessage(8, 12, now.Add(2*time.Second).UnixMilli(), 1, 0, addr("+4791234567", "Kari")),
+	}}))
+	if n := changes(); n != 0 {
+		t.Fatalf("changes after a new list: %d", n)
+	}
+}

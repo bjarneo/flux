@@ -40,6 +40,67 @@ class BridgesTest {
     }
 
     @Test
+    fun numberFromLateBroadcast() {
+        val t = CallTracker()
+        assertEquals(listOf(CallEvent("ringing")), t.onState(LineState.Ringing))
+        // The broadcast without READ_CALL_LOG has no number.
+        assertEquals(emptyList<CallEvent>(), t.onNumber(null, LineState.Ringing))
+        assertEquals(listOf(CallEvent("ringing", number = "+47 111")), t.onNumber(" +47 111 ", LineState.Ringing))
+        assertEquals(emptyList<CallEvent>(), t.onNumber("+47 111", LineState.Ringing))
+        assertEquals(
+            listOf(CallEvent("missedCall", number = "+47 111"), CallEvent("ringing", cancel = true, number = "+47 111")),
+            t.onState(LineState.Idle),
+        )
+        assertNull(t.number)
+    }
+
+    @Test
+    fun numberFromEarlyBroadcast() {
+        val t = CallTracker()
+        assertEquals(emptyList<CallEvent>(), t.onNumber("+47 111", LineState.Ringing))
+        assertEquals(listOf(CallEvent("ringing", number = "+47 111")), t.onState(LineState.Ringing))
+        assertEquals(emptyList<CallEvent>(), t.onNumber("+47 111", LineState.OffHook))
+        assertEquals(listOf(CallEvent("talking", number = "+47 111")), t.onState(LineState.OffHook))
+    }
+
+    @Test
+    fun nextCallDoesNotShowTheNumberOfTheCallBefore() {
+        val t = CallTracker()
+        t.onState(LineState.Ringing)
+        t.onNumber("+47 111", LineState.Ringing)
+        t.onState(LineState.Idle)
+        // The idle broadcast of the first call comes after the idle state.
+        assertEquals(emptyList<CallEvent>(), t.onNumber("+47 111", LineState.Idle))
+        assertNull(t.number)
+
+        // The second call rings before its broadcast comes.
+        assertEquals(listOf(CallEvent("ringing")), t.onState(LineState.Ringing))
+        assertEquals(listOf(CallEvent("ringing", number = "+47 222")), t.onNumber("+47 222", LineState.Ringing))
+    }
+
+    @Test
+    fun lateRingingBroadcastOfAShortCall() {
+        val t = CallTracker()
+        t.onState(LineState.Ringing)
+        t.onState(LineState.Idle)
+        // The ringing broadcast comes after the call ended. The idle
+        // broadcast that follows removes its number.
+        t.onNumber("+47 111", LineState.Ringing)
+        t.onNumber("+47 111", LineState.Idle)
+        assertNull(t.number)
+        assertEquals(listOf(CallEvent("ringing")), t.onState(LineState.Ringing))
+    }
+
+    @Test
+    fun numberBeforeAndroid12() {
+        val t = CallTracker()
+        assertEquals(listOf(CallEvent("ringing", number = "+47 111")), t.onState(LineState.Ringing, "+47 111"))
+        assertEquals(listOf(CallEvent("talking", number = "+47 111")), t.onState(LineState.OffHook, ""))
+        assertEquals(listOf(CallEvent("talking", cancel = true, number = "+47 111")), t.onState(LineState.Idle, "+47 111"))
+        assertEquals(listOf(CallEvent("ringing", number = "+47 222")), t.onState(LineState.Ringing, "+47 222"))
+    }
+
+    @Test
     fun telephonyBody() {
         val p = Packet.parse(CallPackets.packet(CallEvent("ringing"), " +47 123 ", "Mom").serialize())!!
         assertEquals(Types.TELEPHONY, p.type)

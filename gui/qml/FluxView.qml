@@ -237,6 +237,18 @@ Item {
     })
   }
 
+  // Asks a question before an action. onConfirm runs only after the user
+  // selects the confirm key. Cancel, Escape, and a click on the scrim run
+  // nothing.
+  property var confirmAction: null
+  function confirm(title, text, confirmText, onConfirm) {
+    confirmAction = onConfirm
+    confirmSheet.title = title
+    confirmSheet.text = text
+    confirmSheet.confirmText = confirmText
+    confirmSheet.open = true
+  }
+
   property alias sidebarFlick: sideFlick
 
   // Scrolls the sidebar so that item is in view, for example the device
@@ -286,6 +298,25 @@ Item {
     var others = allDevices.filter(o => o.id !== d.id && Fmt.nameKey(o.name) === key)
     if (others.length === 0) return ""
     return others.some(o => o.paired) ? "Same name as a paired device" : "Same name as another device"
+  }
+
+  // The address that the pair field connects to now.
+  property bool addressBusy: false
+  property string addressTried: ""
+
+  function pairAddress(address) {
+    var addr = (address || "").trim()
+    if (addr === "" || addressBusy) return
+    addressBusy = true
+    addressTried = addr
+    call("pair.address", { address: addr }, function (res) {
+      addressBusy = false
+      addressField.clear()
+      call("pair.request", { device: res.device })
+    }, function (err) {
+      addressBusy = false
+      toast(err.message || err.code || "Error")
+    })
   }
 
   function startPair() {
@@ -667,6 +698,30 @@ Item {
             color: Theme.dim
             font.pixelSize: 11
             wrapMode: Text.Wrap
+          }
+
+          // Pair by address, for a network that blocks discovery. fluxd
+          // connects to the address, then the window asks the device to
+          // pair as for a discovered device.
+          Txt {
+            visible: root.pairMode && !root.requested
+            width: parent.width
+            topPadding: 6
+            leftPadding: 4
+            rightPadding: 4
+            text: root.addressBusy ? "Connecting to " + root.addressTried + "…" : "Not found? Type the IP address of the phone, then press Enter."
+            color: Theme.dim
+            font.pixelSize: 11
+            wrapMode: Text.Wrap
+          }
+          Field {
+            id: addressField
+            visible: root.pairMode && !root.requested
+            width: parent.width
+            padY: 7
+            placeholder: "192.168.1.20"
+            enabled: !root.addressBusy
+            onAccepted: root.pairAddress(text)
           }
         }
 
@@ -1056,6 +1111,18 @@ Item {
         }
       }
     }
+  }
+
+  ConfirmSheet {
+    id: confirmSheet
+    objectName: "confirmSheet"
+    z: 40
+    onConfirmed: {
+      var action = root.confirmAction
+      root.confirmAction = null
+      if (action) action()
+    }
+    onCanceled: root.confirmAction = null
   }
 
   Toast {

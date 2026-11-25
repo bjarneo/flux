@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The fill of a widget row that needs the user, on the tile corner. The widget tints it with the tile color of the theme. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/widget_tile" />
+    <corners android:radius="12dp" />
+</shape>

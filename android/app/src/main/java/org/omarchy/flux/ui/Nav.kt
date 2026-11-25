@@ -4,19 +4,22 @@ import org.omarchy.flux.core.StreamKind
 
 /** The 3 destinations of the navigation bar. [key] is also the debug page name. */
 enum class Tab(val key: String, val label: String) {
-    Chat("chat", "Chat"),
-    Control("control", "Control"),
+    Chat("chat", "Chats"),
+    Remote("remote", "Remote"),
     Computers("computers", "Computers");
 
     companion object {
-        /** The destination of [key]. The Inbox and Send of older versions are now the chat. */
-        fun fromKey(key: String?): Tab = entries.firstOrNull { it.key == key } ?: Chat
+        /**
+         * The destination of [key]. The Inbox and Send of older versions are now the chat.
+         * Control is the old name of Remote, so a saved state with `control` opens Remote.
+         */
+        fun fromKey(key: String?): Tab = entries.firstOrNull { it.key == key } ?: if (key == "control") Remote else Chat
     }
 }
 
 /**
  * One screen above a destination. [deviceId] is the computer of the screen,
- * or null for a screen of the app, such as [SYNC_PAGE].
+ * or null for a screen of the app, such as [SETTINGS_PAGE].
  */
 data class Route(val deviceId: String?, val page: String)
 
@@ -35,6 +38,12 @@ sealed interface Dest {
     data class Detail(val route: Route, override val depth: Int, override val tab: Tab) : Dest
 }
 
+/** The chat of 1 computer. "chat:tray" opens it with the tray open. */
+const val CHAT_PAGE = "chat"
+
+/** The page of the chat of 1 computer with the tray open, for the debug pages. */
+const val CHAT_TRAY_PAGE = "chat:tray"
+
 /** The page prefix of the screen of one agent. The herdr pane ID follows it. */
 const val AGENT_PAGE = "agent:"
 
@@ -50,16 +59,23 @@ const val AGENTS_PAGE = "agents"
 /** The Omarchy panel: workspaces, windows, and key bindings. */
 const val OMARCHY_PAGE = "omarchy"
 
-/** The webcam of 1 computer, in the Stream band of Control. */
+/** The extended screen: the computer adds a monitor that this phone shows. */
+const val EXTEND_PAGE = "extend"
+
+/** The webcam of 1 computer, in the Share group of Remote. */
 const val WEBCAM_PAGE = "webcam"
 
-/** The mic of 1 computer, in the Stream band of Control. */
+/** The mic of 1 computer, in the Share group of Remote. */
 const val MIC_PAGE = "mic"
+
+/** The media of 1 computer, with its audio outputs and Play on phone. */
+const val MEDIA_PAGE = "media"
 
 /** The page of a stream of [kind]. A stream request opens it. */
 fun streamPage(kind: StreamKind): String = when (kind) {
     StreamKind.Webcam -> WEBCAM_PAGE
     StreamKind.Mic -> MIC_PAGE
+    StreamKind.Speaker -> MEDIA_PAGE
 }
 
 /** Debug builds only: the page prefix that shows the prompt of a stream request, such as ask:webcam. */
@@ -68,11 +84,14 @@ const val ASK_PAGE = "ask:"
 /** Debug builds only: the page prefix that shows the notification of a stream request, such as notify:mic. */
 const val NOTIFY_PAGE = "notify:"
 
-/** The sync switches. They apply to every computer, so the page has no computer. */
-const val SYNC_PAGE = "sync"
+/** The settings of the app. The screen lies above Chats, and the key in the top bar of Chats opens it. It has no computer. */
+const val SETTINGS_PAGE = "settings"
 
 /** The version and the project links. They belong to the app, so the page has no computer. */
 const val ABOUT_PAGE = "about"
+
+/** The SSH key of this phone. It applies to every computer, so the page has no computer. */
+const val SSH_PAGE = "ssh"
 
 /**
  * The navigation state: the destination [tab] and the screens above it.
@@ -118,10 +137,14 @@ data class Nav(val tab: Tab = Tab.Chat, val stack: List<Route> = emptyList()) {
         /** The destination that holds a page of a computer, so that Back goes there. */
         fun tabOf(page: String): Tab = when {
             page == "browse" || page.startsWith("camera") && !page.endsWith(":webcam") -> Tab.Chat
-            else -> Tab.Control
+            page == CHAT_PAGE || page == CHAT_TRAY_PAGE || page.startsWith(AGENT_PAGE) -> Tab.Chat
+            else -> Tab.Remote
         }
 
-        /** The navigation of a notification that opens an agent. Back goes to the chat. */
+        /** The navigation that opens the chat of the computer [deviceId] above the list of chats. */
+        fun chat(deviceId: String): Nav = Nav(Tab.Chat, listOf(Route(deviceId, CHAT_PAGE)))
+
+        /** The navigation of a notification that opens an agent. Back goes to the list of chats. */
         fun agent(deviceId: String, pane: String): Nav = Nav(Tab.Chat, listOf(Route(deviceId, "$AGENT_PAGE$pane")))
 
         /**
@@ -130,18 +153,27 @@ data class Nav(val tab: Tab = Tab.Chat, val stack: List<Route> = emptyList()) {
          * computer. It returns the state and the computer for the scope.
          */
         fun debug(page: String, deviceId: String): Pair<Nav, String?> = when (page) {
-            // The Inbox and Send of older versions are now the chat.
-            "chat", "inbox", "send", "ring" -> Nav(Tab.Chat) to null
-            "control" -> Nav(Tab.Control) to null
+            // The Inbox and Send of older versions are now the list of chats.
+            "chat", "chats", "inbox", "send", "ring" -> Nav(Tab.Chat) to null
+            // The chat of 1 computer, and the same chat with the tray open.
+            "thread" -> chat(deviceId) to null
+            "tray" -> Nav(Tab.Chat, listOf(Route(deviceId, CHAT_TRAY_PAGE))) to null
+            // Control is the old name of Remote.
+            "remote", "control" -> Nav(Tab.Remote) to null
             "computers", "devices", "pair", "unpair" -> Nav(Tab.Computers) to null
-            SYNC_PAGE, ABOUT_PAGE -> Nav(Tab.Computers, listOf(Route(null, page))) to null
-            // The old computer page is now the Control destination of 1 computer.
-            "home" -> Nav(Tab.Control) to deviceId
+            // The sync switches are groups of Settings now, so the old page opens Settings.
+            SETTINGS_PAGE, "sync" -> Nav(Tab.Chat, listOf(Route(null, SETTINGS_PAGE))) to null
+            // These screens open above Settings, so Back goes to Settings.
+            ABOUT_PAGE, SSH_PAGE -> Nav(Tab.Chat, listOf(Route(null, SETTINGS_PAGE), Route(null, page))) to null
+            // The old computer page is now the Remote destination of 1 computer.
+            "home" -> Nav(Tab.Remote) to deviceId
             // The prompt of a stream request shows over the chat. The notification shows in the shade.
             else -> if (page.startsWith(ASK_PAGE) || page.startsWith(NOTIFY_PAGE)) Nav(Tab.Chat) to null else {
                 val agents = Route(deviceId, AGENTS_PAGE)
                 val stack = when {
-                    page.startsWith(AGENT_PAGE) || page.startsWith(TERMINAL_PAGE) || page == NEW_PANE_PAGE -> listOf(agents, Route(deviceId, page))
+                    // An agent is a chat, so Back goes to the list of chats.
+                    page.startsWith(AGENT_PAGE) -> listOf(Route(deviceId, page))
+                    page.startsWith(TERMINAL_PAGE) || page == NEW_PANE_PAGE -> listOf(agents, Route(deviceId, page))
                     else -> listOf(Route(deviceId, page))
                 }
                 Nav(tabOf(page), stack) to null

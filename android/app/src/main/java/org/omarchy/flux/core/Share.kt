@@ -205,7 +205,7 @@ object Share {
                 d.send(Packet(Types.SHARE_UPDATE, bodyOf("numberOfFiles" to files.size, "totalPayloadSize" to total)))
                 val sent = ArrayList<String>()
                 for ((uri, name, size) in files) {
-                    val entry = SendLog.fileStarted(d.id, d.identity.deviceName, name, size, incoming = false)
+                    val entry = SendLog.fileStarted(d.id, d.identity.deviceName, name, size, incoming = false, uri = uri.toString())
                     val ok = runCatching {
                         // The protocol needs the exact size before the transfer.
                         // A source without a size goes through a cache file.

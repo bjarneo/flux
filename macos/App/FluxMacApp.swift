@@ -9,9 +9,9 @@ struct FluxMacApp: App {
     var body: some Scene {
         Window("Flux", id: "main") {
             RootView(launch: delegate.launch)
-                .frame(minWidth: 760, minHeight: 520)
+                .frame(minWidth: 800, minHeight: 520)
         }
-        .defaultSize(width: 900, height: 620)
+        .defaultSize(width: 1000, height: 660)
         .commands {
             CommandMenu("Go") { GoMenu(launch: delegate.launch) }
         }

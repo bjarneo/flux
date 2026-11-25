@@ -336,6 +336,44 @@ Item {
       tryVerify(function () { return !findVisibleBy(p, "text", "Not sent") })
     }
 
+    // A failed entry shows at its time among the messages. A pending entry
+    // stays at the end.
+    function test_outboxInTimeOrder() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "messages"
+      tryVerify(function () { return !!page(view) && page(view).loaded })
+      var p = page(view)
+      compare(p.selected.thread, 1)
+      var now = Math.floor(Date.now() / 1000)
+      mock.updateDevice(top.pixel, function (d) {
+        d.outbox = [
+          { thread: 1, address: "+4791234567", body: "Not yet", time: now - 240, outgoing: true, pending: false, failed: true },
+          { thread: 1, address: "+4791234567", body: "Still sending", time: now - 600, outgoing: true, pending: true, failed: false },
+        ]
+        return d
+      })
+      compare(p.shown.map(function (m) { return m.body }), ["Hi honey!", "Not yet", "Dinner sunday? bring the kids", "Still sending"])
+    }
+
+    // A message that the phone reports loads the open thread again, also
+    // when the message is older than the last message.
+    function test_reportedChangeLoadsThread() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "messages"
+      tryVerify(function () { return !!page(view) && page(view).loaded })
+      var p = page(view)
+      compare(p.selected.thread, 1)
+      var loads = requestsOf("sms.thread").length
+      mock.updateDevice(top.pixel, function (d) {
+        d.conversations[0].changes = 1
+        return d
+      })
+      compare(requestsOf("sms.thread").length, loads + 1)
+      compare(requestsOf("sms.thread")[loads].params.thread, 1)
+    }
+
     function test_sendRefusesThreadOfOtherDevice() {
       var view = createTemporaryObject(viewComponent, top)
       view.selectedId = top.pixel
@@ -482,6 +520,24 @@ Item {
       // The column lays out its lines before the next frame.
       tryVerify(function () { return !card.armed }, 500)
       tryCompare(card, "armed", true, 3000)
+    }
+
+    // A connect by address asks the device that answered to pair. A failed
+    // connect asks nothing and frees the field.
+    function test_pairByAddress() {
+      var view = createTemporaryObject(viewComponent, top)
+      tryVerify(function () { return view.allDevices.length > 0 })
+      view.startPair()
+      view.pairAddress("  192.168.1.20 ")
+      compare(requestsOf("pair.address")[0].params.address, "192.168.1.20")
+      tryVerify(function () { return requestsOf("pair.request").length === 1 })
+      compare(requestsOf("pair.request")[0].params.device, "c0ffee00000000000000000000000add")
+      verify(!view.addressBusy)
+      mock.failures = { "pair.address": { code: "unreachable", message: "cannot reach 10.0.0.9" } }
+      view.pairAddress("10.0.0.9")
+      tryVerify(function () { return !view.addressBusy })
+      compare(requestsOf("pair.request").length, 1)
+      mock.failures = {}
     }
 
     function test_discoveredTwinIsMarked() {
@@ -909,6 +965,43 @@ Item {
       start.clicked()
       compare(requestsOf("webcam.start").length, 2)
     }
+
+    // The phone speaker card shows Start only for a device that lists
+    // speaker, asks the device, and shows the stream with its muted output.
+    function test_speakerCard() {
+      canAsk(true)
+      var view = overview()
+      var card = null
+      tryVerify(function () { card = findBy(page(view), "objectName", "speakerCard"); return !!card })
+      verify(!card.visible)
+      mock.updateDevice(top.pixel, function (d) { d.plugins.push("speaker"); return d })
+      verify(card.visible)
+      compare(card.idleTitle, "The phone speaker is off")
+      var start = findBy(card, "objectName", "startButton")
+      verify(start.visible)
+      start.clicked()
+      compare(requestsOf("speaker.start").length, 1)
+      compare(requestsOf("speaker.start")[0].params.device, top.pixel)
+      tryCompare(card, "note", "Confirm on Pixel 8.")
+      compare(card.idleTitle, "Asked Pixel 8 to play the audio of this computer")
+      tryVerify(function () { var t = findBy(view, "message", "Asked Pixel 8 to play the audio of this computer. Confirm on Pixel 8."); return !!t && t.visible })
+
+      mock.setState(function (s) { s.speaker = { active: true, to: top.pixel, toName: "Pixel 8", rate: 48000, channels: 2, mute: true, muted: "Laptop Speakers" } })
+      verify(card.live)
+      verify(!start.visible)
+      compare(card.note, "")
+      compare(card.title, "Pixel 8 plays the audio of this computer")
+      compare(card.detail, "Laptop Speakers is muted")
+      mock.setState(function (s) { s.speaker.muted = "" })
+      compare(card.detail, "48 kHz · stereo")
+      card.stop()
+      compare(requestsOf("speaker.stop").length, 1)
+      verify(!card.live)
+
+      // A stream to another device shows on the page of that device.
+      mock.setState(function (s) { s.speaker = { active: true, to: "another", toName: "Other" } })
+      verify(card.idle)
+    }
   }
 
   TestCase {
@@ -1087,6 +1180,185 @@ Item {
       compare(rule[0].params.device, top.pixel)
       compare(rule[0].params.key, "remoteDesktop")
       compare(rule[0].params.value, false)
+    }
+
+    function openCard() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "device"
+      var card = null
+      tryVerify(function () { card = findBy(page(view), "objectName", "accessCard"); return !!card })
+      return { view: view, card: card }
+    }
+
+    // Turn on for Agent control asks first. Cancel sends nothing. Turn on in
+    // the sheet sends 1 settings.set.
+    function test_agentControlAsksFirst() {
+      var o = openCard()
+      var sheet = findBy(o.view, "objectName", "confirmSheet")
+      var turn = findBy(o.card, "objectName", "computer-herdrControl")
+      compare(turn.text, "Turn on")
+      verify(!sheet.visible)
+      turn.clicked()
+      verify(sheet.visible)
+      compare(findBy(sheet, "objectName", "confirmTitle").text, "Turn on Agent control?")
+      verify(findBy(sheet, "objectName", "confirmText").text.indexOf("any command as your user through an agent") >= 0)
+      compare(requestsOf("settings.set").length, 0)
+      verify(findBy(sheet, "objectName", "confirmCancel").focus)
+      findBy(sheet, "objectName", "confirmCancel").clicked()
+      verify(!sheet.visible)
+      compare(requestsOf("settings.set").length, 0)
+      turn.clicked()
+      keyClick(Qt.Key_Escape)
+      verify(!sheet.visible)
+      compare(requestsOf("settings.set").length, 0)
+      turn.clicked()
+      findBy(sheet, "objectName", "confirmOk").clicked()
+      verify(!sheet.visible)
+      var sent = requestsOf("settings.set")
+      compare(sent.length, 1)
+      compare(sent[0].params.key, "herdrControl")
+      compare(sent[0].params.value, true)
+      tryCompare(turn, "text", "Turn off")
+    }
+
+    function test_agentControlTurnOff() {
+      mock.setState(function (s) { s.settings.herdrControl = true })
+      var o = openCard()
+      var sheet = findBy(o.view, "objectName", "confirmSheet")
+      var turn = findBy(o.card, "objectName", "computer-herdrControl")
+      compare(turn.text, "Turn off")
+      turn.clicked()
+      verify(!sheet.visible)
+      var sent = requestsOf("settings.set")
+      compare(sent.length, 1)
+      compare(sent[0].params.key, "herdrControl")
+      compare(sent[0].params.value, false)
+    }
+
+    function test_agentTerminalsHasNoKey() {
+      var o = openCard()
+      verify(!!findBy(o.card, "objectName", "access-herdrTerminals"))
+      var key = findBy(o.card, "objectName", "computer-herdrTerminals")
+      verify(!key || !key.visible)
+    }
+  }
+  TestCase {
+    name: "DevicePage"
+    when: mock.ready
+
+    function init() {
+      mock.state = mock.fixTimes(mock.fixture.state)
+      mock.requests = []
+      mock.failures = {}
+    }
+
+    function openPage() {
+      var view = createTemporaryObject(viewComponent, top)
+      view.selectedId = top.pixel
+      view.tab = "device"
+      var card = null
+      tryVerify(function () { card = findBy(page(view), "objectName", "accessCard"); return !!card })
+      return view
+    }
+
+    // The visible texts of an item and its children.
+    function texts(item, out) {
+      if (!item || item.visible === false) return out
+      if (typeof item.text === "string" && item.text !== "") out.push(item.text)
+      for (var i = 0; i < item.children.length; i++) texts(item.children[i], out)
+      return out
+    }
+
+    // The cards with a fill and a border that show on the page. The
+    // streams are rows of 1 card, so a flat row is not a card.
+    function cardsOf(item, out) {
+      if (!item || item.visible === false) return out
+      if (typeof item.objectName === "string" && /Card$/.test(item.objectName) && item.flat !== true) out.push(item.objectName)
+      for (var i = 0; i < item.children.length; i++) cardsOf(item.children[i], out)
+      return out
+    }
+
+    // AC80: each line starts with On. or Off. and has 1 sentence.
+    function test_accessLinesStartWithOnOrOff() {
+      mock.setState(function (s) { s.settings.herdr = true; s.settings.shareHome = false })
+      var view = openPage()
+      var keys = ["clipboard", "notifications", "shareHome", "remoteDesktop", "remoteInput", "herdr", "herdrControl", "herdrTerminals"]
+      for (var i = 0; i < keys.length; i++) {
+        var line = findBy(page(view), "objectName", "line-" + keys[i])
+        verify(!!line, keys[i])
+        verify(/^(On|Off)\. The phone (can|cannot) /.test(line.text), line.text)
+        verify(/\.$/.test(line.text), line.text)
+        compare(line.text.split(".").length, 3, line.text)
+      }
+      compare(findBy(page(view), "objectName", "line-herdr").text, "On. The phone can read agent panes.")
+      compare(findBy(page(view), "objectName", "line-herdrControl").text, "Off. The phone can only read.")
+      compare(findBy(page(view), "objectName", "line-herdrTerminals").text.indexOf("Off. "), 0)
+    }
+
+    // The line follows the setting of the device and of the computer.
+    function test_accessLineFollowsTheSettings() {
+      mock.setState(function (s) { s.settings.herdr = true; s.settings.herdrControl = true; s.settings.herdrTerminals = true })
+      var view = openPage()
+      var terminals = findBy(page(view), "objectName", "line-herdrTerminals")
+      compare(terminals.text, "On. The phone can start terminals.")
+      findBy(page(view), "objectName", "toggle-herdrTerminals").toggled(false)
+      tryCompare(terminals, "text", "Off. The phone cannot start terminals.")
+      findBy(page(view), "objectName", "toggle-herdrTerminals").toggled(true)
+      tryCompare(terminals, "text", "On. The phone can start terminals.")
+      findBy(page(view), "objectName", "computer-herdrControl").clicked()
+      tryCompare(terminals, "text", "Off. The phone cannot start terminals, because this computer turned it off.")
+    }
+
+    // AC81: no text of the page uses global, globally, or rule.
+    function test_noGlobalOrRuleInTheText() {
+      var view = openPage()
+      var all = texts(page(view), [])
+      verify(all.length > 20)
+      for (var i = 0; i < all.length; i++) verify(!/global|\brules?\b/i.test(all[i]), all[i])
+    }
+
+    // AC82: an online phone with no stream shows 3 cards. The build of
+    // f6ed4ac showed 6: the device, Access, the camera, the mic, the
+    // speaker, and Unpair.
+    function test_fewerCardsWithNoStream() {
+      mock.setState(function (s) { s.webcam = null; s.mic = null; s.screen = null; s.speaker = null; s.desktop = null; s.browse = [] })
+      mock.updateDevice(top.pixel, function (d) { d.plugins = d.plugins.concat(["streamrequest", "speaker"]); return d })
+      var view = openPage()
+      var names = cardsOf(page(view), [])
+      names.sort()
+      compare(names, ["accessCard", "deviceCard", "streamsCard"])
+      // The 3 idle streams stay on the page as rows of 1 card.
+      verify(findBy(page(view), "objectName", "cameraCard").visible)
+      verify(findBy(page(view), "objectName", "micCard").visible)
+      verify(findBy(page(view), "objectName", "speakerCard").visible)
+    }
+
+    // Unpair is in the device card, and it still asks to confirm.
+    function test_unpairIsInTheDeviceCard() {
+      var view = openPage()
+      var device = findBy(page(view), "objectName", "deviceCard")
+      var unpair = findBy(device, "objectName", "unpairButton")
+      verify(!!unpair && unpair.visible)
+      verify(!findBy(page(view), "objectName", "unpairCard"))
+      verify(view.unpairTarget === null)
+      unpair.clicked()
+      verify(view.unpairTarget !== null)
+      compare(view.unpairTarget.id, top.pixel)
+    }
+
+    // The controls of the streams are in the card of the streams.
+    function test_streamControlsAreInTheStreamsCard() {
+      mock.setState(function (s) { s.webcam = null; s.mic = null })
+      mock.updateDevice(top.pixel, function (d) { d.plugins = d.plugins.concat(["streamrequest"]); return d })
+      var view = openPage()
+      var streams = findBy(page(view), "objectName", "streamsCard")
+      verify(!!findBy(streams, "objectName", "cameraCard"))
+      verify(!!findBy(streams, "objectName", "micCard"))
+      var start = findBy(findBy(streams, "objectName", "micCard"), "objectName", "startButton")
+      verify(start.visible)
+      start.clicked()
+      compare(requestsOf("mic.start").length, 1)
     }
   }
 }

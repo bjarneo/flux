@@ -45,7 +45,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -55,11 +54,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
@@ -100,6 +102,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
@@ -112,6 +115,7 @@ import org.omarchy.flux.core.AgentStatus
 import org.omarchy.flux.core.AgentThread
 import org.omarchy.flux.core.ComputerThemes
 import org.omarchy.flux.core.DebugDemo
+import org.omarchy.flux.core.DebugInbox
 import org.omarchy.flux.core.DeviceUi
 import org.omarchy.flux.core.FluxCore
 import org.omarchy.flux.core.HERDR_BLOCKED
@@ -122,6 +126,9 @@ import org.omarchy.flux.core.HerdrState
 import org.omarchy.flux.core.HerdrSync
 import org.omarchy.flux.core.HerdrTerminal
 import org.omarchy.flux.core.HerdrTerminalSession
+import org.omarchy.flux.core.LinkNote
+import org.omarchy.flux.core.ThreadLink
+import org.omarchy.flux.core.ThreadNote
 import org.omarchy.flux.core.ThreadBlock
 import org.omarchy.flux.core.agentAsk
 import org.omarchy.flux.core.agentThread
@@ -210,86 +217,50 @@ private fun WindowTitle(parts: List<String>, s: AgentStatus, modifier: Modifier 
 // ───────────────────────── Agents ─────────────────────────
 
 /**
- * The herdr agents of a computer. The agents that need input come first.
- * A tap opens the recent output of the agent. When the computer allows
- * terminals, they follow the agents. When the computer allows control,
- * the add button opens a new agent or terminal.
+ * The herdr terminals of a computer, in the picked session. A tap opens the
+ * recent output of a terminal. Agents show in Chats, so this page lists none
+ * and has no add key. It shows when the computer allows terminals.
  */
 @Composable
 fun TiledAgentsScreen(
     d: DeviceUi,
     onBack: () -> Unit,
-    onOpen: (String) -> Unit,
     onOpenTerminal: (String) -> Unit = {},
-    onNew: () -> Unit = {},
 ) {
     LaunchedEffect(d.id, d.online) { if (d.online) HerdrSync.request(FluxCore, d.id) }
     // The list shows the picked herdr session.
     val herdr = HerdrSessionPrefs.herdrOf(LocalContext.current, d)
     // A wide window shows the list in the center, as wide as the other lists.
     CappedScrollColumn(bottom = 96.dp) {
-        TiledTopBar("Agents", onBack, context = d.name) {
-            if (d.online && herdr?.running == true && herdr.control) SquareButton(Ic.add, "New agent or terminal", onNew)
+        TiledTopBar("Terminals", onBack, context = d.name) {
             if (d.online) SquareButton(Ic.refresh, "Refresh", { HerdrSync.request(FluxCore, d.id) })
         }
         if (d.online) SessionStrip(d, Modifier.padding(bottom = 4.dp))
         when {
-            !d.online -> NotReachable(d, "The agents")
-            herdr == null -> LineSkeleton("Loading the agents of ${d.name}", Modifier.padding(4.dp), lines = listOf(0.7f, 0.5f, 0.6f))
+            !d.online -> NotReachable(d, "The terminals")
+            herdr == null -> LineSkeleton("Loading the terminals of ${d.name}", Modifier.padding(4.dp), lines = listOf(0.7f, 0.5f, 0.6f))
             !herdr.enabled -> EmptyState(
-                Ic.agent,
+                Ic.terminal,
                 "Agent status is off",
                 "On ${d.name}, set herdr = true in ~/.config/flux/config.toml. Then run systemctl --user reload fluxd.",
                 Modifier.padding(top = 48.dp),
             )
             !herdr.running -> EmptyState(
-                Ic.agent,
+                Ic.terminal,
                 "herdr is not running",
-                "Start herdr on ${d.name}. Its coding agents show here.",
+                "Start herdr on ${d.name}. Its terminals show here.",
                 Modifier.padding(top = 48.dp),
             )
-            herdr.agents.isEmpty() && herdr.panes.isEmpty() -> EmptyState(
-                Ic.agent,
-                "No agents yet",
-                if (herdr.control) {
-                    "Select New agent or terminal to start an agent on ${d.name}, or start one in a herdr pane there."
-                } else {
-                    "Start a coding agent in a herdr pane on ${d.name}. It shows here."
-                },
+            herdr.panes.isEmpty() -> EmptyState(
+                Ic.terminal,
+                "No terminals yet",
+                "Open a terminal in a herdr pane on ${d.name}. It shows here.",
                 Modifier.padding(top = 48.dp),
             )
             else -> Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
-                for (a in herdr.sorted) AgentTile(a) { onOpen(a.pane) }
-                if (herdr.panes.isNotEmpty()) {
-                    TileLabel("Terminals", Modifier.padding(start = 4.dp, top = 12.dp).semantics { heading() })
-                    for (t in herdr.panes) TerminalTile(t) { onOpenTerminal(t.pane) }
-                }
+                for (t in herdr.panes) TerminalTile(t) { onOpenTerminal(t.pane) }
             }
         }
-    }
-}
-
-/**
- * An agent: the window-title line with the agent, its place, and its
- * status, and the task of the agent under it. Without a task, the project
- * shows in its place.
- */
-@Composable
-private fun AgentTile(a: HerdrAgent, onClick: () -> Unit) {
-    val blocked = a.status == AgentStatus.Blocked
-    val task = a.title.ifEmpty { a.project.ifEmpty { a.pane } }
-    // The window title does not repeat the task.
-    val parts = listOf(a.agent, a.project, a.workspace).filter { it.isNotEmpty() && it != task }.distinct()
-    Tile(
-        Modifier.fillMaxWidth().heightIn(min = 72.dp), onClick,
-        accent = statusColor(a.status),
-        container = if (blocked) Tn.tileHi else Tn.tile,
-        border = BorderStroke(1.dp, if (blocked) Tn.red else Tn.line),
-        padding = PaddingValues(14.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
-    ) {
-        WindowTitle(parts, a.status)
-        T(task, size = 15, weight = FontWeight.SemiBold, maxLines = 2)
     }
 }
 
@@ -343,15 +314,14 @@ internal const val SENT_ANSWER_MS = 10 * 60_000L
  * changes, with the newest at the bottom, and the dock under it. The dock
  * shows the question of a blocked agent with its choices, the step of a
  * working agent with Interrupt, or the end of a finished turn, and the
- * composer. The top bar names the task, and a strip of pills opens the
- * other agents of the computer. The screen reads the output again when the
+ * composer. The top bar shows the agent with its status, the task, and
+ * the Changes key. The screen reads the output again when the
  * status changes, and every few seconds while the agent works and the
  * screen is visible. When the computer also allows terminal control, the
  * Live key shows the live terminal of the pane in the place of the thread.
- * [onSwitch] opens the agent of another pane in the place of this screen.
  */
 @Composable
-fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit, onSwitch: (String) -> Unit = {}) {
+fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit) {
     // True while the sheet of the changes shows. The output then holds the diff.
     var review by rememberSaveable(d.id, pane) { mutableStateOf(false) }
     // True while the live terminal shows in the place of the thread.
@@ -428,7 +398,7 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit, onSwitch: (S
 
     val closer = rememberPaneCloser(d, pane, onBack)
     val task = agent?.let { it.title.ifEmpty { it.project.ifEmpty { pane } } } ?: pane
-    val context = listOfNotNull(agent?.agent, pane, d.name).joinToString(" · ")
+    val context = listOfNotNull(agent?.agent, agent?.project?.ifEmpty { null } ?: pane, d.name).joinToString(" · ")
     // A demo computer shows the debug sample screen in Live, with no unlock and no input.
     val sample = if (demo) terminalDebugSample() else null
     val offered = liveOffered(d.online, agent != null, d.herdr, demo, sample != null)
@@ -483,9 +453,16 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit, onSwitch: (S
         live = false
         review = true
     }
-    val wide = rememberWideWindow()
+    val wide = rememberSplitWindow()
+    // The link state of the thread: the age of the output, a connect in progress, or a link that is closed.
+    // A sample computer of the demo never connects, so only the debug page @connecting shows the connecting state.
+    val connecting = FluxCore.state.collectAsStateWithLifecycle().value.connecting.let { if (demo) DebugInbox.connecting else it }
+    val clock by rememberTicker(30_000L)
+    val linkNote = if (agent == null) null else LinkNote.threadNote(
+        d.online, connecting, d.name, out?.at ?: 0L, clock,
+    ) { timeText(appContext, it) }
     Column(Modifier.fillMaxSize().imePadding()) {
-        AgentTopBar(task, context, onBack) {
+        ChatTopBar(task, context, onBack, avatar = { AgentAvatar(status) }) {
             // The key stays while Live is on, so that Live can always stop.
             if (live || offered) {
                 LivePill(live) {
@@ -498,24 +475,29 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit, onSwitch: (S
                     }
                 }
             }
+            if (canReview && d.online) {
+                Box(
+                    Modifier.size(48.dp).clip(CircleShape).clickable(onClickLabel = "Show the changes", role = Role.Button, onClick = openReview)
+                        .semantics { contentDescription = "Changes" },
+                    contentAlignment = Alignment.Center,
+                ) { Sym(Ic.diff, tint = Tn.text, size = 22.dp) }
+            }
             AgentMenu(
                 refresh = if (d.online && agent != null && !demo && !liveShown) ({ HerdrSync.read(FluxCore, d.id, pane) }) else null,
-                review = if (canReview && d.online) openReview else null,
+                review = null,
                 keys = if (control && !direct) keysOpen else null,
                 onKeys = { keysOpen = !keysOpen },
                 close = if (control && d.online) ({ closer.ask() }) else null,
             )
         }
-        // The strip shows the other agents of the session of this agent.
-        val agents = d.herdr?.scoped(agent?.session)?.sorted.orEmpty()
-        if (agents.size >= 2 && agent != null) AgentStrip(agents, pane, thread?.elapsed.orEmpty(), onSwitch)
         // The progress line: it moves while the agent works.
         Box(Modifier.fillMaxWidth().height(2.dp).background(Tn.line)) {
             if (status == AgentStatus.Working && d.online) SlideBar(Tn.blue, Modifier.fillMaxSize())
         }
         closer.error?.let { T(it, Modifier.padding(horizontal = 16.dp, vertical = 6.dp), size = 12, color = Tn.red) }
         when {
-            !d.online -> Box(Modifier.padding(horizontal = TiledGutter)) { NotReachable(d, "The lines of the agent") }
+            // The thread keeps the last output while the link is closed. Without an output, the screen has nothing to keep.
+            !d.online && (out == null || agent == null) -> Box(Modifier.padding(horizontal = TiledGutter)) { NotReachable(d, "The lines of the agent") }
             agent == null && d.herdr != null -> Column(Modifier.padding(horizontal = TiledGutter, vertical = 8.dp)) {
                 // The line tells why Live ended with the agent. An older
                 // reason does not show here.
@@ -551,15 +533,23 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit, onSwitch: (S
             else -> DockLayout(
                 Modifier.weight(1f).fillMaxWidth(),
                 thread = { pad ->
-                    ThreadList(
-                        out, thread, status, sent, pad,
-                        note = liveNote,
-                        onReview = if (canReview && d.online) openReview else null,
-                    )
+                    Column(Modifier.fillMaxSize()) {
+                        // The age line shows while the link is open. A closed link shows the note above the dock.
+                        if (linkNote?.state == ThreadLink.Connected) AgeLine(linkNote)
+                        Box(Modifier.weight(1f)) {
+                            ThreadList(
+                                out, thread, status, sent, pad,
+                                note = liveNote,
+                                onReview = if (canReview && d.online) openReview else null,
+                            )
+                        }
+                    }
                 },
                 dock = { shape ->
+                    val card = linkNote?.takeIf { it.state != ThreadLink.Connected }
                     if (control) {
                         Column {
+                            if (card != null) LinkCard(d, card)
                             if (terminalInput.unsent) LiveNote(LIVE_UNSENT)
                             // The state of the composer stays while Live shows its key row.
                             replyState.SaveableStateProvider("reply") {
@@ -570,10 +560,10 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit, onSwitch: (S
                             }
                         }
                     } else if (agent != null) {
-                        T(
-                            "To answer from this phone, set herdr_control = true on ${d.name}.",
-                            Modifier.dockFrame(shape).padding(DockPadding).padding(horizontal = 4.dp), size = 12, color = Tn.sub,
-                        )
+                        Column {
+                            if (card != null) LinkCard(d, card)
+                            ControlOffCard(d)
+                        }
                     }
                 },
             )
@@ -596,6 +586,30 @@ fun TiledAgentScreen(d: DeviceUi, pane: String, onBack: () -> Unit, onSwitch: (S
 
 /** The most lines of a question that the dock shows above the choices. */
 private const val ASK_LINES = 6
+
+/**
+ * The picture of an agent in its top bar: the agent icon on `accent-tile`,
+ * with a dot of its status: red while it waits, green when it is done, and
+ * `dim` while it is idle. While it works, a ring turns in the place of the
+ * dot.
+ */
+@Composable
+private fun AgentAvatar(s: AgentStatus?) {
+    ChatAvatar(
+        Ic.agent,
+        tint = if (s == AgentStatus.Working || s == AgentStatus.Blocked || s == AgentStatus.Done) Tn.blue else Tn.sub,
+        size = 36.dp,
+        fill = Tn.accentTile,
+        edge = null,
+        badge = when (s) {
+            AgentStatus.Blocked -> Tn.red
+            AgentStatus.Done -> Tn.green
+            AgentStatus.Working -> null
+            else -> Tn.dim
+        },
+        spinner = s == AgentStatus.Working,
+    )
+}
 
 /**
  * The menu of the agent screen. Each action shows only when it is set:
@@ -678,18 +692,28 @@ internal fun Modifier.dockFrame(shape: DockShape): Modifier {
  * The thread and the dock. On a phone, the dock sits at the bottom and lies
  * [DockOverlap] over the end of the thread, and it takes at most
  * [DOCK_MAX_PART] of the height. In a wide window, the dock is a tile at
- * the bottom of a column at the right. [thread] gets the space to keep
- * free at its end.
+ * the bottom of a column at the right. With [fullWidth], the thread takes
+ * the full width, and the dock sits at the bottom right under it. [thread]
+ * gets the space to keep free at its end.
  */
 @Composable
 internal fun DockLayout(
     modifier: Modifier,
     thread: @Composable (bottom: Dp) -> Unit,
     dock: @Composable (DockShape) -> Unit,
+    fullWidth: Boolean = false,
 ) {
-    if (rememberWideWindow()) {
+    if (rememberSplitWindow()) {
         BoxWithConstraints(modifier) {
             val side = maxOf(maxWidth * CONTROLS_PART, minOf(ControlsMinWidth, maxWidth / 2))
+            if (fullWidth) {
+                // The list takes the full width. The dock is a tile at the bottom right, as in the column of the other screens.
+                Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.weight(1f).fillMaxWidth()) { thread(16.dp) }
+                    Box(Modifier.align(Alignment.End).width(side).padding(end = TiledGutter, bottom = ControlsEnd)) { dock(DockShape.Tile) }
+                }
+                return@BoxWithConstraints
+            }
             Row(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).fillMaxHeight()) { thread(16.dp) }
                 // The dock sits at the bottom of its column, at thumb height, and scrolls when it is taller.
@@ -892,7 +916,7 @@ internal fun PaneLayout(
     output: @Composable (Modifier) -> Unit,
     controls: @Composable () -> Unit,
 ) {
-    if (rememberWideWindow()) {
+    if (rememberSplitWindow()) {
         BoxWithConstraints(modifier.fillMaxWidth()) {
             val side = maxOf(maxWidth * CONTROLS_PART, minOf(ControlsMinWidth, maxWidth / 2))
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(TileGap)) {
@@ -1660,7 +1684,10 @@ private fun AgentDock(
             writing = false
         }
     }
+    // A closed link takes no answer. The dock is dim and takes no tap, and this guard stops any other path.
+    val linked = d.online
     fun guarded(action: () -> Unit) {
+        if (!linked) return
         lockError = null
         ReplyLock.run(context, action) { lockError = it }
     }
@@ -1745,7 +1772,11 @@ private fun AgentDock(
         guarded { HerdrSync.sendPrompt(FluxCore, d.id, agent.pane, t) }
     }
     val asking = blocked && choices.isNotEmpty() && !writing
-    Column(Modifier.fillMaxWidth().dockFrame(shape).padding(DockPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(
+        Modifier.fillMaxWidth().then(if (linked) Modifier else Modifier.alpha(DimAlpha).takeNoTaps()).dockFrame(shape).padding(DockPadding),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        QuestionChangedNote(d.id, agent.pane)
         when {
             blocked -> {
                 AskHeader(
@@ -1760,7 +1791,7 @@ private fun AgentDock(
                         Box(Modifier.padding(horizontal = 4.dp)) { AskText(ask, 16, FontWeight.SemiBold, 6.dp) }
                     }
                     // The grid of the choices keeps 6 dp between them, so that a tap does not hit the next choice.
-                    val open = choicesOpen(out, answered, reply?.sending == true)
+                    val open = linked && choicesOpen(out, answered, reply?.sending == true)
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         choices.forEachIndexed { i, c -> AskChoice(c, primary = i == 0, enabled = open, height = 48.dp, size = 14f) { answer(c) } }
                     }
@@ -1854,6 +1885,87 @@ private fun AgentDock(
                 onDownloaded = ::choose,
                 onDismiss = { picking = false },
             )
+        }
+    }
+}
+
+/** Stops each tap and drag in this part of the screen. The children see the events as used. */
+private fun Modifier.takeNoTaps(): Modifier = pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+    }
+}
+
+/**
+ * The line above the thread while the link is open: a green dot and
+ * `Output from 09:41 · now`.
+ */
+@Composable
+private fun AgeLine(note: ThreadNote) {
+    val text = listOf(note.title, note.detail).filter { it.isNotEmpty() }.joinToString(" · ")
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = TiledGutter, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PulseDot(Tn.green, size = 8.dp, pulse = false)
+        T(text, size = 12, color = Tn.sub, maxLines = 1)
+    }
+}
+
+/**
+ * The note above the dock while the link is not open. It says that the
+ * computer connects, or that it is not reachable and when the output is
+ * from. Retry looks for the computer again. Wake shows when the computer
+ * can wake.
+ */
+@Composable
+private fun LinkCard(d: DeviceUi, note: ThreadNote) {
+    val away = note.state == ThreadLink.Unreachable
+    val shape = RoundedCornerShape(16.dp)
+    Column(
+        Modifier.fillMaxWidth().background(Tn.bg).padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Column(
+            Modifier.fillMaxWidth().clip(shape).background(Tn.tile).border(1.dp, if (away) Tn.yellow else Tn.lineHi, shape)
+                .padding(horizontal = 16.dp, vertical = 12.dp).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            if (away) {
+                T(note.title, size = 16, weight = FontWeight.SemiBold)
+                if (note.detail.isNotEmpty()) T(note.detail, size = 14, color = Tn.sub)
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    RingSpinner(22.dp, color = Tn.blue)
+                    T(note.title, size = 16, weight = FontWeight.SemiBold)
+                }
+            }
+            if (away) {
+                Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FluxButton("Retry", { FluxCore.rediscover() }, icon = Ic.refresh)
+                    if (d.canWake) FluxButton("Wake", { FluxCore.wake(d.id) }, kind = ButtonKind.Tonal, icon = Ic.power)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The note in the place of the dock while Agent control is off on the
+ * computer. It uses the style of [LinkCard]: a bold title and the way to
+ * turn the control on.
+ */
+@Composable
+private fun ControlOffCard(d: DeviceUi) {
+    val shape = RoundedCornerShape(16.dp)
+    Column(Modifier.fillMaxWidth().background(Tn.bg).padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Column(
+            Modifier.fillMaxWidth().clip(shape).background(Tn.tile).border(1.dp, Tn.lineHi, shape)
+                .padding(horizontal = 16.dp, vertical = 12.dp).semantics(mergeDescendants = true) {},
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            T("Agent control is off on ${d.name}", size = 16, weight = FontWeight.SemiBold)
+            T("To answer from this phone, turn on Agent control in Flux on the computer, on the Access card.", size = 14, color = Tn.sub)
         }
     }
 }

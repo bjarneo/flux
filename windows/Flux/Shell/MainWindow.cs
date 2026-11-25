@@ -8,9 +8,10 @@ using FluxKit;
 
 namespace Flux;
 
-// The main window: the sidebar with the 3 destinations, and the page of the
-// selected destination with its header. ContentView.swift of the Mac app has
-// the same layout.
+// The main window: the sidebar with the list of chats, Control, and
+// Computers, and the page of the selected destination with its header. A
+// chat fills the detail column with its own top bar. ContentView.swift of
+// the Mac app has the same layout.
 public sealed class MainWindow : Window
 {
     readonly AppModel model;
@@ -23,9 +24,9 @@ public sealed class MainWindow : Window
     {
         this.model = model;
         Title = "Flux";
-        Width = 900;
-        Height = 620;
-        MinWidth = 760;
+        Width = 980;
+        Height = 640;
+        MinWidth = 820;
         MinHeight = 520;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         FontFamily = Faces.Body;
@@ -49,6 +50,10 @@ public sealed class MainWindow : Window
         InputBindings.Add(new KeyBinding(new Relay(model.Back), Key.Escape, ModifierKeys.None));
         InputBindings.Add(new KeyBinding(new Relay(model.Back), Key.Left, ModifierKeys.Alt));
         InputBindings.Add(new KeyBinding(new Relay(() => OpenSettings?.Invoke()), Key.OemComma, ModifierKeys.Control));
+        InputBindings.Add(new KeyBinding(new Relay(shell.FocusSearch), Key.F, ModifierKeys.Control));
+        // The chat of an agent takes the keys of the agents window.
+        InputBindings.Add(new KeyBinding(new Relay(() => (shell.CurrentPage as ChatsPage)?.Agent?.Refresh()), Key.R, ModifierKeys.Control));
+        InputBindings.Add(new KeyBinding(new Relay(() => (shell.CurrentPage as ChatsPage)?.Agent?.ShowChanges()), Key.D, ModifierKeys.Control));
     }
 
     // Opens the settings window. The app sets it.
@@ -106,11 +111,14 @@ public sealed class MainWindow : Window
 
     // Draws the shell now. Tests call it.
     internal void DrawShell() => shell.Draw();
+
+    // The list of chats in the sidebar. Tests read it.
+    internal ChatsList Chats => shell.Chats;
 }
 
-// The sidebar, the header, the page, and the toast. The hosts stay, so that
-// a page keeps its parent and its state while the sidebar and the header
-// draw again.
+// The sidebar, the header, the page, and the toast. The hosts and the list
+// of chats stay, so that a page and the search keep their parent, their
+// state, and their focus while the sidebar and the header draw again.
 sealed class ShellView : ContentControl
 {
     readonly AppModel model;
@@ -120,6 +128,8 @@ sealed class ShellView : ContentControl
     readonly Dictionary<Route, Page> routePages = [];
     readonly ScopeMenu scopeMenu;
     readonly Border sidebarHost = new();
+    readonly Border markHost = new();
+    readonly Border bottomHost = new();
     readonly Border headerHost = new();
     readonly ContentControl pageHost = new() { Focusable = false };
     readonly Border toastHost = new() { IsHitTestVisible = false };
@@ -133,8 +143,17 @@ sealed class ShellView : ContentControl
         this.routes = routes;
         Focusable = false;
         scopeMenu = new ScopeMenu(model);
+        Chats = new ChatsList(model);
+        var side = new DockPanel();
+        DockPanel.SetDock(markHost, Dock.Top);
+        DockPanel.SetDock(bottomHost, Dock.Bottom);
+        side.Children.Add(markHost);
+        side.Children.Add(bottomHost);
+        side.Children.Add(Chats);
+        sidebarHost.Child = side;
+        sidebarHost.BorderThickness = new Thickness(0, 0, 1, 0);
         var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(SidebarWidth) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         Grid.SetColumn(sidebarHost, 0);
         grid.Children.Add(sidebarHost);
@@ -152,7 +171,16 @@ sealed class ShellView : ContentControl
         Draw();
     }
 
+    // The width of the sidebar, for the list of chats.
+    public const double SidebarWidth = 300;
+
     public Page? CurrentPage { get; private set; }
+
+    // The list of chats in the sidebar.
+    public ChatsList Chats { get; }
+
+    // Gives the focus to the search of the chats, for Ctrl+F.
+    public void FocusSearch() => Chats.FocusSearch();
 
     void Refresh()
     {
@@ -210,7 +238,7 @@ sealed class ShellView : ContentControl
             pageHost.Content = page;
         }
         detail.Background = tn.Bg;
-        sidebarHost.Child = Sidebar();
+        DrawSidebar();
         DrawHeader();
         toastHost.Child = model.Toast is { } toast
             ? new Border
@@ -233,22 +261,29 @@ sealed class ShellView : ContentControl
     {
         if (CurrentPage is { } page)
         {
-            headerHost.Child = Header(page);
+            headerHost.Child = page.OwnHeader ? null : Header(page);
         }
     }
 
-    UIElement Sidebar()
+    // Draws the parts of the sidebar around the list of chats: the Flux mark
+    // with the key that starts an agent at the top, and Control, Computers,
+    // and this computer at the bottom. The list draws itself.
+    void DrawSidebar()
     {
         var tn = Tn.Current;
-        var rows = new List<UIElement> { Mark().Margin(14, 16, 0, 18) };
-        foreach (var d in Enum.GetValues<Destination>())
+        sidebarHost.Background = tn.Bg;
+        sidebarHost.BorderBrush = tn.Line;
+        var start = model.Paired.Count > 0 && model.Core.Plugin<HerdrPlugin>() is not null
+            ? new FluxButton("", ButtonKind.Text, () => AgentsFeature.StartAnywhere(model), Icons.Add).Named("Start Agent").Help("Start a coding agent on a computer")
+            : null;
+        markHost.Child = Ui.H(8, Mark(), Ui.Spacer(), start).Margin(14, 12, 8, 4);
+        var rows = new List<UIElement?>();
+        foreach (var d in new[] { Destination.Control, Destination.Computers })
         {
             var selected = model.Destination == d;
-            var count = d == Destination.Chat ? NeedsYou() : 0;
             var row = Ui.H(10,
                 Ui.Icon(d.Glyph(), 15, selected ? tn.Accent : tn.Sub, 20),
-                Ui.Text(d.Title(), 13, selected ? FontWeights.SemiBold : FontWeights.Normal).Fill(),
-                count > 0 ? Parts.NeedsBadge(count) : null);
+                Ui.Text(d.Title(), 13, selected ? FontWeights.SemiBold : FontWeights.Normal).Fill());
             var tile = new Border
             {
                 Child = row,
@@ -259,21 +294,17 @@ sealed class ShellView : ContentControl
             };
             var dest = d;
             var button = new PlainButton(tile, () => model.Go(dest)).Named(d.Title()).Help($"{d.Title()} (Ctrl+{(int)d + 1})");
-            if (d == Destination.Chat)
-            {
-                System.Windows.Automation.AutomationProperties.SetItemStatus(button, Texts.NeedsText(count));
-            }
+            System.Windows.Automation.AutomationProperties.SetItemStatus(button, selected ? "Selected" : "");
             rows.Add(button.Margin(8, 0, 8, 2));
         }
         var self = Ui.H(8,
             Ui.Icon(model.Core.Host.DeviceType == "laptop" ? Icons.Laptop : Icons.Desktop, 13, tn.Text),
             Ui.Text(model.State.DeviceName, 12).Fill(),
-            model.State.Enabled ? null : Ui.Text("Off", 12, color: tn.Sub)).Margin(14, 10, 14, 12);
-        var dock = new DockPanel { Background = tn.Bg };
-        DockPanel.SetDock(self, Dock.Bottom);
-        dock.Children.Add(self);
-        dock.Children.Add(Ui.V(0, rows));
-        return new Border { Child = dock, BorderBrush = tn.Line, BorderThickness = new Thickness(0, 0, 1, 0), Background = tn.Bg };
+            model.State.Enabled ? null : Ui.Text("Off", 12, color: tn.Sub)).Margin(14, 8, 14, 12);
+        rows.Add(self);
+        bottomHost.Child = Ui.V(0, rows).Margin(0, 6, 0, 0);
+        bottomHost.BorderBrush = tn.Line;
+        bottomHost.BorderThickness = new Thickness(0, 1, 0, 0);
     }
 
     // The Flux mark: a square ring in the text color and a bar in the accent.
@@ -291,8 +322,6 @@ sealed class ShellView : ContentControl
         canvas.Children.Add(bar);
         return Ui.H(8, canvas, Ui.Text("flux", 16, FontWeights.Bold, mono: true)).Named("Flux");
     }
-
-    int NeedsYou() => Inbox.NeedsYou(model);
 
     UIElement Header(Page page)
     {

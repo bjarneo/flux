@@ -4,19 +4,15 @@ import SwiftUI
 /// How often the agent screen reads the output again while the agent works.
 private let workingRefresh: Duration = .seconds(5)
 
-/// One herdr agent as a thread. A strip of pills under the top bar opens
-/// the other agents of the computer in the place of this one.
+/// The chat of 1 herdr agent, above Chats or Control. The top bar has the
+/// look of a chat: the agent with the dot of its status, the task, and the
+/// Changes key.
 struct AgentScreen: View {
     let deviceId: String
-    @State private var pane: String
-
-    init(deviceId: String, pane: String) {
-        self.deviceId = deviceId
-        _pane = State(initialValue: pane)
-    }
+    let pane: String
 
     var body: some View {
-        AgentThreadScreen(deviceId: deviceId, pane: pane) { pane = $0 }
+        AgentThreadScreen(deviceId: deviceId, pane: pane)
             .id(pane)
     }
 }
@@ -36,16 +32,17 @@ struct SentAnswer: Equatable {
 /// The output of one agent as a thread: messages, tool calls, and changes,
 /// with the newest at the bottom, and the dock under it. The dock shows the
 /// question of a blocked agent with its choices, the step of a working
-/// agent with Interrupt, or the end of a turn, and the composer. The
-/// screen reads the output on open, when the status changes, and every 5
-/// seconds while the agent works.
+/// agent with Interrupt, or the end of a turn, and the composer. The top
+/// bar shows the agent with its status, the task, the agent, the project,
+/// and the computer, the Changes key, and a menu. The screen reads the
+/// output on open, when the status changes, and every 5 seconds while the
+/// agent works.
 private struct AgentThreadScreen: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.tn) private var tn
     let deviceId: String
     let pane: String
-    let pick: (String) -> Void
     @State private var asking = false
     @State private var closeError: String?
     /// True while the changes show. The output then holds the diff.
@@ -80,11 +77,11 @@ private struct AgentThreadScreen: View {
             let closing = plugin.model.actions[deviceId].map { $0.action == "close" && $0.pane == pane && $0.sending } ?? false
             let control = agent != nil && herdr?.control == true
             let canReview = agent != nil && herdr?.review == true && online
+            // A computer that is not reachable keeps the last output. The thread says so, see `LinkNote`.
+            let link = LinkNote.threadNote(online: online, connecting: model.connecting, name: name, outputAt: out?.at, now: Date())
+            let task = agent.map { $0.title.isEmpty ? ($0.project.isEmpty ? pane : $0.project) : $0.title } ?? pane
+            let project = agent.map { $0.project.isEmpty ? pane : $0.project } ?? pane
             VStack(spacing: 0) {
-                if let agents = herdr?.sorted, agents.count >= 2, agent != nil {
-                    AgentStrip(agents: agents, pane: pane, elapsed: thread?.elapsed ?? "", pick: pick)
-                        .padding(.bottom, 8)
-                }
                 // The progress line: it moves while the agent works.
                 ZStack {
                     Rectangle().fill(tn.line)
@@ -94,7 +91,7 @@ private struct AgentThreadScreen: View {
                 if let closeError {
                     Text(closeError).font(.caption).foregroundStyle(tn.red).padding(.horizontal, 16).padding(.vertical, 6)
                 }
-                if !online {
+                if !online && out == nil {
                     PaneNotReachable(name: name, what: "The agent output").padding(16)
                     Spacer(minLength: 0)
                 } else if agent == nil && herdr != nil {
@@ -106,47 +103,42 @@ private struct AgentThreadScreen: View {
                         .safeAreaInset(edge: .bottom, spacing: 0) {
                             if let agent {
                                 VStack(spacing: 0) {
-                                    FirstTaskNote(deviceId: deviceId, agent: agent)
-                                    if control {
-                                        AgentDock(deviceId: deviceId, agent: agent, output: out, thread: thread, ask: ask,
-                                                  keysOpen: $keysOpen, review: canReview ? { review = true } : nil) { sent = $0 }
+                                    if let link, !online {
+                                        // The choices and the field take no tap while the computer is not reachable.
+                                        ThreadNoteCard(link: link) { model.retry() }
                                     } else {
-                                        Text(.init("To answer from this iPhone, set `herdr_control = true` on \(name)."))
-                                            .font(.caption)
-                                            .foregroundStyle(tn.sub)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .padding(16)
-                                            .background(DockShape().fill(tn.tile).ignoresSafeArea(edges: .bottom))
+                                        FirstTaskNote(deviceId: deviceId, agent: agent)
+                                        if agent.status == .blocked && plugin.model.isQuestionChanged(deviceId, pane: pane) {
+                                            ThreadNoteCard.questionChanged
+                                        }
+                                        if control {
+                                            AgentDock(deviceId: deviceId, agent: agent, output: out, thread: thread, ask: ask,
+                                                      keysOpen: $keysOpen, review: canReview ? { review = true } : nil) { sent = $0 }
+                                        } else {
+                                            ThreadNoteCard.controlOff(name)
+                                        }
                                     }
                                 }
                             }
                         }
                 }
             }
-            .background(tn.bg.ignoresSafeArea())
-            .navigationBarTitleDisplayMode(.inline)
+            .chatScreen(task)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    VStack(spacing: 1) {
-                        Text(agent.map { $0.title.isEmpty ? ($0.project.isEmpty ? pane : $0.project) : $0.title } ?? pane)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(tn.text)
-                            .lineLimit(1)
-                        Text([agent?.agent, pane, name].compactMap { $0 }.joined(separator: " · "))
-                            .font(.caption2.monospaced())
-                            .foregroundStyle(tn.sub)
-                            .lineLimit(1)
+                    ChatTitle(title: task, context: [agent?.agent, project, name].compactMap { $0 }.joined(separator: " · ")) {
+                        AgentAvatar(status: agent?.status, size: 36, accent: true)
                     }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityAddTraits(.isHeader)
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    if canReview {
+                        Button { review = true } label: { Image(systemName: "plusminus") }
+                            .accessibilityLabel("Changes")
+                            .accessibilityHint("Shows the changes of the agent")
+                    }
                     Menu {
                         if online && agent != nil && !model.demo {
                             Button { plugin.read(deviceId, pane: pane) } label: { Label("Refresh", systemImage: "arrow.clockwise") }
-                        }
-                        if canReview {
-                            Button { review = true } label: { Label("Changes", systemImage: "plusminus") }
                         }
                         if control {
                             Button { keysOpen.toggle() } label: { Label(keysOpen ? "Hide keys" : "Show keys", systemImage: "keyboard") }

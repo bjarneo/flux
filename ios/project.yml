@@ -43,7 +43,8 @@ targets:
         NSLocalNetworkUsageDescription: Flux finds and connects to your Omarchy computers on the local network.
         NSBonjourServices:
           - _flux._udp
-        NSPhotoLibraryUsageDescription: Flux sends your new screenshots and photos to your computers when you turn that on in Settings.
+        PHPhotoLibraryPreventAutomaticLimitedAccessAlert: true
+        NSPhotoLibraryUsageDescription: Flux shows your newest photos in the chat of a computer, so that you can send them. Flux also sends your new screenshots and photos to your computers when you turn that on in Settings.
         NSMicrophoneUsageDescription: Flux listens while you dictate, and while you use this iPhone as a microphone for a computer.
         NSCameraUsageDescription: Flux uses the camera to scan text, codes, and pages, to take photos and signatures, and to stream as a webcam to a computer.
         NSSpeechRecognitionUsageDescription: Flux changes your speech to text for the computer to type. The iPhone recognizes it on the device when it has the language.

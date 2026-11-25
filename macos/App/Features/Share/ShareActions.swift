@@ -45,12 +45,14 @@ enum ShareActions {
     }
 
     /// The computer for files and text from outside the window: the
-    /// computer in scope when it is connected, or else the only connected computer.
+    /// computer of the open chat, then the computer in scope, when it is
+    /// connected, or else the only connected computer.
     static func target(_ model: AppModel) -> String? {
         let connected = model.connectedPaired
+        if model.destination == .chats, let id = model.chat?.deviceId, connected.contains(where: { $0.id == id }) { return id }
         if let id = model.scope, connected.contains(where: { $0.id == id }) { return id }
         if connected.count == 1 { return connected[0].id }
-        model.show(connected.isEmpty ? "No computer is connected" : "Pick a computer in the scope menu of Flux first")
+        model.show(connected.isEmpty ? "No computer is connected" : "Open the chat of a computer in Flux first")
         NSApp.activate(ignoringOtherApps: true)
         return nil
     }

@@ -129,10 +129,13 @@ public sealed class ToastBackend : INotificationBackend
 // entry in the Start menu.
 static class Shortcut
 {
-    public static void Ensure(string appId)
+    public static void Ensure(string appId) =>
+        Write(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Flux.lnk"), "Flux for Omarchy", appId);
+
+    // Writes a shortcut to this Flux.exe at the path, with the app ID when
+    // one is given.
+    public static void Write(string path, string description, string? appId)
     {
-        var programs = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
-        var path = Path.Combine(programs, "Flux.lnk");
         var exe = Environment.ProcessPath ?? "";
         if (exe.Length == 0)
         {
@@ -142,18 +145,21 @@ static class Shortcut
         link.SetPath(exe);
         link.SetArguments("");
         link.SetWorkingDirectory(Path.GetDirectoryName(exe) ?? "");
-        link.SetDescription("Flux for Omarchy");
-        var store = (IPropertyStore)link;
-        var key = new PropertyKey(new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), 5);
-        var value = new PropVariant(appId);
-        try
+        link.SetDescription(description);
+        if (appId is not null)
         {
-            store.SetValue(ref key, ref value);
-            store.Commit();
-        }
-        finally
-        {
-            value.Clear();
+            var store = (IPropertyStore)link;
+            var key = new PropertyKey(new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), 5);
+            var value = new PropVariant(appId);
+            try
+            {
+                store.SetValue(ref key, ref value);
+                store.Commit();
+            }
+            finally
+            {
+                value.Clear();
+            }
         }
         ((IPersistFile)link).Save(path, true);
     }

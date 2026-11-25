@@ -145,6 +145,16 @@ final class HerdrTests: XCTestCase {
         XCTAssertEqual(AgentChoice.find(["1) a", "2) b", "123. c"]).map(\.key), ["1", "2"])
     }
 
+    func testANumberedListAboveTheInputIsNotADialog() {
+        let list = ["● I would add these.", "", "  1. Notify when an agent needs you.", "  2. Hide finished agents.", ""]
+        let rule = String(repeating: "─", count: 32)
+        XCTAssertTrue(AgentChoice.find(list + ["✻ Cogitated for 24s · done 10:00 AM", "", rule, "❯ ", rule, "  ⏵⏵ auto mode on"]).isEmpty,
+                      "the input of Claude Code")
+        XCTAssertTrue(AgentChoice.find(list + ["› Ask Codex to do anything", "", "  100% context left"]).isEmpty, "the input of Codex")
+        XCTAssertTrue(AgentChoice.find(list + ["╭────────╮", "│ >      │", "╰────────╯"]).isEmpty, "the input in a box")
+        XCTAssertEqual(AgentChoice.find(claudeDialog + ["", " Esc to cancel · Tab to amend"]).map(\.key), ["1", "2", "3"], "a dialog has no input")
+    }
+
     func testOutputKeepsColorsAndFindsChoices() throws {
         let text = claudeDialog.joined(separator: "\n").replacingOccurrences(of: " ❯ 1. Yes", with: " \(esc)[38;5;4m❯ 1. Yes\(esc)[0m")
         let json = String(decoding: JSONValue.string(text).serialized(), as: UTF8.self)
@@ -153,6 +163,16 @@ final class HerdrTests: XCTestCase {
         XCTAssertEqual(o.lines[10].spans.last?.style.fg, .indexed(4))
         XCTAssertEqual(o.choices.count, 3)
         XCTAssertFalse(o.loading)
+    }
+
+    func testTheSameScreenReadTwiceIsEqual() throws {
+        let packet = body(#"{"kind":"output","pane":"w5:p1","format":"ansi","text":"Proceed?\n 1. Yes\n 2. No"}"#)
+        let first = try XCTUnwrap(HerdrWire.output(packet, now: Date(timeIntervalSince1970: 100)))
+        let second = try XCTUnwrap(HerdrWire.output(packet, now: Date(timeIntervalSince1970: 200)))
+        XCTAssertNotEqual(first.at, second.at)
+        XCTAssertEqual(first, second, "the parse time is not part of the comparison")
+        let changed = try XCTUnwrap(HerdrWire.output(body(#"{"kind":"output","pane":"w5:p1","format":"ansi","text":"Proceed?\n 1. Yes"}"#)))
+        XCTAssertNotEqual(first, changed)
     }
 
     func testOutputWithAnError() throws {

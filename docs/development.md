@@ -98,6 +98,169 @@ The release build runs R8 and checks release-only build errors.
 Without release credentials, it produces an unsigned APK.
 See [Android tools](android.md#test) for a test peer and phone screenshots.
 
+## Agent answers end to end
+
+The harness in `android/tools/` tests the answer to an agent from the phone without a real agent.
+`fake_herdr.py` is a fake herdr server with 1 blocked agent.
+`timed_answer.py` taps an action of the notification on the emulator and measures the time until herdr gets the input.
+The harness uses Python 3, `adb`, and the Android SDK tools.
+It reads no logcat.
+
+To run the unit tests of the harness:
+
+```sh
+python3 -m unittest discover -s android/tools -p 'test_*.py'
+```
+
+### The fake herdr
+
+```sh
+python3 android/tools/fake_herdr.py --socket SOCKET --scenario codex3 \
+  --control CONTROL.json --log SENDS.jsonl
+```
+
+The fake serves the herdr API of protocol 22 on `SOCKET`.
+The path of `SOCKET` must be shorter than 108 bytes.
+It never connects to another herdr, so it does not touch your own herdr session.
+
+| Scenario | Agent | Dialog |
+| --- | --- | --- |
+| `codex3` | codex | 3 numbered choices |
+| `freetext` | claude | A question that needs free text, with no choices |
+| `choices4` | claude | 4 numbered choices |
+| `opencode` | opencode | A menu row that opencode moves with the arrow keys |
+
+The control file is a JSON object.
+The fake reads it every 50 ms.
+Write it in 1 step with a rename.
+All fields are optional.
+
+| Field | Value |
+| --- | --- |
+| `status` | `idle`, `working`, `blocked`, or `done` |
+| `scenario` | A scenario name |
+| `question` | The question line of the dialog. `null` restores the default. |
+
+A change sends a `pane_agent_status_changed` event to each subscription.
+The phone reads the output of an agent again only after a status change.
+To change the scenario, write `working`, and then write `blocked` with the new `scenario`.
+The agent shows its dialog only while the status is `blocked`.
+With `--after-send working`, the default, a send call to a blocked agent sets the status to `working`.
+With `--after-send keep`, the status stays.
+
+The log has 1 JSON line for each send call: `agent.send_keys`, `agent.prompt`, and `pane.send_input`.
+Each line has `time_ms`, the host time in milliseconds, `method`, `params`, and `result`.
+The `result` is `ok` or the error code, for example `agent_blocked`.
+
+### The test setup
+
+A test `fluxd` that is not headless follows herdr.
+Run it, the fake herdr, the emulator, and a private `adb` server in 1 user and network namespace.
+Use your own folder and your own ports.
+The commands below use these values:
+
+```sh
+export MISE_GO_VERSION=1.27.1
+E=$HOME/.cache/flux-e2e
+mkdir -p "$E"/{config/flux,config/herdr,data,cache,run}
+chmod 700 "$E/run"
+printf 'herdr = true\nherdr_control = true\ncheck_updates = false\n' > "$E/config/flux/config.toml"
+echo '{"status":"working"}' > "$E/control.json"
+: > "$E/sends.jsonl"
+```
+
+1. Build `fluxd` and the debug app:
+
+   ```sh
+   make build-go
+   cd android && ./gradlew :app:assembleDebug --no-daemon && cd ..
+   ```
+
+2. Start the namespace. The holder process keeps it open. Save its PID:
+
+   ```sh
+   unshare --user --map-root-user --net sleep 36000 &
+   NS=$!
+   IN="nsenter -t $NS -U -n --preserve-credentials --"
+   $IN ip link set lo up
+   ```
+
+3. Start the fake herdr in the namespace. It must run there, because `fluxd` checks the user of the herdr socket:
+
+   ```sh
+   $IN python3 android/tools/fake_herdr.py --socket "$E/config/herdr/herdr.sock" \
+     --scenario codex3 --control "$E/control.json" --log "$E/sends.jsonl" &
+   ```
+
+4. Start the test `fluxd` with a scrubbed environment. `PATH` has no herdr CLI and no agent launcher. The environment has no `DBUS_SESSION_BUS_ADDRESS`, `WAYLAND_DISPLAY`, `DISPLAY`, `HYPRLAND_INSTANCE_SIGNATURE`, or `HERDR_SOCKET_PATH`:
+
+   ```sh
+   $IN env -i PATH=/usr/bin:/bin HOME="$E" XDG_CONFIG_HOME="$E/config" XDG_DATA_HOME="$E/data" \
+     XDG_CACHE_HOME="$E/cache" XDG_RUNTIME_DIR="$E/run" FLUX_SOCKET="$E/run/flux/fluxd.sock" \
+     bin/fluxd -udp-port 12100 -tcp-port 28720 &
+   ```
+
+5. Start the emulator and a private `adb` server in the namespace. Run the emulator under the emulator lock. Set `ANDROID_SERIAL`:
+
+   ```sh
+   export ADB_USB=0 ADB_MDNS=0 ANDROID_ADB_SERVER_PORT=28738 ANDROID_SERIAL=emulator-5554
+   $IN flock ~/.cache/flux-emulator.lock emulator -avd Pixel_6_API_36 -no-window -no-audio \
+     -no-snapshot-save -no-boot-anim -gpu swiftshader_indirect &
+   $IN adb wait-for-device
+   $IN adb shell 'while [ -z "$(getprop sys.boot_completed)" ]; do sleep 1; done'
+   $IN adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+   ```
+
+6. Forward the TCP ports 12070 to 12108 of the phone to the emulator, with `adb forward`, as in the [Android tools](android.md#test). Open Flux on the emulator. Pair with the test `fluxd`:
+
+   ```sh
+   (sleep 3; printf 'y\n'; sleep 40) | $IN script -q -c \
+     "env XDG_RUNTIME_DIR=$E/run FLUX_SOCKET=$E/run/flux/fluxd.sock bin/flux-cli pair NAME" /dev/null
+   ```
+
+   Tap **Pair** on the emulator. Then turn on **Agent control** on the Access card of the computer.
+
+7. Check that `fluxd` follows the fake. The agent list must show the blocked codex agent after you write `{"status":"blocked"}` to the control file:
+
+   ```sh
+   $IN env XDG_RUNTIME_DIR="$E/run" FLUX_SOCKET="$E/run/flux/fluxd.sock" bin/flux-cli status --json
+   ```
+
+To stop the setup, stop only the PIDs that you started.
+Stop the emulator with `adb emu kill`.
+Do not stop a process by a name pattern.
+
+### The timed test
+
+The timed test checks that herdr gets a choice 2 s or less after the tap.
+It does 10 runs.
+In each run, it sets the agent to `blocked`, waits for the notification with actions, taps the action, and reads the send time from the log.
+It stops when `ANDROID_SERIAL` is not set or is not an emulator, because it taps the screen.
+
+```sh
+python3 android/tools/timed_answer.py --runs 10 --fake-log "$E/sends.jsonl" \
+  --control "$E/control.json" --action '^Yes, proceed' --expect send_keys:1 --pin 1234 --out "$E/timed.md"
+```
+
+The script prints 1 Markdown row for each run.
+The columns are the taps, the seconds from the status change to the notification, the seconds from the tap to the input at herdr, and the send that herdr got.
+The script exits with 1 when a run is slower than `--limit` seconds, which is 2 by default, or when a run fails.
+`--pin` is the PIN of the emulator. The script keeps the screen on and dismisses the lock screen with it.
+
+The time from the tap includes the start of the `input` command on the phone, so it is longer than the time of a finger.
+The time to the notification has the poll interval of about 0.2 s as its error.
+The harness takes no time for the lock prompt of the app, so unlock before the run.
+The app asks for the phone lock before the first answer, and the unlock stays valid for 5 minutes.
+Answer once by hand before a run that checks the current app.
+
+| Option | Use |
+| --- | --- |
+| `--no-tap` | Measure only the time to the notification. This works with an app that has no actions in its notification. |
+| `--screen` | Tap a node of the open screen of the app, for example the **Yes, proceed** key of the dock, in place of a notification action. The first time is then the time until that node shows. |
+| `--scenario NAME` | Set a scenario of the fake herdr for each run. |
+| `--action REGEX` | The text of the action to tap. The default is `^yes`. In the notification, the script taps only a button, so the expanded text of the notification never matches. Anchor the pattern with `^` for the screen mode. |
+| `--expect SEND` | The send that herdr must get, for example `send_keys:1`. |
+
 ## Update xterm.js
 
 The live terminal of Flux for Android draws with xterm.js from the npm package `@xterm/xterm`.

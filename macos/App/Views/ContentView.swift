@@ -2,8 +2,9 @@ import AppKit
 import FluxKit
 import SwiftUI
 
-/// The main window: the sidebar with the 3 destinations, and the stack of
-/// the selected destination in the detail column.
+/// The main window: the list of chats in the sidebar with Control and
+/// Computers under it, and the open chat or destination in the detail
+/// column. Each destination has its own stack.
 struct ContentView: View {
     @Environment(AppModel.self) private var model
 
@@ -11,11 +12,11 @@ struct ContentView: View {
         @Bindable var model = model
         NavigationSplitView {
             SidebarView()
-                .navigationSplitViewColumnWidth(min: 180, ideal: 200)
+                .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 420)
         } detail: {
             switch model.destination {
-            case .chat:
-                NavigationStack(path: $model.chatPath) { ChatView() }
+            case .chats:
+                NavigationStack(path: $model.chatPath) { ChatDetail() }
             case .control:
                 NavigationStack(path: $model.controlPath) { ControlView() }
             case .computers:
@@ -28,6 +29,12 @@ struct ContentView: View {
             set: { model.pairingSheet = $0?.id }
         )) { device in
             PairRequestSheet(device: device)
+        }
+        .sheet(item: Binding(
+            get: { model.startAgent.map { AgentStart(id: $0) } },
+            set: { model.startAgent = $0?.id }
+        )) { start in
+            StartAgentSheet(deviceId: start.id)
         }
     }
 }

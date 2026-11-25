@@ -1,6 +1,7 @@
 import CoreTransferable
 import FluxKit
 import Observation
+import Photos
 import PhotosUI
 import QuickLook
 import SwiftUI
@@ -88,6 +89,23 @@ final class ShareFeature {
             if !files.isEmpty { await sendCopies(files, to: device, share: share, model: model) }
         }
     }
+
+    /// Writes the originals of the library photos with the local IDs `ids`
+    /// into the outbox and sends them in that order, see `ChatTray`.
+    static func send(assets ids: [String], to device: DeviceSnapshot, model: AppModel) {
+        guard let share = model.core.plugin(SharePlugin.self), !ids.isEmpty else { return }
+        Task {
+            var files: [URL] = []
+            for id in ids {
+                do {
+                    files.append(try await Outbox.export(asset: id))
+                } catch {
+                    model.show("Cannot read a photo: \(error.localizedDescription)")
+                }
+            }
+            if !files.isEmpty { await sendCopies(files, to: device, share: share, model: model) }
+        }
+    }
 }
 
 /// The folder of the copies of files that go out. Each send removes its
@@ -125,6 +143,38 @@ enum Outbox {
         let dir = folder.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
+    }
+
+    /// Writes the library photo with the local ID `id` into a new folder of
+    /// the outbox. An edited photo goes with its edits, as the tray shows
+    /// it, so that a crop does not send the part that the user cut. It
+    /// keeps the name of the original. A photo that only iCloud has
+    /// downloads first. A failure removes the folder.
+    static func export(asset id: String) async throws -> URL {
+        guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [id], options: nil).firstObject else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        let resources = PHAssetResource.assetResources(for: asset)
+        let original = resources.first(where: { $0.type == .photo })
+        guard let resource = resources.first(where: { $0.type == .fullSizePhoto }) ?? original ?? resources.first else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        // The render of an edit is often named FullSizeRender.jpg. The name of the original goes with its extension.
+        var name = resource.originalFilename
+        if resource.type == .fullSizePhoto, let base = original?.originalFilename {
+            let ext = (resource.originalFilename as NSString).pathExtension
+            name = ((base as NSString).deletingPathExtension as NSString).appendingPathExtension(ext.isEmpty ? "jpg" : ext) ?? base
+        }
+        let target = try newFolder().appendingPathComponent(ShareWire.safeName(name))
+        let options = PHAssetResourceRequestOptions()
+        options.isNetworkAccessAllowed = true
+        do {
+            try await PHAssetResourceManager.default().writeData(for: resource, toFile: target, options: options)
+        } catch {
+            remove([target])
+            throw error
+        }
+        return target
     }
 
     /// Copies files that the file picker gave, off the main thread. Each

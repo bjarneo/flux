@@ -21,6 +21,22 @@ enum class ThemeMode(val key: String) {
     }
 }
 
+/**
+ * The scroll direction of the touchpad of this phone. [Computer] uses the
+ * touchpad setting of the computer, and [Natural] when the computer does
+ * not tell it. [Natural] moves the content with the fingers. [Traditional]
+ * scrolls down when the fingers move down, as a scroll wheel does.
+ */
+enum class ScrollMode(val key: String) {
+    Computer("computer"),
+    Natural("natural"),
+    Traditional("traditional");
+
+    companion object {
+        fun fromKey(key: String?): ScrollMode = entries.firstOrNull { it.key == key } ?: Computer
+    }
+}
+
 /** The now-playing state of one player on the PC. */
 data class PlayerState(
     val name: String,
@@ -117,14 +133,28 @@ data class DeviceUi(
     val remoteInput: Boolean? = null,
     /** True when the computer reads repeat with a special key, see RemoteInput.keys. */
     val keyRepeat: Boolean = false,
+    /** The scroll direction of the touchpads of the computer, or null when the computer does not tell it. */
+    val naturalScroll: Boolean? = null,
     /** True when the computer can stream its screen to this phone. */
     val desktopSupported: Boolean = false,
     /** True when the remote desktop is on at the computer, or null before it tells. */
     val remoteDesktop: Boolean? = null,
+    /** True when the computer can add a monitor that this phone shows, the extended screen. */
+    val extendSupported: Boolean = false,
     /** True when the computer runs its Hyprland key bindings for this phone. */
     val shortcutsSupported: Boolean = false,
     /** The key bindings and workspaces of the computer, or null before the first answer. */
     val shortcuts: ShortcutsState? = null,
+    /** The time that the last link to the computer ended, in milliseconds since the epoch, or 0 when no link ended while the app ran. */
+    val lastSeen: Long = 0,
+    /** True when the computer sent the network cards that can wake it. See [Wake]. */
+    val canWake: Boolean = false,
+    /** True when the computer lists its audio outputs and changes them for this phone. */
+    val outputsSupported: Boolean = false,
+    /** The audio outputs of the computer, or null before the first answer. */
+    val outputs: AudioOutputs? = null,
+    /** True when the computer can play its audio on this phone. */
+    val speakerSupported: Boolean = false,
 )
 
 /** A snapshot of the whole app for the UI. */
@@ -152,6 +182,8 @@ data class UiState(
     val smsSync: Boolean = false,
     val smsAccess: Boolean = false,
     val smsSupported: Boolean = false,
+    /** Flux may read the contacts. The computers then show names in place of numbers. */
+    val contactsAccess: Boolean = false,
     /** Notify when a herdr agent on a computer needs input. */
     val agentInputAlerts: Boolean = true,
     /** Notify when a herdr agent on a computer finishes. */
@@ -172,6 +204,8 @@ data class UiState(
     /** False while the user has turned Flux off. */
     val enabled: Boolean = true,
     val theme: ThemeMode = ThemeMode.Computer,
+    /** The scroll direction of the touchpad screen. */
+    val touchpadScroll: ScrollMode = ScrollMode.Computer,
     /**
      * The theme that [ThemeMode.Computer] draws. With a [themeScope], it is
      * the theme of that computer. Without a scope, it is the theme that
@@ -183,4 +217,6 @@ data class UiState(
     val themeScope: String? = null,
     /** The name of the theme of each computer that sent one, by device ID. */
     val computerThemes: Map<String, String> = emptyMap(),
+    /** Opens the fingerprint prompt at once when an approval arrives. */
+    val approveAtOnce: Boolean = false,
 )

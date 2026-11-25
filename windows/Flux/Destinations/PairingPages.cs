@@ -63,8 +63,8 @@ public sealed class PairingPage(AppModel model, string deviceId) : Page(model)
     }
 }
 
-// The page of a paired computer: its state, the scope, and Unpair. The
-// approval section comes with the approval feature.
+// The page of a paired computer: its state, the scope, the sections of the
+// features, such as the approval, and Unpair.
 public sealed class ComputerPage(AppModel model, string deviceId) : Page(model)
 {
     DeviceSnapshot? Device => Model.PairedDevice(deviceId);
@@ -108,8 +108,12 @@ public sealed class ComputerPage(AppModel model, string deviceId) : Page(model)
     }
 }
 
-// The sections that features add to the page of a paired computer.
+// The sections that features add to the page of a paired computer, in the
+// order of Makers. Features.cs adds 1 maker for each feature.
 public static class ComputerSections
 {
-    public static IEnumerable<UIElement> For(AppModel model, DeviceSnapshot device) => [];
+    public static List<Func<AppModel, DeviceSnapshot, UIElement?>> Makers { get; } = [];
+
+    public static IEnumerable<UIElement> For(AppModel model, DeviceSnapshot device) =>
+        Makers.Select(make => make(model, device)).OfType<UIElement>();
 }

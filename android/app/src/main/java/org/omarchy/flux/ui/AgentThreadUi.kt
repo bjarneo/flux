@@ -38,7 +38,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,7 +79,6 @@ import org.omarchy.flux.core.AgentChoice
 import org.omarchy.flux.core.AgentStatus
 import org.omarchy.flux.core.DiffFile
 import org.omarchy.flux.core.DiffLineKind
-import org.omarchy.flux.core.HerdrAgent
 import org.omarchy.flux.core.TermLine
 import org.omarchy.flux.core.ThreadBlock
 import org.omarchy.flux.core.changeMark
@@ -321,30 +319,6 @@ internal fun AskText(ask: AgentAsk, questionSize: Int, questionWeight: FontWeigh
 
 // ───────────────────────── Top of the agent screen ─────────────────────────
 
-/**
- * The top bar of the agent screen: Back, the task of the agent, its
- * agent, pane, and computer in mono, and the [actions] at the end.
- */
-@Composable
-internal fun AgentTopBar(task: String, context: String, onBack: () -> Unit, actions: @Composable () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(start = 2.dp, end = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier.size(48.dp).clip(CircleShape).clickable(onClickLabel = "Back", role = Role.Button, onClick = onBack)
-                .semantics { contentDescription = "Back" },
-            contentAlignment = Alignment.Center,
-        ) { Sym(Ic.back, tint = Tn.text, size = 24.dp) }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            T(task, Modifier.semantics { heading() }, size = 16, weight = FontWeight.SemiBold, maxLines = 1)
-            LineText(context, size = 11f, lineHeight = MONO_LINE, color = Tn.sub, family = Mono, maxLines = 1)
-        }
-        actions()
-    }
-}
-
 /** The Live key of the top bar: a pill that has the accent color while [on]. */
 @Composable
 internal fun LivePill(on: Boolean, onClick: () -> Unit) {
@@ -363,41 +337,6 @@ internal fun LivePill(on: Boolean, onClick: () -> Unit) {
         Sym(Ic.terminal, tint = ink, size = 18.dp)
         T("Live", size = 13, color = ink, weight = FontWeight.SemiBold)
     }
-}
-
-/**
- * The agents of the computer as pills that scroll to the side. The pill of
- * the agent on screen has the accent. A tap opens another agent.
- */
-@Composable
-internal fun AgentStrip(agents: List<HerdrAgent>, pane: String, elapsed: String, onPick: (String) -> Unit) {
-    PillStrip {
-        for (a in agents) {
-            val on = a.pane == pane
-            // The agent on screen shows the time of its step when its output shows one.
-            val meta = when {
-                a.status == AgentStatus.Done -> "done"
-                on && elapsed.isNotEmpty() -> elapsed
-                else -> a.agent
-            }
-            Pill(
-                a.project.ifEmpty { a.title.ifEmpty { a.pane } }, on,
-                onClick = { if (!on) onPick(a.pane) },
-                meta = meta,
-                clickLabel = "Open ${a.project.ifEmpty { a.agent }}",
-                state = if (on) "Shown, ${statusWord(a.status)}" else statusWord(a.status),
-            ) { StatusMark(a.status) }
-        }
-    }
-}
-
-/** The status of an agent as a short word for TalkBack. */
-internal fun statusWord(s: AgentStatus): String = when (s) {
-    AgentStatus.Blocked -> "needs input"
-    AgentStatus.Done -> "done"
-    AgentStatus.Working -> "working"
-    AgentStatus.Idle -> "idle"
-    AgentStatus.Unknown -> "unknown"
 }
 
 // ───────────────────────── Thread ─────────────────────────
@@ -602,7 +541,7 @@ internal fun ThreadYou(text: String, meta: String?) {
 @Composable
 internal fun ThreadWaiting() {
     val turn = when {
-        !rememberWideWindow() -> 0f
+        !rememberSplitWindow() -> 0f
         LocalLayoutDirection.current == LayoutDirection.Ltr -> -90f
         else -> 90f
     }

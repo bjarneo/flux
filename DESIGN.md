@@ -1,5 +1,5 @@
 ---
-name: Flux for Android, iOS, and macOS
+name: Flux for Android, iOS, macOS, and Windows
 description: The device side of Flux. 1 chat of the computers and the device, with what needs the user in the thread, in the live Omarchy theme of the computer.
 colors:
   bg: "#16161E"
@@ -205,19 +205,21 @@ components:
     padding: "2px 2px 2px 12px"
 ---
 
-# Design System: Flux for Android, iOS, and macOS
+# Design System: Flux for Android, iOS, macOS, and Windows
 
 ## Overview
 
 **Creative North Star: "The Thread of What Needs You"**
 
-Flux for Android looks like the user's own Omarchy desktop. Tiles sit on the page with Hyprland gaps. **Chat** shows what happens between the phone and the computers as 1 thread, with the newest entry at the bottom. A card that needs the user takes the full width and a red border, and it holds its whole action. Flux for iOS and Flux for macOS show the same chat.
+Flux for Android looks like the user's own Omarchy desktop. Tiles sit on the page with Hyprland gaps. **Chats** holds 1 chat for each agent and each computer, with what needs the user on top. The chat of a computer shows what happens between the phone and that computer as 1 thread, with the newest entry at the bottom. A card that needs the user takes the full width and a red border, and it holds its whole action. Flux for iOS, Flux for macOS, and Flux for Windows show the same chats.
 
 The app has no palette of its own. The colors come from the live Omarchy theme of the computer in scope, through a contrast guard. Tokyo Night is the fallback when no computer sent a theme. The token values in this file are the Tokyo Night reference set. The roles are the system, and the values change with the theme.
 
 The density is that of a tiled desktop: 8 dp gaps, 12 dp corners, flat tiles, and no shadows. Mono sets what the computer says, such as window titles, prompts, keys, and data. Roboto sets what Flux says. The app rejects the category default of a device list, then a grid of feature cards for each device.
 
 Flux for iOS and Flux for macOS use the same system. They share the token roles, the contrast guard, the Tokyo Night fallback, the chat order, the window title with the state word first, and the one-tap rule for agent choices. The Android app is the reference for every section. The section "Apple platforms" gives only what differs on iOS and macOS. That section comes from the Swift code, because no capture of the Apple apps exists yet.
+
+Flux for Windows uses the same system with the macOS metrics. The section "Windows" gives what differs. It comes from the C# code in `windows/Flux`.
 
 **Key Characteristics:**
 
@@ -326,20 +328,21 @@ All text grows with the Android font size. Layouts hold at 200%. A key label shr
 
 ## Layout
 
-Each app shows **Chat** as its first destination.
+Each app shows **Chats** as its first destination.
 
 - **Gaps and gutter:** Tiles keep an 8 dp gap. The screen gutter is 10 dp. The shell top bar starts 5 dp further in, to align the Flux mark.
-- **Phone in portrait:** **Chat** is 1 thread with the newest entry at the bottom, and the dock under it. Cards of a computer sit on the left at 88% of the width. A card that needs the user takes the full width. What the phone sent sits on the right.
-- **Wide window, 600 dp and more:** A navigation rail replaces the navigation bar. The dock of each screen becomes a tile at the bottom of a column on the right, at thumb height. The thumb menu opens above the dock and takes its width. **Live** keeps the dock in that column, and the terminal takes the full height. The arrow of **Waiting for you** points to the dock at the side.
-- **Short window:** The dock of **Chat** takes at most 70% of the height, and it scrolls inside that part.
-- **Content width:** Screens other than **Chat** scroll in `CappedScrollColumn`. The content is at most 840 dp wide and stays in the center.
-- **Destinations:** Chat, Control, and Computers. Control opens with 1 master tool, then groups of tool rows under section labels. In Control, the agent rows come right after the master tool, because the user needs them most often.
-- **Order:** **Chat** puts its entries in time order, see `chatItems` in `core/ChatFeed.kt`. An agent takes the start time of its status, so an agent with a new status moves to the end.
+- **Phone in portrait:** **Chats** is a list. The chat of a computer is 1 thread with the newest entry at the bottom, and the dock under it. Cards of a computer sit on the left at 88% of the width. A card that needs the user takes the full width. What the phone sent sits on the right.
+- **Wide window, 600 dp and more:** A navigation rail replaces the navigation bar. The dock of each screen becomes a tile at the bottom of a column on the right, at thumb height. The Send bar of a chat sits in the dock tile. **Live** keeps the dock in that column, and the terminal takes the full height. The arrow of **Waiting for you** points to the dock at the side.
+- **Tablet in landscape:** A wide window that is not short splits **Chats**: the list is 380 dp wide at the start, a 1 dp `line` rule follows, and the chat of the selected computer or agent takes the rest. The row of that chat takes `accent-tile`. Without a selection, the side tells the user to select a chat. A screen that a chat opens, such as the camera, covers the full window.
+- **Short window:** The dock of a chat takes at most 70% of the height, and it scrolls inside that part.
+- **Content width:** Screens other than the chats scroll in `CappedScrollColumn`. The content is at most 840 dp wide and stays in the center.
+- **Destinations:** Chats, Remote, and Computers. Remote opens with a row for the computer, then 3 groups of rows under the section labels See, Use, and Share. Settings opens from the gear key of Chats and holds 5 groups that open in place. The agent rows live in Chats.
+- **Order:** **Chats** puts what needs the user first, the newest first, then the agents that work, are done, and are idle, then the computers, online first. See `chatList` in `core/ChatList.kt`. The chat of a computer puts its entries in time order, see `chatItems` in `core/ChatFeed.kt`.
 - **Targets:** Every control takes taps on at least 48 by 48 dp.
 
 ## Elevation & Depth
 
-The system is flat. Tiles have no shadows. Depth comes from 4 tonal surface steps, `bg`, `off-tile`, `tile`, and `tile-hi`, and from 1 dp borders in `line`. In a dark theme, the tiles are lighter steps of the page. In a light theme, they are darker steps. The only emphasis beyond tone is the 2 dp red border of a **Chat** card that needs the user, and the 2 dp active border gradient of the pairing guide.
+The system is flat. Tiles have no shadows. Depth comes from 4 tonal surface steps, `bg`, `off-tile`, `tile`, and `tile-hi`, and from 1 dp borders in `line`. In a dark theme, the tiles are lighter steps of the page. In a light theme, they are darker steps. The only emphasis beyond tone is the 2 dp red border of a card that needs the user, and the 2 dp active border gradient of the pairing guide.
 
 ### Named Rules
 
@@ -369,7 +372,7 @@ A pressed tile changes its border to the accent. A selected choice changes its b
 
 ### Chips
 
-- **Scope chip:** A `tile` chip with a 10 dp corner and a `line` border, 40 dp high, that takes taps on 48 dp. It shows "All computers" or 1 computer, then a 7 dp link dot for each computer, then an expand icon. A tap opens the scope menu.
+- **Scope chip:** A `tile` chip with a 10 dp corner and a `line` border, 40 dp high, or 36 dp in a header, that takes taps on 48 dp. It shows "All computers" or 1 computer, then a 7 dp link dot for each computer, then an expand icon. A tap opens the scope menu. The chip sits in the top bar of Chats, Remote, and Computers.
 - **Choice chip:** A choice of a small group, such as a player or a camera mode. It is at least 40 dp high and takes taps on 48 dp. The label is 13 sp, 600, in `sub`. A selected chip takes `accent-tile`, a 2 dp accent border, and `text`.
 
 ### Cards / Containers
@@ -388,31 +391,58 @@ A pressed tile changes its border to the accent. A selected choice changes its b
 
 ### Navigation
 
-- **Bar:** A 66 dp bar on `bg` in a compact window, with 3 destinations: Chat, Control, and Computers. Each has a 22 dp icon in a 56 by 30 dp pill, and a 12 sp label. The pill of the open destination takes `line`, and its label is 600 in `text`. The Chat pill shows a red badge with the number of items that need the user, up to "9+". Each destination ends with a dock, so the bar has no fade. Chat hides the bar, so its thread and its dock take the height. A swipe to the side moves between the 3 destinations, and the bar shows again as a swipe leaves Chat. 3 dots in a strip under the status bar show the destination, in the same place on all 3: 6 dp dots in `dim`, and an 18 dp pill in `accent` for the one on screen. They follow the swipe. A swipe into a new destination ticks the phone. The first time, Chat slides 72 dp to the side and back.
+- **Bar:** A 66 dp bar on `bg` in a compact window, with 3 destinations: Chats, Remote, and Computers. Each has a 22 dp icon in a 56 by 30 dp pill, and a 12 sp label. The pill of the open destination takes `line`, and its label is 600 in `text`. The Chats pill shows a red badge with the number of items that need the user, up to "9+". The bar shows on each destination. A swipe to the side also moves between the 3 destinations. The chat of a computer or an agent is a feature screen above Chats, so it has no bar.
 - **Rail:** The Material 3 navigation rail in a window of 600 dp and more, with the same destinations.
-- **Top bar:** A destination shows the Flux mark, its title, and a mono context line. **Chat** ends the row with a 36 dp scope chip. A feature screen shows a 40 dp back button, the title, and an optional mono context line. When the actions leave the title too little width, they move to a second row. The agent screen has its own top bar, see Agent screen.
+- **Top bar:** A destination shows the Flux mark, its title, and a mono context line. **Chats** shows the scope chip, the search key, the **Settings** key, and the 48 dp **+** key after its title. A feature screen shows a 40 dp back button, the title, and an optional mono context line. When the actions leave the title too little width, they move to a second row. A chat has its own top bar, see Chat.
 - **Motion:** Destinations fade through in 240 ms. A feature screen moves on the horizontal axis in 220 ms. Predictive back follows the gesture.
+
+### Chats
+
+The signature component: 1 chat for each agent and each computer, as in a messaging app.
+
+- **Header:** The Flux mark, Chats in 16 sp 600, the count of what needs the user and the computers online in mono 11 sp, and the 48 dp **+** key that starts an agent or a terminal.
+- **Search:** A 44 dp pill on `tile` with a `line` border, a 20 dp search icon in `sub`, and the placeholder "Search agents, computers, files". It keeps only the chats that hold its text. A computer also stays when an entry of its chat holds it.
+- **Groups:** Needs you, Agents, and Computers, each with a 14 sp 500 heading and a mono 11 sp line at the end: the count in red, or the computer of the agents.
+- **Row:** A 44 dp picture with 12 dp corners, the title in 15 sp 600 on 1 line, the line under it in 12 or 13 sp, and the time in mono 11 sp `sub` at the end. The picture is `tile` with a `line` border and a 22 dp icon. A 12 dp dot at its bottom right, with a 2 dp ring of the ground, shows the state: green for online or done, red for needs input, and `dim` for idle. An agent that works shows a turning ring in the place of the dot.
+- **Agent row:** The task as the title, then the window title: the state word in the state color and " · agent · project" in mono `sub`. An agent that waits takes `tile`, a 1 dp red border, and an `accent-tile` picture, and shows how long it waits, such as "3m". An agent that works shows how long it works, such as "2:14".
+- **Computer row:** The name, and the newest entry of its chat, such as "You: Dinner at 7". A computer that is not reachable shows at 55% with "Not reachable since 09:12". Each agent row of that computer shows the same line, and its waiting time and working time stop.
+- **Approval and pair request:** A card on `tile` with 12 dp corners and a 2 dp red border, with Deny and Approve, 44 dp high. Approve opens the approval screen.
+
+### Agents widget
+
+The home screen widget of Android: the Needs you and Agents groups of Chats, without the computers. The code is in `widget/`.
+
+- **Ground:** `bg` with the corner of the launcher, 16 dp before Android 12. The inset is 8 dp. It has no shadow and no border.
+- **Header:** 36 dp: the 20 dp Flux mark in `text` and the accent, **Agents** in 15 sp 600, then the count in red mono 11 sp and " · 1 of 2 online" in `sub` mono 11 sp at the end. A widget narrower than 240 dp hides the title and the online count. The mark is `dim` while no computer can send agents. A tap opens Chats.
+- **Row:** At least 48 dp high, with 4 dp between rows and a 10 dp inset. A 10 dp dot, the task in 14 sp 600 on 1 line, the computer in mono 11 sp `sub` at the end of the task, and under them the state word in 12 sp 500 in the state color and " · agent · project" in mono 12 sp `sub`. A narrow widget puts the computer at the end of the source. Below 180 dp, the row shows no source. The dot is red, green, or `dim`. An agent that works has a 2 dp ring in the accent that does not turn.
+- **Needs you:** An agent that waits takes `tile` and a 1 dp red border on 12 dp corners. An approval and a pair request take a 2 dp red border. The widget has no buttons: a tap opens the chat or the approval screen.
+- **More:** When not all rows fit, a 24 dp line in 12 sp `sub` at the end says "3 more in Chats". When that line would take the place of a row, the header says "3 more" in the place of the computers online.
+- **Quiet state:** With no rows, a title in 14 sp 600 and a line in 12 sp, both in `sub`, such as "No computer is connected". The quiet state has no red.
+- **Colors:** The roles of the theme of all computers through the contrast guard: `text`, `sub`, red, green, and the accent on `bg` and `tile`, and `dim` only for the dot and the mark. `WidgetModelTest` checks each pair in each sample theme.
 
 ### Chat
 
-The signature component: 1 thread of the computers and the device.
+The chat of 1 computer: 1 thread of the computer and the device.
 
-- **Header:** The Flux mark, Chat in 16 sp 600, the computer in scope and the count of what needs the user in mono 11 sp, and the scope chip.
-- **Progress:** A 2 dp `line` rule under the header. A file that comes in or goes out fills it in the accent.
+- **Top bar:** A 48 dp back icon, a 36 dp picture with 10 dp corners and an 11 dp state dot, the name in 16 sp 600, the link and battery in mono 11 sp, and the menu: Remote, Get files, Terminals when the computer allows terminals, New agent or terminal, and Clear this chat.
+- **Progress:** A 2 dp `line` rule under the top bar. A file that comes in or goes out fills it in the accent.
 - **Card of a computer:** `tile` with 14 dp corners and a 4 dp corner at the bottom left. The top row holds the state mark and word, the source in mono, and the time. A 14 sp 600 title, a mono 12 sp body in `sub`, and a 13 sp accent text action follow.
-- **Card that needs the user:** An agent that waits, an approval, and a pair request take the full width and a 2 dp red border. An agent shows its command and its numbered choices, each 44 dp high. An approval shows Deny and Approve, 48 dp high. Approve opens the approval screen.
-- **What the phone sent:** A bubble on `accent-tile` with a `line-hi` border, 16 dp corners, and a 4 dp corner at the bottom right, at most 82% of the width. A file is a 236 dp card.
-- **Dock:** The phone clipboard in a 44 dp row with a Send key of an icon and a 13 sp label, and the composer: a 48 dp round **+** key in `line`, the field, the 48 dp mic key, and the 48 dp send key. **+** opens the thumb menu: a card on `bg` with a `line-hi` border and 20 dp corners, 10 dp above the key, over a scrim. It holds the 6 tools as 72 dp tiles, 3 in a row, and under them Control and Computers as 56 dp tiles, 2 in a row, nearest the thumb. A tap opens the menu. A hold opens it at once: the tile under the thumb takes `accent-tile`, an accent border, and 105% scale, with a tick of the phone, and the release opens it. While the field has the focus, **+** hides and the field grows to 6 lines with an accent border. While the phone listens, the panel of the dictation takes the full width. A choice such as "No, and tell Codex what to do differently" turns the dock into a reply: a row with Cancel, and the composer with an accent border and no **+**.
+- **Card that needs the user:** An approval takes the full width and a 2 dp red border. It shows Deny and Approve, 48 dp high. Approve opens the approval screen.
+- **What the phone sent:** A bubble on `accent-tile` with a `line-hi` border, 16 dp corners, and a 4 dp corner at the bottom right, at most 82% of the width. Text is in 14 sp. A link or a clip is in mono 12.5 sp. A photo is a 220 by 132 dp picture with the same corners. Another file is a 236 dp card.
+- **Dock:** The phone clipboard in a 40 dp row on `bg` with 10 dp corners: an 18 dp cyan clipboard icon, the source in 10 sp cyan, the clip in mono 12 sp, and Send as a 13 sp accent text action. Then the Send bar, then the composer: the field, the 48 dp mic key, and the 48 dp send key. The send key shows the number of selected photos in an 18 dp `text` circle.
+- **Send bar:** 4 keys in a row above the field: Photo, File, Scan, and More. A key is 48 dp high, on `bg` with a `line` border and 12 dp corners, with an 18 dp accent icon and a 13 sp label. The key of an open part takes an accent border. Photo opens Recent photos with All photos, and the 4 newest photos as 80 dp cells with 10 dp corners. A selected photo takes a 2 dp accent border and its number in a 20 dp accent circle. More opens a list of Camera, Text, QR, and Signature, as 48 dp rows with a 20 dp accent icon. The open part and the keyboard take the same place, so 1 closes the other. Back closes the open part.
+- **Field:** While the field has the focus, the open part of the Send bar closes and the field grows to 6 lines with an accent border. While the phone listens, the panel of the dictation takes the full width.
 
 ### Agent screen
 
 The agent screen shows 1 herdr agent as a thread. `agentThread` in `core/AgentThread.kt` reads the output of Claude Code, Codex, and opencode. Lines that it does not know stay terminal lines.
 
-- **Top bar:** A 48 dp back icon, the task in 16 sp 600, and the agent, the pane, and the computer in mono 11 sp. Live is a 36 dp pill. The menu holds Refresh, Changes, Show keys, and Close the agent.
-- **Strip:** 36 dp pills for the agents of the computer, each with a status mark, the project, and the agent in mono. The pill on screen takes `accent-tile` and an accent border.
-- **Progress:** A 2 dp `line` rule under the strip. While the agent works, a bar of 40% of the width slides over it in the accent.
+- **Top bar:** The top bar of a chat: a 48 dp back icon, a 36 dp picture on `accent-tile` with the state dot, the task in 16 sp 600, and the agent, the project, and the computer in mono 11 sp. Live is a 36 dp pill. The Changes key is a 48 dp icon. The menu holds Refresh, Show keys, and Close the agent.
+- **Progress:** A 2 dp `line` rule under the top bar. While the agent works, a bar of 40% of the width slides over it in the accent.
 - **Thread:** Messages, tool calls on `off-tile` with a 12 dp corner, a changes card on `tile`, and prompts as bubbles on `accent-tile`. A tap on a tool call shows its result.
 - **Dock:** `tile` with 20 dp top corners and a `line` rule at the top. It lies 14 dp over the end of the thread. It shows the question with 48 dp choices, the step of a working agent with Interrupt, or the end of a turn. The composer is a 48 dp pill on `bg` with a `line-hi` border, a round mic key on `line`, and a round accent send key.
+- **Link note:** A line above the thread shows "Output from 09:12" and the age while the link is open. While the link is not open, a `tile` card above the dock shows "Connecting to COMPUTER" with a spinner, or "COMPUTER is not reachable." with the time of the output, a yellow border, and the keys Retry and Wake.
+- **Dock with Agent control off:** The dock says that Agent control is off and names the Access card in Flux on the computer.
 - **Changes sheet:** `tile` with 20 dp top corners. Each file is a card on `bg` with its diff lines in mono 11 sp: hunks in cyan, added lines in green, and removed lines in red.
 
 ### Window title
@@ -422,11 +452,14 @@ A status dot and a state word in the state color, then " · " and the source in 
 ### Tools
 
 - **Master tool:** The tool that a destination uses most, such as Send clipboard. It is at least 128 dp high, on `tile-hi` with a `line-hi` border. A 28 dp accent icon sits at the top, and a 20 sp label sits at the bottom.
-- **Tool row:** A row of at least 56 dp with a 22 dp accent icon, a 15 sp label, and a 13 sp `sub` line. A tool that is off has a `sub` icon and shows at 55% alpha.
+- **Tool row:** A row of at least 56 dp with a 22 dp accent icon, a 15 sp label, and a 13 sp `sub` line. A tool that is off has a `sub` icon and shows at 55% alpha. Remote stacks its rows in 1 tile for each group, with a chevron at the end and a 1 dp `line` rule between the rows.
+- **Settings group:** A group row is at least 64 dp high with a 22 dp accent icon, a 15 sp title, a 13 sp `sub` summary, and a chevron. Only 1 group is open. A wide window in landscape shows the groups in 2 columns. Turn off Flux and About Flux stand apart at the end.
 
 ### Preserved surfaces
 
 The pairing sheet, `TiledPairSheet`, and the fingerprint approval screen, `ApproveActivity`, keep their layout and behavior. Their colors follow the theme. Do not restyle them as part of a system change.
+
+The SSH key screen, `SshSignActivity`, uses the layout and the guards of the approval screen: the 88 dp key badge, the question, the computer, the program in mono in a box, the red warning, and Deny and Approve. The program comes from the computer, so it stays in its box and never joins the question. The **SSH key** page under Computers uses the sync switch row, a `tile` with the public key and the fingerprint in mono, and the command block.
 
 ## Apple platforms
 
@@ -458,11 +491,12 @@ This section comes from the Swift code. No screen capture of the Apple apps exis
 
 The iPhone app follows the HIG structure. The code is in `ios/App/`.
 
-- **Navigation:** A `TabView` with 3 tabs: Chat, Control, and Computers. Chat uses the `text.bubble` symbol. The Chat tab shows a badge with the number of items that need the user on all computers, from 1 to "9+". Each tab has its own `NavigationStack`, with the system back button and the edge swipe. A tap on the open tab goes back to its root.
-- **Bars:** The tab bar takes the `tile` fill. The navigation bar of a tab root takes the `bg` fill and an inline title. The scope chip takes the place of the visible title. The title stays for VoiceOver and the back button.
-- **Chat:** The navigation bar holds the title, the context line, the scope chip, and a menu with Send photos, signature, and Queue and transfers. The thread and the dock follow the Android chat. Each agent that waits shows its choices, because iOS reads the prompt of each agent on its own. Open on a received file shows it with Quick Look.
+- **Navigation:** A `TabView` with 3 tabs: Chats, Control, and Computers. Chats uses the `text.bubble` symbol. The Chats tab shows a badge with the number of items that need the user on all computers, from 1 to "9+". Each tab has its own `NavigationStack`, with the system back button and the edge swipe. A tap on the open tab goes back to its root. The tab bar shows on each tab root. The chat of a computer and the chat of an agent push onto the stack of Chats and hide the tab bar. A swipe to the side does not change the tab.
+- **Bars:** The tab bar takes the `tile` fill. The navigation bar of a tab root takes the `bg` fill and an inline title. The Flux mark, the title, and the mono context line take the place of the visible title. A chat takes the `bg` fill too, a back key without a label, and its `ChatTitle` in the middle: the 36 pt picture with 10 pt corners and an 11 pt state dot, the title in subheadline semibold, and the context line in caption 2 mono. The title stays for VoiceOver and the back button.
+- **Chats:** `ChatsView` follows the Android Chats. The navigation bar holds the title, the context line, and the **+** key. The search field is a 44 pt capsule on `tile` with a `line` border, and it takes the accent border while it has the focus. It stays at the top while the list scrolls. A row is a button with a 44 pt `ChatAvatar`, the title in subheadline semibold, the line in caption or footnote, and the time in caption 2 mono. The approval and a pair request use the cards of the chat with tile corners and 44 pt buttons. An agent uses the `brain` symbol, and a computer uses the symbol of its type.
+- **Chat:** `ComputerChatView` holds the chat of 1 computer. The menu of the navigation bar holds Control, Agents and terminals, New agent or terminal, and Queue and transfers. The thread and the dock follow the Android chat, without agent cards. Open on a received file shows it with Quick Look. The clipboard row has a 44 pt Send target. The tray reads the 4 newest images with PhotoKit only when Flux has access to the photos. Without the access, a row on `bg` asks for it. All photos opens `PhotosPicker`. The tools are 64 pt cells on `bg` in a grid of 4.
 - **Metrics:** An 8 pt gap, a 10 pt gutter, a 12 pt tile corner, an 8 pt small corner, and a 10 pt chip corner. The content is at most 840 pt wide, and the choice and action rows are at most 600 pt wide.
-- **Targets:** Every control takes taps on 44 by 44 pt or more. A `FluxButton` is 44 pt high or more. A choice is 44 pt high or more in a chat card and 48 pt in the dock. A tool row is 56 pt high or more. The master tool is 128 pt high or more. The round media buttons are 48 pt, and the main one is a 56 pt green circle.
+- **Targets:** Every control takes taps on 44 by 44 pt or more. A `FluxButton` is 44 pt high or more. A choice is 48 pt high or more in the dock. The buttons of an approval are 48 pt in a chat and 44 pt in Chats. A tool row is 56 pt high or more. The master tool is 128 pt high or more. The round media buttons are 48 pt, and the main one is a 56 pt green circle.
 - **Type:** System text styles, so Dynamic Type works from xSmall to the accessibility sizes. Icons scale with the body style.
 
 | Role | iOS text style |
@@ -480,20 +514,23 @@ The iPhone app follows the HIG structure. The code is in `ios/App/`.
 
 - **States:** A pressed tile changes its border to the accent, as on Android. A pressed `FluxButton` shows at 70% alpha.
 - **VoiceOver:** Each control has a label, a value, and a hint. The top row of a chat card reads the state, the source, and the time as 1 line.
-- **Agent screen:** The system navigation bar holds the task, the agent, the pane, and the computer, and a menu with Refresh, Changes, Show keys, and Close the agent. The strip of pills, the progress line, the thread, and the dock follow the Android agent screen. The Changes sheet is a large sheet on `tile`. iOS has no Live.
-- **Differences from Android:** A tab bar in the place of the navigation bar and the navigation rail. A wide window keeps the tab bar. The system push and back motion in the place of the 220 ms shared axis and predictive back. 44 pt targets in the place of 48 dp targets. Text styles in the place of fixed sp sizes.
+- **Agent screen:** The navigation bar has the look of a chat: the 36 pt picture on `accent-tile` with the state dot, the task, and the agent, the project, and the computer in mono. The Changes key and a menu with Refresh, Show keys, and Close the agent follow. The progress line, the thread, and the dock follow the Android agent screen. The Changes sheet is a large sheet on `tile`. iOS has no Live.
+- **Differences from Android:** A tab bar in the place of the navigation bar and the navigation rail. A wide window keeps the tab bar. A swipe does not move between the tabs. The chat of a computer has no Copy on a clip, and a sent photo shows as a file card. The system push and back motion in the place of the 220 ms shared axis and predictive back. 44 pt targets in the place of 48 dp targets. Text styles in the place of fixed sp sizes.
 - **Preserved surfaces:** The pairing sheet, `PairSheet`, and the Face ID approval sheet, `ApprovePrompt`.
 
 ### macOS
 
 The Mac app follows the macOS 14 structure. The code is in `macos/App/`.
 
-- **Main window:** A `NavigationSplitView`, at least 760 by 520 pt. The default size is 900 by 620 pt. The sidebar is 180 pt to 200 pt wide. It holds the 3 destinations, Chat, Control, and Computers, with the same symbols as iOS, and this Mac at the bottom. The Chat row shows a badge with the count of items that need the user on all computers. Each destination has its own `NavigationStack` in the detail column.
-- **Toolbar:** The scope menu sits in the toolbar of each destination root. It is a chip with the chip corner, a link dot and a battery dot for each computer, and a chevron. A click opens a panel of choices, 280 pt wide, with rows of 36 pt.
-- **Go menu:** Command-1 to Command-3 open Chat, Control, and Computers. Command-R stays with the agents window.
-- **Chat:** The toolbar holds the title Chat, the context line as the subtitle, and the scope menu. The thread column is at most 840 pt wide, and the dock lies under it. Each agent that waits shows its choices. Escape closes a reply.
+- **Main window:** A `NavigationSplitView`, at least 800 by 520 pt. The default size is 1000 by 660 pt. The sidebar is 260 pt to 420 pt wide, 300 pt by default. It holds the list of chats, then the rows of Control and Computers with their keys, and this Mac at the bottom. The detail column shows the open chat, Control, or Computers, each with its own `NavigationStack`. The design note says it: macOS puts the list in the sidebar and the chat in the detail column.
+- **Toolbar:** The scope menu sits in the toolbar of Control and Computers. It is a chip with the chip corner, a link dot and a battery dot for each computer, and a chevron. A click opens a panel of choices, 280 pt wide, with rows of 36 pt. Chats has no scope.
+- **Go menu:** Command-1 to Command-3 open Chats, Control, and Computers. Chats shows the chat that was open last. Command-R and Command-D stay with the agent chat and the agents window.
+- **Chats:** The sidebar follows the Android list. The header holds the Flux mark in the accent, Chats in 15 pt semibold, the count of what needs the user and the computers online in mono 11 pt, and a 28 pt round **+** key on `line` that starts an agent. The search field is a 30 pt pill on `tile` with a `line` border, and the border takes the accent while the field has the focus. The group headings are 13 pt medium with the trailing text in mono 11 pt. A row has a 36 pt picture with 10 pt corners and an 11 pt dot, the title in 13 pt semibold, and the line in 12 pt. The open chat takes `line`, and a hover adds 5% of `text`. An agent that waits takes `tile`, a 1 pt red border, and an `accent-tile` picture. The approval and the pair request are cards on `tile` with the tile corners and a 2 pt red border, with 40 pt buttons. The agent symbol is `brain`, as in the rest of the Mac app.
+- **Chat of a computer:** The window toolbar holds a 28 pt picture with the state dot, the name as the title, the link and battery as the subtitle, and a menu: Control, Agents Window, Start an Agent, and Computer Page. The thread column is at most 840 pt wide, and the dock lies under it. The thread holds no agents. The clipboard row is 40 pt on `bg` with 10 pt corners, a cyan icon, and Send as a text action.
+- **Tray:** The 34 pt **+** key opens the tray under the composer, and turns into an accent key with a cross. The tray holds the tools as 52 pt cells on `bg` with a `line` border, 4 in a row: Camera, File, Scan, Text, QR, Signature, Get files, and Agent. The Mac has no photo library tray. While Send new screenshots is on, the tray shows the 4 newest screenshots as 64 pt cells with 10 pt corners, and All screenshots. A selected screenshot takes a 2 pt accent border and its number in an 18 pt accent circle, and the send key shows the count in a 16 pt `text` circle. A click in the field or Escape closes the tray.
+- **Agent chat:** The agent thread and dock of the agents window in the detail column. The window toolbar holds a 28 pt picture on `accent-tile` with the state dot, the task as the title, the agent, the project, and the computer as the subtitle, then Changes, Keys, Copy, and Refresh.
 - **Metrics:** An 8 pt gap, a 12 pt gutter, a 12 pt tile corner, an 8 pt small corner, and a 10 pt chip corner. The content is at most 840 pt wide, and the choice and action rows are at most 600 pt wide.
-- **Agents window:** The agent list stays in the sidebar in the place of the strip of pills. The detail shows a header with Changes, Command-D, a Keys toggle, Copy, and Refresh, Command-R. The progress line, the thread, and the dock follow the Android agent screen. The Changes sheet closes with Escape. The Mac has no Live.
+- **Agents window:** It stays for Agents Window in Control, Agents in the menu bar panel, Open Agents on the page of a computer, and the agent notifications. The agent list stays in the sidebar in the place of the strip of pills. The detail shows a header with a 32 pt agent picture, Changes, Command-D, a Keys toggle, Copy, and Refresh, Command-R. The progress line, the thread, and the dock follow the Android agent screen. The Changes sheet closes with Escape. The Mac has no Live.
 - **Targets:** A button is 28 pt high or more. Choice rows are 36 pt high or more. A tool row is 44 pt high or more. Every action is a `Button`, so Tab and Space reach it with full keyboard access.
 - **Buttons:** `FluxButtonStyle` has the same 5 kinds as Android, on the 8 pt small corner. The label is 13 pt semibold, with 14 pt side insets, or 8 pt for the Text kind. A hover adds 6% of `text` over the button. A press shows the button at 80% alpha.
 - **Tiles:** A pressed tile shows at 80% alpha. Its border does not change to the accent.
@@ -513,12 +550,41 @@ The Mac app follows the macOS 14 structure. The code is in `macos/App/`.
 | Badge | 11 pt, mono, bold |
 
 - **Menu bar extra:** The Flux mark, then the count of items that need the user, from 1 to "9+". The mark has an offline form when no computer is connected. VoiceOver reads "Flux, 2 items need you". The extra uses the window style, so its panel reads the agent output when it opens.
-- **Menu bar panel:** 360 pt wide with a 12 pt inset. It shows a red dot and the count line, then the 2 newest items that need the user as chat cards with their one-tap choices. A reply choice opens the main window. Under them are up to 3 rows that open Chat, a menu for each online computer, and Open Flux, Settings, and Quit Flux. The panel does not use the scope.
+- **Menu bar panel:** 360 pt wide with a 12 pt inset. It shows a red dot and the count line, then the 2 newest items that need the user as chat cards with their one-tap choices. A choice that rejects the action and Open chat open the chat of the agent in the main window. Under them are up to 3 rows that open their chats, a menu for each online computer, and Open Flux, Settings, and Quit Flux. The panel does not use the scope.
 - **Destinations:** Control opens with the master tool Remote desktop, and the agents row comes right under it.
 - **Settings window:** It holds the theme under General, Theme, and the feature settings. It takes the theme surfaces.
 - **Feature windows:** The windows for agents, browse, camera, remote desktop, and touchpad keep their layout. They take the theme background, the accent, and the light or dark mode.
-- **Differences from Android:** A sidebar in the place of the navigation bar. 28 pt pointer targets in the place of 48 dp touch targets. A hover state. Buttons on the 8 pt small corner. A pressed tile dims and keeps its border. A 12 pt gutter. The menu bar extra exists only on the Mac.
+- **Differences from Android:** The list of chats in the sidebar and the open chat in the detail column, in the place of the navigation bar and a screen for each chat. The chat top bars in the window toolbar. A tray with recent screenshots in the place of recent photos. 28 pt pointer targets in the place of 48 dp touch targets. A hover state. Buttons on the 8 pt small corner. A pressed tile dims and keeps its border. A 12 pt gutter. The menu bar extra exists only on the Mac.
 - **Preserved surfaces:** The pairing view shows on the theme background of the window, and takes the accent and the light or dark mode. The pair request sheet, `PairRequestSheet`, and the Touch ID approval window, `ApprovePrompt`, keep their own background, and take only the accent and the light or dark mode.
+
+## Windows
+
+Flux for Windows uses the system of this file with the metrics of macOS, because both are pointer desktops. This section gives only what differs from macOS. All other sections apply.
+
+This section comes from the C# code in `windows/Flux`. No capture of the Windows app exists yet.
+
+### Shared code
+
+- **Theme engine:** `windows/FluxKit/Theme/ThemePalette.cs` is the port of `ThemePalette.swift`, with the same contrast needs and the same Tokyo Night and Tokyo Night Day values. `ThemeMode` has Computer, System, Light, and Dark.
+- **Roles in a view:** `ThemeColors` in `windows/Flux/Kit/Tn.cs` gives each role as a frozen WPF brush through `Tn.Current`. `Tn.Changed` draws the open views again.
+- **Shell kit:** `windows/Flux/Kit` holds `Metrics`, `Faces`, `Stack`, `FluxButton` with the 5 kinds, and `Parts`: the master tool, the tool row, the grid tool, `SectionLabel`, `ListHeading`, `NeedsBadge`, `LinkDot`, `BatteryDot`, `RingMark`, the spinner, the progress line, `KeyView`, `CommandBlock`, and the page dock.
+- **Views in code:** The views are C# code, not XAML. A view draws itself from the models again after a change, as a SwiftUI view does. Fields and lists that keep their state stay across the drawings.
+
+### Windows rules
+
+- **Type faces:** Segoe UI Variable Text, or Segoe UI, sets Flux text. Cascadia Mono, or Consolas, sets computer data. Segoe Fluent Icons, or Segoe MDL2 Assets on Windows 10, draws the icons. The Mono Is the Computer Rule applies with Segoe UI in the place of Roboto.
+- **Main window:** At least 820 by 520 px, 980 by 640 px by default. The sidebar is 300 px wide. At the top, it holds the Flux mark, the word `flux` in mono, and the **+** key that starts an agent. The list of Chats follows. Control and Computers sit under a `line` rule, and this computer is at the bottom. The selected destination takes a `line` fill and a 600 label. The detail column shows the open chat, or the page of Control or Computers.
+- **Chats:** The list of the Chats section, in the sidebar and in the macOS sizes. The title is 15 px 600, and the context line is mono 11 px. The search is a 32 px pill on `tile` with a `line` border, the clear key, and the mic key. With the focus, its border takes the accent. The group headings are 13 px 500, with the count or the computer in mono 11 px. A row has a 36 px picture with 10 px corners and a 12 px state dot. The title is 13 px 600, the line is 12 px, and the time is mono 11 px. The open chat takes a `line` fill. The approval and the pair request are cards with the tile corner and 40 px buttons.
+- **Chat:** The top bar of a chat replaces the header. It holds the 36 px picture with the state dot, the name in 15 px 600, the link and battery in mono 11 px, and the menu key. The list stays in the sidebar, so the top bar has no back key. The clipboard row is 40 px high. The **+** key, the field, the mic key, and the send key are 36 px. The tray opens in the dock with Recent screenshots and All screenshots. The 4 newest screenshots are 72 px cells, and the tools are 60 px cells on `bg`, 4 in a row. The tray scrolls inside 280 px, and Escape closes it.
+- **Agent chat:** The agent screen with the top bar of a chat: the picture on `accent-tile`, the task, and the agent, the project, and the computer in mono. `±` opens the changes, then Keys, Copy, and Refresh.
+- **Header:** The title of the page in 15 px 600, the context line in mono 11 px and `sub`, a back button on a route, and the scope chip on a destination root. A chat draws its own top bar.
+- **Title bar:** The window frame takes the light or dark mode of the palette. On Windows 11, the caption takes `bg` and `text`.
+- **Standard controls:** Text fields, check boxes, sliders, menus, and scroll bars use the Fluent theme of WPF in the light or dark mode of the palette. A field of the dock takes `bg`, a `line-hi` border, and an accent border with the focus.
+- **Dialogs:** A dialog is a window on `tile-hi` with the content and the buttons at the end. Escape cancels it. The pair request dialog keeps the layout of the Mac sheet.
+- **Tray icon:** The Flux mark on the 16-unit grid of the website mark, drawn for the light or dark taskbar, dimmed while no paired computer is connected, with a red dot when an item needs the user. A click opens a panel of 360 px at the bottom right of the screen: the count line, the 2 newest items that need the user as cards, the next items as rows that open their chats, a menu for each online computer, and Open Flux, Settings, and Quit Flux. The right button opens a menu with the same app actions.
+- **Notifications:** Windows toasts. The computer name shows as the attribution line. The actions of a category are toast buttons.
+- **Keys:** `Ctrl+1` to `Ctrl+3` open Chats, Control, and Computers. `Ctrl+F` goes to the search of Chats. `Esc` and `Alt+Left` go back. `Ctrl+,` opens the settings. In the chat of an agent, `Ctrl+R` reads the output again and `Ctrl+D` shows the changes. Tab reaches each action, and a focused control shows a 2 px accent ring.
+- **Differences from macOS:** A tray icon and panel in the place of the menu bar extra. A sidebar of a fixed width. Dialogs in the place of sheets. The Fluent controls of WPF in the place of the AppKit controls. Windows has no photo library, so the tray of a chat shows the newest screenshots in the place of the photos.
 
 ## Website
 

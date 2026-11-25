@@ -273,6 +273,7 @@ func (d *Daemon) handleNotification(dev *Device, l *lan.Link, p *proto.Packet) {
 		return
 	}
 	_, seen := dev.notifDesktop[b.ID]
+	isNew := findNotification(dev.notifications, b.ID) == nil
 	dev.notifications = removeNotification(dev.notifications, b.ID)
 	dev.notifications = append([]*PhoneNotification{n}, dev.notifications...)
 	if len(dev.notifications) > maxNotifications {
@@ -284,6 +285,11 @@ func (d *Daemon) handleNotification(dev *Device, l *lan.Link, p *proto.Packet) {
 	show := d.cfg.Notifications && !b.Silent.bool() && !(seen && b.OnlyOnce.bool())
 	d.mu.Unlock()
 	d.markDirty()
+	if isNew && !b.Silent.bool() {
+		d.emitAutomation(automationEvent{Kind: "notification.received", Device: dev.ID, Subject: n.App, Env: map[string]string{
+			"FLUX_APP": n.App, "FLUX_TITLE": n.Title, "FLUX_TEXT": n.Text,
+		}})
+	}
 	if show {
 		d.showNotification(dev, n)
 	}
@@ -523,6 +529,8 @@ func (d *Daemon) onNotificationAction(_ uint32, key string) {
 		}
 	case "desktop-stop":
 		_ = d.StopDesktop()
+	case "speaker-stop":
+		_ = d.StopSpeaker()
 	case "browse-stop":
 		d.stopBrowse(rest)
 	case "notif-dismiss":

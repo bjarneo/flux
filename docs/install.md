@@ -17,6 +17,7 @@ The macOS app requires macOS 14 or later.
 | Clipboard | `wl-clipboard` |
 | Phone keyboard | `wtype`, which Omarchy installs |
 | Remote desktop | `gpu-screen-recorder`, which Omarchy installs |
+| Extended screen on an Android phone or tablet | `wf-recorder` |
 | Icons | A Nerd Font that provides `ttf-font-nerd` |
 | Android install with `adb` | `android-tools`, as in [Android requirements](android.md#requirements) |
 | Android build | JDK 21, SDK platform 36, and Build Tools 36.0.0 |

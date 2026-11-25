@@ -41,7 +41,8 @@ public class EndToEndTests
         Assert.True(computer.IsFlux);
         Assert.Equal("fluxd", computer.App);
         Assert.NotNull(t.Core.Trust.Get(computer.Id));
-        Assert.Contains($"Paired with {computer.Name}", t.Toasts);
+        // The toast comes through the queue of the UI, after the state.
+        await Wait.UntilAsync(() => t.Toasts.Contains($"Paired with {computer.Name}"), "the pairing toast", fluxd);
 
         await fluxd.CliAsync("ping", "hello there");
         await Wait.UntilAsync(() => t.Toasts.Contains($"hello there from {computer.Name}"), $"the ping from fluxd, toasts: {string.Join(" | ", t.Toasts)}", fluxd);

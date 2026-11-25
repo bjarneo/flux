@@ -13,23 +13,9 @@ enum Route: Hashable {
     case feature(FeatureRoute)
 }
 
-/// The 3 destinations of the tab bar, in order.
+/// The 3 destinations of the tab bar, in order. `chat` is the Chats tab.
 enum AppTab: Hashable, CaseIterable {
     case chat, control, computers
-}
-
-/// A reply that the dock of the chat writes to the agent in `pane`, in the
-/// place of the `choice` that rejects its action, such as "No, and tell
-/// Codex what to do differently".
-struct ChatReply: Equatable {
-    let deviceId: String
-    let pane: String
-    let agent: String
-    let project: String
-    let computer: String
-    let choice: AgentChoice
-    /// The lines of the question that the user read. The reply goes out only while the question is the same.
-    let lines: [TermLine]
 }
 
 /// A short message for the user. Each one has its own id, so that the same
@@ -54,13 +40,17 @@ final class AppModel {
     var controlPath: [Route] = []
     var computersPath: [Route] = []
     /// The computer in scope, or nil for all computers. A new start begins
-    /// with all computers.
+    /// with all computers. The scope filters Control, and it picks the
+    /// computer theme. The list of chats shows all computers.
     var scope: String?
-    /// The reply that the dock of the chat writes to an agent, or nil.
-    var chatReply: ChatReply?
-    /// The first time that the chat showed each item whose start is not
-    /// known. The chat reads it while it draws, so SwiftUI does not track it.
+    /// The first time that the chat of a computer showed each item whose
+    /// start is not known. The chat reads it while it draws, so SwiftUI does
+    /// not track it.
     @ObservationIgnored private var seenClock = SeenClock()
+    /// The same for the rows of the list of chats.
+    @ObservationIgnored private var listClock = SeenClock()
+    /// The time that each paired computer went offline in this run of Flux, by device ID.
+    private var wentOffline: [String: Date] = [:]
     /// True for 3 seconds after a connection attempt starts. The chat then
     /// says that it connects, not that a computer is not reachable.
     private(set) var connecting = false
@@ -198,44 +188,65 @@ final class AppModel {
         return Inbox.items(core: core, devices: state.devices)
     }
 
-    /// The entries of the chat in scope, oldest first. `all` are the Inbox
-    /// items of all computers, so that a change of the scope does not move an item.
-    func chatEntries(all: [InboxItem]) -> [ChatEntry] {
+    /// What the chats show besides the Inbox items: what this iPhone sent,
+    /// the files in both directions, the last clip, and the answers to
+    /// approvals. The demo shows its samples.
+    private var chatSources: (sent: [SentItem], transfers: [FileTransfer], clip: ClipEvent?, answers: [ApproveRecord]) {
+        if demo { return (DemoMode.sent, DemoMode.sendTransfers, DemoMode.clip, []) }
+        return (core.plugin(SharePlugin.self)?.model.sent ?? [],
+                core.plugin(SharePlugin.self)?.model.transfers ?? [],
+                core.plugin(ClipboardPlugin.self)?.model.last,
+                core.plugin(ApprovePlugin.self)?.model.history ?? [])
+    }
+
+    /// The entries of the chat of the computer `deviceId`, oldest first,
+    /// with the approval of that computer. The chat of a computer shows no
+    /// agents, because each agent has its own chat. `all` are the Inbox
+    /// items of all computers, so that a new item on another computer does
+    /// not move an item.
+    func chatEntries(of deviceId: String, all: [InboxItem]) -> [ChatEntry] {
         let seen = seenClock.update(all.map(\.key), now: Date())
-        if demo {
-            return Chat.entries(sent: DemoMode.sent, transfers: DemoMode.sendTransfers, clip: DemoMode.clip, answers: [],
-                                items: all, since: { _, pane in DemoMode.since(pane: pane) }, seen: seen, scope: scope)
+        let approvals = all.filter { item in
+            if case .approval = item.content { return item.deviceIds.contains(deviceId) }
+            return false
         }
-        let since = core.plugin(HerdrPlugin.self)?.model.since ?? [:]
-        return Chat.entries(sent: core.plugin(SharePlugin.self)?.model.sent ?? [],
-                            transfers: core.plugin(SharePlugin.self)?.model.transfers ?? [],
-                            clip: core.plugin(ClipboardPlugin.self)?.model.last,
-                            answers: core.plugin(ApprovePlugin.self)?.model.history ?? [],
-                            items: all, since: { id, pane in since[id]?[pane] },
-                            seen: seen, scope: scope)
+        let s = chatSources
+        return Chat.entries(sent: s.sent, transfers: s.transfers, clip: s.clip, answers: s.answers,
+                            items: approvals, since: { _, _ in nil }, seen: seen, scope: deviceId)
+    }
+
+    /// The list of chats: 1 chat for each agent and each paired computer,
+    /// with what needs the user on top, see `Chats.list`. A `query` keeps
+    /// only the chats that hold it. The demo shows its sample agents and its
+    /// sample approval.
+    func chatList(query: String) -> ChatList {
+        let s = chatSources
+        let log = Chat.entries(sent: s.sent, transfers: s.transfers, clip: s.clip, answers: s.answers,
+                               items: [], since: { _, _ in nil }, seen: [:])
+        if demo {
+            return Chats.list(devices: state.devices, herdr: DemoMode.herdrStates, approval: DemoMode.approval(), log: log,
+                              since: { _, pane in DemoMode.since(pane: pane) }, lastSeen: { self.lastSeen($0) },
+                              seen: &listClock, now: Date(), query: query)
+        }
+        let herdr = core.plugin(HerdrPlugin.self)?.model
+        let since = herdr?.since ?? [:]
+        return Chats.list(devices: state.devices, herdr: herdr?.states ?? [:], approval: core.plugin(ApprovePlugin.self)?.model.current,
+                          log: log, since: { id, pane in since[id]?[pane] }, lastSeen: { self.lastSeen($0) },
+                          seen: &listClock, now: Date(), query: query)
+    }
+
+    /// The time that the paired computer `id` went offline in this run of
+    /// Flux, or nil when Flux does not know it. The demo desktop went
+    /// offline at 09:12 today.
+    func lastSeen(_ id: String) -> Date? {
+        if demo { return DemoMode.lastSeen(id) }
+        return wentOffline[id]
     }
 
     /// Sets the computer in scope, or all computers with nil. The scope
-    /// filters the chat and Control, and it picks the computer theme.
+    /// filters Control, and it picks the computer theme.
     func setScope(_ id: String?) {
         scope = id
-    }
-
-    /// The Inbox items changed. The herdr plugin drops the prompts of the
-    /// agents that no longer wait or work, and the reply of the dock ends
-    /// when its agent no longer waits.
-    func inboxChanged(all: [InboxItem]) {
-        var keys = Set<String>()
-        var waits = Set<String>()
-        for item in all {
-            // A working agent shows its step in the chat, so its prompt stays too.
-            if case .agent(let deviceId, let agent, _) = item.content, agent.status == .blocked || agent.status == .working {
-                keys.insert(HerdrModel.promptKey(deviceId, pane: agent.pane))
-                if agent.status == .blocked { waits.insert(HerdrModel.promptKey(deviceId, pane: agent.pane)) }
-            }
-        }
-        core.plugin(HerdrPlugin.self)?.keepPrompts(keys)
-        if let r = chatReply, !waits.contains(HerdrModel.promptKey(r.deviceId, pane: r.pane)) { chatReply = nil }
     }
 
     /// The links connect for 3 seconds before the chat says that a
@@ -299,17 +310,20 @@ final class AppModel {
         let old = state
         state = s
         for d in s.devices where d.pairState != .incoming { Notifier.shared.remove(id: "pair-\(d.id)") }
+        for d in s.devices where d.paired && !d.online && old.devices.contains(where: { $0.id == d.id && $0.online }) {
+            wentOffline[d.id] = Date()
+        }
         if let id = pairingSheet, !s.devices.contains(where: { $0.id == id }) { pairingSheet = nil }
         FeatureHooks.stateChanged(s, model: self)
         // A computer that is no longer paired leaves the scope.
         if let id = scope, !s.devices.contains(where: { $0.id == id && $0.paired }) { scope = nil }
-        // A new pairing opens the chat of the new computer. Flux asks for
-        // notifications here, so that the question comes with a reason.
+        // A new pairing opens the chat of the new computer above Chats. Flux
+        // asks for notifications here, so that the question comes with a reason.
         if let id = Self.newlyPaired(old: old.devices.map { ($0.id, $0.paired) }, new: s.devices.map { ($0.id, $0.paired) }).first {
             pairingSheet = nil
             scope = id
             tab = .chat
-            chatPath = []
+            chatPath = [.feature(.chat(id))]
             notePaired(id)
             NotificationAccess.shared.ask()
         }

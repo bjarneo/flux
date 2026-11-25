@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"flux/internal/approve"
 	"flux/internal/config"
 	"flux/internal/herdr"
 	"golang.org/x/sys/unix"
@@ -47,6 +48,13 @@ func doctor() {
 	}
 
 	checkDiscoveryPort(udpHolders, os.Stdout, check)
+
+	// polkit-1 asks the phone only with a setuid polkit-agent-helper-1.
+	// The line is the one of flux-cli approve status.
+	if name, err := approveUser(); err == nil {
+		_, kerr := approve.ReadKey(approve.KeyPath(name), 0)
+		approveDoctor(os.Stdout, kerr == nil, approve.SystemPAM().Uses("polkit-1"), checkServices([]string{"polkit-1"}), check)
+	}
 
 	// Flux needs no open port. fluxd opens every connection, and mDNS
 	// finds the phones. The default ufw rules let mDNS in.
@@ -107,6 +115,14 @@ func doctor() {
 	_, pwErr := exec.LookPath("pw-cat")
 	check(pwErr == nil, "pw-cat is installed, so the phone can be a microphone",
 		"The phone as microphone needs pw-cat. Install it with: sudo pacman -S pipewire")
+	// The phone as speaker needs pw-record. The audio outputs on the phone
+	// and the mute of the phone speaker need pactl.
+	_, recErr := exec.LookPath("pw-record")
+	check(recErr == nil, "pw-record is installed, so the phone can play the audio of this computer",
+		"The phone as speaker needs pw-record. Install it with: sudo pacman -S pipewire")
+	_, pactlErr := exec.LookPath("pactl")
+	check(pactlErr == nil, "pactl is installed, so the phone can select the audio output of this computer",
+		"The audio outputs on the phone need pactl. Install it with: sudo pacman -S libpulse")
 	_, mpvErr := exec.LookPath("mpv")
 	_, ffplayErr := exec.LookPath("ffplay")
 	check(mpvErr == nil || ffplayErr == nil, "mpv or ffplay is installed, so the phone screen can show here",
@@ -122,7 +138,9 @@ func doctor() {
 	check(gsrErr == nil || wfErr == nil, "gpu-screen-recorder is installed, so the phone can show this screen",
 		"The remote desktop needs gpu-screen-recorder. Install it with: sudo pacman -S gpu-screen-recorder")
 	if wfErr == nil {
-		fmt.Println("✓ wf-recorder is installed, so the remote desktop also works on a GPU that gpu-screen-recorder does not support")
+		fmt.Println("✓ wf-recorder is installed, so a phone or a tablet can extend this screen, and the remote desktop also works on a GPU that gpu-screen-recorder does not support")
+	} else {
+		fmt.Println("- To extend this screen to a phone or a tablet, install wf-recorder: sudo pacman -S wf-recorder")
 	}
 	if gsrErr == nil {
 		kms := filepath.Join(filepath.Dir(gsr), "gsr-kms-server")
@@ -134,6 +152,7 @@ func doctor() {
 	// herdr is optional. When it runs, the phone shows its agents.
 	// The state error err of fluxd decides below whether checkLiveTerminal
 	// gets the state, so the error of LookPath has its own name.
+	herdrServer := false
 	if _, herr := exec.LookPath("herdr"); herr == nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		path := herdr.SocketPath()
@@ -146,6 +165,7 @@ func doctor() {
 			// For example, the socket belongs to another user.
 			check(false, "", safe(fmt.Sprintf("The herdr socket %s does not work: %v", path, perr)))
 		default:
+			herdrServer = true
 			check(pong.Protocol >= herdr.MinProtocol, fmt.Sprintf("herdr %s runs, so the phone can show its agents", pong.Version),
 				fmt.Sprintf("herdr %s uses API protocol %d, and Flux needs %d or newer. Run: herdr update", pong.Version, pong.Protocol, herdr.MinProtocol))
 			if pong.Protocol >= herdr.MinProtocol {
@@ -156,6 +176,10 @@ func doctor() {
 				checkLiveTerminal(pong.Version, fluxd, os.Stdout, check)
 			}
 		}
+	}
+
+	if note := herdrCoreNote(herdrServer); note != "" {
+		fmt.Println(note)
 	}
 
 	for _, bin := range []string{"wl-copy", "wl-paste", "xdg-open"} {
@@ -353,6 +377,23 @@ func checkLiveTerminal(server string, fluxd *State, out io.Writer, check func(ok
 		check(false, "", safe(fmt.Sprintf("The live terminal on the phone needs %s, and fluxd runs %s %s. Update that herdr, or put a newer herdr first in the PATH of fluxd.service. Then run: %s",
 			need, fluxd.Herdr.CLI.Path, fluxd.Herdr.CLI.Version, restart)))
 	}
+}
+
+// herdrCoreNote returns the doctor line for herdr-core. The Herdr app runs
+// herdr-core with its own socket, and Flux reads only the herdr server. The
+// line is empty when the socket does not exist or the herdr server answers.
+func herdrCoreNote(serverRuns bool) string {
+	if serverRuns {
+		return ""
+	}
+	dir := os.Getenv("XDG_RUNTIME_DIR")
+	if dir == "" {
+		return ""
+	}
+	if _, err := os.Stat(filepath.Join(dir, "herdr-core", "default.sock")); err != nil {
+		return ""
+	}
+	return "- herdr-core runs, but Flux reads only the herdr server. Agents of the Herdr app do not show on the phone."
 }
 
 // herdrDown reports whether err is a plain connection failure to the

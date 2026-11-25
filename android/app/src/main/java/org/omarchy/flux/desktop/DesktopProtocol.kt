@@ -11,19 +11,35 @@ import java.io.IOException
 import java.io.InputStream
 
 /**
+ * The screen of this phone for the extended screen: the size of the video
+ * in pixels and the Android density. The computer adds a monitor of this
+ * size, so that each pixel of the monitor is 1 pixel of the phone.
+ */
+data class ExtendSize(val width: Int, val height: Int, val density: Float)
+
+/**
  * The flux.desktop packets. The phone opens a TLS listener and sends
  * "start" with its port, the longest side of the stream, and optionally
- * a monitor. The computer connects and writes frames, see [FrameReader].
- * The computer answers "live" with the monitor and the size, "error", or
- * "stop". The touches go as flux.mousepad.request with a position.
+ * a monitor. For the extended screen, "start" has "extend" and the size of
+ * the phone screen instead of a monitor. The computer connects and writes
+ * frames, see [FrameReader]. The computer answers "live" with the monitor
+ * and the size, "error", or "stop". The touches go as
+ * flux.mousepad.request with a position.
  */
 object DesktopPackets {
     /** The longest side of the stream that the phone asks for, in pixels. */
     const val MAX_SIZE = 1920
 
-    fun start(port: Int, monitor: String? = null, maxSize: Int = MAX_SIZE, audio: Boolean = false): Packet {
+    /** The longest side of the extended screen that the phone asks for, the largest that fluxd streams. */
+    const val MAX_EXTEND_SIZE = 3840
+
+    fun start(port: Int, monitor: String? = null, maxSize: Int = MAX_SIZE, audio: Boolean = false, extend: ExtendSize? = null): Packet {
         val fields = mutableListOf<Pair<String, Any?>>("state" to "start", "port" to port, "maxSize" to maxSize)
-        if (!monitor.isNullOrEmpty()) fields += "monitor" to monitor
+        if (extend != null) {
+            fields += listOf("extend" to true, "width" to extend.width, "height" to extend.height, "density" to extend.density)
+        } else if (!monitor.isNullOrEmpty()) {
+            fields += "monitor" to monitor
+        }
         if (audio) fields += "audio" to true
         return Packet(Types.FLUX_DESKTOP, bodyOf(*fields.toTypedArray()))
     }
@@ -33,8 +49,11 @@ object DesktopPackets {
 
 /** An answer from the computer. */
 sealed interface DesktopReply {
-    /** The computer streams [monitor] at [width] × [height]. [monitors] are all the monitors that it can stream. */
-    data class Live(val monitor: String, val monitors: List<String>, val width: Int, val height: Int) : DesktopReply
+    /**
+     * The computer streams [monitor] at [width] × [height]. [monitors] are all the monitors that it can stream.
+     * [extend] is true when [monitor] is a monitor that the computer added for this phone.
+     */
+    data class Live(val monitor: String, val monitors: List<String>, val width: Int, val height: Int, val extend: Boolean = false) : DesktopReply
 
     data class Failed(val message: String) : DesktopReply
 
@@ -51,6 +70,7 @@ sealed interface DesktopReply {
                     p.strings("monitors"),
                     p.int("width") ?: 0,
                     p.int("height") ?: 0,
+                    p.bool("extend") == true,
                 )
                 "error" -> Failed(p.string("message")?.takeIf { it.isNotEmpty() } ?: "The computer could not stream its screen")
                 "stop" -> Stop
