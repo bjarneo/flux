@@ -6,6 +6,7 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -55,12 +56,30 @@ func TestDialFirstPrefersFirstHost(t *testing.T) {
 	}
 }
 
+// silentDialer returns a dialer that never answers for the address silent.
+// Its connect step waits until the dial context ends. This does not depend
+// on the network. A TUN-mode proxy accepts a TCP connection to any address,
+// so a real unreachable address is not silent on every computer.
+func silentDialer(silent string) *net.Dialer {
+	return &net.Dialer{
+		Timeout: 5 * time.Second,
+		ControlContext: func(ctx context.Context, _, address string, _ syscall.RawConn) error {
+			if address != silent {
+				return nil
+			}
+			<-ctx.Done()
+			return ctx.Err()
+		},
+	}
+}
+
 // TestDialFirstSkipsSilentHost checks that a host that does not answer
 // delays the next host by dialDelay only, not by the dial timeout.
 func TestDialFirstSkipsSilentHost(t *testing.T) {
 	port := listenLoopback(t)
+	silent := addrs(port, "127.0.0.2")[0]
 	began := time.Now()
-	conn, i, err := dialFirst(context.Background(), &net.Dialer{Timeout: 5 * time.Second}, addrs(port, unreachable, "127.0.0.1"))
+	conn, i, err := dialFirst(context.Background(), silentDialer(silent), []string{silent, addrs(port, "127.0.0.1")[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
