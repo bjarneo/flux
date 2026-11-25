@@ -59,7 +59,7 @@ build() {
 # can fail with a newer Go than the Go of CI.
 check() {
 	_src
-	go test ./cmd/... ./internal/...
+	PATH=/usr/bin:/bin go test ./cmd/... ./internal/...
 }
 
 package() {
