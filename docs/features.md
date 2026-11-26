@@ -140,7 +140,7 @@ flux-cli url https://omarchy.org
 **Chat** in the desktop window shows the clips, links, and files between the selected device and the computer, with the newest entry at the bottom.
 What the device sent is on the left. What the computer sent is on the right.
 To send a text or a link, type it in the field at the bottom and press Enter. Shift+Enter adds a line.
-To send files, drop them on the page or select **Attach files**.
+To send files, drop them on the page or select **Attach files**. A paste of an image, for example a screenshot, sends that image as a file, so the phone shows it in the chat and can open it. A paste of text goes into the field as before.
 Press `i` to type a message and `/` to search the chat.
 **Saved** shows the saved clips of every device.
 
@@ -276,6 +276,8 @@ Both are on by default.
 
 - Copy an image on the desktop, for example a screenshot. Then paste it in an app on the phone.
 - Copy an image on the phone, open **Chat** in Flux, and tap **Send** next to the clipboard. Then paste it on the desktop.
+
+The clipboard sync of an image puts the image on the clipboard of the phone, and Android keeps it in the clipboard only. The chat of the phone shows that it arrived, but it shows no picture. To put a picture in the chat of the phone, paste the image into the field of **Chat** on the desktop, or drop it on the page. Flux then sends it as a file, and the chat shows the picture.
 
 A clip that you send with **Send**, the **Send clipboard** tile, or the notification action goes on the desktop clipboard also while `auto_clipboard` is off.
 The desktop then shows a notification with the start of the text, for example **Clipboard from Pixel 8**.

@@ -13,6 +13,10 @@ Item {
   signal accepted()
   // Esc takes the focus from the field.
   signal escaped()
+  // The owner's clipboard-image check, or null. It returns true when the
+  // clipboard holds an image and the owner takes it. The field skips its
+  // own paste then, so a text paste still reaches the field.
+  property var pasteTaker: null
 
   readonly property real lineHeight: metrics.height
   implicitHeight: Math.max(lineHeight, Math.min(edit.contentHeight, lineHeight * maxLines)) + 20
@@ -76,6 +80,14 @@ Item {
       Keys.onEscapePressed: {
         focus = false
         root.escaped()
+      }
+      // Ctrl+V: the owner checks the clipboard for an image first. The
+      // handler accepts the event only when the owner took an image, so a
+      // text paste still reaches the field.
+      Keys.onShortcutOverride: function (event) {
+        if ((event.key === Qt.Key_V) && (event.modifiers & Qt.ControlModifier) && root.pasteTaker && root.pasteTaker()) {
+          event.accepted = true
+        }
       }
     }
   }

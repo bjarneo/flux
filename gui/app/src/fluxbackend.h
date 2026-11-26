@@ -45,6 +45,14 @@ public:
     // pickFiles opens the Omarchy file chooser. cb receives an array of
     // absolute paths, which is empty when the user cancels.
     Q_INVOKABLE void pickFiles(const QString &title, const QJSValue &cb);
+    // pasteFile writes the image on the clipboard to a file in the runtime
+    // folder. cb receives the absolute path, or null when the clipboard
+    // holds no image or the write fails. The file belongs to the user.
+    Q_INVOKABLE void pasteFile(const QJSValue &cb);
+    // hasClipboardImage reports whether the clipboard holds an image. The
+    // composer asks it before it takes a Ctrl+V, so a text paste still
+    // reaches the field.
+    Q_INVOKABLE bool hasClipboardImage() const;
     // startDaemon starts the fluxd user service. cb receives (ok, message).
     Q_INVOKABLE void startDaemon(const QJSValue &cb);
     // retryNow connects at once when the connection is down, and starts

@@ -3,6 +3,14 @@
 #include <QJSEngine>
 #include <QProcess>
 
+#include <QClipboard>
+#include <QDateTime>
+#include <QDir>
+#include <QFile>
+#include <QGuiApplication>
+#include <QImage>
+#include <QTimer>
+
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -297,6 +305,51 @@ void FluxBackend::pickFiles(const QString &title, const QJSValue &cb)
     proc->start(QStringLiteral("omarchy"),
                 {QStringLiteral("file"), QStringLiteral("select"), QStringLiteral("--title"), title,
                  QStringLiteral("--multiple")});
+}
+
+// hasClipboardImage reports whether the clipboard holds an image. The read
+// is synchronous and negotiates every image MIME type.
+bool FluxBackend::hasClipboardImage() const
+{
+    return !QGuiApplication::clipboard()->image().isNull();
+}
+
+// pasteFile writes the image on the clipboard to a PNG file in the runtime
+// folder and gives its path to cb. The path starts with "/", so share.files
+// accepts it. The folder belongs to the user, so fluxd can read the file.
+void FluxBackend::pasteFile(const QJSValue &cb)
+{
+    const QImage image = QGuiApplication::clipboard()->image();
+    if (image.isNull()) {
+        if (cb.isCallable())
+            invoke(cb, {QJSValue::NullValue});
+        return;
+    }
+    QDir dir(runtimeDir());
+    if (!dir.mkpath(QStringLiteral("."))) {
+        if (cb.isCallable())
+            invoke(cb, {QJSValue::NullValue});
+        return;
+    }
+    // A serial keeps 2 pastes of the same millisecond apart.
+    static int serial = 0;
+    const QString path = dir.filePath(QStringLiteral("paste-%1-%2.png")
+                                          .arg(QDateTime::currentMSecsSinceEpoch())
+                                          .arg(++serial));
+    if (!image.save(path, "PNG")) {
+        if (cb.isCallable())
+            invoke(cb, {QJSValue::NullValue});
+        return;
+    }
+    // fluxd snapshots the file when share.files runs. The paste file then
+    // has no other use, so it goes before the runtime folder fills up.
+    auto *file = new QFile(path, this);
+    QTimer::singleShot(2 * 60 * 1000, this, [file] {
+        file->remove();
+        file->deleteLater();
+    });
+    if (cb.isCallable())
+        invoke(cb, {path});
 }
 
 void FluxBackend::startDaemon(const QJSValue &cb)
