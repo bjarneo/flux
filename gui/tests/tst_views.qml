@@ -1106,6 +1106,37 @@ Item {
       compare(sent[0].params.paths, ["/home/user/notes.md"])
     }
 
+    // A paste with an image on the clipboard sends the image as a file, so
+    // the phone shows it in its chat.
+    function test_pastedImageGoesAsAFile() {
+      var view = chat()
+      var field = draft(view)
+      verify(field.pasteTaker())
+      tryVerify(function () { return requestsOf("share.files").length === 1 })
+      var sent = requestsOf("share.files")
+      compare(sent[0].params.device, top.pixel)
+      compare(sent[0].params.paths, ["/run/user/1000/flux/paste-1.png"])
+      compare(requestsOf("clipboard.send").length, 0)
+    }
+
+    // A text clipboard falls through, so Ctrl+V pastes the text.
+    function test_textPasteReachesTheField() {
+      var view = chat()
+      var field = draft(view)
+      mock.clipboardHasImage = false
+      verify(!field.pasteTaker())
+      mock.clipboardHasImage = true
+      // A null path shows a toast and sends nothing.
+      mock.failures = { "pasteFile": {} }
+      verify(field.pasteTaker())
+      tryVerify(function () {
+        var t = findBy(view, "message", "The paste did not produce an image file.")
+        return !!t && t.visible
+      })
+      compare(requestsOf("share.files").length, 0)
+      mock.failures = {}
+    }
+
     // Saved shows the saved clips of every device, and no files.
     function test_savedShowsEverySavedClip() {
       mock.setState(function (s) { s.clipboard.forEach(function (e) { e.pinned = e.id === "c3" || e.id === "c1" }) })

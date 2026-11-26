@@ -128,6 +128,90 @@ Scope {
     return paths.filter(function (p) { return p.startsWith("/") })
   }
 
+  // The image MIME types that Flux syncs, and the file extension of each.
+  // The clipboard probe picks the first type that the clipboard offers.
+  readonly property var pasteTypes: [
+    { mime: "image/png", ext: "png" },
+    { mime: "image/jpeg", ext: "jpg" },
+    { mime: "image/webp", ext: "webp" },
+    { mime: "image/gif", ext: "gif" },
+  ]
+
+  // The types that the clipboard offered when the probe last ran. "" until
+  // the first probe answers, so a Ctrl+V before then does not take the
+  // event.
+  property string pasteTypesSeen: ""
+  property bool pasteProbing: false
+
+  // A slow probe does not block the next one.
+  function refreshPasteTypes() {
+    if (pasteProbing) return
+    pasteProbing = true
+    var proc = pasteProbeComponent.createObject(root, {
+      command: ["sh", "-c", "wl-paste --list-types 2>/dev/null"],
+    })
+    proc.done = function (code, text) {
+      pasteTypesSeen = code === 0 ? String(text || "") : ""
+      pasteProbing = false
+      try { proc.destroy() } catch (e) {}
+    }
+    proc.running = true
+  }
+
+  // hasClipboardImage reports whether the clipboard held an image MIME
+  // type at the last probe. The probe runs at startup, after each failed
+  // paste, and once a second while a paste probe is idle.
+  function hasClipboardImage() {
+    if (pasteTypesSeen === "") return false
+    for (var i = 0; i < pasteTypes.length; i++)
+      if (pasteTypesSeen.indexOf(pasteTypes[i].mime) >= 0) return true
+    return false
+  }
+
+  // pasteFile writes the image on the clipboard to a file in the runtime
+  // folder. cb gets the absolute path, or null when the clipboard holds no
+  // image. The magic check is the first 8 bytes of a PNG; it uses base64,
+  // because ANSI-C quoting is not POSIX and /bin/sh can be dash.
+  function pasteFile(cb) {
+    var pick = null
+    for (var i = 0; i < pasteTypes.length; i++) {
+      if (pasteTypesSeen.indexOf(pasteTypes[i].mime) >= 0) {
+        pick = pasteTypes[i]
+        break
+      }
+    }
+    if (!pick) {
+      cb(null)
+      return
+    }
+    var path = (Quickshell.env("XDG_RUNTIME_DIR") || "/run/user/" + uid()) +
+      "/flux/paste-" + Date.now() + "-" + (++pasteSerial) + "." + pick.ext
+    var proc = pasteComponent.createObject(root, {
+      command: ["sh", "-c",
+        'mkdir -p "$(dirname "$1")" && wl-paste --type "$2" --no-newline > "$1" 2>/dev/null; ' +
+        'if [ -s "$1" ] && [ "$(head -c 8 "$1" | base64)" = "iVBORw0KGgo=" ]; then printf \'%s\' "$1"; ' +
+        'else rm -f "$1"; fi',
+        "flux-paste", path, pick.mime],
+    })
+    proc.done = function (code, text) {
+      var p = code === 0 && text.startsWith("/") ? text : null
+      // A paste that fails leaves the types stale. The probe runs again.
+      if (p === null) pasteTypesSeen = ""
+      try { cb(p) } catch (e) {}
+      try { proc.destroy() } catch (e) {}
+      // fluxd snapshots the file when share.files runs, so it goes before
+      // the runtime folder fills up.
+      if (p !== null) {
+        var cleaner = cleanerComponent.createObject(root, {
+          command: ["sh", "-c", "sleep 120; rm -f \"$1\"; true", "flux-paste-clean", p],
+        })
+        cleaner.running = true
+      }
+    }
+    proc.running = true
+  }
+  property int pasteSerial: 0
+
   // Starts the fluxd user service. cb gets true when systemctl succeeds.
   function startDaemon(cb) {
     var proc = pickerComponent.createObject(root, {
@@ -197,6 +281,40 @@ Scope {
   }
 
   Component {
+    id: pasteComponent
+    Process {
+      id: proc
+      property var done: null
+      stdout: StdioCollector { id: out; waitForEnd: true }
+      onExited: function (code) {
+        if (proc.done) proc.done(code, out.text)
+        else proc.destroy()
+      }
+    }
+  }
+
+  Component {
+    id: pasteProbeComponent
+    Process {
+      id: proc
+      property var done: null
+      stdout: StdioCollector { id: out; waitForEnd: true }
+      onExited: function (code) {
+        if (proc.done) proc.done(code, out.text)
+        else proc.destroy()
+      }
+    }
+  }
+
+  Component {
+    id: cleanerComponent
+    Process {
+      id: proc
+      onExited: proc.destroy()
+    }
+  }
+
+  Component {
     id: socketComponent
     Socket {
       id: socket
@@ -219,7 +337,20 @@ Scope {
     }
   }
 
-  Component.onCompleted: connectNow()
+  Component.onCompleted: {
+    connectNow()
+    refreshPasteTypes()
+  }
+
+  // The clipboard of Wayland can change at any time. A probe that answers
+  // after a paste keeps the types fresh for the next Ctrl+V. The probe is
+  // cheap (1 wl-paste call), so a slow timer is enough.
+  Timer {
+    interval: 2000
+    repeat: true
+    running: true
+    onTriggered: root.refreshPasteTypes()
+  }
 
   // A new interval starts the timer again, so retryNow() also cuts a long
   // wait short.

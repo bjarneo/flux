@@ -153,6 +153,23 @@ QtObject {
     Qt.callLater(function () { try { cb(["/home/user/Pictures/kanagawa.png", "/home/user/notes.md"]) } catch (e) {} })
   }
 
+  // The clipboard image check writes a sample path. A test that sets
+  // failures.pasteFile gets null instead. The callback runs at once, so
+  // the test sees the share.files request within the test function.
+  function pasteFile(cb) {
+    calls.push("pasteFile")
+    var ok = !Object.prototype.hasOwnProperty.call(failures, "pasteFile")
+    try { cb(ok ? "/run/user/1000/flux/paste-1.png" : null) } catch (e) {}
+  }
+
+  // The mock clipboard holds an image unless a test turns it off.
+  property bool clipboardHasImage: true
+
+  function hasClipboardImage() {
+    calls.push("hasClipboardImage")
+    return clipboardHasImage
+  }
+
   function startDaemon(cb) {
     calls.push("startDaemon")
     connected = true

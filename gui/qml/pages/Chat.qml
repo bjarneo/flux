@@ -175,6 +175,36 @@ Item {
 
   property bool picking: false
 
+  // Puts an image from the clipboard on its way to the device: the host
+  // writes the clipboard image to a file, and share.files sends it. The
+  // host answers later, so this captures the device and the page lifetime
+  // first, like pick does. The composer calls this only when the host
+  // reports an image, so a text paste still reaches the field.
+  function pasteImage() {
+    var v = view
+    if (!v || !v.backend || !dev || !v.backend.pasteFile) return false
+    var id = dev.id
+    var name = devName
+    var life = root.life
+    var wasOnline = online
+    v.backend.pasteFile(function (path) {
+      if (!life.alive || !path) {
+        if (life.alive) v.toast("The paste did not produce an image file.")
+        return
+      }
+      if (wasOnline) {
+        v.call("share.files", { device: id, paths: [path] }, function () {
+          if (life.alive) v.toast("Queued the pasted image for " + name + ".")
+        }, function (err) {
+          if (life.alive) v.toast(err.message || err.code || "Error")
+        })
+      } else {
+        v.toast(name + " is offline. The image did not go out.")
+      }
+    })
+    return true
+  }
+
   // Opens the file chooser of the desktop. The chooser can close after the
   // page is gone, so the callback uses only values outside the page.
   function pick() {
@@ -428,6 +458,14 @@ Item {
       onAccepted: root.send()
       onEscaped: root.view.forceActiveFocus()
       onTextChanged: root.sendError = ""
+      // An image on the clipboard goes to the device as a file, so the
+      // phone shows it in the chat and can open it. The check is the
+      // composite: the host reports an image, then the chat takes it.
+      pasteTaker: function () {
+        var b = root.view ? root.view.backend : null
+        if (!b || !b.hasClipboardImage || !b.hasClipboardImage()) return false
+        return root.pasteImage()
+      }
     }
 
     Item {
